@@ -1,7 +1,9 @@
+// src/server/auth/config.ts
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
-import { env } from "~/env";
+// Use validated env import if you set it up in env.js/mjs
+// import { env } from "~/env";
 import { db } from "~/server/db";
 import {
   accounts,
@@ -36,33 +38,51 @@ declare module "next-auth" {
  * @see https://next-auth.js.org/configuration/options
  */
 export const authConfig = {
-  providers: [
-    GitHubProvider({
-      clientId: process.env.AUTH_GITHUB_ID || "", // Or use env.AUTH_GITHUB_ID if using T3 env validation object
-      clientSecret: process.env.AUTH_GITHUB_SECRET || "", // Or use env.AUTH_GITHUB_SECRET
-    }),
-    /**
-     * ...add more providers here.
-     *
-     * Most other providers require a bit more work than the Discord provider. For example, the
-     * GitHub provider requires you to add the `refresh_token_expires_in` field to the Account
-     * model. Refer to the NextAuth.js docs for the provider you want to use. Example:
-     *
-     * @see https://next-auth.js.org/providers/github
-     */
-  ],
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
     verificationTokensTable: verificationTokens,
+    // DO NOT add sessionsTable here
   }),
+  providers: [
+    GitHubProvider({
+      // Use validated env if possible, otherwise fallback like before
+      clientId: process.env.AUTH_GITHUB_ID || "",
+      clientSecret: process.env.AUTH_GITHUB_SECRET || "",
+    }),
+  ],
+  session: {
+    strategy: "jwt",
+  },
   callbacks: {
-    session: ({ session, user }) => ({
+    // Add the JWT callback needed for JWT strategy
+    jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+      }
+      return token;
+    },
+    // Session callback reads from the token
+    session: ({ session, token }) => ({
       ...session,
       user: {
         ...session.user,
-        id: user.id,
+        id: token.id as string, // Ensure ID from token is put into session user
       },
     }),
+    // Your authorized callback can likely stay here too
+    authorized({ auth, request: { nextUrl } }) {
+      const isLoggedIn = !!auth?.user;
+      const isProtectedRoute = nextUrl.pathname.startsWith('/dashboard') || nextUrl.pathname.startsWith('/projects');
+      // Consider if API should be protected differently (e.g., allow unauthed access to specific tRPC routes?)
+      const isApiRoute = nextUrl.pathname.startsWith('/api/');
+      if (isProtectedRoute || (isApiRoute && !nextUrl.pathname.startsWith('/api/auth'))) { // Example: Protect API except auth routes
+        if (isLoggedIn) return true;
+        return false; // Redirect for protected routes
+      }
+      return true; // Allow public routes
+    },
   },
+  // secret: env.AUTH_SECRET, // Implicitly uses AUTH_SECRET env var in v5
+  // pages: { signIn: '/login' }, // Optional custom pages
 } satisfies NextAuthConfig;

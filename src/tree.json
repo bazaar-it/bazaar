@@ -20,7 +20,10 @@
         {"type":"file","name":"page.tsx"}
       ]},
       {"type":"file","name":"layout.tsx"},
-      {"type":"file","name":"page.tsx"}
+      {"type":"file","name":"page.tsx"},
+      {"type":"directory","name":"remotion-demo","contents":[
+        {"type":"file","name":"page.tsx"}
+      ]}
     ]},
     {"type":"directory","name":"components","contents":[
       {"type":"directory","name":"client","contents":[
@@ -29,10 +32,30 @@
       ]}
     ]},
     {"type":"file","name":"env.js"},
+    {"type":"file","name":"index.css"},
     {"type":"directory","name":"remotion","contents":[
-      {"type":"file","name":"Composition.tsx"},
+      {"type":"file","name":"Composition-test.tsx"},
+      {"type":"directory","name":"MyComp","contents":[
+        {"type":"file","name":"Logo.tsx"},
+        {"type":"file","name":"Main.tsx"},
+        {"type":"file","name":"Rings.tsx"},
+        {"type":"file","name":"TextFade.tsx"}
+      ]},
       {"type":"file","name":"Root.tsx"},
-      {"type":"file","name":"index.ts"}
+      {"type":"directory","name":"components","contents":[
+        {"type":"file","name":"ImageSlide.tsx"},
+        {"type":"file","name":"TitleCard.tsx"},
+        {"type":"directory","name":"scenes","contents":[
+          {"type":"file","name":"ImageScene.tsx"},
+          {"type":"file","name":"TextScene.tsx"}
+        ]}
+      ]},
+      {"type":"directory","name":"compositions","contents":[
+        {"type":"file","name":"DemoTimeline.tsx"},
+        {"type":"file","name":"DynamicVideo.tsx"}
+      ]},
+      {"type":"file","name":"index.ts"},
+      {"type":"file","name":"webpack-override.mjs"}
     ]},
     {"type":"directory","name":"scripts","contents":[
       {"type":"file","name":"dev-seed.ts"}
@@ -60,6 +83,9 @@
       ]},
       {"type":"directory","name":"queries"}
     ]},
+    {"type":"directory","name":"stores","contents":[
+      {"type":"file","name":"videoState.ts"}
+    ]},
     {"type":"directory","name":"styles","contents":[
       {"type":"file","name":"globals.css"}
     ]},
@@ -71,9 +97,10 @@
     ]},
     {"type":"directory","name":"types","contents":[
       {"type":"file","name":"input-props.ts"},
-      {"type":"file","name":"json-patch.ts"}
+      {"type":"file","name":"json-patch.ts"},
+      {"type":"file","name":"remotion-constants.ts"}
     ]}
   ]}
 ,
-  {"type":"report","directories":23,"files":31}
+  {"type":"report","directories":29,"files":46}
 ]

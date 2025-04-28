@@ -1,16 +1,19 @@
 // src/app/layout.tsx
 import "~/styles/globals.css";
-import type { ReactNode } from "react";
+import { TRPCReactProvider } from "~/trpc/react";  // ← add this import
 
 export default function RootLayout({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-background text-foreground antialiased">
-        {children}
+      <body>
+        {/* 👇 give every page tRPC + React-Query context */}
+        <TRPCReactProvider>
+          {children}
+        </TRPCReactProvider>
       </body>
     </html>
   );
