@@ -48,11 +48,32 @@ export const chatRouter = createTRPCRouter({
               Available scene types:
               - text: display text with color, fontSize, backgroundColor
               - image: display an image with src URL and fit (cover/contain)
+              - background-color: fills screen with color, optional toColor for animation
+              - shape: renders circle/square/etc with animation
+              - gradient: multi-color background with animation
+              - particles: animated particle effects
+              - text-animation: animated text with various effects
+              - split-screen: shows content side-by-side
+              - zoom-pan: Ken Burns effect on images
+              - svg-animation: animated vector graphics
+              
+              Transitions between scenes:
+              To create smooth transitions between scenes, add a "transitionToNext" property to a scene.
+              This defines how this scene transitions to the next scene in the sequence.
+              
+              Example transition:
+              {"op": "add", "path": "/scenes/0/transitionToNext", "value": {
+                "type": "fade",  // Options: "fade", "slide", "wipe"
+                "duration": 30,  // Number of frames the transition lasts
+                "direction": "from-right", // For slide/wipe: "from-left", "from-right", "from-top", "from-bottom"
+                "useSpring": false // Optional: true for spring physics, false for linear
+              }}
               
               Example patch operations:
               - Change text color: {"op": "replace", "path": "/scenes/0/data/color", "value": "#FF0000"}
               - Add new scene: {"op": "add", "path": "/scenes/-", "value": {"id": "unique-uuid", "type": "text", ...}}
               - Move scene: {"op": "move", "path": "/scenes/2", "from": "/scenes/1"}
+              - Add transition: {"op": "add", "path": "/scenes/1/transitionToNext", "value": {"type": "slide", "duration": 30, "direction": "from-right"}}
               
               The inputProps schema is:
               ${JSON.stringify(inputPropsSchema.shape, null, 2)}

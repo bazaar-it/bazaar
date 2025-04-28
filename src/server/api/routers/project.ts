@@ -50,33 +50,26 @@ export const projectRouter = createTRPCRouter({
   create: protectedProcedure
     .mutation(async ({ ctx }) => {
       try {
-        // Create a new project for the logged-in user
-        const result = await ctx.db
+        // Create a new project for the logged-in user with returning clause
+        const inserted = await ctx.db
           .insert(projects)
           .values({
             userId: ctx.session.user.id,
             title: "Untitled Video",
             props: DEFAULT_PROJECT_PROPS,
           })
-          .returning({ id: projects.id });
+          .returning();
+
+        const result = inserted[0];
           
-        if (!result || result.length === 0) {
+        if (!result) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to create project",
           });
         }
         
-        const projectId = result[0]?.id;
-        
-        if (!projectId) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to retrieve project ID",
-          });
-        }
-        
-        return { projectId };
+        return { projectId: result.id };
       } catch (error) {
         console.error("Error creating project:", error);
         throw new TRPCError({

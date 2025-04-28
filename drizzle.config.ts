@@ -18,7 +18,7 @@ export default {
    * generate / push / migrate commands.
    */
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "",
+    url: process.env.DATABASE_URL_NON_POOLED ?? process.env.DATABASE_URL ?? "",
   },
 
   /*
