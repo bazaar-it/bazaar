@@ -2,6 +2,7 @@
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
+import GoogleProvider from "next-auth/providers/google";
 // Use validated env import if you set it up in env.js/mjs
 // import { env } from "~/env";
 import { db } from "~/server/db";
@@ -50,6 +51,10 @@ export const authConfig = {
       clientId: process.env.AUTH_GITHUB_ID || "",
       clientSecret: process.env.AUTH_GITHUB_SECRET || "",
     }),
+    GoogleProvider({
+      clientId: process.env.AUTH_GOOGLE_ID || "",
+      clientSecret: process.env.AUTH_GOOGLE_SECRET || "",
+    }),
   ],
   session: {
     strategy: "jwt",
@@ -84,5 +89,5 @@ export const authConfig = {
     },
   },
   // secret: env.AUTH_SECRET, // Implicitly uses AUTH_SECRET env var in v5
-  // pages: { signIn: '/login' }, // Optional custom pages
+  pages: { signIn: "/login" }, // Custom login page
 } satisfies NextAuthConfig;

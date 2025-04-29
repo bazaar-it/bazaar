@@ -14,6 +14,8 @@ export const env = createEnv({
         : z.string().optional(),
     AUTH_GITHUB_ID: z.string(),
     AUTH_GITHUB_SECRET: z.string(),
+    AUTH_GOOGLE_ID: z.string(),
+    AUTH_GOOGLE_SECRET: z.string(),
     DATABASE_URL: z.string().url(),
     DATABASE_URL_NON_POOLED: z.string().url(),
     NODE_ENV: z
@@ -39,6 +41,8 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
     AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
+    AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
+    AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_URL_NON_POOLED: process.env.DATABASE_URL_NON_POOLED,
     NODE_ENV: process.env.NODE_ENV,
