@@ -3,12 +3,18 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import path from 'path';
 
 /** @type {import('next').NextConfig} */
 const config = {
   eslint: {
     // Allow production builds to complete despite ESLint errors
     ignoreDuringBuilds: true,
+  },
+  webpack(config) {
+    // Resolve '~/*' to '<root>/src/*'
+    config.resolve.alias['~'] = path.resolve(__dirname, 'src');
+    return config;
   },
 };
 

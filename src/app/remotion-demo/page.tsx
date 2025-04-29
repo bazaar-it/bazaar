@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Player } from '@remotion/player';
-import { DemoTimeline } from '../../remotion/compositions/DemoTimeline';
-import { defaultDemoProps } from '../../types/remotion-constants';
+import { DemoTimeline } from '~/remotion/compositions/DemoTimeline';
+import { defaultDemoProps } from '~/types/remotion-constants';
 
 export default function RemotionDemoPage() {
   return (
