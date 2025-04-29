@@ -19,18 +19,53 @@ type Props = {
 export default function InterfaceShell({ projectId, initialProps, initialProjects }: Props) {
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   
-  // This would be an actual mutation in the future
-  const handleRename = useCallback((newName: string) => {
-    setTitle(newName);
-    // Here you would call a mutation like:
-    // renameProject.mutate({ id: projectId, title: newName });
-  }, [projectId]);
+  // Set up rename mutation
+  const renameMutation = api.project.rename.useMutation({
+    onSuccess: (data) => {
+      // Update the local state when the mutation is successful
+      if (data) {
+        setTitle(data.title);
+      }
+    },
+    onError: (error: unknown) => {
+      console.error("Failed to rename project:", error);
+      // Could add a toast notification here in the future
+    }
+  });
+  
+  // Set up render mutation
+  const renderMutation = api.render.start.useMutation({
+    onSuccess: () => {
+      console.log("Render started successfully");
+      // Could add a toast notification here in the future
+    },
+    onError: (error: unknown) => {
+      console.error("Failed to start render:", error);
+      // Could add a toast notification here in the future
+    }
+  });
 
+  // Handle rename action
+  const handleRename = useCallback((newName: string) => {
+    if (newName.trim() === title || newName.trim() === "") return;
+
+    // Update optimistically
+    setTitle(newName);
+    
+    // Call the mutation
+    renameMutation.mutate({
+      id: projectId,
+      title: newName
+    });
+  }, [projectId, renameMutation, title]);
+
+  // Handle render action
   const handleRender = useCallback(() => {
-    // Here you would call your render mutation
-    console.log("Rendering project:", projectId);
-    // renderProject.mutate({ id: projectId });
-  }, [projectId]);
+    // Call the render mutation
+    renderMutation.mutate({ 
+      projectId: projectId 
+    });
+  }, [projectId, renderMutation]);
 
   return (
     <div className="h-screen w-screen overflow-hidden flex flex-col bg-background text-foreground">
@@ -45,6 +80,8 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
         projectTitle={title} 
         onRename={handleRename}
         onRender={handleRender}
+        isRenaming={renameMutation.isPending}
+        isRendering={renderMutation.isPending}
       />
 
       {/* Main content area with panels */}

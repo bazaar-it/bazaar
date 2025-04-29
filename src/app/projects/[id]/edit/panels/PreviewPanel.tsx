@@ -14,14 +14,17 @@ export default function PreviewPanel({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { inputProps, replace } = useVideoState();
+  const { getCurrentProps, setProject } = useVideoState();
   
-  // Set initial project data when provided
+  // Initialize or update project data when projectId or initial props change
   useEffect(() => {
-    if (initial && !inputProps) {
-      replace(initial);
+    if (initial) {
+      setProject(projectId, initial);
     }
-  }, [initial, inputProps, replace]);
+  }, [projectId, initial, setProject]);
+
+  // Get the current project's props
+  const inputProps = getCurrentProps();
 
   if (!inputProps) {
     return (
@@ -32,10 +35,10 @@ export default function PreviewPanel({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <h2 className="text-xl font-semibold mb-4">Video Preview</h2>
+    <div className="flex flex-col h-full bg-white bg-opacity-90">
+      <h2 className="text-xl font-semibold mb-4"></h2>
       
-      <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden">
+      <div className="flex-1 rounded-lg overflow-hidden">
         <Player
           component={DynamicVideo}
           durationInFrames={inputProps.meta.duration}

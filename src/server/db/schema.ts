@@ -99,6 +99,7 @@ export const projects = createTable(
 
 export const projectsRelations = relations(projects, ({ many }) => ({ // Added projectsRelations
   patches: many(patches),
+  messages: many(messages), // Add relation to messages
 }));
 
 // --- Patches table ---
@@ -116,5 +117,22 @@ export const patches = createTable(
 
 export const patchesRelations = relations(patches, ({ one }) => ({ // Added patchesRelations
   project: one(projects, { fields: [patches.projectId], references: [projects.id] }),
-}))
-;
+}));
+
+// --- Messages table ---
+// Stores chat messages for projects
+export const messages = createTable(
+  "message",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    content: d.text().notNull(),
+    role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [index("message_project_idx").on(t.projectId)],
+);
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  project: one(projects, { fields: [messages.projectId], references: [projects.id] }),
+}));

@@ -96,4 +96,52 @@ export const projectRouter = createTRPCRouter({
         });
       }
     }),
+    
+  rename: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      title: z.string().min(1).max(255),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // First check if the project exists and belongs to the user
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.id));
+        
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+        
+        // Ensure the user has access to this project
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+        
+        // Update the project title
+        const updated = await ctx.db
+          .update(projects)
+          .set({ 
+            title: input.title,
+            updatedAt: new Date()
+          })
+          .where(eq(projects.id, input.id))
+          .returning();
+          
+        return updated[0];
+      } catch (error) {
+        console.error("Error renaming project:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to rename project",
+        });
+      }
+    }),
 }); 

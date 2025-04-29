@@ -20,14 +20,15 @@ export default async function ProjectEditPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  const projectId = params.id; // ✅ now clean
+  const { id: projectId } = params;
+  
   if (!projectId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
     notFound();
   }
 
   try {
     const [projectResult, userProjects] = await Promise.all([
-      db.query.projects.findFirst({ where: eq(projects.id, projectId) }), // ✅ use findFirst, no .then
+      db.query.projects.findFirst({ where: eq(projects.id, projectId) }),
       getUserProjects(session.user.id),
     ]);
 

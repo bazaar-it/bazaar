@@ -25,24 +25,32 @@ interface TopBarProps {
   projectTitle: string;
   onRender?: () => void;
   onRename?: (newName: string) => void;
+  isRenaming?: boolean;
+  isRendering?: boolean;
 }
 
-export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps) {
-  const [isRenaming, setIsRenaming] = useState(false);
+export default function TopBar({ 
+  projectTitle, 
+  onRender, 
+  onRename, 
+  isRenaming: isRenamingProp = false, 
+  isRendering = false 
+}: TopBarProps) {
+  const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle);
 
   const handleRename = () => {
     if (onRename && newTitle.trim()) {
       onRename(newTitle);
     }
-    setIsRenaming(false);
+    setIsEditingName(false);
   };
 
   return (
     <header className="h-14 border-b bg-background flex items-center justify-between px-4 z-10">
       <div className="flex items-center gap-8 ml-14">
         {/* Title or rename input */}
-        {isRenaming ? (
+        {isEditingName ? (
           <form 
             onSubmit={(e) => {
               e.preventDefault();
@@ -55,8 +63,14 @@ export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps
               onChange={(e) => setNewTitle(e.target.value)}
               className="w-[240px] h-8"
               autoFocus
+              disabled={isRenamingProp}
             />
-            <Button type="submit" size="sm" variant="outline">
+            <Button 
+              type="submit" 
+              size="sm" 
+              variant="outline"
+              disabled={isRenamingProp}
+            >
               Save
             </Button>
             <Button 
@@ -65,8 +79,9 @@ export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps
               variant="ghost" 
               onClick={() => {
                 setNewTitle(projectTitle);
-                setIsRenaming(false);
+                setIsEditingName(false);
               }}
+              disabled={isRenamingProp}
             >
               Cancel
             </Button>
@@ -74,7 +89,7 @@ export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps
         ) : (
           <h1 
             className="text-lg font-medium cursor-pointer hover:text-primary"
-            onClick={() => setIsRenaming(true)}
+            onClick={() => setIsEditingName(true)}
           >
             {projectTitle}
           </h1>
@@ -82,20 +97,21 @@ export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-2">
-        <Button 
+       <div className="flex items-center gap-2">
+        {/* <Button 
           variant="default" 
           size="sm" 
           className="gap-2"
           onClick={onRender}
+          disabled={isRendering}
         >
           <PlayIcon className="h-4 w-4" />
-          Render
+          {isRendering ? "Rendering..." : "Render"}
         </Button>
 
         <Button variant="outline" size="icon" className="h-8 w-8">
           <Share2Icon className="h-4 w-4" />
-        </Button>
+        </Button> */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -104,7 +120,7 @@ export default function TopBar({ projectTitle, onRender, onRename }: TopBarProps
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsRenaming(true)}>
+            <DropdownMenuItem onClick={() => setIsEditingName(true)}>
               Rename Project
             </DropdownMenuItem>
             <DropdownMenuItem>
