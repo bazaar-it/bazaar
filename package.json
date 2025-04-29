@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.2",
+    "@heroicons/react": "^2.2.0",
     "@neondatabase/serverless": "^0.10.4",
     "@remotion/bundler": "4.0.290",
     "@remotion/cli": "4.0.290",
@@ -34,7 +35,7 @@
     "@remotion/player": "4.0.290",
     "@remotion/shapes": "4.0.290",
     "@remotion/tailwind": "4.0.290",
-    "@remotion/transitions": "^4.0.291",
+    "@remotion/transitions": "^4.0.290",
     "@t3-oss/env-nextjs": "^0.12.0",
     "@tanstack/react-query": "^5.69.0",
     "@trpc/client": "^11.0.0",
