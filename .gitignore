@@ -49,9 +49,14 @@ yarn-error.log*
 .cursor/
 .cursorrules
 
-# Remotion renders / Drizzle artifacts
-remotion/
+# Drizzle artifacts
 drizzle/
+
+# Remotion render outputs only (not source code)
+/remotion/out/
+/remotion/renders/
+/remotion/*.mp4
+/remotion/*.png
 
 # Local data & caches
 memory-bank/
