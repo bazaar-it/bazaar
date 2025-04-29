@@ -1,8 +1,8 @@
-import { enableTailwind } from "@remotion/tailwind";
+import { enableTailwind } from "@remotion/tailwind-v4";
 
 /**
- *  @param {import('webpack').Configuration} currentConfig
+ * @param {import('@remotion/cli').WebpackOverrideFn}
  */
-export const webpackOverride = (currentConfig) => {
-  return enableTailwind(currentConfig);
+export const webpackOverride = (currentConfiguration) => {
+  return enableTailwind(currentConfiguration);
 };

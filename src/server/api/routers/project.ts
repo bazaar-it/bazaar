@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects } from "~/server/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, like, count, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
 
@@ -50,26 +50,44 @@ export const projectRouter = createTRPCRouter({
   create: protectedProcedure
     .mutation(async ({ ctx }) => {
       try {
+        // Find how many "Untitled Video" projects the user already has
+        const countResults = await ctx.db
+          .select({ count: count() })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.userId, ctx.session.user.id),
+              like(projects.title, 'Untitled Video%')
+            )
+          );
+        
+        // Generate a unique title
+        let title = "Untitled Video";
+        const projectCount = countResults[0]?.count ?? 0;
+        if (projectCount > 0) {
+          title = `Untitled Video ${projectCount + 1}`;
+        }
+        
         // Create a new project for the logged-in user with returning clause
         const inserted = await ctx.db
           .insert(projects)
           .values({
             userId: ctx.session.user.id,
-            title: "Untitled Video",
+            title,
             props: DEFAULT_PROJECT_PROPS,
           })
           .returning();
 
-        const result = inserted[0];
+        const insertResult = inserted[0];
           
-        if (!result) {
+        if (!insertResult) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to create project",
           });
         }
         
-        return { projectId: result.id };
+        return { projectId: insertResult.id };
       } catch (error) {
         console.error("Error creating project:", error);
         throw new TRPCError({

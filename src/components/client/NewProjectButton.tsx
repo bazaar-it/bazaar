@@ -3,8 +3,24 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "~/trpc/react";
+import { Button } from "~/components/ui/button";
+import { PlusIcon } from "lucide-react";
 
-export function NewProjectButton() {
+interface NewProjectButtonProps {
+  className?: string;
+  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  size?: "default" | "sm" | "lg" | "icon";
+  showIcon?: boolean;
+  onStart?: () => void;
+}
+
+export function NewProjectButton({ 
+  className, 
+  variant = "default", 
+  size = "default",
+  showIcon = false,
+  onStart
+}: NewProjectButtonProps = {}) {
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
   
@@ -36,6 +52,12 @@ export function NewProjectButton() {
 
   const handleCreateProject = () => {
     if (createProject.isPending || isRedirecting) return;
+    
+    // Call the onStart callback if provided
+    if (onStart) {
+      onStart();
+    }
+    
     createProject.mutate();
   };
 
@@ -43,12 +65,15 @@ export function NewProjectButton() {
   const isDisabled = createProject.isPending || isRedirecting;
 
   return (
-    <button
+    <Button
       onClick={handleCreateProject}
       disabled={isDisabled}
-      className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded disabled:bg-blue-300"
+      variant={variant}
+      size={size}
+      className={className}
     >
-      {isDisabled ? "Creating..." : "Create New Project"}
-    </button>
+      {showIcon && <PlusIcon className="h-4 w-4 mr-2" />}
+      {isDisabled ? "Creating..." : "New Project"}
+    </Button>
   );
 } 

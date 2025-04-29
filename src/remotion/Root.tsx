@@ -11,7 +11,7 @@ import {
   defaultDemoProps,
 } from "../types/remotion-constants";
 import { BazaarLogo } from "./MyComp/Logo";
-import "../styles/globals.css";
+import "../index.css";
 import { Rings } from "./MyComp/Rings";
 import { DemoTimeline } from "./compositions/DemoTimeline";
 import { DynamicVideo } from "./compositions/DynamicVideo";
