@@ -5,6 +5,7 @@ import { projects } from "~/server/db/schema";
 import { eq, desc, like, count, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
+import { processUserMessageInProject } from "./chat";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -48,7 +49,10 @@ export const projectRouter = createTRPCRouter({
     }),
     
   create: protectedProcedure
-    .mutation(async ({ ctx }) => {
+    .input(z.object({
+      initialMessage: z.string().min(1).max(2000).optional(),
+    }).optional())
+    .mutation(async ({ ctx, input }) => {
       try {
         // Find how many "Untitled Video" projects the user already has
         const countResults = await ctx.db
@@ -86,8 +90,19 @@ export const projectRouter = createTRPCRouter({
             message: "Failed to create project",
           });
         }
+
+        // If initialMessage is provided, trigger LLM/assistant processing asynchronously
+        if (input?.initialMessage && input.initialMessage.trim().length > 0) {
+          // Fire-and-forget – attach a catch to avoid unhandled rejection noise
+          processUserMessageInProject(ctx, insertResult.id, input.initialMessage)
+            .catch((error) => {
+              // Log but don't affect the response – project has already been created
+              console.error(`Error processing initial message for project ${insertResult.id}:`, error);
+            });
+        }
         
         return { projectId: insertResult.id };
+
       } catch (error) {
         console.error("Error creating project:", error);
         throw new TRPCError({

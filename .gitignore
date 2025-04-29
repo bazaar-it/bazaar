@@ -59,7 +59,6 @@ drizzle/
 /remotion/*.png
 
 # Local data & caches
-memory-bank/
 *.sqlite
 *.log
 

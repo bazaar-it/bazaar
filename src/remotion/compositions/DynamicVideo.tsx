@@ -30,6 +30,10 @@ const toHelperDir = (dir: string | undefined) =>
       "from-right":  "right",
       "from-top":    "up",
       "from-bottom": "down",
+      "left":        "left",
+      "right":       "right",
+      "up":          "up",
+      "down":        "down",
     } as const
   )[dir ?? "from-right"] ?? "right";
 

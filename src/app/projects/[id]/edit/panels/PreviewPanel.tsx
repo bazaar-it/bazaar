@@ -6,6 +6,7 @@ import { Player } from '@remotion/player';
 import { DynamicVideo } from '~/remotion/compositions/DynamicVideo';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/types/input-props';
+import { api } from '~/trpc/react';
 
 export default function PreviewPanel({ 
   projectId, 
@@ -14,14 +15,31 @@ export default function PreviewPanel({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { getCurrentProps, setProject } = useVideoState();
-  
+  const { getCurrentProps, setProject, replace } = useVideoState();
+
+  // Poll backend for updated project every second to reflect server-side patches
+  const { data: projectData } = api.project.getById.useQuery(
+    { id: projectId },
+    {
+      enabled: !!projectId,
+      refetchInterval: 1000,
+      staleTime: 0,
+    },
+  );
+
   // Initialize or update project data when projectId or initial props change
   useEffect(() => {
     if (initial) {
       setProject(projectId, initial);
     }
   }, [projectId, initial, setProject]);
+
+  // Replace props if project data changed (e.g. LLM patch applied)
+  useEffect(() => {
+    if (projectData?.props) {
+      replace(projectId, projectData.props as InputProps);
+    }
+  }, [projectData?.props, projectId, replace]);
 
   // Get the current project's props
   const inputProps = getCurrentProps();

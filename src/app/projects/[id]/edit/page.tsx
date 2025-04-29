@@ -20,7 +20,8 @@ export default async function ProjectEditPage({ params }: PageProps) {
     redirect("/login");
   }
 
-  const { id: projectId } = params;
+  // In Next.js 15+, `params` is asynchronously resolved – await to avoid warning
+  const { id: projectId } = await params;
   
   if (!projectId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
     notFound();

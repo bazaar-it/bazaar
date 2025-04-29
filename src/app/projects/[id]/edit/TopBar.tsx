@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { PlayIcon, MoreVerticalIcon, Share2Icon, SaveIcon, Settings2Icon } from "lucide-react";
+import { PlayIcon, MoreVerticalIcon, Share2Icon, SaveIcon, Settings2Icon, LogOutIcon } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 interface TopBarProps {
   projectTitle: string;
@@ -44,6 +45,10 @@ export default function TopBar({
       onRename(newTitle);
     }
     setIsEditingName(false);
+  };
+
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: '/' });
   };
 
   return (
@@ -98,20 +103,15 @@ export default function TopBar({
 
       {/* Action buttons */}
        <div className="flex items-center gap-2">
-        {/* <Button 
-          variant="default" 
+        <Button 
+          variant="ghost" 
           size="sm" 
           className="gap-2"
-          onClick={onRender}
-          disabled={isRendering}
+          onClick={handleLogout}
         >
-          <PlayIcon className="h-4 w-4" />
-          {isRendering ? "Rendering..." : "Render"}
+          <LogOutIcon className="h-4 w-4" />
+          Logout
         </Button>
-
-        <Button variant="outline" size="icon" className="h-8 w-8">
-          <Share2Icon className="h-4 w-4" />
-        </Button> */}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

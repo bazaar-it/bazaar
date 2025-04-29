@@ -35,8 +35,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       enabled: !!projectId,
       // Don't show loading state for too long - treat errors as empty messages
       retry: 1,
-      // Only consider data as stale after 1 minute
-      staleTime: 60 * 1000,
+      // Poll every second for new messages
+      refetchInterval: 1000,
+      // Consider data stale quickly so polling can re-render as soon as new messages come in
+      staleTime: 0,
     }
   );
   
@@ -101,12 +103,17 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     });
   };
 
-  function formatTimestamp(timestamp: Date | number | string | null): string {
-    if (!timestamp) return '';
-    
+  // Update the formatTimestamp function to ensure consistent output
+  const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
+    
+    // Use explicit format options that will be consistent on server and client
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    
+    // Return just HH:MM without AM/PM to match server rendering
+    return `${hours}:${minutes}`;
+  };
 
   // Type guard to ensure message matches DbMessage type
   function isDbMessage(msg: any): msg is DbMessage {
@@ -182,7 +189,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   >
                     <p className="text-sm">{msg.content}</p>
                     <p className="text-xs opacity-70 text-right mt-1">
-                      {formatTimestamp(msg.createdAt)}
+                      {formatTimestamp(typeof msg.createdAt === 'number' ? msg.createdAt : new Date(msg.createdAt).getTime())}
                     </p>
                   </div>
                 </div>
