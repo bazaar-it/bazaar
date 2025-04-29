@@ -4,6 +4,10 @@
  */
 import "./src/env.js";
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES modules replacement for __dirname
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const config = {
