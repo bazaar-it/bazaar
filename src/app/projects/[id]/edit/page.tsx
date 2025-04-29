@@ -10,11 +10,10 @@ import { auth } from "~/server/auth";
  * Project Edit Page
  * Server Component that fetches project data and hydrates the client components
  */
-export default async function ProjectEditPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ProjectEditPage({ params }: { params: Promise<{ id: string }> }) {
+  // Await params to get the actual id (Next.js types params as Promise)
+  const { id } = await params;
+
   // Get session to check auth and user ID
   const session = await auth();
   
@@ -33,7 +32,7 @@ export default async function ProjectEditPage({
   const [project] = await db
     .select()
     .from(projects)
-    .where(eq(projects.id, params.id));
+    .where(eq(projects.id, id));
 
   // Handle not found
   if (!project) {
@@ -61,10 +60,7 @@ export default async function ProjectEditPage({
 
       {/* Preview panel — 2/3 on md+ */}
       <section className="md:col-span-2 h-full overflow-hidden bg-muted p-4">
-        <PlayerShell 
-          projectId={project.id} 
-          initial={project.props}
-        />
+        <PlayerShell projectId={project.id} initial={project.props} />
       </section>
     </div>
   );
