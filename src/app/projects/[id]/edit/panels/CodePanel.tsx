@@ -8,7 +8,8 @@ import { PlayIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { useVideoState } from "~/stores/videoState";
 
 export default function CodePanel() {
-  const { inputProps } = useVideoState();
+  const { getCurrentProps } = useVideoState();
+const inputProps = getCurrentProps();
   const [jsonString, setJsonString] = useState<string>("");
   const [copied, setCopied] = useState(false);
   

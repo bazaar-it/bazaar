@@ -31,7 +31,6 @@ export default function EditorLayout({ projectId, initialProjects = [], initialP
         <Sidebar 
           projects={projects} 
           currentProjectId={projectId}
-          onClose={() => setSidebarOpen(false)}
         />
       )}
       

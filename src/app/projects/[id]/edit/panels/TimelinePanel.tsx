@@ -5,7 +5,8 @@ import React from 'react';
 import { useVideoState } from '~/stores/videoState';
 
 export default function TimelinePanel() {
-  const { inputProps } = useVideoState();
+  const { getCurrentProps } = useVideoState();
+const inputProps = getCurrentProps();
   
   if (!inputProps) {
     return (

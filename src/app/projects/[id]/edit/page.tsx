@@ -7,21 +7,17 @@ import { projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import InterfaceShell from "./InterfaceShell";
 
-interface PageProps {
-  params: {
-    id: string;
-  };
-}
+export default async function Page(props: any) {
+  const { params } = props as { params: { id: string } };
 
-export default async function ProjectEditPage({ params }: PageProps) {
   const session = await auth();
 
   if (!session?.user) {
     redirect("/login");
   }
 
-  // In Next.js 15+, `params` is asynchronously resolved – await to avoid warning
-  const { id: projectId } = await params;
+  // In Next.js 15+, `params` is a plain object, not a Promise
+  const { id: projectId } = params;
   
   if (!projectId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
     notFound();

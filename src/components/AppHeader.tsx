@@ -36,8 +36,10 @@ export default function AppHeader({
     <header className="h-14 border-b bg-background flex items-center justify-between px-4 z-10 w-full">
       {/* Left: Logo */}
       <div className="flex items-center gap-3 min-w-[160px]">
-        <Image src="/bazaar-logo.png" alt="Bazaar Logo" width={32} height={32} className="rounded" />
-        <span className="text-lg font-bold tracking-tight hidden sm:inline">Bazaar‑Vid</span>
+        <a href="/" className="flex items-center gap-3 min-w-[160px]" aria-label="Go to homepage">
+          <Image src="/bazaar-logo.png" alt="Bazaar Logo" width={32} height={32} className="rounded" />
+          <span className="text-lg font-bold tracking-tight hidden sm:inline">Bazaar‑Vid</span>
+        </a>
       </div>
 
       {/* Center: Project Title (with rename) */}

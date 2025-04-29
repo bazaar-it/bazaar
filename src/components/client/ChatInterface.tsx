@@ -14,7 +14,8 @@ export function ChatInterface({ projectId }: { projectId: string }) {
       isUser: false,
     },
   ]);
-  const { inputProps, applyPatch } = useVideoState();
+  const { getCurrentProps, applyPatch } = useVideoState();
+const inputProps = getCurrentProps();
   
   const sendMessage = api.chat.sendMessage.useMutation({
     onMutate: () => {
@@ -29,7 +30,7 @@ export function ChatInterface({ projectId }: { projectId: string }) {
     },
     onSuccess: ({ patch }) => {
       // Apply the patch to the local state
-      applyPatch(patch as unknown as Operation[]);
+      applyPatch(projectId, patch as unknown as Operation[]);
       
       // Add system response to chat history
       setChatHistory(prev => [

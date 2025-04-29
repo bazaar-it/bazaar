@@ -14,12 +14,13 @@ export function PlayerShell({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { inputProps, replace } = useVideoState();
+  const { getCurrentProps, replace } = useVideoState();
+const inputProps = getCurrentProps();
   
   // Set initial project data when provided
   useEffect(() => {
     if (initial && !inputProps) {
-      replace(initial);
+      replace(projectId, initial);
     }
   }, [initial, inputProps, replace]);
 
