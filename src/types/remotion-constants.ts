@@ -1,5 +1,6 @@
 // src/types/remotion-constants.ts
-import crypto from "crypto";
+// Use a browser-compatible UUID generation approach instead of Node's crypto
+import { v4 as uuidv4 } from 'uuid';
 import { z } from "zod";
 import type { InputProps } from "./input-props";
 
@@ -33,7 +34,7 @@ export const DEFAULT_PROJECT_PROPS: InputProps = {
   },
   scenes: [
     {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       type: "text",
       start: 0,
       duration: 60,

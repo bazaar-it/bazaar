@@ -18,6 +18,10 @@ const config = {
   webpack(config) {
     // Resolve '~/*' to '<root>/src/*'
     config.resolve.alias['~'] = path.resolve(__dirname, 'src');
+    // Polyfill for the crypto module
+    config.resolve.fallback = {
+      crypto: require.resolve('crypto-browserify'),
+    };
     return config;
   },
 };
