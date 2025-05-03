@@ -1,0 +1,83 @@
+// jest.config.ts
+import type { Config } from '@jest/types';
+import { pathsToModuleNameMapper } from 'ts-jest';
+import { compilerOptions } from './tsconfig.json';
+
+const config: Config.InitialOptions = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  moduleNameMapper: {
+    // Handle path aliases from tsconfig
+    ...pathsToModuleNameMapper(compilerOptions.paths || {}, { prefix: '<rootDir>/' }),
+    // Mock CSS modules and assets
+    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '\\.(jpg|jpeg|png|gif|webp|svg)$': '<rootDir>/src/tests/__mocks__/fileMock.js',
+    // Mock certain modules globally
+    '^openai$': '<rootDir>/src/tests/__mocks__/openai.ts',
+  },
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
+      tsconfig: 'tsconfig.jest.json',
+    }],
+  },
+  setupFilesAfterEnv: [
+    '<rootDir>/src/tests/setupTests.ts',
+  ],
+  testMatch: [
+    '**/__tests__/**/*.test.[jt]s?(x)',
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/.next/',
+    '/dist/',
+  ],
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.jest.json',
+    },
+  },
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx,ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/pages/_app.tsx',
+    '!src/pages/_document.tsx',
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
+    },
+  },
+  // Group tests by category
+  projects: [
+    {
+      displayName: 'LLM Tests',
+      testMatch: ['<rootDir>/src/tests/llm/**/*.test.[jt]s?(x)'],
+      testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+    },
+    {
+      displayName: 'E2E Tests',
+      testMatch: ['<rootDir>/src/tests/e2e/**/*.test.[jt]s?(x)'],
+      testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+    },
+    {
+      displayName: 'Performance Tests',
+      testMatch: ['<rootDir>/src/tests/performance/**/*.test.[jt]s?(x)'],
+      testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+    },
+    {
+      displayName: 'UI Tests',
+      testMatch: ['<rootDir>/src/tests/integration/**/*.test.[jt]s?(x)'],
+      testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+    },
+  ],
+  // Configure test timeouts for performance tests
+  testTimeout: 30000,
+  // Environment variables for tests
+  setupFiles: ['<rootDir>/src/tests/setEnvVars.ts'],
+};
+
+export default config; 

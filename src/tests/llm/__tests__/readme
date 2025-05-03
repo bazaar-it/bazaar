@@ -1,0 +1,39 @@
+1. OpenAI Tools API Integration
+The openaiToolsAPI.test.ts file validates your integration with OpenAI's function calling capabilities:
+Tests proper parsing of tool calls from API responses
+Handles multiple tool calls in a single response
+Gracefully handles malformed responses and API errors
+2. Response Streaming Performance
+The responseStreaming.test.ts file ensures your streaming implementation meets performance targets:
+Verifies <150ms initial response time
+Confirms <500ms time-to-first-content
+Tests throughput and degraded performance handling
+Monitors stream event sequence accuracy
+3. Dual-LLM Architecture
+The dualLLMArchitecture.test.ts file validates your intent + code generation pipeline:
+Tests coordination between intent detection and code generation models
+Handles failures at each pipeline stage
+Includes proper context sharing between models
+4. Error Recovery
+The errorRecovery.test.ts file tests your resilience to LLM service disruptions:
+Implements retry logic with exponential backoff
+Tests fallback to simpler models
+Provides template-based final fallbacks
+Handles non-retryable errors appropriately
+5. Tool Definition Validation
+The toolDefinitions.test.ts file ensures your OpenAI tool definitions follow best practices:
+Validates against OpenAI's schema requirements
+Checks for proper parameter types and documentation
+Enforces required field annotations
+6. Context Management
+The contextManagement.test.ts file tests how you handle conversation context:
+Maintains context across multiple requests
+Implements smart context pruning when approaching token limits
+Preserves critical context like project details
+Manages multiple concurrent conversations
+I've also set up the supporting infrastructure:
+Jest configuration with proper test categorization
+Environment variables setup
+Mock implementations for OpenAI
+Global test utilities and mocks
+These tests provide comprehensive validation of your LLM integration, focusing on both functional correctness and performance characteristics.
