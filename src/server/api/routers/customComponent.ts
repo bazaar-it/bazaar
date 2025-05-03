@@ -12,6 +12,8 @@ import { TRPCError } from "@trpc/server";
  * - Creating component generation jobs
  * - Checking job status
  * - Listing jobs by project
+ * - Renaming components
+ * - Deleting components
  */
 export const customComponentRouter = createTRPCRouter({
   create: protectedProcedure
@@ -47,6 +49,79 @@ export const customComponentRouter = createTRPCRouter({
         .returning();
       
       return job;
+    }),
+    
+  rename: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      effect: z.string().min(1, "Component name is required")
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Find the component
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.id),
+        with: { project: true }
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found"
+        });
+      }
+      
+      // Verify user owns the project
+      if (component.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to modify this component"
+        });
+      }
+      
+      // Update the component name
+      const [updated] = await ctx.db.update(customComponentJobs)
+        .set({ 
+          effect: input.effect,
+          updatedAt: new Date()
+        })
+        .where(eq(customComponentJobs.id, input.id))
+        .returning();
+      
+      return updated;
+    }),
+    
+  delete: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Find the component
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.id),
+        with: { project: true }
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found"
+        });
+      }
+      
+      // Verify user owns the project
+      if (component.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to delete this component"
+        });
+      }
+      
+      // Delete the component
+      const [deleted] = await ctx.db.delete(customComponentJobs)
+        .where(eq(customComponentJobs.id, input.id))
+        .returning();
+      
+      return deleted;
     }),
     
   getJobStatus: protectedProcedure

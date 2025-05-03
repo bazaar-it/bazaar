@@ -73,13 +73,25 @@ function prepareComponentCode(code: string): string {
   // 8. Strip trailing whitespace introduced by removals
   transformed = transformed.trim();
 
-  // ------------------------------------------------------------------
-  //  Build the wrapper string using JSON.stringify for safe embedding
-  // ------------------------------------------------------------------
-  const transformedLiteral = JSON.stringify(transformed);
+  return transformed;
+}
 
-  return `/* Dynamically loaded custom component */
-  (function(window) {
+function wrapComponentCode(transformed: string): string {
+  // Define the Remotion exports that should be available
+  // inside the custom component code.
+  const remotionExportsDestructuring = `const { AbsoluteFill, Audio, Easing, Img, interpolate, random, Sequence, Series, spring, staticFile, useCurrentFrame, useVideoConfig, Video } = Remotion;`;
+
+  // Prepend the destructuring to the actual component code
+  const codeWithRemotionScope = `${remotionExportsDestructuring}\n${transformed}`;
+
+  // ------------------------------------------------------------------
+  // Prepare the code for embedding within the Function constructor
+  // Escape backticks and stringify for safe embedding
+  // ------------------------------------------------------------------
+  const transformedLiteral = JSON.stringify(codeWithRemotionScope);
+
+  // Construct the IIFE wrapper
+  return `;(function(window) {
     if (!window.React) window.React = window.react || {};
     if (!window.Remotion) window.Remotion = window.remotion || {};
 
@@ -93,14 +105,14 @@ function prepareComponentCode(code: string): string {
     try {
       // Evaluate the component code in an isolated scope
       const __code = ${transformedLiteral};
-      const __fn = new Function('React', 'Remotion', 'module', 'exports', __code + '\n//# sourceURL=custom-component.js');
+      const __fn = new Function('React', 'Remotion', 'module', 'exports', __code + '\\n//# sourceURL=custom-component.js');
       __fn(React, Remotion, module, exports);
 
       // Attempt to detect the exported component
       let detectedComponent = exports.default || null;
 
       if (!detectedComponent) {
-        const probableName = '${probableComponentName}';
+        const probableName = 'Component';
         if (exports[probableName]) {
           detectedComponent = exports[probableName];
           console.log('Found component by probable name:', probableName);
@@ -137,8 +149,7 @@ function prepareComponentCode(code: string): string {
         );
       };
     }
-  })(window);
-  `;
+  })(window);`;
 }
 
 /**
@@ -196,11 +207,12 @@ export async function GET(
     
     // Prepare the component code to work with our app
     const transformedContent = prepareComponentCode(originalContent);
+    const finalCode = wrapComponentCode(transformedContent);
 
     console.log(`Prepared component ${id} for browser compatibility`);
 
     // Return the transformed JavaScript with proper headers
-    return new NextResponse(transformedContent, {
+    return new NextResponse(finalCode, {
       status: 200,
       headers: {
         'Content-Type': 'application/javascript',
