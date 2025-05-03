@@ -1,3 +1,4 @@
+// src/server/db/schema.ts
 import { relations, sql } from "drizzle-orm";
 import { uniqueIndex } from "drizzle-orm/pg-core";
 
@@ -125,12 +126,27 @@ export const messages = createTable(
   "message",
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom(),
-    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    projectId: d
+      .uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
     content: d.text().notNull(),
     role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
-    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
+    status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
   }),
-  (t) => [index("message_project_idx").on(t.projectId)],
+  (t) => [
+    index("message_project_idx").on(t.projectId),
+    index("message_status_idx").on(t.status),
+  ],
 );
 
 export const messagesRelations = relations(messages, ({ one }) => ({
@@ -143,15 +159,26 @@ export const customComponentJobs = createTable(
   "custom_component_job",
   (d) => ({
     id: d.uuid().primaryKey().defaultRandom(),
-    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    projectId: d
+      .uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
     effect: d.text().notNull(), // Natural language description of the effect
-    tsxCode: d.text().notNull(), // Generated TSX code for the component
+    tsxCode: d.text(), // Generated TSX code for the component
+    metadata: d.jsonb(), // NEW – intent or other metadata
+    statusMessageId: d.uuid().references(() => messages.id), // Link to status message for streaming updates
     status: d.varchar({ length: 50 }).default("pending").notNull(), // "pending"|"building"|"success"|"error"
     outputUrl: d.text(), // URL to the compiled JS hosted on R2
     errorMessage: d.text(), // Error message if compilation failed
     retryCount: d.integer().default(0).notNull(), // Number of retry attempts
-    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-    updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
   }),
   (t) => [
     index("custom_component_job_project_idx").on(t.projectId),
@@ -163,3 +190,45 @@ export const customComponentJobs = createTable(
 export const customComponentJobsRelations = relations(customComponentJobs, ({ one }) => ({
   project: one(projects, { fields: [customComponentJobs.projectId], references: [projects.id] }),
 }));
+
+// --- Component Errors table ---
+// Stores errors for custom component jobs
+export const componentErrors = createTable(
+  "component_error",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    jobId: d
+      .uuid()
+      .notNull()
+      .references(() => customComponentJobs.id, { onDelete: "cascade" }),
+    errorType: d.varchar({ length: 100 }).notNull(),
+    details: d.text().notNull(),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  }),
+  (t) => [index("component_error_job_idx").on(t.jobId)],
+);
+
+export const componentErrorsRelations = relations(componentErrors, ({ one }) => ({
+  job: one(customComponentJobs, {
+    fields: [componentErrors.jobId],
+    references: [customComponentJobs.id],
+  }),
+}));
+
+// --- Metrics table ---
+export const metrics = createTable(
+  "metric",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    name: d.varchar({ length: 100 }).notNull(),
+    value: d.real().notNull(),
+    tags: d.jsonb(),
+    timestamp: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  })
+);

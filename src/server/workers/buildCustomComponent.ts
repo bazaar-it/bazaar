@@ -51,6 +51,11 @@ export async function processPendingJobs() {
           })
           .where(eq(customComponentJobs.id, job.id));
 
+        // Check if tsxCode is available (it could be null after schema change)
+        if (!job.tsxCode) {
+          throw new Error("TSX code is missing for this job");
+        }
+        
         // Sanitize TSX code (remove unsafe imports, etc.)
         const sanitizedTsx = sanitizeTsx(job.tsxCode);
         

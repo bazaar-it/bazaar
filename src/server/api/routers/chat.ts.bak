@@ -13,7 +13,7 @@
 /* - Handles text deltas & tool calls                                 */
 /* - Single final database update for assistant message             */
 /* - Structured client events                                         */
-/* ------------------------------------------------------------------ */                                    
+/* ------------------------------------------------------------------ */                                     */
 /* (Optimized Streaming Approach - Single LLM Call, Single DB Update) */
 /* ------------------------------------------------------------------ */
 
@@ -458,7 +458,7 @@ export const chatRouter = createTRPCRouter({
                     // Append error to any content already streamed
                         // Ignore if the stream is already closed
                     }
-                };
+                });
                 
                 // Return teardown function (required for tRPC observable)
                 return () => {
