@@ -1,5 +1,10 @@
 ------------------------------------------------------------- Done ✅ -------------------------------------------------------------
 
+**Status:** Complete
+
+**Summary:**
+Sprint 3 implemented the core chat-to-patch loop, including tRPC chat.sendMessage mutation, LLM integration, JSON patch validation, persistent project state, and a functional UI for editing video props through chat. WebSockets and Lambda rendering are deferred to later sprints.
+
 
 Focus for Sprint 3 (Implementing the Core Loop - No WebSockets Yet):
 

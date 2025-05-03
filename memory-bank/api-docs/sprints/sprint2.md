@@ -1,4 +1,8 @@
-------------------------------------------------------------- Done ✅ -------------------------------------------------------------
+------------------------------------------------------------- Sprint 2 – In Progress -------------------------------------------------------------
+
+**Status:** In Progress
+
+**Note:** This sprint is not 100% complete. Some learning and implementation tasks remain ongoing.
 
 
 Okay, Sprint 2 focused entirely on a Remotion Deep Dive sounds like a great plan! Before diving into the complex AI and props-driven architecture for the main app, getting comfortable with actually building video elements directly with Remotion code is essential.
@@ -137,6 +141,13 @@ Audio, Volume	same interpolate trick for volume envelopes
 
 
 ⸻
+
+## What’s Left / Ongoing Tasks
+- Continue hands-on experimentation with Remotion’s core APIs (especially transitions, audio, and reusable components).
+- Document and solidify learnings from Remotion Studio experiments.
+- Ensure all key Remotion concepts (assets, sequencing, transitions, etc.) are demoed in code.
+- Prepare a knowledge base for LLM prompting and future onboarding.
+- Only mark complete when all learning objectives and hands-on demos are done.
 
 5  Next sprint preview ⏭️
 	•	Wire JSON Patch events → update inputProps

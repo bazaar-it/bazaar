@@ -1,5 +1,82 @@
 # Project Progress
 
+## Sprint 5-6 Progress - Dynamic Remotion Component Generation
+
+We've begun implementing the custom Remotion component generation pipeline from Sprints 5-6. This feature will enable users to generate custom effects using natural language prompts like "add fireworks between scenes 1 and 2".
+
+### Completed Implementation (Sprint 5 - Custom Component Pipeline)
+
+1. **Database Infrastructure**
+   - ✅ Added `customComponentJobs` table to the Drizzle schema with fields for tracking component status, code, and URLs
+   - ✅ Set up relations to the projects table for proper data organization
+   - ✅ Generated and applied database migration (0003_tired_sir_ram.sql)
+
+2. **API Layer**
+   - ✅ Created tRPC router (`customComponentRouter`) with procedures for creating, querying, and listing component jobs
+   - ✅ Added proper authorization checks to ensure users can only access their own components
+   - ✅ Integrated the router with the main app router
+
+3. **Build Pipeline**
+   - ✅ Implemented worker process (`buildCustomComponent.ts`) for compiling TSX to JS using esbuild
+   - ✅ Added code sanitization to prevent unsafe imports and operations
+   - ✅ Added post-processing to auto-fix missing Remotion imports, ensuring generated components always work
+
+4. **Custom Components Sidebar**
+   - ✅ Added Custom Components section to main sidebar (2025-05-02) showing components across all user projects
+   - ✅ Implemented real-time status display with `<CustomComponentStatus />` component
+   - ✅ Fixed data structure issues with joined query results from listAllForUser endpoint
+
+5. **Timeline Integration**
+   - ✅ Implemented component insertion into video timeline using existing Zustand videoState pattern
+   - ✅ Used JSON patch operations for state updates to maintain UI reactivity
+   - ✅ Components appear immediately in Preview panel when inserted
+   - ✅ Set up R2 integration to host compiled components
+      - ✅ Created Cloudflare R2 bucket (bazaar-vid-components) in Eastern North America region
+      - ✅ Generated Account API token for production use
+      - ✅ Configured environment variables for R2 endpoint, credentials, and public URL
+   - ✅ Created cron endpoint (`/api/cron/process-component-jobs`) to process pending jobs regularly
+   - ✅ Added CRON_SECRET for securing the background worker
+
+4. **Runtime Integration**
+   - ✅ Implemented `useRemoteComponent` hook for dynamically loading components from R2 storage
+   - ✅ Added ErrorBoundary and Suspense handling for proper error states
+   - ✅ Created `CustomScene` component for the Remotion scene registry
+   - ✅ Updated scene registry to use the CustomScene for 'custom' type
+
+5. **UI Components**
+   - ✅ Created `CustomComponentStatus` component for displaying job status with proper loading states
+   - ✅ Implemented `InsertCustomComponentButton` for adding custom components to the timeline
+   - ✅ Added helpful user feedback and error handling
+
+### Next Steps (Sprint 6 - LLM Integration)
+
+1. **LLM Integration**
+   - ✅ Implement OpenAI function calling schema for component generation
+   - ✅ Create TSX code generation prompt for the LLM (using official Remotion prompt)
+   - Set up the two-phase prompting flow (effect description → TSX generation)
+
+2. **UI Integration**
+   - Update chat UI to display component status during generation
+   - Add UI for browsing and reusing previously generated components
+   - Create testing infrastructure for generated components
+
+
+### HIGH Priority - Completed
+- 2025-05-02 – Remotion Custom Component Pipeline: Import Post-processing & Type Safety
+  - Implemented robust post-processing in `generateComponentCode.ts` to ensure all required Remotion/React imports are present in LLM-generated code.
+  - Merges with existing imports and deduplicates symbols for clean output.
+  - Fixed TypeScript errors by adding explicit undefined checks when merging imports.
+  - All generated code uploaded to R2 is now guaranteed to be ready-to-use, reducing user-facing errors.
+
+### MEDIUM Priority - Remaining
+- Create documentation for the custom component system
+
+### MEDIUM Priority - Completed 
+- ✅ Implement OpenAI function calling schema for component generation
+- ✅ Create TSX code generation prompt for the LLM (using official Remotion prompt)
+
+This implementation preserves existing functionality while extending the system to allow dynamic component generation, greatly expanding the creative possibilities for users.
+
 ## Sprint 3 - Core Video Editing Loop
 - ✅ Implemented tRPC chat.sendMessage mutation with OpenAI client
 - ✅ Connected ChatInterface to send messages and apply patches
@@ -44,12 +121,15 @@
 
 ## What's left to build
 - Comprehensive video rendering functionality
-- Offline custom component pipeline
+- Offline custom component pipeline (Sprint 5)
+- LLM-powered custom component generation (Sprint 6)
 - User asset uploads to R2
 - More complex scene types and transitions
 
 ## Current status
 The application now has a fully functional chat system that stores messages in the database while providing immediate feedback through optimistic updates. The chat panel allows users to describe desired video changes, which are then processed by the LLM to generate JSON patches. These patches are applied to the video in real-time, and the conversation history is persisted for future sessions.
+
+We're now preparing to implement the custom component generation pipeline (Sprints 5-6), which will allow users to request and generate custom Remotion effects using natural language. The implementation will include a database schema for custom component jobs, a build worker process using esbuild, R2 storage integration, dynamic component loading, and OpenAI function calling for generating TSX code.
 
 We've implemented a robust Zustand state store (`videoState.ts`) that handles:
 - Per-project state management of video properties

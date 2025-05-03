@@ -136,3 +136,30 @@ export const messages = createTable(
 export const messagesRelations = relations(messages, ({ one }) => ({
   project: one(projects, { fields: [messages.projectId], references: [projects.id] }),
 }));
+
+// --- Custom Component Jobs table ---
+// Stores jobs for generating and compiling custom Remotion components
+export const customComponentJobs = createTable(
+  "custom_component_job",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    effect: d.text().notNull(), // Natural language description of the effect
+    tsxCode: d.text().notNull(), // Generated TSX code for the component
+    status: d.varchar({ length: 50 }).default("pending").notNull(), // "pending"|"building"|"success"|"error"
+    outputUrl: d.text(), // URL to the compiled JS hosted on R2
+    errorMessage: d.text(), // Error message if compilation failed
+    retryCount: d.integer().default(0).notNull(), // Number of retry attempts
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    index("custom_component_job_project_idx").on(t.projectId),
+    index("custom_component_job_status_idx").on(t.status),
+  ],
+);
+
+// Add relations for custom component jobs
+export const customComponentJobsRelations = relations(customComponentJobs, ({ one }) => ({
+  project: one(projects, { fields: [customComponentJobs.projectId], references: [projects.id] }),
+}));

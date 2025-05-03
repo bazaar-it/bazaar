@@ -28,24 +28,31 @@ const inputProps = getCurrentProps();
       // Clear input field
       setMessage("");
     },
-    onSuccess: ({ patch }) => {
-      // Apply the patch to the local state
-      applyPatch(projectId, patch as unknown as Operation[]);
-      
-      // Add system response to chat history
-      setChatHistory(prev => [
-        ...prev,
-        { 
-          message: "✅ Changes applied to the video preview.",
-          isUser: false 
-        }
-      ]);
+    onSuccess: (response) => {
+      // Check if this is a custom component response or a patch response
+      if ('noPatches' in response && response.noPatches) {
+        // Custom component generated - just wait for refetch to show the actual message
+        // The system will refetch messages which will include the component generation status
+      } else if ('patch' in response && response.patch) {
+        // Apply the patch to the local state
+        applyPatch(projectId, response.patch as unknown as Operation[]);
+        
+        // Add system response to chat history
+        setChatHistory(prev => [
+          ...prev,
+          { 
+            message: "✅ Changes applied to the video preview.",
+            isUser: false 
+          }
+        ]);
+      }
     },
     onError: (error) => {
+      // Add error message to chat history
       setChatHistory(prev => [
-        ...prev,
+        ...prev, 
         { 
-          message: `❌ Error: ${error.message}`,
+          message: `Error: ${error.message}`,
           isUser: false 
         }
       ]);

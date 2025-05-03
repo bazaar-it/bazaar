@@ -75,16 +75,24 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       // Clear input field
       setMessage("");
     },
-    onSuccess: ({ patch }) => {
-      // Apply the patch to the project
-      applyPatch(projectId, patch as unknown as Operation[]);
-      
-      // Add system response to optimistic chat history
-      addMessage(projectId, "Changes applied to your video preview.", false);
-      
-      // Refetch messages from database to sync with server
-      // This ensures we have the actual database records
-      void refetchMessages();
+    onSuccess: (response) => {
+      // Check if this is a custom component response or a patch response
+      if ('noPatches' in response && response.noPatches) {
+        // Custom component generated - no need to apply patch
+        // The assistant message will be fetched from the database
+        
+        // Refetch messages from database to sync with server
+        void refetchMessages();
+      } else if ('patch' in response && response.patch) {
+        // Apply the patch to the project
+        applyPatch(projectId, response.patch as unknown as Operation[]);
+        
+        // Add system response to optimistic chat history
+        addMessage(projectId, "Changes applied to your video preview.", false);
+        
+        // Refetch messages from database to sync with server
+        void refetchMessages();
+      }
     },
     onError: (error) => {
       // Add error message to chat history

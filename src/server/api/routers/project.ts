@@ -1,11 +1,14 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects } from "~/server/db/schema";
+import { projects, patches } from "~/server/db/schema";
 import { eq, desc, like, count, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
 import { processUserMessageInProject } from "./chat";
+import { jsonPatchSchema, type JsonPatch } from "~/types/json-patch";
+import { applyPatch } from "fast-json-patch";
+import type { Operation } from "fast-json-patch";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -156,6 +159,63 @@ export const projectRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to rename project",
+        });
+      }
+    }),
+  patch: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      patch: jsonPatchSchema,
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // First check if the project exists and belongs to the user
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId));
+        
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+        
+        // Ensure the user has access to this project
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+
+        // Apply the JSON patch
+        const patchOperations = input.patch as unknown as Operation[];
+        const nextProps = applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
+        
+        // Save the new props and the patch
+        const updated = await ctx.db
+          .update(projects)
+          .set({ 
+            props: nextProps,
+            updatedAt: new Date()
+          })
+          .where(eq(projects.id, input.projectId))
+          .returning();
+
+        // Save the patch for history
+        await ctx.db.insert(patches).values({
+          projectId: input.projectId,
+          patch: input.patch
+        });
+        
+        return updated[0];
+      } catch (error) {
+        console.error("Error patching project:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to patch project",
         });
       }
     }),

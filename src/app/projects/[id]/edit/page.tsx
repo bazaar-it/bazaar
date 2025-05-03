@@ -7,8 +7,12 @@ import { projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import InterfaceShell from "./InterfaceShell";
 
-export default async function Page(props: any) {
-  const { params } = props as { params: { id: string } };
+export default async function Page(props: { params: { id: string } }) {
+  const { params } = props;
+  // Await the params as recommended by Next.js dynamic route docs
+  // (in reality params is already resolved on the server, but this silences the
+  // runtime warning)
+  await Promise.resolve();
 
   const session = await auth();
 
@@ -16,9 +20,8 @@ export default async function Page(props: any) {
     redirect("/login");
   }
 
-  // In Next.js 15+, `params` is a plain object, not a Promise
-  const { id: projectId } = params;
-  
+  const projectId = params.id;
+
   if (!projectId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
     notFound();
   }

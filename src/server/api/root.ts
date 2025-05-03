@@ -2,6 +2,8 @@
 import { projectRouter } from "~/server/api/routers/project";
 import { chatRouter } from "~/server/api/routers/chat";
 import { renderRouter } from "~/server/api/routers/render";
+import { customComponentRouter } from "~/server/api/routers/customComponent";
+import { timelineRouter } from "~/server/api/routers/timeline";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 /**
@@ -13,6 +15,8 @@ export const appRouter = createTRPCRouter({
   project: projectRouter,
   chat: chatRouter,
   render: renderRouter,
+  customComponent: customComponentRouter,
+  timeline: timelineRouter,
 });
 
 // export type definition of API

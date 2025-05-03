@@ -1,6 +1,7 @@
 //src/remotion/components/scenes/index.ts
 import type { FC, ReactNode } from 'react';
 import { BackgroundColorScene } from './BackgroundColorScene';
+import { CustomScene } from './CustomScene';
 import { GradientScene } from './GradientScene';
 import { ImageScene } from './ImageScene';
 import { ParticlesScene } from './ParticlesScene';
@@ -30,13 +31,14 @@ export const sceneRegistry: Record<SceneType, FC<SceneProps>> = {
   'split-screen': SplitScreenScene as FC<SceneProps>,
   'zoom-pan': ZoomPanScene as FC<SceneProps>,
   'svg-animation': SVGAnimationScene as FC<SceneProps>,
-  // Add custom implementation for completeness
-  'custom': TextScene as FC<SceneProps>, // Fallback to TextScene for custom type
+  // Custom components loaded dynamically via useRemoteComponent
+  'custom': CustomScene as FC<SceneProps>,
 };
 
 // Export all scenes
 export {
   BackgroundColorScene,
+  CustomScene,
   GradientScene,
   ImageScene,
   ParticlesScene,

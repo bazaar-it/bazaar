@@ -1,5 +1,10 @@
 ------------------------------------------------------------- Done ✅ -------------------------------------------------------------
 
+**Status:** Complete
+
+**Summary:**
+Sprint 1 established the core project structure, set up the initial DB schema with Drizzle, configured Auth.js, created a placeholder UI layout, and integrated Remotion for static preview. No LLM, JSON patching, or Lambda rendering was included in this sprint.
+
 Sprint Goal: Establish core project structure, set up basic DB schema with Drizzle, configure basic Auth.js, create placeholder UI layout, integrate Remotion structure, and display a static Remotion composition via @remotion/player within the Next.js app.
 Okay, let's combine the best of both plans to create a clear, actionable 3-hour sprint plan for you and your Cursor agent. This focuses on getting a clickable skeleton running, verifying core integrations, and adhering to the principles and stack we've defined in the "v4 Definitive" context document.
 
