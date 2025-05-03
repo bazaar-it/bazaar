@@ -28,7 +28,10 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./src/*"]
-    }
+    },
+    
+    /* Testing */
+    "types": ["jest", "node"]
   },
   "include": [
     "next-env.d.ts",

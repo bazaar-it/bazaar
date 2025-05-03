@@ -1,5 +1,30 @@
 # Project Progress
 
+## Sprint 7 Progress - Real-time Chat Streaming Optimization
+
+We've implemented a robust real-time chat streaming solution using the Vercel AI SDK, enabling immediate feedback and better user experience when interacting with the AI assistant.
+
+### Completed Implementation (Sprint 7 - Chat Streaming)
+
+1. **Streaming Architecture**
+   - ✅ Implemented Vercel AI SDK integration with tRPC v11 using observables
+   - ✅ Created streaming response procedure (`streamResponse`) in the chat router
+   - ✅ Added proper token management and event emission for real-time feedback
+   - ✅ Ensured database updates at critical points in the stream lifecycle
+   - ✅ Improved state management with proper delta content handling
+   - ✅ Enhanced message synchronization between database and client states
+
+2. **Error Handling**
+   - ✅ Enhanced error handling with typed error events in the streaming pipeline
+   - ✅ Implemented proper cleanup of database records in error conditions
+   - ✅ Added graceful fallbacks when streaming fails
+   - ✅ Improved type safety for error conditions
+
+3. **Database Schema Updates**
+   - ✅ Utilized existing message status fields for tracking streaming state
+   - ✅ Added support for message status transitions during streaming
+   - ✅ Ensured proper final database updates in all success and error paths
+
 ## Sprint 5-6 Progress - Dynamic Remotion Component Generation
 
 We've begun implementing the custom Remotion component generation pipeline from Sprints 5-6. This feature will enable users to generate custom effects using natural language prompts like "add fireworks between scenes 1 and 2".
@@ -63,7 +88,7 @@ We've begun implementing the custom Remotion component generation pipeline from 
 
 ### HIGH Priority - Completed
 - 2025-05-02 – Remotion Custom Component Pipeline: Import Post-processing & Type Safety
-  - Implemented robust post-processing in `generateComponentCode.ts` to ensure all required Remotion/React imports are present in LLM-generated code.
+  - Implemented robust post-processing in `generateComponentCode.ts` to ensure all required Remotion/React imports are present in LLM-generated code.
   - Merges with existing imports and deduplicates symbols for clean output.
   - Fixed TypeScript errors by adding explicit undefined checks when merging imports.
   - All generated code uploaded to R2 is now guaranteed to be ready-to-use, reducing user-facing errors.
@@ -115,9 +140,15 @@ This implementation preserves existing functionality while extending the system 
 - Improved the Chat UI with a better welcome message for new projects
 - Fixed loading states to provide a better user experience
 - Made database error handling more robust
-- Fixed TypeScript error in chat.ts related to safely parsing path parts from JSON Patches
+- Fixed TypeScript errors in chat.ts related to safely parsing path parts from JSON Patches
 - Enhanced chat history synchronization between database and client state
 - Improved error handling for initial message processing during project creation
+- Implemented streaming chat responses using Vercel AI SDK for real-time feedback
+- Fixed missing database updates in successful streaming paths
+- Optimized message processing with proper error handling and type safety
+- Enhanced streaming token management for immediate user feedback
+- Improved cross-procedure communication between project and chat routers
+- Fixed type handling in retryWithBackoff utility for better error handling
 
 ## What's left to build
 - Comprehensive video rendering functionality
@@ -151,6 +182,33 @@ Recent fixes and improvements include:
 ## Known issues
 - Page route params need to be handled correctly (async/await pattern in Next.js 14+)
 - Error messages from backend mutations could be more user-friendly
-- Type safety for messages can be further improved
 - Should display more detailed responses from the LLM instead of generic confirmation
-- Error handling could be more user-friendly
+- Need to completely migrate client code to use streaming chat API instead of legacy procedures
+- Front-end needs to be updated to take full advantage of the streaming response types
+
+## Sprint 7 Progress
+
+### Ticket #4 - Build Worker Optimisation (COMPLETED)
+
+- ✅ Implemented TSX wrapping with globalThis.React / Remotion snippet
+- ✅ Optimized esbuild configuration with `external: ['react','remotion'], format:'esm'`
+- ✅ Added worker pool limited to cpuCount - 1 threads
+- ✅ Added metrics for build duration and success/failure
+- ✅ Created reusable metrics utility (src/lib/metrics.ts)
+- ✅ Added documentation in memory-bank/sprints/sprint7/build-worker-optimization.md
+- ✅ Added test coverage with Jest focusing on isolated function testing
+- ✅ Created testing documentation and best practices in src/server/workers/__tests__/README.md
+
+### Other Sprint 7 Tickets (TODO)
+
+- [ ] Ticket #1 - DB & Types
+- [ ] Ticket #2 - Streaming API (Vercel AI SDK)
+- [x] Ticket #3 - Front-End Chat Streaming
+   - ✅ Implemented real-time message updates with delta content handling
+   - ✅ Added message synchronization between database and client states
+   - ✅ Created comprehensive test suite for streaming logic
+   - ✅ Updated event handling for all stream event types
+- [ ] Ticket #5 - Overlay for Long Builds
+- [ ] Ticket #6 - Parallel Two-Phase Prompt Worker
+- [ ] Ticket #7 - Error & Retry Endpoint
+- [ ] Ticket #8 - Dashboards & Alerts

@@ -10,7 +10,7 @@ export function retryWithBackoff<T>(
       maxRetries: number;
       initialDelay: number;
       maxDelay: number;
-      retryableErrors?: number[] | ((error: any) => boolean);
+      retryableErrors?: number[] | ((error: unknown) => boolean);
     }
   ): (fnToCall: () => Promise<T>) => Promise<T> {
     const { maxRetries, initialDelay, maxDelay, retryableErrors } = options;
@@ -21,7 +21,7 @@ export function retryWithBackoff<T>(
       while (true) {
         try {
           return await fn(attempt);
-        } catch (error) {
+        } catch (error: unknown) {
           attempt++;
           
           // Check if we should retry
@@ -31,9 +31,19 @@ export function retryWithBackoff<T>(
               typeof retryableErrors === 'function' 
                 ? retryableErrors(error) 
                 : Array.isArray(retryableErrors) 
-                  ? retryableErrors.includes(error.status || error.statusCode) 
+                  ? isHttpError(error) && retryableErrors.includes(getErrorStatusCode(error)) 
                   : true
             );
+            
+          // Helper functions for type-safe error handling
+          function isHttpError(err: unknown): err is {status?: number; statusCode?: number} {
+            return typeof err === 'object' && err !== null && 
+                   ('status' in err || 'statusCode' in err);
+          }
+          
+          function getErrorStatusCode(err: {status?: number; statusCode?: number}): number {
+            return err.status || err.statusCode || 0;
+          }
           
           if (!shouldRetry) {
             throw error;

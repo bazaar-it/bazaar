@@ -1,5 +1,37 @@
 # TODO Items
 
+## Sprint 7: Real-time Chat Streaming Optimization
+
+### HIGH Priority - Completed ✅
+- ✅ Implement Vercel AI SDK integration with tRPC v11 observables
+- ✅ Create streaming response procedure in chat router
+- ✅ Add proper token management and event emission
+- ✅ Fix missing database updates in successful streaming paths
+- ✅ Enhance error handling with typed error events
+- ✅ Fix TypeScript errors for better type safety
+- ✅ Improve cross-procedure communication between chat and project routers
+- ✅ Implement build worker optimization with worker pool and concurrency limits
+- ✅ Add test coverage for custom component build worker
+
+### HIGH Priority - Remaining
+- Implement UI indicators for status changes during streaming
+
+### HIGH Priority - Completed ✅
+- ✅ Migrate client code to use the new streaming API instead of legacy sendMessage
+- ✅ Update front-end to properly handle streaming event types
+- ✅ Create comprehensive test suite for streaming interactions
+
+### MEDIUM Priority - Completed ✅
+- ✅ Ensure proper final database updates in all success/error paths
+- ✅ Fix type handling in retryWithBackoff utility
+- ✅ Update documentation to reflect the new streaming architecture
+
+### MEDIUM Priority - Remaining
+- Add client-side metrics collection for response times
+- Implement more granular error handling for specific failure cases
+- Expand test coverage for build worker to include integration tests
+- Add performance benchmarks for build worker optimization
+
 ## Sprint 5-6: Dynamic Remotion Component Generation
 
 ### HIGH Priority - Completed ✅

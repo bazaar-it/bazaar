@@ -98,7 +98,7 @@ export const projectRouter = createTRPCRouter({
         if (input?.initialMessage && input.initialMessage.trim().length > 0) {
           // Fire-and-forget – attach a catch to avoid unhandled rejection noise
           processUserMessageInProject(ctx, insertResult.id, input.initialMessage)
-            .catch((error) => {
+            .catch((error: unknown) => {
               // Log but don't affect the response – project has already been created
               console.error(`Error processing initial message for project ${insertResult.id}:`, error);
             });

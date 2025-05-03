@@ -40,6 +40,8 @@ import type {
 const SYSTEM_PROMPT = "You are a Remotion video assistant. Analyze the user request in the context of the current video properties (`currentProps`). Decide whether to apply a JSON patch for direct modifications or request a new custom component generation for complex effects. Use `applyJsonPatch` for modifications. Use `generateRemotionComponent` for new effects. Respond naturally if neither tool is appropriate or more information is needed.";
 const MAX_CONTEXT_MESSAGES = 10; // How many *pairs* of user/assistant messages to fetch
 
+// --- Helper Functions ---
+
 // --- Tool Definitions ---
 const applyPatchTool: ChatCompletionTool = {
     type: "function",
@@ -182,7 +184,7 @@ export const chatRouter = createTRPCRouter({
         .input(z.object({ projectId: z.string().uuid(), message: z.string().min(1) }))
         .mutation(async ({ ctx, input }) => {
              console.warn("Using legacy sendMessage instead of streaming flow.");
-             return await processUserMessageSynchronously(ctx, input.projectId, input.message);
+            return await processUserMessageInProject(ctx, input.projectId, input.message);
         }),
 
     /**
@@ -262,216 +264,286 @@ export const chatRouter = createTRPCRouter({
                         console.log(`[Stream ${assistantMessageId}] Starting subscription.`);
                         emit.next({ type: "status", status: "thinking" });
 
-                    // --- 1. Fetch Context (Project & History) ---
-                    const project = await db.query.projects.findFirst({
-                        columns: { id: true, userId: true, props: true },
-                        where: and(
-                            eq(projects.id, projectId),
-                            eq(projects.userId, session.user.id)
-                        )
-                    });
-                    if (!project) throw new TRPCError({ code: "FORBIDDEN" });
+                        // --- 1. Fetch Context (Project & History) ---
+                        const project = await db.query.projects.findFirst({
+                            columns: { id: true, userId: true, props: true },
+                            where: and(
+                                eq(projects.id, projectId),
+                                eq(projects.userId, session.user.id)
+                            )
+                        });
+                        if (!project) throw new TRPCError({ code: "FORBIDDEN" });
 
-                    // Find the placeholder message to get its creation time
-                    const placeholderMessage = await db.query.messages.findFirst({
-                        columns: { createdAt: true, id: true },
-                        where: eq(messages.id, assistantMessageId)
-                    });
-                    if (!placeholderMessage) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Assistant placeholder not found." });
-
-
-                    // Fetch recent messages *before* the placeholder was created
-                    const history = await db.query.messages.findMany({
-                        where: and(
-                            eq(messages.projectId, projectId),
-                            lt(messages.createdAt, placeholderMessage.createdAt) // Messages before placeholder
-                        ),
-                        orderBy: [desc(messages.createdAt)],
-                        limit: MAX_CONTEXT_MESSAGES * 2 // Fetch more to ensure we get user/assistant pairs
-                    });
-
-                    // Find the most recent user message from the fetched history
-                    // This assumes the user message immediately precedes the assistant placeholder creation
-                    const lastUserMessage = history.find(m => m.role === 'user');
-                    if (!lastUserMessage) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not find triggering user message in history." });
-
-                    // --- 2. Construct OpenAI Request ---
-                     // Prepare history for OpenAI, alternating roles, newest first, limit pairs
-                    const openAIHistory: ChatCompletionMessageParam[] = history
-                        .reverse() // Oldest first
-                        .slice(-(MAX_CONTEXT_MESSAGES * 2)) // Limit total messages
-                        .map(m => ({ role: m.role, content: m.content } as ChatCompletionMessageParam));
-
-                    const currentRequestMessage: ChatCompletionMessageParam = {
-                        role: "user",
-                        content: JSON.stringify({
-                            request: lastUserMessage.content, // The user's request
-                            currentProps: project.props // Current state for context
-                        })
-                    };
-
-                    const messagesForAPI: ChatCompletionMessageParam[] = [
-                        { role: "system", content: SYSTEM_PROMPT },
-                        ...openAIHistory, // Add historical context
-                        currentRequestMessage // Add the current request + props
-                    ];
+                        // Find the placeholder message to get its creation time
+                        const placeholderMessage = await db.query.messages.findFirst({
+                            columns: { createdAt: true, id: true },
+                            where: eq(messages.id, assistantMessageId)
+                        });
+                        if (!placeholderMessage) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Assistant placeholder not found." });
 
 
-                    // --- 3. Call OpenAI (Single Streaming Call) ---
-                    console.log(`[Stream ${assistantMessageId}] Making OpenAI call with ${messagesForAPI.length} messages.`);
-                    const openaiResponse = await openai.chat.completions.create({
-                        model: "gpt-4o",
-                        messages: messagesForAPI,
-                        tools: TOOLS,
-                        tool_choice: "auto",
-                        stream: true,
-                    });
+                        // Fetch recent messages *before* the placeholder was created
+                        const history = await db.query.messages.findMany({
+                            where: and(
+                                eq(messages.projectId, projectId),
+                                lt(messages.createdAt, placeholderMessage.createdAt) // Messages before placeholder
+                            ),
+                            orderBy: [desc(messages.createdAt)],
+                            limit: MAX_CONTEXT_MESSAGES * 2 // Fetch more to ensure we get user/assistant pairs
+                        });
 
-                    // --- 4. Process Stream Manually ---
-                    for await (const chunk of openaiResponse) {
-                        const delta = chunk.choices[0]?.delta;
-                        const finishReason = chunk.choices[0]?.finish_reason;
+                        // Find the most recent user message from the fetched history
+                        // This assumes the user message immediately precedes the assistant placeholder creation
+                        const lastUserMessage = history.find(m => m.role === 'user');
+                        if (!lastUserMessage) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not find triggering user message in history." });
 
-                        // a) Handle Content Delta
-                        if (delta?.content) {
-                            finalContent += delta.content; // Append to server-side buffer
-                            emit.next({ type: "delta", content: delta.content }); // Emit delta to client
-                        }
+                        // --- 2. Construct OpenAI Request ---
+                        // Prepare history for OpenAI, alternating roles, newest first, limit pairs
+                        const openAIHistory: ChatCompletionMessageParam[] = history
+                            .reverse() // Oldest first
+                            .slice(-(MAX_CONTEXT_MESSAGES * 2)) // Limit total messages
+                            .map(m => ({ role: m.role, content: m.content } as ChatCompletionMessageParam));
 
-                        // b) Handle Tool Call Delta (Buffering)
-                        if (delta?.tool_calls && delta.tool_calls.length > 0) {
-                            const toolCallDelta = delta.tool_calls[0];
-                            if (!isToolCall) { // First chunk of tool call
-                                isToolCall = true;
-                                finalKind = "tool_result"; // Mark final kind
-                                console.log(`[Stream ${assistantMessageId}] Tool call detected.`);
-                                emit.next({ type: "status", status: "tool_calling" });
-                            }
-                            if (toolCallDelta && toolCallDelta.id) toolCallId = toolCallDelta.id;
-                            if (toolCallDelta && toolCallDelta.function?.name) toolName = toolCallDelta.function.name;
-                            if (toolCallDelta && toolCallDelta.function?.arguments) toolArgsBuffer += toolCallDelta.function.arguments;
-                        }
+                        const currentRequestMessage: ChatCompletionMessageParam = {
+                            role: "user",
+                            content: JSON.stringify({
+                                request: lastUserMessage.content, // The user's request
+                                currentProps: project.props // Current state for context
+                            })
+                        };
 
-                        // c) Handle Stream Finish Reason
-                        if (finishReason) {
-                            console.log(`[Stream ${assistantMessageId}] Finish Reason: ${finishReason}`);
-                            if (finishReason === "tool_calls" && isToolCall) {
-                                // --- Execute Tool ---
-                                console.log(`[Stream ${assistantMessageId}] Executing Tool: ${toolName}, Args: ${toolArgsBuffer}`);
-                                emit.next({ type: "tool_start", name: toolName });
+                        const messagesForAPI: ChatCompletionMessageParam[] = [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            ...openAIHistory, // Add historical context
+                            currentRequestMessage // Add the current request + props
+                        ];
 
-                                let parsedArgs: any;
-                                try {
-                                    parsedArgs = JSON.parse(toolArgsBuffer);
-                                } catch (parseError: any) {
-                                     console.error(`[Stream ${assistantMessageId}] Tool args parse error:`, parseError);
-                                     throw new Error(`Failed to parse arguments for tool ${toolName}: ${parseError.message}`);
+                        // --- 3. Call OpenAI (Single Streaming Call) ---
+                        console.log(`[Stream ${assistantMessageId}] Making OpenAI call with ${messagesForAPI.length} messages.`);
+                        const openaiResponse = await openai.chat.completions.create({
+                            model: "gpt-4o",
+                            messages: messagesForAPI,
+                            tools: TOOLS,
+                            tool_choice: "auto",
+                            stream: true,
+                        });
+
+                        // --- 4. Process Stream Manually ---
+                        for await (const chunk of openaiResponse) {
+                            const delta = chunk.choices[0]?.delta;
+                            const finishReason = chunk.choices[0]?.finish_reason;
+
+                            // a) Process Content Updates (Text Deltas)
+                            if (delta?.content) {
+                                const contentDelta = delta.content;
+                                // Keep building the final content
+                                finalContent += contentDelta;
+                                
+                                // Only emit on significant text or the first delta
+                                if (contentDelta.trim() || finalContent.length === contentDelta.length) {
+                                    // Stream the content delta to client
+                                    emit.next({ type: "delta", content: contentDelta });
                                 }
+                            }
+                            
+                            // b) Process Tool Calls
+                            if (delta?.tool_calls && delta.tool_calls.length > 0) {
+                                // Handle tool call start if not already in tool call mode
+                                if (!isToolCall) {
+                                    isToolCall = true;
+                                    toolName = delta.tool_calls[0]?.function?.name || "unknown";
+                                    toolCallId = delta.tool_calls[0]?.id || null;
+                                    finalKind = "tool_result"; // Mark as tool call for DB update
+                                    emit.next({ type: "tool_start", name: toolName });
+                                    console.log(`[Stream ${assistantMessageId}] Tool start: ${toolName}`);
+                                }
+                                
+                                // Accumulate function arguments (they may come in chunks)
+                                if (delta.tool_calls[0]?.function?.arguments) {
+                                    toolArgsBuffer += delta.tool_calls[0].function.arguments;
+                                }
+                            }
+                            
+                            // c) Handle Stream Finish Reason
+                            if (finishReason) {
+                                console.log(`[Stream ${assistantMessageId}] Finish Reason: ${finishReason}`);
+                                if (finishReason === "tool_calls" && isToolCall) {
+                                    console.log(`[Stream ${assistantMessageId}] Executing tool: ${toolName} with args: ${toolArgsBuffer}`);
+                                    finalStatus = "building";
+                                    
+                                    // Signal to client that we're executing a tool
+                                    emit.next({ type: "status", status: "tool_calling" });
+                                    
+                                    try {
+                                        // Handle the tool calls based on function name
+                                        if (toolName === "generateRemotionComponent" && toolArgsBuffer) {
+                                            // Parse the tool arguments
+                                            const args = JSON.parse(toolArgsBuffer);
+                                            const { effectDescription } = args;
+                                            
+                                            // Generate the component (this handles DB entries)
+                                            const result = await handleComponentGenerationInternal(projectId, effectDescription, assistantMessageId);
+                                            jobId = result.jobId;
+                                            
+                                            // Update final content and emit event to client
+                                            finalContent = `I'm generating a custom component for: "${result.effect}"
 
-                                // --- Tool: applyJsonPatch ---
-                                if (toolName === "applyJsonPatch") {
-                                    const { operations, explanation } = parsedArgs;
-                                    explanationFromTool = explanation;
+Status: Processing
+Job ID: ${jobId}
 
-                                    // i. Validate Patch Schema
-                                    const patchValidation = jsonPatchSchema.safeParse(operations);
-                                    if (!patchValidation.success) throw new Error(`Invalid patch format: ${patchValidation.error.message}`);
-                                    const validPatchOps = patchValidation.data as Operation[];
-
-                                    // ii. Apply Patch (to clone)
-                                    const originalProps = structuredClone(project.props);
-                                    const patchResult = applyPatch(originalProps, validPatchOps, true, false);
-                                    const nextProps = patchResult.newDocument;
-                                                    // Fast-json-patch has the errors in a different format depending on versions
-                                    // Handle errors based on what's available in your version
-                                    const patchErrors = (patchResult as any).errors;
-                                    if (patchErrors && Array.isArray(patchErrors) && patchErrors.length > 0) {
-                                        const errorMsg = patchErrors[0]?.message || 'Unknown patch error';
-                                        throw new Error(`Patch application error: ${errorMsg}`);
-                                    }
-
-                                    // iii. Validate Resulting Props
-                                    const resultValidation = inputPropsSchema.safeParse(nextProps);
-                                    if (!resultValidation.success) throw new Error(`Patch result invalid: ${resultValidation.error.message}`);
-
-                                    // iv. Persist (Transaction recommended for multi-table updates)
-                                    await db.transaction(async (tx) => {
-                                        await tx.update(projects)
-                                            .set({ props: resultValidation.data, updatedAt: new Date() })
-                                            .where(eq(projects.id, projectId));
-                                        await tx.insert(patches).values({
-                                            id: nanoid(), 
-                                            projectId, 
-                                            patch: validPatchOps as unknown as JsonPatch, 
-                                            createdAt: new Date()
+Your component is being compiled and will be available soon.`;
+                                            
+                                            emit.next({ 
+                                                type: "tool_result", 
+                                                name: toolName,
+                                                success: true,
+                                                jobId,
+                                                finalContent
+                                            });
+                                        }
+                                        else if (toolName === "applyJsonPatch" && toolArgsBuffer) {
+                                            // Parse the tool arguments
+                                            const args = JSON.parse(toolArgsBuffer);
+                                            const { operations, explanation } = args;
+                                            
+                                            // Validate patch operations
+                                            const parsed = jsonPatchSchema.safeParse(operations);
+                                            if (!parsed.success) {
+                                                throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid patch format" });
+                                            }
+                                            
+                                            const patch = parsed.data;
+                                            const patchOperations = patch as unknown as Operation[];
+                                            
+                                            // Apply the patch to props
+                                            const nextProps = applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
+                                            const validated = inputPropsSchema.safeParse(nextProps);
+                                            
+                                            if (!validated.success) {
+                                                throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
+                                            }
+                                            
+                                            // Save project changes and patch history
+                                            await db.update(projects)
+                                                .set({ props: validated.data, updatedAt: new Date() })
+                                                .where(eq(projects.id, projectId));
+                                                
+                                            await db.insert(patches).values({ 
+                                                projectId, 
+                                                patch: patchOperations as unknown as JsonPatch 
+                                            });
+                                            
+                                            // Update the final content with the explanation
+                                            const toolExplanation = explanation || `I've updated your video with ${patchOperations.length} changes.`;
+                                            explanationFromTool = toolExplanation;
+                                            finalContent = toolExplanation;
+                                            finalStatus = "success";
+                                            
+                                            // Emit success to client
+                                            emit.next({ 
+                                                type: "tool_result", 
+                                                name: toolName,
+                                                success: true,
+                                                finalContent
+                                            });
+                                        }
+                                        else {
+                                            // Unknown or empty tool call
+                                            throw new TRPCError({ 
+                                                code: "BAD_REQUEST", 
+                                                message: `Unhandled tool: ${toolName}` 
+                                            });
+                                        }
+                                    
+                                    // For tool call execution errors
+                                    } catch (toolError: any) {
+                                        console.error(`[Stream ${assistantMessageId}] Tool execution error:`, toolError);
+                                        finalStatus = "error";
+                                        finalKind = "error";
+                                        const errorMsg = toolError instanceof TRPCError ? toolError.message : (toolError.message ?? String(toolError));
+                                        finalContent = `❌ Error executing ${toolName}: ${errorMsg}`;
+                                        
+                                        // Emit error to client
+                                        emit.next({ 
+                                            type: "tool_result", 
+                                            name: toolName,
+                                            success: false,
+                                            finalContent 
                                         });
-                                    });
-
-                                    console.log(`[Stream ${assistantMessageId}] Patch applied successfully.`);
+                                    }
+                                } else if (finishReason === "stop") {
+                                    // Normal completion (no tool calls)
                                     finalStatus = "success";
-                                    // Use explanation if provided, otherwise generate one
-                                    const patchSummary = explanationFromTool ?? `${validPatchOps.length} change(s) applied.`;
-                                    finalContent = finalContent ? `${finalContent}\n\n✅ ${patchSummary}` : `✅ ${patchSummary}`;
-                                    emit.next({ type: "tool_result", name: toolName, success: true, finalContent });
-
-                                // --- Tool: generateRemotionComponent ---
-                                } else if (toolName === "generateRemotionComponent") {
-                                    const { effectDescription } = parsedArgs;
-                                    if (!effectDescription) throw new Error("Missing effectDescription");
-
-                                    // Delegate to internal helper
-                                    const jobDetails = await handleComponentGenerationInternal(projectId, effectDescription, assistantMessageId);
-                                    jobId = jobDetails.jobId; // Store for final emit
-
-                                    console.log(`[Stream ${assistantMessageId}] Component generation job started: ${jobId}`);
-                                    finalStatus = "building"; // Worker updates final status later
-                                    finalContent = finalContent ? `${finalContent}\n\n⏳ Generating component "${jobDetails.effect}"... (Job ID: ${jobId})` : `⏳ Generating component "${jobDetails.effect}"... (Job ID: ${jobId})`;
-                                    emit.next({ type: "tool_result", name: toolName, success: true, jobId, finalContent });
-
+                                    emit.next({ type: "complete", finalContent });
                                 } else {
-                                    console.warn(`[Stream ${assistantMessageId}] Unknown tool called: ${toolName}`);
-                                    throw new Error(`Unknown tool requested: ${toolName}`);
+                                    // Other finish reasons (length, content filter, etc.)
+                                    console.log(`[Stream ${assistantMessageId}] Other finish reason: ${finishReason}`);
+                                    finalStatus = "success"; // Still mark as success
+                                    emit.next({ type: "complete", finalContent });
                                 }
-                            } else if (finishReason === "stop") {
-                                // --- Normal Text Completion ---
-                                console.log(`[Stream ${assistantMessageId}] Stream finished normally.`);
-                                if (!finalContent.trim()) finalContent = "Okay."; // Handle empty responses
-                                finalStatus = "success";
-                                finalKind = "text";
-                                emit.next({ type: "complete", finalContent });
-                            } else {
-                                // --- Other Finish Reasons ---
-                                console.warn(`[Stream ${assistantMessageId}] Stream finished unexpectedly: ${finishReason}`);
-                                finalStatus = "error";
-                                finalKind = "error";
-                                finalContent += `\n\n⚠️ Response may be incomplete (${finishReason}).`;
-                                emit.next({ type: "error", error: `Stream ended unexpectedly: ${finishReason}`, finalContent });
-                            }
-                            break; // Exit the loop once finished
-                        } // End finishReason handling
-                    } // End for await loop
+                                break; // Exit the loop once finished
+                            } // End finishReason handling
+                        } // End for await loop
 
-                } catch (error: any) {
-                    console.error(`[Stream ${assistantMessageId}] Error during stream processing:`, error);
-                    finalStatus = "error";
-                    finalKind = "error";
-                    // Append error to any content already streamed
-                        // Ignore if the stream is already closed
-                    }
-                };
+                    } catch (error: any) {
+                        console.error(`[Stream ${assistantMessageId}] Error during stream processing:`, error);
+                        finalStatus = "error";
+                        finalKind = "error";
+                        const errorMsg = error instanceof TRPCError ? error.message : (error.message ?? String(error));
+                        finalContent = finalContent ? `${finalContent}\n\n❌ Error: ${errorMsg}` : `❌ Error: ${errorMsg}`;
+                        // Emit error details to client
+                        emit.next({ type: "error", error: errorMsg, finalContent });
+                        // DB update will happen in finally block
+                    } finally {
+                        // --- Final DB Update (Guaranteed Execution) ---
+                        console.log(`[Stream ${assistantMessageId}] Updating final message: Status=${finalStatus}, Kind=${finalKind}`);
+                        try {
+                            await db.update(messages)
+                                .set({ 
+                                    content: finalContent, 
+                                    status: finalStatus, 
+                                    kind: finalKind, 
+                                    updatedAt: new Date() 
+                                })
+                                .where(eq(messages.id, assistantMessageId));
+                            
+                            console.log(`[Stream ${assistantMessageId}] Final DB update successful.`);
+                        } catch (dbError: any) {
+                            console.error(`[Stream ${assistantMessageId}] CRITICAL: Failed to update final message status in DB:`, dbError);
+                            // Emit might fail if connection is already closed, but try anyway
+                            emit.next({ type: "error", error: `Failed to save final state: ${dbError.message}`});
+                        }
+                        
+                        // Signal end to client
+                        emit.next({ type: "finalized", status: finalStatus, jobId });
+                        emit.complete(); // Signal observable completion
+                        console.log(`[Stream ${assistantMessageId}] Stream processing finished and observable completed.`);
+                    }    
+                } // End for await loop
+
+                // Execute the main process, catching any startup errors
+                mainProcess().catch((error) => {
+                    // Catch errors from the main async process starting itself
+                    console.error(`[Stream ${assistantMessageId}] Fatal error starting mainProcess:`, error);
+                    emit.error(new TRPCError({ // Signal error through the observable
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: error instanceof Error ? error.message : 'Unknown streaming setup error',
+                        cause: error
+                    }));
+                    // No finally block here, error is emitted, observable ends. DB won't be updated.
+                });
                 
-                // Return teardown function (required for tRPC observable)
+                // Return teardown function
                 return () => {
-                    console.log(`[Stream ${assistantMessageId}] Client disconnected, cleaning up`);
-                    // Any cleanup code would go here
+                    console.log(`[Stream ${assistantMessageId}] Teardown: Client disconnected`);
+                    // Cleanup logic (e.g., abort fetch controllers if needed)
                 };
-            }); // End observable
+            }); // End observable return
         }),
 
 }); // End createTRPCRouter
 
-// --- Type Definition for Client Events ---
-// Return type for sendMessage mutation - needed for client compatibility
+// ... (rest of the code remains the same)
 export type SendMessageResult = {
     patch?: JsonPatch;
     userMessageId: string;
@@ -481,10 +553,14 @@ export type SendMessageResult = {
 };
 
 /**
- * Temporary implementation of the legacy sendMessage until client code is updated
- * to use the streaming API. This provides backward compatibility.
+ * Process a user message within a project context, handling both standard video updates
+ * and custom component generation requests.
+ * 
+ * Used by both the chat router and project router.
+ * Acts as the temporary implementation of the legacy sendMessage until all client code
+ * is updated to use the streaming API.
  */
-async function processUserMessageSynchronously(ctx: any, projectId: string, message: string): Promise<SendMessageResult> {
+export async function processUserMessageInProject(ctx: any, projectId: string, message: string): Promise<SendMessageResult> {
     try {
         // Check project access
         const [project] = await ctx.db

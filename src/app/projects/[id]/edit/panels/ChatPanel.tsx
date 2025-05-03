@@ -1,21 +1,28 @@
 // src/app/projects/[id]/edit/panels/ChatPanel.tsx
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Separator } from "~/components/ui/separator";
-import { SendHorizontalIcon, Loader2Icon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "~/trpc/react";
-import { useVideoState, type DbMessage, type ChatMessage } from "~/stores/videoState";
+import { Input } from "~/components/ui/input";
+import { Button } from "~/components/ui/button";
+import { Separator } from "~/components/ui/separator";
+import { Loader2Icon, SendHorizontalIcon } from "lucide-react";
+import { useVideoState, type DbMessage, type ChatMessage, type MessageUpdates } from "~/stores/videoState";
+import { type StreamEvent } from "~/server/api/routers/chat";
+import { skipToken } from "@tanstack/react-query";
 import type { Operation } from "fast-json-patch";
 
 export default function ChatPanel({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  // Store current streaming message ID
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const { 
     applyPatch, 
     getChatHistory, 
-    addMessage, 
+    addMessage,
+    addAssistantMessage,
+    updateMessage, 
     syncDbMessages, 
     clearOptimisticMessages 
   } = useVideoState();
@@ -35,9 +42,9 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       enabled: !!projectId,
       // Don't show loading state for too long - treat errors as empty messages
       retry: 1,
-      // Poll every second for new messages
-      refetchInterval: 1000,
-      // Consider data stale quickly so polling can re-render as soon as new messages come in
+      // No longer polling - streaming will update messages in real-time
+      // refetchInterval: 1000,
+      // Consider data stale quickly so re-renders happen as needed
       staleTime: 0,
     }
   );
@@ -67,45 +74,135 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [dbMessages, optimisticChatHistory]);
   
-  const sendMessage = api.chat.sendMessage.useMutation({
+  // STEP 1: Initiate the chat with user message (returns assistantMessageId for streaming)
+  const initiateChat = api.chat.initiateChat.useMutation({
     onMutate: () => {
       // Add user message to optimistic chat history immediately
       addMessage(projectId, message, true);
       
       // Clear input field
       setMessage("");
+      
+      // Set streaming state
+      setIsStreaming(true);
     },
     onSuccess: (response) => {
-      // Check if this is a custom component response or a patch response
-      if ('noPatches' in response && response.noPatches) {
-        // Custom component generated - no need to apply patch
-        // The assistant message will be fetched from the database
-        
-        // Refetch messages from database to sync with server
-        void refetchMessages();
-      } else if ('patch' in response && response.patch) {
-        // Apply the patch to the project
-        applyPatch(projectId, response.patch as unknown as Operation[]);
-        
-        // Add system response to optimistic chat history
-        addMessage(projectId, "Changes applied to your video preview.", false);
-        
-        // Refetch messages from database to sync with server
-        void refetchMessages();
-      }
+      // Get the assistantMessageId and start the streaming subscription
+      const { assistantMessageId } = response;
+      
+      // Add placeholder assistant message to the store
+      addAssistantMessage(projectId, assistantMessageId, "...");
+      
+      // Set the streaming message ID to start the subscription
+      setStreamingMessageId(assistantMessageId);
     },
     onError: (error) => {
       // Add error message to chat history
       addMessage(projectId, `Error: ${error.message}`, false);
+      setIsStreaming(false);
     },
   });
+  
+  // Handle stream events from subscription
+  const handleStreamEvents = (event: StreamEvent) => {
+    try {
+      // Use streaming message ID for updates - this is set when initiateChat succeeds
+      const activeMessageId = streamingMessageId || "";
+      
+      // Update message based on event type
+      switch (event.type) {
+        case "status":
+          // Update status (thinking, tool_calling, building)
+          updateMessage(projectId, activeMessageId, {
+            status: event.status
+          });
+          break;
+          
+        case "delta":
+          // Append content delta to message
+          updateMessage(projectId, activeMessageId, {
+            delta: event.content // Use delta instead of content for streaming chunks
+          });
+          break;
+          
+        case "tool_start":
+          // Tool execution started
+          updateMessage(projectId, event.name, {
+            status: "tool_calling",
+            content: `Using tool: ${event.name}...`
+          });
+          break;
+          
+        case "tool_result":
+          // Tool executed with result
+          if (event.finalContent) {
+            updateMessage(projectId, event.name, {
+              status: event.success ? "success" : "error",
+              kind: "tool_result",
+              content: event.finalContent,
+              jobId: event.jobId || null
+            });
+          }
+          break;
+          
+        case "complete":
+          // Response complete
+          updateMessage(projectId, event.finalContent, {
+            status: "success",
+            kind: "text",
+            content: event.finalContent
+          });
+          break;
+          
+        case "error":
+          // Error occurred
+          updateMessage(projectId, event.error, {
+            status: "error",
+            kind: "error",
+            content: event.finalContent || `Error: ${event.error}`
+          });
+          break;
+          
+        case "finalized":
+          // Stream completed
+          setIsStreaming(false);
+          setStreamingMessageId(null);  // Stop subscription
+          // Refetch messages to ensure we have the latest state
+          void refetchMessages();
+          break;
+      }
+      
+      // Scroll to bottom on each update
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      console.error("Error processing stream event:", err, event);
+    }
+  };
+  
+
+
+  // Set up the stream response subscription
+  // This will automatically activate when streamingMessageId is set
+  api.chat.streamResponse.useSubscription(
+    // Only subscribe if we have a streaming message ID
+    streamingMessageId ? { assistantMessageId: streamingMessageId, projectId } : skipToken,
+    {
+      onData: handleStreamEvents,
+      onError: (err) => {
+        console.error("Stream subscription error:", err);
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+        addMessage(projectId, `Stream error: ${err.message}`, false);
+      }
+    }
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!message.trim() || !projectId) return;
     
-    sendMessage.mutate({
+    initiateChat.mutate({
       projectId,
       message: message.trim(),
     });
@@ -208,7 +305,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
             {hasDbMessages ? (
               // Only show optimistic messages if there's a chance they're not in the database yet
               // For a more robust solution, you'd filter out messages that match database entries
-              sendMessage.isPending && hasOptimisticMessages && optimisticChatHistory.map((chat) => (
+              isStreaming && hasOptimisticMessages && optimisticChatHistory.map((chat) => (
                 <div
                   key={chat.id}
                   className={`flex ${chat.isUser ? 'justify-end' : 'justify-start'} opacity-70`}
@@ -252,7 +349,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           </>
         )}
         
-        {sendMessage.isPending && !hasOptimisticMessages && (
+        {isStreaming && !hasOptimisticMessages && (
           <div className="flex justify-start">
             <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
               <Loader2Icon className="h-4 w-4 animate-spin" />
@@ -273,14 +370,14 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Describe changes to your video..."
             className="flex-1"
-            disabled={sendMessage.isPending || isLoadingMessages}
+            disabled={isStreaming || isLoadingMessages}
           />
           <Button 
             type="submit"
-            disabled={sendMessage.isPending || isLoadingMessages || !message.trim()}
+            disabled={isStreaming || isLoadingMessages || !message.trim()}
             size="icon"
           >
-            {sendMessage.isPending ? (
+            {isStreaming ? (
               <Loader2Icon className="h-4 w-4 animate-spin" />
             ) : (
               <SendHorizontalIcon className="h-4 w-4" />

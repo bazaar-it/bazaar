@@ -1,4 +1,4 @@
-# Sprint 7: Real-time Chat-Driven Component Creation
+# Sprint 7: Real-time Chat-Driven Component Creation & Streaming Optimization
 
 ## Key Metrics & Targets
 
@@ -34,7 +34,7 @@
 ### Technical Implementation Details
 
 **1. Message Updates vs. New Messages:**
-We'll use the **update approach** to avoid cluttering the chat with multiple system messages:
+We've implemented the **update approach** to avoid cluttering the chat with multiple system messages:
 
 ```typescript
 // src/server/db/schema.ts
@@ -55,77 +55,100 @@ await db.update(messages)
   .where(eq(messages.id, statusMessageId));
 ```
 
-**2. Streaming "Thinking" Tokens:**
-A key optimization to hit the 150ms target while waiting for real responses:
+**2. Streaming Implementation with Vercel AI SDK:**
+We've implemented real-time streaming using the Vercel AI SDK and tRPC observables to hit the 150ms target while providing continuous feedback:
 
 ```typescript
-// src/app/projects/[id]/edit/panels/ChatPanel.tsx
-const handleSubmit = async (message: string) => {
-  // 1. Immediately start streaming basic "thinking" tokens
-  const streamController = new AbortController();
-  const startTime = performance.now();
-  let intervalId: number | null = null;
-  
-  // Create a stream that immediately sends thinking tokens
-  const thinkingStream = new ReadableStream({
-    start(controller) {
-      controller.enqueue("Thinking");
-      
-      // Stream dots while waiting for real response
-      // Using variable to ensure we can clear it in all browsers
-      intervalId = window.setInterval(() => {
-        controller.enqueue(".");
-      }, 100);
-      
-      // Clean up interval when real stream starts - Safari-safe cleanup
-      streamController.signal.addEventListener('abort', () => {
-        if (intervalId !== null) {
-          window.clearInterval(intervalId);
-          intervalId = null;
-        }
-        controller.close();
+// src/server/api/routers/chat.ts - Core streaming implementation
+export const chatRouter = createTRPCRouter({
+  // First initialize the chat session
+  initiateChat: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      message: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Creates user message and placeholder assistant message
+      // Returns the ID needed for streaming
+      return { assistantMessageId };
+    }),
+    
+  // Then stream the response
+  streamResponse: protectedProcedure
+    .input(z.object({
+      assistantMessageId: z.string().uuid(),
+      projectId: z.string().uuid(),
+    }))
+    .subscription(({ ctx, input }) => {
+      // Return a subscription using observable
+      return observable<StreamEvent>((emit) => {
+        // Start a self-executing async function to handle the stream
+        (async () => {
+          try {
+            // 1. Emit initial status immediately
+            emit.next({ type: "status", status: "thinking" });
+            
+            // 2. Process OpenAI streaming response
+            const stream = await openai.chat.completions.create({
+              model: "gpt-4o",
+              messages: /* context */,
+              stream: true,
+              tools: TOOLS,
+            });
+            
+            // 3. Process stream chunks with proper database updates
+            // at critical points during streaming
+          } catch (error) {
+            // Handle errors with proper typing
+          }
+        })();
+        
+        // Return cleanup function
+        return () => { /* cleanup */ };
       });
-    },
-    cancel() {
-      // Additional safety for cases where abort event listener fails
-      if (intervalId !== null) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
-    }
+    })
+});
+
+// Real-time streaming events
+export type StreamEvent =
+  | { type: "status"; status: "thinking" | "tool_calling" | "building" }
+  | { type: "delta"; content: string }
+  | { type: "tool_start"; name: string }
+  | { type: "tool_result"; name: string; success: boolean; jobId?: string | null; finalContent?: string }
+  | { type: "complete"; finalContent: string }
+  | { type: "error"; error: string; finalContent?: string }
+  | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null };
+
+// Client-side implementation
+const handleSubmit = async (message: string) => {
+  // 1. First, initiate the chat and get the placeholder message ID
+  const { assistantMessageId } = await api.chat.initiateChat.mutate({
+    projectId,
+    message,
   });
   
-  // 2. Update UI with thinking stream
-  const messageId = await updateChatWithStream(thinkingStream);
-  
-  try {
-    // 3. Make the actual API call with OpenAI streaming
-    const response = await fetch('/api/chat', { /* params */ });
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+  // 2. Connect to the streaming subscription
+  const subscription = api.chat.streamResponse.subscribe(
+    { assistantMessageId, projectId },
+    {
+      onData: (event) => {
+        // Handle different event types
+        switch (event.type) {
+          case "status":
+            updateMessageStatus(assistantMessageId, event.status);
+            break;
+          case "delta":
+            appendMessageContent(assistantMessageId, event.content);
+            break;
+          case "complete":
+            finalizeMessage(assistantMessageId, event.finalContent);
+            break;
+          // ... handle other event types
+        }
+      },
+      onError: (error) => handleStreamError(error, assistantMessageId),
     }
-    
-    // 4. Abort thinking stream and handle the real stream
-    streamController.abort();
-    
-    if (supportsMessageEditing) {
-      // If our UI supports editing messages, update the existing message
-      updateChatWithStream(response.body, messageId);
-    } else {
-      // Otherwise, hide the thinking message and add a new one
-      hideMessage(messageId); // Sets opacity to 0.5 via CSS
-      updateChatWithStream(response.body);
-    }
-    
-    // 5. Record timing metrics
-    const responseTime = performance.now() - startTime;
-    recordMetric('initial-response-time', responseTime);
-  } catch (error) {
-    // Handle errors, including rate limits
-    streamController.abort();
-    handleStreamError(error, messageId);
-  }
+  );
 };
 ```
 
@@ -134,19 +157,74 @@ const handleSubmit = async (message: string) => {
 - Chat provides continuous real-time updates to keep users oriented
 - The video timeline shows exactly where the component will appear
 
-**4. Automated Timing Measurements:**
+**Implementation Details:**
+- Add a subtle, unobtrusive overlay for lengthy builds:
+
+```tsx
+// src/remotion/compositions/DynamicVideo.tsx
+// Add this inside the AbsoluteFill for builds over ~8 seconds
+// The overlay will not appear in the final exported video
+
+{isBuilding && buildTime > 8000 && (
+  <div style={{
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    color: 'white',
+    padding: '8px 12px',
+    borderRadius: 4,
+    fontSize: 12,
+    opacity: 0.8,
+    pointerEvents: 'none', // ensures it doesn't interfere with interactions
+    transition: 'opacity 0.5s',
+  }}>
+    Compiling custom component...
+  </div>
+)}
+```
+
+- Optimize build time through smarter code generation
+- Use selective bundling to reduce compilation time
+- Implement parallel processing for component builds
+- External React/Remotion reference for smaller bundles:
+
 ```typescript
-// src/lib/metrics.ts
-export function recordMetric(name: string, value: number, tags?: Record<string, string>) {
-  // Log to DB and export to monitoring dashboard
-  return db.insert(metrics).values({
-    name,
-    value,
-    tags: tags ? JSON.stringify(tags) : null,
-    timestamp: new Date(),
+// src/server/workers/buildCustomComponent.ts
+export async function buildCustomComponent(job: CustomComponentJob): Promise<void> {
+  // Add this wrapper to the generated code
+  const codeWithExternals = `
+    // Make React and Remotion globals available to the component
+    // This is required when externalizing these dependencies
+    if (typeof window !== 'undefined') {
+      globalThis.React = React;
+      globalThis.Remotion = Remotion;
+    }
+    
+    ${job.tsxCode}
+  `;
+  
+  // Configure esbuild with externals
+  const result = await esbuild.build({
+    stdin: {
+      contents: codeWithExternals,
+      loader: 'tsx',
+      resolveDir: process.cwd(),
+    },
+    bundle: true,
+    external: ['react', 'remotion'], // Make these external
+    format: 'esm',
+    // Other options...
   });
+  
+  // Rest of implementation...
 }
 ```
+
+**Optimization Targets:**
+- Reduce average build time from ~8s to <5s
+- Eliminate all "loading" UI in favor of informative chat
+- Provide specific progress indicators through chat
 
 2. Code Quality & Fidelity Improvements
 -------------------------------------
@@ -539,3 +617,75 @@ Custom Component → Video Preview Pipeline: File Reference & Flow
 *(Backend file names are mentioned inline below)*
 
 ---
+
+---
+
+## Tickets for Sprint 7
+
+### Ticket #1 - DB & Types
+
+*   Prisma / Drizzle migration
+*   Add to messages table:
+    *   `ts`
+    *   `CopyInsert`
+    *   `kind`   `varchar`  `default 'message'`  // 'message' | 'status'
+    *   `status` `varchar`  `nullable`           // 'pending' | 'building' | 'success' | 'error'
+    *   `updated_at` `timestamp` `default now()`
+*   Add to custom_component_jobs:
+    *   `ts`
+    *   `CopyInsert`
+    *   `status_message_id` `uuid` `nullable references messages(id)`
+    *   `retry_count`       `int`  `default 0`
+*   New table component_errors (jobId, errorType, details, createdAt)
+*   TypeScript types in src/server/db/schema.ts + Zod models update
+*   Data-backfill script (sets kind='message' on existing rows)
+
+### Ticket #2 - Streaming API (Vercel AI SDK)
+
+*   `src/server/api/routers/chat.ts`
+*   Switch from `json()` response to `experimental_stream()` helper
+*   Start the “thinking-dots” stream immediately; pipe OpenAI tokens as they arrive
+*   Persist a “status” message row (pending) and stream its id to the client
+*   Exponential back-off util for 429 errors (wrapped in `retryWithBackoff`)
+*   Metrics hook - record initial-response-time when first token flushed
+
+### Ticket #3 - Front-End Chat Streaming
+
+*   `ChatPanel.tsx`
+*   Replace `fetch('/api/chat')` with `const { stream, messageId } = startStream()`
+*   Safari-safe interval clearing (code already in doc)
+*   If `supportsMessageEditing`  `PATCH messages/:id` via tRPC; else hide superseded msg with `opacity: 0.5`
+*   Client perf hooks to emit `performance.now()` deltas into `/api/metrics`
+
+### Ticket #4 - Build Worker Optimisation
+
+*   `src/server/workers/buildCustomComponent.ts`
+*   Wrap generated TSX with globalThis.React / Remotion snippet
+*   `esbuild`   `external: ['react','remotion'], format:'esm'`
+*   Cap worker pool to cpuCount - 1 threads (piscina or a simple queue)
+*   Metric emit: build duration ms and success/failure boolean
+
+### Ticket #5 - Overlay for Long Builds
+
+*   `src/remotion/compositions/DynamicVideo.tsx`
+*   Local `isBuilding` flag from Zustand (videoState.buildingJobs.length > 0)
+*   Render the “Compiling…” `<div>` overlay only when buildTime > 8000
+*   Ensure `exportComposition()` path sets `overlayStyle.display='none'`
+
+### Ticket #6 - Parallel Two-Phase Prompt Worker
+
+*   New util `generateComponent.ts` (code from doc)
+*   Unit test: prompt   returns `{ intent, tsxCode, isValid:true }` in <1.2 s (jest timeout 3 s)
+*   Store intent JSON in `custom_component_jobs.metadata`
+
+### Ticket #7 - Error & Retry Endpoint
+
+*   `customComponentRouter.handleComponentError` (code from doc)
+*   `handleRetry()` increments `retry_count` and re-queues job if <3
+*   Chat status message updated with human-friendly error
+
+### Ticket #8 - Dashboards & Alerts
+
+*   Tiny endpoint `/api/metrics POST`   inserts into metrics table
+*   Grafana (or Logflare) dashboard JSON committed under `infra/grafana/`
+*   Vercel Cron job nightly email summary
