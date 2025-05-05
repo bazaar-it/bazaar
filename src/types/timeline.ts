@@ -89,6 +89,9 @@ export interface TimelineContextState {
   durationInFrames: number;
   zoomLevel: number;
   scrollPosition: number;
+  minDuration: number; // Minimum duration for any timeline item
+  maxRows: number; // Maximum number of rows/tracks in timeline
+  invalidDragOperation: boolean; // Flag to indicate if current drag operation is invalid
 }
 
 /**
@@ -118,18 +121,23 @@ export interface TimelineActions {
  */
 export interface DragInfo {
   itemId: number;
-  action: 'move' | 'resize-start' | 'resize-end';
-  startPosition: number;
-  startRow: number;
+  dragType: 'move' | 'resize-left' | 'resize-right';
+  startX: number;
+  startFrame: number;
   startDuration: number;
-  startClientX: number;
+  startRow: number;
+  offsetX: number;
+  pixelsPerFrame: number;
+  currentFrame?: number;
+  currentDuration?: number;
+  currentRow?: number;
 }
 
 /**
  * Position and dimensions of ghost element during drag
  */
 export interface GhostPosition {
-  left: number; // percentage
-  width: number; // percentage
+  left: number;
+  width: number;
   row?: number;
 }

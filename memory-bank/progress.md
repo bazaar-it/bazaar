@@ -273,3 +273,66 @@ Recent fixes and improvements include:
 - [ ] Ticket #6 - Parallel Two-Phase Prompt Worker
 - [ ] Ticket #7 - Error & Retry Endpoint
 - [ ] Ticket #8 - Dashboards & Alerts
+
+## Timeline Improvements
+
+### What Works
+- Timeline display with multiple tracks
+- Basic timeline navigation and editing functionality
+- Playhead synchronization with video player
+- Zoom and scroll functionality with useTimelineZoom hook
+- Timeline click and selection behavior with useTimelineClick hook
+- Full drag-and-drop implementation for timeline items:
+  - Drag to move items
+  - Resize from left and right edges
+  - Visual feedback during drag operations
+  - Validation to prevent invalid operations
+  - Track-to-track movement
+  - Collision detection and prevention
+  - Performance optimizations with dedicated hooks
+- Ghost element display during drag operations with invalid state feedback
+- Timeline marker for current frame position
+- Track management with collapse/hide/lock functionality
+- Keyboard shortcuts for timeline navigation and manipulation
+
+### Recently Completed
+- Implemented useTimelineDrag hook for advanced drag operations
+- Fixed TypeScript errors in timeline components:
+  - Resolved "Cannot redeclare block-scoped variable" errors in TimelineContext.tsx
+  - Fixed type handling in TimelineItem.tsx default cases
+- Added visual feedback during drag operations with validation indicators
+- Implemented track management with collapsible rows
+- Added pointer event handling for better cross-device support
+- Improved collision detection logic for timeline items
+
+### What's Left to Build
+- Extend the timeline component to support undo/redo operations
+- Add timeline snapping functionality (snap to grid, snap to other items)
+- Implement multi-select and group operations
+- Create a "smart timeline" auto-layout feature
+- Add keyboard shortcut documentation
+- Improve accessibility
+- Add animations for smoother UX
+
+### Known Issues
+- Timeline item validation needs to be kept in sync with backend validation
+- Some edge cases in drag behavior need to be refined
+- Ghost item positioning could be more precise
+- Item movement needs better handling for items becoming too small
+
+## Recent Fixes and Improvements
+
+- Fixed multiple default exports issue in custom component generation
+  - Added sanitization to remove duplicate default exports
+  - Updated OpenAI system prompt to emphasize single default exports
+  - Added better error handling and debug logging for component generation
+  - Modified build process to safely handle malformed component code
+- Removed unused toast references from ChatPanel.tsx
+  - Removed non-existent import for useToast
+  - Removed unused toast variable declaration
+  - Fixed linter errors related to missing modules
+- Implemented proper server lifecycle hooks
+  - Created Next.js instrumentation.ts file for proper one-time initialization
+  - Fixed duplicate server initialization issues during development
+  - Added proper process shutdown cleanup
+  - Improved error handling and resilience for background workers

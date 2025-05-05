@@ -2,16 +2,17 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useTimeline } from './TimelineContext';
+import { useTimeline, useTimelineZoom, useTimelineClick, useTimelineDrag } from './TimelineContext';
 import TimelineGrid from './TimelineGrid';
 import TimelineMarker from './TimelineMarker';
 import TimelineHeader from './TimelineHeader';
 import { cn } from '~/lib/utils';
 import { useVideoState } from '~/stores/videoState';
 import { TimelineItemType } from '~/types/timeline';
-import type { TimelineItemUnion, DragInfo } from '~/types/timeline';
+import type { TimelineItemUnion } from '~/types/timeline';
 import type { Operation } from 'fast-json-patch';
 import { addScene, removeSceneByIndex, replace } from '~/lib/patch';
+import { ZoomIn, ZoomOut, Trash2, Copy, Plus, Scissors } from 'lucide-react';
 
 export interface TimelineProps {
   projectId: string;
@@ -32,6 +33,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   allowDragToChat = false,
   selectedItemId = null,
   onSelectItem,
+  totalDuration,
 }) => {
   // Get timeline context values
   const { 
@@ -42,17 +44,16 @@ export const Timeline: React.FC<TimelineProps> = ({
     durationInFrames,
     zoomLevel,
     isDragging,
-    ghostPosition,
-    dragInfoRef,
     timelineRef: contextTimelineRef,
     updateItem,
-    setCurrentFrame,
-    setZoomLevel,
-    setGhostPosition,
-    setIsDragging,
-    findGapsInRow,
+    setDurationInFrames,
     seekToFrame
   } = useTimeline();
+  
+  // Use the hooks for timeline interaction
+  const { handleTimelineClick, selectItem } = useTimelineClick();
+  const { zoomIn, zoomOut, resetZoom } = useTimelineZoom();
+  const { startDrag } = useTimelineDrag();
   
   // Get video state
   const { getCurrentProps, applyPatch } = useVideoState();
@@ -115,17 +116,10 @@ export const Timeline: React.FC<TimelineProps> = ({
       default: return TimelineItemType.TEXT;
     }
   }
-
-  // Handle item selection
-  const handleItemClick = useCallback((itemId: number) => {
-    // Update internal timeline context
-    setSelectedItemId(itemId);
-    
-    // Propagate selection to parent component if handler provided
-    if (onSelectItem) {
-      onSelectItem(itemId);
-    }
-  }, [setSelectedItemId, onSelectItem]);
+  
+  // Track timeline width for responsive calculations
+  const [timelineWidth, setTimelineWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Update scene in Zustand when timeline item changes using JSON-Patch
   const handleTimelineChange = useCallback((updatedItem: TimelineItemUnion) => {
@@ -138,18 +132,22 @@ export const Timeline: React.FC<TimelineProps> = ({
     
     if (sceneIndex === -1) return;
     
-    // Generate patches using our patch factory
+    // Clamp start and duration to valid bounds
+    const safeFrom = Math.max(0, updatedItem.from);
+    const safeDuration = Math.max(1, updatedItem.durationInFrames);
+    
+    // Generate patches using our patch factory - only update supported properties
     const patches: Operation[] = [
-      // Update the start time
-      ...replace(sceneIndex, 'start', updatedItem.from),
-      // Update the duration
-      ...replace(sceneIndex, 'duration', updatedItem.durationInFrames)
+      // Update the start time (non-negative)
+      ...replace(sceneIndex, 'start', safeFrom),
+      // Update the duration (at least 1 frame)
+      ...replace(sceneIndex, 'duration', safeDuration)
     ];
     
     // Apply patches using the optimistic update pattern
     applyPatch(projectId, patches);
   }, [inputProps, projectId, applyPatch]);
-
+  
   // Handle item deletion using the patch factory
   const handleDeleteItem = useCallback((id: number) => {
     if (!inputProps) return;
@@ -168,55 +166,126 @@ export const Timeline: React.FC<TimelineProps> = ({
       
       // If this was the selected item, clear selection
       if (internalSelectedItemId === id) {
-        handleItemClick(null as any);
+        setSelectedItemId(null);
       }
     }
+  }, [inputProps, projectId, applyPatch, internalSelectedItemId, setSelectedItemId]);
+  
+  // Handle add new track
+  const handleAddTrack = useCallback(() => {
+    if (!inputProps || !inputProps.scenes.length) return;
+    
+    // Find highest track number - avoid using row directly
+    const maxTrackIndex = Math.max(...inputProps.scenes.map((scene, index) => {
+      // Use the scene's index in scenes array if no explicit row/track
+      return (scene as any).row || index % 3;
+    }));
+    
+    // Create a new empty placeholder for this track
+    const newTrackIndex = maxTrackIndex + 1;
+    
+    // Sample placeholder text for now - in production, this could be configurable
+    const newScene = {
+      type: 'text' as const, // Use const assertion to satisfy TypeScript
+      id: String(Date.now()), // Generate a temporary ID
+      start: 0,
+      duration: 30, // 1 second at 30fps
+      data: {
+        text: `Track ${newTrackIndex + 1}`,
+        color: '#FFFFFF',
+        fontSize: 24,
+        fontFamily: 'Arial',
+      }
+    };
+    
+    // Create patch to add the scene
+    const patches = addScene(newScene);
+    
+    // Apply the patch
+    applyPatch(projectId, patches);
   }, [inputProps, projectId, applyPatch]);
-
-  // Refs for DOM elements
-  const containerRef = useRef<HTMLDivElement>(null);
   
-  // Local state for drag item ID
-  const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
-  
-  // Seek on timeline click
-  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = contextTimelineRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const clickX = e.clientX - rect.left;
-    const percent = clickX / rect.width;
-    const frame = Math.round(percent * durationInFrames);
-    seekToFrame(frame);
-  }, [contextTimelineRef, durationInFrames, seekToFrame]);
-
-  // Handle mouse wheel for zooming
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    
-    // Adjust zoom level based on wheel direction
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    const newZoom = Math.max(0.5, Math.min(5, zoomLevel + delta));
-    
-    setZoomLevel(newZoom);
-  }, [zoomLevel, setZoomLevel]);
-
-  // Set up wheel event listener
+  // Hook to apply timeline changes to Zustand store
   useEffect(() => {
-    const timeline = contextTimelineRef.current;
-    
-    if (timeline) {
-      timeline.addEventListener('wheel', handleWheel, { passive: false });
-      
-      return () => {
-        timeline.removeEventListener('wheel', handleWheel);
-      };
-    }
-  }, [handleWheel, contextTimelineRef]);
+    // Add a listener or setup a reaction when item updates
+    // For now, just set up a simple check on each item update
+    const handleItemUpdate = (item: TimelineItemUnion) => {
+      handleTimelineChange(item);
+    };
 
-  // Track timeline width for responsive calculations
-  const [timelineWidth, setTimelineWidth] = useState(0);
+    // Later we could add proper event listeners here
+    
+    return () => {
+      // Cleanup logic if needed
+    };
+  }, [handleTimelineChange]);
   
-  // Track window resize for responsive adjustments
+  // Drag-to-chat item export
+  const handleDragItemToChat = useCallback((id: number) => {
+    if (!allowDragToChat) return;
+    
+    // Find the item by ID
+    const item = timelineItems.find(item => item.id === id);
+    if (!item) return;
+    
+    console.log('Item dragged to chat:', item);
+    
+    // If there's an external handler, call it
+    if (onSelectItem) {
+      onSelectItem(id);
+    }
+  }, [timelineItems, allowDragToChat, onSelectItem]);
+  
+  // Keyboard shortcuts for timeline
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts if in text input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      // Shortcut for deleting selected items
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (internalSelectedItemId !== null) {
+          e.preventDefault();
+          handleDeleteItem(internalSelectedItemId);
+        }
+      }
+      
+      // Shortcuts for zooming
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          zoomIn();
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          zoomOut();
+        } else if (e.key === '0') {
+          e.preventDefault();
+          resetZoom();
+        }
+      }
+      
+      // Arrow keys for moving through timeline
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        seekToFrame(Math.max(0, currentFrame - (e.shiftKey ? 10 : 1)));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        seekToFrame(Math.min(durationInFrames - 1, currentFrame + (e.shiftKey ? 10 : 1)));
+      }
+    };
+    
+    // Add event listener for keyboard shortcuts
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentFrame, durationInFrames, internalSelectedItemId, handleDeleteItem, seekToFrame, zoomIn, zoomOut, resetZoom]);
+  
+  // Handle window resizing
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current) {
@@ -224,137 +293,167 @@ export const Timeline: React.FC<TimelineProps> = ({
       }
     };
     
-    window.addEventListener('resize', handleResize);
+    // Initial measurement
     handleResize();
     
-    return () => window.removeEventListener('resize', handleResize);
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
-
-  // Synchronize external and internal selection state
+  
+  // External sync: update context selection when props change
   useEffect(() => {
-    // If selectedItemId is provided externally, sync it with internal state
     if (selectedItemId !== null && selectedItemId !== internalSelectedItemId) {
       setSelectedItemId(selectedItemId);
     }
   }, [selectedItemId, internalSelectedItemId, setSelectedItemId]);
-
-  // Handle item drag start
-  const handleItemDragStart = useCallback(
-    (itemId: number, clientX: number, action: 'move' | 'resize-start' | 'resize-end') => {
-      // Find item by ID
-      const item = items.find(item => item.id === itemId);
-      if (!item) return;
-      
-      // Calculate timeline dimensions
-      const timeline = contextTimelineRef.current;
-      if (!timeline) return;
-      
-      const timelineRect = timeline.getBoundingClientRect();
-      const startPointPercent = clientX - timelineRect.left;
-      const percentWidth = timelineRect.width / 100;
-      const startPointInPercent = startPointPercent / percentWidth;
-      
-      // Set up drag info
-      dragInfoRef.current = {
-        itemId,
-        action,
-        startPosition: startPointInPercent, 
-        startRow: item.row,
-        startDuration: item.durationInFrames,
-        startClientX: clientX
-      };
-      
-      // Set up ghost position for visual feedback
-      const leftPercent = (item.from / durationInFrames) * 100;
-      const widthPercent = (item.durationInFrames / durationInFrames) * 100;
-      
-      setGhostPosition({
-        left: leftPercent,
-        width: widthPercent,
-        row: item.row
-      });
-      
-      setIsDragging(true);
-      
-      // Also select the item being dragged
-      handleItemClick(itemId);
-    },
-    [items, setGhostPosition, setIsDragging, durationInFrames, handleItemClick]
-  );
-
-  // Handle making an item draggable to chat
-  const handleDragToChat = useCallback((itemId: number) => {
-    if (!allowDragToChat) return;
-    
-    // Find the relevant item
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-    
-    // Implementation will depend on how your chat interface expects data
-    console.log('Item ready for drag to chat:', item);
-    
-    // You would implement the drag event handlers here
-    // This is a placeholder for the actual implementation
-  }, [items, allowDragToChat]);
+  
+  // Use explicit duration from props if provided
+  useEffect(() => {
+    if (totalDuration && totalDuration !== durationInFrames) {
+      setDurationInFrames(totalDuration);
+    }
+  }, [totalDuration, durationInFrames, setDurationInFrames]);
 
   return (
     <div 
-      className={cn("flex flex-col h-full overflow-hidden bg-background border rounded-md", className)}
       ref={containerRef}
+      className={cn("flex flex-col w-full h-full", className)}
     >
-      {/* Timeline header with time markers */}
+      {/* Toolbar */}
+      <div className="flex items-center justify-between bg-slate-900 px-4 py-2 border-b border-slate-700">
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={zoomOut}
+            className="p-1 text-slate-400 hover:text-white"
+            title="Zoom out (Ctrl+-)"
+          >
+            <ZoomOut size={16} />
+          </button>
+          <span className="text-xs text-slate-300">
+            {Math.round(zoomLevel * 100)}%
+          </span>
+          <button 
+            onClick={zoomIn}
+            className="p-1 text-slate-400 hover:text-white"
+            title="Zoom in (Ctrl++)"
+          >
+            <ZoomIn size={16} />
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Item selection tools */}
+          {internalSelectedItemId !== null && (
+            <>
+              <button 
+                onClick={() => handleDeleteItem(internalSelectedItemId)}
+                className="p-1 text-slate-400 hover:text-red-500"
+                title="Delete selected item (Delete)"
+              >
+                <Trash2 size={16} />
+              </button>
+              <button 
+                onClick={() => {
+                  // Clone selected item
+                  const item = timelineItems.find(i => i.id === internalSelectedItemId);
+                  if (item) {
+                    const cloned = {
+                      ...item,
+                      id: Date.now(), // Generate new ID
+                      from: item.from + item.durationInFrames + 5, // Place after original with gap
+                    };
+                    
+                    // Add to timeline
+                    updateItem(cloned);
+                  }
+                }}
+                className="p-1 text-slate-400 hover:text-white"
+                title="Duplicate selected item"
+              >
+                <Copy size={16} />
+              </button>
+              <button 
+                onClick={() => {
+                  // Find the item
+                  const item = timelineItems.find(i => i.id === internalSelectedItemId);
+                  if (item && currentFrame > item.from && currentFrame < item.from + item.durationInFrames) {
+                    // Split at current frame
+                    const firstHalf = {
+                      ...item,
+                      durationInFrames: currentFrame - item.from
+                    };
+                    
+                    const secondHalf = {
+                      ...item,
+                      id: Date.now(), // Generate new ID
+                      from: currentFrame,
+                      durationInFrames: item.from + item.durationInFrames - currentFrame
+                    };
+                    
+                    // Update first half
+                    updateItem(firstHalf);
+                    // Add second half
+                    updateItem(secondHalf);
+                  }
+                }}
+                className="p-1 text-slate-400 hover:text-white"
+                title="Split at current position"
+              >
+                <Scissors size={16} />
+              </button>
+            </>
+          )}
+          
+          <button 
+            onClick={handleAddTrack}
+            className="p-1 text-slate-400 hover:text-white"
+            title="Add new track"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        
+        <div className="text-xs text-slate-300">
+          {formatTime(currentFrame / 30)} / {formatTime(durationInFrames / 30)}
+        </div>
+      </div>
+      
+      {/* Timeline header with markers */}
       <TimelineHeader 
-        durationInFrames={durationInFrames} 
+        durationInFrames={durationInFrames}
         zoomLevel={zoomLevel}
       />
       
-      {/* Main timeline area */}
-      <div className="flex-1 relative overflow-x-auto overflow-y-hidden">
-        <div
-          ref={contextTimelineRef}
-          className="relative w-full h-full"
-          style={{ 
-            width: `${100 * zoomLevel}%`,
-            minWidth: '100%',
-          }}
-          onClick={handleTimelineClick}
-        >
-          {/* Current frame marker */}
-          <TimelineMarker 
-            currentFrame={currentFrame} 
-            totalDuration={durationInFrames}
-            zoomLevel={zoomLevel}
-          />
-          
-          {/* Ghost element for drag operations */}
-          {isDragging && (
-            <div 
-              className="absolute h-full bg-blue-400/20 border border-blue-500 pointer-events-none"
-              style={{
-                left: `${ghostPosition.left}%`,
-                width: `${ghostPosition.width}%`,
-                zIndex: 10,
-              }}
-            />
-          )}
-          
-          {/* Timeline grid with items */}
-          <TimelineGrid
-            items={items}
-            selectedItemId={internalSelectedItemId}
-            setSelectedItemId={setSelectedItemId}
-            draggedItemId={draggedItemId}
-            isDragging={isDragging}
-            durationInFrames={durationInFrames}
-            onItemDragStart={handleItemDragStart}
-            onDragToChat={handleDragToChat}
-            currentFrame={currentFrame}
-            zoomLevel={zoomLevel}
-          />
-        </div>
+      {/* Main timeline grid */}
+      <div className="flex-grow overflow-auto relative">
+        <TimelineGrid
+          onDragToChat={allowDragToChat ? handleDragItemToChat : undefined}
+          onTrackAdd={handleAddTrack}
+        />
+        
+        {/* Playhead marker */}
+        <TimelineMarker
+          currentFrame={currentFrame}
+          totalDuration={durationInFrames}
+          zoomLevel={zoomLevel}
+        />
       </div>
     </div>
   );
 };
+
+/**
+ * Format seconds to MM:SS.ms format
+ */
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toFixed(2).padStart(5, '0')}`;
+}
 
 export default Timeline;

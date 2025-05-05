@@ -150,6 +150,9 @@ async function processJob(jobId: string): Promise<void> {
         throw new Error("TSX code is missing for this job");
       }
       
+      // Log component code length for debugging
+      console.log(`Processing component code (${job.tsxCode.length} characters)`);
+      
       // Sanitize TSX code (remove unsafe imports, etc.)
       const sanitizedTsx = sanitizeTsx(job.tsxCode);
       
@@ -246,8 +249,11 @@ async function processJob(jobId: string): Promise<void> {
  * 3. Preserves the component code itself
  */
 function sanitizeTsx(tsxCode: string): string {
+  // First, remove duplicate default exports
+  const deduplicatedCode = removeDuplicateDefaultExports(tsxCode);
+  
   // Split by lines
-  const lines = tsxCode.split('\n');
+  const lines = deduplicatedCode.split('\n');
   
   // Filter out all import statements - we'll handle React and Remotion via globals
   const codeWithoutImports = lines.filter(line => {
@@ -257,6 +263,37 @@ function sanitizeTsx(tsxCode: string): string {
   });
   
   return codeWithoutImports.join('\n');
+}
+
+/**
+ * Removes duplicate default exports from component code
+ * This fixes issues with LLM-generated code sometimes having multiple default exports
+ */
+function removeDuplicateDefaultExports(code: string): string {
+  // Find all export default statements
+  const defaultExportRegex = /export\s+default\s+([A-Za-z0-9_]+)\s*;?/g;
+  const matches = Array.from(code.matchAll(defaultExportRegex));
+  
+  // If we have multiple default exports
+  if (matches.length > 1) {
+    console.log(`Found ${matches.length} default exports in component, keeping only the first one`);
+    
+    // Keep only the first export default statement
+    const firstMatch = matches[0];
+    const otherMatches = matches.slice(1);
+    
+    // Replace other export default statements with comments
+    let sanitizedCode = code;
+    for (const match of otherMatches) {
+      const fullMatch = match[0]; // The full "export default Component;" string
+      sanitizedCode = sanitizedCode.replace(fullMatch, `// Removed duplicate export: ${fullMatch}`);
+    }
+    
+    return sanitizedCode;
+  }
+  
+  // If there's only one or zero export default, return the original code
+  return code;
 }
 
 /**

@@ -12,6 +12,12 @@ const config = {
     ignoreDuringBuilds: true,
   },
   
+  // Enable instrumentation for server lifecycle management
+  experimental: {
+    // @ts-expect-error - TypeScript definitions not updated yet
+    instrumentationHook: true,
+  },
+  
   // Configure webpack to ignore problematic files
   webpack: (config, { isServer }) => {
     if (!config.resolve) {

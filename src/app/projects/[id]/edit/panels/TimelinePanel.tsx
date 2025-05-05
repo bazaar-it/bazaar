@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useMemo, useCallback, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import Timeline from '~/components/client/Timeline/Timeline';
 import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
@@ -14,6 +14,7 @@ import { replace } from '~/lib/patch';
 
 export default function TimelinePanel() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { getCurrentProps, applyPatch } = useVideoState();
   const inputProps = getCurrentProps();
   const { selectedSceneId, setSelectedSceneId } = useSelectedScene();
@@ -106,55 +107,38 @@ export default function TimelinePanel() {
     }
   }
   
-  // Handle timeline item updates to sync with videoState
-  const handleItemUpdate = useCallback((updatedItem: TimelineItemUnion) => {
-    if (!inputProps || !id) return;
+  // Handle when an item is selected from the timeline
+  const handleSelectItem = useCallback((itemId: number) => {
+    // Find the scene that corresponds to the timeline item
+    const scene = inputProps?.scenes.find(s => {
+      const sceneIdNum = parseInt(s.id, 10);
+      return !isNaN(sceneIdNum) && sceneIdNum === itemId;
+    });
     
-    const sceneIndex = inputProps.scenes.findIndex(scene => 
-      parseInt(scene.id, 10) === updatedItem.id || scene.id === String(updatedItem.id)
-    );
-    
-    if (sceneIndex === -1) return;
-    
-    // Generate and apply patches for the updated properties
-    const patches = [
-      // Update the start time
-      ...replace(sceneIndex, 'start', updatedItem.from),
-      // Update the duration
-      ...replace(sceneIndex, 'duration', updatedItem.durationInFrames)
-    ];
-    
-    // Apply the patches to update the state
-    applyPatch(id, patches);
-  }, [inputProps, id, applyPatch]);
-  
-  // If projectId or sceneId change, or if a new scene is added beyond current view,
-  // ensure the timeline scrolls to show relevant content
-  useEffect(() => {
-    if (!inputProps?.scenes || !timelineContainerRef.current) return;
-    
-    // If we have a selected scene, make sure it's visible
-    if (selectedSceneId) {
-      const selectedScene = inputProps.scenes.find(scene => scene.id === selectedSceneId);
-      if (selectedScene) {
-        const timeline = timelineContainerRef.current.querySelector('.timeline-grid');
-        if (timeline && timeline.scrollWidth > timeline.clientWidth) {
-          // Calculate scroll position to ensure selected item is visible
-          const sceneStart = selectedScene.start;
-          const sceneDuration = selectedScene.duration;
-          const sceneCenter = sceneStart + (sceneDuration / 2);
-          
-          // Get pixel ratio from totalDuration and container width
-          const pixelsPerFrame = timeline.scrollWidth / totalDuration;
-          const centerPosition = sceneCenter * pixelsPerFrame;
-          
-          // Center the scene in the visible area
-          timeline.scrollLeft = centerPosition - (timeline.clientWidth / 2);
-        }
-      }
+    // Update the selected scene in context
+    if (scene) {
+      setSelectedSceneId(scene.id);
+      
+      // Log instead of toast notification
+      console.log(`Selected: ${scene.type} scene`);
     }
-  }, [selectedSceneId, inputProps?.scenes, totalDuration]);
+  }, [inputProps?.scenes, setSelectedSceneId]);
   
+  // Handle drag from timeline to chat
+  const handleDragToChat = useCallback((itemId: number) => {
+    // Find the scene
+    const scene = inputProps?.scenes.find(s => {
+      const sceneIdNum = parseInt(s.id, 10);
+      return !isNaN(sceneIdNum) && sceneIdNum === itemId;
+    });
+    
+    if (scene) {
+      // You could implement a way to send this scene to the chat
+      // For now, just log
+      console.log(`Dragged scene ${scene.type} to chat`);
+    }
+  }, [inputProps?.scenes]);
+
   if (!inputProps) {
     return (
       <div className="flex flex-col h-full items-center justify-center">
@@ -165,31 +149,46 @@ export default function TimelinePanel() {
 
   return (
     <div className="flex flex-col h-full" ref={timelineContainerRef}>
-      <h2 className="text-xl font-semibold mb-4">Timeline</h2>
+      <h2 className="text-xl font-semibold mb-2">Timeline</h2>
       
-      <div className="flex-1">
-        <TimelineProvider initialItems={timelineItems} initialDuration={totalDuration}>
+      <div className="flex-1 border border-gray-700 rounded-md overflow-hidden">
+        <TimelineProvider 
+          initialItems={timelineItems} 
+          initialDuration={totalDuration}
+        >
           <Timeline 
             projectId={id as string} 
             className="h-full"
             totalDuration={totalDuration}
-            onSelectItem={(itemId) => {
-              // Convert timeline item ID to scene ID string
-              const scene = inputProps.scenes.find(s => {
-                const sceneIdNum = parseInt(s.id, 10);
-                return !isNaN(sceneIdNum) && sceneIdNum === itemId;
-              });
-              
-              // Update the selected scene in context
-              if (scene) {
-                setSelectedSceneId(scene.id);
-              } else {
-                setSelectedSceneId(null);
-              }
-            }}
+            onSelectItem={handleSelectItem}
             selectedItemId={selectedSceneId ? parseInt(selectedSceneId, 10) : null}
+            allowDragToChat={true}
           />
         </TimelineProvider>
+      </div>
+      
+      {/* Keyboard shortcut help */}
+      <div className="mt-2 text-xs text-gray-400 grid grid-cols-2 gap-x-4 gap-y-1">
+        <div className="flex items-center">
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Delete</kbd>
+          <span>Remove scene</span>
+        </div>
+        <div className="flex items-center">
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Ctrl</kbd>
+          <span>+</span>
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mx-1">D</kbd>
+          <span>Duplicate</span>
+        </div>
+        <div className="flex items-center">
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Ctrl</kbd>
+          <span>+</span>
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mx-1">S</kbd>
+          <span>Split at playhead</span>
+        </div>
+        <div className="flex items-center">
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">↔</kbd>
+          <span>Drag to reposition</span>
+        </div>
       </div>
     </div>
   );

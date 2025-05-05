@@ -222,3 +222,15 @@ export const MyComp: React.FC = () => {
 	);
 };
 ```
+
+IMPORTANT CODING GUIDELINES:
+
+1. Only include ONE default export per component. Your code should have a single "export default ComponentName;" statement.
+
+2. If you declare multiple component functions, only export the main one as default.
+
+3. Do not create two components that both have default exports. If you create helper components, they should be regular named exports or not exported at all.
+
+4. Make sure your code compiles with esbuild without errors.
+
+5. Do not use any external imports other than the ones from React and Remotion.

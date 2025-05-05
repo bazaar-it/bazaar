@@ -27,6 +27,38 @@ export const generateCustomComponentFunctionDef = {
 };
 
 /**
+ * Ensures there's only one default export in the generated code
+ * by removing any duplicate export default statements
+ */
+function sanitizeDefaultExports(code: string): string {
+  // Find all export default statements
+  const defaultExportRegex = /export\s+default\s+([A-Za-z0-9_]+)\s*;?/g;
+  const matches = Array.from(code.matchAll(defaultExportRegex));
+  
+  // If we have multiple default exports
+  if (matches.length > 1) {
+    console.log(`[COMPONENT GEN] Found ${matches.length} default exports, keeping only the first one`);
+    
+    // Keep only the first export default statement
+    const firstMatch = matches[0];
+    const otherMatches = matches.slice(1);
+    
+    // Replace other export default statements with simple variable declarations
+    let sanitizedCode = code;
+    for (const match of otherMatches) {
+      const fullMatch = match[0]; // The full "export default Component;" string
+      const componentName = match[1]; // Just the component name
+      sanitizedCode = sanitizedCode.replace(fullMatch, `// Removed duplicate export: ${fullMatch}`);
+    }
+    
+    return sanitizedCode;
+  }
+  
+  // If there's only one or zero export default, return the original code
+  return code;
+}
+
+/**
  * Generates TSX code for a custom Remotion component based on the user's description
  * using OpenAI's function calling capabilities
  * 
@@ -69,13 +101,13 @@ Follow these guidelines for creating Remotion components:
 ${remotionPrompt}
 
 Additional requirements:
-- The component must export a default function named after the effect
-- Use TypeScript for type safety
-- Keep the component focused on a single visual effect
-- Use the AbsoluteFill component to handle positioning
-- Use proper animations with useCurrentFrame and interpolate
-- Avoid random numbers unless using the random() function from Remotion
-- Follow best practices for React performance`,
+1. Ensure the component works with Remotion and React dependencies injected globally
+2. IMPORTANT: Include ONLY ONE default export in your code - multiple default exports will cause build failures
+3. Provide proper TypeScript typing for all parameters and return values
+4. Include detailed comments explaining any complex animations or calculations
+5. Focus on creating visually appealing and performant animations
+6. Name your main component clearly based on the effect it creates
+7. If you create helper components, do not export them as default - only the main component should be exported as default`
         },
         {
           role: "user",
@@ -155,9 +187,15 @@ Additional requirements:
     const fixedTsxCode = ensureImports(args.tsxCode);
     // --- END POST-PROCESSING ---
 
+    // Sanitize the code to remove duplicate exports
+    const sanitizedTsxCode = sanitizeDefaultExports(fixedTsxCode);
+
+    // Ensure proper imports are included
+    const ensuredTsxCode = ensureImports(sanitizedTsxCode);
+
     return {
       effect: args.effect,
-      tsxCode: fixedTsxCode,
+      tsxCode: ensuredTsxCode,
     };
 
   } catch (error) {

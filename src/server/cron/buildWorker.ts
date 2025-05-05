@@ -12,19 +12,30 @@ let consecutiveErrors = 0;
 let lastErrorTime = 0;
 let isPollingPaused = false;
 
+// Track worker state
+let intervalId: NodeJS.Timeout | null = null;
+let isWorkerRunning = false;
+
 /**
  * Start the build worker polling process
  * This runs continuously in the background, processing pending component jobs
  * with smart error handling and backoff
  */
 export function startBuildWorker() {
+  // Prevent multiple instances of the worker
+  if (isWorkerRunning && intervalId) {
+    console.log('⚠️ Build worker already running, skipping duplicate initialization');
+    return () => stopBuildWorker();
+  }
+  
   console.log('🛠️ Starting custom component build worker...');
+  isWorkerRunning = true;
   
   // Check if we have any pending jobs before starting the polling
   void checkForPendingJobs();
   
   // Start polling with better control and error handling
-  const intervalId = setInterval(async () => {
+  intervalId = setInterval(async () => {
     // Skip this cycle if polling is paused due to errors
     if (isPollingPaused) {
       const now = Date.now();
@@ -59,10 +70,19 @@ export function startBuildWorker() {
   }, POLL_INTERVAL_MS);
   
   // Return a cleanup function to stop polling if needed
-  return () => {
+  return () => stopBuildWorker();
+}
+
+/**
+ * Stop the build worker
+ */
+function stopBuildWorker() {
+  if (intervalId) {
     console.log('Stopping custom component build worker...');
     clearInterval(intervalId);
-  };
+    intervalId = null;
+    isWorkerRunning = false;
+  }
 }
 
 /**
