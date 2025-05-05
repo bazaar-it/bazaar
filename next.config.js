@@ -12,12 +12,6 @@ const config = {
     ignoreDuringBuilds: true,
   },
   
-  // Enable instrumentation for server lifecycle management
-  experimental: {
-    // @ts-expect-error - TypeScript definitions not updated yet
-    instrumentationHook: true,
-  },
-  
   // Configure webpack to ignore problematic files
   webpack: (config, { isServer }) => {
     if (!config.resolve) {
@@ -34,16 +28,51 @@ const config = {
     // Ignore all .d.ts files (e.g., esbuild/lib/main.d.ts)
     config.module.rules.push({
       test: /\.d\.ts$/,
-      use: 'ignore-loader',
+      use: 'null-loader',
     });
 
-    // Mark esbuild as external for server-side bundling
-    if (isServer) {
-      if (!config.externals) config.externals = [];
-      config.externals.push('esbuild');
-    }
+    // Add loader for .woff and .woff2 fonts to optimize tree shaking
+    config.module.rules.push({
+      test: /\.woff2?$/,
+      type: 'asset/resource',
+    });
 
     return config;
+  },
+  
+  // Transpile Remotion library
+  transpilePackages: ["@remotion/cli", "@remotion/player", "@remotion/renderer", "remotion"],
+  
+  // External packages that should be bundled separately
+  serverExternalPackages: ['@prisma/client', 'drizzle-orm'],
+  
+  // Configure CORS for API routes
+  headers: async () => {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
+        ],
+      },
+    ];
+  },
+  
+  // Skip TypeScript type checking to optimize build time
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
 };
 

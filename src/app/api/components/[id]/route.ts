@@ -162,10 +162,8 @@ export async function GET(
   request: NextRequest,
   context: { params: { id: string } }
 ) {
-  // Next.js 13+ requires awaiting at least once before accessing params
-  await Promise.resolve();
-
-  const { id } = context.params;
+  const { params } = context;
+  const { id } = params;
   
   if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return new NextResponse('Invalid component ID', { status: 400 });
