@@ -110,27 +110,18 @@ export const useVideoState = create<VideoState>((set, get) => ({
   },
 
   setProject: (projectId, initialProps) => 
-    set((state) => {
-      // If project already exists, just update the current ID
-      if (state.projects[projectId]) {
-        return {
-          currentProjectId: projectId
-        };
-      }
-      
-      // Otherwise create a new project entry
-      return {
-        currentProjectId: projectId,
-        projects: {
-          ...state.projects,
-          [projectId]: {
-            props: initialProps,
-            chatHistory: getDefaultChatHistory(),
-            dbMessagesLoaded: false
-          }
+    set((state) => ({
+      currentProjectId: projectId,
+      projects: {
+        ...state.projects,
+        [projectId]: {
+          ...(state.projects[projectId] || {}),
+          props: initialProps,
+          chatHistory: state.projects[projectId]?.chatHistory || getDefaultChatHistory(),
+          dbMessagesLoaded: state.projects[projectId]?.dbMessagesLoaded ?? false,
         }
-      };
-    }),
+      }
+    })),
 
   applyPatch: (projectId, patch) =>
     set((state) => {

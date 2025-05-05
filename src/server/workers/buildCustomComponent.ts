@@ -48,6 +48,11 @@ export async function processPendingJobs() {
     });
 
     console.log(`Found ${pendingJobs.length} pending jobs`);
+    
+    // If no pending jobs, return early
+    if (pendingJobs.length === 0) {
+      return;
+    }
 
     // Queue jobs for processing, respecting concurrency limits
     for (const job of pendingJobs) {
@@ -56,14 +61,41 @@ export async function processPendingJobs() {
       buildQueue.push({ jobId: job.id, promise: buildPromise });
     }
 
-    // Wait for all jobs to complete
-    await Promise.all(buildQueue.map(item => item.promise));
+    // Wait for all jobs to complete with timeout protection
+    await Promise.all(
+      buildQueue.map(item => 
+        // Wrap each promise with a timeout to avoid hanging
+        Promise.race([
+          item.promise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Build timeout for job ${item.jobId}`)), 300000)
+          )
+        ])
+      )
+    );
     
     // Clear the queue
     buildQueue.length = 0;
     
   } catch (error) {
-    console.error("Error processing jobs:", error);
+    // Improve error logging
+    if (error instanceof Error) {
+      console.error(`Error processing jobs: ${error.message}`, error.stack);
+      // Record the error for metrics
+      void recordMetric("worker_error", 1, { 
+        errorType: error.constructor.name,
+        message: error.message.substring(0, 100) // Truncate long error messages
+      });
+    } else {
+      console.error("Unknown error processing jobs:", error);
+    }
+    
+    // Try to clear the queue even on error
+    try {
+      buildQueue.length = 0;
+    } catch (e) {
+      // Do nothing if this also fails
+    }
   }
 }
 

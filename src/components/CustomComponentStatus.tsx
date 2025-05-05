@@ -41,16 +41,52 @@ export function CustomComponentStatus({
   const prevStatusRef = useRef<string | null>(null);
   const prevOutputUrlRef = useRef<string | null>(null);
   
-  // Query the job status with polling for pending/building jobs
-  const { data: job, isLoading } = api.customComponent.getJobStatus.useQuery(
+  // Keep a ref to track if we need polling (only for pending/building)
+  const shouldPollRef = useRef<boolean>(true);
+  const errorCountRef = useRef<number>(0);
+  
+  // Query the job status with smarter polling logic
+  const { data: job, isLoading, error } = api.customComponent.getJobStatus.useQuery(
     { id: componentId },
     { 
-      // Poll every 2 seconds for pending/building jobs, stop polling otherwise
-      refetchInterval: 2000,
-      refetchIntervalInBackground: true,
+      // Only poll if the job is in a non-terminal state
+      refetchInterval: shouldPollRef.current ? 2000 : false,
+      refetchIntervalInBackground: false, // Don't poll when tab is inactive
       enabled: !!componentId,
+      // Don't retry indefinitely on error
+      retry: (failureCount, error) => {
+        // Only retry up to 3 times for DB connection errors
+        if (error.message?.includes('connecting to database') && failureCount < 3) {
+          return true;
+        }
+        return false;
+      },
+      // Don't keep invalid data in the cache too long
+      staleTime: 30000
     }
   );
+
+  // Update polling strategy based on job status
+  useEffect(() => {
+    if (!job) return;
+    
+    // Only poll for pending/building jobs - terminal states don't need polling
+    shouldPollRef.current = ['pending', 'building'].includes(job.status);
+    
+    // Reset error counter when we get a successful response
+    errorCountRef.current = 0;
+  }, [job]);
+
+  // Instead, log errors in useEffect
+  useEffect(() => {
+    if (error) {
+      errorCountRef.current += 1;
+      // Only log the first few errors to avoid spam
+      if (errorCountRef.current <= 3) {
+        console.error(`Error fetching component status: ${error.message}`);
+      }
+    }
+  }, [error]);
 
   // Call the callbacks when the job status changes
   useEffect(() => {
@@ -79,6 +115,15 @@ export function CustomComponentStatus({
       }
     }
   }, [job, onSuccess, onStatusChange]);
+
+  // Handle error states
+  if (error) {
+    return (
+      <div className="text-red-500">
+        <span className="text-xs">❌ Status unavailable</span>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

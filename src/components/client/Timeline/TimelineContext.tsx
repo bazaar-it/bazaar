@@ -52,6 +52,10 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
 }) => {
   // State
   const [items, setItems] = useState<TimelineItemUnion[]>(initialItems);
+  // Sync items when initialItems prop changes
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   
   // Select item handler
@@ -60,6 +64,10 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   }, []);
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [durationInFrames, setDurationInFrames] = useState<number>(initialDuration);
+  // Sync duration when initialDuration prop changes
+  useEffect(() => {
+    setDurationInFrames(initialDuration);
+  }, [initialDuration]);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [scrollPosition, setScrollPosition] = useState<number>(0);
   const [ghostPosition, setGhostPosition] = useState<GhostPosition>({ left: 0, width: 0 });

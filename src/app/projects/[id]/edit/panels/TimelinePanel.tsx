@@ -2,10 +2,11 @@
 //src/app/projects/[id]/edit/panels/TimelinePanel.tsx
 "use client";
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import Timeline from '~/components/client/Timeline/Timeline';
+import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
 import type { TimelineItemUnion } from '~/types/timeline';
 import { TimelineItemType } from '~/types/timeline';
 import { useSelectedScene } from '~/components/client/Timeline/SelectedSceneContext';
@@ -16,18 +17,29 @@ export default function TimelinePanel() {
   const { getCurrentProps, applyPatch } = useVideoState();
   const inputProps = getCurrentProps();
   const { selectedSceneId, setSelectedSceneId } = useSelectedScene();
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
   
   // Calculate total duration from video props
   const totalDuration = useMemo(() => {
-    if (!inputProps) return 300; // Default fallback
-    return inputProps.meta.duration;
-  }, [inputProps]);
+    if (!inputProps?.scenes || inputProps.scenes.length === 0) {
+      return 300; // Default 10 seconds at 30fps if no scenes
+    }
+    
+    // Find the latest ending frame across all scenes
+    const maxEndFrame = inputProps.scenes.reduce((max, scene) => {
+      const sceneEndFrame = scene.start + scene.duration;
+      return Math.max(max, sceneEndFrame);
+    }, 0);
+    
+    // Add some padding (3 seconds) to ensure we can see beyond the last scene
+    return Math.max(maxEndFrame + 90, 300);
+  }, [inputProps?.scenes]);
   
   // Convert scenes to timeline items
-  const timelineItems = useMemo(() => {
+  const timelineItems = useMemo<TimelineItemUnion[]>(() => {
     if (!inputProps) return [];
     
-    return inputProps.scenes.map((scene, index) => {
+    return inputProps.scenes.map((scene, index): TimelineItemUnion => {
       // Map the type first to use in the correct item creation
       const itemType = mapSceneTypeToTimelineType(scene.type);
       
@@ -116,6 +128,33 @@ export default function TimelinePanel() {
     applyPatch(id, patches);
   }, [inputProps, id, applyPatch]);
   
+  // If projectId or sceneId change, or if a new scene is added beyond current view,
+  // ensure the timeline scrolls to show relevant content
+  useEffect(() => {
+    if (!inputProps?.scenes || !timelineContainerRef.current) return;
+    
+    // If we have a selected scene, make sure it's visible
+    if (selectedSceneId) {
+      const selectedScene = inputProps.scenes.find(scene => scene.id === selectedSceneId);
+      if (selectedScene) {
+        const timeline = timelineContainerRef.current.querySelector('.timeline-grid');
+        if (timeline && timeline.scrollWidth > timeline.clientWidth) {
+          // Calculate scroll position to ensure selected item is visible
+          const sceneStart = selectedScene.start;
+          const sceneDuration = selectedScene.duration;
+          const sceneCenter = sceneStart + (sceneDuration / 2);
+          
+          // Get pixel ratio from totalDuration and container width
+          const pixelsPerFrame = timeline.scrollWidth / totalDuration;
+          const centerPosition = sceneCenter * pixelsPerFrame;
+          
+          // Center the scene in the visible area
+          timeline.scrollLeft = centerPosition - (timeline.clientWidth / 2);
+        }
+      }
+    }
+  }, [selectedSceneId, inputProps?.scenes, totalDuration]);
+  
   if (!inputProps) {
     return (
       <div className="flex flex-col h-full items-center justify-center">
@@ -125,30 +164,32 @@ export default function TimelinePanel() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" ref={timelineContainerRef}>
       <h2 className="text-xl font-semibold mb-4">Timeline</h2>
       
       <div className="flex-1">
-        <Timeline 
-          projectId={id as string} 
-          className="h-full"
-          totalDuration={totalDuration}
-          onSelectItem={(itemId) => {
-            // Convert timeline item ID to scene ID string
-            const scene = inputProps.scenes.find(s => {
-              const sceneIdNum = parseInt(s.id, 10);
-              return !isNaN(sceneIdNum) && sceneIdNum === itemId;
-            });
-            
-            // Update the selected scene in context
-            if (scene) {
-              setSelectedSceneId(scene.id);
-            } else {
-              setSelectedSceneId(null);
-            }
-          }}
-          selectedItemId={selectedSceneId ? parseInt(selectedSceneId, 10) : null}
-        />
+        <TimelineProvider initialItems={timelineItems} initialDuration={totalDuration}>
+          <Timeline 
+            projectId={id as string} 
+            className="h-full"
+            totalDuration={totalDuration}
+            onSelectItem={(itemId) => {
+              // Convert timeline item ID to scene ID string
+              const scene = inputProps.scenes.find(s => {
+                const sceneIdNum = parseInt(s.id, 10);
+                return !isNaN(sceneIdNum) && sceneIdNum === itemId;
+              });
+              
+              // Update the selected scene in context
+              if (scene) {
+                setSelectedSceneId(scene.id);
+              } else {
+                setSelectedSceneId(null);
+              }
+            }}
+            selectedItemId={selectedSceneId ? parseInt(selectedSceneId, 10) : null}
+          />
+        </TimelineProvider>
       </div>
     </div>
   );

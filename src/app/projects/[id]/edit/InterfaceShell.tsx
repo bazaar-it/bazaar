@@ -27,6 +27,12 @@ type Props = {
 };
 
 export default function InterfaceShell({ projectId, initialProps, initialProjects }: Props) {
+  const { setProject } = useVideoState();
+
+  // Ensure Zustand store always loads the correct project on projectId change
+  useEffect(() => {
+    setProject(projectId, initialProps);
+  }, [projectId, initialProps, setProject]);
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   
   // Customizable layout state
@@ -98,7 +104,7 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   const { data: session } = useSession();
   const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
   
-  const { getCurrentProps, setProject } = useVideoState();
+  const { getCurrentProps } = useVideoState();
   const inputProps = getCurrentProps();
   
   useEffect(() => {
@@ -170,7 +176,7 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
                     <>
                       <PanelResizeHandle className="h-1.5 bg-muted hover:bg-primary/20 transition-colors" />
                       <Panel defaultSize={30} className="bg-background">
-                        <TimelinePanel />
+                        <TimelinePanel key={projectId} />
                       </Panel>
                     </>
                   )}
