@@ -1,15 +1,24 @@
 // src/app/projects/[id]/edit/InterfaceShell.tsx
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Separator } from '~/components/ui/separator';
+import { Button } from '~/components/ui/button';
 import type { InputProps } from '~/types/input-props';
 import { ChatPanel, PreviewPanel } from "./panels";
+import TimelinePanel from "./panels/TimelinePanel";
 import Sidebar from "./Sidebar";
 import AppHeader from "~/components/AppHeader";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
+import { useVideoState } from '~/stores/videoState';
+import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
+import type { TimelineItemUnion } from '~/types/timeline';
+import { TimelineItemType } from '~/types/timeline';
+import { DraggableTimeline } from '~/components/client/DraggableTimeline';
+
+type TimelineMode = 'hidden' | 'vertical' | 'floating';
 
 type Props = {
   projectId: string;
@@ -19,6 +28,23 @@ type Props = {
 
 export default function InterfaceShell({ projectId, initialProps, initialProjects }: Props) {
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
+  
+  // Customizable layout state
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>('hidden');
+  
+  // Handle timeline mode toggle
+  const toggleTimeline = useCallback(() => {
+    setTimelineMode(prev => {
+      if (prev === 'hidden') return 'vertical';
+      if (prev === 'vertical') return 'floating';
+      return 'hidden';
+    });
+  }, []);
+  
+  // Close timeline entirely
+  const closeTimeline = useCallback(() => {
+    setTimelineMode('hidden');
+  }, []);
   
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
@@ -68,10 +94,33 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
     });
   }, [projectId, renderMutation]);
 
-  // Get authenticated user (server-side)
-  // Get user info from session
+  // Get authenticated user from session
   const { data: session } = useSession();
   const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
+  
+  const { getCurrentProps, setProject } = useVideoState();
+  const inputProps = getCurrentProps();
+  
+  useEffect(() => {
+    setProject(projectId, initialProps);
+  }, [projectId, initialProps, setProject]);
+  
+  const timelineItems = useMemo<TimelineItemUnion[]>(() => {
+    if (!inputProps) return [];
+    return inputProps.scenes.map((scene, index): TimelineItemUnion => {
+      const id = parseInt(scene.id, 10) || index;
+      switch (scene.type) {
+        case 'text':
+          return { id, type: TimelineItemType.TEXT, from: scene.start, durationInFrames: scene.duration, row: index % 3, content: scene.data?.text as string || 'Text', color: scene.data?.color as string || '#FFFFFF', fontSize: scene.data?.fontSize as number || 24, fontFamily: scene.data?.fontFamily as string || 'Arial' };
+        case 'image':
+          return { id, type: TimelineItemType.IMAGE, from: scene.start, durationInFrames: scene.duration, row: index % 3, src: scene.data?.src as string || '' };
+        default:
+          return { id, type: TimelineItemType.TEXT, from: scene.start, durationInFrames: scene.duration, row: index % 3, content: scene.type, fontSize: 24, fontFamily: 'Arial', color: '#FFFFFF' };
+      }
+    });
+  }, [inputProps]);
+  
+  const initialDuration = inputProps?.meta.duration || 0;
 
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden">
@@ -79,9 +128,12 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
       <Sidebar
         projects={initialProjects}
         currentProjectId={projectId}
+        onToggleTimeline={toggleTimeline}
+        timelineActive={timelineMode !== 'hidden'}
       />
+      
       {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {/* AppHeader with project title and user info */}
         <AppHeader
           projectTitle={title}
@@ -91,23 +143,46 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
           isRendering={renderMutation.isPending}
           user={user}
         />
-        {/* Main panels */}
-        <div className="flex-1 overflow-hidden min-h-0">
-          <PanelGroup direction="horizontal" className="h-full">
-            {/* Left panel: Chat */}
-            <Panel defaultSize={35} minSize={20} maxSize={50}>
-              <div className="h-full border-r bg-background overflow-auto">
-                <ChatPanel projectId={projectId} />
-              </div>
-            </Panel>
-            <PanelResizeHandle className="w-1.5 bg-muted hover:bg-primary/20 transition-colors" />
-            {/* Right panel: Preview */}
-            <Panel minSize={50}>
-              <div className="h-full bg-black">
-                <PreviewPanel projectId={projectId} initial={initialProps} />
-              </div>
-            </Panel>
-          </PanelGroup>
+        
+        {/* Main workspace with flexible layout */}
+        <div className="flex-1 overflow-hidden min-h-0 relative">
+          <TimelineProvider initialItems={timelineItems} initialDuration={initialDuration}>
+            <PanelGroup direction="horizontal" className="h-full">
+              {/* Left panel: Chat */}
+              <Panel defaultSize={35} minSize={20} maxSize={50}>
+                <div className="h-full border-r bg-background overflow-auto">
+                  <ChatPanel projectId={projectId} />
+                </div>
+              </Panel>
+              
+              <PanelResizeHandle className="w-1.5 bg-muted hover:bg-primary/20 transition-colors" />
+              
+              {/* Right panel: Preview and optional Timeline */}
+              <Panel minSize={50}>
+                <PanelGroup direction="vertical" className="h-full">
+                  {/* Preview panel */}
+                  <Panel defaultSize={timelineMode === 'vertical' ? 70 : 100} className="h-full bg-black">
+                    <PreviewPanel projectId={projectId} initial={initialProps} />
+                  </Panel>
+                  
+                  {/* Vertical Timeline panel (conditionally rendered) */}
+                  {timelineMode === 'vertical' && (
+                    <>
+                      <PanelResizeHandle className="h-1.5 bg-muted hover:bg-primary/20 transition-colors" />
+                      <Panel defaultSize={30} className="bg-background">
+                        <TimelinePanel />
+                      </Panel>
+                    </>
+                  )}
+                </PanelGroup>
+              </Panel>
+            </PanelGroup>
+            
+            {/* Floating Draggable Timeline */}
+            {timelineMode === 'floating' && (
+              <DraggableTimeline onClose={closeTimeline} />
+            )}
+          </TimelineProvider>
         </div>
       </div>
     </div>

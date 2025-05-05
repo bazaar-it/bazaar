@@ -5,6 +5,8 @@ import React, { useEffect } from 'react';
 import { Player } from '@remotion/player';
 import { DynamicVideo } from '~/remotion/compositions/DynamicVideo';
 import { useVideoState } from '~/stores/videoState';
+import { useVideoPlayer } from '~/hooks/useVideoPlayer';
+import { useTimeline } from '~/components/client/Timeline/TimelineContext';
 import type { InputProps } from '~/types/input-props';
 
 export function PlayerShell({ 
@@ -15,7 +17,10 @@ export function PlayerShell({
   initial?: InputProps;
 }) {
   const { getCurrentProps, replace } = useVideoState();
-const inputProps = getCurrentProps();
+  const inputProps = getCurrentProps();
+  // Video/Timeline synchronization
+  const { playerRef, isPlaying, currentFrame } = useVideoPlayer();
+  const { setPlayerRef, setIsPlaying: setTimelinePlaying, setCurrentFrame: setTimelineFrame } = useTimeline();
   
   // Set initial project data when provided
   useEffect(() => {
@@ -23,6 +28,19 @@ const inputProps = getCurrentProps();
       replace(projectId, initial);
     }
   }, [initial, inputProps, replace]);
+
+  // Register playerRef with timeline context
+  useEffect(() => {
+    if (playerRef.current) {
+      setPlayerRef(playerRef.current);
+    }
+  }, [playerRef, setPlayerRef]);
+
+  // Propagate play/pause state to timeline
+  useEffect(() => setTimelinePlaying(isPlaying), [isPlaying, setTimelinePlaying]);
+
+  // Update timeline currentFrame from player
+  useEffect(() => setTimelineFrame(currentFrame), [currentFrame, setTimelineFrame]);
 
   if (!inputProps) {
     return (
@@ -38,6 +56,7 @@ const inputProps = getCurrentProps();
       
       <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden">
         <Player
+          ref={playerRef}
           component={DynamicVideo}
           durationInFrames={inputProps.meta.duration}
           fps={30}

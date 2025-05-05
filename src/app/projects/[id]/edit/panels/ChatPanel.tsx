@@ -6,11 +6,12 @@ import { api } from "~/trpc/react";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
-import { Loader2Icon, SendHorizontalIcon } from "lucide-react";
+import { Loader2Icon, SendHorizontalIcon, AlertTriangleIcon } from "lucide-react";
 import { useVideoState, type DbMessage, type ChatMessage, type MessageUpdates } from "~/stores/videoState";
 import { type StreamEvent } from "~/server/api/routers/chat";
 import { skipToken } from "@tanstack/react-query";
 import type { Operation } from "fast-json-patch";
+import { useSelectedScene } from "~/components/client/Timeline/SelectedSceneContext";
 
 export default function ChatPanel({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState("");
@@ -26,6 +27,9 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     syncDbMessages, 
     clearOptimisticMessages 
   } = useVideoState();
+  
+  // Get the currently selected scene from context
+  const { selectedSceneId } = useSelectedScene();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // Fetch messages from database using tRPC
@@ -74,17 +78,150 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [dbMessages, optimisticChatHistory]);
   
+  // Set up the stream response mutation
+  const streamResponse = api.chat.streamResponse.useMutation({
+    onSuccess: (response) => {
+      let cancelled = false;
+
+      const consumeStream = async () => {
+        try {
+          // Track if a component was generated to break early
+          let componentGenerated = false;
+          
+          // httpBatchStreamLink converts Observable responses into an async
+          // iterator at runtime, but the static type exposed by tRPC is still
+          // Observable. Cast through `unknown` first to satisfy TS 2352.
+          const asyncIterable = response as unknown as AsyncIterable<StreamEvent>;
+
+          for await (const event of asyncIterable) {
+            if (cancelled) break;
+            
+            // Check if this is a tool_result event with a jobId (component generation)
+            if (event.type === "tool_result" && event.jobId) {
+              // Mark that we've generated a component
+              componentGenerated = true;
+              console.log(`[ChatPanel] Component generation detected in stream, jobId: ${event.jobId}`);
+            }
+            
+            // Process the event
+            handleStreamEvents(event);
+            
+            // If we've already processed a component generation event, we can stop streaming
+            if (componentGenerated) {
+              console.log("[ChatPanel] Breaking stream early after component generation");
+              break;
+            }
+          }
+          console.log("Stream completed");
+        } catch (err) {
+          console.error("Stream error:", err);
+          addMessage(projectId, `Stream error: ${err instanceof Error ? err.message : String(err)}`, false);
+        } finally {
+          setIsStreaming(false);
+          setStreamingMessageId(null);
+        }
+      };
+
+      void consumeStream();
+
+      // Cleanup ‑ allow caller to cancel iteration
+      return () => {
+        cancelled = true;
+      };
+    },
+    onError: (err) => {
+      console.error("Stream mutation error:", err);
+      setIsStreaming(false);
+      setStreamingMessageId(null);
+      addMessage(projectId, `Stream error: ${err.message}`, false);
+    }
+  });
+
+  // Track processed messages to avoid duplicate streams
+  const [processedMessageIds] = useState<Set<string>>(new Set());
+  
+  // Trigger stream subscription when streamingMessageId changes
+  useEffect(() => {
+    // Only proceed if we have a valid streaming message ID and we're not already processing it
+    if (!streamingMessageId || !projectId || !isStreaming) {
+      return; // Exit early if we don't need to stream
+    }
+    
+    // Check if we've already processed this message in this component lifecycle
+    if (processedMessageIds.has(streamingMessageId)) {
+      console.log(`Message ${streamingMessageId} already processed in this session, not restarting stream`);
+      return;
+    }
+
+    // Check if this message is already in the database with a completed status
+    const existingMessage = dbMessages?.find(msg => msg.id === streamingMessageId);
+    
+    // Prevent streaming for completed/processed messages
+    if (existingMessage) {
+      const isCompleted = (
+        existingMessage.status === "success" || 
+        existingMessage.status === "error" || 
+        existingMessage.kind === "tool_result" ||
+        // Check for jobId property (may not exist on all message types)
+        ('jobId' in existingMessage && existingMessage.jobId !== null)
+      );
+      
+      // Also check for messages that already have significant content
+      const hasContent = existingMessage.content && 
+        existingMessage.content.length > 10 && 
+        existingMessage.content !== "...";
+      
+      if (isCompleted || hasContent) {
+        console.log(`Message ${streamingMessageId} already processed, not starting stream`, existingMessage);
+        // Mark as processed to prevent future attempts
+        processedMessageIds.add(streamingMessageId);
+        // Reset streaming state for completed messages
+        setIsStreaming(false);
+        setStreamingMessageId(null);
+        return;
+      }
+    }
+    
+    // Mark as being processed to prevent duplicate streams
+    processedMessageIds.add(streamingMessageId);
+    
+    console.log(`Starting stream subscription for message ID: ${streamingMessageId}`);
+    streamResponse.mutate({
+      assistantMessageId: streamingMessageId,
+      projectId
+    });
+    
+    // This effect doesn't need to depend on dbMessages directly -
+    // it only needs to run when streamingMessageId changes
+  }, [streamingMessageId, projectId, isStreaming, streamResponse, processedMessageIds]);
+  
+  // Reset streaming state on component mount only
+  useEffect(() => {
+    // Only reset if we have stale state from a previous session
+    if (isStreaming || streamingMessageId) {
+      console.log("Clearing stale streaming state on component mount");
+      setIsStreaming(false);
+      setStreamingMessageId(null);
+    }
+    // No cleanup function needed here - we don't want to reset on unmount
+  }, []);
+  
   // STEP 1: Initiate the chat with user message (returns assistantMessageId for streaming)
-  const initiateChat = api.chat.initiateChat.useMutation({
+  const initiateChatMutation = api.chat.initiateChat.useMutation({
     onMutate: () => {
-      // Add user message to optimistic chat history immediately
+      // Track that we're streaming
+      setIsStreaming(true);
+      
+      // Add the user message optimistically
       addMessage(projectId, message, true);
       
-      // Clear input field
+      // Clear the input
       setMessage("");
       
-      // Set streaming state
-      setIsStreaming(true);
+      // Log the selected scene for context if available
+      if (selectedSceneId) {
+        console.log(`[ChatPanel] Selected scene for context: ${selectedSceneId}`);
+      }
     },
     onSuccess: (response) => {
       // Get the assistantMessageId and start the streaming subscription
@@ -109,6 +246,8 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       // Use streaming message ID for updates - this is set when initiateChat succeeds
       const activeMessageId = streamingMessageId || "";
       
+      console.log(`[ChatPanel] Handling stream event: ${event.type}`, event);
+      
       // Update message based on event type
       switch (event.type) {
         case "status":
@@ -127,7 +266,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           
         case "tool_start":
           // Tool execution started
-          updateMessage(projectId, event.name, {
+          updateMessage(projectId, activeMessageId, {
             status: "tool_calling",
             content: `Using tool: ${event.name}...`
           });
@@ -136,35 +275,63 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
         case "tool_result":
           // Tool executed with result
           if (event.finalContent) {
-            updateMessage(projectId, event.name, {
+            // Important: If this is a component generation (has jobId), update message with all data
+            // This ensures we can detect already processed messages on page refresh
+            updateMessage(projectId, activeMessageId, {
               status: event.success ? "success" : "error",
               kind: "tool_result",
               content: event.finalContent,
               jobId: event.jobId || null
             });
+            
+            // Immediately log the completed tool result for debugging
+            console.log(`[ChatPanel] Tool result received: ${event.success ? 'success' : 'error'}`, {
+              messageId: activeMessageId,
+              hasJobId: !!event.jobId,
+              jobId: event.jobId
+            });
+          }
+          
+          // Immediately stop streaming if a component was generated (has jobId)
+          if (event.jobId) {
+            console.log(`[ChatPanel] Component generation complete with jobId: ${event.jobId}. Stopping stream.`);
+            setIsStreaming(false);
+            setStreamingMessageId(null); // Stop subscription
+            
+            // Force a refetch to sync with backend
+            void refetchMessages();
           }
           break;
           
         case "complete":
           // Response complete
-          updateMessage(projectId, event.finalContent, {
+          updateMessage(projectId, activeMessageId, {
             status: "success",
             kind: "text",
             content: event.finalContent
           });
+          
+          // Always stop streaming when complete
+          setIsStreaming(false);
+          setStreamingMessageId(null);
           break;
           
         case "error":
           // Error occurred
-          updateMessage(projectId, event.error, {
+          updateMessage(projectId, activeMessageId, {
             status: "error",
             kind: "error",
             content: event.finalContent || `Error: ${event.error}`
           });
+          
+          // Always stop streaming on error
+          setIsStreaming(false);
+          setStreamingMessageId(null);
           break;
           
         case "finalized":
           // Stream completed
+          console.log(`[ChatPanel] Stream finalized with status: ${event.status}, jobId: ${event.jobId || 'none'}`);
           setIsStreaming(false);
           setStreamingMessageId(null);  // Stop subscription
           // Refetch messages to ensure we have the latest state
@@ -176,35 +343,22 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (err) {
       console.error("Error processing stream event:", err, event);
+      // Ensure we clean up streaming state even on error
+      setIsStreaming(false);
+      setStreamingMessageId(null);
     }
   };
-  
 
-
-  // Set up the stream response subscription
-  // This will automatically activate when streamingMessageId is set
-  api.chat.streamResponse.useSubscription(
-    // Only subscribe if we have a streaming message ID
-    streamingMessageId ? { assistantMessageId: streamingMessageId, projectId } : skipToken,
-    {
-      onData: handleStreamEvents,
-      onError: (err) => {
-        console.error("Stream subscription error:", err);
-        setIsStreaming(false);
-        setStreamingMessageId(null);
-        addMessage(projectId, `Stream error: ${err.message}`, false);
-      }
-    }
-  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!message.trim() || isStreaming) return;
     
-    if (!message.trim() || !projectId) return;
-    
-    initiateChat.mutate({
+    // Start streaming response
+    initiateChatMutation.mutate({
       projectId,
       message: message.trim(),
+      sceneId: selectedSceneId, // Include the selected scene ID if available
     });
   };
 
@@ -362,13 +516,29 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
         <div ref={messagesEndRef} />
       </div>
       
+      {/* Selected scene indicator */}
+      {selectedSceneId && (
+        <div className="px-4 py-2 bg-primary/10 border-t flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
+          <p className="text-xs">Editing scene: {selectedSceneId}</p>
+        </div>
+      )}
+
       {/* Message input */}
       <div className="p-4 border-t">
+        {!selectedSceneId && (
+          <div className="mb-2 flex items-center gap-2 text-xs text-amber-500">
+            <AlertTriangleIcon className="h-3 w-3" />
+            <span>No scene selected. Your changes will apply to the entire project.</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Describe changes to your video..."
+            placeholder={selectedSceneId 
+              ? "Describe changes to this scene..." 
+              : "Describe changes to your video..."}
             className="flex-1"
             disabled={isStreaming || isLoadingMessages}
           />

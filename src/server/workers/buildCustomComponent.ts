@@ -207,54 +207,68 @@ async function processJob(jobId: string): Promise<void> {
 }
 
 /**
- * Sanitize TSX code by removing unsafe imports
+ * Sanitize TSX code by removing unsafe imports and handling React/Remotion imports
  * 
- * Only allow imports from:
- * - react
- * - remotion
- * - @remotion/* packages
+ * 1. Removes all unsafe imports (non-React, non-Remotion)
+ * 2. Removes all React and Remotion imports (since we're adding globals)
+ * 3. Preserves the component code itself
  */
 function sanitizeTsx(tsxCode: string): string {
-  // Only allow imports from React and Remotion
-  const safeImportRegex = /^import\s+.*\s+from\s+['"](?:react|remotion|@remotion\/.*)['"]/gm;
-  
-  // Split by lines, filter only safe imports
+  // Split by lines
   const lines = tsxCode.split('\n');
-  const safeLines = lines.filter(line => {
+  
+  // Filter out all import statements - we'll handle React and Remotion via globals
+  const codeWithoutImports = lines.filter(line => {
     const trimmedLine = line.trim();
-    const isImport = trimmedLine.startsWith('import ');
-    return !isImport || safeImportRegex.test(line);
+    // Skip any import statements 
+    return !trimmedLine.startsWith('import ');
   });
   
-  return safeLines.join('\n');
+  return codeWithoutImports.join('\n');
 }
 
 /**
- * Wrap TSX code with globalThis React and Remotion references
- * so that the component can access them without direct imports.
+ * Wrap TSX code with global React and Remotion references
+ * and register the component for use with the useRemoteComponent hook.
  * 
- * This allows us to set external: ['react', 'remotion'] in esbuild
- * while still ensuring the component works in the Remotion player.
+ * The application expects the component to be assigned to window.__REMOTION_COMPONENT.
  */
 function wrapTsxWithGlobals(tsxCode: string): string {
+  // Try to extract the component name from the TSX code
+  const componentNameMatch = tsxCode.match(/function\s+([A-Za-z0-9_]+)\s*\(/);  
+  const componentName = componentNameMatch ? componentNameMatch[1] : 'CustomComponent';
+  
   return `
-// Ensure React and Remotion are available globally
-const React = globalThis.React || require('react');
-const { 
-  AbsoluteFill, 
-  useCurrentFrame, 
-  useVideoConfig, 
-  spring, 
-  interpolate, 
-  Sequence,
-  Audio,
-  Img,
-  staticFile,
-  Series,
-  interpolateColors
-} = globalThis.remotion || require('remotion');
+// Access React from global scope
+const React = window.React || globalThis.React;
+
+// Access Remotion APIs safely without destructuring
+const AbsoluteFill = window.Remotion?.AbsoluteFill;
+const useCurrentFrame = window.Remotion?.useCurrentFrame;
+const useVideoConfig = window.Remotion?.useVideoConfig;
+const spring = window.Remotion?.spring;
+const interpolate = window.Remotion?.interpolate;
+const Sequence = window.Remotion?.Sequence;
+const Audio = window.Remotion?.Audio;
+const Img = window.Remotion?.Img;
+const staticFile = window.Remotion?.staticFile;
+const Series = window.Remotion?.Series;
+const interpolateColors = window.Remotion?.interpolateColors;
 
 // Original component code
 ${tsxCode}
+
+// Register the component for the useRemoteComponent hook
+// This is the key integration point with the application
+if (typeof ${componentName} !== 'undefined') {
+  // This is the expected format by the useRemoteComponent hook
+  window.__REMOTION_COMPONENT = ${componentName};
+  console.log('Component registered as window.__REMOTION_COMPONENT');
+} else {
+  console.error('Could not find component to register:', '${componentName}');
+}
+
+// Also export as default for module systems (not used in browser context)
+export default ${componentName};
 `;
 }

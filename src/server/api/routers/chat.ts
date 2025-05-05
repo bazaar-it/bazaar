@@ -26,10 +26,12 @@ import { projects, patches, messages, customComponentJobs } from "~/server/db/sc
 import { eq, desc, and, lt } from "drizzle-orm"; // Added lt for time comparison
 import { openai } from "~/server/lib/openai";
 import { nanoid } from "nanoid";
+import { randomUUID } from "crypto";
 import { applyPatch, type Operation } from 'fast-json-patch';
 import { inputPropsSchema } from "~/types/input-props";
 import { jsonPatchSchema, type JsonPatch } from "~/types/json-patch";
 import { generateComponentCode } from "~/server/workers/generateComponentCode";
+import { processPendingJobs } from "~/server/workers/buildCustomComponent";
 import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
@@ -39,6 +41,9 @@ import type {
 // --- Constants ---
 const SYSTEM_PROMPT = "You are a Remotion video assistant. Analyze the user request in the context of the current video properties (`currentProps`). Decide whether to apply a JSON patch for direct modifications or request a new custom component generation for complex effects. Use `applyJsonPatch` for modifications. Use `generateRemotionComponent` for new effects. Respond naturally if neither tool is appropriate or more information is needed.";
 const MAX_CONTEXT_MESSAGES = 10; // How many *pairs* of user/assistant messages to fetch
+
+// Set to track active streams and prevent duplicates
+const activeStreamIds = new Set<string>();
 
 // --- Helper Functions ---
 
@@ -105,13 +110,11 @@ async function handleComponentGenerationInternal(
     console.log(`[COMPONENT GEN INTERNAL] Starting for AsstMsgID: ${assistantMessageId}, Desc: ${effectDescription}`);
     try {
         // 1. Generate code (can be slow)
-        // TODO: Consider moving generateComponentCode to a background job triggered here
-        // if it causes the stream handler to time out or hold resources too long.
         const { effect, tsxCode } = await generateComponentCode(effectDescription);
         console.log(`[COMPONENT GEN INTERNAL] Code generated for "${effect}"`);
 
         // 2. Create job record
-        const jobId = nanoid();
+        const jobId = randomUUID(); // Use standard UUID format instead of nanoid
         await db.insert(customComponentJobs)
             .values({
                 id: jobId,
@@ -128,8 +131,13 @@ async function handleComponentGenerationInternal(
 
         console.log(`[COMPONENT GEN INTERNAL] Job ${jobId} created for "${effect}"`);
 
-        // Optional: Trigger build worker here explicitly if not polling
-        // await triggerBuildWorker(job.id);
+        // 3. Trigger build worker immediately
+        try {
+            await processPendingJobs();
+        } catch (buildError) {
+            console.error("[COMPONENT GEN INTERNAL] Error triggering build:", buildError);
+            // Don't throw - the cron job will retry
+        }
 
         return {
             jobId,
@@ -138,9 +146,7 @@ async function handleComponentGenerationInternal(
 
     } catch (error: any) {
         console.error("[COMPONENT GEN INTERNAL] Error:", error);
-        // Error will be caught by the streamResponse handler's try/catch
-        // and update the final message status there.
-        throw new TRPCError({ // Re-throw as TRPCError for consistent handling
+        throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: `Failed to generate component: ${error.message}`,
             cause: error
@@ -195,10 +201,16 @@ export const chatRouter = createTRPCRouter({
         .input(z.object({
             projectId: z.string().uuid(),
             message: z.string().min(1),
+            sceneId: z.string().nullable().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const { projectId, message } = input;
+            const { projectId, message, sceneId } = input;
             const { session } = ctx;
+            
+            // Log if scene ID is provided for context-aware responses
+            if (sceneId) {
+                console.log(`Chat initiated with scene context: ${sceneId}`);
+            }
 
             // 1. Auth Check
             const project = await ctx.db.query.projects.findFirst({
@@ -208,7 +220,7 @@ export const chatRouter = createTRPCRouter({
             if (!project) throw new TRPCError({ code: "FORBIDDEN" });
 
             // 2. Insert User Message
-            const userMessageId = nanoid();
+            const userMessageId = randomUUID(); // Use standard UUID format instead of nanoid
             await ctx.db.insert(messages).values({
                 id: userMessageId,
                 projectId,
@@ -218,7 +230,7 @@ export const chatRouter = createTRPCRouter({
             });
 
             // 3. Create Assistant Placeholder
-            const assistantMessageId = nanoid();
+            const assistantMessageId = randomUUID(); // Use standard UUID format instead of nanoid
             await ctx.db.insert(messages).values({
                 id: assistantMessageId,
                 projectId,
@@ -243,10 +255,56 @@ export const chatRouter = createTRPCRouter({
             assistantMessageId: z.string(), // The ID returned by initiateChat
             projectId: z.string().uuid(),
         }))
-        .subscription(({ ctx, input }) => {
+        .mutation(async ({ ctx, input }) => {
             const { assistantMessageId, projectId } = input;
             const { session } = ctx;
-
+            
+            // Check if this message is already being streamed
+            if (activeStreamIds.has(assistantMessageId)) {
+                console.log(`[Stream] Message ${assistantMessageId} already streaming, preventing duplicate`);
+                return observable<StreamEvent>((emit) => {
+                    // Immediately send finalized event and complete
+                    emit.next({ type: "finalized", status: "success" });
+                    emit.complete();
+                    return () => {};
+                });
+            }
+            
+            // Check if this message already exists and has been completed
+            const existingMessage = await db.query.messages.findFirst({
+                where: eq(messages.id, assistantMessageId),
+                columns: { id: true, status: true, kind: true }
+            });
+            
+            // Check if message exists and is already completed
+            if (existingMessage && (
+                existingMessage.status === "success" ||
+                existingMessage.status === "error" ||
+                existingMessage.kind === "tool_result"
+            )) {
+                console.log(`[Stream] Message ${assistantMessageId} already completed in DB, skipping stream`);
+                return observable<StreamEvent>((emit) => {
+                    emit.next({ type: "finalized", status: existingMessage.status as any || "success" });
+                    emit.complete();
+                    return () => {};
+                });
+            }
+            
+            // Check if there's a component job already created for this message
+            const existingJob = await db.query.customComponentJobs.findFirst({
+                where: eq(customComponentJobs.projectId, projectId),
+                orderBy: [desc(customComponentJobs.createdAt)]
+                // We don't need to set limit explicitly as findFirst already limits to one result
+            });
+            
+            if (existingJob) {
+                console.log(`[Stream] Recent job found for project ${projectId}, may be related to this message`);
+            }
+            
+            // Mark message as being actively streamed
+            activeStreamIds.add(assistantMessageId);
+            
+            // Start a new stream for this message
             return observable<StreamEvent>((emit) => {
                 // Variables to buffer stream state
                 let finalContent = ""; // Accumulates the full text response
@@ -536,12 +594,13 @@ Your component is being compiled and will be available soon.`;
                 // Return teardown function
                 return () => {
                     console.log(`[Stream ${assistantMessageId}] Teardown: Client disconnected`);
-                    // Cleanup logic (e.g., abort fetch controllers if needed)
+                    // Remove from active streams set when disconnected
+                    activeStreamIds.delete(assistantMessageId);
                 };
             }); // End observable return
-        }),
-
-}); // End createTRPCRouter
+        }), // End observable
+    }) // End streamResponse mutation
+; // End createTRPCRouter
 
 // ... (rest of the code remains the same)
 export type SendMessageResult = {

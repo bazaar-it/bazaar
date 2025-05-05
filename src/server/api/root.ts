@@ -4,7 +4,10 @@ import { chatRouter } from "~/server/api/routers/chat";
 import { renderRouter } from "~/server/api/routers/render";
 import { customComponentRouter } from "~/server/api/routers/customComponent";
 import { timelineRouter } from "~/server/api/routers/timeline";
+import { videoRouter } from "~/server/api/routers/video";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+// Import server initialization to start background processes
+import "~/server/init";
 
 /**
  * This is the primary router for your server.
@@ -17,6 +20,7 @@ export const appRouter = createTRPCRouter({
   render: renderRouter,
   customComponent: customComponentRouter,
   timeline: timelineRouter,
+  video: videoRouter,
 });
 
 // export type definition of API

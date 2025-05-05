@@ -5,8 +5,7 @@ import { create } from "zustand";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import type { InputProps } from "../types/input-props";
-import { string } from "zod";
-import { type } from "os";
+import { api } from "~/trpc/react";
 
 // Define chat message types
 export type ChatMessage = {
@@ -138,13 +137,60 @@ export const useVideoState = create<VideoState>((set, get) => ({
       // Skip if project doesn't exist
       if (!state.projects[projectId]) return state;
       
+      // Debug logging
+      console.table(patch);
+      console.log(
+        "[applyPatch] scenes:",
+        state.projects[projectId].props.scenes.map((s) => ({
+          id: s.id,
+          start: s.start,
+          dur: s.duration,
+        }))
+      );
+      
       try {
+        // Store original state for potential rollback
+        const originalProps = structuredClone(state.projects[projectId].props);
+
         // Apply patch to create new props
         const newProps = applyPatch(
-          structuredClone(state.projects[projectId].props), 
+          structuredClone(originalProps), 
           patch, 
           /* validate */ true
         ).newDocument;
+        
+        // Fire-and-forget persist to server
+        // Use fetch directly to avoid React dependencies in Zustand
+        fetch("/api/trpc/video.applyPatch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            json: { // Wrap in json property for tRPC
+              projectId, 
+              patch 
+            }
+          }),
+        }).catch(() => {
+          // Rollback if server rejects
+          console.error("Server rejected patch, rolling back");
+          // Use a safer approach that preserves the full state structure
+          const currentState = get();
+          const projectState = currentState.projects[projectId];
+          
+          if (projectState) {
+            set({
+              projects: {
+                ...currentState.projects,
+                [projectId]: {
+                  ...projectState,
+                  props: originalProps
+                }
+              }
+            });
+          }
+        });
         
         // Return updated state
         return {

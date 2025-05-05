@@ -70,4 +70,4 @@ function shouldFilter(args) {
   
   // Filter if message matches any filter pattern
   return filterPatterns.some(pattern => pattern.test(message));
-}
+} 

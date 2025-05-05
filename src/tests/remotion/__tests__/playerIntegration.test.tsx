@@ -2,10 +2,13 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 
+// Import testing utilities
+import '@testing-library/jest-dom';
+
 // Mock the window object for client-side behavior
 Object.defineProperty(window, 'requestAnimationFrame', {
   writable: true,
-  value: jest.fn(cb => setTimeout(cb, 0))
+  value: jest.fn((cb: () => void) => setTimeout(cb, 0))
 });
 
 // Mock Next.js useRouter
@@ -19,80 +22,15 @@ jest.mock('next/navigation', () => ({
   useSearchParams: jest.fn().mockReturnValue(new URLSearchParams())
 }));
 
-// Mock Player from Remotion
-jest.mock('@remotion/player', () => {
-  // Return a function component that simulates Player behavior
-  const MockPlayer = ({
-    component: Component,
-    durationInFrames,
-    compositionWidth,
-    compositionHeight,
-    fps,
-    controls,
-    loop,
-    autoPlay,
-    style,
-    clickToPlay,
-    doubleClickToFullscreen,
-    renderLoading,
-    playbackRate,
-    inputProps = {},
-    allowFullscreen = true,
-    initialFrame = 0
-  }) => {
-    const [isPlaying, setIsPlaying] = React.useState(autoPlay || false);
-    const [currentFrame, setCurrentFrame] = React.useState(initialFrame);
-    const [volume, setVolume] = React.useState(1);
-    const [isFullscreen, setIsFullscreen] = React.useState(false);
-    
-    return (
-      <div 
-        data-testid="mock-player"
-        data-playing={isPlaying}
-        data-current-frame={currentFrame}
-        data-volume={volume}
-        data-fullscreen={isFullscreen}
-        data-duration={durationInFrames}
-        data-dimensions={`${compositionWidth}x${compositionHeight}`}
-        data-fps={fps}
-        style={style}
-      >
-        <div data-testid="controls" style={{ display: controls ? 'block' : 'none' }}>
-          <button 
-            data-testid="play-button" 
-            onClick={() => setIsPlaying(!isPlaying)}
-          >
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-          <input 
-            data-testid="seek-slider" 
-            type="range" 
-            min={0} 
-            max={durationInFrames - 1} 
-            value={currentFrame}
-            onChange={(e) => setCurrentFrame(Number(e.target.value))}
-          />
-          <button 
-            data-testid="fullscreen-button" 
-            onClick={() => allowFullscreen && setIsFullscreen(!isFullscreen)}
-            disabled={!allowFullscreen}
-          >
-            Fullscreen
-          </button>
-        </div>
-        <div data-testid="composition-container">
-          <Component {...inputProps} />
-        </div>
-      </div>
-    );
-  };
-  
-  return {
-    Player: jest.fn().mockImplementation(MockPlayer)
-  };
-});
+// Import the MockPlayer component for mocking
+import MockPlayer from '../__mocks__/MockPlayer';
 
-// Import after mocks
+// Mock Player from Remotion
+jest.mock('@remotion/player', () => ({
+  Player: jest.fn().mockImplementation((props) => MockPlayer(props))
+}));
+
+// Import rendering tools after mocks
 import { render, fireEvent, screen } from '@testing-library/react';
 import { Player } from '@remotion/player';
 

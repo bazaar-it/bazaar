@@ -1,5 +1,5 @@
 //src/components/CustomComponentStatus.tsx
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 // Note: Replace these imports with the actual paths in your project
 // Assuming api utility is located at ~/lib/api or similar
@@ -16,6 +16,8 @@ const Spinner = ({ className }: { className?: string }) => (
 interface CustomComponentStatusProps {
   componentId: string;
   onSuccess?: (outputUrl: string) => void;
+  onStatusChange?: (status: string, outputUrl?: string) => void; // New callback for any status change
+  collapsed?: boolean; // Optional prop to show condensed view
 }
 
 /**
@@ -26,11 +28,19 @@ interface CustomComponentStatusProps {
  * 
  * @param componentId UUID of the custom component job
  * @param onSuccess Optional callback for when the job succeeds
+ * @param onStatusChange Optional callback for any status change
+ * @param collapsed Whether to show a condensed view (for sidebar)
  */
 export function CustomComponentStatus({ 
   componentId, 
-  onSuccess 
+  onSuccess,
+  onStatusChange,
+  collapsed
 }: CustomComponentStatusProps) {
+  // Keep track of previous status and outputUrl to prevent unnecessary callbacks
+  const prevStatusRef = useRef<string | null>(null);
+  const prevOutputUrlRef = useRef<string | null>(null);
+  
   // Query the job status with polling for pending/building jobs
   const { data: job, isLoading } = api.customComponent.getJobStatus.useQuery(
     { id: componentId },
@@ -42,74 +52,96 @@ export function CustomComponentStatus({
     }
   );
 
-  // Call the success callback when the job completes
+  // Call the callbacks when the job status changes
   useEffect(() => {
-    if (job?.status === "success" && job.outputUrl && onSuccess) {
-      onSuccess(job.outputUrl);
+    if (!job || !job.status) return;
+    
+    // Convert null to undefined for the outputUrl parameter
+    const outputUrl = job.outputUrl || undefined;
+    
+    // Only call callbacks if status or outputUrl actually changed
+    const statusChanged = prevStatusRef.current !== job.status;
+    const outputUrlChanged = prevOutputUrlRef.current !== job.outputUrl;
+    
+    if (statusChanged || outputUrlChanged) {
+      // Update refs with current values
+      prevStatusRef.current = job.status;
+      prevOutputUrlRef.current = job.outputUrl;
+      
+      // Call status change callback for any status
+      if (onStatusChange) {
+        onStatusChange(job.status, outputUrl);
+      }
+      
+      // Call success callback specifically for successful jobs
+      if (job.status === "success" && job.outputUrl && onSuccess) {
+        onSuccess(job.outputUrl);
+      }
     }
-  }, [job, onSuccess]);
+  }, [job, onSuccess, onStatusChange]);
 
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 text-slate-500">
         <Spinner className="h-4 w-4" />
-        <span>Checking component status...</span>
+        <span className="text-xs">Loading...</span>
       </div>
     );
   }
   
-  if (!job) {
+  if (!job || !job.status) {
     return (
       <div className="text-red-500">
-        ❌ Component not found
+        <span className="text-xs">❌ Not found</span>
       </div>
     );
   }
   
+  // Render different UI based on status
   switch (job.status) {
     case "pending":
       return (
-        <div className="flex items-center gap-2 text-amber-500">
-          <Spinner className="h-4 w-4" />
-          <span>Waiting in queue...</span>
+        <div className="flex items-center gap-1 text-amber-500">
+          <Spinner className="h-3 w-3" />
+          <span className="text-xs">Queued</span>
         </div>
       );
     case "building":
       return (
-        <div className="flex items-center gap-2 text-blue-500">
-          <Spinner className="h-4 w-4" />
-          <span>Building your custom component...</span>
+        <div className="flex items-center gap-1 text-blue-500">
+          <Spinner className="h-3 w-3" />
+          <span className="text-xs">Building</span>
         </div>
       );
     case "success":
       return (
-        <div className="text-green-500 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="text-green-500 flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
-          <span>Custom component ready</span>
+          <span className="text-xs">Ready</span>
         </div>
       );
     case "error":
       return (
         <div className="text-red-500">
-          <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <line x1="15" y1="9" x2="9" y2="15"></line>
               <line x1="9" y1="9" x2="15" y2="15"></line>
             </svg>
-            <span>Error building component</span>
+            <span className="text-xs">Error</span>
           </div>
-          {job.errorMessage && (
-            <div className="mt-1 text-sm bg-red-50 p-2 rounded-md border border-red-200">
+          {job.errorMessage && !collapsed && (
+            <div className="mt-1 text-xs bg-red-50 p-1 rounded-md border border-red-200 max-w-[200px] truncate">
               {job.errorMessage}
             </div>
           )}
         </div>
       );
     default:
-      return <div>Unknown status: {job.status}</div>;
+      return <div className="text-xs">Unknown: {job.status}</div>;
   }
 }

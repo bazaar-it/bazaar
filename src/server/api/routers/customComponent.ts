@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { customComponentJobs, projects } from "~/server/db/schema";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, ne, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 /**
@@ -190,9 +190,13 @@ export const customComponentRouter = createTRPCRouter({
 
   // List all custom components for the logged-in user across all projects
   listAllForUser: protectedProcedure
-    .query(async ({ ctx }) => {
-      // Get all jobs for all projects owned by this user
-      const results = await ctx.db
+    .input(z.object({
+      // Optional flag to filter by successful components only
+      successfulOnly: z.boolean().optional().default(true),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Query for all projects owned by this user
+      let query = ctx.db
         .select({
           // Select only the job fields we need to avoid ambiguity
           id: customComponentJobs.id,
@@ -209,8 +213,39 @@ export const customComponentRouter = createTRPCRouter({
         })
         .from(customComponentJobs)
         .innerJoin(projects, eq(customComponentJobs.projectId, projects.id))
-        .where(eq(projects.userId, ctx.session.user.id))
-        .orderBy(desc(customComponentJobs.createdAt));
+        .where(eq(projects.userId, ctx.session.user.id));
+      
+      // If we only want successful components, add additional filters
+      if (input.successfulOnly) {
+        // A successful component must:
+        // 1. Have status="success"
+        // 2. Have a non-null outputUrl (indicating it was uploaded to R2)
+        // We need to modify our base where condition
+        query = ctx.db
+          .select({
+            id: customComponentJobs.id,
+            projectId: customComponentJobs.projectId,
+            effect: customComponentJobs.effect,
+            status: customComponentJobs.status,
+            tsxCode: customComponentJobs.tsxCode,
+            outputUrl: customComponentJobs.outputUrl,
+            errorMessage: customComponentJobs.errorMessage,
+            createdAt: customComponentJobs.createdAt,
+            updatedAt: customComponentJobs.updatedAt,
+            projectName: projects.title
+          })
+          .from(customComponentJobs)
+          .innerJoin(projects, eq(customComponentJobs.projectId, projects.id))
+          .where(and(
+            eq(projects.userId, ctx.session.user.id),
+            eq(customComponentJobs.status, "success"),
+            // Use IS NOT NULL syntax for checking non-null outputUrl
+            isNotNull(customComponentJobs.outputUrl)
+          ));
+      }
+      
+      // Execute the query with ordering
+      const results = await query.orderBy(desc(customComponentJobs.createdAt));
       
       return results;
     }),

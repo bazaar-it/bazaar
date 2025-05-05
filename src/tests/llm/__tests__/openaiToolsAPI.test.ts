@@ -30,7 +30,7 @@ jest.mock('openai', () => {
               },
               finish_reason: 'tool_calls'
             }]
-          })
+          } as any)
         }
       }
     }))
@@ -90,16 +90,16 @@ describe('OpenAI Tools API Integration', () => {
 
     const toolCalls = response.choices[0].message.tool_calls;
     expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0].function.name).toBe('generateRemotionComponent');
+    expect(toolCalls[0]?.function.name).toBe('generateRemotionComponent');
 
     // Process the tool calls
     const processedCalls = await processToolCalls(toolCalls);
     
     // Check that the calls were properly processed
     expect(processedCalls).toHaveLength(1);
-    expect(processedCalls[0].functionName).toBe('generateRemotionComponent');
-    expect(processedCalls[0].args).toEqual({ effect: 'fireworks', duration: 5 });
-    expect(processedCalls[0].result.success).toBe(true);
+    expect(processedCalls[0]?.functionName).toBe('generateRemotionComponent');
+    expect(processedCalls[0]?.args).toEqual({ effect: 'fireworks', duration: 5 });
+    expect(processedCalls[0]?.result.success).toBe(true);
   });
 
   it('should handle responses with multiple tool calls', async () => {
@@ -159,18 +159,18 @@ describe('OpenAI Tools API Integration', () => {
 
     const toolCalls = response.choices[0].message.tool_calls;
     expect(toolCalls).toHaveLength(2);
-    expect(toolCalls[0].function.name).toBe('updateVideoProperty');
-    expect(toolCalls[1].function.name).toBe('addScene');
+    expect(toolCalls[0]?.function.name).toBe('updateVideoProperty');
+    expect(toolCalls[1]?.function.name).toBe('addScene');
 
     // Process the tool calls
     const processedCalls = await processToolCalls(toolCalls);
     
     // Check that the calls were properly processed
     expect(processedCalls).toHaveLength(2);
-    expect(processedCalls[0].functionName).toBe('updateVideoProperty');
-    expect(processedCalls[0].args).toEqual({ property: 'background', value: '#0000FF' });
-    expect(processedCalls[1].functionName).toBe('addScene');
-    expect(processedCalls[1].args).toEqual({ type: 'text', content: 'Hello World' });
+    expect(processedCalls[0]?.functionName).toBe('updateVideoProperty');
+    expect(processedCalls[0]?.args).toEqual({ property: 'background', value: '#0000FF' });
+    expect(processedCalls[1]?.functionName).toBe('addScene');
+    expect(processedCalls[1]?.args).toEqual({ type: 'text', content: 'Hello World' });
   });
 
   it('should handle error cases gracefully', async () => {
@@ -212,11 +212,11 @@ describe('OpenAI Tools API Integration', () => {
     const toolCalls = response.choices[0].message.tool_calls;
     
     // Process the tool calls
-    const processedCalls = processToolCalls(toolCalls);
+    const processedCalls = await processToolCalls(toolCalls);
     
     // Should still process despite malformed JSON
     expect(processedCalls).toHaveLength(1);
-    expect(processedCalls[0].functionName).toBe('generateRemotionComponent');
-    expect(processedCalls[0].args).toEqual({}); // Empty object due to failed parsing
+    expect(processedCalls[0]?.functionName).toBe('generateRemotionComponent');
+    expect(processedCalls[0]?.args).toEqual({}); // Empty object due to failed parsing
   });
 }); 

@@ -1,15 +1,8 @@
 // jest.setup.js
+// This file is run after the test environment is set up but before any tests run
 
-// Set up jest-dom matchers for DOM testing
-require('@testing-library/jest-dom');
-
-// Set up global mocks
-global.ResizeObserver = class MockResizeObserver {
-  constructor() {}
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
+// Import test libraries
+import '@testing-library/jest-dom';
 
 // Mock the console.error to avoid noise in test output
 const originalConsoleError = console.error;
@@ -26,6 +19,14 @@ console.error = function(...args) {
   }
   
   originalConsoleError.apply(console, args);
+};
+
+// Set up global mocks
+global.ResizeObserver = class MockResizeObserver {
+  constructor() {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
 };
 
 // Set required environment variables for tests
