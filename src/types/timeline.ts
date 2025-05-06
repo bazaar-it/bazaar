@@ -15,6 +15,11 @@ export enum TimelineItemType {
 }
 
 /**
+ * Status types for timeline items - used for visual feedback
+ */
+export type TimelineItemStatus = "valid" | "warning" | "error" | "pending" | "building";
+
+/**
  * Base interface for all timeline items
  */
 export interface TimelineItem {
@@ -23,6 +28,9 @@ export interface TimelineItem {
   from: number; // Start frame
   durationInFrames: number;
   row: number; // Vertical position in timeline
+  status?: TimelineItemStatus; // Item status for visual feedback
+  sceneId?: string; // Original scene ID from the video data
+  componentId?: string; // For custom components, reference to component ID
 }
 
 /**

@@ -1,54 +1,86 @@
 // src/app/projects/[id]/edit/panels/TimelinePanel.tsx
-//src/app/projects/[id]/edit/panels/TimelinePanel.tsx
 "use client";
 
-import React, { useMemo, useCallback, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import Timeline from '~/components/client/Timeline/Timeline';
-import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
-import type { TimelineItemUnion } from '~/types/timeline';
 import { TimelineItemType } from '~/types/timeline';
+import type { TimelineItemUnion, TimelineItemStatus } from '~/types/timeline';
+import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
 import { useSelectedScene } from '~/components/client/Timeline/SelectedSceneContext';
 import { replace } from '~/lib/patch';
+import type { SceneType } from "~/types/remotion-constants";
+
+// Define a simple interface for component jobs to avoid type errors
+interface ComponentJob {
+  id: string;
+  status: string;
+  metadata?: {
+    durationInFrames?: number;
+  };
+}
 
 export default function TimelinePanel() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
   const { getCurrentProps, applyPatch } = useVideoState();
   const inputProps = getCurrentProps();
   const { selectedSceneId, setSelectedSceneId } = useSelectedScene();
   const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const [sceneStatuses, setSceneStatuses] = useState<Record<string, TimelineItemStatus>>({});
+  
+  // Since we don't have real-time job data yet, we'll check for timing issues only
+  // We can implement a real API once it's available
+  const activeJobs: ComponentJob[] = [];
+  
+  // Initialize scene statuses based on timing issues
+  useEffect(() => {
+    if (inputProps?.scenes) {
+      const newStatuses: Record<string, TimelineItemStatus> = {};
+      
+      // Check for scene timing issues
+      let previousEndFrame = 0;
+      inputProps.scenes.forEach((scene, index) => {
+        // Check for gaps
+        if (scene.start > previousEndFrame && index > 0) {
+          newStatuses[scene.id] = "warning";
+        }
+        
+        // Check for overlaps
+        if (scene.start < previousEndFrame && index > 0) {
+          newStatuses[scene.id] = "error";
+        }
+        
+        previousEndFrame = scene.start + scene.duration;
+      });
+      
+      setSceneStatuses(newStatuses);
+    }
+  }, [inputProps?.scenes]);
   
   // Calculate total duration from video props
   const totalDuration = useMemo(() => {
-    if (!inputProps?.scenes || inputProps.scenes.length === 0) {
-      return 300; // Default 10 seconds at 30fps if no scenes
-    }
-    
-    // Find the latest ending frame across all scenes
-    const maxEndFrame = inputProps.scenes.reduce((max, scene) => {
-      const sceneEndFrame = scene.start + scene.duration;
-      return Math.max(max, sceneEndFrame);
-    }, 0);
-    
-    // Add some padding (3 seconds) to ensure we can see beyond the last scene
-    return Math.max(maxEndFrame + 90, 300);
-  }, [inputProps?.scenes]);
+    if (!inputProps?.meta?.duration) return 300; // Default 10 seconds at 30fps
+    return inputProps.meta.duration;
+  }, [inputProps?.meta?.duration]);
   
   // Convert scenes to timeline items
-  const timelineItems = useMemo<TimelineItemUnion[]>(() => {
+  const timelineItems = useMemo(() => {
     if (!inputProps) return [];
     
     return inputProps.scenes.map((scene, index): TimelineItemUnion => {
+      const status = sceneStatuses[scene.id] || "valid";
+      
       // Map the type first to use in the correct item creation
       const itemType = mapSceneTypeToTimelineType(scene.type);
       
-      // Create proper typed items based on scene type
-      switch (scene.type) {
-        case 'text':
+      // Create timeline item based on type
+      switch (itemType) {
+        case TimelineItemType.TEXT:
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: parseInt(scene.id, 10) || index + 1,
             type: TimelineItemType.TEXT,
             from: scene.start,
             durationInFrames: scene.duration,
@@ -56,32 +88,37 @@ export default function TimelinePanel() {
             content: scene.data?.text as string || 'Text',
             color: scene.data?.color as string || '#FFFFFF',
             fontSize: scene.data?.fontSize as number || 24,
-            fontFamily: scene.data?.fontFamily as string || 'Arial'
+            fontFamily: scene.data?.fontFamily as string || 'Arial',
+            status,
+            sceneId: scene.id,
           };
-        case 'image':
+        case TimelineItemType.IMAGE:
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: parseInt(scene.id, 10) || index + 1,
             type: TimelineItemType.IMAGE,
             from: scene.start,
             durationInFrames: scene.duration,
             row: index % 3,
-            src: scene.data?.src as string || ''
+            src: scene.data?.src as string || '',
+            status,
+            sceneId: scene.id,
           };
-        case 'custom':
+        case TimelineItemType.CUSTOM:
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: parseInt(scene.id, 10) || index + 1,
             type: TimelineItemType.CUSTOM,
             from: scene.start,
             durationInFrames: scene.duration,
             row: index % 3,
             componentId: scene.data?.componentId as string || '',
             name: scene.data?.name as string || 'Custom Component',
-            outputUrl: scene.data?.outputUrl as string || ''
+            outputUrl: scene.data?.outputUrl as string || '',
+            status,
+            sceneId: scene.id,
           };
         default:
-          // Default to a text item for other scene types
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: parseInt(scene.id, 10) || index + 1,
             type: TimelineItemType.TEXT,
             from: scene.start,
             durationInFrames: scene.duration,
@@ -89,55 +126,39 @@ export default function TimelinePanel() {
             content: scene.type,
             fontSize: 24,
             fontFamily: 'Arial',
-            color: '#FFFFFF'
+            color: '#FFFFFF',
+            status,
+            sceneId: scene.id,
           };
       }
     });
-  }, [inputProps]);
+  }, [inputProps?.scenes, sceneStatuses]);
   
   // Function to map scene types to timeline item types
   function mapSceneTypeToTimelineType(sceneType: string): TimelineItemType {
     switch (sceneType) {
       case 'text': return TimelineItemType.TEXT;
       case 'image': return TimelineItemType.IMAGE;
+      case 'custom': return TimelineItemType.CUSTOM;
       case 'video': return TimelineItemType.VIDEO;
       case 'audio': return TimelineItemType.AUDIO;
-      case 'custom': return TimelineItemType.CUSTOM;
       default: return TimelineItemType.TEXT;
     }
   }
   
-  // Handle when an item is selected from the timeline
   const handleSelectItem = useCallback((itemId: number) => {
     // Find the scene that corresponds to the timeline item
-    const scene = inputProps?.scenes.find(s => {
-      const sceneIdNum = parseInt(s.id, 10);
-      return !isNaN(sceneIdNum) && sceneIdNum === itemId;
-    });
+    const item = timelineItems.find(item => item.id === itemId);
     
     // Update the selected scene in context
-    if (scene) {
-      setSelectedSceneId(scene.id);
+    if (item && item.sceneId) {
+      setSelectedSceneId(item.sceneId);
       
-      // Log instead of toast notification
-      console.log(`Selected: ${scene.type} scene`);
+      // Update URL with scene ID for deep linking
+      const newPath = `${pathname}?scene=${item.sceneId}`;
+      router.push(newPath);
     }
-  }, [inputProps?.scenes, setSelectedSceneId]);
-  
-  // Handle drag from timeline to chat
-  const handleDragToChat = useCallback((itemId: number) => {
-    // Find the scene
-    const scene = inputProps?.scenes.find(s => {
-      const sceneIdNum = parseInt(s.id, 10);
-      return !isNaN(sceneIdNum) && sceneIdNum === itemId;
-    });
-    
-    if (scene) {
-      // You could implement a way to send this scene to the chat
-      // For now, just log
-      console.log(`Dragged scene ${scene.type} to chat`);
-    }
-  }, [inputProps?.scenes]);
+  }, [timelineItems, setSelectedSceneId, pathname, router]);
 
   if (!inputProps) {
     return (
@@ -174,20 +195,37 @@ export default function TimelinePanel() {
           <span>Remove scene</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Ctrl</kbd>
-          <span>+</span>
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mx-1">D</kbd>
-          <span>Duplicate</span>
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Space</kbd>
+          <span>Play/pause</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Ctrl</kbd>
-          <span>+</span>
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mx-1">S</kbd>
-          <span>Split at playhead</span>
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">→</kbd>
+          <span>Next frame</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">↔</kbd>
-          <span>Drag to reposition</span>
+          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">←</kbd>
+          <span>Previous frame</span>
+        </div>
+      </div>
+      
+      {/* Status legend */}
+      <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+        <span>Status:</span>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded-full mr-1"></div>
+          <span>Valid</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded-full mr-1"></div>
+          <span>Warning</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded-full mr-1"></div>
+          <span>Error</span>
+        </div>
+        <div className="flex items-center">
+          <div className="w-3 h-3 bg-blue-500/20 border border-blue-500 rounded-full mr-1 animate-pulse"></div>
+          <span>Building</span>
         </div>
       </div>
     </div>

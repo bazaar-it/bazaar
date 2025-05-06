@@ -2,10 +2,11 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem } from '~/types/timeline';
+import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem, type TimelineItemStatus } from '~/types/timeline';
 import { cn } from '~/lib/utils';
 import Image from 'next/image';
 import { useTimelineClick, useTimelineDrag } from './TimelineContext';
+import { AlertCircle, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 
 interface TimelineItemProps {
   item: TimelineItemUnion;
@@ -40,6 +41,56 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
   
   // Determine if current frame is within this item
   const isActive = currentFrame >= item.from && currentFrame < item.from + item.durationInFrames;
+  
+  // Status indicator based on the item's status property
+  const statusIndicator = useMemo(() => {
+    // If no status is provided, don't show an indicator
+    if (!item.status) return null;
+    
+    switch (item.status) {
+      case 'valid':
+        return (
+          <div className="absolute -right-1 -top-1 bg-green-500/20 border border-green-500 rounded-full p-0.5 z-30">
+            <CheckCircle size={12} className="text-green-500" />
+          </div>
+        );
+      case 'warning':
+        return (
+          <div className="absolute -right-1 -top-1 bg-yellow-500/20 border border-yellow-500 rounded-full p-0.5 z-30">
+            <AlertTriangle size={12} className="text-yellow-500" />
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="absolute -right-1 -top-1 bg-red-500/20 border border-red-500 rounded-full p-0.5 z-30">
+            <AlertCircle size={12} className="text-red-500" />
+          </div>
+        );
+      case 'building':
+      case 'pending':
+        return (
+          <div className="absolute -right-1 -top-1 bg-blue-500/20 border border-blue-500 rounded-full p-0.5 z-30 animate-pulse">
+            <Loader2 size={12} className="text-blue-500 animate-spin" />
+          </div>
+        );
+      default:
+        return null;
+    }
+  }, [item.status]);
+  
+  // Get border color based on status
+  const getBorderColorClass = (): string => {
+    if (!item.status) return "";
+    
+    switch (item.status) {
+      case 'valid': return "border-green-500/30";
+      case 'warning': return "border-yellow-500/30";
+      case 'error': return "border-red-500/30";
+      case 'building':
+      case 'pending': return "border-blue-500/30";
+      default: return "";
+    }
+  };
   
   // Generate thumbnail or icon based on item type
   const thumbnail = useMemo(() => {
@@ -178,12 +229,13 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
   return (
     <div
       className={cn(
-        "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150",
+        "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150 border",
         isSelected ? "ring-2 ring-white shadow-lg dark:ring-blue-300 z-20" : "z-10",
         isActive ? "border-b-2 border-yellow-300" : "",
         isDragging ? "opacity-50 cursor-grabbing" : "",
         isDraggingInvalid ? "ring-2 ring-red-500" : "",
-        "hover:brightness-110"
+        "hover:brightness-110",
+        getBorderColorClass()
       )}
       style={{
         left: `${leftPosition}%`,
@@ -197,6 +249,9 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
       draggable={!!onDragToChat}
       onDragStart={handleDragToChatStart}
     >
+      {/* Status Indicator */}
+      {statusIndicator}
+      
       {/* Left resize handle */}
       <div
         className="resize-handle absolute left-0 top-0 bottom-0 w-2 cursor-w-resize z-30"

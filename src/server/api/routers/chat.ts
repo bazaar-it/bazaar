@@ -180,7 +180,7 @@ async function handleComponentGenerationInternal(
         const { effect, tsxCode } = await generateComponentCode(effectDescription);
         
         // Create a unique ID for this job
-        const jobId = nanoid();
+        const jobId = randomUUID();
         
         console.log(`[COMPONENT GEN INTERNAL] Generated code for "${effect}", jobId: ${jobId}`);
         
@@ -194,18 +194,18 @@ async function handleComponentGenerationInternal(
         
         // Store the job in the database
         await db.insert(customComponentJobs).values({
-            id: jobId,
-            projectId,
-            effect,
-            tsxCode,
+                id: jobId,
+                projectId,
+                effect,
+                tsxCode,
             status: "pending",
-            retryCount: 0,
-            errorMessage: null,
+                retryCount: 0,
+                errorMessage: null,
             metadata,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        });
-        
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+
         return { jobId, effect, componentMetadata: metadata };
     } catch (error) {
         console.error(`[COMPONENT GEN INTERNAL] Error:`, error);
@@ -370,7 +370,7 @@ async function handleScenePlanInternal(
                         // Add to our tracking
                         componentJobs.push({
                             description: scene.description,
-                            jobId,
+            jobId,
                             name: effect
                         });
                         
@@ -822,7 +822,7 @@ export const chatRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { assistantMessageId, projectId } = input;
             const { session } = ctx;
-            
+
             // Check if this message is already being streamed
             if (activeStreamIds.has(assistantMessageId)) {
                 console.log(`[Stream] Message ${assistantMessageId} already streaming, preventing duplicate`);
@@ -943,7 +943,7 @@ export const chatRouter = createTRPCRouter({
                         // --- 3. Call OpenAI (Single Streaming Call) ---
                         console.log(`[Stream ${assistantMessageId}] Making OpenAI call with ${messagesForAPI.length} messages.`);
                         const openaiResponse = await openai.chat.completions.create({
-                            model: "gpt-o4-mini",
+                            model: "gpt-4o-mini",
                             messages: messagesForAPI,
                             tools: TOOLS,
                             tool_choice: "auto",
@@ -1282,7 +1282,7 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
 
         // Call OpenAI with tools for function calling
         const llmResp = await openai.chat.completions.create({
-            model: "gpt-o4-mini",
+            model: "gpt-4o-mini",
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },
@@ -1309,7 +1309,7 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
                 const { effect, tsxCode } = await generateComponentCode(effectDescription);
                 
                 // Create job
-                const jobId = nanoid();
+                const jobId = randomUUID();
                 await ctx.db.insert(customComponentJobs).values({
                     id: jobId,
                     projectId,

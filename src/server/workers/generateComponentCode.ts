@@ -118,7 +118,7 @@ export async function generateComponentCode(description: string): Promise<{
     
     // Call OpenAI with function calling enabled
     const response = await openai.chat.completions.create({
-      model: "gpt-o4-mini", // Using o4-mini as per @gpt.mdc standard
+      model: "gpt-4o-mini", // Using the correct OpenAI model name
       temperature: 0.7,
       messages: [
         {

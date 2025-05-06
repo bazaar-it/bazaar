@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches } from "~/server/db/schema";
-import { eq, desc, like, count, and } from "drizzle-orm";
+import { eq, desc, like, count, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
 import { processUserMessageInProject } from "./chat";
@@ -57,9 +57,9 @@ export const projectRouter = createTRPCRouter({
     }).optional())
     .mutation(async ({ ctx, input }) => {
       try {
-        // Find how many "Untitled Video" projects the user already has
-        const countResults = await ctx.db
-          .select({ count: count() })
+        // Get a list of all "Untitled Video" projects with their numbers
+        const userProjects = await ctx.db
+          .select({ title: projects.title })
           .from(projects)
           .where(
             and(
@@ -68,12 +68,21 @@ export const projectRouter = createTRPCRouter({
             )
           );
         
-        // Generate a unique title
-        let title = "Untitled Video";
-        const projectCount = countResults[0]?.count ?? 0;
-        if (projectCount > 0) {
-          title = `Untitled Video ${projectCount + 1}`;
+        // Find the highest number used in "Untitled Video X" titles
+        let highestNumber = 0;
+        for (const project of userProjects) {
+          const match = project.title.match(/^Untitled Video (\d+)$/);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > highestNumber) {
+              highestNumber = num;
+            }
+          }
         }
+        
+        // Generate a unique title with the next available number
+        const nextNumber = highestNumber + 1;
+        const title = userProjects.length === 0 ? "Untitled Video" : `Untitled Video ${nextNumber}`;
         
         // Create a new project for the logged-in user with returning clause
         const inserted = await ctx.db
@@ -143,6 +152,25 @@ export const projectRouter = createTRPCRouter({
           });
         }
         
+        // Check if another project with this title already exists for this user
+        const [existingProject] = await ctx.db
+          .select()
+          .from(projects)
+          .where(
+            and(
+              eq(projects.userId, ctx.session.user.id),
+              eq(projects.title, input.title),
+              ne(projects.id, input.id) // Not the current project
+            )
+          );
+        
+        if (existingProject) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "A project with this title already exists",
+          });
+        }
+        
         // Update the project title
         const updated = await ctx.db
           .update(projects)
@@ -156,6 +184,9 @@ export const projectRouter = createTRPCRouter({
         return updated[0];
       } catch (error) {
         console.error("Error renaming project:", error);
+        if (error instanceof TRPCError) {
+          throw error; // Re-throw TRPC errors
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to rename project",

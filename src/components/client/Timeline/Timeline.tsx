@@ -12,7 +12,7 @@ import { TimelineItemType } from '~/types/timeline';
 import type { TimelineItemUnion } from '~/types/timeline';
 import type { Operation } from 'fast-json-patch';
 import { addScene, removeSceneByIndex, replace } from '~/lib/patch';
-import { ZoomIn, ZoomOut, Trash2, Copy, Plus, Scissors } from 'lucide-react';
+import { ZoomIn, ZoomOut, Trash2, Copy, Plus, Scissors, RefreshCw } from 'lucide-react';
 
 export interface TimelineProps {
   projectId: string;
@@ -54,6 +54,9 @@ export const Timeline: React.FC<TimelineProps> = ({
   const { handleTimelineClick, selectItem } = useTimelineClick();
   const { zoomIn, zoomOut, resetZoom } = useTimelineZoom();
   const { startDrag } = useTimelineDrag();
+  
+  // UI state
+  const [isRegeneratingScene, setIsRegeneratingScene] = useState(false);
   
   // Get video state
   const { getCurrentProps, applyPatch } = useVideoState();
@@ -153,9 +156,10 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (!inputProps) return;
     
     // Find the scene index
-    const sceneIndex = inputProps.scenes.findIndex(scene => 
-      parseInt(scene.id, 10) === id || scene.id === String(id)
-    );
+    const itemToDelete = items.find(item => item.id === id);
+    if (!itemToDelete || !itemToDelete.sceneId) return;
+    
+    const sceneIndex = inputProps.scenes.findIndex(scene => scene.id === itemToDelete.sceneId);
     
     if (sceneIndex !== -1) {
       // Generate a remove patch using our factory
@@ -169,7 +173,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         setSelectedItemId(null);
       }
     }
-  }, [inputProps, projectId, applyPatch, internalSelectedItemId, setSelectedItemId]);
+  }, [inputProps, projectId, applyPatch, internalSelectedItemId, setSelectedItemId, items]);
   
   // Handle add new track
   const handleAddTrack = useCallback(() => {
@@ -319,6 +323,45 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   }, [totalDuration, durationInFrames, setDurationInFrames]);
 
+  // Handle Scene Regeneration (placeholder for future implementation)
+  const handleRegenerateScene = useCallback(() => {
+    // Find the selected item
+    const selectedItem = items.find(item => item.id === internalSelectedItemId);
+    if (!selectedItem || !selectedItem.sceneId) return;
+    
+    // Set regenerating state to show UI feedback
+    setIsRegeneratingScene(true);
+    
+    // For now, just log that we would regenerate this scene
+    console.log(`Regenerating scene ${selectedItem.sceneId}`);
+    
+    // Simulate regeneration in progress
+    setTimeout(() => {
+      setIsRegeneratingScene(false);
+      
+      // Show notification
+      console.log('Scene regeneration will be implemented in a future update');
+    }, 1500);
+    
+    // In future implementation, this would trigger a tRPC call to regenerate the scene
+    // The implementation would look like:
+    /*
+    api.chat.regenerateScene.mutate({
+      projectId,
+      sceneId: selectedItem.sceneId
+    }, {
+      onSuccess: () => {
+        setIsRegeneratingScene(false);
+        // Show success notification
+      },
+      onError: (error) => {
+        setIsRegeneratingScene(false);
+        // Show error notification
+      }
+    });
+    */
+  }, [internalSelectedItemId, items]);
+
   return (
     <div 
       ref={containerRef}
@@ -360,7 +403,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               <button 
                 onClick={() => {
                   // Clone selected item
-                  const item = timelineItems.find(i => i.id === internalSelectedItemId);
+                  const item = items.find(i => i.id === internalSelectedItemId);
                   if (item) {
                     const cloned = {
                       ...item,
@@ -377,10 +420,24 @@ export const Timeline: React.FC<TimelineProps> = ({
               >
                 <Copy size={16} />
               </button>
+              {/* Add regenerate button */}
+              <button 
+                onClick={handleRegenerateScene}
+                className={cn(
+                  "p-1",
+                  isRegeneratingScene 
+                    ? "text-blue-400 animate-pulse" 
+                    : "text-slate-400 hover:text-white"
+                )}
+                title="Regenerate scene (coming soon)"
+                disabled={isRegeneratingScene}
+              >
+                <RefreshCw size={16} className={isRegeneratingScene ? "animate-spin" : ""} />
+              </button>
               <button 
                 onClick={() => {
                   // Find the item
-                  const item = timelineItems.find(i => i.id === internalSelectedItemId);
+                  const item = items.find(i => i.id === internalSelectedItemId);
                   if (item && currentFrame > item.from && currentFrame < item.from + item.durationInFrames) {
                     // Split at current frame
                     const firstHalf = {
