@@ -68,6 +68,9 @@ function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean,
   const router = useRouter();
   const { applyPatch: applyVideoPatch, getCurrentProps } = useVideoState();
   
+  // Get the mutation at component level, not inside the callback
+  const insertComponentMutation = api.video.insertComponent.useMutation();
+  
   // Local state for UI
   const [searchQuery, setSearchQuery] = useState("");
   const [isExpanded, setIsExpanded] = useLocalStorage("bazaar-components-expanded", true);
@@ -154,61 +157,32 @@ function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean,
       return;
     }
     
-    // Get current video properties
-    const currentProps = getCurrentProps();
-    if (!currentProps) {
-      alert("Error: Cannot access current video properties.");
-      return;
-    }
-    
-    // Generate UUID for the new scene
-    const newSceneId = crypto.randomUUID();
-    
-    // Create new scene at the end of the timeline
-    const insertPosition = currentProps.meta.duration;
-    
-    // Create a JSON patch to add the component as a new scene
-    const patch: Operation[] = [
-      {
-        // Add new scene to the scenes array
-        op: "add" as const,
-        path: `/scenes/-`,
-        value: {
-          id: newSceneId,
-          type: "custom" as const, 
-          start: insertPosition,
-          duration: 60, // Default 2 second duration (60 frames at 30fps)
-          data: {
-            componentId: job.id,
-            name: job.effect,
-            outputUrl: componentUrl // Include the output URL for reference
-          }
+    // Call the mutation using the reference from component level
+    insertComponentMutation.mutate({
+      projectId: projectId,
+      componentId: job.id,
+      componentName: job.effect,
+      // Let the backend determine the insert position by default
+    }, {
+      onSuccess: (response) => {
+        console.log('Component inserted successfully:', response);
+        
+        // The backend has applied the patch, but we should update our local state as well
+        // to ensure the UI updates immediately
+        if (response.patch) {
+          applyVideoPatch(projectId, response.patch);
         }
+        
+        // Show success message
+        alert(`Added "${job.effect}" to your timeline and preview!`);
       },
-      {
-        // Update the total duration if needed
-        op: "replace" as const,
-        path: "/meta/duration",
-        value: Math.max(currentProps.meta.duration, insertPosition + 60)
+      onError: (error) => {
+        console.error('Error inserting component:', error);
+        alert(`Error adding component: ${error.message}`);
       }
-    ];
+    });
     
-    console.log('Applying patch:', patch);
-    
-    // Apply patch to update the UI immediately
-    applyVideoPatch(projectId, patch);
-    
-    // Force sync with the timeline by updating the duration
-    const componentEndPosition = insertPosition + 60; // Using the same calculation as in patch
-    console.log(`Added component at position ${insertPosition}, ends at ${componentEndPosition}`);
-    console.log(`Current duration: ${currentProps.meta.duration}, New end: ${componentEndPosition}`);
-    
-    // Save to database using the existing API - show more clear messaging
-    alert(`Added "${job.effect}" to your timeline and preview!\n\nIf you don't see it in the timeline, it may be added beyond the current view. Check the debug overlay for details.`);
-    
-    // Optional: Navigate to preview tab if desired
-    // router.push(`/projects/${projectId}/edit#preview`);
-  }, [projectId, applyVideoPatch, getCurrentProps, componentStatuses]);
+  }, [projectId, componentStatuses, insertComponentMutation, applyVideoPatch]);
   
   // Open rename dialog with the selected component
   const handleRenameClick = (component: any) => {

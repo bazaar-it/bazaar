@@ -37,6 +37,7 @@ import type {
   ChatCompletionTool,
   ChatCompletionToolChoiceOption
 } from "openai/resources/chat/completions";
+import { Subject } from "rxjs";
 
 // --- Constants ---
 const SYSTEM_PROMPT = "You are a Remotion video assistant. Analyze the user request in the context of the current video properties (`currentProps`). Decide whether to apply a JSON patch for direct modifications or request a new custom component generation for complex effects. Use `applyJsonPatch` for modifications. Use `generateRemotionComponent` for new effects. Respond naturally if neither tool is appropriate or more information is needed.";
@@ -98,59 +99,622 @@ const generateRemotionComponentTool: ChatCompletionTool = {
     },
 };
 
-const TOOLS: ChatCompletionTool[] = [applyPatchTool, generateRemotionComponentTool];
+const scenePlannerTool: ChatCompletionTool = {
+    type: "function",
+    function: {
+        name: "planVideoScenes",
+        description: "Analyze user intent to plan multiple scenes with appropriate durations",
+        parameters: {
+            type: "object",
+            properties: {
+                intent: {
+                    type: "string",
+                    description: "Summary of the user's overall video intent"
+                },
+                sceneCount: {
+                    type: "integer",
+                    description: "Number of scenes needed to fulfill the request (minimum 1, maximum 10)",
+                    minimum: 1,
+                    maximum: 10
+                },
+                totalDuration: {
+                    type: "integer",
+                    description: "Total suggested video duration in seconds (maximum 60 seconds)",
+                    minimum: 1,
+                    maximum: 60
+                },
+                fps: {
+                    type: "integer",
+                    description: "Frames per second (normally 30)",
+                    default: 30
+                },
+                scenes: {
+                    type: "array",
+                    description: "Detailed breakdown of each scene",
+                    items: {
+                        type: "object",
+                        properties: {
+                            id: {
+                                type: "string",
+                                description: "Unique ID for this scene to track across generation steps"
+                            },
+                            description: {
+                                type: "string", 
+                                description: "Detailed description of this scene's content and purpose"
+                            },
+                            durationInSeconds: {
+                                type: "number",
+                                description: "Recommended duration for this scene in seconds"
+                            },
+                            effectType: {
+                                type: "string",
+                                enum: ["text", "image", "custom"],
+                                description: "Preferred scene type for this content"
+                            }
+                        },
+                        required: ["id", "description", "durationInSeconds", "effectType"]
+                    }
+                }
+            },
+            required: ["intent", "sceneCount", "totalDuration", "fps", "scenes"]
+        }
+    }
+};
+
+const TOOLS: ChatCompletionTool[] = [scenePlannerTool, generateRemotionComponentTool, applyPatchTool];
 
 // --- Internal Helper for Component Generation ---
 // This is called directly by the streamResponse logic when the tool is invoked.
 async function handleComponentGenerationInternal(
     projectId: string,
     effectDescription: string,
-    assistantMessageId: string // ID of the message being updated
-): Promise<{ jobId: string; effect: string }> {
+    assistantMessageId: string, // ID of the message being updated
+    durationInSeconds: number = 6, // Default duration of 6 seconds (180 frames)
+    fps: number = 30, // Default fps
+    sceneId?: string // Scene ID from the planner
+): Promise<{ jobId: string; effect: string; componentMetadata: Record<string, any> }> {
     console.log(`[COMPONENT GEN INTERNAL] Starting for AsstMsgID: ${assistantMessageId}, Desc: ${effectDescription}`);
+    
     try {
-        // 1. Generate code (can be slow)
+        // Generate the component code using OpenAI
         const { effect, tsxCode } = await generateComponentCode(effectDescription);
-        console.log(`[COMPONENT GEN INTERNAL] Code generated for "${effect}"`);
-
-        // 2. Create job record
-        const jobId = randomUUID(); // Use standard UUID format instead of nanoid
-        await db.insert(customComponentJobs)
-            .values({
-                id: jobId,
-                projectId,
-                effect,
-                tsxCode,
-                status: "pending", // Background worker should process this
-                retryCount: 0,
-                errorMessage: null,
-                statusMessageId: assistantMessageId, // Link job to the message
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            });
-
-        console.log(`[COMPONENT GEN INTERNAL] Job ${jobId} created for "${effect}"`);
-
-        // 3. Trigger build worker immediately
-        try {
-            await processPendingJobs();
-        } catch (buildError) {
-            console.error("[COMPONENT GEN INTERNAL] Error triggering build:", buildError);
-            // Don't throw - the cron job will retry
-        }
-
-        return {
-            jobId,
-            effect
+        
+        // Create a unique ID for this job
+        const jobId = nanoid();
+        
+        console.log(`[COMPONENT GEN INTERNAL] Generated code for "${effect}", jobId: ${jobId}`);
+        
+        // Create metadata object with duration info
+        const metadata = { 
+            durationInFrames: Math.round(durationInSeconds * fps), // Convert using provided fps
+            durationInSeconds,
+            fps,
+            scenePlanId: sceneId // Store the reference to the scene plan
         };
-
-    } catch (error: any) {
-        console.error("[COMPONENT GEN INTERNAL] Error:", error);
+        
+        // Store the job in the database
+        await db.insert(customComponentJobs).values({
+            id: jobId,
+            projectId,
+            effect,
+            tsxCode,
+            status: "pending",
+            retryCount: 0,
+            errorMessage: null,
+            metadata,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        });
+        
+        return { jobId, effect, componentMetadata: metadata };
+    } catch (error) {
+        console.error(`[COMPONENT GEN INTERNAL] Error:`, error);
         throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: `Failed to generate component: ${error.message}`,
-            cause: error
+            message: `Failed to generate component: ${error instanceof Error ? error.message : String(error)}`,
+            cause: error,
         });
+    }
+}
+
+// --- Internal Helper for Scene Planning ---
+// This processes the scene plan and triggers component generation for each custom scene
+
+// Define the SceneResult interface
+interface SceneResult {
+    sceneId: string;
+    type: string;
+    durationInFrames: number;
+    start?: number; // Position will be calculated later
+    jobId?: string;
+    effect?: string;
+    description: string;
+    data?: {
+        text?: string;
+        color?: string;
+        fontSize?: number;
+        fontFamily?: string;
+        componentId?: string;
+        name?: string;
+    };
+}
+
+async function handleScenePlanInternal(
+    projectId: string,
+    userId: string,
+    scenesPlan: any,
+    assistantMessageId: string,
+    db: any,
+    emitter?: Subject<any> // For streaming updates
+): Promise<{ message: string, patches?: Operation[] }> {
+    console.log(`[SCENE PLANNER] Processing scene plan for project ${projectId}`);
+    
+    try {
+        // Validate scene plan structure first
+        if (!scenesPlan || !Array.isArray(scenesPlan.scenes) || scenesPlan.scenes.length === 0) {
+            throw new Error("Invalid scene plan: must include at least one scene");
+        }
+        
+        if (!scenesPlan.fps || typeof scenesPlan.fps !== 'number' || scenesPlan.fps <= 0) {
+            console.log("Scene plan missing fps, defaulting to 30");
+            scenesPlan.fps = 30; // Default to 30fps if not specified
+        }
+        
+        if (scenesPlan.scenes.length > 10) {
+            console.warn(`Scene plan has ${scenesPlan.scenes.length} scenes, capping at 10`);
+            scenesPlan.scenes = scenesPlan.scenes.slice(0, 10); // Cap at maximum 10 scenes
+        }
+        
+        // Get current project state
+        const project = await db.query.projects.findFirst({
+            where: eq(projects.id, projectId),
+        });
+        
+        if (!project) {
+            throw new Error(`Project ${projectId} not found`);
+        }
+        
+        // Verify ownership (additional security check)
+        if (project.userId !== userId) {
+            throw new TRPCError({
+                code: "FORBIDDEN",
+                message: "You don't have permission to modify this project"
+            });
+        }
+        
+        // Store the plan in project metadata
+        await db.update(projects)
+            .set({ 
+                metadata: {
+                    ...project.metadata,
+                    lastScenePlan: scenesPlan
+                },
+                updatedAt: new Date()
+            })
+            .where(eq(projects.id, projectId));
+        
+        // If we have an emitter, immediately stream back the plan 
+        if (emitter) {
+            emitter.next({
+                type: "scenePlan",
+                plan: scenesPlan,
+                status: "planning_complete"
+            });
+        }
+        
+        // Begin constructing our response
+        let responseMessage = `I've planned your video with ${scenesPlan.sceneCount} scenes:\n\n`;
+        
+        // Array to hold all our operations
+        const operations: Operation[] = [];
+        
+        // Track custom component generation jobs
+        const componentJobs: { description: string, jobId: string, name: string }[] = [];
+        
+        // Track scene generation to properly position scenes
+        let needsRepositioning = false;
+        const sceneResults: SceneResult[] = [];
+        const fps = scenesPlan.fps;
+        
+        // Create a function for calculating scene positions
+        const calculateScenePositions = (scenes: SceneResult[]) => {
+            let currentPosition = 0;
+            for (const scene of scenes) {
+                scene.start = currentPosition;
+                currentPosition += scene.durationInFrames;
+            }
+            return currentPosition; // Return the total duration
+        };
+        
+        // Process each scene, capturing all errors and generating placeholders when needed
+        for (let i = 0; i < scenesPlan.scenes.length; i++) {
+            const scene = scenesPlan.scenes[i];
+            
+            // Validate required scene properties
+            if (!scene.id) scene.id = crypto.randomUUID();
+            if (!scene.description) scene.description = `Scene ${i+1}`;
+            if (!scene.durationInSeconds || typeof scene.durationInSeconds !== 'number') {
+                scene.durationInSeconds = 5; // Default 5 seconds
+            }
+            if (!scene.effectType) scene.effectType = "text"; // Default to text
+            
+            const durationInFrames = Math.round(scene.durationInSeconds * fps); // Convert to frames using plan fps
+            const sceneId = scene.id;
+            
+            responseMessage += `**Scene ${i+1}**: ${scene.description} (${scene.durationInSeconds}s)\n`;
+            
+            // If we have an emitter, send scene status = "pending"
+            if (emitter) {
+                emitter.next({
+                    type: "sceneStatus",
+                    sceneId,
+                    sceneIndex: i,
+                    status: "pending"
+                });
+            }
+            
+            try {
+                // Handle different effect types
+                if (scene.effectType === "custom") {
+                    try {
+                        // Generate a custom component with explicit duration
+                        const { jobId, effect, componentMetadata } = await handleComponentGenerationInternal(
+                            projectId,
+                            scene.description,
+                            assistantMessageId,
+                            scene.durationInSeconds, // Pass the planned duration
+                            fps,                     // Pass fps from plan
+                            sceneId                  // Pass the scene ID from planner
+                        );
+                        
+                        // Add to our tracking
+                        componentJobs.push({
+                            description: scene.description,
+                            jobId,
+                            name: effect
+                        });
+                        
+                        // If we have an emitter, update scene status = "building"
+                        if (emitter) {
+                            emitter.next({
+                                type: "sceneStatus",
+                                sceneId,
+                                sceneIndex: i,
+                                status: "building",
+                                jobId
+                            });
+                        }
+                        
+                        // Handle component over-run: If component declares a different duration, trust the component
+                        let actualDurationInFrames = durationInFrames;
+                        if (componentMetadata?.durationInFrames && 
+                            componentMetadata.durationInFrames > durationInFrames) {
+                            
+                            console.log(`Scene ${i} (${sceneId}): Component declared ${componentMetadata.durationInFrames} frames, ` +
+                                        `which exceeds planned ${durationInFrames}. Using component's duration.`);
+                            
+                            // Trust the component's duration
+                            actualDurationInFrames = componentMetadata.durationInFrames;
+                            needsRepositioning = true; // Flag that we need to recalculate positions
+                        }
+                        
+                        // Store this scene result with its actual duration
+                        sceneResults.push({
+                            sceneId,
+                            type: "custom",
+                            durationInFrames: actualDurationInFrames,
+                            jobId,
+                            effect,
+                            description: scene.description
+                        });
+                        
+                    } catch (error) {
+                        console.error(`[SCENE PLANNER] Error generating custom scene ${i}:`, error);
+                        
+                        // If we have an emitter, update scene status = "error"
+                        if (emitter) {
+                            emitter.next({
+                                type: "sceneStatus",
+                                sceneId,
+                                sceneIndex: i,
+                                status: "error",
+                                error: error instanceof Error ? error.message : String(error)
+                            });
+                        }
+                        
+                        // Fall back to a placeholder text scene on error
+                        sceneResults.push({
+                            sceneId,
+                            type: "text",
+                            durationInFrames: Math.round(5 * fps), // 5 seconds fallback using plan fps
+                            data: { 
+                                text: `Scene ${i + 1}: ${scene.description} (Error: ${error instanceof Error ? error.message : String(error)})`,
+                                color: "#FFFFFF",
+                                fontSize: 32,
+                                fontFamily: "Arial"
+                            },
+                            description: scene.description
+                        });
+                    }
+                } else if (scene.effectType === "text") {
+                    // Add a simple text scene
+                    sceneResults.push({
+                        sceneId,
+                        type: "text",
+                        durationInFrames,
+                        data: {
+                            text: scene.description,
+                            color: "#FFFFFF",
+                            fontSize: 32,
+                            fontFamily: "Arial"
+                        },
+                        description: scene.description
+                    });
+                } else if (scene.effectType === "image") {
+                    // For now, create a text scene saying "Image: [description]"
+                    sceneResults.push({
+                        sceneId,
+                        type: "text",
+                        durationInFrames,
+                        data: {
+                            text: `Image: ${scene.description}`,
+                            color: "#FFFFFF",
+                            fontSize: 32,
+                            fontFamily: "Arial"
+                        },
+                        description: scene.description
+                    });
+                } else {
+                    // Unknown scene type - create a simple text scene as fallback
+                    console.warn(`Unknown scene type: ${scene.effectType}, defaulting to text`);
+                    sceneResults.push({
+                        sceneId,
+                        type: "text",
+                        durationInFrames,
+                        data: {
+                            text: scene.description,
+                            color: "#FFFFFF",
+                            fontSize: 32,
+                            fontFamily: "Arial"
+                        },
+                        description: scene.description
+                    });
+                }
+            } catch (error) {
+                // Top-level error handler to ensure the process continues even if a scene fails
+                console.error(`[SCENE PLANNER] Critical error processing scene ${i}:`, error);
+                
+                // Create a fallback scene
+                sceneResults.push({
+                    sceneId,
+                    type: "text",
+                    durationInFrames: Math.round(5 * fps), // 5 seconds fallback using plan fps
+                    data: { 
+                        text: `Scene ${i + 1}: Error (${error instanceof Error ? error.message : String(error)})`,
+                        color: "#FF0000", // Red color to indicate error
+                        fontSize: 32,
+                        fontFamily: "Arial"
+                    },
+                    description: `Error in scene ${i + 1}`
+                });
+            }
+        }
+        
+        // After processing all scenes, recalculate positions if needed
+        const totalDuration = calculateScenePositions(sceneResults);
+        
+        // Create operations for adding each scene
+        for (const scene of sceneResults) {
+            if (scene.type === "custom") {
+                operations.push({
+                    op: "add",
+                    path: `/scenes/-`,
+                    value: {
+                        id: scene.sceneId,
+                        type: "custom",
+                        start: scene.start,
+                        duration: scene.durationInFrames,
+                        data: {
+                            componentId: scene.jobId,
+                            name: scene.effect,
+                            description: scene.description
+                        }
+                    }
+                });
+            } else if (scene.type === "text") {
+                operations.push({
+                    op: "add",
+                    path: `/scenes/-`,
+                    value: {
+                        id: scene.sceneId,
+                        type: "text",
+                        start: scene.start,
+                        duration: scene.durationInFrames,
+                        data: scene.data
+                    }
+                });
+            }
+        }
+        
+        // Update the total duration
+        operations.push({
+            op: "replace",
+            path: "/meta/duration",
+            value: totalDuration
+        });
+        
+        // Validate the entire patch against our schema before applying
+        try {
+            // Create a test object to validate final state
+            const testProps = applyPatch(
+                structuredClone(project.props), 
+                operations
+            ).newDocument;
+            
+            // Validate with Zod schema
+            const validationResult = inputPropsSchema.safeParse(testProps);
+            
+            if (!validationResult.success) {
+                throw new Error(`Invalid patch: ${validationResult.error.message}`);
+            }
+            
+            // Additional checks for total duration and scene count
+            if (testProps.scenes.length > 10) {
+                throw new Error("Too many scenes: maximum allowed is 10");
+            }
+            
+            if (testProps.meta.duration > 60 * fps) { // 60 seconds @ configured fps
+                throw new Error(`Total duration exceeds maximum of 60 seconds (${60 * fps} frames at ${fps} fps)`);
+            }
+            
+            // Comprehensive timing integrity validation
+            let expectedPosition = 0;
+            let scenesHaveGaps = false;
+            let scenesOverlap = false;
+            
+            for (const scene of testProps.scenes) {
+                // Check for positional accuracy
+                if (scene.start !== expectedPosition) {
+                    if (scene.start < expectedPosition) {
+                        scenesOverlap = true;
+                        console.error(`Scene positioning error: scene ${scene.id} starts at ${scene.start}, overlapping with previous scene that ends at ${expectedPosition}`);
+                    } else if (scene.start > expectedPosition) {
+                        scenesHaveGaps = true;
+                        console.error(`Scene positioning error: gap between scenes detected from ${expectedPosition} to ${scene.start}`);
+                    }
+                }
+                
+                // Validate scene duration
+                if (scene.duration <= 0) {
+                    throw new Error(`Invalid scene duration for scene ${scene.id}: ${scene.duration}`);
+                }
+                
+                // Update expected position
+                expectedPosition = scene.start + scene.duration;
+            }
+            
+            // Check total duration consistency
+            if (expectedPosition !== testProps.meta.duration) {
+                throw new Error(`Duration mismatch: scenes sum to ${expectedPosition}, meta.duration is ${testProps.meta.duration}`);
+            }
+            
+            // Warn about positioning issues but don't fail
+            if (scenesHaveGaps) {
+                console.warn("Warning: Scene plan has gaps between scenes");
+            }
+            
+            if (scenesOverlap) {
+                console.warn("Warning: Scene plan has overlapping scenes");
+            }
+            
+        } catch (error) {
+            console.error("[SCENE PLANNER] Patch validation failed:", error);
+            
+            // Instead of throwing, try to fix the issues
+            if (error instanceof Error && error.message.includes("Duration mismatch")) {
+                // Fix the total duration to match the sum of scene durations
+                const lastOperation = operations[operations.length - 1];
+                // Check if lastOperation exists and is a replace operation with path /meta/duration
+                if (lastOperation && 
+                    lastOperation.op === "replace" && 
+                    lastOperation.path === "/meta/duration" &&
+                    'value' in lastOperation) { // Type guard to check if 'value' property exists
+                    // Recalculate total duration manually
+                    let calculatedDuration = 0;
+                    for (const scene of sceneResults) {
+                        calculatedDuration += scene.durationInFrames;
+                    }
+                    
+                    // Update the operation with corrected duration
+                    lastOperation.value = calculatedDuration;
+                    console.log(`[SCENE PLANNER] Fixed duration mismatch: updated to ${calculatedDuration}`);
+                }
+            } else {
+                // For other errors, try a simpler approach: one scene with reasonable duration
+                console.error(`[SCENE PLANNER] Creating minimal fallback plan due to validation errors`);
+                
+                // Clear existing operations
+                operations.length = 0;
+                
+                // Create a single simple text scene
+                const fallbackId = crypto.randomUUID();
+                operations.push({
+                    op: "add",
+                    path: `/scenes/-`,
+                    value: {
+                        id: fallbackId,
+                        type: "text",
+                        start: 0,
+                        duration: Math.round(5 * fps), // 5 seconds using plan fps
+                        data: {
+                            text: "Scene planning error - please try again",
+                            color: "#FF0000",
+                            fontSize: 32,
+                            fontFamily: "Arial"
+                        }
+                    }
+                });
+                
+                // Set total duration
+                operations.push({
+                    op: "replace",
+                    path: "/meta/duration",
+                    value: Math.round(5 * fps)
+                });
+                
+                responseMessage = "I encountered an issue while planning your video. Please try a simpler request or provide more details.";
+            }
+        }
+        
+        // Add info about components being generated
+        if (componentJobs.length > 0) {
+            responseMessage += "\n\nI'm generating these custom components:\n";
+            componentJobs.forEach(job => {
+                responseMessage += `- "${job.name}" (processing)\n`;
+            });
+            responseMessage += "\nThey'll appear in your timeline once processing is complete.";
+        }
+        
+        return {
+            message: responseMessage,
+            patches: operations
+        };
+    } catch (error) {
+        console.error(`[SCENE PLANNER] Error:`, error);
+        
+        // If we have an emitter, send error
+        if (emitter) {
+            emitter.next({
+                type: "scenePlan",
+                status: "error",
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+        
+        // Create a minimal fallback response
+        return {
+            message: `I encountered an error while planning your video: ${error instanceof Error ? error.message : String(error)}. Please try again with a simpler request.`,
+            patches: [{
+                op: "add",
+                path: `/scenes/-`,
+                value: {
+                    id: crypto.randomUUID(),
+                    type: "text",
+                    start: 0,
+                    duration: 150, // 5 seconds at 30fps
+                    data: {
+                        text: "Error in scene planning. Please try again.",
+                        color: "#FF0000",
+                        fontSize: 32,
+                        fontFamily: "Arial"
+                    }
+                }
+            }, {
+                op: "replace",
+                path: "/meta/duration",
+                value: 150
+            }]
+        };
     }
 }
 
@@ -379,7 +943,7 @@ export const chatRouter = createTRPCRouter({
                         // --- 3. Call OpenAI (Single Streaming Call) ---
                         console.log(`[Stream ${assistantMessageId}] Making OpenAI call with ${messagesForAPI.length} messages.`);
                         const openaiResponse = await openai.chat.completions.create({
-                            model: "gpt-4o",
+                            model: "gpt-o4-mini",
                             messages: messagesForAPI,
                             tools: TOOLS,
                             tool_choice: "auto",
@@ -434,7 +998,82 @@ export const chatRouter = createTRPCRouter({
                                     
                                     try {
                                         // Handle the tool calls based on function name
-                                        if (toolName === "generateRemotionComponent" && toolArgsBuffer) {
+                                        if (toolName === "planVideoScenes" && toolArgsBuffer) {
+                                            // Parse the tool arguments
+                                            const scenePlan = JSON.parse(toolArgsBuffer);
+                                            
+                                            // Create an observable Subject for streaming updates
+                                            const updateEmitter = new Subject<any>();
+                                            
+                                            // Subscribe to the emitter to forward events to client
+                                            const subscription = updateEmitter.subscribe(update => {
+                                                if (update.type === "scenePlan") {
+                                                    emit.next({ 
+                                                        type: "scenePlan", 
+                                                        plan: update.plan,
+                                                        status: update.status
+                                                    });
+                                                } else if (update.type === "sceneStatus") {
+                                                    emit.next({ 
+                                                        type: "sceneStatus", 
+                                                        sceneId: update.sceneId,
+                                                        sceneIndex: update.sceneIndex,
+                                                        status: update.status,
+                                                        jobId: update.jobId,
+                                                        error: update.error
+                                                    });
+                                                }
+                                            });
+                                            
+                                            try {
+                                                // Process the scene plan (this handles DB entries and emits updates)
+                                                const result = await handleScenePlanInternal(
+                                                    projectId, 
+                                                    session.user.id, 
+                                                    scenePlan, 
+                                                    assistantMessageId,
+                                                    db,
+                                                    updateEmitter
+                                                );
+                                                
+                                                // Apply the patches to the project
+                                                if (result.patches && result.patches.length > 0) {
+                                                    // Apply the patch to props
+                                                    const nextProps = applyPatch(structuredClone(project.props), result.patches, true, false).newDocument;
+                                                    const validated = inputPropsSchema.safeParse(nextProps);
+                                                    
+                                                    if (!validated.success) {
+                                                        throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
+                                                    }
+                                                    
+                                                    // Save project changes and patch history
+                                                    await db.update(projects)
+                                                        .set({ props: validated.data, updatedAt: new Date() })
+                                                        .where(eq(projects.id, projectId));
+                                                        
+                                                    await db.insert(patches).values({ 
+                                                        projectId, 
+                                                        patch: result.patches as unknown as JsonPatch 
+                                                    });
+                                                }
+                                                
+                                                // Update final content with the response message
+                                                finalContent = result.message;
+                                                finalStatus = "success";
+                                                
+                                                // Emit tool result to client
+                                                emit.next({ 
+                                                    type: "tool_result", 
+                                                    name: toolName,
+                                                    success: true,
+                                                    finalContent
+                                                });
+                                            } finally {
+                                                // Clean up subscription regardless of success/failure
+                                                subscription.unsubscribe();
+                                            }
+                                        }
+                                        else if (toolName === "generateRemotionComponent" && toolArgsBuffer) {
                                             // Parse the tool arguments
                                             const args = JSON.parse(toolArgsBuffer);
                                             const { effectDescription } = args;
@@ -643,12 +1282,12 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
 
         // Call OpenAI with tools for function calling
         const llmResp = await openai.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-o4-mini",
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },
             ],
-            tools: [applyPatchTool, generateRemotionComponentTool],
+            tools: [scenePlannerTool, generateRemotionComponentTool],
             tool_choice: "auto",
         });
 
@@ -779,4 +1418,6 @@ export type StreamEvent =
     | { type: "tool_result"; name: string; success: boolean; jobId?: string | null; finalContent?: string }
     | { type: "complete"; finalContent: string }
     | { type: "error"; error: string; finalContent?: string }
-    | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null };
+    | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null }
+    | { type: "scenePlan"; plan: any; status: "planning_complete" }
+    | { type: "sceneStatus"; sceneId: string; sceneIndex: number; status: "pending" | "building" | "success" | "error"; jobId?: string; error?: string };

@@ -33,9 +33,20 @@ const config = {
 
     // Add loader for .woff and .woff2 fonts to optimize tree shaking
     config.module.rules.push({
-      test: /\.woff2?$/,
+      test: /\.(woff|woff2)$/,
       type: 'asset/resource',
     });
+
+    // Mark esbuild as external to prevent bundling issues
+    // This is required because esbuild needs to access its binary executable
+    if (!config.externals) {
+      config.externals = [];
+    }
+    
+    // Add esbuild to externals to prevent it from being bundled
+    if (isServer) {
+      config.externals.push('esbuild');
+    }
 
     return config;
   },
@@ -73,7 +84,15 @@ const config = {
         hostname: '**',
       },
     ],
+    domains: ['images.unsplash.com'],
   },
+
+  // Server component features
+  serverComponentsExternalPackages: [
+    'esbuild',
+    '@aws-sdk/client-s3',
+    'sharp',
+  ],
 };
 
 export default config;

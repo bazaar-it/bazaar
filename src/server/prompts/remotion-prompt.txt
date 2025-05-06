@@ -1,3 +1,9 @@
+// CRITICAL: FOLLOW THESE RULES FOR DEFAULT EXPORTS
+// 1. INCLUDE EXACTLY ONE DEFAULT EXPORT PER COMPONENT FILE
+// 2. NEVER INCLUDE MULTIPLE DEFAULT EXPORTS
+// 3. MULTIPLE DEFAULT EXPORTS WILL CAUSE BUILD FAILURES
+// 4. IF YOU CREATE HELPER COMPONENTS, DO NOT EXPORT THEM AS DEFAULT
+
 Inside a component, regular HTML and SVG tags can be returned.
 There are special tags for video and audio.
 Those special tags accept regular CSS styles.
@@ -231,6 +237,415 @@ IMPORTANT CODING GUIDELINES:
 
 3. Do not create two components that both have default exports. If you create helper components, they should be regular named exports or not exported at all.
 
-4. Make sure your code compiles with esbuild without errors.
+4. NEVER declare React with "const React = ..." or "import React from 'react'" - React is already provided globally.
 
-5. Do not use any external imports other than the ones from React and Remotion.
+5. NEVER import Remotion components. The following are all provided globally:
+   - AbsoluteFill, useCurrentFrame, useVideoConfig
+   - spring, interpolate, interpolateColors
+   - Sequence, Audio, Img, staticFile, Series
+   - OffthreadVideo (use this directly without import for videos)
+
+6. Make sure your code compiles with esbuild without errors.
+
+7. Create ENGAGING animations lasting at least 6 seconds (180 frames at 30fps) - avoid short/simple animations.
+
+8. Default to using spring animations rather than linear for more natural, engaging movement.
+
+9. Include visual narrative or multi-step flows when possible, showing clear transitions between states.
+
+✅ CORRECT PATTERN:
+```tsx
+// React is available globally - DO NOT declare it again
+function MyComponent() {
+  // Get current frame and video dimensions
+  const frame = useCurrentFrame();
+  const { width, height, fps } = useVideoConfig();
+
+  // Calculated timing values based on frame
+  const progress = Math.min(1, frame / 180); // 6-second animation (180 frames)
+  
+  // Ensure animation has proper setup, middle, and completion phases
+  // across the full 6-second (180 frame) timeline
+  return (
+    <AbsoluteFill>
+      {/* Your animation code here */}
+    </AbsoluteFill>
+  );
+}
+
+export default MyComponent;
+```
+
+EXAMPLES OF COMPLEX, ENGAGING COMPONENTS:
+
+EXAMPLE 1: SIMULATED USER INTERACTION
+```tsx
+function TypewriterWithCursor() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  // Text to display character by character
+  const text = "Welcome to our website! Click here to get started.";
+  
+  // Show one character every 3 frames (10 chars per second)
+  const charCount = Math.min(text.length, Math.floor(frame / 3));
+  const displayedText = text.substring(0, charCount);
+  
+  // Cursor blink effect (every 15 frames = 2 blinks per second)
+  const showCursor = Math.floor(frame / 15) % 2 === 0;
+  
+  // Mouse cursor movement simulation - moves to button after typing
+  const mousePosition = () => {
+    if (frame < 100) {
+      // Not visible during initial typing
+      return { x: -50, y: -50 };
+    } else if (frame < 130) {
+      // Move cursor towards button (animate movement)
+      const progress = (frame - 100) / 30;
+      return {
+        x: spring({ from: -50, to: 300, frame: frame - 100, fps, durationInFrames: 30 }),
+        y: spring({ from: -50, to: 150, frame: frame - 100, fps, durationInFrames: 30 }),
+      };
+    } else {
+      // Hover on button
+      return { x: 300, y: 150 };
+    }
+  };
+  
+  // Button click animation
+  const isButtonClicked = frame > 160;
+  const buttonScale = isButtonClicked 
+    ? spring({ from: 1, to: 0.9, frame: frame - 160, fps, durationInFrames: 10 })
+    : 1;
+  
+  const pos = mousePosition();
+  
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#1a1a1a', fontFamily: 'Arial', padding: 40 }}>
+      <div style={{ color: 'white', fontSize: 30, marginTop: 100 }}>
+        {displayedText}
+        {showCursor && <span style={{ opacity: 0.8 }}>|</span>}
+      </div>
+      
+      {/* Button that appears after typing */}
+      {charCount === text.length && (
+        <div style={{
+          position: 'absolute',
+          top: 150,
+          left: 300,
+          backgroundColor: '#3498db',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: 8,
+          fontSize: 18,
+          cursor: 'pointer',
+          transform: `scale(${buttonScale})`,
+          transformOrigin: 'center',
+          boxShadow: isButtonClicked ? '0 2px 5px rgba(0,0,0,0.3)' : '0 5px 15px rgba(0,0,0,0.3)',
+        }}>
+          Get Started
+        </div>
+      )}
+      
+      {/* Simulated mouse cursor */}
+      <div style={{
+        position: 'absolute',
+        left: pos.x,
+        top: pos.y,
+        width: 20,
+        height: 20,
+        backgroundImage: 'url(data:image/svg+xml;base64,...)',
+        backgroundSize: 'contain',
+        backgroundRepeat: 'no-repeat',
+        zIndex: 100,
+        pointerEvents: 'none',
+      }} />
+    </AbsoluteFill>
+  );
+}
+
+export default TypewriterWithCursor;
+```
+
+EXAMPLE 2: APP INTERFACE WITH DATA VISUALIZATION
+```tsx
+function DataVisualizationComponent() {
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  
+  // Simulated data points
+  const data = [10, 45, 30, 60, 20, 80, 40, 90, 50];
+  
+  // Animation timing
+  const interfaceLoadTime = 30; // Interface fades in
+  const chartStartTime = 60;    // Chart starts building
+  const chartEndTime = 120;     // Chart completes
+  const highlightTime = 150;    // Highlight interesting data point
+  const conclusionTime = 180;   // Show conclusion text
+  
+  // Calculate progress for different animation phases
+  const interfaceOpacity = Math.min(1, frame / interfaceLoadTime);
+  const chartProgress = Math.max(0, Math.min(1, (frame - chartStartTime) / (chartEndTime - chartStartTime)));
+  const highlightOpacity = Math.max(0, Math.min(1, (frame - highlightTime) / 15));
+  const conclusionOpacity = Math.max(0, Math.min(1, (frame - conclusionTime) / 15));
+  
+  // Number of visible bars in the chart
+  const visibleBars = Math.floor(data.length * chartProgress);
+  
+  // Function to render navigation
+  const renderNavigation = () => (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      width: '100%',
+      height: 60,
+      backgroundColor: '#2c3e50',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 20px',
+      opacity: interfaceOpacity,
+    }}>
+      <div style={{ color: 'white', fontSize: 24, fontWeight: 'bold' }}>Analytics Dashboard</div>
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 20 }}>
+        {['Home', 'Reports', 'Settings', 'Profile'].map((item, i) => (
+          <div key={i} style={{ color: 'white', opacity: 0.8 }}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  
+  // Function to render the bar chart
+  const renderBarChart = () => (
+    <div style={{
+      position: 'absolute',
+      top: 100,
+      width: '100%',
+      height: 300,
+      display: 'flex',
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      gap: 20,
+      padding: '0 50px',
+      opacity: interfaceOpacity,
+    }}>
+      {data.slice(0, visibleBars).map((value, i) => {
+        const isHighlighted = i === 7 && frame > highlightTime; // Highlight the highest value
+        return (
+          <div
+            key={i}
+            style={{
+              width: 50,
+              height: value * 3,
+              backgroundColor: isHighlighted ? '#e74c3c' : '#3498db',
+              position: 'relative',
+              borderRadius: '5px 5px 0 0',
+              boxShadow: isHighlighted ? '0 0 15px rgba(231, 76, 60, 0.7)' : 'none',
+            }}
+          >
+            {isHighlighted && (
+              <div style={{
+                position: 'absolute',
+                top: -40,
+                width: '100%',
+                textAlign: 'center',
+                color: '#e74c3c',
+                fontWeight: 'bold',
+                opacity: highlightOpacity,
+              }}>
+                90%
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+  
+  // Render conclusion text
+  const renderConclusion = () => (
+    <div style={{
+      position: 'absolute',
+      bottom: 100,
+      width: '100%',
+      textAlign: 'center',
+      padding: '0 50px',
+      opacity: conclusionOpacity,
+    }}>
+      <div style={{ fontSize: 28, color: '#2c3e50', fontWeight: 'bold', marginBottom: 10 }}>
+        Conversion Rate Peaked at 90% in Q3
+      </div>
+      <div style={{ fontSize: 18, color: '#7f8c8d' }}>
+        Our new marketing strategy has shown exceptional results.
+      </div>
+    </div>
+  );
+  
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#ecf0f1', fontFamily: 'Arial' }}>
+      {renderNavigation()}
+      {renderBarChart()}
+      {renderConclusion()}
+    </AbsoluteFill>
+  );
+}
+
+export default DataVisualizationComponent;
+```
+
+EXAMPLE 3: PRODUCT SHOWCASE WITH 3D-LIKE EFFECTS
+```tsx
+function ProductShowcase() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  // Animation phases
+  const introTime = 0;     // Initial product appearance
+  const rotateStartTime = 30;  // Start rotating product
+  const rotateEndTime = 120;   // Complete rotation
+  const featureTime = 150;     // Show feature highlights
+  const outroTime = 210;       // Final call to action
+  
+  // Calculate the current rotation angle
+  const rotationProgress = Math.max(0, Math.min(1, (frame - rotateStartTime) / (rotateEndTime - rotateStartTime)));
+  const rotation = rotationProgress * 360; // Full rotation
+  
+  // Calculate opacity for different elements
+  const productOpacity = Math.min(1, (frame - introTime) / 20);
+  const featuresOpacity = Math.max(0, Math.min(1, (frame - featureTime) / 15));
+  const ctaOpacity = Math.max(0, Math.min(1, (frame - outroTime) / 15));
+  
+  // Product features to highlight
+  const features = [
+    { x: 30, y: 20, text: "Premium materials" },
+    { x: 70, y: 40, text: "Ergonomic design" },
+    { x: 20, y: 70, text: "Long-lasting battery" },
+  ];
+  
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#f5f5f5', fontFamily: 'Arial' }}>
+      {/* Product title */}
+      <div style={{
+        position: 'absolute',
+        top: 50,
+        width: '100%',
+        textAlign: 'center',
+        fontSize: 40,
+        fontWeight: 'bold',
+        color: '#333',
+        opacity: productOpacity,
+      }}>
+        Next-Gen Smart Watch
+      </div>
+      
+      {/* Product image with rotation */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: `translate(-50%, -50%) rotateY(${rotation}deg)`,
+        perspective: '1000px',
+        opacity: productOpacity,
+      }}>
+        <div style={{
+          width: 300,
+          height: 300,
+          backgroundColor: '#333',
+          borderRadius: 20,
+          boxShadow: '0 30px 60px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            width: 220,
+            height: 220,
+            borderRadius: 110,
+            backgroundColor: '#000',
+            boxShadow: 'inset 0 0 20px rgba(255,255,255,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '10px solid #444',
+          }}>
+            <div style={{
+              width: 180,
+              height: 180,
+              borderRadius: 90,
+              backgroundColor: '#111',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: 16,
+              fontFamily: 'monospace',
+            }}>
+              {/* Watch face display */}
+              <div>
+                <div style={{ fontSize: 24, marginBottom: 10 }}>
+                  {new Date().getHours()}:{new Date().getMinutes()}
+                </div>
+                <div style={{ opacity: 0.7 }}>
+                  Steps: 12,458
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Feature highlights */}
+      {frame > featureTime && features.map((feature, i) => (
+        <div key={i} style={{
+          position: 'absolute',
+          top: `${feature.y}%`,
+          left: `${feature.x}%`,
+          backgroundColor: 'rgba(52, 152, 219, 0.9)',
+          color: 'white',
+          padding: '8px 16px',
+          borderRadius: 20,
+          fontSize: 16,
+          opacity: featuresOpacity,
+          transform: 'scale(1)',
+          boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+        }}>
+          {feature.text}
+        </div>
+      ))}
+      
+      {/* Call to action */}
+      {frame > outroTime && (
+        <div style={{
+          position: 'absolute',
+          bottom: 80,
+          width: '100%',
+          textAlign: 'center',
+          opacity: ctaOpacity,
+        }}>
+          <div style={{
+            display: 'inline-block',
+            backgroundColor: '#e74c3c',
+            color: 'white',
+            padding: '15px 40px',
+            borderRadius: 30,
+            fontSize: 20,
+            fontWeight: 'bold',
+            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.5)',
+          }}>
+            Pre-order Now
+          </div>
+        </div>
+      )}
+    </AbsoluteFill>
+  );
+}
+
+export default ProductShowcase;
+```
+
+Remember to ALWAYS:
+1. Create animations that are at least 6 seconds long (180 frames)
+2. Include multi-step transitions and narrative flow
+3. Use spring animations for more natural movement
+4. Keep code clean, performant, and well-commented

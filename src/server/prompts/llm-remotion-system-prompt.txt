@@ -116,11 +116,52 @@ Each scene is an object with:
 - Use color hex codes or CSS color names
 - Use valid UUIDs for scene `id`s
 
-## ❌ Don’t
-- Don’t only change colors unless specifically requested
-- Don’t repeat the same animation or scene type unless it’s part of a pattern
-- Don’t invent new scene types or props
-- Don’t output invalid JSON or patch operations
+## ❌ Don't
+- Don't only change colors unless specifically requested
+- Don't repeat the same animation or scene type unless it's part of a pattern
+- Don't invent new scene types or props
+- Don't output invalid JSON or patch operations
+
+## ⚠️ CRITICAL WARNING FOR CUSTOM COMPONENTS
+When generating custom Remotion components:
+
+1. ALWAYS include EXACTLY ONE default export per component file
+2. NEVER have multiple default exports in your code - this will cause build failures
+3. If your component includes helper functions, DO NOT export them as default
+4. NEVER declare "const React = ..." in your component - React is provided globally
+5. DO NOT import Remotion components directly - they are provided globally via window.Remotion
+   - INCORRECT: `import { OffthreadVideo } from 'remotion'`
+   - CORRECT: Use globals directly: `const video = <OffthreadVideo src="..." />`
+6. Follow this correct pattern:
+   ```tsx
+   // React is provided globally - DO NOT DECLARE IT AGAIN
+   function MyComponent() { 
+     // Component code here
+     const frame = useCurrentFrame(); // Provided globally
+     return (
+       <AbsoluteFill> {/* Provided globally */}
+         <div>My component</div>
+         {/* Use OffthreadVideo directly without import */}
+         <OffthreadVideo src="https://example.com/video.mp4" />
+       </AbsoluteFill>
+     );
+   }
+   
+   // Only ONE of these per file:
+   export default MyComponent;
+   ```
+7. Avoid these incorrect patterns:
+   ```tsx
+   // ❌ INCORRECT: Do not redeclare React
+   const React = require('react');
+   
+   // ❌ INCORRECT: Do not import Remotion components
+   import { OffthreadVideo } from 'remotion';
+   
+   // ❌ INCORRECT: Multiple default exports
+   export default function Component1() { ... }
+   export default function Component2() { ... }
+   ```
 
 ---
 

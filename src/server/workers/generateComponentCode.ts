@@ -31,26 +31,40 @@ export const generateCustomComponentFunctionDef = {
  * by removing any duplicate export default statements
  */
 function sanitizeDefaultExports(code: string): string {
-  // Find all export default statements
-  const defaultExportRegex = /export\s+default\s+([A-Za-z0-9_]+)\s*;?/g;
+  // Find all export default statements with improved regex
+  // This handles both "export default ComponentName;" and "export default function ComponentName()"
+  const defaultExportRegex = /export\s+default\s+(function\s+)?([A-Za-z0-9_]+\s*(\(\))?\s*{|\s*[A-Za-z0-9_]+\s*;?)/g;
   const matches = Array.from(code.matchAll(defaultExportRegex));
   
   // If we have multiple default exports
   if (matches.length > 1) {
-    console.log(`[COMPONENT GEN] Found ${matches.length} default exports, keeping only the first one`);
+    console.log(`[COMPONENT GEN] Found ${matches.length} default exports, keeping only the first one:`);
+    
+    // Log what was found for debugging
+    matches.forEach((match, i) => {
+      const lineNumber = code.substring(0, match.index || 0).split('\n').length;
+      console.log(`  [${i}] Line ~${lineNumber}: ${match[0]}`);
+    });
     
     // Keep only the first export default statement
     const firstMatch = matches[0];
     const otherMatches = matches.slice(1);
     
-    // Replace other export default statements with simple variable declarations
+    // Replace other export default statements with comments
     let sanitizedCode = code;
     for (const match of otherMatches) {
-      const fullMatch = match[0]; // The full "export default Component;" string
-      const componentName = match[1]; // Just the component name
-      sanitizedCode = sanitizedCode.replace(fullMatch, `// Removed duplicate export: ${fullMatch}`);
+      if (!match.index) continue; // TypeScript safety check
+      
+      const fullMatch = match[0]; // The full export default statement
+      
+      // Replace with comment and remove the export
+      sanitizedCode = sanitizedCode.replace(
+        fullMatch, 
+        `// Removed duplicate export: ${fullMatch.replace(/\n/g, ' ')}`
+      );
     }
     
+    console.log(`[COMPONENT GEN] Successfully sanitized duplicate exports, keeping first export default`);
     return sanitizedCode;
   }
   
@@ -72,24 +86,39 @@ export async function generateComponentCode(description: string): Promise<{
   try {
     console.log("[COMPONENT GENERATOR] Starting component generation for:", description);
     
-    // Load Remotion prompt from file with error handling
+    // Load Remotion prompts from files with error handling
     let remotionPrompt = "";
+    let systemPrompt = "";
+    
     try {
       const promptPath = path.join(process.cwd(), "src/server/prompts/remotion-prompt.txt");
-      console.log("[COMPONENT GENERATOR] Loading prompt from:", promptPath);
-      remotionPrompt = await fs.readFile(promptPath, "utf8");
-      console.log("[COMPONENT GENERATOR] Successfully loaded prompt file");
+      const systemPromptPath = path.join(process.cwd(), "src/server/prompts/llm-remotion-system-prompt.txt");
+      
+      console.log("[COMPONENT GENERATOR] Loading prompts from:", promptPath, systemPromptPath);
+      
+      [remotionPrompt, systemPrompt] = await Promise.all([
+        fs.readFile(promptPath, "utf8"),
+        fs.readFile(systemPromptPath, "utf8")
+      ]);
+      
+      console.log("[COMPONENT GENERATOR] Successfully loaded prompt files");
     } catch (err) {
-      console.error("[COMPONENT GENERATOR] Error loading prompt file:", err);
-      // Fallback to a basic prompt if file can't be loaded
+      console.error("[COMPONENT GENERATOR] Error loading prompt files:", err);
+      // Fallback to a basic prompt if files can't be loaded
       remotionPrompt = "Create React components using Remotion. Use AbsoluteFill for positioning. Use useCurrentFrame and interpolate for animations.";
+      systemPrompt = "You are an expert at creating Remotion components in React and TypeScript. Follow all best practices for Remotion components.";
     }
+    
+    // Extract the critical warnings section from the system prompt
+    const criticalWarningSection = systemPrompt.includes("CRITICAL WARNING FOR CUSTOM COMPONENTS") 
+      ? systemPrompt.split("## ⚠️ CRITICAL WARNING FOR CUSTOM COMPONENTS")[1]?.split("---")[0] || ""
+      : "";
     
     console.log("[COMPONENT GENERATOR] Calling OpenAI API with function calling...");
     
     // Call OpenAI with function calling enabled
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-o4-mini", // Using o4-mini as per @gpt.mdc standard
       temperature: 0.7,
       messages: [
         {
@@ -100,14 +129,23 @@ Follow these guidelines for creating Remotion components:
 
 ${remotionPrompt}
 
-Additional requirements:
-1. Ensure the component works with Remotion and React dependencies injected globally
-2. IMPORTANT: Include ONLY ONE default export in your code - multiple default exports will cause build failures
-3. Provide proper TypeScript typing for all parameters and return values
-4. Include detailed comments explaining any complex animations or calculations
-5. Focus on creating visually appealing and performant animations
-6. Name your main component clearly based on the effect it creates
-7. If you create helper components, do not export them as default - only the main component should be exported as default`
+## ⚠️ CRITICAL WARNING FOR CUSTOM COMPONENTS
+${criticalWarningSection || `
+When generating custom Remotion components:
+
+1. ALWAYS include EXACTLY ONE default export per component file
+2. NEVER have multiple default exports in your code - this will cause build failures
+3. If your component includes helper functions, DO NOT export them as default
+4. NEVER declare "const React = ..." in your component - React is provided globally
+5. Follow this correct pattern:
+   function MyComponent() { 
+     // Component code here
+     return <div>My component</div>;
+   }
+   
+   // Only ONE of these per file:
+   export default MyComponent;
+`}`
         },
         {
           role: "user",
@@ -184,18 +222,20 @@ Additional requirements:
       return processed;
     }
 
-    const fixedTsxCode = ensureImports(args.tsxCode);
-    // --- END POST-PROCESSING ---
-
-    // Sanitize the code to remove duplicate exports
-    const sanitizedTsxCode = sanitizeDefaultExports(fixedTsxCode);
+    // Sanitize the code to remove duplicate exports - do this first
+    console.log("[COMPONENT GENERATOR] Sanitizing duplicate exports...");
+    const sanitizedTsxCode = sanitizeDefaultExports(args.tsxCode);
 
     // Ensure proper imports are included
-    const ensuredTsxCode = ensureImports(sanitizedTsxCode);
+    console.log("[COMPONENT GENERATOR] Ensuring proper imports...");
+    const processedTsxCode = ensureImports(sanitizedTsxCode);
+
+    // Final check for any remaining duplicate exports
+    const finalTsxCode = sanitizeDefaultExports(processedTsxCode);
 
     return {
       effect: args.effect,
-      tsxCode: ensuredTsxCode,
+      tsxCode: finalTsxCode,
     };
 
   } catch (error) {

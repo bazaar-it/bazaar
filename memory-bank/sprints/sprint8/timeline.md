@@ -435,3 +435,30 @@ This implementation creates a seamless editing experience while ensuring all tim
 - Implement multi-select and group operations for items
 - Create undo/redo functionality for timeline operations
 - Add item splitting functionality at the current playhead position
+
+## 2025-05-06: Timeline Enhancements Summary
+
+### What Was Done
+
+- Integrated core hooks (`useTimelineClick`, `useTimelineZoom`, `useTimelineDragAndDrop`) for click-to-seek, zoom, and drag/resize with collision detection.
+- Added client-side validation in drag/resize to prevent zero-duration and overlapping items, with visual feedback (`invalidDragOperation`).
+- Improved scene insertion logic to clamp row placement and find gaps, avoiding unwanted new rows.
+- Enhanced real-time scene planning in chat with RxJS `Subject` emitter, streaming status updates (`scenePlan`, `sceneStatus`, `building`, `error`).
+- Extended server-side chat router to persist `lastScenePlan`, handle dynamic FPS, and support fallback flows on component generation errors.
+- Implemented patch validation using Zod schemas before applying JSON-Patch operations, ensuring integrity and duration limits.
+
+### Consequences
+
+- Dragging/resizing now prevents invalid timeline states, improving UX and blocking zero-length or overlapping scenes.
+- Zoom and click interactions align precisely with player frames, enhancing control.
+- Real-time planning feedback stream guides users during video composition and surfaces errors early.
+- Server persisting plan metadata enables auditability and potential plan restoration.
+- Patch validation reduces runtime failures and enforces scene count/duration constraints.
+
+### Next Steps
+
+1. Implement unit and integration tests (Jest/Playwright) covering timeline hooks and validation logic.
+2. Enhance UI feedback: visually highlight gaps, invalid drop zones, and support undo/redo of timeline edits.
+3. Expose tRPC mutations for timeline changes to persist updates server-side via `updateTimeline`.
+4. Optimize rendering for large timelines (e.g., row virtualization, memoization).
+5. Extend error handling: surface in-app notifications for scene generation failures and patch validation errors.

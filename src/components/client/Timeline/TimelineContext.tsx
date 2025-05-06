@@ -29,6 +29,7 @@ interface TimelineContextValue extends TimelineContextState, TimelineActions {
   timelineRef: React.RefObject<HTMLDivElement>;
   setGhostPosition: React.Dispatch<React.SetStateAction<GhostPosition>>;
   setIsDragging: React.Dispatch<React.SetStateAction<boolean>>;
+  setInvalidDragOperation: React.Dispatch<React.SetStateAction<boolean>>;
   setPlayerRef: (ref: any) => void;
   seekToFrame: (frame: number) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -362,6 +363,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     minDuration,
     maxRows,
     invalidDragOperation,
+    setInvalidDragOperation,
     // Actions
     setItems,
     setSelectedItemId,
@@ -534,7 +536,8 @@ export const useTimelineDrag = () => {
     selectItem,
     minDuration,
     maxRows,
-    invalidDragOperation
+    invalidDragOperation,
+    setInvalidDragOperation
   } = useTimeline();
 
   // Calculate frame position from x coordinate
@@ -548,7 +551,7 @@ export const useTimelineDrag = () => {
     
     return frame;
   }, [timelineRef, durationInFrames, zoomLevel, scrollPosition]);
-  
+
   // Start dragging an item
   const startDrag = useCallback((
     e: React.PointerEvent,
@@ -610,7 +613,7 @@ export const useTimelineDrag = () => {
     durationInFrames, 
     scrollPosition
   ]);
-  
+
   // Handle drag movement
   const handleDragMove = useCallback((e: PointerEvent) => {
     if (!dragInfoRef.current || !timelineRef.current) return;
@@ -622,7 +625,6 @@ export const useTimelineDrag = () => {
     const item = items.find(i => i.id === itemId);
     if (!item) return;
     
-    // Calculate new position based on drag type
     let newFrom = startFrame;
     let newDuration = startDuration;
     let newRow = startRow;
@@ -656,27 +658,54 @@ export const useTimelineDrag = () => {
       }
     }
     
-    // Update ghost UI position
+    // --- Client-side validation ---
+    const updatedItem = { ...item, from: newFrom, durationInFrames: newDuration, row: newRow };
+    const isValidDuration = validateDuration(newDuration, durationInFrames);
+    const isValidStart = validateStart(newFrom, newDuration, durationInFrames);
+    const isValidRow = validateRow(newRow, maxRows);
+    const isValidOverlap = validateOverlap(items, updatedItem);
+    const isValid = isValidDuration && isValidStart && isValidRow && isValidOverlap;
+    setInvalidDragOperation(!isValid);
+    if (!isValid) return;
+    // --- End validation ---
+    
     setGhostPosition({
       left: (newFrom * pixelsPerFrame) - scrollPosition,
       width: newDuration * pixelsPerFrame
     });
     
-    // Update drag info with current position
     dragInfoRef.current = {
       ...dragInfo,
       currentFrame: newFrom,
       currentDuration: newDuration,
       currentRow: newRow
     };
-  }, [items, dragInfoRef, timelineRef, xToFrame, setGhostPosition, scrollPosition, durationInFrames, minDuration, maxRows]);
-  
+  }, [
+    items,
+    dragInfoRef,
+    timelineRef,
+    xToFrame,
+    setGhostPosition,
+    scrollPosition,
+    durationInFrames,
+    minDuration,
+    maxRows,
+    setInvalidDragOperation
+  ]);
+
   // End dragging and commit changes
   const handleDragEnd = useCallback((e: PointerEvent) => {
     if (!dragInfoRef.current) return;
     
     const dragInfo = dragInfoRef.current;
     const { itemId, currentFrame, currentDuration, currentRow } = dragInfo;
+    
+    // Prevent committing invalid operations
+    if (invalidDragOperation) {
+      setInvalidDragOperation(false);
+      dragInfoRef.current = null;
+      return;
+    }
     
     // Clean up event listeners
     document.removeEventListener('pointermove', handleDragMove);
@@ -702,8 +731,15 @@ export const useTimelineDrag = () => {
     
     // Clear drag info
     dragInfoRef.current = null;
-  }, [items, updateItem, setIsDragging, dragInfoRef]);
-  
+  }, [
+    items,
+    updateItem,
+    setIsDragging,
+    dragInfoRef,
+    invalidDragOperation,
+    setInvalidDragOperation
+  ]);
+
   return {
     startDrag,
     ghostPosition,
