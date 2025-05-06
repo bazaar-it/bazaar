@@ -1,6 +1,66 @@
 import { type SceneAnalysis } from '~/types/chat';
 
 /**
+ * Extract details from a scene object for regeneration
+ * 
+ * @param scene - The scene object from the project properties
+ * @returns Scene details including description and duration
+ */
+export function getSceneDetails(scene: any) {
+  // Extract scene description from various possible locations
+  const description = 
+    scene.data?.description || 
+    scene.data?.text || 
+    scene.data?.name || 
+    `Scene with effect: ${scene.type}`;
+  
+  // Calculate duration in seconds based on frames (assumes 30fps if not specified)
+  const fps = scene.fps || 30;
+  const durationInSeconds = scene.duration / fps;
+  
+  return {
+    description,
+    durationInSeconds,
+    fps,
+    sceneId: scene.id,
+    type: scene.type,
+    data: scene.data || {}
+  };
+}
+
+/**
+ * Analyze a scene description to determine appropriate properties for regeneration
+ * 
+ * @param description - The scene description text
+ * @param durationInSeconds - The duration in seconds
+ * @param fps - Frames per second (default: 30)
+ * @returns Scene analysis with details needed for regeneration
+ */
+export function analyzeSceneDescription(
+  description: string,
+  durationInSeconds: number,
+  fps: number = 30
+) {
+  // Generate a consistent component name based on description
+  const words = description
+    .split(/\s+/)
+    .filter(word => word.length > 3)
+    .slice(0, 2)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+  
+  const componentName = `${words}Scene` || 'CustomScene';
+  
+  return {
+    description,
+    durationInSeconds,
+    fps,
+    effectType: "custom",
+    suggestedName: componentName
+  };
+}
+
+/**
  * Analyzes scene content to determine complexity and required components
  * 
  * @param description - The scene description from the planner

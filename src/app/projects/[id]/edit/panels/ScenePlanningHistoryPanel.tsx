@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { api } from '~/trpc/react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from "~/components/ui/button";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2Icon } from "lucide-react";
+import { useImageAnalysis } from "~/hooks/useImageAnalysis";
 
 // Interfaces that match the database schema
 interface ScenePlanScene {
@@ -107,6 +108,9 @@ export default function ScenePlanningHistoryPanel() {
   const [tabSections, setTabSections] = useState<Record<string, 'reasoning' | 'context'>>({});
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [sceneImages, setSceneImages] = useState<Record<string, UploadedImage[]>>({});
+  const { analyzeImage } = useImageAnalysis();
+  const [imageTags, setImageTags] = useState<Record<string, string[]>>({});
+  const [analyzingImg, setAnalyzingImg] = useState<Record<string, boolean>>({});
   // Fetch planning history data
   const { data: planningHistoryData } = api.chat.getScenePlanningHistory.useQuery({
     projectId
@@ -160,6 +164,20 @@ export default function ScenePlanningHistoryPanel() {
   // Format relative time
   const formatRelativeTime = (date: Date) => {
     return formatDistanceToNow(new Date(date), { addSuffix: true });
+  };
+  
+  // Stub handler for regenerating a plan with attached images
+  const handleRegenerate = (planId: string) => {
+    console.log('Regenerating plan:', planId, 'with image attachments:', sceneImages);
+    // TODO: call tRPC mutation e.g. api.chat.regenerateScene.mutate({ planId, attachments: sceneImages });
+  };
+  
+  // Analyze image using vision stub
+  const handleAnalyzeImage = async (img: UploadedImage) => {
+    setAnalyzingImg(prev => ({ ...prev, [img.id]: true }));
+    const tags = await analyzeImage(img.url);
+    setImageTags(prev => ({ ...prev, [img.id]: tags }));
+    setAnalyzingImg(prev => ({ ...prev, [img.id]: false }));
   };
   
   if (planningHistory.length === 0) {
@@ -340,13 +358,30 @@ export default function ScenePlanningHistoryPanel() {
                           )}
                           {/* Attached images */}
                           {sceneImages[scene.id]?.map(img => (
-                            <img key={img.id} src={img.url} className="h-10 w-10 object-cover rounded" />
+                            <div key={img.id} className="flex flex-col items-center">
+                              <img src={img.url} className="h-10 w-10 object-cover rounded" />
+                              <button
+                                onClick={() => handleAnalyzeImage(img)}
+                                className="text-xs text-blue-500 underline mt-1"
+                              >
+                                Analyze
+                              </button>
+                              {(analyzingImg[img.id] ?? false) && <Loader2Icon className="animate-spin mt-1 h-4 w-4" />}
+                              {(imageTags[img.id]?.length ?? 0) > 0 && (
+                                <div className="text-xs mt-1">{imageTags[img.id]?.join(', ')}</div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       );
                     })}
                     <div className="flex justify-end mt-2 gap-2">
-                      <button className="bg-muted px-4 py-2 w-24 rounded text-xs border border-border">Regenerate</button>
+                      <button
+                        onClick={() => handleRegenerate(plan.id)}
+                        className="bg-muted px-4 py-2 w-24 rounded text-xs border border-border"
+                      >
+                        Regenerate
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -71,6 +71,11 @@ We've been implementing the intelligent scene planning system that will dynamica
    - Add loading states for scenes being generated
    - Implement progress tracking for long-running generations
 
+4. **Regeneration Job Persistence**
+   - Re-add `jobId` to assistant message records
+   - Update DB schema (Drizzle) to include `jobId`
+   - Create migration for new column
+
 ## Sprint 8 Progress - Comprehensive Test Suite Implementation
 
 We've implemented a comprehensive test suite for the Bazaar-Vid project's LLM integration and video generation systems. These tests ensure the reliability and correctness of our core functionality.

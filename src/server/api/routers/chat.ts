@@ -33,6 +33,7 @@ import { SYSTEM_PROMPT, MAX_CONTEXT_MESSAGES } from "~/server/constants/chat";
 import { type StreamEvent, StreamEventType } from "~/types/chat";
 import { generateComponent } from "~/server/services/componentGenerator.service";
 import { handleScenePlan } from "~/server/services/scenePlanner.service";
+import { getSceneDetails, analyzeSceneDescription } from "~/server/services/sceneAnalyzer.service";
 
 // Set to track active streams and prevent duplicates
 const activeStreamIds = new Set<string>();
@@ -358,6 +359,197 @@ export const chatRouter = createTRPCRouter({
             });
             
             return planningHistory;
+        }),
+
+    regenerateScene: protectedProcedure
+        .input(
+            z.object({
+                projectId: z.string().uuid(),
+                sceneId: z.string(),
+            })
+        )
+        .mutation(async ({ ctx, input }) => {
+            const { db } = ctx;
+            const userId = ctx.session.user.id;
+            const { projectId, sceneId } = input;
+            
+            // Verify the project exists and belongs to the user
+            const project = await db.query.projects.findFirst({
+                where: (projects, { eq, and }) => and(
+                    eq(projects.id, projectId),
+                    eq(projects.userId, userId)
+                ),
+            });
+            
+            if (!project) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: "Project not found or access denied",
+                });
+            }
+            
+            // Get the current project properties to find the scene
+            const projectProps = project.props as any;
+            if (!projectProps || !projectProps.scenes) {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Invalid project structure",
+                });
+            }
+            
+            // Find the scene to regenerate
+            const sceneToRegenerate = projectProps.scenes.find(
+                (scene: any) => scene.id === sceneId
+            );
+            
+            if (!sceneToRegenerate) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: "Scene not found in project",
+                });
+            }
+            
+            // Only support regenerating custom components for now
+            if (sceneToRegenerate.type !== "custom") {
+                throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: "Only custom components can be regenerated",
+                });
+            }
+            
+            // Create a system message for the regeneration context
+            const systemMessage = await db.insert(messages).values({
+                projectId,
+                role: "system",
+                content: `Regenerating scene ${sceneId}. Previous component: ${sceneToRegenerate.data?.name || "Unknown"}`,
+                kind: "text",
+                status: "success",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning();
+            
+            try {
+                // Get scene details and analysis
+                const sceneDetails = await getSceneDetails(sceneToRegenerate);
+                const scene = await analyzeSceneDescription(sceneDetails.description, sceneDetails.durationInSeconds);
+                
+                // Check if we have a valid system message
+                if (!systemMessage || systemMessage.length === 0 || !systemMessage[0]) {
+                    throw new Error("Failed to create system message for regeneration");
+                }
+                
+                // Generate a new component
+                const result = await generateComponent(
+                    projectId,
+                    scene.description,
+                    systemMessage[0].id,
+                    scene.durationInSeconds,
+                    scene.fps || 30
+                );
+                
+                // Create patch operation to update the component
+                const patch: Operation[] = [
+                    {
+                        op: "replace",
+                        path: `/scenes/${projectProps.scenes.findIndex((s: any) => s.id === sceneId)}/data/componentId`,
+                        value: result.jobId,
+                    },
+                    {
+                        op: "replace",
+                        path: `/scenes/${projectProps.scenes.findIndex((s: any) => s.id === sceneId)}/data/name`,
+                        value: result.effect,
+                    },
+                ];
+                
+                // If the component metadata includes a different duration, update the scene duration
+                if (result.componentMetadata?.durationInFrames && 
+                    result.componentMetadata.durationInFrames !== sceneToRegenerate.duration) {
+                    // Add operation to update duration
+                    patch.push({
+                        op: "replace",
+                        path: `/scenes/${projectProps.scenes.findIndex((s: any) => s.id === sceneId)}/duration`,
+                        value: result.componentMetadata.durationInFrames,
+                    });
+                    
+                    // Recalculate positions of subsequent scenes
+                    const sceneIndex = projectProps.scenes.findIndex((s: any) => s.id === sceneId);
+                    const durationDiff = result.componentMetadata.durationInFrames - sceneToRegenerate.duration;
+                    
+                    // Update position of all scenes after this one
+                    for (let i = sceneIndex + 1; i < projectProps.scenes.length; i++) {
+                        patch.push({
+                            op: "replace",
+                            path: `/scenes/${i}/start`,
+                            value: projectProps.scenes[i].start + durationDiff,
+                        });
+                    }
+                    
+                    // Update total duration
+                    if (projectProps.meta && typeof projectProps.meta.duration === "number") {
+                        patch.push({
+                            op: "replace",
+                            path: "/meta/duration",
+                            value: projectProps.meta.duration + durationDiff,
+                        });
+                    }
+                }
+                
+                // Apply the patch to the project
+                const updatedProject = await db.update(projects)
+                    .set({
+                        props: applyPatch({ ...projectProps }, patch).newDocument,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(projects.id, projectId))
+                    .returning();
+                
+                // Store the patch operation in the database
+                await db.insert(patches).values({
+                    projectId,
+                    patch: patch as any,
+                    createdAt: new Date(),
+                });
+                
+                // Create an assistant message indicating successful regeneration
+                await db.insert(messages).values({
+                    projectId,
+                    role: "assistant",
+                    content: `Scene "${result.effect}" regenerated successfully.`,
+                    kind: "text",
+                    status: "success",
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+                
+                return {
+                    success: true,
+                    message: `Scene regenerated successfully`,
+                    patch,
+                    scene: {
+                        id: sceneId,
+                        componentId: result.jobId,
+                        name: result.effect,
+                        status: "building",
+                    },
+                };
+            } catch (error) {
+                // Create an error message
+                await db.insert(messages).values({
+                    projectId,
+                    role: "assistant",
+                    content: `Error regenerating scene: ${error instanceof Error ? error.message : "Unknown error"}`,
+                    kind: "error",
+                    status: "error",
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+                
+                throw new TRPCError({
+                    code: "INTERNAL_SERVER_ERROR",
+                    message: error instanceof Error ? error.message : "Unknown error during scene regeneration",
+                    cause: error,
+                });
+            }
         }),
 });
 
