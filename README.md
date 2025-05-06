@@ -192,7 +192,6 @@
 1. **Always update docs:** if you add a table ➜ update `schema.ts` + README.
 2. **Keep PRs atomic** – one feature / one migration / one test.
 3. **No unused code** – run `pnpm test && pnpm lint && pnpm type-check` locally before proposing.
-4. **Prefer explicit over clever** – write the SQL, don't hide it behind magic helpers.
 5. **Validate everything** – LLM JSON patches must pass Zod before persisting.
 6. **Use proper UUIDs** – Always use `randomUUID()` for database IDs, not `nanoid()`.
 7. **Add path comments** – First line in every file should indicate its relative path.

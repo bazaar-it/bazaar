@@ -8,7 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { Loader2Icon, SendHorizontalIcon, AlertTriangleIcon } from "lucide-react";
 import { useVideoState, type DbMessage, type ChatMessage, type MessageUpdates } from "~/stores/videoState";
-import { type StreamEvent } from "~/server/api/routers/chat";
+import { type StreamEvent } from "~/types/chat";
 import { skipToken } from "@tanstack/react-query";
 import type { Operation } from "fast-json-patch";
 import { useSelectedScene } from "~/components/client/Timeline/SelectedSceneContext";

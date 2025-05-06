@@ -457,7 +457,6 @@ This implementation creates a seamless editing experience while ensuring all tim
 
 ### Next Steps
 
-1. Implement unit and integration tests (Jest/Playwright) covering timeline hooks and validation logic.
 2. Enhance UI feedback: visually highlight gaps, invalid drop zones, and support undo/redo of timeline edits.
 3. Expose tRPC mutations for timeline changes to persist updates server-side via `updateTimeline`.
 4. Optimize rendering for large timelines (e.g., row virtualization, memoization).

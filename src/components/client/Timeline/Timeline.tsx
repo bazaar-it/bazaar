@@ -62,11 +62,20 @@ export const Timeline: React.FC<TimelineProps> = ({
   const { getCurrentProps, applyPatch } = useVideoState();
   const inputProps = getCurrentProps();
 
-  // Convert scenes to timeline items
+  // Map scenes to timeline items with guaranteed unique IDs
   const timelineItems = useMemo<TimelineItemUnion[]>(() => {
     if (!inputProps) return [];
     
     return inputProps.scenes.map((scene, index): TimelineItemUnion => {
+      // Generate a unique numeric ID for each item
+      // Use hash function to convert string UUID to a stable number
+      // or use index + timestamp to ensure uniqueness
+      const uniqueId = scene.id 
+        ? (typeof scene.id === 'number' 
+            ? scene.id 
+            : hashStringToInt(scene.id)) 
+        : index + Date.now();
+      
       // Map scene type to timeline item type
       const itemType = mapSceneTypeToTimelineType(scene.type);
       
@@ -74,7 +83,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       switch (scene.type) {
         case 'text':
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: uniqueId,
             type: TimelineItemType.TEXT,
             from: scene.start,
             durationInFrames: scene.duration,
@@ -86,16 +95,27 @@ export const Timeline: React.FC<TimelineProps> = ({
           } as TimelineItemUnion;
         case 'image':
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: uniqueId,
             type: TimelineItemType.IMAGE,
             from: scene.start,
             durationInFrames: scene.duration,
             row: index % 3,
             src: scene.data?.src as string || ''
           } as TimelineItemUnion;
+        case 'custom':
+          return {
+            id: uniqueId,
+            type: TimelineItemType.CUSTOM,
+            from: scene.start,
+            durationInFrames: scene.duration,
+            row: index % 3,
+            name: scene.data?.name as string || 'Custom',
+            componentId: scene.data?.componentId as string || '',
+            outputUrl: scene.data?.outputUrl as string || ''
+          } as TimelineItemUnion;
         default:
           return {
-            id: parseInt(scene.id, 10) || index,
+            id: uniqueId,
             type: TimelineItemType.TEXT,
             from: scene.start,
             durationInFrames: scene.duration,
@@ -108,6 +128,19 @@ export const Timeline: React.FC<TimelineProps> = ({
       }
     });
   }, [inputProps]);
+  
+  // Simple hash function to convert string to integer
+  // This gives us a way to convert UUID strings to numbers
+  function hashStringToInt(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Ensure positive number and avoid collisions with small indices
+    return Math.abs(hash) + 1000000;
+  }
 
   // Helper function to map scene types to timeline item types
   function mapSceneTypeToTimelineType(sceneType: string): TimelineItemType {

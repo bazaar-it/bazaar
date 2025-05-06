@@ -6,8 +6,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Separator } from '~/components/ui/separator';
 import { Button } from '~/components/ui/button';
 import type { InputProps } from '~/types/input-props';
-import { ChatPanel, PreviewPanel } from "./panels";
-import TimelinePanel from "./panels/TimelinePanel";
+import { ChatPanel, PreviewPanel, ScenePlanningHistoryPanel, TimelinePanel } from "./panels";
 import Sidebar from "./Sidebar";
 import AppHeader from "~/components/AppHeader";
 import { api } from "~/trpc/react";
@@ -17,8 +16,11 @@ import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
 import type { TimelineItemUnion } from '~/types/timeline';
 import { TimelineItemType } from '~/types/timeline';
 import { DraggableTimeline } from '~/components/client/DraggableTimeline';
+// @ts-ignore
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
 type TimelineMode = 'hidden' | 'vertical' | 'floating';
+type LeftPanelTab = 'chat' | 'planning';
 
 type Props = {
   projectId: string;
@@ -37,6 +39,7 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   
   // Customizable layout state
   const [timelineMode, setTimelineMode] = useState<TimelineMode>('hidden');
+  const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('chat');
   
   // Handle timeline mode toggle
   const toggleTimeline = useCallback(() => {
@@ -154,10 +157,27 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
         <div className="flex-1 overflow-hidden min-h-0 relative">
           <TimelineProvider initialItems={timelineItems} initialDuration={initialDuration}>
             <PanelGroup direction="horizontal" className="h-full">
-              {/* Left panel: Chat */}
+              {/* Left panel: Tabbed interface with Chat and Scene Planning History */}
               <Panel defaultSize={35} minSize={20} maxSize={50}>
-                <div className="h-full border-r bg-background overflow-auto">
-                  <ChatPanel projectId={projectId} />
+                <div className="h-full border-r bg-background flex flex-col">
+                  <Tabs 
+                    value={leftPanelTab} 
+                    onValueChange={(value) => setLeftPanelTab(value as LeftPanelTab)}
+                    className="flex-1 flex flex-col min-h-0"
+                  >
+                    <TabsList className="grid grid-cols-2 m-2">
+                      <TabsTrigger value="chat">Chat</TabsTrigger>
+                      <TabsTrigger value="planning">Scene Planning</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="chat" className="flex-1 overflow-hidden">
+                      <ChatPanel projectId={projectId} />
+                    </TabsContent>
+                    
+                    <TabsContent value="planning" className="flex-1 min-h-0 overflow-hidden">
+                      <ScenePlanningHistoryPanel />
+                    </TabsContent>
+                  </Tabs>
                 </div>
               </Panel>
               

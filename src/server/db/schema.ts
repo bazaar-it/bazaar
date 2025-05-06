@@ -232,3 +232,36 @@ export const metrics = createTable(
       .notNull(),
   })
 );
+
+// --- Scene Plans table ---
+// Stores LLM reasoning about scene planning
+export const scenePlans = createTable(
+  "scene_plan",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d
+      .uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    messageId: d
+      .uuid()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    rawReasoning: d.text().notNull(), // Raw LLM reasoning about the plan
+    planData: d.jsonb().notNull(), // The structured scene plan data
+    userPrompt: d.text().notNull(), // The user prompt that led to this plan
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  }),
+  (t) => [
+    index("scene_plan_project_idx").on(t.projectId),
+    index("scene_plan_message_idx").on(t.messageId),
+  ],
+);
+
+// Add relations for scene plans
+export const scenePlansRelations = relations(scenePlans, ({ one }) => ({
+  project: one(projects, { fields: [scenePlans.projectId], references: [projects.id] }),
+  message: one(messages, { fields: [scenePlans.messageId], references: [messages.id] }),
+}));
