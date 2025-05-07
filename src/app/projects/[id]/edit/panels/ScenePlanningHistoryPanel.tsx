@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '~/trpc/react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from "~/components/ui/button";
-import { ChevronDown, ChevronUp, Loader2Icon } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2Icon, PlayIcon } from "lucide-react";
 import { useImageAnalysis } from "~/hooks/useImageAnalysis";
+import { TimelineContext } from '~/components/client/Timeline/TimelineContext';
+import { useVideoState } from "~/stores/videoState";
 
 // Interfaces that match the database schema
 interface ScenePlanScene {
@@ -96,6 +98,10 @@ function ContextDropZone({ onImagesChange }: { onImagesChange: (imgs: UploadedIm
   );
 }
 
+// Helper type for valid scene types
+type ValidSceneType = "custom" | "text" | "image" | "background-color" | "shape" | 
+  "gradient" | "particles" | "text-animation" | "split-screen" | "zoom-pan" | "svg-animation";
+
 export default function ScenePlanningHistoryPanel() {
   // --- Scene editing state (top-level, fixes React Hooks order) ---
   const [editingSceneId, setEditingSceneId] = React.useState<string | null>(null);
@@ -111,6 +117,12 @@ export default function ScenePlanningHistoryPanel() {
   const { analyzeImage } = useImageAnalysis();
   const [imageTags, setImageTags] = useState<Record<string, string[]>>({});
   const [analyzingImg, setAnalyzingImg] = useState<Record<string, boolean>>({});
+  
+  // Get access to timeline context
+  const timeline = useContext(TimelineContext);
+  // Get access to video state store
+  const videoState = useVideoState();
+  
   // Fetch planning history data
   const { data: planningHistoryData } = api.chat.getScenePlanningHistory.useQuery({
     projectId
@@ -180,6 +192,67 @@ export default function ScenePlanningHistoryPanel() {
     setAnalyzingImg(prev => ({ ...prev, [img.id]: false }));
   };
   
+  // Helper function to map arbitrary effect types to valid scene types
+  const mapToValidSceneType = (type: string): ValidSceneType => {
+    const validTypes: ValidSceneType[] = [
+      "custom", "text", "image", "background-color", "shape", 
+      "gradient", "particles", "text-animation", "split-screen", 
+      "zoom-pan", "svg-animation"
+    ];
+    
+    return validTypes.includes(type as ValidSceneType) 
+      ? (type as ValidSceneType) 
+      : "text"; // Default to text if invalid type
+  };
+  
+  // Apply a scene plan to the timeline 
+  const applyPlanToTimeline = (plan: ScenePlan) => {
+    if (!plan.planData?.scenes) {
+      console.error("Cannot apply plan without scenes");
+      return;
+    }
+    
+    try {
+      // Map the scenes from plan data to timeline format
+      const timelineScenes = plan.planData.scenes.map(scene => ({
+        id: scene.id,
+        type: scene.effectType,
+        durationInFrames: Math.round(scene.durationInSeconds * (plan.planData.fps || 30))
+      }));
+      
+      // Update the timeline with these scenes
+      if (timeline) {
+        timeline.updateFromScenePlan(timelineScenes);
+      } else {
+        console.error("Timeline context is not available");
+        return;
+      }
+      
+      // Also update the overall video properties
+      // Note: this is optional, as timeline will sync internally
+      // but this ensures both state models are consistent
+      videoState.replace(projectId, {
+        meta: {
+          duration: timelineScenes.reduce((total, scene) => total + scene.durationInFrames, 0),
+          title: "Video from " + plan.userPrompt.substring(0, 30) + "..."
+        },
+        scenes: plan.planData.scenes.map(scene => ({
+          id: scene.id,
+          duration: Math.round(scene.durationInSeconds * (plan.planData.fps || 30)),
+          type: mapToValidSceneType(scene.effectType),
+          start: 0, // Will be recalculated by the timeline
+          data: { description: scene.description }
+        }))
+      });
+      
+      // Visual feedback
+      alert(`Applied plan "${plan.userPrompt}" to timeline`);
+    } catch (error) {
+      console.error("Error applying plan to timeline:", error);
+      alert("Failed to apply plan to timeline");
+    }
+  };
+  
   if (planningHistory.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 text-muted-foreground">
@@ -213,8 +286,8 @@ export default function ScenePlanningHistoryPanel() {
         </p>
       </div>
       <div className="flex-1 p-4 overflow-auto bg-background">
-        {planningHistory.map((plan) => (
-          <div key={plan.id} className="mb-6 flex flex-col gap-2">
+        {planningHistory.map((plan, pIdx) => (
+          <div key={`${plan.id}-${pIdx}`} className="mb-6 flex flex-col gap-2">
             {/* Header bubble */}
             <div
               className="flex items-center gap-2 cursor-pointer"
@@ -293,7 +366,7 @@ export default function ScenePlanningHistoryPanel() {
 
                       return (
                         <div
-                          key={scene.id}
+                          key={`${plan.id}-${scene.id}-${idx}`}
                           className="rounded-lg bg-background border border-border p-3"
                           onDragOver={e => e.preventDefault()}
                           onDrop={e => {
@@ -376,6 +449,16 @@ export default function ScenePlanningHistoryPanel() {
                       );
                     })}
                     <div className="flex justify-end mt-2 gap-2">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1"
+                        onClick={() => applyPlanToTimeline(plan)}
+                      >
+                        <PlayIcon size={14} />
+                        <span>Apply to Timeline</span>
+                      </Button>
+                      
                       <button
                         onClick={() => handleRegenerate(plan.id)}
                         className="bg-muted px-4 py-2 w-24 rounded text-xs border border-border"

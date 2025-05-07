@@ -3,6 +3,9 @@ import { openai } from "~/server/lib/openai";
 import { TRPCError } from "@trpc/server";
 import fs from "fs/promises";
 import path from "path";
+import { customComponentJobs, db } from "~/server/db";
+import { eq } from "drizzle-orm";
+import { updateComponentStatus } from "~/server/services/componentGenerator.service";
 
 /**
  * Type definition for the OpenAI function call that generates custom Remotion components
@@ -70,6 +73,80 @@ function sanitizeDefaultExports(code: string): string {
   
   // If there's only one or zero export default, return the original code
   return code;
+}
+
+/**
+ * Processes a component generation job from the database.
+ * This is the function that is called from componentGenerator.service.ts
+ * 
+ * @param jobId ID of the component generation job
+ */
+export async function processComponentJob(jobId: string): Promise<void> {
+  try {
+    console.log(`[COMPONENT GENERATOR] Processing job ${jobId}`);
+    
+    // Get the job from database
+    const job = await db.query.customComponentJobs.findFirst({
+      where: eq(customComponentJobs.id, jobId)
+    });
+    
+    if (!job) {
+      console.error(`[COMPONENT GENERATOR] Job ${jobId} not found`);
+      throw new Error(`Job ${jobId} not found`);
+    }
+    
+    if (!job.metadata || typeof job.metadata !== 'object') {
+      console.error(`[COMPONENT GENERATOR] Job ${jobId} has invalid metadata`);
+      await updateComponentStatus(jobId, 'error', db, undefined, 'Invalid job metadata');
+      return;
+    }
+    
+    const prompt = (job.metadata as any).prompt;
+    if (!prompt || typeof prompt !== 'string') {
+      console.error(`[COMPONENT GENERATOR] Job ${jobId} has no prompt in metadata`);
+      await updateComponentStatus(jobId, 'error', db, undefined, 'Missing prompt in job metadata');
+      return;
+    }
+    
+    try {
+      // Call the implementation that takes a description
+      const result = await generateComponentCode(prompt);
+      
+      // Save the result to the database
+      await db.update(customComponentJobs)
+        .set({
+          tsxCode: result.tsxCode,
+          status: 'building', // Mark as building so buildCustomComponent can pick it up
+          updatedAt: new Date()
+        })
+        .where(eq(customComponentJobs.id, jobId));
+        
+      console.log(`[COMPONENT GENERATOR] Successfully generated TSX code for job ${jobId}`);
+    } catch (error) {
+      console.error(`[COMPONENT GENERATOR] Error generating code for job ${jobId}:`, error);
+      await updateComponentStatus(
+        jobId, 
+        'error', 
+        db, 
+        undefined, 
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  } catch (error) {
+    console.error(`[COMPONENT GENERATOR] Error processing job ${jobId}:`, error);
+    // Try to update status if possible
+    try {
+      await updateComponentStatus(
+        jobId, 
+        'error', 
+        db, 
+        undefined, 
+        `Failed to process job: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } catch (dbError) {
+      console.error(`[COMPONENT GENERATOR] Could not update job status for ${jobId}:`, dbError);
+    }
+  }
 }
 
 /**

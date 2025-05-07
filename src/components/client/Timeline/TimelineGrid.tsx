@@ -176,11 +176,11 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
       {/* Ghost item during drag */}
       {renderGhostItem()}
       
-      <div className="w-full h-full">
+    <div className="w-full h-full">
         {/* Track Headers */}
         <div className="sticky left-0 z-20 bg-slate-900 border-r border-slate-700 w-36">
-          {rows.map(rowIndex => (
-            <div 
+      {rows.map(rowIndex => (
+        <div 
               key={`track-header-${rowIndex}`}
               className={cn(
                 "flex items-center h-14 px-2 border-b border-slate-700",
@@ -270,17 +270,17 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
               >
                 {/* Only render items if track is not collapsed */}
                 {!collapsedTracks.has(rowIndex) && rowItems.map(item => (
-                  <TimelineItem
+            <TimelineItem
                     key={`item-${item.id}`}
-                    item={item}
+              item={item}
                     isSelected={selectedItemId === item.id}
                     isDragging={isDragging}
-                    durationInFrames={durationInFrames}
-                    currentFrame={currentFrame}
-                    zoomLevel={zoomLevel}
+              durationInFrames={durationInFrames}
+              currentFrame={currentFrame}
+              zoomLevel={zoomLevel}
                     onDragToChat={onDragToChat ? () => onDragToChat(item.id) : undefined}
-                  />
-                ))}
+            />
+          ))}
               </div>
             );
           })}

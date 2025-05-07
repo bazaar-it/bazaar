@@ -2,6 +2,7 @@ import { type Operation } from "fast-json-patch";
 import { Subject } from "rxjs";
 import crypto from "crypto";
 import { db } from "~/server/db";
+import { scenePlans } from "~/server/db/schema";
 import { MAX_SCENES } from "~/server/constants/chat";
 import { type ComponentJob, type SceneResult, type SceneStatus, type ScenePlanResponse } from "~/types/chat";
 import { analyzeSceneContent } from "./sceneAnalyzer.service";
@@ -31,10 +32,13 @@ export async function handleScenePlan(
 ): Promise<ScenePlanResponse> {
     console.log(`Processing scene plan with ${scenesPlan.scenes?.length ?? 0} scenes`);
     
-    // Validate input
+    // More intelligent handling of scene plan validation
     if (!scenesPlan.scenes || !Array.isArray(scenesPlan.scenes) || scenesPlan.scenes.length === 0) {
+        console.log("Received empty scene plan - generating helpful response instead of error");
+        // Instead of returning an error, return a helpful message that encourages the LLM
+        // to try again with scene planning
         return {
-            message: "No valid scenes were provided in the plan."
+            message: "I'll help you create a video based on your request. Let me plan out some scenes for you. What specific elements would you like to include in your video?"
         };
     }
     
@@ -248,7 +252,35 @@ export async function handleScenePlan(
             responseMessage += `- ${job.name}: ${job.description}\n`;
         }
     }
-    
+
+    // CRITICAL FIX: Save the scene plan to the database
+    try {
+        // Calculate total duration across all scenes
+        const totalDuration = scenesPlan.scenes.reduce((total: number, scene: any) => total + (scene.durationInSeconds || 0), 0);
+        
+        // Create scene plan record in the database
+        await dbInstance.insert(scenePlans).values({
+            projectId,
+            messageId: assistantMessageId,
+            rawReasoning: scenesPlan.reasoning || "",
+            userPrompt: scenesPlan.intent || "Video scene plan",
+            planData: {
+                intent: scenesPlan.intent || "",
+                reasoning: scenesPlan.reasoning || "",
+                scenes: scenesPlan.scenes,
+                sceneCount: scenesPlan.scenes.length,
+                totalDuration,
+                fps: fps
+            },
+            createdAt: new Date()
+        });
+        
+        console.log(`Saved scene plan to database for project ${projectId}, message ${assistantMessageId}`);
+    } catch (dbError) {
+        console.error("Error saving scene plan to database:", dbError);
+        // Don't fail the whole operation if DB save fails, just log it
+    }
+
     return {
         message: responseMessage,
         patches: projectPatches

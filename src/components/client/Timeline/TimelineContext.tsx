@@ -2,12 +2,18 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import type {
-  TimelineContextState,
-  TimelineActions,
-  TimelineItemUnion,
-  DragInfo,
-  GhostPosition
+import { 
+  type TimelineItemUnion,
+  type DragInfo,
+  type GhostPosition,
+  TimelineItemType,
+  type TextItem,
+  type ImageItem,
+  type CustomItem,
+  type VideoItem,
+  type AudioItem,
+  type TimelineContextState,
+  type TimelineActions
 } from '~/types/timeline';
 import { useVideoState } from '~/stores/videoState';
 import {
@@ -37,10 +43,16 @@ interface TimelineContextValue extends TimelineContextState, TimelineActions {
   selectItem: (id: number | null) => void;
   handleWheelZoom: (e: WheelEvent, clientX: number) => void;
   handleTimelineClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  
+  // New method to update timeline based on scene plan
+  updateFromScenePlan: (scenes: Array<{id: string, type: string, durationInFrames: number}>) => void;
 }
 
 // Create context with default empty state
 const TimelineContext = createContext<TimelineContextValue | null>(null);
+
+// Export context for use in other components
+export { TimelineContext };
 
 /**
  * Timeline provider props
@@ -93,6 +105,9 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   const dragInfoRef = useRef<DragInfo | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const isPlayingRef = useRef(false);
+
+  // Get videoState to sync with overall application state
+  const { getCurrentProps, replace } = useVideoState();
 
   // Wheel zoom handler - zooms around mouse position
   const handleWheelZoom = useCallback((e: WheelEvent, clientX: number) => {
@@ -346,6 +361,114 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     }
   }, [items, durationInFrames, maxRows, minDuration, findGapsInRow]);
   
+  // New method to update timeline based on scene plan
+  const updateFromScenePlan = useCallback((scenes: Array<{id: string, type: string, durationInFrames: number}>) => {
+    // Convert scene plan format to timeline items
+    const newItems: TimelineItemUnion[] = scenes.map((scene, index) => {
+      // Calculate position based on previous scenes
+      const from = scenes.slice(0, index).reduce((acc, s) => acc + s.durationInFrames, 0);
+      
+      const sceneType = mapSceneTypeToTimelineType(scene.type);
+      
+      // Create base timeline item with common properties
+      const baseItem = {
+        id: parseInt(scene.id.replace(/\D/g, '')) || index + 1,
+        type: sceneType,
+        from,
+        durationInFrames: scene.durationInFrames,
+        row: 0,
+        sceneId: scene.id,
+        status: 'valid' as const,
+      };
+      
+      // Create specific item based on type
+      switch (sceneType) {
+        case TimelineItemType.TEXT:
+          return {
+            ...baseItem,
+            type: TimelineItemType.TEXT,
+            content: `Scene ${index + 1}: ${scene.type}`,
+          } as TextItem;
+          
+        case TimelineItemType.IMAGE:
+          return {
+            ...baseItem,
+            type: TimelineItemType.IMAGE,
+            src: '',
+          } as ImageItem;
+          
+        case TimelineItemType.CUSTOM:
+          return {
+            ...baseItem,
+            type: TimelineItemType.CUSTOM,
+            componentId: scene.id,
+            name: `Scene ${index + 1}: ${scene.type}`,
+            outputUrl: '',
+          } as CustomItem;
+          
+        case TimelineItemType.VIDEO:
+          return {
+            ...baseItem,
+            type: TimelineItemType.VIDEO,
+            src: '',
+          } as VideoItem;
+          
+        case TimelineItemType.AUDIO:
+          return {
+            ...baseItem,
+            type: TimelineItemType.AUDIO,
+            src: '',
+          } as AudioItem;
+          
+        default:
+          // Default to CUSTOM if no matching type
+          return {
+            ...baseItem,
+            type: TimelineItemType.CUSTOM,
+            componentId: scene.id,
+            name: `Scene ${index + 1}: ${scene.type}`,
+            outputUrl: '',
+          } as CustomItem;
+      }
+    });
+    
+    // Update timeline items with new ones from scene plan
+    setItems(newItems);
+    
+    // Update total duration
+    const newDuration = newItems.reduce((max, item) => Math.max(max, item.from + item.durationInFrames), 0);
+    setDurationInFrames(newDuration);
+    
+    // Select first item by default
+    if (newItems.length > 0 && newItems[0]) {
+      selectItem(newItems[0].id);
+    }
+    
+    console.log("Timeline updated from scene plan:", newItems);
+  }, [selectItem]);
+  
+  // Helper function to map scene types to timeline item types
+  const mapSceneTypeToTimelineType = useCallback((sceneType: string): TimelineItemType => {
+    switch (sceneType.toLowerCase()) {
+      case 'text':
+        return TimelineItemType.TEXT;
+      case 'image':
+        return TimelineItemType.IMAGE;
+      case 'custom':
+        return TimelineItemType.CUSTOM;
+      case 'background-color':
+      case 'color':
+        return TimelineItemType.CUSTOM;
+      case 'video':
+        return TimelineItemType.VIDEO;
+      case 'audio':
+        return TimelineItemType.AUDIO;
+      // Add more mappings as needed
+      default:
+        return TimelineItemType.CUSTOM;
+    }
+  }, []);
+  
   // Combine state and actions for context value
   const contextValue: TimelineContextValue = {
     // State
@@ -384,6 +507,9 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     // Hook callbacks
     handleWheelZoom,
     handleTimelineClick,
+    
+    // New method for scene plan integration
+    updateFromScenePlan,
   };
 
   return (

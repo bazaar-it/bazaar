@@ -13,7 +13,7 @@
 /* - Handles text deltas & tool calls                                 */
 /* - Single final database update for assistant message               */
 /* - Structured client events                                         */
-/* ------------------------------------------------------------------ */                                    
+/* ------------------------------------------------------------------ */
 
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -21,19 +21,20 @@ import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { db } from "~/server/db";
 import { projects, patches, messages, customComponentJobs, scenePlans } from "~/server/db/schema";
-import { eq, desc, and, lt } from "drizzle-orm";
+import { eq, desc, and, lt, count } from "drizzle-orm";
 import { openai } from "~/server/lib/openai";
 import { randomUUID } from "crypto";
 import { applyPatch, type Operation } from 'fast-json-patch';
 import { inputPropsSchema } from "~/types/input-props";
 import { type JsonPatch } from "~/types/json-patch";
 import { Subject } from "rxjs";
-import { processUserMessage } from "~/server/services/chatOrchestration.service";
+import { processUserMessage, handleClientReconnection } from "~/server/services/chatOrchestration.service";
 import { SYSTEM_PROMPT, MAX_CONTEXT_MESSAGES } from "~/server/constants/chat";
 import { type StreamEvent, StreamEventType } from "~/types/chat";
 import { generateComponent } from "~/server/services/componentGenerator.service";
 import { handleScenePlan } from "~/server/services/scenePlanner.service";
 import { getSceneDetails, analyzeSceneDescription } from "~/server/services/sceneAnalyzer.service";
+import { eventBufferService } from "~/server/services/eventBuffer.service";
 
 // Set to track active streams and prevent duplicates
 const activeStreamIds = new Set<string>();
@@ -73,7 +74,7 @@ export const chatRouter = createTRPCRouter({
     sendMessage: protectedProcedure
         .input(z.object({ projectId: z.string().uuid(), message: z.string().min(1) }))
         .mutation(async ({ ctx, input }) => {
-            console.warn("Using legacy sendMessage instead of streaming flow.");
+             console.warn("Using legacy sendMessage instead of streaming flow.");
             return await processUserMessageInProject(ctx, input.projectId, input.message);
         }),
 
@@ -138,19 +139,76 @@ export const chatRouter = createTRPCRouter({
         .input(z.object({
             assistantMessageId: z.string(), // The ID returned by initiateChat
             projectId: z.string().uuid(),
+            clientId: z.string().optional(), // Client ID for reconnection support
+            lastEventId: z.string().optional(), // Last event ID for reconnections
         }))
         .mutation(async ({ ctx, input }) => {
-            const { assistantMessageId, projectId } = input;
+            const { assistantMessageId, projectId, clientId, lastEventId } = input;
             const { session } = ctx;
+            
+            // Generate a unique client ID if not provided
+            const effectiveClientId = clientId || randomUUID();
 
-            // Check if this message is already being streamed
-            if (activeStreamIds.has(assistantMessageId)) {
-                console.log(`[Stream] Message ${assistantMessageId} already streaming, preventing duplicate`);
+            // Check if this message is already being streamed and client wants to reconnect
+            if (activeStreamIds.has(assistantMessageId) && clientId && lastEventId) {
+                console.log(`[Stream] Client ${clientId} attempting to reconnect to message ${assistantMessageId}`);
+                
                 return observable<StreamEvent>((emit) => {
-                    // Immediately send finalized event and complete
-                    emit.next({ type: "finalized", status: "success" });
-                    emit.complete();
-                    return () => {};
+                    // Create a new subject for this client
+                    const clientEmitter = new Subject<any>();
+                    
+                    // Subscribe to events from the client emitter and forward them
+                    const subscription = clientEmitter.subscribe(event => {
+                        // Forward the event directly
+                        emit.next(event);
+                        
+                        // Complete when done
+                        if (event.type === "finalized" || event.type === "error" || event.type === "done") {
+                            emit.complete();
+                        }
+                    });
+                    
+                    // Handle reconnection asynchronously
+                    handleClientReconnection(
+                        effectiveClientId,
+                        assistantMessageId,
+                        lastEventId,
+                        clientEmitter
+                    ).then((reconnected: boolean) => {
+                        if (!reconnected) {
+                            // Failed to reconnect, create an error event
+                            clientEmitter.next({
+                                type: StreamEventType.ERROR,
+                                error: "Reconnection failed, session may have expired",
+                                phase: 'reconnection',
+                                timestamp: Date.now()
+                            });
+                            clientEmitter.next({
+                                type: StreamEventType.DONE
+                            });
+                            clientEmitter.complete();
+                        }
+                    }).catch((error: unknown) => {
+                        console.error(`[Stream ${assistantMessageId}] Reconnection error:`, error);
+                        clientEmitter.next({
+                            type: StreamEventType.ERROR,
+                            error: "Error during reconnection",
+                            phase: 'reconnection',
+                            timestamp: Date.now()
+                        });
+                        clientEmitter.next({
+                            type: StreamEventType.DONE
+                        });
+                        clientEmitter.complete();
+                    });
+                    
+                    // Return teardown function
+                    return () => {
+                        console.log(`[Stream ${assistantMessageId}] Client ${clientId} disconnected during reconnection`);
+                        subscription.unsubscribe();
+                        // Mark client as disconnected in event buffer
+                        eventBufferService.markDisconnected(effectiveClientId);
+                    };
                 });
             }
             
@@ -184,6 +242,15 @@ export const chatRouter = createTRPCRouter({
                 console.log(`[Stream] Recent job found for project ${projectId}, may be related to this message`);
             }
             
+            // Check for a stored tool call state that might require resuming
+            const savedState = eventBufferService.getToolCallState(assistantMessageId);
+            const shouldResume = savedState && 
+                (savedState.status === 'executing' || savedState.status === 'accumulating');
+                
+            if (shouldResume) {
+                console.log(`[Stream ${assistantMessageId}] Found saved state with status: ${savedState.status}, will resume processing`);
+            }
+            
             // Mark message as being actively streamed
             activeStreamIds.add(assistantMessageId);
             
@@ -197,6 +264,9 @@ export const chatRouter = createTRPCRouter({
                 
                 // Subscribe to events from the processing stream and forward them
                 const subscription = eventEmitter.subscribe(event => {
+                    // We'll receive events with an eventId from the buffer
+                    const { eventId, ...eventData } = event;
+                    
                     switch (event.type) {
                         case StreamEventType.CHUNK:
                             emit.next({ type: "delta", content: event.content });
@@ -207,10 +277,10 @@ export const chatRouter = createTRPCRouter({
                         case StreamEventType.TOOL_RESULT:
                             emit.next({ 
                                 type: "tool_result", 
-                                name: event.name, 
+                                name: event.toolName, 
                                 success: event.success, 
                                 jobId: event.jobId, 
-                                finalContent: event.content 
+                                finalContent: event.result 
                             });
                             break;
                         case StreamEventType.CONTENT_COMPLETE:
@@ -237,12 +307,19 @@ export const chatRouter = createTRPCRouter({
                             });
                             emit.complete();
                             break;
+                        case StreamEventType.RECONNECTED:
+                            emit.next({
+                                type: "reconnected",
+                                missedEvents: event.missedEvents,
+                                lastEventId: event.lastEventId
+                            });
+                            break;
                     }
                 });
-                
+
                 const mainProcess = async () => {
                     try {
-                        console.log(`[Stream ${assistantMessageId}] Starting subscription.`);
+                        console.log(`[Stream ${assistantMessageId}] Starting subscription for client ${effectiveClientId}.`);
                         emit.next({ type: "status", status: "thinking" });
 
                         // --- 1. Fetch Context (Project & History) ---
@@ -278,16 +355,18 @@ export const chatRouter = createTRPCRouter({
 
                         // Process the user message
                         await processUserMessage(
-                            projectId,
+                            projectId, 
                             session.user.id,
                             lastUserMessage.id,
                             assistantMessageId,
                             lastUserMessage.content,
                             project.props,
                             openai,
-                            eventEmitter
+                            eventEmitter,
+                            effectiveClientId,  // Client ID for reconnection support
+                            shouldResume || undefined // Convert null to undefined
                         );
-                        
+
                     } catch (error: any) {
                         console.error(`[Stream ${assistantMessageId}] Error during stream processing:`, error);
                         eventEmitter.next({
@@ -320,11 +399,53 @@ export const chatRouter = createTRPCRouter({
                 
                 // Return teardown function
                 return () => {
-                    console.log(`[Stream ${assistantMessageId}] Teardown: Client disconnected`);
+                    console.log(`[Stream ${assistantMessageId}] Teardown: Client ${effectiveClientId} disconnected`);
                     subscription.unsubscribe();
-                    activeStreamIds.delete(assistantMessageId);
+                    
+                    // Mark client as disconnected in event buffer
+                    eventBufferService.markDisconnected(effectiveClientId);
+                    
+                    // Only remove from active streams if no clients are connected
+                    // This is necessary for reconnection support
+                    // We'll rely on the buffer cleanup mechanism to eventually remove it
+                    // activeStreamIds.delete(assistantMessageId);
                 };
             });
+        }),
+
+    // Add new procedure for client reconnection
+    reconnectToStream: protectedProcedure
+        .input(z.object({
+            assistantMessageId: z.string(),
+            projectId: z.string().uuid(),
+            clientId: z.string(),
+            lastEventId: z.string().optional()
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const { assistantMessageId, projectId, clientId, lastEventId } = input;
+            
+            // First ensure the user has access to this project
+            const project = await ctx.db.query.projects.findFirst({
+                where: and(
+                    eq(projects.id, projectId),
+                    eq(projects.userId, ctx.session.user.id)
+                ),
+            });
+            
+            if (!project) {
+                throw new TRPCError({
+                    code: "FORBIDDEN",
+                    message: "You don't have access to this project",
+                });
+            }
+            
+            // The actual reconnection will be handled by streamResponse
+            // This endpoint just validates the request first
+            return {
+                canReconnect: activeStreamIds.has(assistantMessageId),
+                assistantMessageId,
+                clientId
+            };
         }),
 
     // Add new procedure for getting scene planning reasoning
@@ -585,11 +706,26 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
             throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this project" });
         }
 
+        // Check if this is the first message in the project
+        const existingMessages = await ctx.db
+            .select({ count: count() })
+            .from(messages)
+            .where(eq(messages.projectId, projectId));
+        
+        const isFirstMessage = existingMessages[0]?.count === 0;
+
         // Insert user message
         const [userMessage] = await ctx.db
             .insert(messages)
             .values({ projectId, content: message, role: "user" })
             .returning();
+
+        // For first messages or messages that look like video descriptions,
+        // we want to force the tool choice to be planVideoScenes
+        const shouldForcePlanningTool = isFirstMessage || 
+            message.toLowerCase().includes("need a video") || 
+            message.toLowerCase().includes("create a video") || 
+            message.toLowerCase().includes("make a video");
 
         // Call OpenAI with tools for function calling
         const llmResp = await openai.chat.completions.create({
@@ -603,20 +739,50 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
                     type: "function",
                     function: {
                         name: "planVideoScenes",
-                        description: "Analyze user intent to plan multiple scenes with appropriate durations",
+                        description: "Analyze user intent to plan multiple scenes with appropriate durations. Use this for any request that describes a video the user wants to create, especially initial prompts from new projects.",
                         parameters: {
                             type: "object",
                             properties: {
+                                intent: {
+                                    type: "string",
+                                    description: "The high-level purpose or goal of the video"
+                                },
+                                reasoning: {
+                                    type: "string",
+                                    description: "Explanation of why these scenes were chosen"
+                                },
+                                fps: {
+                                    type: "number",
+                                    description: "Frames per second for the video, typically 30"
+                                },
                                 scenes: {
                                     type: "array",
-                                    description: "Detailed breakdown of each scene",
+                                    description: "Detailed breakdown of each scene with effects",
                                     items: {
-                                        type: "object"
+                                        type: "object",
+                                        properties: {
+                                            id: {
+                                                type: "string",
+                                                description: "Unique identifier for this scene"
+                                            },
+                                            description: {
+                                                type: "string",
+                                                description: "What should appear in this scene"
+                                            },
+                                            durationInSeconds: {
+                                                type: "number",
+                                                description: "How long this scene should last"
+                                            },
+                                            effectType: {
+                                                type: "string",
+                                                description: "Visual effect to use: text, image, background-color, custom, etc."
+                                            }
+                                        },
+                                        required: ["description", "durationInSeconds", "effectType"]
                                     }
-                                },
-                                // Other parameters as needed
+                                }
                             },
-                            required: ["scenes"]
+                            required: ["scenes", "intent"]
                         }
                     }
                 },
@@ -638,7 +804,10 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
                     },
                 },
             ],
-            tool_choice: "auto",
+            // Force scene planning tool for first-time messages or video requests
+            tool_choice: shouldForcePlanningTool 
+                ? { type: "function", function: { name: "planVideoScenes" } } 
+                : "auto",
         });
 
         const msgResp = llmResp.choices[0]?.message;
@@ -716,30 +885,30 @@ Your component is being compiled and will be available soon.`;
                     ).newDocument;
                     
                     // Validate new props
-                    const validated = inputPropsSchema.safeParse(nextProps);
-                    if (!validated.success) {
-                        throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
-                    }
+                const validated = inputPropsSchema.safeParse(nextProps);
+                if (!validated.success) {
+                    throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
+                }
+                
+                // Save changes
+                await ctx.db.update(projects)
+                    .set({ props: validated.data, updatedAt: new Date() })
+                    .where(eq(projects.id, projectId));
                     
-                    // Save changes
-                    await ctx.db.update(projects)
-                        .set({ props: validated.data, updatedAt: new Date() })
-                        .where(eq(projects.id, projectId));
-                        
-                    await ctx.db.insert(patches).values({ 
-                        projectId, 
+                await ctx.db.insert(patches).values({ 
+                    projectId, 
                         patch: result.patches as unknown as JsonPatch 
-                    });
+                });
                 }
                 
                 // Store assistant message
-                await ctx.db.insert(messages).values({
-                    projectId,
+                await ctx.db.insert(messages).values({ 
+                    projectId, 
                     content: result.message,
                     role: "assistant",
                 });
                 
-                return {
+                return { 
                     userMessageId: userMessage.id,
                     patch: result.patches as unknown as JsonPatch,
                 };

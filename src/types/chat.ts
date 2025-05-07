@@ -6,7 +6,7 @@ import { messages } from "~/server/db/schema";
 /**
  * Represent the status of a scene during generation
  */
-export type SceneStatus = "pending" | "building" | "success" | "error";
+export type SceneStatus = "pending" | "building" | "success" | "error" | "tool_calling";
 
 /**
  * The structure of a scene result during planning
@@ -39,6 +39,68 @@ export interface ScenePlanResponse {
 }
 
 /**
+ * For accumulating tool call fragments across stream chunks
+ */
+export interface ToolCallAccumulator {
+  id?: string;
+  index: number;
+  type: string;
+  function: {
+    name: string;
+    arguments: string;
+  };
+  complete: boolean;
+}
+
+/**
+ * Enhanced message updates for chat panel
+ */
+export interface MessageUpdates {
+  status?: "pending" | "error" | "success" | "building" | "tool_calling";
+  kind?: "text" | "error" | "status" | "tool_result";
+  content?: string;
+  delta?: string;
+  jobId?: string | null;
+  toolName?: string;
+  toolStartTime?: number;
+  executionTimeSeconds?: number | null;
+  eventId?: string;
+}
+
+/**
+ * Records the state of a tool call to support reconnections
+ */
+export interface ToolCallState {
+  messageId: string;
+  timestamp: number;
+  accumulatedCalls: Record<number, ToolCallAccumulator>;
+  streamedContent: string;
+  executedCalls: string[]; // IDs of already executed tool calls
+  status: 'accumulating' | 'executing' | 'completed' | 'error';
+  error?: string;
+}
+
+/**
+ * Represents a buffered event for possible replay
+ */
+export interface BufferedEvent {
+  id: string;
+  messageId: string;
+  timestamp: number;
+  event: StreamEvent;
+  processed: boolean;
+}
+
+/**
+ * Configuration for the event buffer
+ */
+export interface EventBufferConfig {
+  maxBufferSize: number;
+  bufferExpiryMs: number;
+  reconnectWindowMs: number;
+}
+
+/**
  * Status update event types for streaming
  */
 export enum StreamEventType {
@@ -49,6 +111,7 @@ export enum StreamEventType {
   TOOL_RESULT = "toolResult",
   ERROR = "error",
   DONE = "done",
+  RECONNECTED = "reconnected", // New event type for reconnection
 }
 
 /**
@@ -56,14 +119,27 @@ export enum StreamEventType {
  */
 export type StreamEvent =
   | { type: "status"; status: "thinking" | "tool_calling" | "building" }
-  | { type: "delta"; content: string }
-  | { type: "tool_start"; name: string }
-  | { type: "tool_result"; name: string; success: boolean; jobId?: string | null; finalContent?: string }
-  | { type: "complete"; finalContent: string }
-  | { type: "error"; error: string; finalContent?: string }
-  | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null }
-  | { type: "scenePlan"; plan: any; status: "planning_complete" }
-  | { type: "sceneStatus"; sceneId: string; sceneIndex: number; status: "pending" | "building" | "success" | "error"; jobId?: string; error?: string };
+  | { type: "delta"; content: string; eventId?: string }
+  | { type: "tool_start"; name: string; eventId?: string }
+  | { type: "tool_result"; name: string; success: boolean; jobId?: string | null; finalContent?: string; eventId?: string }
+  | { type: "complete"; finalContent: string; eventId?: string }
+  | { type: "error"; error: string; finalContent?: string; eventId?: string }
+  | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null; eventId?: string }
+  | { type: "scenePlan"; plan: any; status: "planning_complete"; eventId?: string }
+  | { type: "sceneStatus"; sceneId: string; sceneIndex: number; status: "pending" | "building" | "success" | "error"; jobId?: string; error?: string; eventId?: string }
+  | { type: "reconnected"; lastEventId?: string; missedEvents: number; eventId?: string };
+
+/**
+ * Connection metadata for a streaming client
+ */
+export interface ClientConnection {
+  clientId: string;
+  messageId: string;
+  lastEventId?: string;
+  lastEventTime: number;
+  isActive: boolean;
+  disconnectedAt?: number;
+}
 
 /**
  * Scene analysis for component generation

@@ -8,15 +8,18 @@ import type { InputProps } from "../types/input-props";
 import { api } from "~/trpc/react";
 
 // Define chat message types
-export type ChatMessage = {
+export interface ChatMessage {
   id: string;
   message: string;
   isUser: boolean;
   timestamp: number;
-  status?: "pending" | "success" | "error" | "building" | "thinking" | "tool_calling";
-  kind?: "text" | "tool_result" | "error" | "status";
+  status?: "pending" | "error" | "success" | "building" | "tool_calling";
+  kind?: "text" | "error" | "status" | "tool_result";
   jobId?: string | null;
-};
+  toolName?: string;
+  toolStartTime?: number;
+  executionTimeSeconds?: number | null;
+}
 
 // Define message update parameters for streaming support
 export interface MessageUpdates {
@@ -25,6 +28,9 @@ export interface MessageUpdates {
   status?: ChatMessage['status'];
   kind?: ChatMessage['kind'];
   jobId?: string | null;
+  toolName?: string;
+  toolStartTime?: number;
+  executionTimeSeconds?: number | null;
 }
 
 // Define database message type to match what comes from the API

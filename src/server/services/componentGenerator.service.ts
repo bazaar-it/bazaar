@@ -1,7 +1,7 @@
 import { customComponentJobs, db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
-import { generateComponentCode } from "~/server/workers/generateComponentCode";
+import { processComponentJob } from "~/server/workers/generateComponentCode";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 
 // Type for the database instance
@@ -136,7 +136,7 @@ export const ${componentName}: React.FC = () => {
 
     // Start generating the code (don't await - this happens asynchronously)
     // This will update the job status when complete
-    generateComponentCode(jobId)
+    processComponentJob(jobId)
         .catch(error => {
             console.error(`Error generating component code for job ${jobId}:`, error);
         });

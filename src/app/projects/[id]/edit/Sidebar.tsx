@@ -172,7 +172,7 @@ function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean,
         if (response.patch) {
           applyVideoPatch(projectId, response.patch);
         }
-        
+    
         // Show success message
         alert(`Added "${job.effect}" to your timeline and preview!`);
       },
@@ -401,21 +401,21 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
               onClick={() => setCollapsed(prev => !prev)}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <ChevronRightIcon className="h-5 w-5" /> : <ChevronLeftIcon className="h-5 w-5" />}
-            </Button>
+        >
+          {collapsed ? <ChevronRightIcon className="h-5 w-5" /> : <ChevronLeftIcon className="h-5 w-5" />}
+        </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
             {collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           </TooltipContent>
         </Tooltip>
       </div>
-      
+
       {/* New Project Button */}
       <div className={collapsed ? 'flex justify-center items-center p-2' : 'px-3 py-2'}>
         <Tooltip>
@@ -489,7 +489,7 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
           </TooltipContent>
         </Tooltip>
       </div>
-      
+
       {/* Projects Section Header */}
       <div 
         className={`flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-accent/50 rounded ${collapsed ? 'justify-center px-0' : ''}`}
@@ -537,8 +537,8 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
       {/* Custom Components Section */}
       <div className="flex-1 overflow-auto border-t">
         <div className="px-1 py-2">
-          <CustomComponentsSidebar collapsed={collapsed} projectId={currentProjectId} />
-        </div>
+        <CustomComponentsSidebar collapsed={collapsed} projectId={currentProjectId} />
+      </div>
       </div>
     </aside>
   );

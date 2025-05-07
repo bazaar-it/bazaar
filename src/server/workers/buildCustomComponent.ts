@@ -487,7 +487,7 @@ function wrapTsxWithGlobals(tsxCode: string): string {
 // Access React from global scope - DO NOT DECLARE React AGAIN INSIDE COMPONENT
 const React = window.React || globalThis.React;
 
-// Access Remotion APIs safely without destructuring 
+// Access Remotion APIs safely without destructuring
 const AbsoluteFill = window.Remotion?.AbsoluteFill;
 const useCurrentFrame = window.Remotion?.useCurrentFrame;
 const useVideoConfig = window.Remotion?.useVideoConfig;

@@ -235,11 +235,11 @@ async function handleScenePlanInternal(
     // Generate custom component if needed
     if (scene.effectType === "custom") {
       try {
-        // Generate a custom component with explicit duration
+      // Generate a custom component with explicit duration
         const { jobId, effect, componentMetadata } = await handleComponentGenerationInternal(
-          projectId,
-          scene.description,
-          assistantMessageId,
+        projectId,
+        scene.description,
+        assistantMessageId,
           scene.durationInSeconds, // Pass the planned duration
           scenesPlan.fps,          // Pass fps from plan
           sceneId                  // Pass the scene ID from planner
@@ -271,8 +271,8 @@ async function handleScenePlanInternal(
             status: "building"
           };
         }
-        
-        // ... rest of code to add component
+      
+      // ... rest of code to add component
         
         return {
           sceneId,

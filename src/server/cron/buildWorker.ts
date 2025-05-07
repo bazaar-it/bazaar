@@ -51,7 +51,7 @@ export function startBuildWorker() {
     try {
       // Check if there are any pending jobs before processing
       const pendingJobCount = await checkForPendingJobs();
-      
+  
       // If we got a successful response (even with 0 jobs), reset error counter
       consecutiveErrors = 0;
     } catch (error) {

@@ -48,11 +48,11 @@ export function initializeServer() {
  */
 function cleanupServer() {
   console.log('🧹 Cleaning up server resources...');
-  if (workerCleanup) {
-    workerCleanup();
-    workerCleanup = null;
-    isInitialized = false;
-  }
+    if (workerCleanup) {
+      workerCleanup();
+      workerCleanup = null;
+      isInitialized = false;
+    }
 }
 
 // Export the cleanup function for manual use if needed

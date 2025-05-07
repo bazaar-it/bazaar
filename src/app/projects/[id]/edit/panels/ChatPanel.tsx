@@ -6,7 +6,7 @@ import { api } from "~/trpc/react";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
-import { Loader2Icon, SendHorizontalIcon, AlertTriangleIcon } from "lucide-react";
+import { Loader2Icon, SendHorizontalIcon, AlertTriangleIcon, CheckCircleIcon, XCircleIcon } from "lucide-react";
 import { useVideoState, type DbMessage, type ChatMessage, type MessageUpdates } from "~/stores/videoState";
 import { type StreamEvent } from "~/types/chat";
 import { skipToken } from "@tanstack/react-query";
@@ -31,6 +31,16 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
   // Get the currently selected scene from context
   const { selectedSceneId } = useSelectedScene();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Get or create a persistent client ID for reconnection support
+  const clientIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      clientIdRef.current = localStorage.getItem('chatClientId') || 
+                     crypto.randomUUID();
+      localStorage.setItem('chatClientId', clientIdRef.current);
+    }
+  }, []);
   
   // Fetch messages from database using tRPC
   const { 
@@ -103,8 +113,22 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
               console.log(`[ChatPanel] Component generation detected in stream, jobId: ${event.jobId}`);
             }
             
+            // Check if this is a reconnection event
+            if (event.type === "reconnected") {
+              console.log(`[ChatPanel] Reconnected to stream, missed ${event.missedEvents} events`);
+            }
+            
             // Process the event
             handleStreamEvents(event);
+            
+            // Store the last event ID for reconnection support
+            if (streamingMessageId && event.type !== "reconnected") {
+              // Using an event-specific ID if available
+              const eventId = 'eventId' in event && typeof event.eventId === 'string' 
+                ? event.eventId 
+                : Date.now().toString();
+              localStorage.setItem(`lastEvent_${streamingMessageId}`, eventId);
+            }
             
             // If we've already processed a component generation event, we can stop streaming
             if (componentGenerated) {
@@ -139,6 +163,63 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
   // Track processed messages to avoid duplicate streams
   const [processedMessageIds] = useState<Set<string>>(new Set());
+  
+  // Check for reconnection on page load or refresh
+  useEffect(() => {
+    // Function to check for possible reconnection
+    const checkForReconnection = async () => {
+      // Check if there's a message ID in localStorage that was being streamed
+      const pendingMessageId = localStorage.getItem('pendingStreamMessageId');
+      if (pendingMessageId && clientIdRef.current) {
+        console.log(`[ChatPanel] Found pending stream for message ${pendingMessageId}, attempting reconnection`);
+        
+        // Get the last event ID if available
+        const lastEventId = localStorage.getItem(`lastEvent_${pendingMessageId}`);
+        
+        let canReconnect = false;
+        try {
+          // Type assertion to handle the API call safely
+          const reconnectApi = api.chat.reconnectToStream;
+          // Check if the API is available and has the mutate method
+          if (reconnectApi && typeof (reconnectApi as any).mutate === 'function') {
+            const reconnectResult = await (reconnectApi as any).mutate({
+              assistantMessageId: pendingMessageId,
+              projectId,
+              clientId: clientIdRef.current,
+              lastEventId
+            });
+            canReconnect = reconnectResult.canReconnect;
+          } else {
+            // API not available, clean up
+            localStorage.removeItem('pendingStreamMessageId');
+            localStorage.removeItem(`lastEvent_${pendingMessageId}`);
+            return;
+          }
+        } catch (error) {
+          console.error(`[ChatPanel] Error checking reconnection:`, error);
+          // Clean up if reconnection fails
+          localStorage.removeItem('pendingStreamMessageId');
+          localStorage.removeItem(`lastEvent_${pendingMessageId}`);
+          return;
+        }
+
+        if (canReconnect) {
+          console.log(`[ChatPanel] Reconnection possible, resuming stream`);
+          setStreamingMessageId(pendingMessageId);
+          setIsStreaming(true);
+        } else {
+          console.log(`[ChatPanel] Reconnection not possible, cleaning up`);
+          localStorage.removeItem('pendingStreamMessageId');
+          localStorage.removeItem(`lastEvent_${pendingMessageId}`);
+        }
+      }
+    };
+    
+    // Only run this effect once on mount
+    if (projectId) {
+      void checkForReconnection();
+    }
+  }, [projectId]);
   
   // Trigger stream subscription when streamingMessageId changes
   useEffect(() => {
@@ -185,15 +266,20 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     // Mark as being processed to prevent duplicate streams
     processedMessageIds.add(streamingMessageId);
     
+    // Store the streaming message ID for reconnection
+    localStorage.setItem('pendingStreamMessageId', streamingMessageId);
+    
     console.log(`Starting stream subscription for message ID: ${streamingMessageId}`);
     streamResponse.mutate({
       assistantMessageId: streamingMessageId,
-      projectId
+      projectId,
+      clientId: clientIdRef.current || undefined,
+      lastEventId: localStorage.getItem(`lastEvent_${streamingMessageId}`) || undefined
     });
     
     // This effect doesn't need to depend on dbMessages directly -
     // it only needs to run when streamingMessageId changes
-  }, [streamingMessageId, projectId, isStreaming, streamResponse, processedMessageIds]);
+  }, [streamingMessageId, projectId, isStreaming, streamResponse, processedMessageIds, dbMessages]);
   
   // Reset streaming state on component mount only
   useEffect(() => {
@@ -252,8 +338,9 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       switch (event.type) {
         case "status":
           // Update status (thinking, tool_calling, building)
+          const newStatus = event.status === "thinking" ? "pending" : event.status;
           updateMessage(projectId, activeMessageId, {
-            status: event.status
+            status: newStatus
           });
           break;
           
@@ -265,14 +352,25 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           break;
           
         case "tool_start":
-          // Tool execution started
+          // Tool execution started - with timestamp for duration tracking
           updateMessage(projectId, activeMessageId, {
             status: "tool_calling",
-            content: `Using tool: ${event.name}...`
+            content: `Using tool: ${event.name}...`,
+            toolName: event.name,
+            toolStartTime: Date.now() // Add timestamp for tracking execution time
           });
           break;
           
         case "tool_result":
+          // Get the message to check for toolStartTime
+          const message = optimisticChatHistory.find(m => m.id === activeMessageId);
+          const toolStartTime = message?.toolStartTime;
+          
+          // Calculate execution time if we have a start time
+          const executionTime = toolStartTime
+            ? Math.round((Date.now() - toolStartTime) / 100) / 10 // Convert to seconds with 1 decimal
+            : null;
+            
           // Tool executed with result
           if (event.finalContent) {
             // Important: If this is a component generation (has jobId), update message with all data
@@ -281,14 +379,16 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
               status: event.success ? "success" : "error",
               kind: "tool_result",
               content: event.finalContent,
-              jobId: event.jobId || null
+              jobId: event.jobId || null,
+              executionTimeSeconds: executionTime // Store the execution time
             });
             
             // Immediately log the completed tool result for debugging
             console.log(`[ChatPanel] Tool result received: ${event.success ? 'success' : 'error'}`, {
               messageId: activeMessageId,
               hasJobId: !!event.jobId,
-              jobId: event.jobId
+              jobId: event.jobId,
+              executionTime: executionTime
             });
           }
           
@@ -297,6 +397,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
             console.log(`[ChatPanel] Component generation complete with jobId: ${event.jobId}. Stopping stream.`);
             setIsStreaming(false);
             setStreamingMessageId(null); // Stop subscription
+            
+            // Clean up localStorage to prevent reconnection attempts
+            localStorage.removeItem('pendingStreamMessageId');
+            localStorage.removeItem(`lastEvent_${activeMessageId}`);
             
             // Force a refetch to sync with backend
             void refetchMessages();
@@ -314,6 +418,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           // Always stop streaming when complete
           setIsStreaming(false);
           setStreamingMessageId(null);
+          
+          // Clean up localStorage to prevent reconnection attempts
+          localStorage.removeItem('pendingStreamMessageId');
+          localStorage.removeItem(`lastEvent_${activeMessageId}`);
           break;
           
         case "error":
@@ -327,6 +435,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           // Always stop streaming on error
           setIsStreaming(false);
           setStreamingMessageId(null);
+          
+          // Clean up localStorage to prevent reconnection attempts
+          localStorage.removeItem('pendingStreamMessageId');
+          localStorage.removeItem(`lastEvent_${activeMessageId}`);
           break;
           
         case "finalized":
@@ -334,8 +446,19 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
           console.log(`[ChatPanel] Stream finalized with status: ${event.status}, jobId: ${event.jobId || 'none'}`);
           setIsStreaming(false);
           setStreamingMessageId(null);  // Stop subscription
+          
+          // Clean up localStorage to prevent reconnection attempts
+          localStorage.removeItem('pendingStreamMessageId');
+          localStorage.removeItem(`lastEvent_${activeMessageId}`);
+          
           // Refetch messages to ensure we have the latest state
           void refetchMessages();
+          break;
+          
+        case "reconnected":
+          // Successfully reconnected to the stream
+          console.log(`[ChatPanel] Successfully reconnected to stream. Missed ${event.missedEvents} events.`);
+          // No need to update the UI here, the missed events will be replayed
           break;
       }
       
@@ -346,6 +469,12 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       // Ensure we clean up streaming state even on error
       setIsStreaming(false);
       setStreamingMessageId(null);
+      
+      // Clean up localStorage to prevent reconnection attempts
+      if (streamingMessageId) {
+        localStorage.removeItem('pendingStreamMessageId');
+        localStorage.removeItem(`lastEvent_${streamingMessageId}`);
+      }
     }
   };
 
@@ -402,6 +531,40 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       </div>
     </div>
   );
+  
+  // New component for tool messages with status indicator
+  const ToolMessage = ({ message }: { message: ChatMessage }) => {
+    // Only render for assistant messages that are tool-related
+    if (message.isUser || !message.status) return null;
+    
+    // Get the appropriate status icon/indicator
+    const getStatusIndicator = () => {
+      if (!message.status) return null;
+      
+      switch (message.status) {
+        case "tool_calling":
+          return <Loader2Icon className="h-4 w-4 animate-spin text-primary mr-2" />;
+        case "building":
+          return <Loader2Icon className="h-4 w-4 animate-spin text-amber-500 mr-2" />;
+        case "success":
+          return <CheckCircleIcon className="h-4 w-4 text-green-500 mr-2" />;
+        case "error":
+          return <XCircleIcon className="h-4 w-4 text-red-500 mr-2" />;
+        default:
+          return null;
+      }
+    };
+    
+    return (
+      <div className="flex items-center text-xs text-muted-foreground mt-1">
+        {getStatusIndicator()}
+        <span>{message.toolName && `Tool: ${message.toolName}`}</span>
+        {message.executionTimeSeconds && (
+          <span className="ml-2">Completed in {message.executionTimeSeconds}s</span>
+        )}
+      </div>
+    );
+  };
 
   const hasDbMessages = dbMessages && dbMessages.length > 0;
   const hasOptimisticMessages = optimisticChatHistory && optimisticChatHistory.length > 0;
@@ -450,6 +613,17 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(typeof msg.createdAt === 'number' ? msg.createdAt : new Date(msg.createdAt).getTime())}
                     </p>
+                    
+                    {/* Show tool status for assistant messages */}
+                    {msg.role === 'assistant' && msg.status && (
+                      <div className="flex items-center text-xs text-muted-foreground mt-1">
+                        {(msg.status as string) === 'tool_calling' && <Loader2Icon className="h-4 w-4 animate-spin text-primary mr-2" />}
+                        {msg.status === 'building' && <Loader2Icon className="h-4 w-4 animate-spin text-amber-500 mr-2" />}
+                        {msg.status === 'success' && <CheckCircleIcon className="h-4 w-4 text-green-500 mr-2" />}
+                        {msg.status === 'error' && <XCircleIcon className="h-4 w-4 text-red-500 mr-2" />}
+                        <span>{msg.kind === 'tool_result' ? 'Tool execution' : msg.status}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -475,6 +649,9 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(chat.timestamp)}
                     </p>
+                    
+                    {/* Show tool message status/progress */}
+                    {!chat.isUser && <ToolMessage message={chat} />}
                   </div>
                 </div>
               ))
@@ -496,6 +673,9 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(chat.timestamp)}
                     </p>
+                    
+                    {/* Show tool message status/progress */}
+                    {!chat.isUser && <ToolMessage message={chat} />}
                   </div>
                 </div>
               ))
