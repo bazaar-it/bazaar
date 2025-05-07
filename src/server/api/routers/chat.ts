@@ -34,6 +34,11 @@ import { type StreamEvent, StreamEventType } from "~/types/chat";
 import { generateComponent } from "~/server/services/componentGenerator.service";
 import { handleScenePlan } from "~/server/services/scenePlanner.service";
 import { getSceneDetails, analyzeSceneDescription } from "~/server/services/sceneAnalyzer.service";
+import { 
+    generateAnimationDesignBrief,
+    type AnimationBriefGenerationParams,
+} from "~/server/services/animationDesigner.service";
+import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 import { eventBufferService } from "~/server/services/eventBuffer.service";
 
 // Set to track active streams and prevent duplicates
@@ -558,14 +563,37 @@ export const chatRouter = createTRPCRouter({
                 if (!systemMessage || systemMessage.length === 0 || !systemMessage[0]) {
                     throw new Error("Failed to create system message for regeneration");
                 }
+
+                // --- Generate Animation Design Brief --- 
+                const videoWidth = projectProps.width || 1920; // Use projectProps or default
+                const videoHeight = projectProps.height || 1080; // Use projectProps or default
+                const currentFps = scene.fps || 30;
+                const durationInFrames = Math.round(scene.durationInSeconds * currentFps);
+
+                const animationBriefParams: AnimationBriefGenerationParams = {
+                    projectId,
+                    sceneId, // sceneId from the tRPC input
+                    scenePurpose: scene.description,
+                    sceneElementsDescription: scene.description, // Could be more detailed if available
+                    desiredDurationInFrames: durationInFrames,
+                    dimensions: { width: videoWidth, height: videoHeight }, // Corrected: fps is not part of dimensions here
+                };
+
+                console.log(`Regenerating component for scene ${sceneId}: Generating new Animation Design Brief...`);
+                const { brief, briefId } = await generateAnimationDesignBrief(animationBriefParams);
+                console.log(`Regenerating component for scene ${sceneId}: New Animation Design Brief ID: ${briefId}`);
+                // --- End Animation Design Brief --- 
                 
-                // Generate a new component
+                // Generate a new component using the brief
                 const result = await generateComponent(
                     projectId,
-                    scene.description,
+                    brief, // Pass the generated brief object
                     systemMessage[0].id,
-                    scene.durationInSeconds,
-                    scene.fps || 30
+                    scene.durationInSeconds, // Still useful for context, though brief has duration
+                    currentFps,            // Still useful for context, though brief has fps
+                    sceneId,               // Pass original sceneId for linking if needed by generateComponent
+                    userId,                // Pass userId if available from ctx
+                    briefId                // Pass the new briefId
                 );
                 
                 // Create patch operation to update the component
@@ -824,15 +852,38 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
                 const args = JSON.parse(toolCall.function?.arguments || "{}");
                 const { effectDescription } = args;
                 
-                // Use the new service to generate component
+                // --- Generate Animation Design Brief for new component --- 
+                const placeholderSceneId = randomUUID();
+                const videoWidth = 1920; // Default width
+                const videoHeight = 1080; // Default height
+                const defaultFps = 30;
+                const defaultDurationSeconds = 6;
+                const durationInFrames = Math.round(defaultDurationSeconds * defaultFps);
+
+                const animationBriefParams: AnimationBriefGenerationParams = {
+                    projectId,
+                    sceneId: placeholderSceneId,
+                    scenePurpose: effectDescription,
+                    sceneElementsDescription: effectDescription,
+                    desiredDurationInFrames: durationInFrames,
+                    dimensions: { width: videoWidth, height: videoHeight }, 
+                };
+                
+                console.log(`New component request: Generating Animation Design Brief for placeholder scene ${placeholderSceneId}...`);
+                const { brief, briefId } = await generateAnimationDesignBrief(animationBriefParams);
+                console.log(`New component request: Animation Design Brief ID ${briefId} generated for placeholder scene ${placeholderSceneId}`);
+                // --- End Animation Design Brief --- 
+
+                // Use the new service to generate component with the brief
                 const result = await generateComponent(
                     projectId,
-                    effectDescription,
-                    userMessage.id,
-                    6, // Default duration
-                    30, // Default FPS
-                    undefined, // No scene ID
-                    project.userId // User ID
+                    brief, // Pass the generated brief object
+                    userMessage.id, // systemMessageId equivalent
+                    defaultDurationSeconds, 
+                    defaultFps, 
+                    placeholderSceneId, // Pass the placeholder sceneId
+                    project.userId, // User ID
+                    briefId // Pass the new briefId
                 );
                 
                 // Assistant response

@@ -1,14 +1,22 @@
-// /src/server/api/services/animationDesigner.service.ts
+// src/server/services/animationDesigner.service.ts
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema'; 
 import {
   animationDesignBriefSchema,
   type AnimationDesignBrief,
-} from '~/lib/schemas/animationDesignBrief.schema'; // Adjusted path
-import { env } from '~/env'; // Adjusted path assuming env.ts is at src/env.ts
+} from '~/lib/schemas/animationDesignBrief.schema'; 
+import { env } from '~/env'; 
 import { db } from '~/server/db';
 import { animationDesignBriefs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
+
+// Generate JSON Schema for the AnimationDesignBrief once at module level
+const toolParametersJsonSchema = zodToJsonSchema(animationDesignBriefSchema, "AnimationDesignBriefToolParams");
+
+if (!toolParametersJsonSchema) {
+  throw new Error('Could not generate JSON schema for AnimationDesignBriefParams. Check schema definition.');
+}
 
 // Initialize OpenAI client
 // Ensure OPENAI_API_KEY is set in your environment variables
@@ -16,25 +24,25 @@ const openai = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
 });
 
-const ANIMATION_BRIEF_TOOL_NAME = 'generate_animation_design_brief';
+const ANIMATION_BRIEF_TOOL_NAME = 'create_animation_design_brief';
 
 /**
  * Describes the input parameters for generating an Animation Design Brief.
  */
 export interface AnimationBriefGenerationParams {
-  projectId: string; // Added projectId for database storage
+  projectId: string; 
   sceneId: string;
-  scenePurpose: string; // e.g., "Introduce Product X and its key benefit"
-  sceneElementsDescription: string; // e.g., "A title text 'Product X', a subtitle 'Solves problem Y', an image of the product, and a small company logo."
+  scenePurpose: string; 
+  sceneElementsDescription: string; 
   desiredDurationInFrames: number;
-  dimensions: { // Added dimensions as it's part of the brief and LLM needs it
+  dimensions: { 
       width: number;
       height: number;
   };
-  currentVideoContext?: string; // Optional: Broader context of the video, e.g., existing scenes, overall tone
-  targetAudience?: string; // Optional: Who is this video for?
-  brandGuidelines?: string; // Optional: Specific brand colors, fonts, or styles to adhere to
-  componentJobId?: string; // Optional: ID of the related component job, if known
+  currentVideoContext?: string; 
+  targetAudience?: string; 
+  brandGuidelines?: string; 
+  componentJobId?: string; 
 }
 
 /**
@@ -161,7 +169,7 @@ export async function generateAnimationDesignBrief(
 
   const userPrompt = `Generate the Animation Design Brief for the scene described above. Ensure the output is a single JSON object that perfectly matches the tool's schema.`;
 
-  const llmModel = 'gpt-4-turbo-preview'; // Store which model we used for the database
+  const llmModel = 'gpt-4-turbo-preview'; 
 
   try {
     console.log(`Requesting Animation Design Brief from LLM for sceneId: ${sceneId}...`);
@@ -170,7 +178,7 @@ export async function generateAnimationDesignBrief(
     const result = await db.insert(animationDesignBriefs).values({
       projectId,
       sceneId,
-      designBrief: emptyBrief, // Use our type-safe empty brief
+      designBrief: emptyBrief, 
       llmModel,
       status: 'pending',
       componentJobId,
@@ -182,56 +190,6 @@ export async function generateAnimationDesignBrief(
     
     const pendingRecordId = result[0].id;
     console.log(`Created pending Animation Design Brief record with ID: ${pendingRecordId}`);
-
-    // Prepare the schema for OpenAI's function calling
-    // Convert our Zod schema to a JSON Schema for OpenAI
-    const schemaAsJson = {
-      type: 'object',
-      properties: {
-        briefVersion: { type: 'string', default: '1.0.0', description: 'Version of the Animation Design Brief schema used' },
-        sceneId: { type: 'string', format: 'uuid', description: 'Unique identifier for the scene this brief describes' },
-        sceneName: { type: 'string', description: 'User-friendly name for the scene (e.g., "Introduction Sequence")' },
-        scenePurpose: { type: 'string', description: 'The main goal or message of this scene (e.g., "Introduce Product X", "Highlight Feature Y")' },
-        overallStyle: { type: 'string', description: 'Overall artistic style and mood (e.g., "energetic and vibrant", "minimalist and clean", "cinematic and dramatic")' },
-        durationInFrames: { type: 'integer', minimum: 1, description: 'Total duration of the scene in frames' },
-        dimensions: { 
-          type: 'object', 
-          properties: {
-            width: { type: 'integer', minimum: 1, description: 'Canvas width in pixels' },
-            height: { type: 'integer', minimum: 1, description: 'Canvas height in pixels' }
-          },
-          required: ['width', 'height'],
-          description: 'Dimensions of the scene canvas'
-        },
-        colorPalette: { 
-          type: 'object',
-          properties: {
-            primary: { type: 'string', description: 'Primary color (hex, rgba, etc.)' },
-            secondary: { type: 'string', description: 'Secondary color' },
-            accent: { type: 'string', description: 'Accent color' },
-            background: { type: 'string', description: 'Background color for the scene/canvas' },
-            textPrimary: { type: 'string', description: 'Primary text color' },
-            textSecondary: { type: 'string', description: 'Secondary text color' },
-            customColors: { type: 'object', additionalProperties: { type: 'string' }, description: 'Record of additional custom named colors' }
-          },
-          required: ['background'],
-          description: 'Defines the color palette for the scene'
-        },
-        elements: {
-          type: 'array',
-          items: {
-            type: 'object',
-            description: 'Defines a visual or auditory element within the scene and its animations'
-            // Full schema details would be expanded here in a real implementation
-          },
-          minItems: 1,
-          description: 'Array of elements that make up the scene'
-        },
-        // Other properties would be fully defined here for a complete implementation
-      },
-      required: ['briefVersion', 'sceneId', 'scenePurpose', 'overallStyle', 'durationInFrames', 'dimensions', 'colorPalette', 'elements'],
-      description: 'A comprehensive brief detailing the design and animation for a single Remotion scene'
-    };
 
     const response = await openai.chat.completions.create({
       model: llmModel,
@@ -245,7 +203,7 @@ export async function generateAnimationDesignBrief(
           function: {
             name: ANIMATION_BRIEF_TOOL_NAME,
             description: 'Generates a detailed animation design brief for a video scene, adhering to a specific JSON schema.',
-            parameters: schemaAsJson,
+            parameters: toolParametersJsonSchema, 
           },
         },
       ],
@@ -253,8 +211,8 @@ export async function generateAnimationDesignBrief(
         type: 'function',
         function: { name: ANIMATION_BRIEF_TOOL_NAME },
       },
-      temperature: 0.5, // Slightly lower temperature for more predictable schema adherence
-      response_format: { type: "json_object" }, // Request JSON output if model supports it explicitly
+      temperature: 0.5, 
+      response_format: { type: "json_object" }, 
     });
 
     const toolCalls = response.choices[0]?.message?.tool_calls;
@@ -378,15 +336,15 @@ export async function generateAnimationDesignBrief(
   }
 }
 
-// Example usage (for testing purposes - remove or adapt for actual use)
 /*
+// Example usage (for testing purposes - remove or adapt for actual use)
 async function testGenerateBrief() {
   try {
     const exampleParams: AnimationBriefGenerationParams = {
-      sceneId: 'c272d8db-b86a-4f7a-9e97-7097e9a175b5', // Valid UUID
+      sceneId: 'c272d8db-b86a-4f7a-9e97-7097e9a175b5', 
       scenePurpose: 'Introduce a new sustainable coffee brand called "EarthBean".',
       sceneElementsDescription: 'Show the EarthBean logo, a steaming coffee cup, a tagline "Taste the Planet, Love the Bean", and a background of lush coffee plants.',
-      desiredDurationInFrames: 150, // 5 seconds at 30fps
+      desiredDurationInFrames: 150, 
       dimensions: { width: 1920, height: 1080 },
       targetAudience: 'Eco-conscious coffee drinkers, aged 25-55.',
       brandGuidelines: 'Colors: earthy browns, deep greens, cream. Font: Avenir Next. Style: organic, warm, inviting.'

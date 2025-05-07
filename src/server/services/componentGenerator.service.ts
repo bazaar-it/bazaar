@@ -1,8 +1,10 @@
+// src/server/services/componentGenerator.service.ts
 import { customComponentJobs, db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { processComponentJob } from "~/server/workers/generateComponentCode";
 import type { PgDatabase } from "drizzle-orm/pg-core";
+import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 
 // Type for the database instance
 type DB = typeof db;
@@ -31,93 +33,446 @@ interface ComponentGenerationResult {
  * Generates a Remotion component based on a description and registers it in the database
  * 
  * @param projectId - The project ID the component belongs to
- * @param effectDescription - Description of the desired effect
+ * @param brief - Animation design brief
  * @param assistantMessageId - ID of the assistant message for status updates
  * @param durationInSeconds - Duration in seconds (default: 6)
  * @param fps - Frames per second (default: 30)
  * @param sceneId - Optional scene ID if part of a scene plan
  * @param userId - The user who initiated the request
+ * @param animationDesignBriefId - Optional ID of the animation design brief
  * @returns Component generation result with job ID, effect name, and metadata
  */
 export async function generateComponent(
     projectId: string,
-    effectDescription: string,
+    brief: AnimationDesignBrief,
     assistantMessageId: string,
     durationInSeconds: number = 6,
     fps: number = 30,
     sceneId?: string,
-    userId?: string
+    userId?: string,
+    animationDesignBriefId?: string
 ): Promise<ComponentGenerationResult> {
-    // Analyze the effect description to generate a better component name and planning context
-    let componentName = 'CustomScene';
-    
-    // Extract a short name from the description (first 2-3 words capitalized)
-    const nameSuggestion = effectDescription
-        .split(/\s+/)
-        .slice(0, 3)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join('')
-        .replace(/[^a-zA-Z0-9]/g, '');
-        
-    // Use the suggestion if it's at least 4 characters long, otherwise default
-    if (nameSuggestion && nameSuggestion.length >= 4) {
-        componentName = nameSuggestion + 'Scene';
+    // Component name from brief, with fallback
+    let componentName = brief.sceneName || 'CustomScene'; 
+    if (!brief.sceneName || componentName === 'CustomScene' || componentName.length < 4) {
+        const nameSuggestion = (brief.scenePurpose || "Unnamed Scene")
+            .split(/\s+/)
+            .slice(0, 3)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join('')
+            .replace(/[^a-zA-Z0-9]/g, '');
+        if (nameSuggestion && nameSuggestion.length >= 4) {
+            componentName = nameSuggestion + 'Scene';
+        } else {
+            componentName = 'DefaultGeneratedScene'; // Ensure a valid fallback
+        }
     }
     
-    // Estimate component complexity based on description length and keywords
-    const estimatedComplexity = Math.min(1.0, effectDescription.length / 300);
+    // Estimate component complexity based on brief content
+    const estimatedComplexity = Math.min(1.0, (brief.elements?.length || 1) * 0.05 + (brief.scenePurpose?.length || 0) * 0.002);
     
-    // Duration in frames
-    const durationInFrames = Math.round(durationInSeconds * fps);
+    // Values from brief, with fallbacks to parameters
+    const actualDurationInFrames = brief.durationInFrames || Math.round(durationInSeconds * fps);
+    const actualFps = fps; 
+    const actualWidth = brief.dimensions.width;
+    const actualHeight = brief.dimensions.height;
     
-    // Create enhanced prompt with more structured guidance
-    const enhancedDescription = `
-Create a custom Remotion component for scene: "${effectDescription}"
+    // Construct Enhanced LLM Prompt from AnimationDesignBrief
+    let enhancedDescriptionLines: string[] = [];
 
-Scene duration: ${durationInSeconds} seconds (${durationInFrames} frames at ${fps}fps)
-Scene purpose: ${sceneId ? `Part of multi-scene video` : 'Standalone component'}
+    // --- Role and High-Level Instructions ---
+    enhancedDescriptionLines.push(`### ROLE: You are an Expert Remotion Developer and Senior React Engineer.`);
+    enhancedDescriptionLines.push(`### TASK: Create a production-quality Remotion React functional component in TypeScript.`);
+    enhancedDescriptionLines.push(`### COMPONENT NAME: '${componentName}'`);
+    enhancedDescriptionLines.push(`### OBJECTIVE: Generate a component that precisely implements the provided AnimationDesignBrief with professional animations and visual effects.`);
+    enhancedDescriptionLines.push(`### VIDEO CONFIG: Target video is ${actualWidth}x${actualHeight}px, ${actualDurationInFrames} frames total duration, at ${actualFps} FPS.`);
+    enhancedDescriptionLines.push(`### MANDATORY REQUIREMENTS:`);
+    enhancedDescriptionLines.push(`- The FIRST line MUST be: // src/remotion/components/scenes/${componentName}.tsx`);
+    enhancedDescriptionLines.push(`- The component MUST be a functional component using TypeScript (.tsx).`);
+    enhancedDescriptionLines.push(`- ALWAYS use the Remotion hooks: useCurrentFrame() and useVideoConfig() for timing and dimensions.`);
+    enhancedDescriptionLines.push(`- Component MUST accept props: { brief: AnimationDesignBrief } (assume this type is imported).`);
+    enhancedDescriptionLines.push(`- Utilize appropriate Remotion animation functions based on each element's needs:`);
+    enhancedDescriptionLines.push(`  * interpolate() - For smooth linear or eased transitions between values`);
+    enhancedDescriptionLines.push(`  * spring() - For physics-based, bouncy animations`);
+    enhancedDescriptionLines.push(`  * Easing module - For specifying animation curves (easeInOut, bezier, etc.)`);
+    enhancedDescriptionLines.push(`- Use Remotion timing components when needed:`);
+    enhancedDescriptionLines.push(`  * <Sequence from={startFrame} durationInFrames={duration}> - For sequential animations`);
+    enhancedDescriptionLines.push(`  * <Series> - For orchestrating complex animation sequences`);
+    enhancedDescriptionLines.push(`  * <Loop> - For repeating animations`);
+    enhancedDescriptionLines.push(`- Apply absolute positioning based on initialLayout coordinates.`);
+    
+    // --- Boilerplate Structure Guide ---
+    enhancedDescriptionLines.push(`\n### BOILERPLATE STRUCTURE (Follow this pattern):`);
+    enhancedDescriptionLines.push(`\`\`\`typescript`);
+    enhancedDescriptionLines.push(`// src/remotion/components/scenes/${componentName}.tsx`);
+    enhancedDescriptionLines.push(`import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence, Easing, Img, Audio } from 'remotion';`);
+    enhancedDescriptionLines.push(`import React from 'react';`);
+    enhancedDescriptionLines.push(`// import { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';`);
+    enhancedDescriptionLines.push(``);
+    enhancedDescriptionLines.push(`export const ${componentName}: React.FC<{ brief: AnimationDesignBrief }> = ({ brief }) => {`);
+    enhancedDescriptionLines.push(`  const frame = useCurrentFrame();`);
+    enhancedDescriptionLines.push(`  const { fps, width, height, durationInFrames } = useVideoConfig();`);
+    enhancedDescriptionLines.push(``);
+    enhancedDescriptionLines.push(`  // Extract key brief properties`);
+    enhancedDescriptionLines.push(`  const { elements, colorPalette, typography, overallStyle } = brief;`);
+    enhancedDescriptionLines.push(``);
+    enhancedDescriptionLines.push(`  // Define background color from brief`);
+    enhancedDescriptionLines.push(`  const backgroundColor = colorPalette?.background || 'transparent';`);
+    enhancedDescriptionLines.push(``);
+    enhancedDescriptionLines.push(`  return (`);
+    enhancedDescriptionLines.push(`    <AbsoluteFill style={{ backgroundColor }}>`);
+    enhancedDescriptionLines.push(`      {/* Render each element with its animations */}`);
+    enhancedDescriptionLines.push(`    </AbsoluteFill>`);
+    enhancedDescriptionLines.push(`  );`);
+    enhancedDescriptionLines.push(`};`);
+    enhancedDescriptionLines.push(`\`\`\``);
 
-This component should:
-1. Be self-contained with all necessary imports and styling
-2. Handle all animation timing relative to useCurrentFrame()
-3. Use appropriate animation techniques for smooth motion
-4. Include all visual elements described in the scene
-5. Return a properly structured React component
+    enhancedDescriptionLines.push("\n--- Scene Overview ---");
+    enhancedDescriptionLines.push(`Scene Name: ${brief.sceneName || componentName}`);
+    enhancedDescriptionLines.push(`Purpose: ${brief.scenePurpose || 'N/A'}`);
+    enhancedDescriptionLines.push(`Overall Style: ${brief.overallStyle || 'N/A'}`);
+    if (brief.notes) {
+        enhancedDescriptionLines.push(`Designer Notes: ${brief.notes}`);
+    }
 
-The recommended format is:
-\`\`\`tsx
-import { useCurrentFrame, useVideoConfig, spring } from 'remotion';
-import { AbsoluteFill } from 'remotion';
+    if (brief.colorPalette) {
+        enhancedDescriptionLines.push("\n--- Color Palette ---");
+        const { primary, secondary, accent, background, textPrimary, textSecondary, customColors } = brief.colorPalette;
+        if (primary) enhancedDescriptionLines.push(`- Primary Color: ${primary}`);
+        if (secondary) enhancedDescriptionLines.push(`- Secondary Color: ${secondary}`);
+        if (accent) enhancedDescriptionLines.push(`- Accent Color: ${accent}`);
+        if (background) enhancedDescriptionLines.push(`- Background Color: ${background}`);
+        if (textPrimary) enhancedDescriptionLines.push(`- Text Primary Color: ${textPrimary}`);
+        if (textSecondary) enhancedDescriptionLines.push(`- Text Secondary Color: ${textSecondary}`);
+        if (customColors && typeof customColors === 'object' && Object.keys(customColors).length > 0) {
+            enhancedDescriptionLines.push("- Custom Colors:");
+            Object.entries(customColors).forEach(([name, value]: [string, string]) => enhancedDescriptionLines.push(`  - ${name}: ${value}`));
+        }
+    }
 
-export const ${componentName}: React.FC = () => {
-  const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
-  
-  // Animation calculations
-  // ...
-  
-  return (
-    <AbsoluteFill style={{ background: '...' }}>
-      {/* Component content */}
-    </AbsoluteFill>
-  );
-};
-\`\`\`
-`;
+    if (brief.typography) {
+        enhancedDescriptionLines.push("\n--- Typography ---");
+        const { defaultFontFamily, heading1 } = brief.typography;
+        if (defaultFontFamily) {
+            enhancedDescriptionLines.push(`- Default Font Family: ${defaultFontFamily}`);
+        }
+        // Example for a specific style like heading1 - adapt for others if their schema path is known
+        if (heading1 && typeof heading1 === 'object') {
+            enhancedDescriptionLines.push("- Heading1 Style:");
+            if (heading1.fontFamily) enhancedDescriptionLines.push(`  - Font Family: ${heading1.fontFamily}`);
+            if (heading1.fontSize) enhancedDescriptionLines.push(`  - Font Size: ${heading1.fontSize}`);
+            if (heading1.fontWeight) enhancedDescriptionLines.push(`  - Font Weight: ${heading1.fontWeight}`);
+            if (heading1.lineHeight) enhancedDescriptionLines.push(`  - Line Height: ${heading1.lineHeight}`);
+            if (heading1.letterSpacing) enhancedDescriptionLines.push(`  - Letter Spacing: ${heading1.letterSpacing}`);
+            if (heading1.color) enhancedDescriptionLines.push(`  - Color: ${heading1.color}`);
+        }
+        // Add similar blocks for bodyText, captionText if their structure is known and needed
+    }
+
+    // --- Scene Elements & Animations Translation Guide ---
+    enhancedDescriptionLines.push(`\n### ELEMENT-BY-ELEMENT IMPLEMENTATION GUIDE:`);
+    enhancedDescriptionLines.push(`Each element from the AnimationDesignBrief must be translated into React/Remotion code following these guidelines:`);
+    
+    // ElementType to JSX/DOM Translation Guide
+    enhancedDescriptionLines.push(`\n#### ELEMENT TYPE TRANSLATION:`);
+    enhancedDescriptionLines.push(`- 'text' → Use a <div> or <h1>-<h6> with appropriate styling`);
+    enhancedDescriptionLines.push(`- 'image' → Use Remotion's <Img src={content} /> component`);
+    enhancedDescriptionLines.push(`- 'video' → Use Remotion's <Video src={content} /> component`);
+    enhancedDescriptionLines.push(`- 'shape' → Use appropriate shape elements (div with border-radius for circles/rounded rectangles, SVG for complex shapes)`);
+    enhancedDescriptionLines.push(`- 'container' → Use a positioned <div> that may contain child elements`);
+    
+    // Layout Translation Guide
+    enhancedDescriptionLines.push(`\n#### INITIAL LAYOUT TRANSLATION:`);
+    enhancedDescriptionLines.push(`All initialLayout properties MUST be translated to React inline styles:`);
+    enhancedDescriptionLines.push(`- 'x', 'y' → style={{ position: 'absolute', left: x, top: y }}`); 
+    enhancedDescriptionLines.push(`- 'width', 'height' → style={{ width, height }}`); 
+    enhancedDescriptionLines.push(`- 'opacity' → style={{ opacity }}`); 
+    enhancedDescriptionLines.push(`- 'rotation' → style={{ transform: \`rotate(\${rotation}deg)\` }}`); 
+    enhancedDescriptionLines.push(`- 'scale' → style={{ transform: \`scale(\${scale})\` }}`); 
+    enhancedDescriptionLines.push(`- 'zIndex' → style={{ zIndex }}`); 
+    enhancedDescriptionLines.push(`- Multiple transforms should be combined: transform: \`rotate(\${rotation}deg) scale(\${scale})\``); 
+    
+    // Animation Translation Guide
+    enhancedDescriptionLines.push(`\n#### ANIMATION IMPLEMENTATION:`);
+    enhancedDescriptionLines.push(`For each animation, use this approach:`);
+    enhancedDescriptionLines.push(`1. Calculate the active animation frames based on delayInFrames and durationInFrames:`);
+    enhancedDescriptionLines.push(`   const animStartFrame = animation.delayInFrames || 0;`);
+    enhancedDescriptionLines.push(`   const animEndFrame = animStartFrame + (animation.durationInFrames || 30);`);
+    
+    enhancedDescriptionLines.push(`2. Apply the appropriate Remotion animation function:`);
+    enhancedDescriptionLines.push(`   - For 'spring' animations or when remotionFunctionHint is 'spring':`);
+    enhancedDescriptionLines.push(`     const animatedValue = spring({`);
+    enhancedDescriptionLines.push(`       frame: frame - animStartFrame,`);
+    enhancedDescriptionLines.push(`       fps,`);
+    enhancedDescriptionLines.push(`       from: property.from,`);
+    enhancedDescriptionLines.push(`       to: property.to,`);
+    enhancedDescriptionLines.push(`       config: property.springConfig || { damping: 10, mass: 1, stiffness: 100 }`);
+    enhancedDescriptionLines.push(`     });`);
+    
+    enhancedDescriptionLines.push(`   - For most other animations, use interpolate:`);
+    enhancedDescriptionLines.push(`     const animatedValue = interpolate(`);
+    enhancedDescriptionLines.push(`       frame,`);
+    enhancedDescriptionLines.push(`       [animStartFrame, animEndFrame],`);
+    enhancedDescriptionLines.push(`       [property.from, property.to],`);
+    enhancedDescriptionLines.push(`       {`);
+    enhancedDescriptionLines.push(`         extrapolateLeft: 'clamp',`);
+    enhancedDescriptionLines.push(`         extrapolateRight: 'clamp',`);
+    enhancedDescriptionLines.push(`         easing: determineEasing(animation.easing)`);
+    enhancedDescriptionLines.push(`       }`);
+    enhancedDescriptionLines.push(`     );`);
+    
+    enhancedDescriptionLines.push(`3. Apply animated values to style properties:`);
+    enhancedDescriptionLines.push(`   - For transform properties (e.g., 'transform.translateX', 'transform.scale'):`);
+    enhancedDescriptionLines.push(`     Extract the specific transform type and apply with appropriate units.`);
+    enhancedDescriptionLines.push(`   - For standard CSS properties (e.g., 'opacity'):`);
+    enhancedDescriptionLines.push(`     Apply directly to the style object.`);
+    enhancedDescriptionLines.push(`   - Example: style={{ opacity: animatedOpacity, transform: \`translateX(\${animatedX}px) scale(\${animatedScale})\` }}`);
+    
+    enhancedDescriptionLines.push(`4. For sequence-based timing (startAfter, startWith):`);
+    enhancedDescriptionLines.push(`   - Wrap elements in <Sequence> components with appropriate 'from' and 'durationInFrames' props`);
+    enhancedDescriptionLines.push(`   - Use 'from' attribute based on animation.delayInFrames`);
+    enhancedDescriptionLines.push(`   - Example: <Sequence from={30} durationInFrames={60}>...</Sequence>`);
+    
+    // Actual Brief Elements Review
+    enhancedDescriptionLines.push(`\n### SPECIFIC ELEMENTS TO IMPLEMENT:`);
+    if (brief.elements && brief.elements.length > 0) {
+        brief.elements.forEach((element, index) => {
+            enhancedDescriptionLines.push(`\n#### ELEMENT ${index + 1}: ${element.elementId} (${element.elementType})`);
+            
+            // Content
+            if (element.content) {
+                const contentValue = typeof element.content === 'string' || typeof element.content === 'number' 
+                    ? element.content 
+                    : JSON.stringify(element.content);
+                enhancedDescriptionLines.push(`- Content: ${contentValue}`);
+            }
+            
+            // Layout
+            if (element.initialLayout) {
+                enhancedDescriptionLines.push(`- Initial Layout (CSS equivalent):`); 
+                const layout = element.initialLayout;
+                
+                // Build a sample style object string to demonstrate correct implementation
+                let styleObjectExample = 'style={{ ';
+                const styleProperties: string[] = [];
+                
+                if (layout.x !== undefined) {
+                    enhancedDescriptionLines.push(`  * x: ${layout.x}${typeof layout.x === 'number' ? 'px' : ''}`);
+                    styleProperties.push(`position: 'absolute'`, `left: ${layout.x}${typeof layout.x === 'number' ? 'px' : ''}`);
+                }
+                
+                if (layout.y !== undefined) {
+                    enhancedDescriptionLines.push(`  * y: ${layout.y}${typeof layout.y === 'number' ? 'px' : ''}`);
+                    if (!styleProperties.includes(`position: 'absolute'`)) {
+                        styleProperties.push(`position: 'absolute'`);
+                    }
+                    styleProperties.push(`top: ${layout.y}${typeof layout.y === 'number' ? 'px' : ''}`);
+                }
+                
+                if (layout.width !== undefined) {
+                    enhancedDescriptionLines.push(`  * width: ${layout.width}${typeof layout.width === 'number' ? 'px' : ''}`);
+                    styleProperties.push(`width: ${layout.width}${typeof layout.width === 'number' ? 'px' : ''}`);
+                }
+                
+                if (layout.height !== undefined) {
+                    enhancedDescriptionLines.push(`  * height: ${layout.height}${typeof layout.height === 'number' ? 'px' : ''}`);
+                    styleProperties.push(`height: ${layout.height}${typeof layout.height === 'number' ? 'px' : ''}`);
+                }
+                
+                if (layout.opacity !== undefined) {
+                    enhancedDescriptionLines.push(`  * opacity: ${layout.opacity}`);
+                    styleProperties.push(`opacity: ${layout.opacity}`);
+                }
+                
+                // Handle transform properties
+                // Explicitly type with string[] to avoid 'never' type inference
+                const transformProps: string[] = [];
+                if (layout.rotation !== undefined) {
+                    enhancedDescriptionLines.push(`  * rotation: ${layout.rotation}deg`);
+                    transformProps.push(`rotate(${layout.rotation}deg)`);
+                }
+                
+                if (layout.scale !== undefined) {
+                    enhancedDescriptionLines.push(`  * scale: ${layout.scale}`);
+                    transformProps.push(`scale(${layout.scale})`);
+                }
+                
+                if (transformProps.length > 0) {
+                    styleProperties.push(`transform: '${transformProps.join(' ')}'`);
+                }
+                
+                if (layout.zIndex !== undefined) {
+                    enhancedDescriptionLines.push(`  * zIndex: ${layout.zIndex}`);
+                    styleProperties.push(`zIndex: ${layout.zIndex}`);
+                }
+                
+                if (layout.backgroundColor) {
+                    enhancedDescriptionLines.push(`  * backgroundColor: ${layout.backgroundColor}`);
+                    styleProperties.push(`backgroundColor: '${layout.backgroundColor}'`);
+                }
+                
+                styleObjectExample += styleProperties.join(', ') + ' }}';
+                enhancedDescriptionLines.push(`- React style equivalent: ${styleObjectExample}`);
+            }
+            
+            // Animations with detailed implementation hints
+            if (element.animations && element.animations.length > 0) {
+                enhancedDescriptionLines.push(`\n- Animations for ${element.elementId}:`);
+                element.animations.forEach((animation, animIndex) => {
+                    enhancedDescriptionLines.push(`  * Animation ${animIndex + 1}: ${animation.animationType}`);
+                    
+                    // Duration and timing
+                    const durationFrames = animation.durationInFrames || 30;
+                    const delayFrames = animation.delayInFrames || 0;
+                    
+                    enhancedDescriptionLines.push(`    - Start frame: ${delayFrames}`);
+                    enhancedDescriptionLines.push(`    - Duration: ${durationFrames} frames`);
+                    enhancedDescriptionLines.push(`    - End frame: ${delayFrames + durationFrames}`);
+                    
+                    // Easing
+                    if (animation.easing) {
+                        let easingImplementation;
+                        // Need to cast animation.easing to handle it properly without TypeScript errors
+                        const easingValue = animation.easing;
+                        
+                        if (typeof easingValue === 'string') {
+                            const normalizedEasing = easingValue.replace(/-/g, '');
+                            easingImplementation = `Easing.${normalizedEasing}`;
+                        } else if (Array.isArray(easingValue)) {
+                            // Safely handle array type with proper casting
+                            const easingArray = easingValue as number[];
+                            if (easingArray.length === 4) {
+                                easingImplementation = `Easing.bezier(${easingArray.join(', ')})`;
+                            } else {
+                                easingImplementation = 'Easing.linear';
+                            }
+                        } else {
+                            easingImplementation = 'Easing.linear';
+                        }
+                        enhancedDescriptionLines.push(`    - Easing: ${animation.easing} → Implement as: ${easingImplementation}`);
+                    }
+                    
+                    // Remotion function hint - using type guard for safety
+                    if ('remotionFunctionHint' in animation && (animation as any).remotionFunctionHint) {
+                        const functionHint = (animation as any).remotionFunctionHint;
+                        enhancedDescriptionLines.push(`    - Suggested Remotion function: ${functionHint}`);
+                        enhancedDescriptionLines.push(`    - IMPORTANT: Prioritize using this function when implementing this animation.`);
+                    }
+                    
+                    // Animated properties with implementation hints
+                    if (animation.propertiesAnimated && animation.propertiesAnimated.length > 0) {
+                        enhancedDescriptionLines.push(`    - Properties to animate:`);
+                        animation.propertiesAnimated.forEach(prop => {
+                            enhancedDescriptionLines.push(`      • ${prop.property}: from ${JSON.stringify(prop.from)} to ${JSON.stringify(prop.to)}`);
+                            
+                            // Implementation hint based on property type and animation type
+                            // Note: Using type guards and safe access to avoid TypeScript errors
+                            // since these may be extensible properties not in the original schema
+                            const animationTypeStr = animation.animationType || '';
+                            const remotionHint = 'remotionFunctionHint' in animation ? 
+                              (animation as any).remotionFunctionHint as string | undefined : undefined;
+                            
+                            const useSpring = 
+                              (remotionHint?.toLowerCase()?.includes('spring')) || 
+                              animationTypeStr.toLowerCase().includes('spring');
+                            
+                            let implementationHint;
+                            if (useSpring) {
+                                // Spring animation hint - safely construct spring config
+                                // without assuming properties exist
+                                const springConfigObj = 'springConfig' in prop ? (prop as any).springConfig : null;
+                                const springConfig = springConfigObj ? 
+                                  `{damping: ${(springConfigObj as any).damping || 10}, stiffness: ${(springConfigObj as any).stiffness || 100}, mass: ${(springConfigObj as any).mass || 1}}` :
+                                  '{damping: 10, stiffness: 100, mass: 1}';
+                                  
+                                implementationHint = `const ${prop.property.replace('.', '')}Value = spring({ 
+          frame: frame - ${delayFrames}, 
+          fps, 
+          from: ${JSON.stringify(prop.from)}, 
+          to: ${JSON.stringify(prop.to)}, 
+          config: ${springConfig} 
+        })`;
+                            } else {
+                                // Interpolate animation hint
+                                implementationHint = `const ${prop.property.replace('.', '')}Value = interpolate(
+          frame, 
+          [${delayFrames}, ${delayFrames + durationFrames}], 
+          [${JSON.stringify(prop.from)}, ${JSON.stringify(prop.to)}], 
+          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: ${animation.easing ? `Easing.${animation.easing.replace(/-/g, '')}` : 'Easing.linear'} }
+        );`;
+                            }
+                            
+                            enhancedDescriptionLines.push(`        Implementation: \`${implementationHint}\``);
+                        });
+                    }
+                });
+            }
+        });
+    } else {
+        enhancedDescriptionLines.push(`No specific elements detailed in the brief. Create a visually appealing scene based on the purpose and style, using the boilerplate structure and Remotion best practices outlined above.`);
+    }
+    
+    // --- Final Instructions and Best Practices ---
+    enhancedDescriptionLines.push(`\n### SEQUENCE ORCHESTRATION & TIMING GUIDELINES:`);
+    enhancedDescriptionLines.push(`When implementing multiple animations, carefully orchestrate them to match the design intent:`);
+    enhancedDescriptionLines.push(`1. Use <Sequence> components for elements or animations that should start at specific frames.`);
+    enhancedDescriptionLines.push(`   Example: <Sequence from={30} durationInFrames={60}><YourAnimatedElement /></Sequence>`);
+    
+    enhancedDescriptionLines.push(`2. For animation dependencies between elements (animations that must follow others):`);
+    enhancedDescriptionLines.push(`   - Create a timing map that respects trigger values like 'afterPrevious' by calculating startFrames.`);
+    enhancedDescriptionLines.push(`   - Example: const titleExitFrame = titleStartFrame + titleDuration;`);
+    enhancedDescriptionLines.push(`             const subTitleStartFrame = titleExitFrame; // Starting after title exits`);
+    
+    if (brief.audioTracks && brief.audioTracks.length > 0) {
+        enhancedDescriptionLines.push(`\n### AUDIO IMPLEMENTATION:`);
+        enhancedDescriptionLines.push(`This scene includes the following audio track(s) to implement:`);
+        
+        brief.audioTracks.forEach((audio, index) => {
+            // Use the correct property names based on the actual schema
+            enhancedDescriptionLines.push(`- Audio ${index + 1}: ${audio.trackId || 'Background Audio'}`);
+            if (audio.url) enhancedDescriptionLines.push(`  - Source: ${audio.url}`);
+            if (audio.startAtFrame !== undefined) enhancedDescriptionLines.push(`  - Start at frame: ${audio.startAtFrame}`);
+            // durationInFrames might not be available, so we don't check for it
+            if (audio.loop) enhancedDescriptionLines.push(`  - Loop: ${audio.loop}`);
+            if (audio.volume !== undefined) enhancedDescriptionLines.push(`  - Volume: ${audio.volume}`);
+            enhancedDescriptionLines.push(`  - Implementation: <Audio src={${JSON.stringify(audio.url)}} startFrom={${audio.startAtFrame || 0}} volume={${audio.volume || 1}} ${audio.loop ? 'loop' : ''}/>`);
+        });
+    }
+    
+    // Add code quality, performance, and accessibility guidelines
+    enhancedDescriptionLines.push(`\n### CODE QUALITY & PERFORMANCE GUIDELINES:`);
+    enhancedDescriptionLines.push(`1. MODULARITY: For complex elements, consider creating sub-components.`);
+    enhancedDescriptionLines.push(`2. PERFORMANCE: Minimize DOM nodes - prefer CSS transforms over creating new elements.`);
+    enhancedDescriptionLines.push(`3. MEMOIZATION: Use React.useMemo() for computationally expensive calculations.`);
+    enhancedDescriptionLines.push(`4. TYPING: Provide proper TypeScript types throughout, including for style objects.`);
+    enhancedDescriptionLines.push(`5. COMMENTS: Add brief comments for complex animation logic or calculations.`);
+    enhancedDescriptionLines.push(`6. ORGANIZATION: Group related animations and separate distinct animation phases.`);
+    enhancedDescriptionLines.push(`7. ERROR HANDLING: Include defensive checks for potentially undefined values.`);
+
+    // Most important reminder about using the exact brief values
+    enhancedDescriptionLines.push(`\n### CRITICAL REMINDER:`);
+    enhancedDescriptionLines.push(`- PRECISELY follow the AnimationDesignBrief's specifications.`);
+    enhancedDescriptionLines.push(`- RESPECT the timing, durations, and easing specified in the brief.`);
+    enhancedDescriptionLines.push(`- IMPLEMENT ALL elements and animations exactly as detailed above.`);
+    enhancedDescriptionLines.push(`- START with the boilerplate structure provided earlier.`);
+    enhancedDescriptionLines.push(`- REMEMBER the first line MUST be: // src/remotion/components/scenes/${componentName}.tsx`);
+
+    const enhancedDescription = enhancedDescriptionLines.join('\n');
 
     // Generate unique ID for this job
     const jobId = uuidv4();
     
     // Add the job to the database
     const jobData = {
-        prompt: enhancedDescription, // Use the enhanced description
+        prompt: enhancedDescription, 
         componentName,
-        durationInFrames,
-        fps,
-        width: 1920, // Default HD width
-        height: 1080, // Default HD height
+        durationInFrames: actualDurationInFrames,
+        fps: actualFps,
+        width: actualWidth, 
+        height: actualHeight, 
         projectId,
-        sceneId,
+        sceneId: brief.sceneId, // Use sceneId from brief
+        animationDesignBriefId: animationDesignBriefId, // Store brief ID
         // If we have a userId, include it for analytics/tracking
         userData: userId ? { userId } : undefined
     };
@@ -147,8 +502,10 @@ export const ${componentName}: React.FC = () => {
         jobId,
         effect: componentName,
         componentMetadata: {
-            durationInFrames,
-            fps,
+            durationInFrames: actualDurationInFrames,
+            fps: actualFps,
+            width: actualWidth,
+            height: actualHeight,
             complexity: estimatedComplexity
         }
     };

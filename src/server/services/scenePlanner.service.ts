@@ -7,6 +7,11 @@ import { MAX_SCENES } from "~/server/constants/chat";
 import { type ComponentJob, type SceneResult, type SceneStatus, type ScenePlanResponse } from "~/types/chat";
 import { analyzeSceneContent } from "./sceneAnalyzer.service";
 import { generateComponent } from "./componentGenerator.service";
+import { 
+  generateAnimationDesignBrief, 
+  type AnimationBriefGenerationParams 
+} from "./animationDesigner.service";
+import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 
 // Define the database type
 type DB = typeof db;
@@ -103,15 +108,34 @@ export async function handleScenePlan(
             // Handle different effect types
             if (scene.effectType === "custom") {
                 try {
-                    // Generate a custom component with explicit duration
+                    // --- BEGIN Animation Design Brief Integration ---
+                    const videoDimensions = { width: 1920, height: 1080 }; // TODO: Get from project settings or plan
+
+                    const animationBriefParams: AnimationBriefGenerationParams = {
+                        projectId,
+                        sceneId,
+                        scenePurpose: scene.description, // Or a more specific field from scene plan
+                        sceneElementsDescription: scene.description, // Or a more detailed field
+                        desiredDurationInFrames: durationInFrames,
+                        dimensions: videoDimensions,
+                        // componentJobId: undefined, // Can be linked later if needed
+                    };
+
+                    console.log(`Generating Animation Design Brief for scene ${sceneId}...`);
+                    const { brief, briefId } = await generateAnimationDesignBrief(animationBriefParams);
+                    console.log(`Generated Animation Design Brief with ID: ${briefId} for scene ${sceneId}`);
+                    // --- END Animation Design Brief Integration ---
+
+                    // Generate a custom component with explicit duration, now using the detailed brief
                     const { jobId, effect, componentMetadata } = await generateComponent(
                         projectId,
-                        scene.description,
+                        brief, // Pass the detailed AnimationDesignBrief object
                         assistantMessageId,
-                        scene.durationInSeconds, // Pass the planned duration
-                        fps,                     // Pass fps from plan
+                        scene.durationInSeconds, // Pass the planned duration (brief also contains duration)
+                        fps,                     // Pass fps from plan (brief also contains fps)
                         sceneId,                 // Pass the scene ID from planner
-                        userId                   // Pass user ID
+                        userId,                  // Pass user ID
+                        briefId                  // Pass the briefId for linking/logging
                     );
                     
                     // Add to our tracking

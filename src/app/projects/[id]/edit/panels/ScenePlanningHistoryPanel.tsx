@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { api } from '~/trpc/react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from "~/components/ui/button";
-import { ChevronDown, ChevronUp, Loader2Icon, PlayIcon } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2Icon, PlayIcon, RefreshCwIcon } from "lucide-react";
 import { useImageAnalysis } from "~/hooks/useImageAnalysis";
 import { TimelineContext } from '~/components/client/Timeline/TimelineContext';
 import { useVideoState } from "~/stores/videoState";
@@ -35,6 +35,20 @@ interface ScenePlan {
   planData: ScenePlanData;
   userPrompt: string;
   createdAt: Date;
+}
+
+// New interface for Animation Design Brief
+interface AnimationDesignBrief {
+  id: string;
+  projectId: string;
+  sceneId: string;
+  status: string;
+  errorMessage?: string | null;
+  designBrief: any; // This holds the structured brief content
+  llmModel: string;
+  createdAt: Date;
+  updatedAt: Date | null;
+  componentJobId: string | null;
 }
 
 // Type for the API response
@@ -118,6 +132,9 @@ export default function ScenePlanningHistoryPanel() {
   const [imageTags, setImageTags] = useState<Record<string, string[]>>({});
   const [analyzingImg, setAnalyzingImg] = useState<Record<string, boolean>>({});
   
+  // New state for Animation Design Briefs
+  const [expandedBriefs, setExpandedBriefs] = useState<Record<string, boolean>>({});
+  
   // Get access to timeline context
   const timeline = useContext(TimelineContext);
   // Get access to video state store
@@ -143,6 +160,36 @@ export default function ScenePlanningHistoryPanel() {
       } as ScenePlan;
     });
   }, [planningHistoryData]);
+  
+  // Fetch Animation Design Briefs data
+  const { data: briefsData, isLoading: isLoadingBriefs, refetch: refetchBriefs } = api.animation.listDesignBriefs.useQuery({
+    projectId
+  }, {
+    refetchInterval: 5000, // Auto refresh every 5 seconds
+  });
+
+  // Helper to map animation design briefs by scene ID
+  const briefsBySceneId = React.useMemo(() => {
+    if (!briefsData) return {};
+    
+    const briefsMap: Record<string, AnimationDesignBrief[]> = {};
+    briefsData.forEach(brief => {
+      const { sceneId } = brief;
+      // Use a null coalescing pattern that TypeScript can understand
+      briefsMap[sceneId] = briefsMap[sceneId] || [];
+      briefsMap[sceneId].push(brief as AnimationDesignBrief);
+    });
+    
+    return briefsMap;
+  }, [briefsData]);
+  
+  // Regenerate brief mutation
+  const regenerateBriefMutation = api.animation.generateDesignBrief.useMutation({
+    onSuccess: () => {
+      // Refetch briefs when successful
+      void refetchBriefs();
+    }
+  });
   
   // Auto-expand the most recent plan when data loads
   useEffect(() => {
@@ -173,6 +220,14 @@ export default function ScenePlanningHistoryPanel() {
     }));
   };
   
+  // Toggle a brief's expanded state
+  const toggleBrief = (briefId: string) => {
+    setExpandedBriefs(prev => ({
+      ...prev,
+      [briefId]: !prev[briefId]
+    }));
+  };
+  
   // Format relative time
   const formatRelativeTime = (date: Date) => {
     return formatDistanceToNow(new Date(date), { addSuffix: true });
@@ -182,6 +237,40 @@ export default function ScenePlanningHistoryPanel() {
   const handleRegenerate = (planId: string) => {
     console.log('Regenerating plan:', planId, 'with image attachments:', sceneImages);
     // TODO: call tRPC mutation e.g. api.chat.regenerateScene.mutate({ planId, attachments: sceneImages });
+  };
+  
+  // Handler for regenerating an Animation Design Brief
+  const handleRegenerateBrief = (sceneId: string) => {
+    // Find the scene in the plans
+    let scenePurpose = "";
+    let sceneElementsDescription = "";
+    let desiredDurationInFrames = 0;
+    let dimensions = { width: 1920, height: 1080 };
+    
+    // Look for the scene in all plans
+    for (const plan of planningHistory) {
+      const foundScene = plan.planData.scenes.find(scene => scene.id === sceneId);
+      if (foundScene) {
+        scenePurpose = foundScene.description;
+        sceneElementsDescription = foundScene.description;
+        desiredDurationInFrames = Math.round(foundScene.durationInSeconds * (plan.planData.fps || 30));
+        break;
+      }
+    }
+    
+    // Only proceed if we found a valid scene
+    if (scenePurpose) {
+      regenerateBriefMutation.mutate({
+        projectId,
+        sceneId,
+        scenePurpose,
+        sceneElementsDescription,
+        desiredDurationInFrames,
+        dimensions
+      });
+    } else {
+      console.error(`Could not find scene with ID ${sceneId} to regenerate brief`);
+    }
   };
   
   // Analyze image using vision stub
@@ -250,6 +339,22 @@ export default function ScenePlanningHistoryPanel() {
     } catch (error) {
       console.error("Error applying plan to timeline:", error);
       alert("Failed to apply plan to timeline");
+    }
+  };
+  
+  // Helper function to render a brief status indicator
+  const renderBriefStatus = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+          <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />Pending
+        </span>;
+      case 'complete':
+        return <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Complete</span>;
+      case 'error':
+        return <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Error</span>;
+      default:
+        return <span className="inline-flex items-center px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">Unknown</span>;
     }
   };
   
@@ -345,6 +450,10 @@ export default function ScenePlanningHistoryPanel() {
                     {plan.planData.scenes.map((scene, idx) => {
                       const isEditing = editingSceneId === scene.id;
                       const editedScene = editedScenes[scene.id] || scene;
+                      
+                      // Check if this scene has any animation briefs
+                      const sceneBriefs = briefsBySceneId[scene.id] || [];
+                      const hasAnimationBriefs = sceneBriefs.length > 0;
 
                       const handleEditClick = () => {
                         setEditingSceneId(scene.id);
@@ -429,6 +538,113 @@ export default function ScenePlanningHistoryPanel() {
                               rows={2}
                             />
                           )}
+                          
+                          {/* Animation Design Briefs Section */}
+                          {hasAnimationBriefs && (
+                            <div className="mt-3 pt-3 border-t border-border">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => toggleSection(`brief-${scene.id}`)}
+                              >
+                                <span className="text-xs font-medium">Animation Design Briefs</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
+                                  {expandedSections[`brief-${scene.id}`] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                </Button>
+                              </div>
+                              
+                              {expandedSections[`brief-${scene.id}`] && (
+                                <div className="mt-2 space-y-2">
+                                  {sceneBriefs.map((brief) => (
+                                    <div 
+                                      key={brief.id} 
+                                      className="bg-muted/50 rounded p-2 text-xs"
+                                    >
+                                      <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">Version {brief.llmModel}</span>
+                                          {renderBriefStatus(brief.status)}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6 p-0"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleBrief(brief.id);
+                                            }}
+                                          >
+                                            {expandedBriefs[brief.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="text-xs text-muted-foreground mb-1">
+                                        Created {formatRelativeTime(new Date(brief.createdAt))}
+                                      </div>
+                                      
+                                      {expandedBriefs[brief.id] && (
+                                        <div className="mt-2 bg-background p-2 rounded overflow-x-auto">
+                                          <pre className="text-xs whitespace-pre-wrap">
+                                            {JSON.stringify(brief.designBrief, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="w-full mt-2"
+                                    disabled={regenerateBriefMutation.isPending}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRegenerateBrief(scene.id);
+                                    }}
+                                  >
+                                    {regenerateBriefMutation.isPending ? (
+                                      <>
+                                        <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
+                                        Regenerating...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCwIcon className="h-3 w-3 mr-1" />
+                                        Regenerate Animation Brief
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* If no animation briefs yet, show a button to generate one */}
+                          {!hasAnimationBriefs && (
+                            <div className="mt-3 pt-2 border-t border-border">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full mt-1"
+                                disabled={regenerateBriefMutation.isPending}
+                                onClick={() => handleRegenerateBrief(scene.id)}
+                              >
+                                {regenerateBriefMutation.isPending ? (
+                                  <>
+                                    <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
+                                    Generating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCwIcon className="h-3 w-3 mr-1" />
+                                    Generate Animation Brief
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                          
                           {/* Attached images */}
                           {sceneImages[scene.id]?.map(img => (
                             <div key={img.id} className="flex flex-col items-center">

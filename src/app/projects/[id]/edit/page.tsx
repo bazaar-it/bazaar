@@ -24,7 +24,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     const [projectResult, userProjects] = await Promise.all([
       db.query.projects.findFirst({ where: eq(projects.id, projectId) }),
       getUserProjects(session.user.id),
-    ]);
+    ]); 
 
     if (!projectResult) {
       notFound();

@@ -1,5 +1,8 @@
 // /src/lib/schemas/animationDesignBrief.schema.ts
 import { z } from 'zod';
+import { extendZodWithOpenApi } from 'zod-openapi';
+
+extendZodWithOpenApi(z);
 
 const easingOptions = [
   'linear',
@@ -25,6 +28,7 @@ export const layoutSchema = z.object({
   rotation: z.number().optional().default(0).describe('Rotation in degrees'),
   scale: z.number().optional().default(1).describe('Scale factor'),
   backgroundColor: z.string().optional().describe('Background color (e.g., hex, rgba)'),
+  zIndex: z.number().int().optional().describe('Stacking order of the element (higher values are on top)'),
 }).describe('Defines the initial visual layout and styling of an element.');
 
 export const animationPropertySchema = z.object({
