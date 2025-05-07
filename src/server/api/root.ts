@@ -5,6 +5,7 @@ import { renderRouter } from "~/server/api/routers/render";
 import { customComponentRouter } from "~/server/api/routers/customComponent";
 import { timelineRouter } from "~/server/api/routers/timeline";
 import { videoRouter } from "~/server/api/routers/video";
+import { animationRouter } from "~/server/api/routers/animation";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   customComponent: customComponentRouter,
   timeline: timelineRouter,
   video: videoRouter,
+  animation: animationRouter,
 });
 
 // export type definition of API

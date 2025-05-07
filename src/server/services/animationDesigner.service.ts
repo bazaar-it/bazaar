@@ -6,6 +6,9 @@ import {
   type AnimationDesignBrief,
 } from '~/lib/schemas/animationDesignBrief.schema'; // Adjusted path
 import { env } from '~/env'; // Adjusted path assuming env.ts is at src/env.ts
+import { db } from '~/server/db';
+import { animationDesignBriefs } from '~/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 // Initialize OpenAI client
 // Ensure OPENAI_API_KEY is set in your environment variables
@@ -19,6 +22,7 @@ const ANIMATION_BRIEF_TOOL_NAME = 'generate_animation_design_brief';
  * Describes the input parameters for generating an Animation Design Brief.
  */
 export interface AnimationBriefGenerationParams {
+  projectId: string; // Added projectId for database storage
   sceneId: string;
   scenePurpose: string; // e.g., "Introduce Product X and its key benefit"
   sceneElementsDescription: string; // e.g., "A title text 'Product X', a subtitle 'Solves problem Y', an image of the product, and a small company logo."
@@ -30,7 +34,83 @@ export interface AnimationBriefGenerationParams {
   currentVideoContext?: string; // Optional: Broader context of the video, e.g., existing scenes, overall tone
   targetAudience?: string; // Optional: Who is this video for?
   brandGuidelines?: string; // Optional: Specific brand colors, fonts, or styles to adhere to
+  componentJobId?: string; // Optional: ID of the related component job, if known
 }
+
+/**
+ * Saves an Animation Design Brief to the database.
+ * 
+ * @param projectId The ID of the project this design brief belongs to
+ * @param sceneId The ID of the scene this design brief is for
+ * @param brief The validated Animation Design Brief to save
+ * @param llmModel The LLM model used to generate the brief
+ * @param componentJobId Optional ID of the component job this brief is associated with
+ * @returns The ID of the newly created design brief record
+ */
+export async function saveAnimationDesignBrief(
+  projectId: string,
+  sceneId: string,
+  brief: AnimationDesignBrief,
+  llmModel: string,
+  componentJobId?: string
+): Promise<string> {
+  try {
+    console.log(`Saving Animation Design Brief for sceneId ${sceneId} to database...`);
+    
+    const result = await db.insert(animationDesignBriefs).values({
+      projectId,
+      sceneId,
+      designBrief: brief,
+      llmModel,
+      status: 'complete',
+      componentJobId,
+    }).returning({ id: animationDesignBriefs.id });
+    
+    if (!result || result.length === 0 || !result[0] || !result[0].id) {
+      throw new Error('Failed to insert Animation Design Brief, no ID returned');
+    }
+    
+    console.log(`Animation Design Brief saved with ID: ${result[0].id}`);
+    return result[0].id;
+  } catch (error: any) {
+    console.error(`Error saving Animation Design Brief to database:`, error.message);
+    throw new Error(`Failed to save Animation Design Brief: ${error.message}`);
+  }
+}
+
+// Complete initialLayout object with all required properties and their defaults
+const createEmptyDesignBrief = (sceneId: string, dimensions: { width: number, height: number }): AnimationDesignBrief => ({
+  briefVersion: '1.0.0',
+  sceneId: sceneId,
+  scenePurpose: 'Pending brief generation...',
+  overallStyle: 'Pending...',
+  durationInFrames: 0,
+  dimensions: dimensions,
+  colorPalette: {
+    background: '#000000',
+  },
+  elements: [{
+    elementId: '00000000-0000-0000-0000-000000000000',
+    elementType: 'text',
+    name: 'Placeholder',
+    content: 'Loading...',
+    initialLayout: {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      opacity: 1,
+      rotation: 0,
+      scale: 1,
+      backgroundColor: '#ffffff',
+    },
+    animations: [],
+  }],
+  audioTracks: [],
+  typography: {
+    defaultFontFamily: 'Arial'
+  }
+});
 
 /**
  * Generates a detailed Animation Design Brief for a scene using an LLM.
@@ -41,18 +121,23 @@ export interface AnimationBriefGenerationParams {
  */
 export async function generateAnimationDesignBrief(
   params: AnimationBriefGenerationParams
-): Promise<AnimationDesignBrief> {
+): Promise<{ brief: AnimationDesignBrief; briefId: string }> {
   const {
+    projectId,
     sceneId,
     scenePurpose,
     sceneElementsDescription,
     desiredDurationInFrames,
-    dimensions, // Added
+    dimensions,
     currentVideoContext,
     targetAudience,
     brandGuidelines,
+    componentJobId,
   } = params;
 
+  // Create a type-safe empty brief
+  const emptyBrief = createEmptyDesignBrief(sceneId, dimensions);
+  
   const systemPrompt = `You are an expert animation designer tasked with creating a detailed Animation Design Brief for a video scene.
     The brief must strictly adhere to the provided JSON schema. Your goal is to translate the user's requirements into a comprehensive, actionable design.
 
@@ -76,10 +161,80 @@ export async function generateAnimationDesignBrief(
 
   const userPrompt = `Generate the Animation Design Brief for the scene described above. Ensure the output is a single JSON object that perfectly matches the tool's schema.`;
 
+  const llmModel = 'gpt-4-turbo-preview'; // Store which model we used for the database
+
   try {
     console.log(`Requesting Animation Design Brief from LLM for sceneId: ${sceneId}...`);
+    
+    // Create a pending record in the database
+    const result = await db.insert(animationDesignBriefs).values({
+      projectId,
+      sceneId,
+      designBrief: emptyBrief, // Use our type-safe empty brief
+      llmModel,
+      status: 'pending',
+      componentJobId,
+    }).returning({ id: animationDesignBriefs.id });
+    
+    if (!result || result.length === 0 || !result[0] || !result[0].id) {
+      throw new Error('Failed to create pending Animation Design Brief record');
+    }
+    
+    const pendingRecordId = result[0].id;
+    console.log(`Created pending Animation Design Brief record with ID: ${pendingRecordId}`);
+
+    // Prepare the schema for OpenAI's function calling
+    // Convert our Zod schema to a JSON Schema for OpenAI
+    const schemaAsJson = {
+      type: 'object',
+      properties: {
+        briefVersion: { type: 'string', default: '1.0.0', description: 'Version of the Animation Design Brief schema used' },
+        sceneId: { type: 'string', format: 'uuid', description: 'Unique identifier for the scene this brief describes' },
+        sceneName: { type: 'string', description: 'User-friendly name for the scene (e.g., "Introduction Sequence")' },
+        scenePurpose: { type: 'string', description: 'The main goal or message of this scene (e.g., "Introduce Product X", "Highlight Feature Y")' },
+        overallStyle: { type: 'string', description: 'Overall artistic style and mood (e.g., "energetic and vibrant", "minimalist and clean", "cinematic and dramatic")' },
+        durationInFrames: { type: 'integer', minimum: 1, description: 'Total duration of the scene in frames' },
+        dimensions: { 
+          type: 'object', 
+          properties: {
+            width: { type: 'integer', minimum: 1, description: 'Canvas width in pixels' },
+            height: { type: 'integer', minimum: 1, description: 'Canvas height in pixels' }
+          },
+          required: ['width', 'height'],
+          description: 'Dimensions of the scene canvas'
+        },
+        colorPalette: { 
+          type: 'object',
+          properties: {
+            primary: { type: 'string', description: 'Primary color (hex, rgba, etc.)' },
+            secondary: { type: 'string', description: 'Secondary color' },
+            accent: { type: 'string', description: 'Accent color' },
+            background: { type: 'string', description: 'Background color for the scene/canvas' },
+            textPrimary: { type: 'string', description: 'Primary text color' },
+            textSecondary: { type: 'string', description: 'Secondary text color' },
+            customColors: { type: 'object', additionalProperties: { type: 'string' }, description: 'Record of additional custom named colors' }
+          },
+          required: ['background'],
+          description: 'Defines the color palette for the scene'
+        },
+        elements: {
+          type: 'array',
+          items: {
+            type: 'object',
+            description: 'Defines a visual or auditory element within the scene and its animations'
+            // Full schema details would be expanded here in a real implementation
+          },
+          minItems: 1,
+          description: 'Array of elements that make up the scene'
+        },
+        // Other properties would be fully defined here for a complete implementation
+      },
+      required: ['briefVersion', 'sceneId', 'scenePurpose', 'overallStyle', 'durationInFrames', 'dimensions', 'colorPalette', 'elements'],
+      description: 'A comprehensive brief detailing the design and animation for a single Remotion scene'
+    };
+
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview', // Or your preferred model that supports extensive JSON output
+      model: llmModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -90,7 +245,7 @@ export async function generateAnimationDesignBrief(
           function: {
             name: ANIMATION_BRIEF_TOOL_NAME,
             description: 'Generates a detailed animation design brief for a video scene, adhering to a specific JSON schema.',
-            parameters: animationDesignBriefSchema.openapi('AnimationDesignBriefInput'),
+            parameters: schemaAsJson,
           },
         },
       ],
@@ -105,12 +260,30 @@ export async function generateAnimationDesignBrief(
     const toolCalls = response.choices[0]?.message?.tool_calls;
     if (!toolCalls || toolCalls.length === 0) {
       console.error('LLM response:', JSON.stringify(response, null, 2));
+      
+      // Update the database record with error status
+      await db.update(animationDesignBriefs)
+        .set({ 
+          status: 'error',
+          errorMessage: 'LLM did not return the expected tool call for animation brief generation.'
+        })
+        .where(eq(animationDesignBriefs.id, pendingRecordId));
+        
       throw new Error('LLM did not return the expected tool call for animation brief generation.');
     }
 
     const toolCall = toolCalls[0];
     if (toolCall?.function?.name !== ANIMATION_BRIEF_TOOL_NAME) {
       console.error('LLM response:', JSON.stringify(response, null, 2));
+      
+      // Update the database record with error status
+      await db.update(animationDesignBriefs)
+        .set({ 
+          status: 'error',
+          errorMessage: `LLM returned an unexpected tool: ${toolCall?.function?.name}`
+        })
+        .where(eq(animationDesignBriefs.id, pendingRecordId));
+        
       throw new Error(`LLM returned an unexpected tool: ${toolCall?.function?.name}`);
     }
 
@@ -121,6 +294,15 @@ export async function generateAnimationDesignBrief(
     } catch (jsonError: any) {
       console.error('Failed to parse LLM response as JSON:', briefArguments);
       console.error('JSON parsing error:', jsonError.message);
+      
+      // Update the database record with error status
+      await db.update(animationDesignBriefs)
+        .set({ 
+          status: 'error',
+          errorMessage: `LLM response was not valid JSON: ${jsonError.message}`
+        })
+        .where(eq(animationDesignBriefs.id, pendingRecordId));
+        
       throw new Error(`LLM response for animation brief was not valid JSON. Error: ${jsonError.message}`);
     }
 
@@ -130,6 +312,16 @@ export async function generateAnimationDesignBrief(
     if (!validationResult.success) {
       console.error('Animation Design Brief validation failed. Issues:', JSON.stringify(validationResult.error.flatten(), null, 2));
       console.error('Data received from LLM:', JSON.stringify(parsedBrief, null, 2));
+      
+      // Update the database record with error status
+      await db.update(animationDesignBriefs)
+        .set({ 
+          status: 'error',
+          errorMessage: `Validation error: ${validationResult.error.message}`,
+          designBrief: emptyBrief
+        })
+        .where(eq(animationDesignBriefs.id, pendingRecordId));
+        
       throw new Error(`Generated Animation Design Brief failed validation: ${validationResult.error.message}`);
     }
     
@@ -147,12 +339,37 @@ export async function generateAnimationDesignBrief(
         validationResult.data.dimensions = { width: dimensions.width, height: dimensions.height };
     }
 
+    // Update the database record with the validated brief
+    await db.update(animationDesignBriefs)
+      .set({ 
+        status: 'complete',
+        designBrief: validationResult.data
+      })
+      .where(eq(animationDesignBriefs.id, pendingRecordId));
 
-    console.log(`Animation Design Brief for sceneId ${sceneId} generated and validated successfully.`);
-    return validationResult.data as AnimationDesignBrief;
+    console.log(`Animation Design Brief for sceneId ${sceneId} generated, validated, and saved successfully.`);
+    return { 
+      brief: validationResult.data as AnimationDesignBrief,
+      briefId: pendingRecordId 
+    };
 
   } catch (error: any) {
     console.error(`Error generating Animation Design Brief for sceneId ${sceneId}:`, error.message);
+    
+    // Handle database error update if pendingRecord exists
+    // Note: This is a fallback in case the error handling in the specific error cases above fails
+    try {
+      await db
+        .update(animationDesignBriefs)
+        .set({ 
+          status: 'error',
+          errorMessage: `Error: ${error.message}`
+        })
+        .where(eq(animationDesignBriefs.sceneId, sceneId));
+    } catch (dbError) {
+      console.error('Failed to update error status in database:', dbError);
+    }
+    
     if (error instanceof OpenAI.APIError) {
       console.error('OpenAI API Error details:', error.status, error.name, error.headers, error.error);
       throw new Error(`OpenAI API Error (${error.status} ${error.name}): ${error.message}`);

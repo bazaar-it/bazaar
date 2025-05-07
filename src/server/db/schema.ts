@@ -6,6 +6,7 @@ import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "@auth/core/adapters";
 import { type InputProps } from "~/types/input-props";
 import { type JsonPatch } from "~/types/json-patch";
+import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 
 // Import the InputProps type for the projects table
 
@@ -248,7 +249,7 @@ export const scenePlans = createTable(
       .references(() => messages.id, { onDelete: "cascade" }),
     rawReasoning: d.text().notNull(), // Raw LLM reasoning about the plan
     planData: d.jsonb().notNull(), // The structured scene plan data
-    userPrompt: d.text().notNull(), // The user prompt that led to this plan
+    userPrompt: d.text().notNull(), // Prompt that generated this plan
     createdAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -256,12 +257,55 @@ export const scenePlans = createTable(
   }),
   (t) => [
     index("scene_plan_project_idx").on(t.projectId),
-    index("scene_plan_message_idx").on(t.messageId),
   ],
 );
 
-// Add relations for scene plans
 export const scenePlansRelations = relations(scenePlans, ({ one }) => ({
   project: one(projects, { fields: [scenePlans.projectId], references: [projects.id] }),
   message: one(messages, { fields: [scenePlans.messageId], references: [messages.id] }),
+}));
+
+// --- Animation Design Briefs table ---
+// Stores detailed animation specifications that bridge scene plans and component generation
+export const animationDesignBriefs = createTable(
+  "animation_design_brief",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d
+      .uuid()
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    sceneId: d.uuid().notNull(), // References scene plan ID (or scene ID within project)
+    componentJobId: d
+      .uuid()
+      .references(() => customComponentJobs.id), // Optional link to component job
+    designBrief: d.jsonb().$type<AnimationDesignBrief>().notNull(), // The structured design brief
+    llmModel: d.varchar({ length: 100 }).notNull(), // Model used to generate the brief
+    status: d
+      .varchar({ length: 50 })
+      .default("pending")
+      .notNull(), // "pending"|"complete"|"error"
+    errorMessage: d.text(), // Error message if generation failed
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    index("animation_design_brief_project_idx").on(t.projectId),
+    index("animation_design_brief_scene_idx").on(t.sceneId),
+    index("animation_design_brief_component_idx").on(t.componentJobId),
+  ],
+);
+
+export const animationDesignBriefsRelations = relations(animationDesignBriefs, ({ one }) => ({
+  project: one(projects, { fields: [animationDesignBriefs.projectId], references: [projects.id] }),
+  componentJob: one(customComponentJobs, { 
+    fields: [animationDesignBriefs.componentJobId], 
+    references: [customComponentJobs.id] 
+  }),
 }));
