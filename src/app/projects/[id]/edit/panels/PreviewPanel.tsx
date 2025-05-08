@@ -8,7 +8,6 @@ import { useVideoState } from '~/stores/videoState';
 import { useTimeline } from '~/components/client/Timeline/TimelineContext';
 import type { InputProps } from '~/types/input-props';
 import { api } from '~/trpc/react';
-import DebugTimelineOverlay from '~/components/client/Preview/DebugTimelineOverlay';
 
 export default function PreviewPanel({ 
   projectId, 
@@ -31,16 +30,16 @@ export default function PreviewPanel({
   // Reference to the Remotion player
   const playerRef = useRef<PlayerRef>(null);
   
-  // Debug mode toggle - IMPORTANT: must be before any conditionals to comply with React's Rules of Hooks
-  const [debugMode, setDebugMode] = useState(true);
-
-  // Poll backend for updated project every second to reflect server-side patches
+  // Query for project data with improved configuration
   const { data: projectData } = api.project.getById.useQuery(
     { id: projectId },
     {
       enabled: !!projectId,
-      refetchInterval: 1000,
-      staleTime: 0,
+      // Reduce polling frequency to reduce network load and console errors
+      refetchInterval: 5000, // Poll every 5 seconds instead of every second
+      staleTime: 2000,      // Consider data fresh for 2 seconds
+      refetchOnWindowFocus: false, // Don't refetch when window gets focus
+      retry: false          // Don't retry failed requests automatically
     },
   );
 
@@ -88,17 +87,7 @@ export default function PreviewPanel({
 
   return (
     <div className="flex flex-col h-full bg-white bg-opacity-90">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold"></h2>
-        <button 
-          onClick={() => setDebugMode(!debugMode)}
-          className="text-xs px-2 py-1 rounded bg-gray-200 hover:bg-gray-300"
-        >
-          {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
-        </button>
-      </div>
-      
-      <div className="flex-1 rounded-lg overflow-hidden relative">
+      <div className="flex-1 overflow-hidden relative">
         <Player
           ref={playerRef}
           component={DynamicVideo}
@@ -114,9 +103,6 @@ export default function PreviewPanel({
           initialFrame={currentFrame}
           renderLoading={() => <div>Loading...</div>}
         />
-        
-        {/* Debug overlay */}
-        {debugMode && <DebugTimelineOverlay projectId={projectId} />}
       </div>
     </div>
   );

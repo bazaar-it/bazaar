@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { PanelGroup, Panel, PanelResizeHandle } from "./PanelGroup";
-import { ChatPanel, CodePanel, PreviewPanel, TimelinePanel, UploadsPanel, Sidebar } from "./panels";
+import { ChatPanel, CodePanel, PreviewPanel, TimelinePanel, UploadsPanel, Sidebar, LibraryPanel } from "./panels";
 import type { InputProps } from "~/types/input-props";
 import type { ProjectListItem } from "~/types/project";
 
@@ -14,7 +14,8 @@ interface EditorLayoutProps {
 }
 
 export default function EditorLayout({ projectId, initialProjects = [], initialProps }: EditorLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   
   const projects = initialProjects.length > 0 
     ? initialProjects 
@@ -26,29 +27,34 @@ export default function EditorLayout({ projectId, initialProjects = [], initialP
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar - outside of PanelGroup */}
-      {sidebarOpen && (
-        <Sidebar 
-          projects={projects} 
-          currentProjectId={projectId}
-        />
+      {/* Sidebar */}
+      <Sidebar 
+        projects={projects}
+        currentProjectId={projectId}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onPanelButtonClick={(panelType: string) => {
+          if (panelType === "projects") {
+            setShowLibrary(!showLibrary);
+          }
+        }}
+      />
+
+      {/* Library Panel (conditional) */}
+      {showLibrary && (
+        <div className="w-64 h-full border-r">
+          <LibraryPanel 
+            projects={projects} 
+            currentProjectId={projectId} 
+          />
+        </div>
       )}
-      
+
       {/* Main Editor Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
         <header className="h-14 border-b px-4 flex items-center">
-          <button 
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-md hover:bg-gray-100"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
-          <h1 className="ml-4 text-lg font-medium">Project Editor</h1>
+          <h1 className="text-lg font-medium">Project Editor</h1>
         </header>
         
         {/* Panel Group - separate from Sidebar */}

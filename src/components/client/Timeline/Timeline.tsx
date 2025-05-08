@@ -3,16 +3,12 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTimeline, useTimelineZoom, useTimelineClick, useTimelineDrag } from './TimelineContext';
-import TimelineGrid from './TimelineGrid';
-import TimelineMarker from './TimelineMarker';
 import TimelineHeader from './TimelineHeader';
 import { cn } from '~/lib/utils';
 import { useVideoState } from '~/stores/videoState';
 import { TimelineItemType } from '~/types/timeline';
-import type { TimelineItemUnion } from '~/types/timeline';
-import type { Operation } from 'fast-json-patch';
-import { addScene, removeSceneByIndex, replace } from '~/lib/patch';
-import { ZoomIn, ZoomOut, Trash2, Copy, Plus, Scissors, RefreshCw } from 'lucide-react';
+import { addScene, removeSceneByIndex } from '~/lib/patch';
+import { ZoomIn, ZoomOut, RefreshCw, Trash2, Copy } from 'lucide-react';
 
 export interface TimelineProps {
   projectId: string;
@@ -55,462 +51,197 @@ export const Timeline: React.FC<TimelineProps> = ({
   const { zoomIn, zoomOut, resetZoom } = useTimelineZoom();
   const { startDrag } = useTimelineDrag();
   
-  // UI state
-  const [isRegeneratingScene, setIsRegeneratingScene] = useState(false);
-  
   // Get video state
   const { getCurrentProps, applyPatch } = useVideoState();
   const inputProps = getCurrentProps();
 
-  // Convert scenes to timeline items
-  const timelineItems = useMemo<TimelineItemUnion[]>(() => {
-    if (!inputProps) return [];
+  // Generate layers based on items (renamed from tracks)
+  const layers = useMemo(() => {
+    // Show at least 2 layers
+    const maxRow = items.length > 0 
+      ? Math.max(...items.map(item => (typeof item.row === 'number' ? item.row : 0)))
+      : 1;
     
-    return inputProps.scenes.map((scene, index): TimelineItemUnion => {
-      // Map scene type to timeline item type
-      const itemType = mapSceneTypeToTimelineType(scene.type);
-      
-      // Create timeline item based on type
-      switch (scene.type) {
-        case 'text':
-          return {
-            id: parseInt(scene.id, 10) || index,
-            type: TimelineItemType.TEXT,
-            from: scene.start,
-            durationInFrames: scene.duration,
-            row: index % 3,
-            content: scene.data?.text as string || 'Text',
-            color: scene.data?.color as string || '#FFFFFF',
-            fontSize: scene.data?.fontSize as number || 24,
-            fontFamily: scene.data?.fontFamily as string || 'Arial'
-          } as TimelineItemUnion;
-        case 'image':
-          return {
-            id: parseInt(scene.id, 10) || index,
-            type: TimelineItemType.IMAGE,
-            from: scene.start,
-            durationInFrames: scene.duration,
-            row: index % 3,
-            src: scene.data?.src as string || ''
-          } as TimelineItemUnion;
-        default:
-          return {
-            id: parseInt(scene.id, 10) || index,
-            type: TimelineItemType.TEXT,
-            from: scene.start,
-            durationInFrames: scene.duration,
-            row: index % 3,
-            content: scene.type,
-            fontSize: 24,
-            fontFamily: 'Arial',
-            color: '#FFFFFF'
-          } as TimelineItemUnion;
-      }
-    });
-  }, [inputProps]);
+    return Array.from({ length: maxRow + 1 }, (_, i) => `Layer ${i + 1}`);
+  }, [items]);
 
-  // Helper function to map scene types to timeline item types
-  function mapSceneTypeToTimelineType(sceneType: string): TimelineItemType {
-    switch (sceneType) {
-      case 'text': return TimelineItemType.TEXT;
-      case 'image': return TimelineItemType.IMAGE;
-      case 'video': return TimelineItemType.VIDEO;
-      case 'audio': return TimelineItemType.AUDIO;
-      default: return TimelineItemType.TEXT;
-    }
-  }
-  
-  // Track timeline width for responsive calculations
-  const [timelineWidth, setTimelineWidth] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Update scene in Zustand when timeline item changes using JSON-Patch
-  const handleTimelineChange = useCallback((updatedItem: TimelineItemUnion) => {
-    if (!inputProps) return;
+  // Handle delete item
+  const handleDeleteItem = useCallback((id: number | null) => {
+    if (id === null) return;
     
-    // Find scene by ID (converting between string and number as needed)
-    const sceneIndex = inputProps.scenes.findIndex(scene => 
-      parseInt(scene.id, 10) === updatedItem.id || scene.id === String(updatedItem.id)
-    );
-    
-    if (sceneIndex === -1) return;
-    
-    // Clamp start and duration to valid bounds
-    const safeFrom = Math.max(0, updatedItem.from);
-    const safeDuration = Math.max(1, updatedItem.durationInFrames);
-    
-    // Generate patches using our patch factory - only update supported properties
-    const patches: Operation[] = [
-      // Update the start time (non-negative)
-      ...replace(sceneIndex, 'start', safeFrom),
-      // Update the duration (at least 1 frame)
-      ...replace(sceneIndex, 'duration', safeDuration)
-    ];
-    
-    // Apply patches using the optimistic update pattern
-    applyPatch(projectId, patches);
-  }, [inputProps, projectId, applyPatch]);
-  
-  // Handle item deletion using the patch factory
-  const handleDeleteItem = useCallback((id: number) => {
-    if (!inputProps) return;
-    
-    // Find the scene index
+    // Find the item
     const itemToDelete = items.find(item => item.id === id);
     if (!itemToDelete || !itemToDelete.sceneId) return;
     
-    const sceneIndex = inputProps.scenes.findIndex(scene => scene.id === itemToDelete.sceneId);
+    const sceneIndex = inputProps?.scenes.findIndex(scene => scene.id === itemToDelete.sceneId);
     
-    if (sceneIndex !== -1) {
-      // Generate a remove patch using our factory
+    if (typeof sceneIndex === 'number' && sceneIndex !== -1) {
+      // Generate a remove patch
       const patches = removeSceneByIndex(sceneIndex);
       
       // Apply the patch
       applyPatch(projectId, patches);
       
-      // If this was the selected item, clear selection
+      // Clear selection
       if (internalSelectedItemId === id) {
         setSelectedItemId(null);
       }
     }
-  }, [inputProps, projectId, applyPatch, internalSelectedItemId, setSelectedItemId, items]);
-  
-  // Handle add new track
-  const handleAddTrack = useCallback(() => {
-    if (!inputProps || !inputProps.scenes.length) return;
+  }, [items, inputProps?.scenes, projectId, applyPatch, internalSelectedItemId, setSelectedItemId]);
+
+  // Handle copy item
+  const handleCopyItem = useCallback((id: number | null) => {
+    if (id === null) return;
     
-    // Find highest track number - avoid using row directly
-    const maxTrackIndex = Math.max(...inputProps.scenes.map((scene, index) => {
-      // Use the scene's index in scenes array if no explicit row/track
-      return (scene as any).row || index % 3;
-    }));
+    // Find the item
+    const itemToCopy = items.find(item => item.id === id);
+    if (!itemToCopy || !itemToCopy.sceneId) return;
     
-    // Create a new empty placeholder for this track
-    const newTrackIndex = maxTrackIndex + 1;
+    const sceneToCopy = inputProps?.scenes.find(scene => scene.id === itemToCopy.sceneId);
     
-    // Sample placeholder text for now - in production, this could be configurable
+    if (sceneToCopy) {
+      // Create a new scene based on the copied one with a new ID
+      const newScene = {
+        ...sceneToCopy,
+        id: String(Date.now()), // Generate a new ID
+        start: sceneToCopy.start + sceneToCopy.duration, // Position after the original
+      };
+      
+      // Add the new scene
+      const patches = addScene(newScene);
+      applyPatch(projectId, patches);
+    }
+  }, [items, inputProps?.scenes, projectId, applyPatch]);
+
+  // Add new layer (renamed from track)
+  const handleAddLayer = useCallback(() => {
+    // Create a new text scene as a placeholder for the new layer
     const newScene = {
-      type: 'text' as const, // Use const assertion to satisfy TypeScript
-      id: String(Date.now()), // Generate a temporary ID
+      type: 'text' as const,
+      id: String(Date.now()),
       start: 0,
-      duration: 30, // 1 second at 30fps
+      duration: 30,
       data: {
-        text: `Track ${newTrackIndex + 1}`,
+        text: 'New Layer',
         color: '#FFFFFF',
         fontSize: 24,
         fontFamily: 'Arial',
       }
     };
     
-    // Create patch to add the scene
     const patches = addScene(newScene);
-    
-    // Apply the patch
     applyPatch(projectId, patches);
-  }, [inputProps, projectId, applyPatch]);
-  
-  // Hook to apply timeline changes to Zustand store
-  useEffect(() => {
-    // Add a listener or setup a reaction when item updates
-    // For now, just set up a simple check on each item update
-    const handleItemUpdate = (item: TimelineItemUnion) => {
-      handleTimelineChange(item);
-    };
+  }, [projectId, applyPatch]);
 
-    // Later we could add proper event listeners here
+  // Format time display (MM:SS:FF)
+  const formatTimeDisplay = (frame: number) => {
+    const seconds = Math.floor(frame / 30);
+    const frames = frame % 30;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
     
-    return () => {
-      // Cleanup logic if needed
-    };
-  }, [handleTimelineChange]);
-  
-  // Drag-to-chat item export
-  const handleDragItemToChat = useCallback((id: number) => {
-    if (!allowDragToChat) return;
-    
-    // Find the item by ID
-    const item = timelineItems.find(item => item.id === id);
-    if (!item) return;
-    
-    console.log('Item dragged to chat:', item);
-    
-    // If there's an external handler, call it
-    if (onSelectItem) {
-      onSelectItem(id);
-    }
-  }, [timelineItems, allowDragToChat, onSelectItem]);
-  
-  // Keyboard shortcuts for timeline
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle shortcuts if in text input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-      
-      // Shortcut for deleting selected items
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (internalSelectedItemId !== null) {
-          e.preventDefault();
-          handleDeleteItem(internalSelectedItemId);
-        }
-      }
-      
-      // Shortcuts for zooming
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          zoomIn();
-        } else if (e.key === '-' || e.key === '_') {
-          e.preventDefault();
-          zoomOut();
-        } else if (e.key === '0') {
-          e.preventDefault();
-          resetZoom();
-        }
-      }
-      
-      // Arrow keys for moving through timeline
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        seekToFrame(Math.max(0, currentFrame - (e.shiftKey ? 10 : 1)));
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        seekToFrame(Math.min(durationInFrames - 1, currentFrame + (e.shiftKey ? 10 : 1)));
-      }
-    };
-    
-    // Add event listener for keyboard shortcuts
-    window.addEventListener('keydown', handleKeyDown);
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentFrame, durationInFrames, internalSelectedItemId, handleDeleteItem, seekToFrame, zoomIn, zoomOut, resetZoom]);
-  
-  // Handle window resizing
-  useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        setTimelineWidth(containerRef.current.clientWidth);
-      }
-    };
-    
-    // Initial measurement
-    handleResize();
-    
-    // Add event listener
-    window.addEventListener('resize', handleResize);
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-  
-  // External sync: update context selection when props change
-  useEffect(() => {
-    if (selectedItemId !== null && selectedItemId !== internalSelectedItemId) {
-      setSelectedItemId(selectedItemId);
-    }
-  }, [selectedItemId, internalSelectedItemId, setSelectedItemId]);
-  
-  // Use explicit duration from props if provided
-  useEffect(() => {
-    if (totalDuration && totalDuration !== durationInFrames) {
-      setDurationInFrames(totalDuration);
-    }
-  }, [totalDuration, durationInFrames, setDurationInFrames]);
-
-  // Handle Scene Regeneration (placeholder for future implementation)
-  const handleRegenerateScene = useCallback(() => {
-    // Find the selected item
-    const selectedItem = items.find(item => item.id === internalSelectedItemId);
-    if (!selectedItem || !selectedItem.sceneId) return;
-    
-    // Set regenerating state to show UI feedback
-    setIsRegeneratingScene(true);
-    
-    // For now, just log that we would regenerate this scene
-    console.log(`Regenerating scene ${selectedItem.sceneId}`);
-    
-    // Simulate regeneration in progress
-    setTimeout(() => {
-      setIsRegeneratingScene(false);
-      
-      // Show notification
-      console.log('Scene regeneration will be implemented in a future update');
-    }, 1500);
-    
-    // In future implementation, this would trigger a tRPC call to regenerate the scene
-    // The implementation would look like:
-    /*
-    api.chat.regenerateScene.mutate({
-      projectId,
-      sceneId: selectedItem.sceneId
-    }, {
-      onSuccess: () => {
-        setIsRegeneratingScene(false);
-        // Show success notification
-      },
-      onError: (error) => {
-        setIsRegeneratingScene(false);
-        // Show error notification
-      }
-    });
-    */
-  }, [internalSelectedItemId, items]);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div 
-      ref={containerRef}
-      className={cn("flex flex-col w-full h-full", className)}
-    >
-      {/* Toolbar */}
-      <div className="flex items-center justify-between bg-slate-900 px-4 py-2 border-b border-slate-700">
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={zoomOut}
-            className="p-1 text-slate-400 hover:text-white"
-            title="Zoom out (Ctrl+-)"
-          >
-            <ZoomOut size={16} />
-          </button>
-          <span className="text-xs text-slate-300">
-            {Math.round(zoomLevel * 100)}%
-          </span>
-          <button 
-            onClick={zoomIn}
-            className="p-1 text-slate-400 hover:text-white"
-            title="Zoom in (Ctrl++)"
-          >
-            <ZoomIn size={16} />
-          </button>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Item selection tools */}
-          {internalSelectedItemId !== null && (
-            <>
-              <button 
-                onClick={() => handleDeleteItem(internalSelectedItemId)}
-                className="p-1 text-slate-400 hover:text-red-500"
-                title="Delete selected item (Delete)"
-              >
-                <Trash2 size={16} />
-              </button>
-              <button 
-                onClick={() => {
-                  // Clone selected item
-                  const item = items.find(i => i.id === internalSelectedItemId);
-                  if (item) {
-                    const cloned = {
-                      ...item,
-                      id: Date.now(), // Generate new ID
-                      from: item.from + item.durationInFrames + 5, // Place after original with gap
-                    };
-                    
-                    // Add to timeline
-                    updateItem(cloned);
-                  }
-                }}
-                className="p-1 text-slate-400 hover:text-white"
-                title="Duplicate selected item"
-              >
-                <Copy size={16} />
-              </button>
-              {/* Add regenerate button */}
-              <button 
-                onClick={handleRegenerateScene}
-                className={cn(
-                  "p-1",
-                  isRegeneratingScene 
-                    ? "text-blue-400 animate-pulse" 
-                    : "text-slate-400 hover:text-white"
-                )}
-                title="Regenerate scene (coming soon)"
-                disabled={isRegeneratingScene}
-              >
-                <RefreshCw size={16} className={isRegeneratingScene ? "animate-spin" : ""} />
-              </button>
-              <button 
-                onClick={() => {
-                  // Find the item
-                  const item = items.find(i => i.id === internalSelectedItemId);
-                  if (item && currentFrame > item.from && currentFrame < item.from + item.durationInFrames) {
-                    // Split at current frame
-                    const firstHalf = {
-                      ...item,
-                      durationInFrames: currentFrame - item.from
-                    };
-                    
-                    const secondHalf = {
-                      ...item,
-                      id: Date.now(), // Generate new ID
-                      from: currentFrame,
-                      durationInFrames: item.from + item.durationInFrames - currentFrame
-                    };
-                    
-                    // Update first half
-                    updateItem(firstHalf);
-                    // Add second half
-                    updateItem(secondHalf);
-                  }
-                }}
-                className="p-1 text-slate-400 hover:text-white"
-                title="Split at current position"
-              >
-                <Scissors size={16} />
-              </button>
-            </>
-          )}
-          
-          <button 
-            onClick={handleAddTrack}
-            className="p-1 text-slate-400 hover:text-white"
-            title="Add new track"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-        
-        <div className="text-xs text-slate-300">
-          {formatTime(currentFrame / 30)} / {formatTime(durationInFrames / 30)}
-        </div>
-      </div>
-      
-      {/* Timeline header with markers */}
+    <div className={cn("flex flex-col h-full bg-white", className)}>
+      {/* Use TimelineHeader component for all header controls */}
       <TimelineHeader 
-        durationInFrames={durationInFrames}
+        durationInFrames={durationInFrames} 
         zoomLevel={zoomLevel}
+        onDeleteItem={handleDeleteItem}
+        onCopyItem={handleCopyItem}
       />
       
-      {/* Main timeline grid */}
-      <div className="flex-grow overflow-auto relative">
-        <TimelineGrid
-          onDragToChat={allowDragToChat ? handleDragItemToChat : undefined}
-          onTrackAdd={handleAddTrack}
-        />
+      {/* Timeline grid */}
+      <div className="flex-1 relative overflow-auto" ref={contextTimelineRef}>
+        {/* Layer names column (renamed from Track) */}
+        <div className="absolute left-0 top-0 bottom-0 w-[120px] bg-white border-r border-gray-200 z-10">
+          {layers.map((layerName, idx) => (
+            <div 
+              key={idx}
+              className="h-12 px-3 flex items-center border-b border-gray-100 text-sm"
+            >
+              {layerName}
+            </div>
+          ))}
+          <div 
+            className="h-12 px-3 flex items-center text-blue-500 hover:bg-gray-50 cursor-pointer text-sm"
+            onClick={handleAddLayer}
+          >
+            + Add Layer
+          </div>
+        </div>
         
-        {/* Playhead marker */}
-        <TimelineMarker
-          currentFrame={currentFrame}
-          totalDuration={durationInFrames}
-          zoomLevel={zoomLevel}
-        />
+        {/* Timeline content area */}
+        <div 
+          className="absolute left-[120px] right-0 top-0 bottom-0 overflow-auto"
+          onClick={handleTimelineClick}
+        >
+          {/* Layer rows background */}
+          {layers.map((_, idx) => (
+            <div 
+              key={idx}
+              className="h-12 border-b border-gray-100"
+            ></div>
+          ))}
+          
+          {/* Current frame marker */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-red-500 z-20 pointer-events-none"
+            style={{ 
+              left: `${(currentFrame / durationInFrames) * 100}%` 
+            }}
+          >
+            <div className="absolute -top-1 -left-[9px] w-[18px] h-5 flex items-center justify-center bg-red-500 text-white text-[10px] rounded">
+              {currentFrame}
+            </div>
+          </div>
+          
+          {/* Timeline items */}
+          {items.map(item => (
+            <div
+              key={item.id}
+              className={cn(
+                "absolute rounded-sm overflow-hidden cursor-pointer border transition-all",
+                selectedItemId === item.id 
+                  ? "ring-2 ring-blue-500 border-blue-500 bg-blue-100"
+                  : "border-blue-400 bg-blue-50 hover:bg-blue-100"
+              )}
+              style={{
+                top: `${(item.row || 0) * 48 + 6}px`,
+                left: `${(item.from / durationInFrames) * 100}%`,
+                width: `${(item.durationInFrames / durationInFrames) * 100}%`,
+                height: '36px',
+                opacity: isDragging && selectedItemId === item.id ? 0.5 : 1
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                selectItem(item.id);
+                if (onSelectItem) {
+                  onSelectItem(item.id);
+                }
+              }}
+              onPointerDown={(e) => {
+                if (e.button === 0) {
+                  e.stopPropagation();
+                  selectItem(item.id);
+                  startDrag(e, item.id, 'move');
+                }
+              }}
+            >
+              <div className="h-full w-full p-1 text-xs flex items-center overflow-hidden text-blue-900">
+                {item.type === TimelineItemType.TEXT ? `Text: ${item.content || ''}` : 
+                 item.type === TimelineItemType.IMAGE ? 'Image' : 
+                 item.type === TimelineItemType.VIDEO ? 'Video' : 
+                 item.type === TimelineItemType.AUDIO ? 'Audio' : 'Item'}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 };
-
-/**
- * Format seconds to MM:SS.ms format
- */
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toFixed(2).padStart(5, '0')}`;
-}
 
 export default Timeline;

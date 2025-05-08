@@ -170,9 +170,7 @@ export default function TimelinePanel() {
 
   return (
     <div className="flex flex-col h-full" ref={timelineContainerRef}>
-      <h2 className="text-xl font-semibold mb-2">Timeline</h2>
-      
-      <div className="flex-1 border border-gray-700 rounded-md overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         <TimelineProvider 
           initialItems={timelineItems} 
           initialDuration={totalDuration}
@@ -186,47 +184,6 @@ export default function TimelinePanel() {
             allowDragToChat={true}
           />
         </TimelineProvider>
-      </div>
-      
-      {/* Keyboard shortcut help */}
-      <div className="mt-2 text-xs text-gray-400 grid grid-cols-2 gap-x-4 gap-y-1">
-        <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Delete</kbd>
-          <span>Remove scene</span>
-        </div>
-        <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Space</kbd>
-          <span>Play/pause</span>
-        </div>
-        <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">→</kbd>
-          <span>Next frame</span>
-        </div>
-        <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">←</kbd>
-          <span>Previous frame</span>
-        </div>
-      </div>
-      
-      {/* Status legend */}
-      <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
-        <span>Status:</span>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded-full mr-1"></div>
-          <span>Valid</span>
-        </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded-full mr-1"></div>
-          <span>Warning</span>
-        </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded-full mr-1"></div>
-          <span>Error</span>
-        </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-blue-500/20 border border-blue-500 rounded-full mr-1 animate-pulse"></div>
-          <span>Building</span>
-        </div>
       </div>
     </div>
   );

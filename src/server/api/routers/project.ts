@@ -103,17 +103,26 @@ export const projectRouter = createTRPCRouter({
           });
         }
 
-        // If initialMessage is provided, trigger LLM/assistant processing asynchronously
+        // Return immediately after creating the project
+        const projectId = insertResult.id;
+        
+        // If initialMessage is provided, process it asynchronously without awaiting
         if (input?.initialMessage && input.initialMessage.trim().length > 0) {
-          // Fire-and-forget – attach a catch to avoid unhandled rejection noise
-          processUserMessageInProject(ctx, insertResult.id, input.initialMessage)
-            .catch((error: unknown) => {
-              // Log but don't affect the response – project has already been created
-              console.error(`Error processing initial message for project ${insertResult.id}:`, error);
-            });
+          // Use Promise.allSettled to safely handle errors without affecting the main response
+          // This is a fire-and-forget approach but with better logging
+          Promise.allSettled([
+            processUserMessageInProject(ctx, projectId, input.initialMessage)
+          ]).then(results => {
+            const result = results[0];
+            if (result.status === 'rejected') {
+              console.error(`Error processing initial message for project ${projectId}:`, result.reason);
+            } else {
+              console.log(`Successfully processed initial message for project ${projectId}`);
+            }
+          });
         }
         
-        return { projectId: insertResult.id };
+        return { projectId };
 
       } catch (error) {
         console.error("Error creating project:", error);

@@ -10,16 +10,16 @@ import { useTimelineClick, useTimelineZoom, useTimeline, useTimelineDrag } from 
 
 interface TimelineGridProps {
   onDragToChat?: (id: number) => void;
-  onTrackAdd?: () => void;
+  onLayerAdd?: () => void;
 }
 
 /**
  * TimelineGrid component that displays timeline items in rows
- * Supporting multiple tracks with advanced functionality
+ * Supporting multiple layers with advanced functionality
  */
 const TimelineGrid: React.FC<TimelineGridProps> = ({
   onDragToChat,
-  onTrackAdd,
+  onLayerAdd,
 }) => {
   // Use the timeline hooks for data and interaction
   const { 
@@ -67,17 +67,17 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     return Array.from({ length: maxRow + 1 }, (_, i) => i);
   }, [maxRow]);
 
-  // Track management state
-  const [lockedTracks, setLockedTracks] = useState<Set<number>>(new Set());
-  const [collapsedTracks, setCollapsedTracks] = useState<Set<number>>(new Set());
-  const [hiddenTracks, setHiddenTracks] = useState<Set<number>>(new Set());
+  // Layer management state
+  const [lockedLayers, setLockedLayers] = useState<Set<number>>(new Set());
+  const [collapsedLayers, setCollapsedLayers] = useState<Set<number>>(new Set());
+  const [hiddenLayers, setHiddenLayers] = useState<Set<number>>(new Set());
   
   // Drop target indicators
   const [dropTargetRow, setDropTargetRow] = useState<number | null>(null);
   
-  // Handle locking/unlocking a track
-  const toggleTrackLock = (rowIndex: number) => {
-    setLockedTracks(prev => {
+  // Handle locking/unlocking a layer
+  const toggleLayerLock = (rowIndex: number) => {
+    setLockedLayers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(rowIndex)) {
         newSet.delete(rowIndex);
@@ -88,9 +88,9 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     });
   };
   
-  // Handle collapsing/expanding a track
-  const toggleTrackCollapse = (rowIndex: number) => {
-    setCollapsedTracks(prev => {
+  // Handle collapsing/expanding a layer
+  const toggleLayerCollapse = (rowIndex: number) => {
+    setCollapsedLayers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(rowIndex)) {
         newSet.delete(rowIndex);
@@ -101,9 +101,9 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     });
   };
   
-  // Handle hiding/showing a track
-  const toggleTrackVisibility = (rowIndex: number) => {
-    setHiddenTracks(prev => {
+  // Handle hiding/showing a layer
+  const toggleLayerVisibility = (rowIndex: number) => {
+    setHiddenLayers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(rowIndex)) {
         newSet.delete(rowIndex);
@@ -177,50 +177,50 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
       {renderGhostItem()}
       
       <div className="w-full h-full">
-        {/* Track Headers */}
-        <div className="sticky left-0 z-20 bg-slate-900 border-r border-slate-700 w-36">
+        {/* Layer Headers */}
+        <div className="sticky left-0 z-20 bg-white border-r border-gray-200 w-36">
           {rows.map(rowIndex => (
             <div 
-              key={`track-header-${rowIndex}`}
+              key={`layer-header-${rowIndex}`}
               className={cn(
-                "flex items-center h-14 px-2 border-b border-slate-700",
-                dropTargetRow === rowIndex ? "bg-blue-900/30" : "",
-                hiddenTracks.has(rowIndex) ? "opacity-50" : ""
+                "flex items-center h-14 px-2 border-b border-gray-200 bg-white text-black",
+                dropTargetRow === rowIndex ? "bg-gray-100" : "",
+                hiddenLayers.has(rowIndex) ? "opacity-50" : ""
               )}
             >
               <div className="flex flex-col flex-1 min-w-0">
                 <div className="flex items-center gap-1">
                   <button 
-                    onClick={() => toggleTrackCollapse(rowIndex)}
-                    className="p-1 text-slate-400 hover:text-white"
+                    onClick={() => toggleLayerCollapse(rowIndex)}
+                    className="p-1 text-gray-400 hover:text-black"
                   >
-                    {collapsedTracks.has(rowIndex) ? 
+                    {collapsedLayers.has(rowIndex) ? 
                       <ChevronDown size={14} /> : 
                       <ChevronUp size={14} />
                     }
                   </button>
-                  <span className="text-xs font-medium truncate">
-                    Track {rowIndex + 1}
+                  <span className="text-xs font-medium truncate text-black">
+                    Layer {rowIndex + 1}
                   </span>
                 </div>
               </div>
               <div className="flex items-center gap-1">
                 <button 
-                  onClick={() => toggleTrackVisibility(rowIndex)}
-                  className="p-1 text-slate-400 hover:text-white"
-                  title={hiddenTracks.has(rowIndex) ? "Show track" : "Hide track"}
+                  onClick={() => toggleLayerVisibility(rowIndex)}
+                  className="p-1 text-gray-400 hover:text-black"
+                  title={hiddenLayers.has(rowIndex) ? "Show layer" : "Hide layer"}
                 >
-                  {hiddenTracks.has(rowIndex) ? 
+                  {hiddenLayers.has(rowIndex) ? 
                     <EyeOff size={14} /> : 
                     <Eye size={14} />
                   }
                 </button>
                 <button 
-                  onClick={() => toggleTrackLock(rowIndex)}
-                  className="p-1 text-slate-400 hover:text-white"
-                  title={lockedTracks.has(rowIndex) ? "Unlock track" : "Lock track"}
+                  onClick={() => toggleLayerLock(rowIndex)}
+                  className="p-1 text-gray-400 hover:text-black"
+                  title={lockedLayers.has(rowIndex) ? "Unlock layer" : "Lock layer"}
                 >
-                  {lockedTracks.has(rowIndex) ? 
+                  {lockedLayers.has(rowIndex) ? 
                     <Lock size={14} /> : 
                     <Unlock size={14} />
                   }
@@ -229,49 +229,45 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
             </div>
           ))}
           
-          {/* Add track button */}
+          {/* Add layer button */}
           <button 
-            onClick={onTrackAdd}
-            className="flex items-center justify-center w-full h-10 text-slate-400 hover:text-white hover:bg-slate-800"
-            title="Add new track"
+            onClick={onLayerAdd}
+            className="flex items-center justify-center w-full h-10 text-gray-400 hover:text-black hover:bg-gray-100 bg-white"
+            title="Add new layer"
           >
             <Plus size={16} />
-            <span className="ml-1 text-xs">Add Track</span>
+            <span className="ml-1 text-xs text-black">Add Layer</span>
           </button>
         </div>
         
         {/* Timeline Rows */}
         <div className="flex-1 overflow-hidden">
           {rows.map(rowIndex => {
-            // Skip hidden tracks
-            if (hiddenTracks.has(rowIndex)) return null;
+            // Skip hidden layers
+            if (hiddenLayers.has(rowIndex)) return null;
             
             // Get items for this row
             const rowItems = rowsMap.get(rowIndex) || [];
             
             return (
               <div 
-                key={`track-${rowIndex}`}
+                key={`layer-${rowIndex}`}
                 className={cn(
-                  "relative h-14 border-b border-slate-700 bg-slate-800",
-                  "hover:bg-slate-800/80",
-                  collapsedTracks.has(rowIndex) ? "h-2" : "h-14",
-                  lockedTracks.has(rowIndex) ? "opacity-50" : "",
-                  dropTargetRow === rowIndex ? "bg-blue-900/30" : ""
+                  "relative border-b border-gray-100",
+                  collapsedLayers.has(rowIndex) ? "h-2" : "h-14",
+                  lockedLayers.has(rowIndex) ? "opacity-50" : "",
+                  dropTargetRow === rowIndex ? "bg-blue-50" : ""
                 )}
-                onDragOver={(e) => !lockedTracks.has(rowIndex) && handleRowDragOver(e, rowIndex)}
+                onDragOver={(e) => !lockedLayers.has(rowIndex) && handleRowDragOver(e, rowIndex)}
                 onDragLeave={handleRowDragLeave}
-                style={{ 
-                  backgroundSize: `${100 * zoomLevel}px 40px`, 
-                  backgroundPosition: '0 center',
-                  backgroundImage: 'linear-gradient(to right, rgba(115, 115, 115, 0.2) 1px, transparent 1px), linear-gradient(to right, rgba(115, 115, 115, 0.1) 1px, transparent 1px)',
-                  backgroundRepeat: 'repeat-x'
-                }}
               >
-                {/* Only render items if track is not collapsed */}
-                {!collapsedTracks.has(rowIndex) && rowItems.map(item => (
+                {/* Empty row content for drop target */}
+                <div className="w-full h-full"></div>
+                
+                {/* Only render items if layer is not collapsed */}
+                {!collapsedLayers.has(rowIndex) && rowItems.map(item => (
                   <TimelineItem
-                    key={`item-${item.id}`}
+                    key={item.id}
                     item={item}
                     isSelected={selectedItemId === item.id}
                     isDragging={isDragging}

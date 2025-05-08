@@ -43,13 +43,21 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       // Don't refetch on window focus to avoid potentially confusing UI updates
       refetchOnWindowFocus: false,
       // Only start fetching if we have a projectId
-      enabled: !!projectId,
-      // Don't show loading state for too long - treat errors as empty messages
-      retry: 1,
+      enabled: !!projectId && projectId.trim().length > 0,
+      // Handle errors gracefully
+      retry: false,
       // No longer polling - streaming will update messages in real-time
       // refetchInterval: 1000,
-      // Consider data stale quickly so re-renders happen as needed
-      staleTime: 0,
+      // Consider data stale for a longer period to reduce unnecessary fetches
+      staleTime: 3000,
+      // If the query fails, just return an empty array
+      placeholderData: [],
+      // Treat the response as stale immediately to avoid cached responses
+      trpc: {
+        context: {
+          skipBatch: true
+        }
+      }
     }
   );
   
@@ -133,8 +141,24 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       console.error("Stream mutation error:", err);
       setIsStreaming(false);
       setStreamingMessageId(null);
-      addMessage(projectId, `Stream error: ${err.message}`, false);
-    }
+      
+      // Check for network errors
+      if (err.message.includes('network') || err.message.includes('fetch') || err.message.includes('connection')) {
+        addMessage(projectId, `Network error: Please check your connection and try again.`, false);
+      } else if (err.message.includes('timeout')) {
+        addMessage(projectId, `The request timed out. Please try again.`, false);
+      } else {
+        // Generic error message for other cases
+        addMessage(projectId, `There was a problem processing your request. Please try again.`, false);
+      }
+      
+      // Request a refetch of messages after a delay to ensure we have the latest state
+      setTimeout(() => {
+        void refetchMessages();
+      }, 1000);
+    },
+    retry: 2, // Retry up to 2 times for recoverable errors
+    retryDelay: attemptIndex => Math.min(1000 * (2 ** attemptIndex), 5000) // Exponential backoff with max 5s
   });
 
   // Track processed messages to avoid duplicate streams
@@ -150,6 +174,14 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     // Check if we've already processed this message in this component lifecycle
     if (processedMessageIds.has(streamingMessageId)) {
       console.log(`Message ${streamingMessageId} already processed in this session, not restarting stream`);
+      return;
+    }
+
+    // Additional validation to prevent errors
+    if (streamingMessageId.trim() === '') {
+      console.error('Invalid empty streamingMessageId, aborting stream');
+      setIsStreaming(false);
+      setStreamingMessageId(null);
       return;
     }
 
@@ -186,14 +218,23 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     processedMessageIds.add(streamingMessageId);
     
     console.log(`Starting stream subscription for message ID: ${streamingMessageId}`);
-    streamResponse.mutate({
-      assistantMessageId: streamingMessageId,
-      projectId
-    });
+    
+    try {
+      // Wrap the mutation call in a try/catch
+      streamResponse.mutate({
+        assistantMessageId: streamingMessageId,
+        projectId
+      });
+    } catch (error) {
+      console.error('Failed to initiate stream:', error);
+      setIsStreaming(false);
+      setStreamingMessageId(null);
+      addMessage(projectId, 'Failed to start streaming. Please try again.', false);
+    }
     
     // This effect doesn't need to depend on dbMessages directly -
     // it only needs to run when streamingMessageId changes
-  }, [streamingMessageId, projectId, isStreaming, streamResponse, processedMessageIds]);
+  }, [streamingMessageId, projectId, isStreaming, streamResponse, processedMessageIds, dbMessages, refetchMessages]);
   
   // Reset streaming state on component mount only
   useEffect(() => {
@@ -352,7 +393,8 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || isStreaming) return;
+    // Temporarily remove the isStreaming check to allow submission even while streaming
+    if (!message.trim()) return;
     
     // Start streaming response
     initiateChatMutation.mutate({
@@ -410,11 +452,6 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b">
-        <h2 className="text-lg font-medium">Chat</h2>
-        <p className="text-sm text-muted-foreground">Describe changes to your video</p>
-      </div>
-      
       {/* Messages container */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {isLoading ? (
@@ -526,12 +563,6 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
       {/* Message input */}
       <div className="p-4 border-t">
-        {!selectedSceneId && (
-          <div className="mb-2 flex items-center gap-2 text-xs text-amber-500">
-            <AlertTriangleIcon className="h-3 w-3" />
-            <span>No scene selected. Your changes will apply to the entire project.</span>
-          </div>
-        )}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={message}
@@ -540,11 +571,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
               ? "Describe changes to this scene..." 
               : "Describe changes to your video..."}
             className="flex-1"
-            disabled={isStreaming || isLoadingMessages}
           />
           <Button 
             type="submit"
-            disabled={isStreaming || isLoadingMessages || !message.trim()}
+            disabled={!message.trim()}
             size="icon"
           >
             {isStreaming ? (

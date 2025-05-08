@@ -37,7 +37,6 @@ export default function UploadsPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col h-full">
-      <h2 className="text-xl font-semibold mb-4">Uploads</h2>
       
       <div 
         className={`flex-1 border-2 border-dashed rounded-lg p-8 mb-4 flex flex-col items-center justify-center ${

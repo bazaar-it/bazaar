@@ -229,8 +229,8 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
   return (
     <div
       className={cn(
-        "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150 border",
-        isSelected ? "ring-2 ring-white shadow-lg dark:ring-blue-300 z-20" : "z-10",
+        "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150 border bg-white",
+        isSelected ? "ring-2 ring-black shadow-lg z-20" : "z-10",
         isActive ? "border-b-2 border-yellow-300" : "",
         isDragging ? "opacity-50 cursor-grabbing" : "",
         isDraggingInvalid ? "ring-2 ring-red-500" : "",
@@ -263,10 +263,10 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
       
       {/* Content */}
       <div className="flex-1 px-1 flex flex-col justify-center overflow-hidden">
-        <div className="text-xs font-medium text-white truncate">
+        <div className="text-xs font-medium text-black truncate">
           {getItemTitle()}
         </div>
-        <div className="text-xs text-gray-300">
+        <div className="text-xs text-black">
           {getDurationText()}
         </div>
       </div>

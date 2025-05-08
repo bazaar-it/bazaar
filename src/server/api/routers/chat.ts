@@ -1289,7 +1289,37 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
             ],
             tools: [scenePlannerTool, generateRemotionComponentTool],
             tool_choice: "auto",
+        }).catch(async (error) => {
+            console.error("OpenAI API error:", error);
+            // Try with a fallback model
+            try {
+                return await openai.chat.completions.create({
+                    model: "gpt-3.5-turbo",
+                    messages: [
+                        { role: "system", content: SYSTEM_PROMPT },
+                        { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },
+                    ],
+                    tools: [scenePlannerTool, generateRemotionComponentTool],
+                    tool_choice: "auto",
+                });
+            } catch (fallbackError) {
+                console.error("Fallback model error:", fallbackError);
+                
+                // Create a basic assistant message as fallback
+                await ctx.db.insert(messages).values({ 
+                    projectId, 
+                    content: "Sorry, I encountered an issue processing your request. Please try again later.", 
+                    role: "assistant" 
+                });
+                
+                return null;
+            }
         });
+
+        // If all API calls failed, return early with the user message ID
+        if (!llmResp) {
+            return { userMessageId: userMessage.id, noPatches: true };
+        }
 
         const msgResp = llmResp.choices[0]?.message;
         if (!msgResp) {

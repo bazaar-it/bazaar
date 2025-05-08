@@ -55,7 +55,13 @@ const config = {
   transpilePackages: ["@remotion/cli", "@remotion/player", "@remotion/renderer", "remotion"],
   
   // External packages that should be bundled separately
-  serverExternalPackages: ['@prisma/client', 'drizzle-orm'],
+  serverExternalPackages: [
+    '@prisma/client', 
+    'drizzle-orm',
+    'esbuild',
+    '@aws-sdk/client-s3',
+    'sharp',
+  ],
   
   // Configure CORS for API routes
   headers: async () => {
@@ -86,13 +92,6 @@ const config = {
     ],
     domains: ['images.unsplash.com'],
   },
-
-  // Server component features
-  serverComponentsExternalPackages: [
-    'esbuild',
-    '@aws-sdk/client-s3',
-    'sharp',
-  ],
 };
 
 export default config;

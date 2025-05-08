@@ -84,7 +84,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   
   // Validation settings
   const [minDuration] = useState(1); // Mirror server-side validation
-  const [maxRows] = useState(10); // Maximum number of timeline tracks
+  const [maxRows] = useState(10); // Maximum number of timeline layers
   const [invalidDragOperation, setInvalidDragOperation] = useState(false);
   
   // Refs
@@ -135,33 +135,41 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   
   // Frame-accurate player sync using rAF
   useEffect(() => {
-    if (!isPlayingRef.current || !playerRef.current) return;
+    // Don't start animation frame if player isn't ready
+    if (!playerRef.current) return;
     
-    let lastTime = 0;
-    const FPS = 30; // Match your video FPS
-    const frameInterval = 1000 / FPS;
-    
-    const syncFrames = (timestamp: number) => {
-      if (timestamp - lastTime >= frameInterval) {
-        // Get current frame from player and update context
-        if (playerRef.current) {
-          const frame = playerRef.current.getCurrentFrame();
+    // Use a more reliable sync mechanism
+    const syncFrames = () => {
+      if (playerRef.current) {
+        // Always get the current frame from player
+        const frame = playerRef.current.getCurrentFrame();
+        
+        // Only update if the frame has changed to avoid unnecessary renders
+        if (frame !== currentFrame) {
           setCurrentFrame(frame);
         }
-        lastTime = timestamp;
+        
+        // Handle looping by watching for frame reset to 0
+        if (frame === 0 && currentFrame > 0) {
+          // Video just looped - ensure our timeline cursor resets too
+          setCurrentFrame(0);
+        }
       }
       
+      // Continue the animation frame loop
       rafIdRef.current = requestAnimationFrame(syncFrames);
     };
     
+    // Start the sync loop immediately
     rafIdRef.current = requestAnimationFrame(syncFrames);
     
     return () => {
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
       }
     };
-  }, []);
+  }, [currentFrame, playerRef.current]); // Add dependencies to ensure proper sync
   
   // Action handlers
   const updateItem = useCallback((updatedItem: TimelineItemUnion) => {

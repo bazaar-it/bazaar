@@ -1,7 +1,7 @@
 // src/app/projects/[id]/edit/InterfaceShell.tsx
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Separator } from '~/components/ui/separator';
 import { Button } from '~/components/ui/button';
@@ -17,6 +17,14 @@ import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
 import type { TimelineItemUnion } from '~/types/timeline';
 import { TimelineItemType } from '~/types/timeline';
 import { DraggableTimeline } from '~/components/client/DraggableTimeline';
+import WorkspacePanels, { type WorkspacePanelsHandle } from './WorkspacePanels';
+
+// New: Floating/collapsible sidebar state
+function useSidebarCollapse() {
+  const [collapsed, setCollapsed] = useState(true);
+  const toggle = () => setCollapsed((c) => !c);
+  return { collapsed, toggle };
+}
 
 type TimelineMode = 'hidden' | 'vertical' | 'floating';
 
@@ -28,6 +36,8 @@ type Props = {
 
 export default function InterfaceShell({ projectId, initialProps, initialProjects }: Props) {
   const { setProject } = useVideoState();
+  const workspacePanelsRef = useRef<WorkspacePanelsHandle>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(256); // Default width
 
   // Ensure Zustand store always loads the correct project on projectId change
   useEffect(() => {
@@ -36,20 +46,39 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   
   // Customizable layout state
-  const [timelineMode, setTimelineMode] = useState<TimelineMode>('hidden');
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>('vertical');
+  const { collapsed, toggle: toggleSidebar } = useSidebarCollapse();
   
   // Handle timeline mode toggle
   const toggleTimeline = useCallback(() => {
-    setTimelineMode(prev => {
-      if (prev === 'hidden') return 'vertical';
-      if (prev === 'vertical') return 'floating';
-      return 'hidden';
-    });
+    // Use the workspacePanels ref to toggle timeline visibility
+    if (workspacePanelsRef.current) {
+      workspacePanelsRef.current.toggleTimeline();
+    }
   }, []);
   
   // Close timeline entirely
   const closeTimeline = useCallback(() => {
     setTimelineMode('hidden');
+  }, []);
+  
+  // Handle adding a panel from sidebar click
+  const handleAddPanel = useCallback((panelType: string) => {
+    // Forward to the WorkspacePanels component if the ref is available
+    if (workspacePanelsRef.current) {
+      workspacePanelsRef.current.addPanel(panelType as any);
+    }
+  }, []);
+
+  // Handle panel drag start from sidebar
+  const handlePanelDragStart = useCallback((panelType: string, panelLabel: string) => {
+    console.log(`Started dragging ${panelLabel} (${panelType}) from sidebar`);
+    // Any additional drag start logic could go here
+  }, []);
+
+  // Handle sidebar width change
+  const handleSidebarWidth = useCallback((width: number) => {
+    setSidebarWidth(width);
   }, []);
   
   // Set up rename mutation
@@ -128,19 +157,26 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   
   const initialDuration = inputProps?.meta.duration || 0;
 
+  // Setup a ref to get the sidebar DOM element 
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  
+  // Effect to get the sidebar width from the data attribute
+  useEffect(() => {
+    if (collapsed) return;
+    const sidebar = sidebarRef.current?.querySelector('aside');
+    if (sidebar) {
+      const width = sidebar.getAttribute('data-sidebar-width');
+      if (width) {
+        setSidebarWidth(parseInt(width));
+      }
+    }
+  }, [collapsed]);
+
+  // --- Layout ---
   return (
-    <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden">
-      {/* Persistent Sidebar */}
-      <Sidebar
-        projects={initialProjects}
-        currentProjectId={projectId}
-        onToggleTimeline={toggleTimeline}
-        timelineActive={timelineMode !== 'hidden'}
-      />
-      
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* AppHeader with project title and user info */}
+    <div className="relative min-h-screen min-w-screen bg-background text-foreground overflow-hidden">
+      {/* Floating Header */}
+      <div className="fixed top-0 left-2.5 right-2.5 z-30 rounded-[15px] shadow-lg bg-white/90 flex items-center justify-between px-6 py-3" style={{borderRadius:15}}>
         <AppHeader
           projectTitle={title}
           onRename={handleRename}
@@ -149,47 +185,39 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
           isRendering={renderMutation.isPending}
           user={user}
         />
-        
-        {/* Main workspace with flexible layout */}
-        <div className="flex-1 overflow-hidden min-h-0 relative">
-          <TimelineProvider initialItems={timelineItems} initialDuration={initialDuration}>
-            <PanelGroup direction="horizontal" className="h-full">
-              {/* Left panel: Chat */}
-              <Panel defaultSize={35} minSize={20} maxSize={50}>
-                <div className="h-full border-r bg-background overflow-auto">
-                  <ChatPanel projectId={projectId} />
-                </div>
-              </Panel>
-              
-              <PanelResizeHandle className="w-1.5 bg-muted hover:bg-primary/20 transition-colors" />
-              
-              {/* Right panel: Preview and optional Timeline */}
-              <Panel minSize={50}>
-                <PanelGroup direction="vertical" className="h-full">
-                  {/* Preview panel */}
-                  <Panel defaultSize={timelineMode === 'vertical' ? 70 : 100} className="h-full bg-black">
-                    <PreviewPanel projectId={projectId} initial={initialProps} />
-                  </Panel>
-                  
-                  {/* Vertical Timeline panel (conditionally rendered) */}
-                  {timelineMode === 'vertical' && (
-                    <>
-                      <PanelResizeHandle className="h-1.5 bg-muted hover:bg-primary/20 transition-colors" />
-                      <Panel defaultSize={30} className="bg-background">
-                        <TimelinePanel key={projectId} />
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </Panel>
-            </PanelGroup>
-            
-            {/* Floating Draggable Timeline */}
-            {timelineMode === 'floating' && (
-              <DraggableTimeline onClose={closeTimeline} />
-            )}
-          </TimelineProvider>
-        </div>
+      </div>
+
+      {/* Sidebar with icons */}
+      <div ref={sidebarRef} className="fixed top-[76px] left-2.5 z-20 rounded-[15px] shadow-lg bg-white/90 flex flex-col h-[calc(100vh-86px)]" style={{borderRadius:15}}>
+        <Sidebar
+          projects={initialProjects}
+          currentProjectId={projectId}
+          collapsed={collapsed}
+          onToggleCollapse={toggleSidebar}
+          onToggleTimeline={toggleTimeline}
+          onAddPanel={handleAddPanel}
+          onPanelDragStart={handlePanelDragStart}
+          onWidthChange={handleSidebarWidth}
+        />
+      </div>
+
+      {/* Main Content Area */}
+      <div
+        className="absolute top-[76px] right-2.5 bottom-2.5 flex flex-col z-10"
+        style={{
+          borderRadius: 15,
+          left: collapsed ? 'calc(2.5px + 58px + 20px)' : `calc(2.5px + ${sidebarWidth}px + 20px)`, // left margin + sidebar width + 20px gap
+          transition: 'left 0.3s cubic-bezier(0.4,0,0.2,1)'
+        }}
+      >
+        <TimelineProvider initialItems={timelineItems} initialDuration={initialDuration}>
+          <WorkspacePanels 
+            projectId={projectId} 
+            initialProps={initialProps}
+            projects={initialProjects}
+            ref={workspacePanelsRef}
+          />
+        </TimelineProvider>
       </div>
     </div>
   );
