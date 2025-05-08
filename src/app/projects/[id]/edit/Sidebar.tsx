@@ -62,7 +62,7 @@ interface WorkspacePanel {
 }
 
 const navItems: WorkspacePanel[] = [
-  { type: 'projects', id: 'projects', name: "Projects", icon: FolderIcon, href: "/projects" },
+  { type: 'projects', id: 'projects', name: "Projects", icon: FolderIcon, href: "#projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'uploads', id: 'uploads', name: "Uploads", icon: UploadIcon, href: "#uploads" },
   { type: 'timeline', id: 'timeline', name: "Timeline", icon: ClockIcon, href: "#timeline" },
@@ -564,20 +564,22 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
           {projects.map((project) => (
             <Tooltip key={project.id}>
               <TooltipTrigger asChild>
-                <div
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Only navigate if this isn't the current project
-                    if (project.id !== currentProjectId) {
-                      console.log(`Navigating to project: ${project.id}`);
-                      router.push(`/projects/${project.id}/edit`, { scroll: false });
-                    }
-                  }}
+                <Link
+                  href={`/projects/${project.id}/edit`}
+                  scroll={false}
+                  replace={true}
+                  prefetch={true}
                   className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors whitespace-nowrap ${
                     project.id === currentProjectId
                       ? "bg-gray-300 text-gray-900 font-medium border border-gray-400"
                       : "bg-gray-200 hover:bg-gray-300 text-gray-800 border border-gray-300"
                   } ${isCollapsed ? 'justify-center w-10 h-10 mx-auto' : 'w-full'} cursor-pointer`}
+                  onClick={(e) => {
+                    // Prevent navigation if this is the current project
+                    if (project.id === currentProjectId) {
+                      e.preventDefault();
+                    }
+                  }}
                 >
                   <ListIcon className="h-5 w-5 shrink-0" />
                   {!isCollapsed && (
@@ -588,7 +590,7 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
                       {project.name}
                     </span>
                   )}
-                </div>
+                </Link>
               </TooltipTrigger>
               {isCollapsed && <TooltipContent side="right">{project.name}</TooltipContent>}
             </Tooltip>

@@ -29,7 +29,7 @@ This document outlines the implementation details of the UI refactoring based on
 **UI Enhancements**:
 - Added improved visual styling for empty drop zones
 - Enhanced panel header design with better drag handles
-- Updated panel labels to use consistent naming scheme
+- Fixed project navigation to use proper Next.js Links with replace/prefetch options to prevent full page reloads
 - Improved initial panel configuration
 - Added better visual feedback during drag operations
 

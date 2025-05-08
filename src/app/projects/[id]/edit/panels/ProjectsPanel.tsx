@@ -4,8 +4,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { Plus, Search, FilterIcon } from "lucide-react";
+import { Search, FilterIcon } from "lucide-react";
 import { Input } from "~/components/ui/input";
+import { NewProjectButton } from "~/components/client/NewProjectButton";
 
 interface Project {
   id: string;
@@ -56,14 +57,13 @@ export default function ProjectsPanel({
     <div className="flex h-full flex-col p-4">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">My Projects</h2>
-        <Button 
-          onClick={() => router.push("/projects/new")}
+        <NewProjectButton 
+          variant="default" 
           size="sm"
-          className="flex items-center gap-1"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Project</span>
-        </Button>
+          showIcon={true}
+          className="h-9 px-3"
+          onStart={() => {}}
+        />
       </div>
 
       {/* Search and Filters */}
@@ -153,13 +153,13 @@ export default function ProjectsPanel({
                 <p className="mb-4 text-sm text-muted-foreground">
                   Create your first project to get started.
                 </p>
-                <Button 
-                  onClick={() => router.push("/projects/new")} 
+                <NewProjectButton
+                  variant="default"
+                  size="default"
+                  showIcon={true}
                   className="flex items-center gap-1"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Create New Project</span>
-                </Button>
+                  onStart={() => {}}
+                />
               </>
             )}
           </div>
