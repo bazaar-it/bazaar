@@ -477,6 +477,8 @@ export async function generateComponent(
         userData: userId ? { userId } : undefined
     };
 
+    console.log(`[ComponentGenerator] Job ${jobId} - Incoming brief/prompt for LLM:`, JSON.stringify(jobData.prompt, null, 2));
+
     // Insert the job record
     const [job] = await db.insert(customComponentJobs).values({
         id: jobId,

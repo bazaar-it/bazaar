@@ -96,7 +96,17 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   const result = await next();
 
   const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  
+  // Only log timing if TRPC_DEBUG environment variable is set or for extremely slow requests
+  const shouldLog = process.env.TRPC_DEBUG === 'true' || (end - start > 5000);
+  const executionTime = end - start;
+  
+  if (shouldLog) {
+    console.log(`[TRPC] ${path} took ${executionTime}ms to execute`);
+  } else if (executionTime > 3000) {
+    // Only log very slow requests (>3s) with a different prefix so they don't get filtered
+    console.log(`⚠️ Slow procedure: ${path} took ${executionTime}ms to execute`);
+  }
 
   return result;
 });

@@ -6,6 +6,9 @@ import path from "path";
 import { customComponentJobs, db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
+import { OpenAI } from "openai";
+import { env } from "~/env";
+import logger, { componentLogger } from "~/lib/logger";
 
 /**
  * Type definition for the OpenAI function call that generates custom Remotion components
@@ -41,12 +44,13 @@ function sanitizeDefaultExports(code: string): string {
   
   // If we have multiple default exports
   if (matches.length > 1) {
-    console.log(`[COMPONENT GEN] Found ${matches.length} default exports, keeping only the first one:`);
-    
-    // Log what was found for debugging
-    matches.forEach((match, i) => {
-      const lineNumber = code.substring(0, match.index || 0).split('\n').length;
-      console.log(`  [${i}] Line ~${lineNumber}: ${match[0]}`);
+    logger.debug('Found multiple default exports, keeping only the first one', {
+      component: true,
+      exportCount: matches.length,
+      exports: matches.map((match, i) => {
+        const lineNumber = code.substring(0, match.index || 0).split('\n').length;
+        return `[${i}] Line ~${lineNumber}: ${match[0]}`;
+      })
     });
     
     // Keep only the first export default statement
@@ -67,7 +71,7 @@ function sanitizeDefaultExports(code: string): string {
       );
     }
     
-    console.log(`[COMPONENT GEN] Successfully sanitized duplicate exports, keeping first export default`);
+    logger.debug('Successfully sanitized duplicate exports', { component: true });
     return sanitizedCode;
   }
   
@@ -83,7 +87,7 @@ function sanitizeDefaultExports(code: string): string {
  */
 export async function processComponentJob(jobId: string): Promise<void> {
   try {
-    console.log(`[COMPONENT GENERATOR] Processing job ${jobId}`);
+    componentLogger.start(jobId, "Processing component job");
     
     // Get the job from database
     const job = await db.query.customComponentJobs.findFirst({
@@ -91,39 +95,41 @@ export async function processComponentJob(jobId: string): Promise<void> {
     });
     
     if (!job) {
-      console.error(`[COMPONENT GENERATOR] Job ${jobId} not found`);
+      componentLogger.error(jobId, "Job not found");
       throw new Error(`Job ${jobId} not found`);
     }
     
     if (!job.metadata || typeof job.metadata !== 'object') {
-      console.error(`[COMPONENT GENERATOR] Job ${jobId} has invalid metadata`);
+      componentLogger.error(jobId, "Invalid job metadata");
       await updateComponentStatus(jobId, 'error', db, undefined, 'Invalid job metadata');
       return;
     }
     
     const prompt = (job.metadata as any).prompt;
     if (!prompt || typeof prompt !== 'string') {
-      console.error(`[COMPONENT GENERATOR] Job ${jobId} has no prompt in metadata`);
+      componentLogger.error(jobId, "No prompt in metadata");
       await updateComponentStatus(jobId, 'error', db, undefined, 'Missing prompt in job metadata');
       return;
     }
     
     try {
       // Call the implementation that takes a description
-      const result = await generateComponentCode(prompt);
+      const result = await generateComponentCode(jobId, prompt);
       
       // Save the result to the database
       await db.update(customComponentJobs)
         .set({
-          tsxCode: result.tsxCode,
+          tsxCode: result.code,
           status: 'building', // Mark as building so buildCustomComponent can pick it up
           updatedAt: new Date()
         })
         .where(eq(customComponentJobs.id, jobId));
         
-      console.log(`[COMPONENT GENERATOR] Successfully generated TSX code for job ${jobId}`);
+      componentLogger.complete(jobId, "Successfully generated TSX code");
     } catch (error) {
-      console.error(`[COMPONENT GENERATOR] Error generating code for job ${jobId}:`, error);
+      componentLogger.error(jobId, "Error generating code", { 
+        error: error instanceof Error ? error.message : String(error)
+      });
       await updateComponentStatus(
         jobId, 
         'error', 
@@ -133,7 +139,9 @@ export async function processComponentJob(jobId: string): Promise<void> {
       );
     }
   } catch (error) {
-    console.error(`[COMPONENT GENERATOR] Error processing job ${jobId}:`, error);
+    componentLogger.error(jobId, "Error processing job", {
+      error: error instanceof Error ? error.message : String(error)
+    });
     // Try to update status if possible
     try {
       await updateComponentStatus(
@@ -144,7 +152,9 @@ export async function processComponentJob(jobId: string): Promise<void> {
         `Failed to process job: ${error instanceof Error ? error.message : String(error)}`
       );
     } catch (dbError) {
-      console.error(`[COMPONENT GENERATOR] Could not update job status for ${jobId}:`, dbError);
+      componentLogger.error(jobId, "Could not update job status", { 
+        error: dbError instanceof Error ? dbError.message : String(dbError)
+      });
     }
   }
 }
@@ -153,174 +163,227 @@ export async function processComponentJob(jobId: string): Promise<void> {
  * Generates TSX code for a custom Remotion component based on the user's description
  * using OpenAI's function calling capabilities
  * 
+ * @param jobId ID of the component generation job
  * @param description User's description of the desired visual effect
  * @returns Generated effect name and TSX code
  */
-export async function generateComponentCode(description: string): Promise<{
-  effect: string;
-  tsxCode: string;
+export async function generateComponentCode(
+  jobId: string,
+  description: string,
+  animationBrief?: object
+): Promise<{
+  code: string;
+  dependencies: Record<string, string>;
 }> {
-  try {
-    console.log("[COMPONENT GENERATOR] Starting component generation for:", description);
-    
-    // Load Remotion prompts from files with error handling
-    let remotionPrompt = "";
-    let systemPrompt = "";
-    
-    try {
-      const promptPath = path.join(process.cwd(), "src/server/prompts/remotion-prompt.txt");
-      const systemPromptPath = path.join(process.cwd(), "src/server/prompts/llm-remotion-system-prompt.txt");
-      
-      console.log("[COMPONENT GENERATOR] Loading prompts from:", promptPath, systemPromptPath);
-      
-      [remotionPrompt, systemPrompt] = await Promise.all([
-        fs.readFile(promptPath, "utf8"),
-        fs.readFile(systemPromptPath, "utf8")
-      ]);
-      
-      console.log("[COMPONENT GENERATOR] Successfully loaded prompt files");
-    } catch (err) {
-      console.error("[COMPONENT GENERATOR] Error loading prompt files:", err);
-      // Fallback to a basic prompt if files can't be loaded
-      remotionPrompt = "Create React components using Remotion. Use AbsoluteFill for positioning. Use useCurrentFrame and interpolate for animations.";
-      systemPrompt = "You are an expert at creating Remotion components in React and TypeScript. Follow all best practices for Remotion components.";
+  const startTime = Date.now();
+  componentLogger.start(jobId, `Generating component for: "${description.substring(0, 50)}..."`);
+
+  let componentName: string = 'CustomComponent';
+  if (description) {
+    // Generate component name from description
+    const nameRegex = /([A-Z][a-z]+)/g;
+    const nameMatches = description.match(nameRegex) || [];
+    if (nameMatches.length > 0) {
+      componentName = nameMatches.slice(0, 3).join('') + 'Scene';
+    } else {
+      // Alternative approach for when the regex doesn't find good matches
+      const words = description
+        .split(/\s+/)
+        .filter((word) => word.length > 3)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .slice(0, 3);
+      if (words.length > 0) {
+        componentName = words.join('') + 'Scene';
+      }
     }
-    
-    // Extract the critical warnings section from the system prompt
-    const criticalWarningSection = systemPrompt.includes("CRITICAL WARNING FOR CUSTOM COMPONENTS") 
-      ? systemPrompt.split("## ⚠️ CRITICAL WARNING FOR CUSTOM COMPONENTS")[1]?.split("---")[0] || ""
-      : "";
-    
-    console.log("[COMPONENT GENERATOR] Calling OpenAI API with function calling...");
-    
+  }
+
+  componentLogger.plan(jobId, `Using component name: ${componentName}`);
+
+  try {
+    // Initialize client
+    const openai = new OpenAI({
+      apiKey: env.OPENAI_API_KEY,
+    });
+
+    const enhancedDescription = animationBrief 
+      ? `Design a React component for a video scene with Remotion (www.remotion.dev) and TypeScript with the following description: "${description}". ` +
+        `Use this Animation Design Brief for precise guidance: ${JSON.stringify(animationBrief, null, 2)}`
+      : `Design a React component for a video scene with Remotion (www.remotion.dev) and TypeScript with the following description: "${description}"`;
+
+    componentLogger.prompt(jobId, "Sending prompt to LLM", { 
+      promptLength: enhancedDescription.length,
+      hasAnimationBrief: !!animationBrief
+    });
+    const llmStartTime = Date.now();
+
     // Call OpenAI with function calling enabled
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using the correct OpenAI model name
-      temperature: 0.7,
+      model: "o4-mini", // Using the correct OpenAI model name
+      // temperature: 0.7, - Removed: o4-mini doesn't support custom temperature values
       messages: [
         {
           role: "system",
-          content: `You are an expert at creating Remotion components in React and TypeScript. 
-Your job is to create custom visual effects for videos based on user descriptions.
-Follow these guidelines for creating Remotion components:
+          content: `You are an expert React and Remotion developer. You build beautiful video components using Remotion and React.
+          
+When creating React components with Remotion, please follow these guidelines:
+1. Each component must be a properly structured React component accepting props and returning valid JSX.
+2. Always use TypeScript for type safety, defining interfaces for props.
+3. For each component, define timing functions for entrance and exit animations.
+4. Smooth transitions between scenes are important - use interpolate, useCurrentFrame and other Remotion utilities.
+5. For better maintainability, use well-named and reusable sub-components.
+6. Maintain a professional and modern visual style.
+7. Import only what's needed - avoid excessive dependencies.
+8. Use the full 'remotion' import path, don't assume specific exports are available unless imported directly.
+9. When generating TypeScript code, imports should include all necessary components and be properly structured.
+10. For visual styling, use CSS-in-JS (styled-components) or inline styles. This enables easier animation of properties.
 
-${remotionPrompt}
+For animation:
+- Make extensive use of Remotion's animation utilities like interpolate and useCurrentFrame().
+- Separate entrance, main, and exit animations with clear timing windows.
+- Use spring() or other easing functions for natural movement.
+- Consider implementing progressive reveals of text or graphic elements.
 
-## ⚠️ CRITICAL WARNING FOR CUSTOM COMPONENTS
-${criticalWarningSection || `
-When generating custom Remotion components:
-
-1. ALWAYS include EXACTLY ONE default export per component file
-2. NEVER have multiple default exports in your code - this will cause build failures
-3. If your component includes helper functions, DO NOT export them as default
-4. NEVER declare "const React = ..." in your component - React is provided globally
-5. Follow this correct pattern:
-   function MyComponent() { 
-     // Component code here
-     return <div>My component</div>;
-   }
-   
-   // Only ONE of these per file:
-   export default MyComponent;
-`}`
+IMPORTANT: Always return production-ready, styled TSX code that requires minimal editing.`
         },
         {
           role: "user",
-          content: `Create a custom visual effect for my video that does the following: ${description}`,
-        },
+          content: enhancedDescription
+        }
       ],
-      functions: [generateCustomComponentFunctionDef],
-      function_call: { name: "generateCustomComponent" },
-    });
-    
-    console.log("[COMPONENT GENERATOR] Received response from OpenAI");
-    
-    // Extract the function call data
-    const functionCall = response.choices[0]?.message?.function_call;
-    if (!functionCall || !functionCall.arguments) {
-      console.error("[COMPONENT GENERATOR] No function call in response:", JSON.stringify(response.choices));
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to generate component code - OpenAI did not return a function call",
-      });
-    }
-    
-    // Parse the function arguments
-    console.log("[COMPONENT GENERATOR] Parsing function arguments...");
-    const args = JSON.parse(functionCall.arguments);
-    
-    // Validate the response
-    if (!args.effect || !args.tsxCode) {
-      console.error("[COMPONENT GENERATOR] Missing required fields in response:", args);
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Generated component is missing required fields",
-      });
-    }
-    
-    console.log(`[COMPONENT GENERATOR] Successfully generated component for "${args.effect}"`);
-    
-    // --- POST-PROCESSING: Ensure all required imports are present ---
-    function ensureImports(code: string): string {
-      const importMap = [
-        { symbol: "React", source: "react" },
-        { symbol: "AbsoluteFill", source: "remotion" },
-        { symbol: "Sequence", source: "remotion" },
-        { symbol: "useCurrentFrame", source: "remotion" },
-        { symbol: "interpolate", source: "remotion" },
-        { symbol: "random", source: "remotion" },
-        { symbol: "useVideoConfig", source: "remotion" },
-      ];
-      let processed = code;
-      for (const { symbol, source } of importMap) {
-        const alreadyImported = new RegExp(`import.*\b${symbol}\b.*from ['"]${source}['"]`).test(processed);
-        const used = new RegExp(`\b${symbol}\b`).test(processed);
-        if (used && !alreadyImported) {
-          // Add import at the top (group remotion imports together)
-          if (source === "remotion") {
-            // Try to merge with existing remotion import
-            const remotionImport = processed.match(/import\s*\{([^}]*)\}\s*from ['"]remotion['"]/);
-            if (remotionImport && remotionImport[1]) {
-              // Add symbol if not already present
-              if (!remotionImport[1].split(',').map(s => s.trim()).includes(symbol)) {
-                processed = processed.replace(
-                  remotionImport[0],
-                  `import {${remotionImport[1].trim()}, ${symbol}} from "remotion"`
-                );
-              }
-            } else {
-              processed = `import { ${symbol} } from "remotion";\n` + processed;
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "generate_remotion_component",
+            description: "Generate a Remotion React component based on the provided description",
+            parameters: {
+              type: "object",
+              properties: {
+                componentName: {
+                  type: "string",
+                  description: "Name of the React component to generate"
+                },
+                componentCode: {
+                  type: "string",
+                  description: "Complete TypeScript/TSX code for the component, including imports and export"
+                },
+                componentDescription: {
+                  type: "string",
+                  description: "Brief description of what the component does"
+                },
+                dependencies: {
+                  type: "object",
+                  description: "Dependencies required for the component beyond React and Remotion",
+                  additionalProperties: {
+                    type: "string",
+                    description: "Version of the dependency (can be 'latest')"
+                  }
+                }
+              },
+              required: ["componentName", "componentCode", "componentDescription"]
             }
-          } else {
-            processed = `import ${symbol} from "${source}";\n` + processed;
           }
         }
-      }
-      return processed;
-    }
-
-    // Sanitize the code to remove duplicate exports - do this first
-    console.log("[COMPONENT GENERATOR] Sanitizing duplicate exports...");
-    const sanitizedTsxCode = sanitizeDefaultExports(args.tsxCode);
-
-    // Ensure proper imports are included
-    console.log("[COMPONENT GENERATOR] Ensuring proper imports...");
-    const processedTsxCode = ensureImports(sanitizedTsxCode);
-
-    // Final check for any remaining duplicate exports
-    const finalTsxCode = sanitizeDefaultExports(processedTsxCode);
-
-    return {
-      effect: args.effect,
-      tsxCode: finalTsxCode,
-    };
-
-  } catch (error) {
-    console.error("[COMPONENT GENERATOR] Error:", error);
-    if (error instanceof TRPCError) throw error;
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate component code: " + (error instanceof Error ? error.message : String(error)),
+      ],
+      tool_choice: { type: "function", function: { name: "generate_remotion_component" } }
     });
+
+    const llmDuration = Date.now() - llmStartTime;
+    componentLogger.llm(jobId, `Received LLM response in ${llmDuration}ms`, {
+      duration: llmDuration,
+      model: "o4-mini"
+    });
+
+    // Extract the first tool call (should be the only one)
+    const toolCall = response.choices[0]?.message.tool_calls?.[0];
+    
+    if (!toolCall || toolCall.function.name !== "generate_remotion_component") {
+      componentLogger.error(jobId, "Invalid response from OpenAI: No valid tool call", { type: "INVALID_RESPONSE" });
+      throw new Error("No valid tool call returned from OpenAI");
+    }
+    
+    // Parse the function arguments as JSON
+    let args;
+    try {
+      args = JSON.parse(toolCall.function.arguments);
+      componentLogger.parse(jobId, "Successfully parsed LLM response");
+    } catch (e) {
+      componentLogger.error(jobId, `Failed to parse tool call arguments: ${e instanceof Error ? e.message : String(e)}`, { 
+        type: "PARSE" 
+      });
+      throw new Error(`Failed to parse component code: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    
+    // Extract component details
+    const generatedComponentName = args.componentName || componentName;
+    const componentCode = args.componentCode;
+    const dependencies = args.dependencies || {};
+    
+    // Check if we have required data
+    if (!componentCode) {
+      componentLogger.error(jobId, "No component code returned from LLM", { type: "MISSING_CODE" });
+      throw new Error("No component code returned from OpenAI");
+    }
+    
+    // Log code length as a simple metric
+    componentLogger.parse(jobId, `Generated ${componentCode.length} bytes of component code for "${generatedComponentName}"`, {
+      codeLength: componentCode.length,
+      componentName: generatedComponentName
+    });
+    
+    // Process the code to fix common issues
+    const processedCode = processGeneratedCode(componentCode, generatedComponentName);
+    
+    const totalDuration = Date.now() - startTime;
+    componentLogger.complete(jobId, `Component generation complete in ${totalDuration}ms`, {
+      duration: totalDuration,
+      componentName: generatedComponentName
+    });
+    
+    return {
+      code: processedCode,
+      dependencies
+    };
+  } catch (error) {
+    componentLogger.error(jobId, `Component generation failed: ${error instanceof Error ? error.message : String(error)}`, {
+      type: "FATAL",
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
+}
+
+// Helper function to clean up and process generated code
+function processGeneratedCode(code: string, componentName: string): string {
+  try {
+    // Fix common issues in the generated code
+    
+    // Some models include markdown code fences - remove them
+    let processedCode = code.replace(/```tsx?/g, '').replace(/```/g, '').trim();
+    
+    // Ensure code has proper exports
+    if (!processedCode.includes('export default') && !processedCode.includes('export const')) {
+      // Add export if missing
+      processedCode = processedCode.replace(
+        new RegExp(`(function|const) ${componentName}`),
+        `export $1 ${componentName}`
+      );
+    }
+    
+    // Fix missing "use client" directive
+    if (!processedCode.includes('"use client"') && !processedCode.includes("'use client'")) {
+      processedCode = `"use client";\n\n${processedCode}`;
+    }
+    
+    return processedCode;
+  } catch (error) {
+    logger.error(`Error processing generated code`, { 
+      type: "PROCESSING",
+      error: error instanceof Error ? error.message : String(error),
+      component: true
+    });
+    // Return original code if processing fails
+    return code;
   }
 }

@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/.e8149a959e794a1cb2970e56b1eaa4cf7b07af4d-audit.json",
+    "files": [
+        {
+            "date": 1746712495467,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-08.log",
+            "hash": "e701f4356e7184d301b0c09ff9d8d8a8f3adac5cd8f6cc62c986f3c530d6a4cf"
+        }
+    ],
+    "hashType": "sha256"
+}

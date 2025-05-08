@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches } from "~/server/db/schema";
+import { projects, patches, scenePlans } from "~/server/db/schema";
 import { eq, desc, like, count, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
@@ -249,5 +249,39 @@ export const projectRouter = createTRPCRouter({
           message: error instanceof Error ? error.message : "Failed to patch project",
         });
       }
+    }),
+  /**
+   * Fetches all scene plans for a given project.
+   */
+  listScenePlans: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      // First, verify project ownership (similar to getById)
+      const project = await ctx.db.query.projects.findFirst({
+        columns: { id: true, userId: true },
+        where: eq(projects.id, input.projectId),
+      });
+
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      if (project.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have access to this project's scene plans.",
+        });
+      }
+
+      // Fetch scene plans for the project, ordered by creation or a specific order if available
+      const plans = await ctx.db.query.scenePlans.findMany({
+        where: eq(scenePlans.projectId, input.projectId),
+        orderBy: [desc(scenePlans.createdAt)], // Or any other relevant order
+      });
+
+      return plans;
     }),
 }); 

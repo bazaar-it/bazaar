@@ -1,18 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-// Mock OpenAI
-jest.mock('openai', () => {
-  return {
-    OpenAI: jest.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: jest.fn()
-        }
-      }
-    }))
-  };
-});
-
 import { OpenAI } from 'openai';
 
 // Simple retry implementation for testing
@@ -111,7 +98,7 @@ async function generateComponentWithFallback(prompt: string, options = { forceEr
     return {
       success: true,
       source: 'primary',
-      content: response.choices[0].message.content
+      content: response.choices[0]!.message!.content
     };
   } catch (error) {
     // Fallback to a simpler model
@@ -126,7 +113,7 @@ async function generateComponentWithFallback(prompt: string, options = { forceEr
       return {
         success: true,
         source: 'fallback',
-        content: response.choices[0].message.content
+        content: response.choices[0]!.message!.content
       };
     } catch (secondError) {
       // Final fallback - return a template
@@ -171,7 +158,7 @@ describe('LLM Error Recovery', () => {
   
   it('should retry temporary failures with exponential backoff', async () => {
     // Configure mock to fail the first 2 attempts, then succeed
-    mockOpenAI.chat.completions.create
+    (mockOpenAI.chat.completions.create as jest.Mock)
       .mockRejectedValueOnce(new RetryableError('Rate limit exceeded', true))
       .mockRejectedValueOnce(new RetryableError('Server error', true))
       .mockResolvedValueOnce({
@@ -193,12 +180,12 @@ describe('LLM Error Recovery', () => {
     
     // Verify results
     expect(mockOpenAI.chat.completions.create).toHaveBeenCalledTimes(3);
-    expect(result.choices[0].message.content).toBe('Success after retries');
+    expect(result.choices[0]!.message!.content).toBe('Success after retries');
   });
   
   it('should throw after maximum retries', async () => {
     // Configure mock to always fail
-    mockOpenAI.chat.completions.create
+    (mockOpenAI.chat.completions.create as jest.Mock)
       .mockRejectedValue(new RetryableError('Rate limit exceeded', true));
     
     // Call with retry
@@ -216,7 +203,7 @@ describe('LLM Error Recovery', () => {
   
   it('should not retry non-retryable errors', async () => {
     // Configure mock to fail with non-retryable error
-    mockOpenAI.chat.completions.create
+    (mockOpenAI.chat.completions.create as jest.Mock)
       .mockRejectedValueOnce(new RetryableError('Invalid API key', false));
     
     // Call with retry
@@ -229,7 +216,7 @@ describe('LLM Error Recovery', () => {
   
   it('should handle fallback to simpler model when primary fails', async () => {
     // Primary model always fails
-    mockOpenAI.chat.completions.create
+    (mockOpenAI.chat.completions.create as jest.Mock)
       .mockImplementationOnce(() => {
         throw new Error('Model unavailable');
       })
@@ -252,7 +239,7 @@ describe('LLM Error Recovery', () => {
   
   it('should fallback to template when all models fail', async () => {
     // Both primary and fallback models fail
-    mockOpenAI.chat.completions.create
+    (mockOpenAI.chat.completions.create as jest.Mock)
       .mockImplementationOnce(() => {
         throw new Error('Primary model unavailable');
       })

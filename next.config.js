@@ -12,6 +12,9 @@ const config = {
     ignoreDuringBuilds: true,
   },
   
+  // Suppress deprecation warnings in development
+  reactStrictMode: true,
+  
   // Configure webpack to ignore problematic files
   webpack: (config, { isServer }) => {
     if (!config.resolve) {
@@ -55,7 +58,7 @@ const config = {
   transpilePackages: ["@remotion/cli", "@remotion/player", "@remotion/renderer", "remotion"],
   
   // External packages that should be bundled separately
-  serverExternalPackages: ['@prisma/client', 'drizzle-orm'],
+  serverExternalPackages: ['@prisma/client', 'drizzle-orm', 'esbuild', '@aws-sdk/client-s3', 'sharp'],
   
   // Configure CORS for API routes
   headers: async () => {
@@ -84,15 +87,17 @@ const config = {
         hostname: '**',
       },
     ],
-    domains: ['images.unsplash.com'],
+    // domains: ['images.unsplash.com'], // Deprecated
   },
 
-  // Server component features
-  serverComponentsExternalPackages: [
-    'esbuild',
-    '@aws-sdk/client-s3',
-    'sharp',
-  ],
+  // Add these settings to quiet down the Next.js internals
+  onDemandEntries: {
+    // Keep pages in memory longer to avoid constant reloads
+    maxInactiveAge: 60 * 60 * 1000, // 1 hour
+    // Don't show verbose logs for page compilation
+    pagesBufferLength: 5,
+  },
+
 };
 
 export default config;

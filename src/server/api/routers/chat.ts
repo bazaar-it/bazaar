@@ -757,7 +757,7 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
 
         // Call OpenAI with tools for function calling
         const llmResp = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "o4-mini",
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },

@@ -12,9 +12,36 @@ import {
   type AnimationBriefGenerationParams 
 } from "./animationDesigner.service";
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
+import logger, { scenePlannerLogger } from "~/lib/logger";
 
 // Define the database type
 type DB = typeof db;
+
+/**
+ * Checks if a string is a valid UUID
+ * @param str String to check
+ * @returns True if string is a valid UUID
+ */
+function isValidUuid(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+/**
+ * Ensures that a scene ID is a valid UUID, generating a new one if not
+ * @param sceneId Scene ID to validate
+ * @returns Valid UUID
+ */
+function ensureValidUuid(sceneId: string): string {
+  if (isValidUuid(sceneId)) {
+    return sceneId;
+  }
+  
+  // Generate a deterministic UUID based on the input string
+  // This ensures the same sceneId string always maps to the same UUID
+  const hash = crypto.createHash('md5').update(sceneId).digest('hex');
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
 
 /**
  * Processes a scene plan from the LLM tool and coordinates generation of any needed components
@@ -35,11 +62,13 @@ export async function handleScenePlan(
     dbInstance: DB = db,
     emitter?: Subject<any>
 ): Promise<ScenePlanResponse> {
-    console.log(`Processing scene plan with ${scenesPlan.scenes?.length ?? 0} scenes`);
+    const startTime = Date.now();
+    const planId = crypto.randomUUID();
+    scenePlannerLogger.start(planId, `Processing scene plan with ${scenesPlan.scenes?.length ?? 0} scenes for project ${projectId}`);
     
     // More intelligent handling of scene plan validation
     if (!scenesPlan.scenes || !Array.isArray(scenesPlan.scenes) || scenesPlan.scenes.length === 0) {
-        console.log("Received empty scene plan - generating helpful response instead of error");
+        scenePlannerLogger.error(planId, "Received empty scene plan - generating helpful response instead of error", { type: "VALIDATION" });
         // Instead of returning an error, return a helpful message that encourages the LLM
         // to try again with scene planning
         return {
@@ -49,12 +78,12 @@ export async function handleScenePlan(
     
     // Cap scenes at MAX_SCENES for safety
     if (scenesPlan.scenes.length > MAX_SCENES) {
-        console.warn(`Scene plan has ${scenesPlan.scenes.length} scenes, capping at ${MAX_SCENES}`);
+        scenePlannerLogger.error(planId, `Scene plan has ${scenesPlan.scenes.length} scenes, capping at ${MAX_SCENES}`, { type: "VALIDATION" });
         scenesPlan.scenes = scenesPlan.scenes.slice(0, MAX_SCENES);
     }
     
     const fps = scenesPlan.fps || 30; // Default to 30fps if not specified
-    let responseMessage = `I've planned your video with ${scenesPlan.scenes.length} scenes: `;
+    let responseMessage = `I've planned your video with ${scenesPlan.scenes.length} scenes:\n\n`; // Added colon and double newline for list start
     
     // Keep track of components we need to create
     const componentJobs: ComponentJob[] = [];
@@ -70,6 +99,10 @@ export async function handleScenePlan(
         
         // Validate required scene properties
         if (!scene.id) scene.id = crypto.randomUUID();
+        
+        // Ensure scene.id is a valid UUID
+        scene.id = ensureValidUuid(scene.id);
+        
         if (!scene.description) scene.description = `Scene ${i+1}`;
         if (!scene.durationInSeconds || typeof scene.durationInSeconds !== 'number') {
             scene.durationInSeconds = 5; // Default 5 seconds
@@ -83,7 +116,11 @@ export async function handleScenePlan(
         // Automatically upgrade text scenes to custom scenes for more sophisticated descriptions
         // that would benefit from a proper component rather than just text overlay
         if (scene.effectType === "text" && sceneAnalysis.complexity > 0.6) {
-            console.log(`Upgrading scene ${i} to custom component based on content analysis:`, sceneAnalysis);
+            scenePlannerLogger.start(planId, `Upgrading to custom component based on content analysis (complexity: ${sceneAnalysis.complexity})`, { 
+                sceneIndex: i,
+                sceneId: scene.id,
+                complexity: sceneAnalysis.complexity 
+            });
             scene.effectType = "custom";
         }
         
@@ -92,7 +129,7 @@ export async function handleScenePlan(
         const sceneId = scene.id;
         
         // Add scene information to the response message 
-        responseMessage += `**Scene ${i+1}**: ${scene.description} (${scene.durationInSeconds}s)\n`;
+        responseMessage += `* **Scene ${i+1}**: ${scene.description} (${scene.durationInSeconds}s)\n`; // Added '*' for list item
         
         // If we have an emitter, send scene status = "pending"
         if (emitter) {
@@ -121,12 +158,25 @@ export async function handleScenePlan(
                         // componentJobId: undefined, // Can be linked later if needed
                     };
 
-                    console.log(`Generating Animation Design Brief for scene ${sceneId}...`);
+                    scenePlannerLogger.adb(planId, sceneId, "Generating Animation Design Brief...");
+                    const adbStartTime = Date.now();
                     const { brief, briefId } = await generateAnimationDesignBrief(animationBriefParams);
-                    console.log(`Generated Animation Design Brief with ID: ${briefId} for scene ${sceneId}`);
+                    const adbDuration = Date.now() - adbStartTime;
+                    scenePlannerLogger.adb(planId, sceneId, `ADB generation complete in ${adbDuration}ms`, { 
+                        duration: adbDuration, 
+                        briefId 
+                    });
+                    
+                    // Log ADB brief structure for debugging
+                    scenePlannerLogger.adb(planId, sceneId, "Animation design brief generated", { 
+                        elementsCount: brief.elements?.length || 0, 
+                        animationsCount: brief.elements?.[0]?.animations?.length || 0 
+                    });
                     // --- END Animation Design Brief Integration ---
 
                     // Generate a custom component with explicit duration, now using the detailed brief
+                    scenePlannerLogger.component(planId, sceneId, `Starting component generation with ADB briefId: ${briefId}`);
+                    const componentStartTime = Date.now();
                     const { jobId, effect, componentMetadata } = await generateComponent(
                         projectId,
                         brief, // Pass the detailed AnimationDesignBrief object
@@ -137,6 +187,12 @@ export async function handleScenePlan(
                         userId,                  // Pass user ID
                         briefId                  // Pass the briefId for linking/logging
                     );
+                    const componentDuration = Date.now() - componentStartTime;
+                    scenePlannerLogger.component(planId, sceneId, `Component generation completed in ${componentDuration}ms`, { 
+                        duration: componentDuration, 
+                        jobId, 
+                        effect 
+                    });
                     
                     // Add to our tracking
                     componentJobs.push({
@@ -161,8 +217,10 @@ export async function handleScenePlan(
                     if (componentMetadata?.durationInFrames && 
                         componentMetadata.durationInFrames > durationInFrames) {
                         
-                        console.log(`Scene ${i} (${sceneId}): Component declared ${componentMetadata.durationInFrames} frames, ` +
-                                    `which exceeds planned ${durationInFrames}. Using component's duration.`);
+                        scenePlannerLogger.adb(planId, sceneId, `Component declared ${componentMetadata.durationInFrames} frames, exceeds planned ${durationInFrames}. Using component's duration.`, { 
+                            duration: componentMetadata.durationInFrames, 
+                            plannedDuration: durationInFrames 
+                        });
                         
                         // Trust the component's duration
                         actualDurationInFrames = componentMetadata.durationInFrames;
@@ -180,7 +238,11 @@ export async function handleScenePlan(
                 } catch (error) {
                     // Handle errors - fall back to a text scene if component generation fails
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    console.error(`Error generating scene ${i}:`, errorMessage);
+                    scenePlannerLogger.error(planId, `Error generating component: ${errorMessage}`, { 
+                        sceneIndex: i,
+                        sceneId: scene.id,
+                        error: errorMessage 
+                    });
                     if (emitter) {
                         emitter.next({
                             type: "sceneStatus",
@@ -202,6 +264,7 @@ export async function handleScenePlan(
                 }
             } else {
                 // Text or other basic scene type - no component generation needed
+                scenePlannerLogger.adb(planId, sceneId, `Using simple ${scene.effectType} scene type, no component generation needed`);
                 sceneResults.push({
                     sceneId,
                     type: scene.effectType,
@@ -223,7 +286,11 @@ export async function handleScenePlan(
         } catch (error) {
             // Handle any uncaught errors at the scene level
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error(`Unhandled error processing scene ${i}:`, errorMessage);
+            scenePlannerLogger.error(planId, `Unhandled error: ${errorMessage}`, { 
+                sceneIndex: i,
+                sceneId: scene.id,
+                error: errorMessage 
+            });
             sceneResults.push({
                 sceneId,
                 type: "text", // Fall back to text
@@ -282,6 +349,9 @@ export async function handleScenePlan(
         // Calculate total duration across all scenes
         const totalDuration = scenesPlan.scenes.reduce((total: number, scene: any) => total + (scene.durationInSeconds || 0), 0);
         
+        // DB Save start time for metrics
+        const dbSaveStartTime = Date.now();
+        
         // Create scene plan record in the database
         await dbInstance.insert(scenePlans).values({
             projectId,
@@ -299,11 +369,15 @@ export async function handleScenePlan(
             createdAt: new Date()
         });
         
-        console.log(`Saved scene plan to database for project ${projectId}, message ${assistantMessageId}`);
+        const dbSaveDuration = Date.now() - dbSaveStartTime;
+        scenePlannerLogger.db(planId, `Saved scene plan to database in ${dbSaveDuration}ms for project ${projectId}, message ${assistantMessageId}`);
     } catch (dbError) {
-        console.error("Error saving scene plan to database:", dbError);
+        scenePlannerLogger.error(planId, `Error saving scene plan: ${dbError instanceof Error ? dbError.message : String(dbError)}`);
         // Don't fail the whole operation if DB save fails, just log it
     }
+
+    const totalDuration = Date.now() - startTime;
+    scenePlannerLogger.complete(planId, `Scene planning pipeline completed in ${totalDuration}ms with ${componentJobs.length} component jobs`);
 
     return {
         message: responseMessage,

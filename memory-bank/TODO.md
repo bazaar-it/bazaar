@@ -142,3 +142,101 @@ Math.sin((frame / fps) * 2 + index) means amplitude depends on FPS; use constant
 ### LOW
 svgIcons registry
 Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path counts will slow renders.
+
+## Testing Infrastructure
+
+- [x] Set up Jest ESM configuration for Next.js 14
+- [x] Create mock framework for OpenAI API for unit tests
+- [x] Fix OpenAI client module for ADB testing
+- [x] Fix Babel configuration for Jest ESM support
+- [x] Install necessary Babel plugins for dynamic imports
+- [ ] Resolve database mocking issues in Animation Designer tests
+- [ ] Fix TypeScript errors in mock implementations
+- [ ] Create test fixtures for different scene types (text, image, transition)
+- [ ] Implement UI integration tests for critical workflows
+- [ ] Add performance metrics to ADB and component generation
+- [ ] Improve test coverage across services
+
+**Next Testing Tasks (Priority Order):**
+1. Fix database mocking to prevent real database connections in tests
+2. Create specialized test helpers for Drizzle ORM patterns
+3. Complete unit tests for Animation Design Brief generation
+4. Create test fixtures for common scene types 
+5. Add integration tests for the complete generation pipeline
+
+## Sprint 14: End-to-End Pipeline Completion (GallerySwipe Ad MVP)
+
+### HIGHEST Priority - Critical Issues (Today)
+- [~] Fix UI feedback delay in scene planning (Initial feedback implemented, advanced streaming UI pending)
+  - [x] Update ScenePlanningHistoryPanel to show partial results from in-progress scene planning (Initial version done)
+  - [ ] Add streaming event handling for partial scene planning results (Partially covered by current approach, needs refinement for full streaming UI)
+  - [x] Display scene descriptions as they become available, rather than waiting for full completion (Initial version done)
+  - [x] Add clear loading indicators during scene planning process (Enhanced loading implemented)
+  - [ ] Implement advanced streaming UI for ScenePlanningHistoryPanel: Show full panel structure immediately with placeholders for scene details, then stream in content as it arrives.
+
+- [~] Fix Animation Design Brief validation failures (Logging enhanced, root cause investigation ongoing)
+  - [ ] Debug validation issues in elements animations array
+  - [ ] Identify schema mismatches between LLM output and validation schema
+  - [x] Implement more robust validation error handling in animationDesigner.service.ts (Enhanced logging for errors added)
+  - [ ] Add schema recovery mechanisms to salvage partial valid data
+
+- [~] Resolve component generation build failures (Logging enhanced, root cause investigation ongoing)
+  - [ ] Investigate why TSX generation succeeds but build process fails
+  - [x] Add more detailed error logging in buildCustomComponent.ts worker (and other relevant services)
+  - [ ] Test build process with minimal component examples
+  - [ ] Fix slow tRPC procedure performance for customComponent.getJobStatus
+
+- [ ] Implement component identification and regeneration system
+  - [ ] Update Animation Design Brief schema to include component identifiers
+  - [ ] Create database schema for element-to-component mapping
+  - [ ] Add UI for component status display in ScenePlanningHistoryPanel
+  - [ ] Implement component regeneration with user feedback
+  - [ ] Track component generation status at the element level
+  - [ ] Add clear error messaging in UI when component generation fails
+
+### HIGH Priority - In Progress
+- [ ] Verify ADB UI integration in ScenePlanningHistoryPanel
+  - [ ] Test listDesignBriefs API functionality
+  - [ ] Ensure "Generate Animation Brief" button works
+  - [ ] Verify status indicators update correctly
+  - [ ] Check brief content formatting
+
+- [ ] End-to-end pipeline testing with GallerySwipe prompt
+  - [ ] Run complete pipeline from user prompt to video
+  - [ ] Verify scene planning creates appropriate scenes
+  - [ ] Confirm ADBs are generated for all scenes
+  - [ ] Test component generation from ADBs
+  - [ ] Validate full video playback
+
+- [ ] Improve error handling throughout the pipeline
+  - [ ] Enhance error recovery in chatOrchestration.service.ts
+  - [ ] Improve fallback mechanisms in animationDesigner.service.ts
+  - [ ] Add graceful fallbacks for component generation failures
+  - [ ] Implement component-specific error recovery
+
+### MEDIUM Priority - Pending
+- [ ] Implement timeline enhancements for better visibility
+  - [ ] Add scene regeneration button in TimelinePanel.tsx
+  - [ ] Implement visual progress indicators for generation status
+  - [ ] Add duration discrepancy feedback
+  - [ ] Improve timeline status indicators
+
+- [ ] Improve user feedback for pipeline progress
+  - [ ] Enhance status messages in ChatPanel.tsx
+  - [ ] Add more detailed progress feedback
+  - [ ] Provide clear error notifications with actionable steps
+  - [ ] Add per-component status indicators in the UI
+
+- [ ] Create comprehensive documentation
+  - [ ] Update end-to-end-pipeline-implementation.md with latest findings
+  - [ ] Document known issues and workarounds
+  - [ ] Create troubleshooting guide for common errors
+  - [ ] Add developer documentation for component generation system
+
+## COMPLETED
+- [x] Create Animation Design Brief Zod schema
+- [x] Implement ADB generation in animationDesigner.service.ts
+- [x] Database schema for ADB storage
+- [x] Basic UI for ADB display in ScenePlanningHistoryPanel.tsx
+- [x] Integration of ADBs with component generation
+- [x] Fixed temperature parameter issues with o4-mini model

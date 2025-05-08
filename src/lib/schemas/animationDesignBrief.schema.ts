@@ -38,14 +38,14 @@ export const animationPropertySchema = z.object({
 }).describe('Defines a single property being animated from a start to an end value.');
 
 export const animationSchema = z.object({
-  animationId: z.string().uuid().describe('Unique identifier for this animation definition within the element'),
+  animationId: z.string().describe('Identifier for this animation definition'),
   animationType: z.string().describe('Type of animation (e.g., \"fadeIn\", \"slideInLeft\", \"customProperty\", \"pulse\")'),
   trigger: z.enum(['onLoad', 'onClick', 'onHover', 'afterPrevious', 'withPrevious']).optional().default('onLoad').describe('Event or condition that triggers the animation'),
   startAtFrame: z.number().int().min(0).describe('Frame number (relative to scene start or trigger) when the animation begins'),
   durationInFrames: z.number().int().min(1).describe('Duration of the animation in frames'),
   delayInFrames: z.number().int().min(0).optional().default(0).describe('Delay in frames before the animation starts after being triggered'),
-  easing: z.enum(easingOptions).optional().default('easeInOutCubic').describe('Easing function for the animation'),
-  propertiesAnimated: z.array(animationPropertySchema).min(1).describe('Array of properties to be animated'),
+  easing: z.string().optional().default('easeInOutCubic').describe('Easing function for the animation'),
+  propertiesAnimated: z.array(animationPropertySchema).optional().default([]).describe('Array of properties to be animated'),
   pathData: z.string().optional().describe('SVG path data for path-based animations (e.g., \"M10 10 H 90 V 90 H 10 Z\")'),
   controlPoints: z.array(z.object({ x: z.number(), y: z.number() })).optional().describe('Control points for complex curve-based animations'),
   repeat: z.object({
@@ -55,11 +55,11 @@ export const animationSchema = z.object({
 }).describe('Defines a single animation sequence for an element.');
 
 export const elementSchema = z.object({
-  elementId: z.string().uuid().describe('Unique identifier for this element within the scene'),
+  elementId: z.string().describe('Identifier for this element within the scene'),
   elementType: z.enum(['text', 'image', 'video', 'shape', 'audio', 'customComponent']).describe('Type of the element'),
   name: z.string().optional().describe('Descriptive name for the element (e.g., \"Headline Text\", \"Background Image\")'),
   content: z.string().optional().describe('Text content for \"text\" elements'),
-  assetUrl: z.string().url().optional().describe('URL for \"image\", \"video\", or \"audio\" elements'),
+  assetUrl: z.string().optional().describe('URL for \"image\", \"video\", or \"audio\" elements'),
   shapeType: z.enum(['rectangle', 'circle', 'ellipse', 'line', 'triangle', 'polygon', 'star']).optional().describe('Specific shape type for \"shape\" elements'),
   componentName: z.string().optional().describe('Name of the custom Remotion component for \"customComponent\" type'),
   initialLayout: layoutSchema.describe('Initial layout and styling of the element at the start of its appearance'),
@@ -96,16 +96,27 @@ export const typographySchema = z.object({
 }).describe('Defines typographic styles for the scene.');
 
 export const audioTrackSchema = z.object({
-  trackId: z.string().uuid().describe('Unique identifier for the audio track'),
-  url: z.string().url().describe('URL of the audio file'),
+  trackId: z.string().describe('Identifier for the audio track'),
+  url: z.string().optional().describe('URL of the audio file'),
+  source: z.string().optional().describe('Source path of the audio file (alternative to url)'),
   volume: z.number().min(0).max(1).optional().default(1).describe('Volume (0 to 1)'),
   startAtFrame: z.number().int().min(0).optional().default(0).describe('Frame number (relative to scene start) when the audio begins playing'),
+  startFrame: z.number().int().min(0).optional().describe('Alternative name for startAtFrame'),
+  endFrame: z.number().int().optional().describe('Frame number when the audio should end'),
   loop: z.boolean().optional().default(false).describe('Whether the audio should loop'),
-}).describe('Defines an audio track to be played in the scene.');
+}).describe('Defines an audio track to be played in the scene')
+.transform(data => {
+  // Handle alternative field names
+  return {
+    ...data,
+    startAtFrame: data.startAtFrame ?? data.startFrame ?? 0,
+    url: data.url ?? data.source,
+  };
+});
 
 export const animationDesignBriefSchema = z.object({
   briefVersion: z.string().default('1.0.0').describe('Version of the Animation Design Brief schema used'),
-  sceneId: z.string().uuid().describe('Unique identifier for the scene this brief describes'),
+  sceneId: z.string().describe('Identifier for the scene this brief describes'),
   sceneName: z.string().optional().describe('User-friendly name for the scene (e.g., \"Introduction Sequence\")'),
   scenePurpose: z.string().describe('The main goal or message of this scene (e.g., \"Introduce Product X\", \"Highlight Feature Y\")'),
   overallStyle: z.string().describe('Overall artistic style and mood (e.g., \"energetic and vibrant\", \"minimalist and clean\", \"cinematic and dramatic\")'),

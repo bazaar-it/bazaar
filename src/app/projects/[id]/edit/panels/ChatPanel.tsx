@@ -12,6 +12,8 @@ import { type StreamEvent } from "~/types/chat";
 import { skipToken } from "@tanstack/react-query";
 import type { Operation } from "fast-json-patch";
 import { useSelectedScene } from "~/components/client/Timeline/SelectedSceneContext";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function ChatPanel({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState("");
@@ -603,13 +605,17 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
                       msg.role === 'user' 
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted'
                     }`}
                   >
-                    <p className="text-sm">{msg.content}</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(typeof msg.createdAt === 'number' ? msg.createdAt : new Date(msg.createdAt).getTime())}
                     </p>
@@ -639,13 +645,17 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${chat.isUser ? 'justify-end' : 'justify-start'} opacity-70`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
                       chat.isUser 
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted'
                     }`}
                   >
-                    <p className="text-sm">{chat.message}</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {chat.message}
+                      </ReactMarkdown>
+                    </div>
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(chat.timestamp)}
                     </p>
@@ -663,13 +673,17 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${chat.isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
                       chat.isUser 
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted'
                     }`}
                   >
-                    <p className="text-sm">{chat.message}</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {chat.message}
+                      </ReactMarkdown>
+                    </div>
                     <p className="text-xs opacity-70 text-right mt-1">
                       {formatTimestamp(chat.timestamp)}
                     </p>

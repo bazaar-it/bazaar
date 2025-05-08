@@ -1,5 +1,75 @@
 # Project Progress
 
+## Sprint 14 Progress - End-to-End Video Generation Pipeline
+
+We've been implementing the end-to-end pipeline for generating videos from user prompts, focusing on the Animation Design Brief generation and component rendering system.
+
+### Current Status (Sprint 14)
+
+1. **Working Components**
+   - ✅ Scene Planner successfully generates scene plans in the backend
+   - ✅ Scene plans are correctly stored in the database
+   - ✅ Animation Design Brief (ADB) creation is partially working
+   - ✅ Fixed temperature parameter issues with o4-mini model
+   - ✅ Implemented comprehensive file-based logging system for pipeline diagnostic analysis
+
+2. **Identified Issues**
+   - ❌ UI Feedback Delay: 2+ minute delay between backend processing and UI updates
+   - ❌ Animation Design Brief validation failures: ADbs are generated but fail validation
+   - ❌ Component Generation: TSX code generation works, but build process fails
+   - ❌ Component Identification: Elements in ADB don't have clear mapping to component jobs
+   - ❌ No Component Regeneration: No way to regenerate a specific component with feedback
+
+3. **Implementation Plan**
+   - 🔄 Fix UI Feedback Delay by showing partial scene planning results
+   - 🔄 Enhance Animation Design Brief schema to be more flexible
+   - 🔄 Debug and fix component build process
+   - 🔄 Add component identification and tracking system
+   - 🔄 Implement component regeneration with user feedback
+
+### Key Updates (May 9, 2024)
+
+1. **Enhanced Logging System Implementation**
+   - Implemented comprehensive structured logging using Winston logger across the entire pipeline
+   - Created specialized loggers for different components (chat, scene planning, animation designer, component generation)
+   - Added file-based logging with daily rotation to persist logs beyond server sessions
+   - Structured logs categorized by pipeline stage with consistent formatting 
+   - Added traceability using consistent IDs (messageId, planId, sceneId, jobId) throughout the pipeline
+   - Enhanced error handling with detailed diagnostic information
+   - Incorporated performance metrics to identify bottlenecks
+   - Created documentation in `/memory-bank/logs/pipeline-logging.md` and `/memory-bank/logs/logging-system.md`
+
+2. **Logging Files & Organization**
+   - Created `/logs` directory for storing all log files
+   - Implemented daily rotation with retention policy (14 days)
+   - Separated logs into multiple files for easier analysis:
+     - `combined-%DATE%.log` - All logs
+     - `error-%DATE%.log` - Error-level logs only
+     - `components-%DATE%.log` - Component generation logs
+   - Added metadata to logs for better filtering and searching
+
+3. **Pipeline Component Logging**
+   - Added enhanced logging to `chatOrchestration.service.ts` for stream processing
+   - Implemented structured logging in `scenePlanner.service.ts` to track scene planning
+   - Enhanced `sceneAnalyzer.service.ts` with detailed complexity calculation logs
+   - Updated `animationDesigner.service.ts` with validation and error handling logs
+   - Added comprehensive logs to `generateComponentCode.ts` and `buildCustomComponent.ts`
+
+4. **Benefits of Enhanced Logging**
+   - Debug capability for identifying issues in the complex multi-step pipeline
+   - Performance tracking to identify bottlenecks and optimize generation times
+   - Enhanced error reporting for quicker problem resolution
+   - Complete traceability of requests through the entire pipeline
+   - Persistent logs for post-mortem analysis of production issues
+
+5. **Next Steps**
+   - Add centralized log viewing functionality in admin dashboard
+   - Implement alerts based on error logs
+   - Create analytics dashboard based on performance metrics
+   - Add log aggregation and search capabilities
+
+A detailed description of the logging system is available in: [memory-bank/logs/logging-system.md](memory-bank/logs/logging-system.md) and [memory-bank/logs/pipeline-logging.md](memory-bank/logs/pipeline-logging.md)
+
 ## Recent Refactoring - Chat System Modularization
 
 We've completed a major refactoring of the chat system, breaking down the monolithic chat.ts file into several modular services:
@@ -463,22 +533,142 @@ As part of Sprint 13, we've enhanced the Animation Design Brief system with impr
 
 2. **Brief Generation Controls**
    - ✅ Added "Generate Animation Brief" button for scenes without briefs
-   - ✅ Implemented "Regenerate Animation Brief" button for updating existing briefs
-   - ✅ Added loading state indicators during generation/regeneration
-   - ✅ Improved brief status tracking with visual indicators
+   - ✅ Implemented "Regenerate" button for scenes with existing briefs
+   - ✅ Added visual feedback during brief generation (loading spinners)
 
-3. **Error Handling**
-   - ✅ Added proper error display for failed brief generations
-   - ✅ Implemented automatic brief refreshing (5-second polling)
-   - ✅ Created conditional UI elements based on brief existence
-
-### Benefits of the UI Integration
+3. **Fixed Animation Brief Schema Issues**
+   - ✅ Fixed OpenAI function calling schema to properly define required properties and structure
+   - ✅ Implemented proper fallback design briefs when generation fails
+   - ✅ Added proper scene ID validation to ensure UUIDs are correctly handled
+   - ✅ Enhanced error handling and reporting throughout the system
 
 The Animation Design Brief system now provides:
-- **Visibility**: Users can now see the animation design briefs directly in the Scene Planning UI
-- **Regeneration**: One-click regeneration for experimenting with different animation styles
-- **Status Tracking**: Clear visual indicators for pending, complete, and error states
-- **Scene Relationship**: Visual indication of which briefs belong to which scenes
-- **Simplicity**: Keeping the UI simple while still providing access to the technical details
+- A structured way to generate detailed animation specifications
+- UI controls to trigger, view, and manage briefs
+- Persistent storage in the database
+- Error recovery mechanisms
+- Integration with the scene planning workflow
 
-These improvements enhance the user experience without requiring a separate complex editor interface, allowing for a more streamlined workflow while still providing access to the detailed Animation Design Brief data.
+### Next Steps
+- Finalize integration between Animation Design Briefs and component generation
+- Explore visualizations for Animation Design Briefs (timeline, preview, etc.)
+- Add ability to edit briefs manually before component generation
+
+### Animation Design Brief System
+
+#### What Works
+- ✅ Fixed the Animation Design Brief generation system to properly handle non-UUID descriptive IDs
+- ✅ Implemented a robust ID conversion system that automatically transforms descriptive IDs to valid UUIDs
+- ✅ Made the brief validation more flexible with optional fields and sensible defaults
+- ✅ Added support for alternative field naming conventions in the schema
+- ✅ Created an intelligent fallback mechanism to extract useful data from partially valid briefs
+- ✅ Updated LLM prompts to give clearer instructions about ID formats
+- ✅ Generation, storage and retrieval of briefs in the database
+- ✅ UI for displaying and regenerating briefs in the ScenePlanningHistoryPanel
+
+#### What's Left to Build
+- Visualization of the animation brief in a more user-friendly way
+- UI for editing and customizing generated briefs
+- Component generation based on the brief specifications
+- Asset management for audio and images referenced in briefs
+- Testing with more complex scene types and animation patterns
+
+#### Current Status
+- The Animation Design Brief system now works reliably and can handle various input formats from the LLM
+- The system gracefully recovers from validation errors by creating usable fallback briefs
+- OpenAI model correctly configured to use "o4-mini" 
+
+#### Known Issues
+- Some edge cases in animation properties validation may still need refinement
+- Asset references (audio, images) need to be properly handled with the storage system
+
+## Log Silencing Investigation (May 8, 2025)
+
+- **Goal**: Reduce noisy terminal logs, specifically `fetchConnectionCache` and verbose tRPC GET requests.
+- **Action 1**: Attempted to correct `next.config.js` for `serverComponentsExternalPackages` by moving it under `experimental`. This was based on older Next.js advice.
+- **Action 2**: Corrected `next.config.js` again based on new warning: `experimental.serverComponentsExternalPackages` moved to top-level `serverExternalPackages`. Merged arrays.
+- **Next Step**: Re-run `npm run dev:ultra-quiet` to observe current log output and determine if further adjustments to `server-log-config.js` are needed.
+
+## Console Logging System Improvements
+
+- Enhanced the console logging system to better filter noisy output from tRPC procedures
+- Implemented three levels of filtering:
+  - Standard mode (`npm run dev`) - Filters common tRPC logs
+  - Ultra-quiet mode (`npm run dev:ultra-quiet`) - More aggressive filtering
+  - Absolute silence mode (`npm run dev:silence`) - Maximum filtering, showing only critical errors
+- Fixed issues with fetchConnectionCache deprecation warnings still appearing
+- Added stronger pattern matching for API requests
+- Created a new approach for reliable log filtering:
+  - Added `filtered-dev.ts` script that filters logs at the process output level
+  - Created new `npm run dev:clean` command using the script-based approach
+  - Fixed incompatibilities between CommonJS and ES modules in utility scripts
+- Created comprehensive documentation in `/memory-bank/api-docs/console-logging.md`
+- Added marker utilities for creating logs that will never be filtered
+- Implemented different performance thresholds based on filtering mode
+
+## Sprint 14: Testing & UI Refinement (Current)
+
+### What's Working
+- Animation Design Brief (ADB) backend system is functional and generates structured design briefs
+- Database integration for storing and retrieving ADBs is working
+- Basic UI for viewing/regenerating ADBs exists in ScenePlanningHistoryPanel
+- OpenAI client module created for better organization
+- Fixed Jest ESM configuration by replacing problematic Babel assumptions with proper plugins
+
+### What's Pending
+- Complete end-to-end pipeline validation for the GallerySwipe ad MVP
+- Improve UI visibility of the ADB generation process 
+- Enhance error handling throughout the generation pipeline
+- Implement scene regeneration UI elements in the timeline
+- Add visual indicators for generation progress
+- Complete database mocking to prevent real database connections in tests
+- Fix TypeScript errors in ADB test files
+
+### Progress Notes
+- The Animation Design Brief UI in ScenePlanningHistoryPanel is mostly implemented but needs verification of backend integration
+- The chat orchestration service has the necessary hooks for handling scene planning and ADB generation
+- Component generation is using ADBs to produce better quality components
+- Created basic OpenAI client module that was missing (`~/server/lib/openai/client.ts`)
+- Fixed Babel configuration for Jest ESM support by using proper plugins
+
+### Next Steps
+1. **Verify ADB UI Integration:**
+   - Ensure ScenePlanningHistoryPanel correctly fetches and displays ADBs
+   - Verify "Generate/Regenerate Animation Brief" buttons work correctly
+   - Test end-to-end flow from user prompt through scene planning to ADB generation
+
+2. **Complete End-to-End Pipeline:**
+   - Test the GallerySwipe ad prompt end-to-end 
+   - Identify and fix any bottlenecks in the pipeline
+   - Add better error handling and recovery mechanisms
+   - Implement visual indicators for pipeline progress
+
+3. **Enhance User Experience:**
+   - Add scene regeneration button in timeline
+   - Improve visibility of component generation status
+   - Add clear indication of timing issues and duration discrepancies
+   - Provide better error messaging for failed operations
+
+4. **Documentation Updates:**
+   - Create user guide for the complete prompt-to-video process
+   - Document key UI elements and their functionality
+   - Update technical documentation for new services and integrations
+
+## Updates - [Current Date]
+
+### Fixes
+1. **Fixed Temperature Parameter Issue with O4-Mini model:**
+   - Removed temperature parameter from all OpenAI API calls using the o4-mini model
+   - The model only supports the default temperature (1.0)
+   - This fixed the error: `[COMPONENT GENERATOR] Error: 400 Unsupported value: 'temperature' does not support 0.7 with this model.`
+
+2. **Improved Scene Planning UI Feedback:**
+   - Added real-time feedback in ScenePlanningHistoryPanel to show scene planning as it happens
+   - Implemented progressive updates so users can see partial planning results immediately
+   - Extracted scene planning information from in-progress messages 
+   - Added a dedicated UI section to display planning status and partial scene descriptions
+   - This improves the user experience by showing planning progress rather than waiting for the entire process to complete
+
+### Current Issues
+- The OpenAI API calls need consistent configuration across the codebase
+- UI components should have better error handling and loading states

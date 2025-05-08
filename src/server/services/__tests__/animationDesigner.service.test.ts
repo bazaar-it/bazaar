@@ -1,53 +1,126 @@
-// src/server/services/__tests__/animationDesigner.service.test.ts
+// /Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/server/services/__tests__/animationDesigner.service.test.ts
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
-import { generateAnimationDesignBrief } from '../animationDesigner.service';
-import { db } from '~/server/db';
 import { animationDesignBriefs } from '~/server/db/schema';
+import type { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';
+import { 
+  createDrizzleMock, 
+  createOpenAIToolCallResponse
+} from '~/tests/utils/mockingHelpers';
 
-// Define types for our mocks
-type MockDB = {
-  insert: jest.Mock;
-  update: jest.Mock;
-  query: jest.Mock;
-  select: jest.Mock;
-};
+// Create mocks for the database
+const { 
+  mockDb, 
+  mockDbInsert, 
+  mockDbUpdate, 
+  mockDbQuery, 
+  mockDbSelect 
+} = createDrizzleMock();
 
-type MockOpenAI = {
-  chat: {
-    completions: {
-      create: jest.Mock;
-    };
+// Global variable to hold the OpenAI mock for use in tests
+let mockOpenAICreate: jest.Mock;
+
+// Setup mock function before importing modules that use it
+mockOpenAICreate = jest.fn();
+
+// Mock the neon database driver
+jest.mock('@neondatabase/serverless', () => {
+  return {
+    neon: jest.fn(() => ({})),
+    neonConfig: {
+      fetchConnectionCache: true
+    }
   };
-};
+});
 
-// Mock the OpenAI client
-jest.mock('~/server/lib/openai/client', () => ({
-  openai: {
-    chat: {
-      completions: {
-        create: jest.fn()
+// Mock drizzle-orm
+jest.mock('drizzle-orm/neon-http', () => ({
+  drizzle: jest.fn(() => mockDb)
+}));
+
+// Mock the database module
+jest.mock('~/server/db', () => ({
+  db: mockDb
+}));
+
+// Mock OpenAI at the package level
+jest.mock('openai', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: mockOpenAICreate
+        }
+      }
+    })),
+    OpenAI: jest.fn().mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: mockOpenAICreate
+        }
+      }
+    }))
+  };
+});
+
+// Mock the OpenAI client module
+jest.mock('~/server/lib/openai/client', () => {
+  return {
+    __esModule: true,
+    openaiClient: {
+      chat: {
+        completions: {
+          create: mockOpenAICreate
+        }
+      }
+    },
+    default: {
+      chat: {
+        completions: {
+          create: mockOpenAICreate
+        }
       }
     }
+  };
+});
+
+// Mock the env file
+jest.mock('~/env', () => ({
+  env: {
+    OPENAI_API_KEY: 'test-api-key',
+    DATABASE_URL: 'postgres://test:test@test.test:5432/testdb'
   }
 }));
 
-// Mock the database
-jest.mock('~/server/db', () => ({
-  db: {
-    insert: jest.fn().mockReturnValue({ returning: jest.fn() }),
-    update: jest.fn().mockReturnValue({ where: jest.fn() }),
-    query: jest.fn(),
-    select: jest.fn().mockReturnValue({ where: jest.fn() })
-  },
-  animationDesignBriefs: {}
-}));
-
-// Import mocked modules (after mocking)
-import { openai } from '~/server/lib/openai/client';
+// Now we can import the module we want to test
+import { generateAnimationDesignBrief, type AnimationBriefGenerationParams } from '../animationDesigner.service';
 
 describe('animationDesigner.service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // Set up default mock implementations for database calls
+    mockDbInsert.mockImplementation(() => {
+      return {
+        values: jest.fn().mockImplementation(() => {
+          return {
+            returning: jest.fn().mockResolvedValue([{
+              id: 'test-brief-id'
+            }])
+          };
+        })
+      };
+    });
+    
+    mockDbUpdate.mockImplementation(() => {
+      return {
+        set: jest.fn().mockImplementation(() => {
+          return {
+            where: jest.fn().mockResolvedValue([{ affected: 1 }])
+          };
+        })
+      };
+    });
   });
 
   afterEach(() => {
@@ -56,132 +129,89 @@ describe('animationDesigner.service', () => {
 
   describe('generateAnimationDesignBrief', () => {
     it('should create a pending brief in the database', async () => {
-      // Mock the database insert returning a pending brief
-      const mockPendingBrief = {
-        id: 'test-brief-id',
+      // Setup valid input parameters
+      const params: AnimationBriefGenerationParams = {
         projectId: 'test-project-id',
         sceneId: 'test-scene-id',
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        scenePurpose: 'test scene purpose',
+        sceneElementsDescription: 'A scene with various elements',
+        desiredDurationInFrames: 150,
+        dimensions: { width: 1920, height: 1080 }
       };
 
-      // Setup the mocks with proper types
-      const mockDbInsert = db.insert as jest.Mock;
-      const mockDbUpdate = db.update as jest.Mock;
-      const mockOpenAICreate = openai.chat.completions.create as jest.Mock;
-      
-      mockDbInsert.mockReturnValue({
-        returning: jest.fn().mockResolvedValue([mockPendingBrief]),
-      });
-
-      // Setup mock params - match the actual interface in animationDesigner.service
-      const params = {
-        projectId: 'test-project-id',
+      // Mock a successful OpenAI response using our helper
+      const briefData = {
         sceneId: 'test-scene-id',
-        effectDescription: 'A test scene description',
+        scenePurpose: 'test scene purpose',
+        overallStyle: 'modern',
+        durationInFrames: 150,
         dimensions: { width: 1920, height: 1080 },
-        durationInSeconds: 5,
-        fps: 30,
-        // Add these required fields to match the AnimationBriefGenerationParams interface
-        scenePurpose: 'testing',
-        sceneElementsDescription: 'test elements',
-        desiredDurationInFrames: 150
+        colorPalette: { background: '#ffffff' },
+        elements: [{ 
+          elementId: 'el-1',
+          elementType: 'text',
+          content: 'Hello world'
+        }]
       };
-
-      // Call the function but don't await it yet
-      const briefPromise = generateAnimationDesignBrief(params);
-
-      // Verify the database insert was called
-      expect(mockDbInsert).toHaveBeenCalled();
       
-      // Mock LLM response - match the actual OpenAI response structure
-      const mockLLMResponse = {
-        choices: [{
-          message: {
-            tool_calls: [{
-              function: {
-                name: 'generateAnimationDesignBrief',
-                arguments: JSON.stringify({
-                  sceneName: 'Test Scene',
-                  scenePurpose: 'Testing',
-                  elements: [],
-                  dimensions: { width: 1920, height: 1080 },
-                  durationInFrames: 150,
-                  // Include required fields from the brief schema
-                  sceneId: 'test-scene-id',
-                  briefVersion: '1.0.0',
-                  overallStyle: 'modern',
-                  colorPalette: { background: '#ffffff' }
-                }),
-              },
-            }],
-          },
-        }],
-      };
+      // Mock the OpenAI API response using the helper from mockingHelpers
+      mockOpenAICreate.mockResolvedValue(
+        createOpenAIToolCallResponse('create_animation_design_brief', briefData)
+      );
 
-      mockOpenAICreate.mockResolvedValue(mockLLMResponse);
-
-      // Now wait for the promise to resolve
-      const result = await briefPromise;
+      // Call the function
+      const result = await generateAnimationDesignBrief(params);
 
       // Verify the result contains both the brief and its ID
       expect(result).toHaveProperty('brief');
       expect(result).toHaveProperty('briefId', 'test-brief-id');
+      
+      // Verify database was called with correct parameters
+      expect(mockDbInsert).toHaveBeenCalled();
+      // Verify OpenAI was called
+      expect(mockOpenAICreate).toHaveBeenCalled();
+      // Verify the update happened to mark it as complete
+      expect(mockDbUpdate).toHaveBeenCalled();
     });
 
     it('should handle LLM errors gracefully', async () => {
-      // Mock the database insert returning a pending brief
-      const mockPendingBrief = {
-        id: 'test-brief-id',
+      // Valid input parameters
+      const params: AnimationBriefGenerationParams = {
         projectId: 'test-project-id',
         sceneId: 'test-scene-id',
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        scenePurpose: 'test scene purpose',
+        sceneElementsDescription: 'A scene with various elements',
+        desiredDurationInFrames: 150,
+        dimensions: { width: 1920, height: 1080 }
       };
 
-      const mockDbInsert = db.insert as jest.Mock;
-      const mockDbUpdate = db.update as jest.Mock;
-      const mockOpenAICreate = openai.chat.completions.create as jest.Mock;
-      
-      mockDbInsert.mockReturnValue({
-        returning: jest.fn().mockResolvedValue([mockPendingBrief]),
-      });
-
-      // Setup mock params with all required fields
-      const params = {
-        projectId: 'test-project-id',
-        sceneId: 'test-scene-id',
-        effectDescription: 'A test scene description',
-        dimensions: { width: 1920, height: 1080 },
-        durationInSeconds: 5,
-        fps: 30,
-        scenePurpose: 'testing',
-        sceneElementsDescription: 'test elements',
-        desiredDurationInFrames: 150
-      };
-
-      // Mock LLM error
-      const mockError = new Error('LLM API Error');
+      // Mock an OpenAI error
+      const mockError = new Error('OpenAI API Error');
       mockOpenAICreate.mockRejectedValue(mockError);
 
-      // Mock the database update for error state
-      mockDbUpdate.mockReturnValue({
-        where: jest.fn().mockResolvedValue([{ affected: 1 }]),
-      });
-
       // Call the function and expect it to handle the error
-      await expect(generateAnimationDesignBrief(params)).resolves.not.toThrow();
+      const result = await generateAnimationDesignBrief(params);
 
-      // Verify the database was updated with the error state
-      expect(mockDbUpdate).toHaveBeenCalled();
+      // It should return a fallback brief
+      expect(result).toHaveProperty('brief');
+      expect(result).toHaveProperty('briefId', 'test-brief-id');
       
-      if (mockDbUpdate.mock.calls.length > 0) {
-        const updateCall = mockDbUpdate.mock.calls[0];
-        expect(updateCall[1]).toHaveProperty('status', 'error');
-        expect(updateCall[1]).toHaveProperty('errorMessage');
+      // Verify update was called to mark as error
+      expect(mockDbUpdate).toHaveBeenCalled();
+      const setMock = mockDbUpdate.mock.calls[0]?.[0];
+      if (setMock) {
+        expect(setMock).toHaveProperty('status', 'error');
+        expect(setMock).toHaveProperty('errorMessage');
       }
     });
   });
 });
+
+// Helper functions to improve type-safety in tests
+function getTypedMockCall(mock: jest.Mock) {
+  return mock.mock.calls;
+}
+
+function expectTypedMockCall(mockCalls: any[], index: number, expected: Record<string, any>) {
+  expect(mockCalls[index]).toEqual(expect.objectContaining(expected));
+}

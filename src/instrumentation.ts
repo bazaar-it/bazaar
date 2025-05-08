@@ -10,6 +10,10 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     console.log('🔄 Next.js instrumentation - Initializing server (nodejs runtime)');
     
+    // Apply log filtering first
+    await import('../server-log-config.js');
+    console.log('📝 Applied server log filtering configuration');
+    
     // Dynamic import to avoid code being included in client bundles
     const { initializeServer } = await import('./server/init');
     

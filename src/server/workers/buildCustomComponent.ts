@@ -5,6 +5,12 @@ import { eq } from "drizzle-orm";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import os from "os";
 import { measureDuration, recordMetric } from "~/lib/metrics";
+import path from "path";
+import { mkdir, writeFile, readFile, rm } from "fs/promises";
+import { env } from "~/env";
+import * as fs from "fs";
+import { updateComponentStatus } from "~/server/services/componentGenerator.service";
+import logger, { buildLogger } from "~/lib/logger";
 
 // Dynamically import esbuild to prevent bundling issues
 let esbuild: typeof import('esbuild') | null = null;
@@ -40,7 +46,7 @@ let activeBuilds = 0;
  *    - Record metrics
  */
 export async function processPendingJobs() {
-  console.log("Processing pending custom component jobs...");
+  logger.info("Processing pending custom component jobs...");
   
   try {
     // Find pending jobs
@@ -49,7 +55,7 @@ export async function processPendingJobs() {
       limit: 10, // Get more jobs than we can process at once, to keep the queue filled
     });
 
-    console.log(`Found ${pendingJobs.length} pending jobs`);
+    logger.info(`Found ${pendingJobs.length} pending jobs`);
     
     // If no pending jobs, return early
     if (pendingJobs.length === 0) {
@@ -60,9 +66,9 @@ export async function processPendingJobs() {
     if (!esbuild) {
       try {
         esbuild = await import('esbuild');
-        console.log("Successfully loaded esbuild module");
+        logger.info("Successfully loaded esbuild module");
       } catch (err) {
-        console.warn("Failed to load esbuild, will use fallback transformation:", err);
+        logger.warn("Failed to load esbuild, will use fallback transformation:", { error: err });
       }
     }
 
@@ -92,14 +98,14 @@ export async function processPendingJobs() {
   } catch (error) {
     // Improve error logging
     if (error instanceof Error) {
-      console.error(`Error processing jobs: ${error.message}`, error.stack);
+      logger.error(`Error processing jobs: ${error.message}`, { stack: error.stack });
       // Record the error for metrics
       void recordMetric("worker_error", 1, { 
         errorType: error.constructor.name,
         message: error.message.substring(0, 100) // Truncate long error messages
       });
     } else {
-      console.error("Unknown error processing jobs:", error);
+      logger.error("Unknown error processing jobs:", { error });
     }
     
     // Try to clear the queue even on error
@@ -136,7 +142,7 @@ async function queueBuild(jobId: string): Promise<void> {
  * Process a single custom component job
  */
 async function processJob(jobId: string): Promise<void> {
-  console.log(`Processing job ${jobId}...`);
+  buildLogger.start(jobId, "Processing job started");
   
   try {
     await measureDuration("component_build", async () => {
@@ -163,7 +169,7 @@ async function processJob(jobId: string): Promise<void> {
       }
       
       // Log component code length for debugging
-      console.log(`Processing component code (${job.tsxCode.length} characters)`);
+      buildLogger.start(jobId, `Processing component code (${job.tsxCode.length} characters)`);
       
       // Sanitize TSX code (remove unsafe imports, etc.)
       const sanitizedTsx = sanitizeTsx(job.tsxCode);
@@ -176,18 +182,18 @@ async function processJob(jobId: string): Promise<void> {
       
       if (esbuild) {
         try {
-          console.log("Compiling TSX code with esbuild...");
+          buildLogger.compile(jobId, "Compiling TSX code with esbuild...");
           jsCode = await compileWithEsbuild(wrappedTsx);
         } catch (esbuildError) {
-          console.error("Error compiling with esbuild, using fallback:", esbuildError);
+          buildLogger.error(jobId, "Error compiling with esbuild, using fallback", { error: esbuildError });
           jsCode = await compileWithFallback(wrappedTsx);
         }
       } else {
-        console.log("Using fallback compiler (esbuild not available)");
+        buildLogger.compile(jobId, "Using fallback compiler (esbuild not available)");
         jsCode = await compileWithFallback(wrappedTsx);
       }
       
-      console.log("Uploading to R2...");
+      buildLogger.upload(jobId, "Uploading to R2...");
 
       // Upload to R2
       const key = `custom-components/${jobId}.js`;
@@ -210,11 +216,11 @@ async function processJob(jobId: string): Promise<void> {
         })
         .where(eq(customComponentJobs.id, jobId));
         
-      console.log(`Job ${jobId} completed successfully, available at ${outputUrl}`);
+      buildLogger.complete(jobId, `Component built successfully, available at ${outputUrl}`);
     }, { jobId });
 
   } catch (error) {
-    console.error(`Error processing job ${jobId}:`, error);
+    buildLogger.error(jobId, "Error processing job", { error: error instanceof Error ? error.message : String(error) });
     
     // Update job with error
     await db.update(customComponentJobs)
@@ -242,40 +248,48 @@ async function processJob(jobId: string): Promise<void> {
  */
 async function compileWithEsbuild(tsxCode: string): Promise<string> {
   if (!esbuild) {
-    throw new Error("esbuild is not available");
+    throw new Error("esbuild is not loaded. Cannot compile.");
   }
-  
-  // Compile with esbuild - optimized settings
-  const result = await esbuild.build({
-    stdin: {
-      contents: tsxCode,
-      loader: "tsx",
-      resolveDir: "",
-    },
-    bundle: true,
-    format: "esm", // Use ESM format
-    target: ["es2020"],
-    platform: "browser",
-    external: ["react", "remotion", "@remotion/transitions", "@remotion/media-utils"], // Keep dependencies external
-    write: false,
-    minify: true,
-    // Avoid file system references that might cause issues
-    outfile: 'out.js',
-    absWorkingDir: os.tmpdir(),
-  });
 
-  // Make sure output files exist and get the first one
-  if (!result.outputFiles || result.outputFiles.length === 0) {
-    throw new Error("No output files generated by esbuild");
+  const wrappedCode = wrapTsxWithGlobals(tsxCode);
+
+  try {
+    const result = await esbuild.build({
+      stdin: {
+        contents: wrappedCode,
+        resolveDir: process.cwd(), // Important for resolving any potential relative paths if ever used
+        loader: 'tsx',
+      },
+      bundle: true, // Bundle dependencies
+      write: false, // We want the output as a string, not written to disk
+      format: 'iife', // Immediately Invoked Function Expression, suitable for browser
+      platform: 'browser',
+      target: 'es2020', // Modern JS target
+      minify: true, // Minify the output
+      // Add any other necessary esbuild options here
+    });
+
+    if (result.errors.length > 0) {
+      logger.error("[ESBUILD] Build failed with errors:", { errors: JSON.stringify(result.errors, null, 2) });
+      // Potentially throw an error or handle as a failed build
+      // For now, logging and attempting to proceed if output exists
+    }
+    if (result.warnings.length > 0) {
+      logger.warn("[ESBUILD] Build completed with warnings:", { warnings: JSON.stringify(result.warnings, null, 2) });
+    }
+
+    if (result.outputFiles && result.outputFiles.length > 0 && result.outputFiles[0]) {
+      const compiledJs = result.outputFiles[0].text;
+      logger.info("[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
+      logger.debug("[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) }); // Optional: log snippet
+      return compiledJs;
+    } else {
+      throw new Error("esbuild compilation did not produce output files.");
+    }
+  } catch (error) {
+    logger.error("[ESBUILD] Error during esbuild compilation:", { error });
+    throw error; // Re-throw to be caught by processJob
   }
-  
-  // TypeScript safety check
-  const outputFile = result.outputFiles[0];
-  if (!outputFile || !outputFile.text) {
-    throw new Error("Invalid output file from esbuild");
-  }
-  
-  return outputFile.text;
 }
 
 /**
@@ -283,7 +297,7 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
  * This is used when esbuild is not available or fails
  */
 async function compileWithFallback(tsxCode: string): Promise<string> {
-  console.log("Using simplified fallback compilation method");
+  logger.info("Using simplified fallback compilation method");
   
   // Perform some basic transformations:
   // 1. Remove TypeScript types
@@ -333,10 +347,11 @@ function sanitizeTsx(tsxCode: string): string {
   const reactMatches = Array.from(deduplicatedCode.matchAll(reactDeclarationRegex));
   
   if (reactMatches.length > 0) {
-    console.log(`Found ${reactMatches.length} React declarations, removing them to prevent duplicates:`);
-    reactMatches.forEach((match, i) => {
-      const lineNumber = deduplicatedCode.substring(0, match.index || 0).split('\n').length;
-      console.log(`  [${i}] Line ~${lineNumber}: ${match[0]}`);
+    logger.debug(`Found ${reactMatches.length} React declarations, removing them to prevent duplicates:`, { 
+      matches: reactMatches.map((match, i) => {
+        const lineNumber = deduplicatedCode.substring(0, match.index || 0).split('\n').length;
+        return `[${i}] Line ~${lineNumber}: ${match[0]}`;
+      })
     });
   }
   
@@ -369,19 +384,18 @@ function removeDuplicateDefaultExports(code: string): string {
   
   // If we have multiple default exports
   if (matches.length > 1) {
-    console.log(`Found ${matches.length} default exports in component, keeping only the first one:`);
-    
-    // Log what was found for debugging
-    matches.forEach((match, i) => {
-      const lineNumber = code.substring(0, match.index).split('\n').length;
-      console.log(`  [${i}] Line ~${lineNumber}: ${match[0]}`);
+    logger.info(`Found ${matches.length} default exports in component, keeping only the first one:`, {
+      matches: matches.map((match, i) => {
+        const lineNumber = code.substring(0, match.index || 0).split('\n').length;
+        return `[${i}] Line ~${lineNumber}: ${match[0]}`;
+      })
     });
     
     // Keep only the first export default statement
     const firstMatch = matches[0];
     // TypeScript safety check
     if (!firstMatch || !firstMatch.index) {
-      console.warn("Warning: Expected to find matches but firstMatch is undefined or has no index");
+      logger.warn("Warning: Expected to find matches but firstMatch is undefined or has no index");
       return code;
     }
     
@@ -401,7 +415,7 @@ function removeDuplicateDefaultExports(code: string): string {
       );
     }
     
-    console.log(`Successfully sanitized duplicate exports, keeping first export default statement`);
+    logger.info(`Successfully sanitized duplicate exports, keeping first export default statement`);
     return sanitizedCode;
   }
   
@@ -436,20 +450,20 @@ function wrapTsxWithGlobals(tsxCode: string): string {
   if (defaultExport && defaultExport[1]) {
     // Prioritize the default export component name
     componentName = defaultExport[1];
-    console.log(`Found default export component: ${componentName}`);
+    logger.debug(`Found default export component: ${componentName}`);
   } else if (funcComponents.length > 0 && funcComponents[0]) {
     // Extract name from the first function component
     const match = funcComponents[0].match(/function\s+([A-Za-z0-9_]+)/);
     if (match && match[1]) {
       componentName = match[1];
-      console.log(`Using function component: ${componentName}`);
+      logger.debug(`Using function component: ${componentName}`);
     }
   } else if (constComponents.length > 0 && constComponents[0]) {
     // Extract name from const component declaration
     const match = constComponents[0].match(/const\s+([A-Za-z0-9_]+)/);
     if (match && match[1]) {
       componentName = match[1];
-      console.log(`Using const component: ${componentName}`);
+      logger.debug(`Using const component: ${componentName}`);
     }
   }
   
@@ -511,4 +525,268 @@ else {
   console.error('Could not find any component to register. Tried: ${componentNames.join(', ')}');
 }
 `;
+}
+
+export async function buildCustomComponent(jobId: string, forceRebuild = false): Promise<boolean> {
+  const startTime = Date.now();
+  buildLogger.start(jobId, `Starting custom component build ${forceRebuild ? '(forced rebuild)' : ''}`);
+  
+  try {
+    // Get the component job data
+    const job = await db.query.customComponentJobs.findFirst({
+      where: eq(customComponentJobs.id, jobId),
+    });
+
+    if (!job) {
+      buildLogger.error(jobId, "Component job not found", { type: "NOT_FOUND" });
+      return false;
+    }
+
+    // If already complete and not forcing a rebuild, skip
+    if (job.status === "complete" && !forceRebuild) {
+      buildLogger.start(jobId, "Component already built successfully. Use forceRebuild=true to rebuild.", { status: "SKIP" });
+      return true;
+    }
+
+    // Update the job status to building
+    await db.update(customComponentJobs)
+      .set({ 
+        status: "building",
+        updatedAt: new Date()
+      })
+      .where(eq(customComponentJobs.id, jobId));
+
+    // Abort if we don't have TSX code
+    if (!job.tsxCode) {
+      buildLogger.error(jobId, "No TSX code found for component job", { type: "NO_CODE" });
+      await updateComponentStatus(jobId, "error", db, undefined, "No TSX code found");
+      return false;
+    }
+
+    buildLogger.start(jobId, `Got ${job.tsxCode.length} bytes of TSX code`, { type: "CODE" });
+
+    // 1. Save the TSX code to a temporary file
+    const tmpDir = path.join(os.tmpdir(), `bazaar-components-${jobId}`);
+    await mkdir(tmpDir, { recursive: true });
+    
+    const componentFilePath = path.join(tmpDir, "component.tsx");
+    await writeFile(componentFilePath, job.tsxCode);
+    buildLogger.start(jobId, `Wrote TSX file to ${componentFilePath}`, { type: "FILES" });
+    
+    // 2. Compile with esbuild
+    const compileStartTime = Date.now();
+    buildLogger.compile(jobId, "Starting esbuild compilation...");
+    
+    // Define a type for the compilation result
+    type CompilationResult = { 
+      success: boolean; 
+      outputPath?: string; 
+      error?: string 
+    };
+    
+    // Compile using esbuild
+    let compiled: CompilationResult;
+    
+    try {
+      if (!esbuild) {
+        await import('esbuild').then(esb => {
+          esbuild = esb;
+        });
+      }
+      
+      if (!esbuild) {
+        throw new Error("Failed to load esbuild");
+      }
+      
+      const outputDir = path.dirname(componentFilePath);
+      const outputPath = path.join(outputDir, "bundle.js");
+      
+      // Configure esbuild
+      const result = await esbuild.build({
+        entryPoints: [componentFilePath],
+        bundle: true,
+        outfile: outputPath,
+        format: 'esm',
+        target: 'es2020',
+        platform: 'browser',
+        minify: true,
+        loader: {
+          '.tsx': 'tsx',
+          '.ts': 'ts',
+          '.js': 'js',
+          '.jsx': 'jsx',
+        },
+        define: {
+          'process.env.NODE_ENV': '"production"',
+        },
+        jsxFactory: 'React.createElement',
+        jsxFragment: 'React.Fragment',
+        external: ['react', 'remotion'],
+        logLevel: 'warning',
+      });
+      
+      // Check for warnings
+      if (result.warnings && result.warnings.length > 0) {
+        buildLogger.warn(jobId, "Compilation warnings", { warnings: result.warnings, type: "COMPILE:WARN" });
+      }
+      
+      // Output final result
+      const fileSize = fs.statSync(outputPath).size;
+      buildLogger.compile(jobId, `Bundle size: ${Math.round(fileSize / 1024)}KB`, { type: "COMPILE:SUCCESS" });
+      
+      compiled = { 
+        success: true, 
+        outputPath 
+      };
+    } catch (error) {
+      buildLogger.error(jobId, "esbuild compilation failed", { type: "COMPILE:ERROR" });
+      
+      // Detailed error analysis for esbuild errors
+      let errorDetails = "Unknown compilation error";
+      
+      if (error instanceof Error) {
+        errorDetails = error.message;
+        
+        // Parse the esbuild error message to extract location info
+        const locationMatch = error.message.match(/([^:]+):(\d+):(\d+):/);
+        if (locationMatch) {
+          const [_, file, lineStr, column] = locationMatch;
+          buildLogger.error(jobId, error.message, { type: "COMPILE:ERROR", location: `${file}:${lineStr}:${column}` });
+          
+          // Try to read the problematic file section if available
+          try {
+            const fileContent = fs.readFileSync(componentFilePath, 'utf8');
+            const lines = fileContent.split('\n');
+            
+            // Ensure lineStr is a string before parsing
+            const lineNum = lineStr ? parseInt(lineStr, 10) : 0;
+            
+            // Extract context (5 lines before and after)
+            const start = Math.max(0, lineNum - 5);
+            const end = Math.min(lines.length, lineNum + 5);
+            
+            const codeContext = [];
+            for (let i = start; i < end; i++) {
+              const prefix = i === lineNum - 1 ? '> ' : '  ';
+              codeContext.push(`${prefix}${i + 1}: ${lines[i]}`);
+            }
+            
+            buildLogger.error(jobId, "Problematic code section:", { 
+              type: "COMPILE:ERROR:CODE", 
+              codeContext: codeContext.join('\n')
+            });
+          } catch (readError) {
+            buildLogger.error(jobId, "Could not read problematic file", { 
+              type: "COMPILE:ERROR", 
+              error: readError instanceof Error ? readError.message : String(readError)
+            });
+          }
+        }
+      }
+      
+      compiled = {
+        success: false,
+        error: errorDetails
+      };
+    }
+    
+    const compileDuration = Date.now() - compileStartTime;
+    
+    if (!compiled.success) {
+      buildLogger.error(jobId, `Compilation failed: ${compiled.error}`, { type: "COMPILE" });
+      await updateComponentStatus(jobId, "error", db, undefined, `Build error: ${compiled.error}`);
+      return false;
+    }
+    
+    buildLogger.compile(jobId, `Compilation successful in ${compileDuration}ms, output: ${compiled.outputPath}`);
+
+    // 3. Upload the bundle to R2
+    const r2StartTime = Date.now();
+    buildLogger.upload(jobId, "Uploading bundle to R2...");
+    
+    // Configure R2 client
+    const r2 = new S3Client({
+      region: 'auto',
+      endpoint: env.R2_ENDPOINT,
+      credentials: {
+        accessKeyId: env.R2_ACCESS_KEY_ID,
+        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+
+    // Read the compiled bundle
+    if (!compiled.outputPath) {
+      buildLogger.error(jobId, "No output path from compilation", { type: "NO_OUTPUT" });
+      await updateComponentStatus(jobId, "error", db, undefined, "No output from compilation");
+      return false;
+    }
+    
+    const bundleContent = await readFile(compiled.outputPath);
+    const publicPath = `custom-components/${jobId}.js`;
+    
+    try {
+      // Upload to R2
+      const result = await r2.send(
+        new PutObjectCommand({
+          Bucket: env.R2_BUCKET_NAME,
+          Key: publicPath,
+          Body: bundleContent,
+          ContentType: 'application/javascript',
+        })
+      );
+      
+      const r2Duration = Date.now() - r2StartTime;
+      buildLogger.upload(jobId, `R2 upload successful in ${r2Duration}ms`, { 
+        ETag: result.ETag, 
+        size: bundleContent.length 
+      });
+    } catch (r2Error) {
+      buildLogger.error(jobId, `R2 upload failed: ${r2Error instanceof Error ? r2Error.message : String(r2Error)}`, { 
+        type: "R2_UPLOAD" 
+      });
+      await updateComponentStatus(jobId, "error", db, undefined, `R2 upload error: ${r2Error instanceof Error ? r2Error.message : String(r2Error)}`);
+      return false;
+    }
+
+    // 4. Update the job with CDN URL
+    const publicUrl = `${env.R2_PUBLIC_URL}/${publicPath}`;
+    buildLogger.complete(jobId, `Bundle URL: ${publicUrl}`);
+    
+    await db.update(customComponentJobs)
+      .set({ 
+        outputUrl: publicUrl,  // Using outputUrl instead of bundleUrl to match schema
+        status: "complete",
+        updatedAt: new Date()
+      })
+      .where(eq(customComponentJobs.id, jobId));
+    
+    // Clean up the temp dir
+    try {
+      await rm(tmpDir, { recursive: true, force: true });
+      buildLogger.start(jobId, `Removed temporary directory ${tmpDir}`, { type: "CLEANUP" });
+    } catch (cleanupError) {
+      // Non-fatal error, just log it
+      buildLogger.warn(jobId, `Failed to clean up temp directory: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+    }
+    
+    const totalDuration = Date.now() - startTime;
+    buildLogger.complete(jobId, `Component build successful in ${totalDuration}ms`);
+    
+    return true;
+  } catch (error) {
+    buildLogger.error(jobId, `Unhandled build error: ${error instanceof Error ? error.message : String(error)}`, { 
+      type: "UNHANDLED",
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    try {
+      await updateComponentStatus(jobId, "error", db, undefined, `Unhandled error: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (updateError) {
+      buildLogger.error(jobId, `Failed to update status: ${updateError instanceof Error ? updateError.message : String(updateError)}`, { 
+        type: "DB_UPDATE" 
+      });
+    }
+    
+    return false;
+  }
 }

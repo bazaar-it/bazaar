@@ -1,0 +1,1 @@
+DROP TABLE "bazaar-vid_post" CASCADE;

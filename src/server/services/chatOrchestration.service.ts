@@ -14,6 +14,7 @@ import { type StreamEventType, StreamEventType as EventType, type ToolCallAccumu
 import { eq, desc } from "drizzle-orm";
 import { eventBufferService } from "~/server/services/eventBuffer.service";
 import { randomUUID } from "crypto";
+import logger, { chatLogger } from "~/lib/logger";
 
 /**
  * Structure of a tool call response
@@ -76,14 +77,23 @@ export async function processUserMessage(
         toolCallExecutionTimes: {},
     };
     
-    console.log(`[${assistantMessageId}] Starting stream processing for project ${projectId}${clientId ? `, client: ${clientId}` : ''}`);
+    chatLogger.start(assistantMessageId, `Starting stream processing for project ${projectId}`, {
+        projectId,
+        clientId,
+        userMessageId
+    });
     
     // If we should resume from a saved state, get it from the buffer
     if (shouldResume && clientId) {
-        console.log(`[${assistantMessageId}] Attempting to resume from saved state for client ${clientId}`);
+        chatLogger.start(assistantMessageId, `Attempting to resume from saved state`, {
+            clientId
+        });
         const savedState = eventBufferService.getToolCallState(assistantMessageId);
         if (savedState) {
-            console.log(`[${assistantMessageId}] Found saved state with status: ${savedState.status}, executed calls: ${savedState.executedCalls.length}`);
+            chatLogger.start(assistantMessageId, `Found saved state`, {
+                status: savedState.status,
+                executedCallsCount: savedState.executedCalls.length
+            });
             // We could add state resumption logic here, but for now just logging
         }
     }
@@ -103,7 +113,10 @@ export async function processUserMessage(
             limit: MAX_CONTEXT_MESSAGES * 2,
         });
         const fetchEndTime = Date.now();
-        console.log(`[${assistantMessageId}] Fetched ${conversationContext.length} messages in ${fetchEndTime - fetchStartTime}ms`);
+        chatLogger.start(assistantMessageId, `Fetched conversation context`, {
+            messageCount: conversationContext.length,
+            duration: fetchEndTime - fetchStartTime
+        });
         
         // Create the OpenAI API request with tools
         const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -129,18 +142,22 @@ export async function processUserMessage(
         // Insert at position 1 (after system prompt, before messages)
         apiMessages.splice(1, 0, userContextMessage);
         
-        console.log(`[${assistantMessageId}] Creating stream with ${apiMessages.length} messages in context`);
+        chatLogger.start(assistantMessageId, `Creating stream`, {
+            contextMessageCount: apiMessages.length
+        });
         
         // Create the streaming request
         const streamStartTime = Date.now();
         const stream = await openaiClient.chat.completions.create({
-            model: "gpt-4o-mini", // or other OpenAI model that supports function calling
+            model: "o4-mini", // or other OpenAI model that supports function calling
             messages: apiMessages,
             stream: true,
             tools: CHAT_TOOLS,
         });
         
-        console.log(`[${assistantMessageId}] Stream created in ${Date.now() - streamStartTime}ms`);
+        chatLogger.stream(assistantMessageId, `Stream created`, {
+            duration: Date.now() - streamStartTime
+        });
         
         // Set up variables for tracking the stream state
         let streamedContent = "";
@@ -149,7 +166,7 @@ export async function processUserMessage(
         const accumulatedToolCalls: Record<number, ToolCallAccumulator> = {};
         
         // Process the stream
-        console.log(`[${assistantMessageId}] Starting to process stream chunks`);
+        chatLogger.stream(assistantMessageId, `Starting to process stream chunks`);
         for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta;
             
@@ -160,7 +177,9 @@ export async function processUserMessage(
             if (delta.tool_calls) {
                 metrics.toolCallFragmentsReceived += 1;
                 
-                console.log(`[${assistantMessageId}] Received tool call delta: ${JSON.stringify(delta.tool_calls)}`);
+                chatLogger.tool(assistantMessageId, "tool_calls", `Received tool call delta`, {
+                    deltaToolCalls: JSON.stringify(delta.tool_calls)
+                });
                 
                 for (const toolCallDelta of delta.tool_calls) {
                     // Make sure we have a valid index
@@ -170,7 +189,9 @@ export async function processUserMessage(
                     if (!accumulatedToolCalls[toolCallDelta.index]) {
                         // This is a new tool call, emit the start event
                         if (toolCallDelta.function?.name) {
-                            console.log(`[${assistantMessageId}] New tool call detected: ${toolCallDelta.function.name} (index: ${toolCallDelta.index})`);
+                            chatLogger.tool(assistantMessageId, toolCallDelta.function.name, `New tool call detected`, {
+                                index: toolCallDelta.index
+                            });
                             
                             emitter.next({
                                 type: EventType.TOOL_CALL,
@@ -200,7 +221,9 @@ export async function processUserMessage(
                         // Append function name if present
                         if (toolCallDelta.function?.name && !toolCall.function.name) {
                             toolCall.function.name = toolCallDelta.function.name;
-                            console.log(`[${assistantMessageId}] Updated tool call name: ${toolCall.function.name} (index: ${toolCall.index})`);
+                            chatLogger.tool(assistantMessageId, toolCall.function.name, `Updated tool call name`, {
+                                index: toolCall.index
+                            });
                         }
                         
                         // Append function arguments if present
@@ -210,7 +233,7 @@ export async function processUserMessage(
                             
                             // Log every 100 chars to avoid excessive logging
                             if (Math.floor(prevLength / 100) !== Math.floor(toolCall.function.arguments.length / 100)) {
-                                console.log(`[${assistantMessageId}] Tool call arguments for ${toolCall.function.name} now ${toolCall.function.arguments.length} chars`);
+                                chatLogger.tool(assistantMessageId, toolCall.function.name, `Tool call arguments for ${toolCall.function.name} now ${toolCall.function.arguments.length} chars`);
                             }
                         }
                     }
@@ -222,7 +245,9 @@ export async function processUserMessage(
                 
                 // Log every 50 chars to avoid excessive logging
                 if (streamedContent.length % 50 === 0) {
-                    console.log(`[${assistantMessageId}] Received content: now ${streamedContent.length} chars total`);
+                    chatLogger.stream(assistantMessageId, `Received content`, {
+                        contentLength: streamedContent.length
+                    });
                 }
                 
                 // Stream the content to the client
@@ -237,7 +262,9 @@ export async function processUserMessage(
             
             if (finishReason === "tool_calls") {
                 // The model has indicated tool calls are ready for execution
-                console.log(`[${assistantMessageId}] Stream finished with reason: tool_calls`);
+                chatLogger.stream(assistantMessageId, `Stream finished with reason`, {
+                    reason: finishReason
+                });
                 emitter.next({
                     type: EventType.CONTENT_COMPLETE,
                 });
@@ -248,7 +275,9 @@ export async function processUserMessage(
                     metrics.toolCallsCompleted += 1;
                 });
                 
-                console.log(`[${assistantMessageId}] Marked ${metrics.toolCallsCompleted} tool calls as complete`);
+                chatLogger.start(assistantMessageId, `Marked tool calls as complete`, {
+                    toolCallsCompleted: metrics.toolCallsCompleted
+                });
                 
                 // Update the message content in the database
                 await db.update(messages)
@@ -256,7 +285,9 @@ export async function processUserMessage(
                     .where(eq(messages.id, assistantMessageId));
             }
             else if (finishReason === "stop") {
-                console.log(`[${assistantMessageId}] Stream finished with reason: stop`);
+                chatLogger.stream(assistantMessageId, `Stream finished with reason`, {
+                    reason: finishReason
+                });
                 emitter.next({
                     type: EventType.CONTENT_COMPLETE,
                 });
@@ -271,8 +302,12 @@ export async function processUserMessage(
                     metrics.streamEnd = Date.now();
                     metrics.totalDuration = metrics.streamEnd - metrics.streamStart;
                     
-                    console.log(`[${assistantMessageId}] Stream completed in ${metrics.totalDuration}ms with no tool calls`);
-                    console.log(`[${assistantMessageId}] Content chunks: ${metrics.contentChunksReceived}, final content length: ${streamedContent.length}`);
+                    chatLogger.stream(assistantMessageId, `Stream completed in`, {
+                        duration: metrics.totalDuration
+                    });
+                    chatLogger.stream(assistantMessageId, `Content chunks`, {
+                        contentLength: metrics.contentChunksReceived
+                    });
                     
                     emitter.next({
                         type: EventType.DONE,
@@ -285,22 +320,28 @@ export async function processUserMessage(
         
         // Process accumulated tool calls
         const completedToolCalls = Object.values(accumulatedToolCalls).filter(tool => tool.complete);
-        console.log(`[${assistantMessageId}] Processing ${completedToolCalls.length} accumulated tool calls...`);
+        chatLogger.start(assistantMessageId, `Processing accumulated tool calls`, {
+            toolCallsCount: completedToolCalls.length
+        });
         
         // Execute each tool call one by one
         for (const accumulatedToolCall of completedToolCalls) {
             try {
                 const toolCallStartTime = Date.now();
-                console.log(`[${assistantMessageId}] Executing tool call: ${accumulatedToolCall.function.name} (index: ${accumulatedToolCall.index})`);
+                chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Executing tool call`, {
+                    index: accumulatedToolCall.index
+                });
                 
                 // Parse the arguments
                 let args;
                 try {
                     args = JSON.parse(accumulatedToolCall.function.arguments);
-                    console.log(`[${assistantMessageId}] Parsed args for ${accumulatedToolCall.function.name}:`, JSON.stringify(args).substring(0, 100) + (JSON.stringify(args).length > 100 ? '...' : ''));
+                    chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Parsed args`, {
+                        args: JSON.stringify(args).substring(0, 100) + (JSON.stringify(args).length > 100 ? '...' : '')
+                    });
                 } catch (e) {
                     const errorMessage = `Failed to parse tool call arguments: ${accumulatedToolCall.function.arguments.substring(0, 100)}...`;
-                    console.error(`[${assistantMessageId}] ${errorMessage}`);
+                    chatLogger.error(assistantMessageId, errorMessage);
                     throw new Error(`Invalid JSON in tool call arguments: ${e instanceof Error ? e.message : String(e)}`);
                 }
                 
@@ -309,7 +350,9 @@ export async function processUserMessage(
                 
                 switch (accumulatedToolCall.function.name) {
                     case "applyJsonPatch":
-                        console.log(`[${assistantMessageId}] Applying JSON patch with ${args.operations?.length || 0} operations`);
+                        chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Applying JSON patch with operations`, {
+                            operationsLength: args.operations?.length || 0
+                        });
                         response = await handleApplyJsonPatch(
                             projectId,
                             args.operations,
@@ -318,7 +361,9 @@ export async function processUserMessage(
                         break;
                         
                     case "generateRemotionComponent":
-                        console.log(`[${assistantMessageId}] Generating component: ${args.effectDescription?.substring(0, 50)}...`);
+                        chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Generating component`, {
+                            effectDescription: args.effectDescription?.substring(0, 50) || ''
+                        });
                         response = await handleGenerateComponent(
                             projectId,
                             userId,
@@ -328,7 +373,9 @@ export async function processUserMessage(
                         break;
                         
                     case "planVideoScenes":
-                        console.log(`[${assistantMessageId}] Planning video scenes: ${args.scenes?.length || 0} scenes`);
+                        chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Planning video scenes`, {
+                            scenesCount: args.scenes?.length || 0
+                        });
                         response = await handlePlanScenes(
                             projectId,
                             userId,
@@ -339,7 +386,9 @@ export async function processUserMessage(
                         break;
                         
                     default:
-                        console.warn(`[${assistantMessageId}] Unknown tool call: ${accumulatedToolCall.function.name}`);
+                        chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Unknown tool call`, {
+                            toolName: accumulatedToolCall.function.name
+                        });
                         response = {
                             message: `Error: Unknown tool call "${accumulatedToolCall.function.name}"`
                         };
@@ -352,7 +401,9 @@ export async function processUserMessage(
                 metrics.toolCallsExecuted += 1;
                 metrics.toolCallExecutionTimes[accumulatedToolCall.function.name] = executionTime;
                 
-                console.log(`[${assistantMessageId}] Tool ${accumulatedToolCall.function.name} executed in ${executionTime}ms`);
+                chatLogger.tool(assistantMessageId, accumulatedToolCall.function.name, `Executed in`, {
+                    duration: executionTime
+                });
                 
                 // Send tool result message to the client
                 emitter.next({
@@ -376,8 +427,12 @@ export async function processUserMessage(
                 
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error(`[${assistantMessageId}] Error processing tool call ${accumulatedToolCall.function.name}:`, errorMessage);
-                console.error(`[${assistantMessageId}] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+                chatLogger.error(assistantMessageId, `Error processing tool call`, {
+                    toolName: accumulatedToolCall.function.name,
+                    index: accumulatedToolCall.index,
+                    error: errorMessage,
+                    stack: error instanceof Error ? error.stack : undefined
+                });
                 
                 // Send error message to the client
                 emitter.next({
@@ -405,14 +460,10 @@ export async function processUserMessage(
         metrics.streamEnd = Date.now();
         metrics.totalDuration = metrics.streamEnd - metrics.streamStart;
         
-        console.log(`[${assistantMessageId}] Stream processing completed in ${metrics.totalDuration}ms`);
-        console.log(`[${assistantMessageId}] Performance metrics:`, {
-            contentChunks: metrics.contentChunksReceived,
-            toolCallFragments: metrics.toolCallFragmentsReceived,
-            toolCallsCompleted: metrics.toolCallsCompleted,
-            toolCallsExecuted: metrics.toolCallsExecuted,
-            toolCallExecutionTimes: metrics.toolCallExecutionTimes,
-            totalDuration: metrics.totalDuration
+        chatLogger.complete(assistantMessageId, `Message processing complete`, {
+            duration: metrics.totalDuration,
+            contentLength: streamedContent.length,
+            toolCallsCount: metrics.toolCallsCompleted
         });
         
         emitter.next({
@@ -421,16 +472,20 @@ export async function processUserMessage(
     } catch (error) {
         // Handle any errors in the main process
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[${assistantMessageId}] Fatal error in stream processing:`, errorMessage);
-        console.error(`[${assistantMessageId}] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
+        chatLogger.error(assistantMessageId, `Fatal error in stream processing`, {
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined
+        });
         
         // Calculate partial metrics even in error case
         if (!metrics.streamEnd) {
             metrics.streamEnd = Date.now();
             metrics.totalDuration = metrics.streamEnd - metrics.streamStart;
             
-            console.log(`[${assistantMessageId}] Stream processing failed after ${metrics.totalDuration}ms`);
-            console.log(`[${assistantMessageId}] Partial metrics:`, {
+            chatLogger.stream(assistantMessageId, `Stream processing failed after`, {
+                duration: metrics.totalDuration
+            });
+            chatLogger.stream(assistantMessageId, `Partial metrics`, {
                 contentChunks: metrics.contentChunksReceived,
                 toolCallFragments: metrics.toolCallFragmentsReceived,
                 toolCallsCompleted: metrics.toolCallsCompleted,
@@ -471,11 +526,13 @@ export async function processUserMessage(
  * @param explanation - Optional explanation
  * @returns Response message and patches
  */
-async function handleApplyJsonPatch(
+export async function handleApplyJsonPatch(
     projectId: string,
     operations: Operation[],
     explanation?: string
 ): Promise<ToolCallResponse> {
+    const messageId = 'apply-json-patch'; // Add a default messageId
+    
     if (!operations || !Array.isArray(operations) || operations.length === 0) {
         throw new TRPCError({
             code: "BAD_REQUEST",
@@ -483,7 +540,7 @@ async function handleApplyJsonPatch(
         });
     }
     
-    console.log(`Applying ${operations.length} JSON patch operations to project ${projectId}`);
+    chatLogger.tool(messageId, "applyJsonPatch", `Applying ${operations.length} JSON patch operations to project ${projectId}`);
     
     // Insert the patch into the database
     // Operations are type-safe as they match the JsonPatch type expected by the database
@@ -507,12 +564,15 @@ async function handleApplyJsonPatch(
  * @param assistantMessageId - ID of the assistant message
  * @returns Response message
  */
-async function handleGenerateComponent(
+export async function handleGenerateComponent(
     projectId: string,
     userId: string,
     effectDescription: string,
     assistantMessageId: string
 ): Promise<ToolCallResponse> {
+    const startTime = Date.now();
+    const messageId = assistantMessageId || 'generate-component'; // Use the provided assistantMessageId
+    
     if (!effectDescription || typeof effectDescription !== "string") {
         throw new TRPCError({
             code: "BAD_REQUEST",
@@ -520,22 +580,39 @@ async function handleGenerateComponent(
         });
     }
     
-    console.log(`Generating component for project ${projectId} with description: ${effectDescription}`);
+    chatLogger.tool(messageId, "generateRemotionComponent", `Generating component for project ${projectId} with description: ${effectDescription}`);
     
-    // Call the component generator
-    const startTime = Date.now();
+    // Create a temporary scene ID for this component
+    const tempSceneId = randomUUID();
+    
+    // Create AnimationDesignBrief parameters
+    const briefParams = {
+        projectId,
+        sceneId: tempSceneId,
+        scenePurpose: effectDescription,
+        sceneElementsDescription: effectDescription,
+        desiredDurationInFrames: 6 * 30, // 6 seconds at 30fps
+        dimensions: { width: 1920, height: 1080 } // Default HD dimensions
+    };
+    
+    // Generate animation design brief using the animation designer service
+    const { brief, briefId } = await import("~/server/services/animationDesigner.service")
+        .then(module => module.generateAnimationDesignBrief(briefParams));
+    
+    // Call the component generator with the design brief
     const { jobId, effect } = await generateComponent(
         projectId,
-        effectDescription,
+        brief, // Now passing proper AnimationDesignBrief object
         assistantMessageId,
         6, // Default 6 seconds
         30, // Default 30fps
-        undefined, // No scene ID in this context
-        userId
+        tempSceneId, // Using our temporary scene ID for linking
+        userId,
+        briefId // Include the brief ID for reference
     );
     const duration = Date.now() - startTime;
     
-    console.log(`Generated component ${effect} (jobId: ${jobId}) in ${duration}ms`);
+    chatLogger.tool(messageId, "generateRemotionComponent", `Generated component ${effect} (jobId: ${jobId}) in ${duration}ms`);
     
     return {
         message: `I'm generating a custom "${effect}" component based on your description. This might take a minute. You'll be able to add it to your timeline once it's ready.`
@@ -552,13 +629,16 @@ async function handleGenerateComponent(
  * @param emitter - Event emitter for streaming updates
  * @returns Response message and patches
  */
-async function handlePlanScenes(
+export async function handlePlanScenes(
     projectId: string,
     userId: string,
     scenePlan: any,
     assistantMessageId: string,
     emitter: Subject<any>
 ): Promise<ToolCallResponse> {
+    const startTime = Date.now();
+    const messageId = assistantMessageId || 'plan-scenes'; // Use the provided assistantMessageId
+    
     if (!scenePlan || !scenePlan.scenes || !Array.isArray(scenePlan.scenes)) {
         throw new TRPCError({
             code: "BAD_REQUEST",
@@ -566,7 +646,7 @@ async function handlePlanScenes(
         });
     }
     
-    console.log(`Planning video with ${scenePlan.scenes.length} scenes for project ${projectId}`);
+    chatLogger.tool(messageId, "planVideoScenes", `Planning video with ${scenePlan.scenes.length} scenes for project ${projectId}`);
     
     // Additional validation logging for scene plan
     try {
@@ -574,24 +654,25 @@ async function handlePlanScenes(
         for (let i = 0; i < scenePlan.scenes.length; i++) {
             const scene = scenePlan.scenes[i];
             if (!scene.id) {
-                console.warn(`[${assistantMessageId}] Scene at index ${i} is missing an ID`);
+                chatLogger.tool(messageId, "planVideoScenes", `Scene at index ${i} is missing an ID`);
             }
             if (!scene.description) {
-                console.warn(`[${assistantMessageId}] Scene ${scene.id || i} is missing a description`);
+                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} is missing a description`);
             }
             if (typeof scene.durationInSeconds !== 'number') {
-                console.warn(`[${assistantMessageId}] Scene ${scene.id || i} has invalid duration: ${scene.durationInSeconds}`);
+                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} has invalid duration: ${scene.durationInSeconds}`);
             }
             if (!scene.effectType) {
-                console.warn(`[${assistantMessageId}] Scene ${scene.id || i} is missing an effect type`);
+                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} is missing an effect type`);
             }
         }
     } catch (validationError) {
-        console.error(`[${assistantMessageId}] Error validating scene plan:`, validationError);
+        chatLogger.error(messageId, `Error validating scene plan`, {
+            error: validationError
+        });
     }
     
     // Process the scene plan using the scene planner service
-    const startTime = Date.now();
     const result = await handleScenePlan(
         projectId,
         userId,
@@ -602,7 +683,7 @@ async function handlePlanScenes(
     );
     const duration = Date.now() - startTime;
     
-    console.log(`[${assistantMessageId}] Scene planning completed in ${duration}ms with ${result.patches?.length || 0} patches`);
+    chatLogger.tool(messageId, "planVideoScenes", `Scene planning completed in ${duration}ms with ${result.patches?.length || 0} patches`);
     
     return result;
 }
@@ -626,11 +707,11 @@ export async function handleClientReconnection(
     const reconnectionResult = eventBufferService.handleReconnection(clientId, lastEventId);
     
     if (!reconnectionResult) {
-        console.log(`[${messageId}] Client ${clientId} reconnection failed, no buffer available or window expired`);
+        chatLogger.error(messageId, `Client ${clientId} reconnection failed, no buffer available or window expired`);
         return false;
     }
     
-    console.log(`[${messageId}] Client ${clientId} reconnected, replaying ${reconnectionResult.events.length} missed events`);
+    chatLogger.start(messageId, `Client ${clientId} reconnected, replaying ${reconnectionResult.events.length} missed events`);
     
     // First emit reconnection event
     emitter.next({
@@ -654,7 +735,7 @@ export async function handleClientReconnection(
     const toolCallState = eventBufferService.getToolCallState(messageId);
     
     if (toolCallState && toolCallState.status === 'executing') {
-        console.log(`[${messageId}] Resuming tool call execution after reconnection`);
+        chatLogger.start(messageId, `Resuming tool call execution after reconnection`);
         
         // We need to resume the processing using the saved state
         // This will happen in the router, not here

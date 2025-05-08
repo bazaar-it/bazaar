@@ -49,8 +49,7 @@ yarn-error.log*
 .cursor/
 .cursorrules
 
-# Drizzle artifacts
-drizzle/
+
 
 # Remotion render outputs only (not source code)
 /remotion/out/
