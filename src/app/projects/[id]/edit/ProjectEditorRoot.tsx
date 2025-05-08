@@ -1,7 +1,7 @@
-// src/app/projects/[id]/edit/InterfaceShell.tsx
+// src/app/projects/[id]/edit/ProjectEditorRoot.tsx
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Separator } from '~/components/ui/separator';
 import { Button } from '~/components/ui/button';
@@ -18,6 +18,8 @@ import { TimelineItemType } from '~/types/timeline';
 import { DraggableTimeline } from '~/components/client/DraggableTimeline';
 // @ts-ignore
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import WorkspaceContentArea from './WorkspaceContentArea';
+import type { WorkspaceContentAreaHandle } from './WorkspaceContentArea';
 
 type TimelineMode = 'hidden' | 'vertical' | 'floating';
 type LeftPanelTab = 'chat' | 'planning';
@@ -28,7 +30,7 @@ type Props = {
   initialProjects: { id: string; name: string }[];
 };
 
-export default function InterfaceShell({ projectId, initialProps, initialProjects }: Props) {
+export default function ProjectEditorRoot({ projectId, initialProps, initialProjects }: Props) {
   const { setProject } = useVideoState();
 
   // Ensure Zustand store always loads the correct project on projectId change
@@ -40,13 +42,16 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   // Customizable layout state
   const [timelineMode, setTimelineMode] = useState<TimelineMode>('hidden');
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('chat');
+  const [timelineHeight, setTimelineHeight] = useState(200); // Default timeline height in pixels
   
   // Handle timeline mode toggle
   const toggleTimeline = useCallback(() => {
+    console.log('Timeline toggle clicked');
     setTimelineMode(prev => {
-      if (prev === 'hidden') return 'vertical';
-      if (prev === 'vertical') return 'floating';
-      return 'hidden';
+      // Only toggle between hidden and vertical for now (no floating mode)
+      const newMode = prev === 'hidden' ? 'vertical' : 'hidden';
+      console.log(`Toggling timeline mode from ${prev} to ${newMode}`);
+      return newMode;
     });
   }, []);
   
@@ -54,6 +59,18 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   const closeTimeline = useCallback(() => {
     setTimelineMode('hidden');
   }, []);
+  
+  // Reference to the WorkspaceContentArea component
+  const workspaceContentAreaRef = useRef<WorkspaceContentAreaHandle>(null);
+  
+  // Handle panel add when clicked or dragged from sidebar
+  const handleAddPanel = useCallback((panelType: 'chat' | 'preview' | 'code' | 'uploads' | 'projects' | 'timeline' | 'sceneplanning') => {
+    if (panelType === 'timeline') {
+      toggleTimeline();
+    } else {
+      workspaceContentAreaRef.current?.addPanel(panelType);
+    }
+  }, [toggleTimeline]);
   
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
@@ -138,6 +155,7 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
         projects={initialProjects}
         currentProjectId={projectId}
         onToggleTimeline={toggleTimeline}
+        onAddPanel={handleAddPanel}
         timelineActive={timelineMode !== 'hidden'}
       />
       
@@ -156,57 +174,64 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
         {/* Main workspace with flexible layout */}
         <div className="flex-1 overflow-hidden min-h-0 relative">
           <TimelineProvider initialItems={timelineItems} initialDuration={initialDuration}>
-            <PanelGroup direction="horizontal" className="h-full">
-              {/* Left panel: Tabbed interface with Chat and Scene Planning History */}
-              <Panel defaultSize={35} minSize={20} maxSize={50}>
-                <div className="h-full border-r bg-background flex flex-col">
-                  <Tabs 
-                    value={leftPanelTab} 
-                    onValueChange={(value) => setLeftPanelTab(value as LeftPanelTab)}
-                    className="flex-1 flex flex-col min-h-0"
-                  >
-                    <TabsList className="grid grid-cols-2 m-2">
-                      <TabsTrigger value="chat">Chat</TabsTrigger>
-                      <TabsTrigger value="planning">Scene Planning</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="chat" className="flex-1 overflow-hidden">
-                      <ChatPanel projectId={projectId} />
-                    </TabsContent>
-                    
-                    <TabsContent value="planning" className="flex-1 min-h-0 overflow-hidden">
-                      <ScenePlanningHistoryPanel />
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </Panel>
-              
-              <PanelResizeHandle className="w-1.5 bg-muted hover:bg-primary/20 transition-colors" />
-              
-              {/* Right panel: Preview and optional Timeline */}
-              <Panel minSize={50}>
-                <PanelGroup direction="vertical" className="h-full">
-                  {/* Preview panel */}
-                  <Panel defaultSize={timelineMode === 'vertical' ? 70 : 100} className="h-full bg-black">
-                    <PreviewPanel projectId={projectId} initial={initialProps} />
-                  </Panel>
-                  
-                  {/* Vertical Timeline panel (conditionally rendered) */}
-                  {timelineMode === 'vertical' && (
-                    <>
-                      <PanelResizeHandle className="h-1.5 bg-muted hover:bg-primary/20 transition-colors" />
-                      <Panel defaultSize={30} className="bg-background">
-                        <TimelinePanel key={projectId} />
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </Panel>
-            </PanelGroup>
+            {/* Use the WorkspaceContentArea component for flexible UI */}
+            <WorkspaceContentArea 
+              ref={workspaceContentAreaRef}
+              projectId={projectId} 
+              initialProps={initialProps}
+              projects={initialProjects}
+            />
             
-            {/* Floating Draggable Timeline */}
-            {timelineMode === 'floating' && (
-              <DraggableTimeline onClose={closeTimeline} />
+            {/* Timeline panel - now integrated more directly */}
+            {timelineMode === 'vertical' && (
+              <div 
+                className="absolute bottom-0 left-0 right-0 border-t border-gray-300 bg-gray-100 overflow-hidden"
+                style={{ height: `${timelineHeight}px` }}
+              >
+                <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-200">
+                  <span className="font-medium text-sm text-gray-800">Timeline</span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      className="cursor-ns-resize p-1 rounded hover:bg-gray-300 transition-colors"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        const startY = e.clientY;
+                        const startHeight = timelineHeight;
+                        
+                        const handleMouseMove = (moveEvent: MouseEvent) => {
+                          const deltaY = startY - moveEvent.clientY;
+                          const newHeight = Math.max(100, Math.min(500, startHeight + deltaY));
+                          setTimelineHeight(newHeight);
+                        };
+                        
+                        const handleMouseUp = () => {
+                          document.removeEventListener('mousemove', handleMouseMove);
+                          document.removeEventListener('mouseup', handleMouseUp);
+                        };
+                        
+                        document.addEventListener('mousemove', handleMouseMove);
+                        document.addEventListener('mouseup', handleMouseUp);
+                      }}
+                    >
+                      <svg width="14" height="5" viewBox="0 0 14 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect y="0" width="14" height="1" rx="0.5" fill="#666" />
+                        <rect y="4" width="14" height="1" rx="0.5" fill="#666" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={closeTimeline}
+                      className="text-gray-600 hover:text-red-600 transition-colors p-1 rounded hover:bg-gray-300"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-2 h-full overflow-y-auto bg-white text-gray-900">
+                  <TimelinePanel />
+                </div>
+              </div>
             )}
           </TimelineProvider>
         </div>

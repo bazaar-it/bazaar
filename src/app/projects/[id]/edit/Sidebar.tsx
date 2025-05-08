@@ -47,19 +47,31 @@ interface SidebarProps {
   projects: Project[];
   currentProjectId: string;
   onToggleTimeline?: () => void;
+  onAddPanel?: (panelType: PanelType) => void;
   timelineActive?: boolean;
 }
 
-const navItems = [
-  { label: "Projects", icon: FolderIcon, href: "/projects" },
-  { label: "Chat", icon: MessageSquareIcon, href: "#chat" },
-  { label: "Uploads", icon: UploadIcon, href: "#uploads" },
-  { label: "Timeline", icon: ClockIcon, href: "#timeline" },
-  { label: "Preview", icon: PlayIcon, href: "#preview" },
-  { label: "Code", icon: Code2Icon, href: "#code" },
+type PanelType = 'chat' | 'preview' | 'code' | 'uploads' | 'projects' | 'timeline' | 'sceneplanning';
+
+interface WorkspacePanel {
+  type: PanelType;
+  id: string;
+  name: string;
+  icon: any;
+  href: string;
+}
+
+const navItems: WorkspacePanel[] = [
+  { type: 'projects', id: 'projects', name: "Projects", icon: FolderIcon, href: "/projects" },
+  { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
+  { type: 'uploads', id: 'uploads', name: "Uploads", icon: UploadIcon, href: "#uploads" },
+  { type: 'timeline', id: 'timeline', name: "Timeline", icon: ClockIcon, href: "#timeline" },
+  { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
+  { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
+  { type: 'sceneplanning', id: 'sceneplanning', name: "Scene Planning", icon: ListIcon, href: "#sceneplanning" },
 ];
 
-function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean, projectId: string }) {
+function CustomComponentsSidebar({ isCollapsed, projectId }: { isCollapsed: boolean, projectId: string }) {
   // This query now fetches only successful components with outputUrl (stored in R2)
   // providing successfulOnly=true (the default) filters out duplicates and failed jobs
   const { data, isLoading, refetch } = api.customComponent.listAllForUser.useQuery({ 
@@ -216,139 +228,132 @@ function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean,
   };
 
   if (isLoading) {
-    return <div className={cn("text-xs text-muted-foreground px-2", collapsed && "text-center px-0")}>Loading...</div>;
+    return <div className={cn("text-xs text-muted-foreground px-2", isCollapsed && "text-center px-0")}>Loading...</div>;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Section header with toggle */}
+      {/* Improved Section header with toggle */}
       <div 
         className={cn(
-          "flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-accent/50 rounded",
-          collapsed && "justify-center px-0"
+          "flex items-center justify-between py-1 cursor-pointer hover:bg-gray-200 rounded-md transition-colors",
+          isCollapsed ? "justify-center mx-auto" : "px-2"
         )}
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <span className={cn("font-semibold text-xs uppercase tracking-wide", collapsed && "sr-only")}>
+        <span className={cn("font-medium text-xs text-gray-700 uppercase tracking-wide", isCollapsed && "sr-only")}>
           Custom Components
         </span>
-        {!collapsed && (
+        {!isCollapsed && (
           isExpanded ? 
-            <ChevronUpIcon className="h-4 w-4 text-muted-foreground" /> : 
-            <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
+            <ChevronUpIcon className="h-4 w-4 text-gray-600" /> : 
+            <ChevronDownIcon className="h-4 w-4 text-gray-600" />
         )}
       </div>
       
-      {/* Search input - show only when expanded and not collapsed */}
-      {isExpanded && !collapsed && (
-        <div className="px-2">
+      {/* Enhanced Search input with better styling */}
+      {isExpanded && !isCollapsed && (
+        <div className="px-2 py-1">
           <div className="relative">
-            <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              type="text"
+            <SearchIcon className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-600" />
+            <Input
               placeholder="Search components..."
-              className="pl-8 h-8 text-xs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-8 pl-7 text-xs rounded-md bg-white border-gray-300 focus-visible:ring-1 focus-visible:ring-gray-400 focus-visible:ring-offset-0"
             />
           </div>
         </div>
       )}
       
-      {/* Components list */}
+      {/* Enhanced Component list with improved styling */}
       {isExpanded && (
-        filteredComponents.length > 0 ? (
-          <ul className={cn("flex flex-col gap-1", collapsed && "items-center")}>
-            {filteredComponents.map((component) => {
-              // Check for status in our local state first, then fall back to component.status
-              const storedStatus = componentStatuses[component.id];
-              const status = storedStatus?.status || component.status;
-              const isReady = status === 'success';
+        <div className={cn("space-y-1 overflow-y-auto max-h-[35vh] pb-2", !isCollapsed && "px-2")}>
+          {filteredComponents.length === 0 ? (
+            <div className={cn("text-xs text-gray-700 px-2 py-2", isCollapsed && "text-center px-0")}>
+              {searchQuery.trim() ? "No components found" : "No components yet"}
+            </div>
+          ) : (
+            filteredComponents.map(component => (
+              <div
+                key={component.id}
+                className={cn(
+                  "group relative flex items-center gap-2 p-2 rounded-md hover:bg-gray-200 cursor-pointer transition-colors",
+                  isCollapsed && "justify-center flex-col gap-1"
+                )}
+                onClick={() => handleInsertComponent(component)}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("text/plain", component.id);
+                  e.dataTransfer.setData("application/jsonld", JSON.stringify(component));
+                  // Add visual indicator for drag operation
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+              >
+                {/* Component thumbnail/preview with improved styling */}
+                <div className="h-9 w-9 rounded-md bg-white flex items-center justify-center text-xs font-medium overflow-hidden border border-gray-300 shadow-sm">
+                  {component.outputUrl ? (
+                    <img 
+                      src={component.outputUrl} 
+                      alt={component.effect} 
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2' ry='2'/%3E%3Cpath d='M3 15v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2'/%3E%3Cpath d='M21 9V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2'/%3E%3C/svg%3E";
+                      }}
+                    />
+                  ) : (
+                    component.effect.charAt(0).toUpperCase()
+                  )}
+                </div>
 
-              return (
-                <li 
-                  key={component.id} 
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-1 rounded group",
-                    collapsed && "justify-center px-0",
-                    isReady ? "hover:bg-accent/50 cursor-pointer" : "hover:bg-accent/10"
-                  )}
-                  title={component.effect}
-                  onClick={() => isReady && handleInsertComponent({
-                    ...component,
-                    status, // Use the most up-to-date status
-                    outputUrl: storedStatus?.outputUrl || component.outputUrl // Use the most up-to-date URL
-                  })}
-                >
-                  {/* Component icon */}
-                  <Code2Icon 
-                    className={cn("h-4 w-4 shrink-0", isReady ? "text-primary" : "text-muted-foreground")}
-                  />
-                  
-                  {/* Component name - only show if not collapsed */}
-                  {!collapsed && (
-                    <span 
-                      className="truncate flex-1 text-xs"
-                      style={{ maxWidth: 120 }}
-                    >
-                      {component.effect}
-                    </span>
-                  )}
-                  
-                  {/* Status indicator */}
-                  <CustomComponentStatus 
-                    componentId={component.id} 
-                    onSuccess={(outputUrl) => handleStatusUpdate(component.id, 'success', outputUrl)}
-                    onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl)}
-                    collapsed={collapsed}
-                  />
-                  
-                  {/* Actions menu - only show if not collapsed */}
-                  {!collapsed && (
+                {/* Component name and actions with improved styling */}
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-xs font-medium truncate text-gray-900">{component.effect}</span>
+                    
+                    {/* Render status indicator when needed */}
+                    <CustomComponentStatus 
+                      componentId={component.id} 
+                      onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl || undefined)}
+                    />
+                  </div>
+                )}
+
+                {/* Actions menu with improved animation and styling */}
+                {!isCollapsed && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                          onClick={(e) => e.stopPropagation()} // Prevent click from bubbling to parent
-                        >
-                          <MoreVerticalIcon className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-gray-300">
+                          <MoreVerticalIcon className="h-3.5 w-3.5 text-gray-700" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent click from bubbling
-                            handleRenameClick(component);
-                          }}
-                          className="text-xs"
-                        >
-                          <EditIcon className="h-3.5 w-3.5 mr-2" />
-                          Rename
+                      <DropdownMenuContent align="end" className="rounded-md shadow-md border border-gray-300 bg-white">
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          handleRenameClick(component);
+                        }}>
+                          <EditIcon className="mr-2 h-3.5 w-3.5" />
+                          <span>Rename</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
+                          className="text-red-600"
                           onClick={(e) => {
-                            e.stopPropagation(); // Prevent click from bubbling
+                            e.stopPropagation();
                             handleDeleteClick(component);
                           }}
-                          className="text-destructive text-xs"
                         >
-                          <TrashIcon className="h-3.5 w-3.5 mr-2" />
-                          Delete
+                          <TrashIcon className="mr-2 h-3.5 w-3.5" />
+                          <span>Delete</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <div className={cn("text-xs text-muted-foreground px-2", collapsed && "text-center px-0")}>
-            {searchQuery ? "No matching components" : "No custom components yet"}
-          </div>
-        )
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       )}
       
       {/* Dialogs */}
@@ -376,107 +381,153 @@ function CustomComponentsSidebar({ collapsed, projectId }: { collapsed: boolean,
   );
 }
 
-export default function Sidebar({ projects, currentProjectId, onToggleTimeline, timelineActive = false }: SidebarProps) {
-  const [collapsed, setCollapsed] = useLocalStorage("bazaar-sidebar-collapsed", false);
-  const [projectsExpanded, setProjectsExpanded] = useLocalStorage("bazaar-projects-expanded", true);
+export default function Sidebar({ projects, currentProjectId, onToggleTimeline, onAddPanel, timelineActive = false }: SidebarProps) {
   const router = useRouter();
+  const [isCollapsed, setIsCollapsed] = useLocalStorage("sidebar-collapsed", false);
+  const [projectsExpanded, setProjectsExpanded] = useLocalStorage("bazaar-projects-expanded", true);
+  
+  // Calculate dynamic width based on the longest menu item name
+  const [sidebarWidth] = useState(224); // Default width
+  const [draggedPanel, setDraggedPanel] = useState<PanelType | null>(null);
 
+  // Toggle the sidebar collapsed state
+  const toggleCollapse = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+  
+  // Handle dragging panel icons from sidebar
+  const handleDragStart = (e: React.DragEvent, panelType: PanelType) => {
+    e.dataTransfer.setData("text/plain", panelType);
+    setDraggedPanel(panelType);
+  };
+  
+  const handleDragEnd = () => {
+    setDraggedPanel(null);
+  };
+  
+  // Handle clicking on panel icons in sidebar
+  const handlePanelClick = (panelType: PanelType) => {
+    // Call the parent component's handler if available
+    if (typeof onAddPanel === 'function') {
+      // For the timeline button, we want to toggle the timeline panel directly
+      if (panelType === 'timeline') {
+        onToggleTimeline?.();
+      } else {
+        onAddPanel(panelType);
+      }
+    }
+  };
+  
   return (
     <aside
-      className={`transition-all duration-200 h-full bg-background border-r flex flex-col items-stretch ${collapsed ? 'w-16' : 'w-64'}`}
-      style={{ minWidth: collapsed ? 64 : 256 }}
+      className={`transition-all duration-200 h-[calc(100vh-40px)] bg-white border border-gray-300 shadow-sm rounded-t-xl rounded-b-[15px] flex flex-col items-stretch overflow-hidden ${isCollapsed ? 'w-[58px]' : ''}`}
+      style={{ 
+        position: 'relative',
+        width: isCollapsed ? '58px' : `${sidebarWidth}px` 
+      }}
+      data-sidebar-width={sidebarWidth}
     >
       {/* Header with toggle button */}
       <div className="flex items-center justify-between h-14 px-2 border-b">
-        {!collapsed ? (
+        {!isCollapsed && (
           <Link href="/" className="font-semibold text-lg flex items-center gap-2">
             <MenuIcon className="h-5 w-5" />
             <span>Bazaar-Vid</span>
           </Link>
-        ) : (
-          <div className="w-full flex justify-center">
-            <MenuIcon className="h-5 w-5" />
-          </div>
         )}
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-              onClick={() => setCollapsed(prev => !prev)}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRightIcon className="h-5 w-5" /> : <ChevronLeftIcon className="h-5 w-5" />}
-        </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          </TooltipContent>
-        </Tooltip>
+        <div className="relative">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute -right-3 top-4 z-20 bg-white border border-gray-200 rounded-full w-7 h-7 flex items-center justify-center hover:bg-gray-50 transition"
+                style={{ transform: 'translateY(-50%)' }}
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {isCollapsed ? <ChevronRightIcon className="h-[14px] w-[14px] text-gray-500" /> : <ChevronLeftIcon className="h-[14px] w-[14px] text-gray-500" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
-      {/* New Project Button */}
-      <div className={collapsed ? 'flex justify-center items-center p-2' : 'px-3 py-2'}>
+      {/* Enhanced New Project Button */}
+      <div className={`${isCollapsed ? 'flex items-center justify-center mt-5' : 'flex items-start px-4 mt-[20px]'}`}>
         <Tooltip>
           <TooltipTrigger asChild>
             <NewProjectButton
-              variant={collapsed ? 'ghost' : 'outline'}
-              size={collapsed ? 'icon' : 'sm'}
-              className={collapsed ? 'w-10 h-10 p-0' : 'w-full min-w-[140px] justify-start'}
+              variant="ghost"
+              className={`h-11 ${isCollapsed ? 'w-11 justify-center' : 'w-full justify-start'} rounded-full transition-all duration-200 hover:bg-gray-100 flex items-center`}
               showIcon={true}
               onStart={() => {}}
             />
           </TooltipTrigger>
-          {collapsed && <TooltipContent side="right">New Project</TooltipContent>}
+          {isCollapsed && <TooltipContent side="right">New Project</TooltipContent>}
         </Tooltip>
       </div>
 
-      {/* Main Navigation */}
-      <div className="border-b py-2">
+      {/* Improved Main Navigation with better styling and drag indicators */}
+      <nav className={`flex flex-col gap-2 mt-4 ${isCollapsed ? 'items-center' : 'items-start'} ${isCollapsed ? '' : 'px-4'}`}>
         {navItems.map((item) => {
           // Don't render the Timeline item as we'll add a custom version
-          if (item.label === "Timeline") return null;
+          if (item.name === "Timeline") return null;
+          
+          // Define if this item can be used as a panel
+          const isPanelItem = item.href.startsWith('#');
           
           return (
-            <Tooltip key={item.label}>
+            <Tooltip key={item.name}>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  className={`w-full justify-start px-3 mb-1`}
+                  className={`h-11 ${isCollapsed ? 'w-11 justify-center' : 'w-full justify-start'} rounded-md transition-all duration-200 ${isPanelItem ? 'cursor-grab active:cursor-grabbing' : ''} hover:bg-gray-300 bg-gray-200 border border-gray-300`}
                   onClick={() => {
                     if (item.href.startsWith('#')) {
-                      // Handle internal tab navigation here
+                      // For panel items, use onAddPanel callback
+                      onAddPanel?.(item.type);
                     } else {
                       router.push(item.href);
                     }
                   }}
+                  draggable={isPanelItem}
+                  onDragStart={isPanelItem ? (e) => {
+                    // Set data for drag operation
+                    e.dataTransfer.setData("text/plain", item.type);
+                    e.dataTransfer.effectAllowed = "copy";
+                  } : undefined}
+                  aria-label={item.name}
                 >
-                  <item.icon className={`h-5 w-5 ${collapsed ? 'mx-auto' : 'mr-2'}`} />
-                  {!collapsed && <span>{item.label}</span>}
+                  <item.icon className={`h-[22px] w-[22px] text-gray-700 ${isCollapsed ? '' : 'mr-3'}`} />
+                  {!isCollapsed && <span className="text-sm font-medium text-gray-800">{item.name}</span>}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right" className={!collapsed ? 'hidden' : ''}>
-                {item.label}
+              <TooltipContent side="right" className={!isCollapsed ? 'hidden' : ''}>
+                {item.name}
               </TooltipContent>
             </Tooltip>
           );
         })}
         
-        {/* Timeline toggle button */}
+        {/* Enhanced Timeline toggle button */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={timelineActive ? "default" : "ghost"}
-              className={`w-full justify-start px-3 mb-1 ${timelineActive ? 'bg-primary/20' : ''}`}
+              variant="ghost"
+              className={`h-11 ${isCollapsed ? 'w-11 justify-center' : 'w-full justify-start'} rounded-md transition-all duration-200 hover:bg-gray-300 ${timelineActive ? 'bg-primary/20' : 'bg-gray-200'} border border-gray-300`}
               onClick={() => onToggleTimeline?.()}
             >
-              <ClockIcon className={`h-5 w-5 ${collapsed ? 'mx-auto' : 'mr-2'} ${timelineActive ? 'text-primary' : ''}`} />
-              {!collapsed && (
+              <ClockIcon className={`h-[22px] w-[22px] ${timelineActive ? 'text-primary' : 'text-gray-600'} ${isCollapsed ? '' : 'mr-3'}`} />
+              {!isCollapsed && (
                 <div className="flex items-center justify-between w-full">
-                  <span>Timeline</span>
+                  <span className="text-sm font-normal">Timeline</span>
                   {timelineActive && (
-                    <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">
+                    <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
                       On
                     </span>
                   )}
@@ -484,61 +535,72 @@ export default function Sidebar({ projects, currentProjectId, onToggleTimeline, 
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right" className={!collapsed ? 'hidden' : ''}>
+          <TooltipContent side="right" className={!isCollapsed ? 'hidden' : ''}>
             {timelineActive ? 'Hide Timeline' : 'Show Timeline'}
           </TooltipContent>
         </Tooltip>
+      </nav>
+
+      {/* Improved Projects Section Header */}
+      <div className="mt-6 mb-2">
+        <div 
+          className={`flex items-center justify-between ${isCollapsed ? 'justify-center mx-auto' : 'px-4'} py-1 cursor-pointer hover:bg-gray-300 bg-gray-200 rounded-md transition-colors border border-gray-300`}
+          onClick={() => setProjectsExpanded(!projectsExpanded)}
+        >
+          <span className={`font-medium text-xs text-gray-500 uppercase tracking-wide ${isCollapsed ? 'sr-only' : ''}`}>
+            Project List
+          </span>
+          {!isCollapsed && (
+            projectsExpanded ? 
+              <ChevronUpIcon className="h-4 w-4 text-gray-400" /> : 
+              <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+          )}
+        </div>
       </div>
 
-      {/* Projects Section Header */}
-      <div 
-        className={`flex items-center justify-between px-2 py-1 cursor-pointer hover:bg-accent/50 rounded ${collapsed ? 'justify-center px-0' : ''}`}
-        onClick={() => setProjectsExpanded(!projectsExpanded)}
-      >
-        <span className={`font-semibold text-xs uppercase tracking-wide ${collapsed ? 'sr-only' : ''}`}>
-          Project List
-        </span>
-        {!collapsed && (
-          projectsExpanded ? 
-            <ChevronUpIcon className="h-4 w-4 text-muted-foreground" /> : 
-            <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
-        )}
-      </div>
-
-      {/* Project List */}
+      {/* Enhanced Project List with better styling */}
       {projectsExpanded && (
-        <nav className="overflow-y-auto px-1 py-2 space-y-1 max-h-[30vh]">
+        <nav className={`overflow-y-auto ${isCollapsed ? 'px-0' : 'px-3'} py-1 space-y-1 max-h-[30vh]`}>
           {projects.map((project) => (
             <Tooltip key={project.id}>
               <TooltipTrigger asChild>
-                <Link
-                  href={`/projects/${project.id}/edit`}
-                  className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                <div
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Only navigate if this isn't the current project
+                    if (project.id !== currentProjectId) {
+                      console.log(`Navigating to project: ${project.id}`);
+                      router.push(`/projects/${project.id}/edit`, { scroll: false });
+                    }
+                  }}
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors whitespace-nowrap ${
                     project.id === currentProjectId
-                      ? "bg-primary/10 text-primary"
-                      : "hover:bg-accent text-foreground"
-                  } ${collapsed ? 'justify-center' : ''}`}
+                      ? "bg-gray-300 text-gray-900 font-medium border border-gray-400"
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800 border border-gray-300"
+                  } ${isCollapsed ? 'justify-center w-10 h-10 mx-auto' : 'w-full'} cursor-pointer`}
                 >
                   <ListIcon className="h-5 w-5 shrink-0" />
-                  <span
-                    className={`truncate transition-all duration-200 ml-2 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
-                    style={{ display: "inline-block", minWidth: 0, maxWidth: collapsed ? 0 : 160 }}
-                  >
-                    {project.name}
-                  </span>
-                </Link>
+                  {!isCollapsed && (
+                    <span
+                      className="truncate transition-all duration-200"
+                      style={{ maxWidth: 160 }}
+                    >
+                      {project.name}
+                    </span>
+                  )}
+                </div>
               </TooltipTrigger>
-              {collapsed && <TooltipContent side="right">{project.name}</TooltipContent>}
+              {isCollapsed && <TooltipContent side="right">{project.name}</TooltipContent>}
             </Tooltip>
           ))}
         </nav>
       )}
 
-      {/* Custom Components Section */}
-      <div className="flex-1 overflow-auto border-t">
-        <div className="px-1 py-2">
-        <CustomComponentsSidebar collapsed={collapsed} projectId={currentProjectId} />
-      </div>
+      {/* Enhanced Custom Components Section with better styling */}
+      <div className="flex-1 overflow-auto border-t mt-4">
+        <div className={`${isCollapsed ? 'px-1' : 'px-3'} py-3`}>
+          <CustomComponentsSidebar isCollapsed={isCollapsed} projectId={currentProjectId} />
+        </div>
       </div>
     </aside>
   );

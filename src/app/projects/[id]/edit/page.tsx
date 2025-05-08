@@ -5,7 +5,7 @@ import { getUserProjects } from "~/server/queries/getUserProjects";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
-import InterfaceShell from "./InterfaceShell";
+import ProjectEditorRoot from "./ProjectEditorRoot";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { id: projectId } = await params;
@@ -42,7 +42,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     }
 
     return (
-      <InterfaceShell
+      <ProjectEditorRoot
         projectId={projectId}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={projectResult.props}
