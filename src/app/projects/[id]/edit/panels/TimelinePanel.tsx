@@ -162,17 +162,20 @@ export default function TimelinePanel() {
 
   if (!inputProps) {
     return (
-      <div className="flex flex-col h-full items-center justify-center">
-        <div className="animate-pulse text-xl">Loading timeline...</div>
+      <div className="flex flex-col h-full items-center justify-center p-8">
+        <div className="animate-pulse text-xl text-muted-foreground">Loading timeline...</div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full" ref={timelineContainerRef}>
-      <h2 className="text-xl font-semibold mb-2">Timeline</h2>
+      <div className="px-4 py-3 border-b border-gray-100 mb-2">
+        <h2 className="text-lg font-medium text-gray-900">Timeline</h2>
+        <p className="text-sm text-gray-500">Video timeline</p>
+      </div>
       
-      <div className="flex-1 border border-gray-700 rounded-md overflow-hidden">
+      <div className="flex-1 border border-gray-100 rounded-[15px] shadow-sm overflow-hidden mx-2 bg-white/50">
         <TimelineProvider 
           initialItems={timelineItems} 
           initialDuration={totalDuration}
@@ -189,42 +192,42 @@ export default function TimelinePanel() {
       </div>
       
       {/* Keyboard shortcut help */}
-      <div className="mt-2 text-xs text-gray-400 grid grid-cols-2 gap-x-4 gap-y-1">
+      <div className="mt-3 mx-4 text-xs text-gray-600 grid grid-cols-2 gap-x-4 gap-y-1 p-3 bg-gray-50/70 rounded-[15px] border border-gray-100 shadow-sm">
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Delete</kbd>
+          <kbd className="px-2 py-0.5 bg-white rounded-[6px] text-gray-700 text-[10px] mr-2 shadow-sm border border-gray-200 font-medium">Delete</kbd>
           <span>Remove scene</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">Space</kbd>
+          <kbd className="px-2 py-0.5 bg-white rounded-[6px] text-gray-700 text-[10px] mr-2 shadow-sm border border-gray-200 font-medium">Space</kbd>
           <span>Play/pause</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">→</kbd>
+          <kbd className="px-2 py-0.5 bg-white rounded-[6px] text-gray-700 text-[10px] mr-2 shadow-sm border border-gray-200 font-medium">→</kbd>
           <span>Next frame</span>
         </div>
         <div className="flex items-center">
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 text-[10px] mr-1">←</kbd>
+          <kbd className="px-2 py-0.5 bg-white rounded-[6px] text-gray-700 text-[10px] mr-2 shadow-sm border border-gray-200 font-medium">←</kbd>
           <span>Previous frame</span>
         </div>
       </div>
       
       {/* Status legend */}
-      <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
-        <span>Status:</span>
+      <div className="mt-2 mx-4 mb-3 flex flex-wrap items-center gap-3 text-xs text-gray-600 p-3 border-t border-gray-100">
+        <span className="font-medium">Status:</span>
         <div className="flex items-center">
-          <div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded-full mr-1"></div>
+          <div className="w-3 h-3 bg-green-500/20 border border-green-500 rounded-full mr-1.5 shadow-sm"></div>
           <span>Valid</span>
         </div>
         <div className="flex items-center">
-          <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded-full mr-1"></div>
+          <div className="w-3 h-3 bg-yellow-500/20 border border-yellow-500 rounded-full mr-1.5 shadow-sm"></div>
           <span>Warning</span>
         </div>
         <div className="flex items-center">
-          <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded-full mr-1"></div>
+          <div className="w-3 h-3 bg-red-500/20 border border-red-500 rounded-full mr-1.5 shadow-sm"></div>
           <span>Error</span>
         </div>
         <div className="flex items-center">
-          <div className="w-3 h-3 bg-blue-500/20 border border-blue-500 rounded-full mr-1 animate-pulse"></div>
+          <div className="w-3 h-3 bg-blue-500/20 border border-blue-500 rounded-full mr-1.5 animate-pulse shadow-sm"></div>
           <span>Building</span>
         </div>
       </div>

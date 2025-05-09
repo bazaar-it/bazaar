@@ -27,6 +27,9 @@ const PANEL_COMPONENTS = {
   code: CodePanel,
   uploads: UploadsPanel,
   projects: ProjectsPanel,
+  templates: ProjectsPanel, // Temporarily using ProjectsPanel for Templates
+  scenes: ProjectsPanel, // Temporarily using ProjectsPanel for Scenes
+  timeline: TimelinePanel,
   sceneplanning: ScenePlanningHistoryPanel
 };
 
@@ -36,10 +39,13 @@ const PANEL_LABELS = {
   code: 'Code',
   uploads: 'Uploads',
   projects: 'Projects',
+  templates: 'Templates',
+  scenes: 'Scenes',
+  timeline: 'Timeline',
   sceneplanning: 'Scene Planning'
 };
 
-type PanelType = keyof typeof PANEL_COMPONENTS;
+export type PanelType = keyof typeof PANEL_COMPONENTS;
 
 interface OpenPanel {
   id: string;
@@ -69,45 +75,50 @@ function SortablePanel({ id, children, style, className, onRemove }: {
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   
-  // Modified style to maintain visibility during dragging
+  // Improved style to maintain better visibility during dragging
   const mergedStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.6 : 1, // Slightly higher opacity for better visibility
-    zIndex: isDragging ? 10 : 1,
-    background: '#f8f9fa', // Slightly off-white for better contrast
-    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : undefined, // Stronger shadow for drag state
+    opacity: isDragging ? 0.9 : 1, // Slightly transparent when dragging but still visible
+    zIndex: isDragging ? 50 : 1, // Higher z-index to stay on top
+    background: 'white',
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : undefined, // More pronounced shadow
+    border: isDragging ? '2px solid #3b82f6' : undefined, // Add blue border when dragging
     height: '100%',
     display: 'flex',
     flexDirection: 'column' as const,
     ...style,
   };
   
-  // All panels should have headers with close buttons for consistent UI
-  // removed special case for code panel so it gets a proper X button
-  const isCodePanel = false; // Removing special handling for code panel
+  // Special case for Code panel - don't add the header with X
+  const isCodePanel = id === 'code';
+  
+  // Get the proper panel title - use PANEL_LABELS if it's a valid PanelType
+  const panelTitle = PANEL_LABELS[id as PanelType] || id;
   
   return (
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-300 overflow-hidden ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
-      <div 
-        className="flex items-center justify-between px-3 py-2 border-b bg-gray-200 cursor-move"
-        {...attributes}
-        {...listeners}
-      >
-        <span className="font-medium text-sm text-gray-800">{PANEL_LABELS[id as PanelType] || id}</span>
-        <button 
-          onClick={onRemove} 
-          className="text-gray-600 hover:text-red-600 transition-colors p-1 rounded hover:bg-gray-300"
-          aria-label={`Close ${PANEL_LABELS[id as PanelType] || id} panel`}
+      {!isCodePanel && (
+        <div 
+          className={`flex items-center justify-between px-3 py-2 border-b ${isDragging ? 'bg-blue-50' : 'bg-gray-50'} cursor-move`}
+          {...attributes}
+          {...listeners}
         >
-          <XIcon className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="flex-1 min-h-0">
+          <span className="font-medium text-sm">{panelTitle}</span>
+          <button 
+            onClick={onRemove} 
+            className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+            aria-label={`Close ${panelTitle} panel`}
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className={`flex-1 min-h-0 ${isCodePanel ? "h-full" : ""}`}>
         {children}
       </div>
     </div>
@@ -136,90 +147,107 @@ function DropZone({
   };
 
   // Quick actions for adding panels
+  const quickActions: { type: PanelType; label: string; icon: React.ReactNode }[] = [
+    { 
+      type: 'preview', 
+      label: 'Preview', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+      )
+    },
+    { 
+      type: 'chat', 
+      label: 'Chat', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      )
+    },
+    { 
+      type: 'code', 
+      label: 'Code', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+      )
+    },
+    { 
+      type: 'uploads', 
+      label: 'Uploads', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      )
+    },
+    { 
+      type: 'projects', 
+      label: 'Projects', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+      )
+    }
+  ];
+
   return (
     <div 
-      className={`
-        h-full 
-        border-2 
-        border-dashed 
-        rounded-[15px] 
-        transition-colors 
-        flex 
-        flex-col 
-        items-center 
-        justify-center 
-        gap-4
-        p-8
-        ${isActive ? 'border-blue-500 bg-blue-50/50' : 'border-gray-400 bg-gray-50/50'}
-      `}
+      className={`w-full h-full flex-1 border-2 border-dashed rounded-[15px] flex flex-col items-center justify-center transition-colors ${
+        isActive ? 'border-blue-400 bg-blue-50/50' : 'border-gray-300'
+      }`}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className="flex flex-col items-center max-w-md text-center">
-        <div className="text-gray-700 mb-4">
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            className="mx-auto h-12 w-12 text-gray-600"
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
-          >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={1.5} 
-              d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" 
-            />
-          </svg>
-        </div>
-        <h3 className="text-lg font-semibold mb-2 text-gray-900">Add Content Panels</h3>
-        <p className="text-gray-700 mb-6">Drag panels from the sidebar or select from the options below</p>
+      <div className="p-6 text-center">
+        <span className="block text-base font-medium text-gray-600 mb-2">
+          {isActive ? 'Drop panel here' : 'No panels open'}
+        </span>
+        <span className="block text-sm text-gray-500 mb-4">
+          {isActive ? 'Release to add new panel' : 'Drag panels from sidebar or click one of the options below'}
+        </span>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
-          {Object.entries(PANEL_LABELS).map(([type, label]) => (
-            <button
-              key={type}
-              onClick={() => onDrop(type as PanelType)}
-              className="
-                bg-white 
-                hover:bg-gray-100 
-                border border-gray-300 
-                rounded-lg 
-                p-3 
-                text-sm 
-                font-medium
-                text-gray-800
-                transition-colors
-                flex 
-                flex-col
-                items-center
-                justify-center
-                gap-2
-                hover:border-blue-400
-                hover:shadow-md
-              "
-            >
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+        {!isActive && (
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
+            {quickActions.map((action) => (
+              <button
+                key={action.type}
+                onClick={() => onDrop(action.type)}
+                className="flex items-center gap-1.5 py-1 px-3 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm text-xs font-medium text-gray-700"
+              >
+                <span className="text-gray-500">{action.icon}</span>
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Simplified drop animation for smoother transitions
+// Improve the drag overlay for better visual feedback
 const dropAnimationConfig: DropAnimation = {
   sideEffects: defaultDropAnimationSideEffects({
     styles: {
       active: {
-        opacity: '0.4',
+        opacity: '0.9', // Increased from 0.4 for better visibility
       },
     },
   }),
-  // Simpler keyframes without transform
-  keyframes: () => {
-    return [{ opacity: 0.4 }, { opacity: 1 }];
+  // Simpler keyframes with string transform values
+  keyframes({ transform }) {
+    return [
+      { opacity: 0.9, transform: transform?.initial ? String(transform.initial) : undefined },
+      { opacity: 1, transform: 'translate3d(0, 0, 0)' }
+    ];
   },
   easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
   duration: 250,
@@ -423,6 +451,20 @@ const WorkspaceContentArea = forwardRef<WorkspaceContentAreaHandle, WorkspaceCon
             projects={projects} 
             currentProjectId={projectId} 
           />;
+        case 'templates':
+          // Temporarily using ProjectsPanel for Templates tab
+          // TODO: Create a dedicated TemplatesPanel component
+          return <ProjectsPanel 
+            projects={[]} 
+            currentProjectId={projectId} 
+          />;
+        case 'scenes':
+          // Temporarily using ProjectsPanel for Scenes tab
+          // TODO: Create a dedicated ScenesPanel component
+          return <ProjectsPanel 
+            projects={[]} 
+            currentProjectId={projectId} 
+          />;
         default:
           return null;
       }
@@ -443,7 +485,7 @@ const WorkspaceContentArea = forwardRef<WorkspaceContentAreaHandle, WorkspaceCon
               <Panel minSize={50} className="w-full">
                 <DropZone isActive={isDraggingFromSidebar} onDrop={handleDropFromSidebar} />
               </Panel>
-              <PanelResizeHandle className="h-[10px] bg-transparent hover:bg-blue-400 transition-colors" />
+              <PanelResizeHandle className="h-[10px] bg-transparent hover:bg-blue-400 transition-colors cursor-row-resize" />
               <Panel minSize={10} maxSize={50} defaultSize={40} className="w-full">
                 <div className="rounded-[15px] border border-gray-200 overflow-hidden h-full flex flex-col">
                   <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
@@ -533,7 +575,7 @@ const WorkspaceContentArea = forwardRef<WorkspaceContentAreaHandle, WorkspaceCon
                   {/* Drop overlay that appears when dragging from sidebar */}
                   {isDraggingFromSidebar && (
                     <div className="absolute inset-0 bg-blue-100/20 border-2 border-dashed border-blue-400 rounded-[15px] pointer-events-none flex items-center justify-center">
-                      <div className="bg-white p-3 rounded-lg shadow-lg">
+                      <div className="bg-white p-3 rounded-[15px] shadow-lg">
                         <span className="text-blue-600 font-medium">Drop to add new panel</span>
                       </div>
                     </div>

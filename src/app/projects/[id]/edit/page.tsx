@@ -32,8 +32,8 @@ export default async function Page({ params }: { params: { id: string } }) {
 
     if (projectResult.userId !== session.user.id) {
       return (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center p-8 max-w-md">
+        <div className="flex items-center justify-center h-screen bg-gray-50/30">
+          <div className="text-center p-8 max-w-md bg-white/95 rounded-[15px] shadow-lg border border-gray-100">
             <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
             <p className="mb-4">You don't have permission to view this project.</p>
           </div>

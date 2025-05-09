@@ -79,7 +79,7 @@ export default function ProjectsPanel({
         </div>
         <div className="relative">
           <select
-            className="h-10 rounded-md border border-input bg-background px-8 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+            className="h-10 rounded-[15px] border border-input bg-background px-8 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as "recent" | "name")}
           >
@@ -97,15 +97,15 @@ export default function ProjectsPanel({
             {sortedProjects.map((project) => (
               <div
                 key={project.id}
-                className={`relative cursor-pointer rounded-md overflow-hidden transition-all hover:shadow-md ${
+                className={`relative cursor-pointer rounded-[15px] overflow-hidden transition-all hover:shadow-md ${
                   project.id === currentProjectId 
                     ? "ring-2 ring-primary ring-offset-2" 
-                    : "border border-gray-200"
+                    : "border border-gray-100 shadow-sm"
                 }`}
                 onClick={() => handleProjectClick(project.id)}
               >
                 {/* Project Thumbnail */}
-                <div className="aspect-video w-full bg-gray-100 relative">
+                <div className="aspect-video w-full bg-gray-50 relative">
                   {project.thumbnail ? (
                     <img
                       src={project.thumbnail}
@@ -120,7 +120,7 @@ export default function ProjectsPanel({
                 </div>
                 
                 {/* Project Info */}
-                <div className="p-3 bg-white dark:bg-gray-800">
+                <div className="p-3 bg-white/90 dark:bg-gray-800">
                   <h3 className="font-medium text-sm truncate">{project.name}</h3>
                   {project.createdAt && (
                     <p className="text-xs text-gray-500 mt-1">
@@ -132,7 +132,7 @@ export default function ProjectsPanel({
             ))}
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+          <div className="flex h-full flex-col items-center justify-center p-8 text-center rounded-[15px] bg-gray-50/50">
             {searchQuery ? (
               <>
                 <h3 className="mb-1 text-lg font-medium">No matching projects</h3>

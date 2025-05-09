@@ -1,3 +1,4 @@
+// src/remotion/compositions/DemoTimeline.tsx
 import React from 'react';
 import { AbsoluteFill, Sequence, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { TitleCard } from '../components/TitleCard';

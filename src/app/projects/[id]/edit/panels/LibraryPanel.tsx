@@ -29,7 +29,7 @@ export default function LibraryPanel({ projects = [], currentProjectId }: Librar
   };
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex h-full flex-col p-4 bg-white/95 rounded-[15px] shadow-sm overflow-hidden">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Library</h2>
         <Button 
@@ -69,10 +69,10 @@ export default function LibraryPanel({ projects = [], currentProjectId }: Librar
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className={`relative cursor-pointer rounded-md overflow-hidden transition-all hover:shadow-md group ${
+                  className={`relative cursor-pointer rounded-[15px] overflow-hidden transition-all hover:shadow-md group ${
                     project.id === currentProjectId 
                       ? "ring-2 ring-primary ring-offset-2" 
-                      : "border border-gray-200"
+                      : "border border-gray-100 shadow-sm"
                   }`}
                   onClick={() => handleProjectClick(project.id)}
                 >
@@ -93,7 +93,7 @@ export default function LibraryPanel({ projects = [], currentProjectId }: Librar
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   
                   {/* Always visible title area */}
-                  <div className="p-2 bg-white dark:bg-gray-800">
+                  <div className="p-2 bg-white/95 dark:bg-gray-800">
                     <h3 className="font-medium text-sm truncate">{project.name}</h3>
                   </div>
                 </div>

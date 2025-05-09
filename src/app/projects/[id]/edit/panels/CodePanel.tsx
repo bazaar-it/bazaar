@@ -30,7 +30,7 @@ const inputProps = getCurrentProps();
   
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-medium">Video Data</h2>
           <p className="text-sm text-muted-foreground">Current video configuration</p>
@@ -51,8 +51,8 @@ const inputProps = getCurrentProps();
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-1">
-        <pre className="text-xs bg-muted p-4 rounded-md overflow-auto h-full">
+      <div className="flex-1 overflow-y-auto p-3">
+        <pre className="text-xs bg-muted/80 p-4 rounded-[15px] shadow-sm overflow-auto h-full">
           <code>{jsonString}</code>
         </pre>
       </div>

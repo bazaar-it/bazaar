@@ -1,0 +1,1 @@
+start creating dedicated components for the Templates and Scenes panels

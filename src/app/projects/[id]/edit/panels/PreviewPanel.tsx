@@ -80,25 +80,28 @@ export default function PreviewPanel({
 
   if (!inputProps) {
     return (
-      <div className="flex flex-col h-full items-center justify-center">
-        <div className="animate-pulse text-xl">Loading video preview...</div>
+      <div className="flex flex-col h-full items-center justify-center p-8">
+        <div className="animate-pulse text-xl text-muted-foreground">Loading video preview...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white bg-opacity-90">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold"></h2>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100">
+        <div>
+          <h2 className="text-lg font-medium">Preview</h2>
+          <p className="text-sm text-muted-foreground">Video preview</p>
+        </div>
         <button 
           onClick={() => setDebugMode(!debugMode)}
-          className="text-xs px-2 py-1 rounded bg-gray-200 hover:bg-gray-300"
+          className="text-xs px-2 py-1 rounded-[15px] bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm"
         >
           {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
         </button>
       </div>
       
-      <div className="flex-1 rounded-lg overflow-hidden relative">
+      <div className="flex-1 rounded-[15px] shadow-sm overflow-hidden relative p-3">
         <Player
           ref={playerRef}
           component={DynamicVideo}
@@ -107,12 +110,12 @@ export default function PreviewPanel({
           compositionWidth={1280}
           compositionHeight={720}
           inputProps={inputProps}
-          style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }}
+          style={{ width: '100%', height: 'auto', aspectRatio: '16/9', borderRadius: '12px' }}
           controls
           autoPlay
           loop
           initialFrame={currentFrame}
-          renderLoading={() => <div>Loading...</div>}
+          renderLoading={() => <div className="flex items-center justify-center h-full"><div className="text-sm text-muted-foreground animate-pulse">Loading...</div></div>}
         />
         
         {/* Debug overlay */}

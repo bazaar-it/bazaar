@@ -520,12 +520,12 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
   // Get welcome message for new projects
   const getWelcomeMessage = () => (
     <div className="text-center py-8">
-      <div className="bg-muted rounded-lg p-4 mx-auto max-w-md">
+      <div className="bg-muted/80 rounded-[15px] shadow-sm p-4 mx-auto max-w-md">
         <h3 className="font-medium text-base mb-2">Welcome to your new project!</h3>
         <p className="text-sm text-muted-foreground mb-3">
           Describe what kind of video you want to create. For example:
         </p>
-        <div className="text-left bg-primary/10 rounded p-3 text-sm">
+        <div className="text-left bg-primary/5 rounded-[15px] p-3 text-sm">
           <p className="mb-1">• "Create a gradient background in blue and purple"</p>
           <p className="mb-1">• "Add a title that says Hello World in the center"</p>
           <p className="mb-1">• "Make the title fade in and add a subtle animation"</p>
@@ -575,7 +575,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b">
+      <div className="px-4 py-3 border-b border-gray-100">
         <h2 className="text-lg font-medium">Chat</h2>
         <p className="text-sm text-muted-foreground">Describe changes to your video</p>
       </div>
@@ -605,10 +605,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
+                    className={`rounded-[15px] shadow-sm px-4 py-2 max-w-[80%] break-words ${
                       msg.role === 'user' 
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                        : 'bg-muted/80'
                     }`}
                   >
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -645,10 +645,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${chat.isUser ? 'justify-end' : 'justify-start'} opacity-70`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
+                    className={`rounded-[15px] shadow-sm px-4 py-2 max-w-[80%] break-words ${
                       chat.isUser 
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                        : 'bg-muted/80'
                     }`}
                   >
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -673,10 +673,10 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
                   className={`flex ${chat.isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div 
-                    className={`rounded-lg px-4 py-2 max-w-[80%] break-words ${
+                    className={`rounded-[15px] shadow-sm px-4 py-2 max-w-[80%] break-words ${
                       chat.isUser 
                         ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                        : 'bg-muted/80'
                     }`}
                   >
                     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -699,7 +699,7 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
         
         {isStreaming && !hasOptimisticMessages && (
           <div className="flex justify-start">
-            <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
+            <div className="bg-muted/80 rounded-[15px] shadow-sm px-4 py-2 flex items-center gap-2">
               <Loader2Icon className="h-4 w-4 animate-spin" />
               <p className="text-sm">Processing your request...</p>
             </div>
@@ -712,14 +712,14 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
       
       {/* Selected scene indicator */}
       {selectedSceneId && (
-        <div className="px-4 py-2 bg-primary/10 border-t flex items-center gap-2">
+        <div className="px-4 py-2 bg-primary/5 border-t border-primary/10 flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-primary animate-pulse"></div>
           <p className="text-xs">Editing scene: {selectedSceneId}</p>
         </div>
       )}
 
       {/* Message input */}
-      <div className="p-4 border-t">
+      <div className="p-4 border-t border-gray-100">
         {!selectedSceneId && (
           <div className="mb-2 flex items-center gap-2 text-xs text-amber-500">
             <AlertTriangleIcon className="h-3 w-3" />

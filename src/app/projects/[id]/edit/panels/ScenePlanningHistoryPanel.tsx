@@ -106,7 +106,7 @@ function ContextDropZone({ onImagesChange }: { onImagesChange: (imgs: UploadedIm
   }
   return (
     <div
-      className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${dragActive ? 'border-blue-400 bg-blue-50/20' : 'border-border bg-background'}`}
+      className={`border-gray-100 border rounded-[15px] shadow-sm p-4 mb-4 text-center transition-colors ${dragActive ? 'border-blue-400 bg-blue-50/20' : 'border-gray-200 bg-gray-50/50'}`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -183,10 +183,13 @@ function extractScenePlanningInfo(
   const sceneRegex = /Scene\s+\d+\s*:\s*([^()]+)(?:\s*\((\d+)s\))?/gi;
   let match;
   while ((match = sceneRegex.exec(currentContent)) !== null) { // Use currentContent
-    extractedScenes.push({
-      description: match[1].trim(),
-      durationInSeconds: (match[2] && typeof match[2] === 'string' && !isNaN(Number(match[2]))) ? parseInt(match[2], 10) : undefined
-    });
+    // Ensure match and all required properties exist before accessing
+    if (match && Array.isArray(match) && match.length >= 2 && match[1]) {
+      extractedScenes.push({
+        description: match[1].trim(),
+        durationInSeconds: (match[2] && typeof match[2] === 'string' && !isNaN(Number(match[2]))) ? parseInt(match[2], 10) : undefined
+      });
+    }
   }
 
   if (extractedScenes.length > 0) {
@@ -681,7 +684,7 @@ export default function ScenePlanningHistoryPanel() {
   // When there are no plans but planning is in progress, show intermediate state
   if ((!planningHistoryData || planningHistoryData.length === 0) && isOverallPlanningInProgress) {
     return (
-      <div className="flex flex-col h-full overflow-hidden bg-background">
+      <div className="flex flex-col h-full border border-gray-100 rounded-[15px] shadow-sm overflow-hidden">
         {/* Image upload context */}
         <ContextDropZone onImagesChange={setUploadedImages} />
         <div className="p-4 border-b border-border bg-background">
@@ -967,7 +970,7 @@ export default function ScenePlanningHistoryPanel() {
                       return (
                         <div
                           key={`${plan.id}-${scene.id}-${idx}`}
-                          className="rounded-lg bg-background border border-border p-3"
+                          className="mx-4 my-3 bg-white border-gray-100 border rounded-[15px] shadow-sm p-3"
                           onDragOver={e => e.preventDefault()}
                           onDrop={e => {
                             e.preventDefault();
@@ -1032,7 +1035,7 @@ export default function ScenePlanningHistoryPanel() {
                           
                           {/* Animation Design Briefs Section */}
                           {hasAnimationBriefs && (
-                            <div className="mt-3 pt-3 border-t border-border">
+                            <div className="mt-3 pt-3 border-t border-gray-100">
                               <div 
                                 className="flex items-center justify-between cursor-pointer"
                                 onClick={() => toggleSection(`brief-${scene.id}`)}
@@ -1111,7 +1114,7 @@ export default function ScenePlanningHistoryPanel() {
                           
                           {/* If no animation briefs yet, show a button to generate one */}
                           {!hasAnimationBriefs && (
-                            <div className="mt-3 pt-2 border-t border-border">
+                            <div className="mt-3 pt-2 border-t border-gray-100">
                               <Button 
                                 variant="outline" 
                                 size="sm" 
@@ -1137,7 +1140,7 @@ export default function ScenePlanningHistoryPanel() {
                           {/* Attached images */}
                           {sceneImages[scene.id]?.map(img => (
                             <div key={img.id} className="flex flex-col items-center">
-                              <img src={img.url} className="h-10 w-10 object-cover rounded" />
+                              <img src={img.url} className="h-10 w-10 object-cover rounded-[8px] shadow-sm" />
                               {(analyzingImg[img.id] ?? false) && <Loader2Icon className="animate-spin mt-1 h-4 w-4" />}
                               {(imageTags[img.id]?.length ?? 0) > 0 && (
                                 <div className="text-xs mt-1">{imageTags[img.id]?.join(', ')}</div>
@@ -1160,7 +1163,7 @@ export default function ScenePlanningHistoryPanel() {
                       
                       <button
                         onClick={() => handleRegenerate(plan.id)}
-                        className="bg-muted px-4 py-2 w-24 rounded text-xs border border-border"
+                        className="bg-muted/80 px-4 py-2 w-24 rounded-[15px] text-xs border border-gray-100 shadow-sm hover:bg-muted transition-colors"
                       >
                         Regenerate
                       </button>
@@ -1168,7 +1171,7 @@ export default function ScenePlanningHistoryPanel() {
                   </div>
                 </div>
                 {/* Total Duration bubble */}
-                <div className="rounded-xl bg-secondary text-muted-foreground text-xs p-3 text-right">
+                <div className="rounded-[15px] bg-gray-50 text-muted-foreground text-xs p-3 text-right shadow-sm">
                   Total Duration: {plan.planData.totalDuration}s at {plan.planData.fps} FPS
                 </div>
               </div>

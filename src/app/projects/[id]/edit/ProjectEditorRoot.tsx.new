@@ -19,7 +19,7 @@ import { DraggableTimeline } from '~/components/client/DraggableTimeline';
 // @ts-ignore
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import WorkspaceContentArea from './WorkspaceContentArea';
-import type { WorkspaceContentAreaHandle, PanelType } from './WorkspaceContentArea';
+import type { WorkspaceContentAreaHandle } from './WorkspaceContentArea';
 
 type TimelineMode = 'hidden' | 'vertical' | 'floating';
 type LeftPanelTab = 'chat' | 'planning';
@@ -44,7 +44,6 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   const [timelineMode, setTimelineMode] = useState<TimelineMode>('hidden');
   const [leftPanelTab, setLeftPanelTab] = useState<LeftPanelTab>('chat');
   const [timelineHeight, setTimelineHeight] = useState(200); // Default timeline height in pixels
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false); // Track sidebar expanded state
   
   // Handle timeline mode toggle
   const toggleTimeline = useCallback(() => {
@@ -63,12 +62,10 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaHandle>(null);
   
   // Handle panel add when clicked or dragged from sidebar
-  const handleAddPanel = useCallback((panelType: PanelType) => {
+  const handleAddPanel = useCallback((panelType: 'chat' | 'preview' | 'code' | 'uploads' | 'projects' | 'timeline' | 'sceneplanning') => {
     if (panelType === 'timeline') {
-      // Special handling for timeline - toggle its visibility
       toggleTimeline();
     } else {
-      // Normal panel handling for all other panel types
       workspaceContentAreaRef.current?.addPanel(panelType);
     }
   }, [toggleTimeline]);
@@ -102,7 +99,7 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   // Handle rename action
   const handleRename = useCallback((newName: string) => {
     if (newName.trim() === title || newName.trim() === "") return;
-
+    
     renameMutation.mutate({
       id: projectId,
       title: newName.trim(),
@@ -121,58 +118,38 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
 
   // Initialize timeline items from initialProps scenes
-  const timelineItems = useMemo<TimelineItemUnion[]>(() => {
+  const timelineItems = useMemo(() => {
     if (!initialProps?.scenes) return [];
-    return initialProps.scenes.map((scene, index): TimelineItemUnion => {
+    return initialProps.scenes.map((scene, index) => {
       const id = parseInt(scene.id, 10) || index;
       switch (scene.type) {
         case 'text':
           return { 
+            id, 
             type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: scene.data?.text as string || 'Text', 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 1, 
+            from: scene.start, 
+            durationInFrames: scene.duration, 
             row: index % 3, 
             content: scene.data?.text as string || 'Text', 
-            fontSize: Number(scene.data?.fontSize || 24), 
-            fontFamily: scene.data?.fontFamily as string || 'Arial', 
-            color: scene.data?.color as string || '#FFFFFF' 
+            color: scene.data?.color as string || '#FFFFFF', 
+            fontSize: scene.data?.fontSize as number || 24, 
+            fontFamily: scene.data?.fontFamily as string || 'Arial' 
           };
         case 'image':
           return { 
+            id, 
             type: TimelineItemType.IMAGE, 
-            id: `scene-${id}`, 
-            title: `Image ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 2, 
+            from: scene.start, 
+            durationInFrames: scene.duration, 
             row: index % 3, 
             src: scene.data?.src as string || '' 
           };
-        case 'background-color':
-          return { 
-            type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: `Background ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 2, 
-            row: index % 3, 
-            content: `Background: ${scene.data?.color as string || '#000000'}`, 
-            fontSize: 16, 
-            fontFamily: 'monospace', 
-            color: '#FFFFFF' 
-          };
         default:
           return { 
+            id, 
             type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: `Scene ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 3, 
+            from: scene.start, 
+            durationInFrames: scene.duration, 
             row: index % 3, 
             content: scene.type, 
             fontSize: 24, 
@@ -186,10 +163,11 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   // Get initial duration from initial props
   const initialDuration = initialProps?.meta?.duration || 0;
 
+  // --- Layout ---
   return (
     <div className="h-screen flex flex-col overflow-hidden relative bg-gray-50/30">
-      {/* App Header - Fixed at top with very high z-index */}
-      <div className="sticky top-0 z-50 w-full bg-white shadow-sm border-b border-gray-100">
+      {/* App Header - Fixed at top with proper z-index */}
+      <div className="sticky top-0 z-40 w-full bg-white">
         <AppHeader
           projectTitle={title}
           onRename={handleRename}
@@ -201,11 +179,22 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
       </div>
       
       <div className="flex-1 relative overflow-hidden px-2.5 pb-2.5 pt-2.5">
-        {/* Main Content Area - Adjusts position based on sidebar expanded state */}
+        {/* Sidebar */}
+        <div className="absolute left-0 top-0 bottom-0 w-[58px] z-10 bg-white/95 rounded-[15px] shadow-lg overflow-hidden">
+          <Sidebar
+            projects={initialProjects}
+            currentProjectId={projectId}
+            onToggleTimeline={toggleTimeline}
+            onAddPanel={handleAddPanel}
+            timelineActive={timelineMode !== 'hidden'}
+          />
+        </div>
+        
+        {/* Main Content Area */}
         <div
-          className="absolute top-0 bottom-0 right-0 z-0 bg-white/95 rounded-[15px] shadow-lg overflow-hidden" 
+          className="absolute top-0 bottom-0 right-0 z-0 bg-white/95 rounded-[15px] shadow-lg overflow-hidden"
           style={{
-            left: isSidebarExpanded ? 'calc(220px + 15px)' : 'calc(58px + 15px)', // Adjust based on sidebar width
+            left: 'calc(58px + 15px)', // sidebar width + gap
             transition: 'left 0.3s cubic-bezier(0.4,0,0.2,1)'
           }}
         >
@@ -272,20 +261,6 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
               )}
             </div>
           </TimelineProvider>
-        </div>
-        
-        {/* Sidebar with absolute positioning that adjusts width based on expanded state */}
-        <div 
-          className={`absolute left-0 top-0 bottom-0 ${isSidebarExpanded ? 'w-[220px]' : 'w-[58px]'} z-40 bg-white rounded-[15px] shadow-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
-          <Sidebar
-            projects={initialProjects}
-            currentProjectId={projectId}
-            onToggleTimeline={toggleTimeline}
-            onAddPanel={handleAddPanel}
-            timelineActive={timelineMode !== 'hidden'}
-            isCollapsed={!isSidebarExpanded}
-            onToggleCollapse={() => setIsSidebarExpanded(!isSidebarExpanded)}
-          />
         </div>
       </div>
     </div>

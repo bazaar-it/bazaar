@@ -36,12 +36,15 @@ export default function UploadsPanel({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <h2 className="text-xl font-semibold mb-4">Uploads</h2>
+    <div className="flex flex-col h-full bg-white/95 rounded-[15px] shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 mb-4">
+        <h2 className="text-lg font-medium">Uploads</h2>
+        <p className="text-sm text-muted-foreground">Upload media files</p>
+      </div>
       
       <div 
-        className={`flex-1 border-2 border-dashed rounded-lg p-8 mb-4 flex flex-col items-center justify-center ${
-          isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+        className={`flex-1 border-2 border-dashed rounded-[15px] shadow-sm p-8 m-4 flex flex-col items-center justify-center ${
+          isDragging ? 'border-blue-500 bg-blue-50/30' : 'border-gray-200 bg-gray-50/30'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -56,11 +59,11 @@ export default function UploadsPanel({ projectId }: { projectId: string }) {
         <p className="text-lg text-center mb-2">
           Drag and drop files here
         </p>
-        <p className="text-sm text-gray-500 text-center mb-4">
+        <p className="text-sm text-muted-foreground text-center mb-4">
           Or click to select files
         </p>
         
-        <label className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer">
+        <label className="px-4 py-2 bg-primary text-primary-foreground rounded-[15px] shadow-sm hover:bg-primary/90 transition-colors cursor-pointer">
           Select Files
           <input 
             type="file" 
@@ -73,14 +76,14 @@ export default function UploadsPanel({ projectId }: { projectId: string }) {
       
       {/* Uploaded files */}
       {uploads.length > 0 && (
-        <div className="overflow-auto">
+        <div className="overflow-auto px-4 pb-4">
           <h3 className="font-medium mb-2">Uploaded Files</h3>
-          <ul className="divide-y">
+          <ul className="divide-y divide-gray-100 border border-gray-100 rounded-[15px] shadow-sm overflow-hidden">
             {uploads.map((filename, index) => (
-              <li key={index} className="py-2 px-3 flex items-center justify-between">
+              <li key={index} className="py-2 px-3 flex items-center justify-between hover:bg-gray-50">
                 <span className="truncate">{filename}</span>
                 <button 
-                  className="text-red-500 hover:text-red-700"
+                  className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
                   onClick={() => setUploads(uploads.filter((_, i) => i !== index))}
                 >
                   Remove

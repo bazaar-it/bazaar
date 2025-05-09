@@ -1,0 +1,126 @@
+"use client";
+
+// src/app/projects/[id]/edit/WorkspaceContentArea.tsx
+// Z-index hierarchy:
+// 50: AppHeader (in ProjectEditorRoot)
+// 40: Sidebar (in ProjectEditorRoot)
+// 25: Dragging panels
+// 20: DragOverlay
+// 10: Regular panels
+import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { PanelGroup, Panel, PanelResizeHandle } from './PanelGroup';
+import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOverlay, defaultDropAnimationSideEffects } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent, DragOverEvent, DropAnimation } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { 
+  ChatPanel, 
+  PreviewPanel, 
+  CodePanel, 
+  UploadsPanel, 
+  TimelinePanel, 
+  ProjectsPanel, 
+  LibraryPanel, 
+  ScenePlanningHistoryPanel 
+} from './panels';
+import { XIcon } from 'lucide-react';
+import type { InputProps } from '~/types/input-props';
+
+// Panel definitions
+const PANEL_COMPONENTS = {
+  chat: ChatPanel,
+  preview: PreviewPanel,
+  code: CodePanel,
+  uploads: UploadsPanel,
+  projects: ProjectsPanel,
+  sceneplanning: ScenePlanningHistoryPanel
+};
+
+const PANEL_LABELS = {
+  chat: 'Chat',
+  preview: 'Preview',
+  code: 'Code',
+  uploads: 'Uploads',
+  projects: 'Projects',
+  sceneplanning: 'Scene Planning'
+};
+
+type PanelType = keyof typeof PANEL_COMPONENTS;
+
+interface OpenPanel {
+  id: string;
+  type: PanelType;
+}
+
+interface WorkspaceContentAreaProps {
+  projectId: string;
+  initialProps: InputProps;
+  onPanelDragStart?: (panelType: PanelType) => void;
+  projects?: any[]; // Array of projects
+}
+
+// Define the interface for the methods we want to expose to parent components
+export interface WorkspaceContentAreaHandle {
+  addPanel: (type: PanelType) => void;
+  toggleTimeline: () => void;
+}
+
+// Sortable panel wrapper
+function SortablePanel({ id, children, style, className, onRemove }: { 
+  id: string; 
+  children: React.ReactNode; 
+  style?: React.CSSProperties; 
+  className?: string;
+  onRemove?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  
+  // Improved style to maintain better visibility during dragging
+  const mergedStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.9 : 1, // Slightly transparent when dragging but still visible
+    zIndex: isDragging ? 25 : 1, // z-index 25 is lower than sidebar (40) but higher than regular panels
+    background: 'white',
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : undefined, // More pronounced shadow
+    border: isDragging ? '2px solid #3b82f6' : undefined, // Add blue border when dragging
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    ...style,
+  };
+  
+  // Special case for Code panel - don't add the header with X
+  const isCodePanel = id === 'code';
+  
+  // Get the proper panel title - use PANEL_LABELS if it's a valid PanelType
+  const panelTitle = PANEL_LABELS[id as PanelType] || id;
+  
+  return (
+    <div
+      ref={setNodeRef}
+      style={mergedStyle}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
+    >
+      {!isCodePanel && (
+        <div 
+          className={`flex items-center justify-between px-3 py-2 border-b ${isDragging ? 'bg-blue-50' : 'bg-gray-50'} cursor-move`}
+          {...attributes}
+          {...listeners}
+        >
+          <span className="font-medium text-sm">{panelTitle}</span>
+          <button 
+            onClick={onRemove} 
+            className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+            aria-label={`Close ${panelTitle} panel`}
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className={`flex-1 min-h-0 ${isCodePanel ? "h-full" : ""}`}>
+        {children}
+      </div>
+    </div>
+  );
+}

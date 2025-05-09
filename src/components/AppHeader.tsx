@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { PlayIcon, Share2Icon, LogOutIcon, CheckIcon, XIcon } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -36,7 +36,7 @@ function UserAvatar({ name }: { name: string }) {
   
   return (
     <div 
-      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold cursor-pointer hover:ring-2 hover:ring-gray-200 transition-all"
+      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold cursor-pointer hover:ring-2 hover:ring-gray-200/60 transition-all shadow-sm"
       style={{ backgroundColor: color }}
     >
       {firstLetter}
@@ -64,7 +64,7 @@ export default function AppHeader({
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
 
-  const handleRename = () => {
+  const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
       onRename(newTitle);
     }
@@ -77,61 +77,81 @@ export default function AppHeader({
   };
 
   return (
-    <header className="h-14 border-b bg-background flex items-center justify-between px-4 z-10 w-full">
-      {/* Left: Logo with improved sizing */}
-      <div className="flex items-center min-w-[160px]">
-        <a href="/" className="flex items-center gap-2" aria-label="Go to homepage">
-          <Image src="/BazaarLogo.svg" alt="Bazaar" width={79} height={30} className="object-contain" priority />
+    <header className="flex items-center justify-between px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
+      {/* Left: Logo only */}
+      <div className="flex items-center min-w-[64px]">
+        <a href="/" className="flex items-center" aria-label="Go to homepage">
+          <Image src="/bazaar-logo.png" alt="Bazaar" width={79} height={30} className="object-contain" priority />
         </a>
       </div>
 
-      {/* Center: Project Title (with rename) */}
-      <div className="flex-1 flex justify-center items-center">
+      {/* Center: Project Title (with rename), text-sm */}
+      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center">
         {projectTitle ? (
-          isEditingName ? (
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                handleRename();
-              }}
-              className="flex gap-2"
-            >
-              <Input
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                className="w-[240px] h-8"
-                autoFocus
-                disabled={isRenaming}
-              />
-              <Button type="submit" size="sm" variant="outline" disabled={isRenaming}>
-                Save
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
+          <div className="relative w-[280px] flex justify-center">
+            {isEditingName ? (
+              <div className="flex items-center w-full">
+                <Input
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  className="w-[240px] h-8 text-sm font-medium rounded-[15px] shadow-sm"
+                  autoFocus
+                  disabled={isRenaming}
+                />
+                <div className="flex items-center ml-2">
+                  <Button 
+                    type="button" 
+                    size="icon" 
+                    variant="default" 
+                    className="w-6 h-6 bg-green-500 hover:bg-green-600 mr-1 rounded-[8px] shadow-sm"
+                    onClick={handleRenameClick} 
+                    disabled={isRenaming}
+                  >
+                    <CheckIcon className="h-3 w-3 text-white" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="destructive"
+                    className="w-6 h-6 rounded-[8px] shadow-sm"
+                    onClick={() => {
+                      setNewTitle(projectTitle || "");
+                      setIsEditingName(false);
+                    }}
+                    disabled={isRenaming}
+                  >
+                    <XIcon className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <h1
+                className="text-sm font-medium cursor-pointer hover:text-primary px-2 text-center"
                 onClick={() => {
                   setNewTitle(projectTitle);
-                  setIsEditingName(false);
+                  setIsEditingName(true);
                 }}
-                disabled={isRenaming}
               >
-                Cancel
-              </Button>
-            </form>
-          ) : (
-            <h1
-              className="text-lg font-medium cursor-pointer hover:text-primary px-2"
-              onClick={() => setIsEditingName(true)}
-            >
-              {projectTitle}
-            </h1>
-          )
+                {projectTitle}
+              </h1>
+            )}
+          </div>
         ) : null}
       </div>
 
-      {/* Right: User info with avatar dropdown & render button */}
+      {/* Right: User info & Export button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
+        <Button
+          variant="default"
+          size="sm"
+          className="gap-2 rounded-[15px] shadow-sm"
+          onClick={onRender}
+          disabled={isRendering}
+        >
+          <DownloadIcon className="h-4 w-4" />
+          {isRendering ? "Exporting..." : "Export"}
+        </Button>
+        
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -139,7 +159,7 @@ export default function AppHeader({
                 <UserAvatar name={user.name || user.email || 'U'} />
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 rounded-[15px] shadow-sm border-gray-100 overflow-hidden">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5">
@@ -159,21 +179,6 @@ export default function AppHeader({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
-            className="gap-2"
-            onClick={onRender}
-            disabled={isRendering}
-          >
-            <PlayIcon className="h-4 w-4" />
-            {isRendering ? "Rendering..." : "Render"}
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <Share2Icon className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
     </header>
   );
