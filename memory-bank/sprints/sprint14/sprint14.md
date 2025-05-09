@@ -5,7 +5,7 @@
 
 Sprint 14 focuses on achieving a fully functional end-to-end pipeline for the "GallerySwipe" ad MVP use case. This involves making strategic improvements to testing infrastructure, completing key UI elements, and ensuring the entire pipeline from user prompt to final video works reliably.
 
-A key goal is enabling users to prompt for an ad video like: "Hi, I'm building an app for users to connect their photo library - an Apple app that uses AI to browse through all their images and make it easy for them to delete images to clean up storage. Swipe right to keep, swipe left to delete. Given the amount of right swipes and left swipes, I have an algorithm to know which images to batch delete and which to keep. The app is called 'GallerySwipe', launching tomorrow. Please make a 25-second video I can use as an ad."
+A key goal is enabling users to prompt for an ad video like: "Hi, I'm building an app for users to connect their photo library - an Apple app that uses AI to browse through all their images and make it easy for them to delete images to clean up storage. Swipe right to keep, swipe left to delete. Given the amount of right swipes and left swipes, I have an algorithm to know which images to batch delete and which to keep. The app is called 'GallerySwipe', launching tomorrow. Please make a 25-second video I can use as an ad." -. 
 
 ## Success Criteria
 
