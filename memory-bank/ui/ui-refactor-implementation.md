@@ -64,6 +64,57 @@ This document outlines the implementation details of the UI refactoring based on
 - Updated item property references (`item.label` → `item.name`)
 - Enhanced type safety for panel items
 
+## UI Refactor - Detailed Integration Plan
+
+## 1. Objective
+
+The primary goal is to meticulously transfer the UI enhancements from the `feature/ui-refactor` branch into the `feature/ui-integration` branch. The previous merge captured the structural changes but missed the detailed UI polish. We aim for a pixel-perfect (or as close as feasible) integration of the UI from `feature/ui-refactor`.
+
+## 2. Branches Involved
+
+-   **Source of UI truth:** `feature/ui-refactor` (contains the desired UI on an older main codebase)
+-   **Target for integration:** `feature/ui-integration` (current branch, has updated functionality but needs UI polish)
+-   **Final destination:** `main` (after `feature/ui-integration` is perfected)
+
+## 3. Methodology
+
+We will adopt a systematic, file-by-file (or component-by-component) approach:
+
+1.  **Identify Key Files/Components:** Start with core UI components affected by the refactor.
+2.  **Compare Versions:**
+    *   The USER will provide the content of the target file/component from the `feature/ui-refactor` branch.
+    *   Cascade will analyze this against the current version in `feature/ui-integration`.
+3.  **Integrate UI Changes:**
+    *   Focus on JSX structure, Tailwind CSS classes, styling, layout, and overall visual presentation.
+    *   Prioritize adopting the UI elements from `feature/ui-refactor` while ensuring existing functionality in `feature/ui-integration` remains intact.
+4.  **Iterate and Verify:** Review changes and ensure they render as expected.
+5.  **Document:** Keep this document updated with progress, decisions, and any challenges encountered.
+
+## 4. Collaboration
+
+-   **USER:** Will provide file contents from `feature/ui-refactor` as needed for comparison. Will also provide feedback and guidance on UI choices.
+-   **Cascade:** Will analyze differences, suggest code modifications for `feature/ui-integration`, and help document the process.
+
+## 5. Initial Target Files for Analysis & Integration
+
+Based on the recent changes and their importance to the workspace UI, we will start with:
+
+1.  `src/app/projects/[id]/edit/page.tsx`
+2.  `src/app/projects/[id]/edit/ProjectEditorRoot.tsx`
+3.  `src/app/projects/[id]/edit/WorkspaceContentArea.tsx`
+4.  Associated styling files or new UI components introduced in `feature/ui-refactor` for these areas.
+
+## 6. Progress Log
+
+*(This section will be updated as we proceed)*
+
+---
+
+**Next Steps:**
+
+1.  USER to provide the content of `src/app/projects/[id]/edit/page.tsx` from the `feature/ui-refactor` branch.
+2.  USER to provide the content of `src/app/projects/[id]/edit/page.tsx` from the `feature/ui-integration` branch (or confirm if the currently open one is the correct version).
+
 ## Next Steps
 
 1. Delete old files (InterfaceShell.tsx, WorkspacePanels.tsx) after confirming all imports are updated
