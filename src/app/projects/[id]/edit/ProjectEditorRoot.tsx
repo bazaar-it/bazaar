@@ -129,11 +129,10 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
         case 'text':
           return { 
             type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: scene.data?.text as string || 'Text', 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 1, 
+            id: id, // Use numeric ID
+            sceneId: scene.id, // Store original scene ID as reference
+            from: parseFloat(String(scene.start || 0)), 
+            durationInFrames: parseFloat(String(scene.duration || 0)),
             row: index % 3, 
             content: scene.data?.text as string || 'Text', 
             fontSize: Number(scene.data?.fontSize || 24), 
@@ -143,38 +142,34 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
         case 'image':
           return { 
             type: TimelineItemType.IMAGE, 
-            id: `scene-${id}`, 
-            title: `Image ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 2, 
+            id: id, 
+            sceneId: scene.id,
+            from: parseFloat(String(scene.start || 0)), 
+            durationInFrames: parseFloat(String(scene.duration || 0)),
             row: index % 3, 
             src: scene.data?.src as string || '' 
           };
         case 'background-color':
           return { 
-            type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: `Background ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 2, 
+            type: TimelineItemType.CUSTOM, 
+            id: id, 
+            sceneId: scene.id,
+            from: parseFloat(String(scene.start || 0)), 
+            durationInFrames: parseFloat(String(scene.duration || 0)),
             row: index % 3, 
-            content: `Background: ${scene.data?.color as string || '#000000'}`, 
-            fontSize: 16, 
-            fontFamily: 'monospace', 
-            color: '#FFFFFF' 
+            name: `Background: ${scene.data?.color as string || '#000000'}`, 
+            componentId: `bg-color-${index}`,
+            outputUrl: ''
           };
         default:
           return { 
             type: TimelineItemType.TEXT, 
-            id: `scene-${id}`, 
-            title: `Scene ${index + 1}`, 
-            start: parseFloat(String(scene.start || 0)), 
-            duration: parseFloat(String(scene.duration || 0)),
-            column: 3, 
+            id: id, 
+            sceneId: scene.id,
+            from: parseFloat(String(scene.start || 0)), 
+            durationInFrames: parseFloat(String(scene.duration || 0)),
             row: index % 3, 
-            content: scene.type, 
+            content: scene.type || 'Unknown scene type', 
             fontSize: 24, 
             fontFamily: 'Arial', 
             color: '#FFFFFF' 

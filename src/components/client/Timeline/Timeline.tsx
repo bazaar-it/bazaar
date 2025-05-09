@@ -20,6 +20,8 @@ export interface TimelineProps {
   allowDragToChat?: boolean;
   selectedItemId?: number | null;
   onSelectItem?: (itemId: number) => void;
+  onUpdateItem?: (updatedItem: TimelineItemUnion) => void;
+  onRepositionItems?: () => void;
   totalDuration?: number; // Duration in frames
 }
 
@@ -33,6 +35,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   allowDragToChat = false,
   selectedItemId = null,
   onSelectItem,
+  onUpdateItem,
+  onRepositionItems,
   totalDuration,
 }) => {
   // Get timeline context values
@@ -159,6 +163,14 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Update scene in Zustand when timeline item changes using JSON-Patch
   const handleTimelineChange = useCallback((updatedItem: TimelineItemUnion) => {
+    // Use the onUpdateItem prop when available, which provides more context-aware state management
+    if (onUpdateItem) {
+      // Use the external handler to update the item in the parent component
+      onUpdateItem(updatedItem);
+      return;
+    }
+    
+    // Fallback to direct update when no external handler is provided
     if (!inputProps) return;
     
     // Find scene by ID (converting between string and number as needed)
@@ -182,7 +194,12 @@ export const Timeline: React.FC<TimelineProps> = ({
     
     // Apply patches using the optimistic update pattern
     applyPatch(projectId, patches);
-  }, [inputProps, projectId, applyPatch]);
+    
+    // Check if we should reposition items to fix any overlaps
+    if (onRepositionItems) {
+      onRepositionItems();
+    }
+  }, [inputProps, projectId, applyPatch, onUpdateItem, onRepositionItems]);
   
   // Handle item deletion using the patch factory
   const handleDeleteItem = useCallback((id: number) => {

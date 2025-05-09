@@ -11,6 +11,7 @@ import { TimelineProvider } from '~/components/client/Timeline/TimelineContext';
 import { useSelectedScene } from '~/components/client/Timeline/SelectedSceneContext';
 import { replace } from '~/lib/patch';
 import type { SceneType } from "~/types/remotion-constants";
+import type { Operation } from "fast-json-patch";
 
 // Define a simple interface for component jobs to avoid type errors
 interface ComponentJob {
@@ -146,6 +147,66 @@ export default function TimelinePanel() {
     }
   }
   
+  // Handle updating a timeline item (position/duration) and sync with video state
+  const handleItemUpdate = useCallback((updatedItem: TimelineItemUnion) => {
+    // Find the corresponding scene in the video state
+    if (!updatedItem.sceneId || !inputProps) return;
+    
+    // Find the scene in the video props
+    const sceneIndex = inputProps.scenes.findIndex(scene => scene.id === updatedItem.sceneId);
+    if (sceneIndex === -1) return;
+    
+    // Create the patch operation to update the scene's start and duration
+    const patch: Operation[] = [
+      { op: 'replace' as const, path: `/scenes/${sceneIndex}/start`, value: updatedItem.from },
+      { op: 'replace' as const, path: `/scenes/${sceneIndex}/duration`, value: updatedItem.durationInFrames }
+    ];
+    
+    // Apply the patch to update the video state
+    applyPatch(id as string, patch);
+    
+    // Log the update for debugging
+    console.debug(`Updated scene ${updatedItem.sceneId}: start=${updatedItem.from}, duration=${updatedItem.durationInFrames}`);
+  }, [id, inputProps, applyPatch]);
+  
+  // Handle repositioning all scenes when needed (e.g., after drag operations that might cause overlaps)
+  const repositionScenes = useCallback(() => {
+    if (!inputProps || !inputProps.scenes.length) return;
+    
+    // Create a sorted copy of scenes by start frame
+    const sortedScenes = [...inputProps.scenes].sort((a, b) => a.start - b.start);
+    
+    // Ensure scenes are properly positioned without overlaps
+    let currentPosition = 0;
+    const patches: Operation[] = [];
+    
+    for (let i = 0; i < sortedScenes.length; i++) {
+      const scene = sortedScenes[i];
+      if (!scene) continue; // Skip if scene is undefined
+      
+      const sceneIndex = inputProps.scenes.findIndex(s => s?.id === scene.id);
+      if (sceneIndex === -1) continue;
+      
+      // If the scene needs repositioning, add a patch
+      if (scene.start !== currentPosition) {
+        patches.push({ 
+          op: 'replace' as const, 
+          path: `/scenes/${sceneIndex}/start`, 
+          value: currentPosition 
+        });
+      }
+      
+      // Move position for the next scene
+      currentPosition += scene.duration || 0; // Default to 0 if duration is undefined
+    }
+    
+    // Apply patches if any
+    if (patches.length > 0) {
+      applyPatch(id as string, patches);
+      console.debug(`Repositioned ${patches.length} scenes to eliminate overlaps`);
+    }
+  }, [id, inputProps, applyPatch]);
+
   const handleSelectItem = useCallback((itemId: number) => {
     // Find the scene that corresponds to the timeline item
     const item = timelineItems.find(item => item.id === itemId);
@@ -185,6 +246,8 @@ export default function TimelinePanel() {
             className="h-full"
             totalDuration={totalDuration}
             onSelectItem={handleSelectItem}
+            onUpdateItem={handleItemUpdate}
+            onRepositionItems={repositionScenes}
             selectedItemId={selectedSceneId ? parseInt(selectedSceneId, 10) : null}
             allowDragToChat={true}
           />

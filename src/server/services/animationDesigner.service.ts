@@ -85,11 +85,83 @@ const toolParametersJsonSchema = {
             items: {
               type: "object",
               properties: {
-                type: { type: "string" },
-                startFrame: { type: "number" },
-                endFrame: { type: "number" },
-                easing: { type: "string" }
-              }
+                animationId: { 
+                  type: "string",
+                  description: "Identifier for this animation definition"
+                },
+                animationType: { 
+                  type: "string",
+                  description: "Type of animation (e.g., \"fadeIn\", \"slideInLeft\", \"customProperty\", \"pulse\")"
+                },
+                trigger: { 
+                  type: "string", 
+                  enum: ["onLoad", "onClick", "onHover", "afterPrevious", "withPrevious"],
+                  default: "onLoad",
+                  description: "Event or condition that triggers the animation"
+                },
+                startAtFrame: { 
+                  type: "number",
+                  description: "Frame number (relative to scene start or trigger) when the animation begins"
+                },
+                durationInFrames: { 
+                  type: "number",
+                  description: "Duration of the animation in frames"
+                },
+                delayInFrames: { 
+                  type: "number", 
+                  default: 0, 
+                  description: "Delay in frames before the animation starts after being triggered"
+                },
+                easing: { 
+                  type: "string", 
+                  default: "easeInOutCubic",
+                  description: "Easing function for the animation" 
+                },
+                propertiesAnimated: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      property: { 
+                        type: "string",
+                        description: "CSS-like property to animate (e.g., \"opacity\", \"x\", \"backgroundColor\")"
+                      },
+                      from: { 
+                        type: ["string", "number", "boolean"],
+                        description: "Starting value of the property"
+                      },
+                      to: { 
+                        type: ["string", "number", "boolean"],
+                        description: "Ending value of the property"
+                      }
+                    },
+                    required: ["property", "from", "to"]
+                  },
+                  description: "Array of properties to be animated"
+                },
+                pathData: {
+                  type: "string",
+                  description: "SVG path data for path-based animations"
+                },
+                repeat: {
+                  type: "object",
+                  properties: {
+                    count: { 
+                      type: ["number", "string"],
+                      description: "Number of times to repeat, or \"infinite\""
+                    },
+                    direction: { 
+                      type: "string", 
+                      enum: ["normal", "reverse", "alternate"],
+                      default: "normal",
+                      description: "Direction of repetition"
+                    }
+                  },
+                  required: ["count"],
+                  description: "Settings for repeating the animation"
+                }
+              },
+              required: ["animationId", "animationType", "startAtFrame", "durationInFrames"]
             }
           }
         },
@@ -114,11 +186,15 @@ const toolParametersJsonSchema = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string" },
+          trackId: { type: "string" },
+          url: { type: "string" },
           source: { type: "string" },
-          startFrame: { type: "number" },
-          endFrame: { type: "number" }
-        }
+          volume: { type: "number", minimum: 0, maximum: 1, default: 1 },
+          startAtFrame: { type: "number", default: 0 },
+          endFrame: { type: "number" },
+          loop: { type: "boolean", default: false }
+        },
+        required: ["trackId"]
       }
     },
     briefVersion: {
@@ -138,31 +214,21 @@ function isValidUuid(str: string): boolean {
   return uuidRegex.test(str);
 }
 
-// Helper for ensuring valid UUIDs
-function ensureValidUuid(sceneId: string): string {
-  if (isValidUuid(sceneId)) {
-    return sceneId;
+/**
+ * Ensures a valid UUID is provided by either using the input if valid
+ * or generating a new RFC 4122 compliant UUID v4.
+ * 
+ * We use randomUUID() from crypto module for proper compliance with UUID standards
+ * rather than a custom deterministic hash, as this ensures proper uniqueness
+ * and compatibility with systems expecting standard UUIDs.
+ */
+function ensureValidUuid(str: string): string {
+  if (isValidUuid(str)) {
+    return str;
   }
   
-  // Generate a deterministic UUID based on the original scene ID
-  const namespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // Namespace UUID (randomly chosen)
-  const buffer = Buffer.from(namespace.replace(/-/g, '') + sceneId);
-  
-  // Create a simple hash of the input
-  let hash = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    hash = ((hash << 5) - hash) + buffer[i]!; // Non-null assertion to fix TypeScript warning
-    hash |= 0; // Convert to 32bit integer
-  }
-  
-  // Generate a UUID-format string from the hash
-  const hex = Math.abs(hash).toString(16).padStart(32, '0');
-  
-  // Format properly as UUID: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-  // Where y is 8,9,a,b for variant 1 UUID
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(12, 15)}-${
-    (parseInt(hex.slice(15, 16), 16) & 0x3 | 0x8).toString(16)}${hex.slice(16, 19)
-  }-${hex.slice(19, 31)}`;
+  // Use proper RFC 4122 compliant v4 UUIDs
+  return randomUUID();
 }
 
 // Save the Animation Design Brief to the database
@@ -196,74 +262,89 @@ export async function saveAnimationDesignBrief(
   }
 }
 
-// Create an empty design brief with minimal default values
-const createEmptyDesignBrief = (sceneId: string, dimensions: { width: number, height: number }): AnimationDesignBrief => ({
-  briefVersion: '1.0.0',
-  sceneId,
-  scenePurpose: "Basic animation for scene",
-  overallStyle: "Simple, clean design",
-  durationInFrames: 60, // 2 seconds at 30fps
-  dimensions,
-  colorPalette: {
-    background: "#ffffff",
-    primary: "#4285F4",
-    secondary: "#34A853",
-    accent: "#FBBC05",
-    textPrimary: "#000000"
-  },
-  elements: [
-    {
-      elementId: randomUUID(), // Generate a valid UUID for the element
-      elementType: "text",
-      name: "Default text",
-      content: "Scene content placeholder",
-      initialLayout: {
-        x: dimensions.width / 2,
-        y: dimensions.height / 2,
-        width: dimensions.width * 0.8,
-        height: 80,
-        opacity: 1,
-        rotation: 0,
-        scale: 1,
-        backgroundColor: "#ffffff"
-      },
-      animations: []
-    }
-  ],
-  audioTracks: [],
-  typography: {
-    defaultFontFamily: "Inter"
-  }
-});
+// Create an empty design brief as a fallback
+function createEmptyDesignBrief(sceneId: string, dimensions: { width: number, height: number }): AnimationDesignBrief {
+  const uniqueId = randomUUID(); // Use standardized UUID generation
+  
+  return {
+    sceneId,
+    scenePurpose: "Display content clearly",
+    overallStyle: "Simple and clean",
+    durationInFrames: 180,
+    dimensions,
+    colorPalette: {
+      background: "#FFFFFF",
+      primary: "#3498db",
+      secondary: "#2ecc71",
+      textPrimary: "#333333",
+      accent: "#e74c3c"
+    },
+    audioTracks: [],
+    elements: [
+      {
+        elementId: randomUUID(), // Use standardized UUID generation
+        elementType: "text",
+        name: "Default Text",
+        content: "Your content here",
+        initialLayout: {
+          x: dimensions.width / 2,
+          y: dimensions.height / 2,
+          opacity: 1,
+          rotation: 0,
+          scale: 1
+        },
+        animations: [
+          {
+            animationId: randomUUID(), // Use standardized UUID generation
+            animationType: "fadeIn",
+            startAtFrame: 0,
+            durationInFrames: 30,
+            easing: "easeOutCubic",
+            trigger: "onLoad",
+            delayInFrames: 0,
+            propertiesAnimated: [
+              { property: "opacity", from: 0, to: 1 }
+            ]
+          }
+        ]
+      }
+    ],
+    briefVersion: "1.0.0"
+  };
+}
 
-// Helper function to recursively fix UUIDs in an object
-function fixUuidsInObject(obj: any, sceneId?: string): any {
+// Fix UUIDs in an object recursively
+function fixUuidsInObject(obj: any, sceneId: string): any {
   if (!obj) return obj;
   
-  const result: any = Array.isArray(obj) ? [] : {};
-  
-  // Process each property in the object
-  for (const key in obj) {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-    
-    const value = obj[key];
-    
-    if (key.toLowerCase().endsWith('id') && typeof value === 'string' && !isValidUuid(value)) {
-      // Convert to a valid UUID if it's not already one
-      result[key] = ensureValidUuid(value);
-      if (sceneId) {
-        animationDesignerLogger.data(sceneId, `Converted ${key}: ${value} to UUID: ${result[key]}`);
-      }
-    } else if (typeof value === 'object' && value !== null) {
-      // Recursively process nested objects
-      result[key] = fixUuidsInObject(value, sceneId);
-    } else {
-      // Copy the value as is
-      result[key] = value;
+  if (typeof obj === 'string') {
+    // Check if this is a property that should be a UUID
+    if (obj.match(/id$/i) && !isValidUuid(obj)) {
+      return randomUUID(); // Use standardized UUID generation
     }
+    return obj;
   }
   
-  return result;
+  if (Array.isArray(obj)) {
+    return obj.map(item => fixUuidsInObject(item, sceneId));
+  }
+  
+  if (typeof obj === 'object') {
+    const newObj: Record<string, any> = {};
+    
+    for (const key in obj) {
+      // Special handling for IDs
+      if ((key === 'sceneId' || key === 'elementId' || key === 'animationId') && typeof obj[key] === 'string') {
+        newObj[key] = isValidUuid(obj[key]) ? obj[key] : randomUUID();
+      } else {
+        newObj[key] = fixUuidsInObject(obj[key], sceneId);
+      }
+    }
+    
+    return newObj;
+  }
+  
+  return obj;
 }
 
 // Helper function to create a useful fallback brief based on partial data
@@ -278,25 +359,128 @@ function createFallbackBrief(
   if (!partialBrief) return emptyBrief;
   
   // Extract whatever useful info we can from the partial brief
-  return {
-    ...emptyBrief,
-    // Use overrides from partial brief where available
-    scenePurpose: partialBrief.scenePurpose || emptyBrief.scenePurpose,
-    overallStyle: partialBrief.overallStyle || emptyBrief.overallStyle,
-    durationInFrames: partialBrief.durationInFrames || emptyBrief.durationInFrames,
-    colorPalette: partialBrief.colorPalette || emptyBrief.colorPalette,
-    // We know elements array is required, so keep at least one element
-    elements: Array.isArray(partialBrief.elements) && partialBrief.elements.length > 0
-      ? partialBrief.elements.map((el: any) => ({
-          ...el,
-          elementId: el.elementId && isValidUuid(el.elementId) 
-            ? el.elementId 
-            : randomUUID(),
-          // Ensure we have animations array (even if empty)
-          animations: Array.isArray(el.animations) ? el.animations : []
-        }))
-      : emptyBrief.elements,
-  };
+  try {
+    // Start with a conservative approach - only copy simple scalar properties
+    const conservativeBrief: Partial<AnimationDesignBrief> = {
+      ...emptyBrief,
+      // Use overrides from partial brief where available
+      scenePurpose: partialBrief.scenePurpose || emptyBrief.scenePurpose,
+      overallStyle: partialBrief.overallStyle || emptyBrief.overallStyle,
+      durationInFrames: partialBrief.durationInFrames || emptyBrief.durationInFrames,
+    };
+    
+    // Attempt to reuse color palette if it exists and has all required fields
+    if (partialBrief.colorPalette && partialBrief.colorPalette.background) {
+      conservativeBrief.colorPalette = {
+        ...emptyBrief.colorPalette,
+        ...partialBrief.colorPalette
+      };
+    }
+    
+    // Try to salvage elements and animations with careful filtering
+    if (Array.isArray(partialBrief.elements) && partialBrief.elements.length > 0) {
+      // Filter elements to keep only those with required fields
+      const validElements = partialBrief.elements
+        .filter((el: any) => el && el.elementId && el.elementType)
+        .map((el: any) => {
+          // Create a basic element with required fields
+          const validElement: any = {
+            elementId: isValidUuid(el.elementId) ? el.elementId : randomUUID(),
+            elementType: el.elementType,
+            name: el.name || `Element ${el.elementType}`,
+            // Ensure at least an empty animations array
+            animations: []
+          };
+          
+          // Add content if it's present
+          if (el.content) validElement.content = el.content;
+          
+          // Add initialLayout if it has x and y coordinates
+          if (el.initialLayout && typeof el.initialLayout.x !== 'undefined' && typeof el.initialLayout.y !== 'undefined') {
+            validElement.initialLayout = {
+              x: el.initialLayout.x,
+              y: el.initialLayout.y,
+              // Add optional layout properties if present
+              ...(el.initialLayout.width !== undefined && { width: el.initialLayout.width }),
+              ...(el.initialLayout.height !== undefined && { height: el.initialLayout.height }),
+              ...(el.initialLayout.opacity !== undefined && { opacity: el.initialLayout.opacity }),
+              ...(el.initialLayout.rotation !== undefined && { rotation: el.initialLayout.rotation }),
+              ...(el.initialLayout.scale !== undefined && { scale: el.initialLayout.scale }),
+              ...(el.initialLayout.backgroundColor !== undefined && { backgroundColor: el.initialLayout.backgroundColor }),
+            };
+          } else {
+            // Fallback layout if missing
+            validElement.initialLayout = {
+              x: dimensions.width / 2,
+              y: dimensions.height / 2,
+              opacity: 1,
+              rotation: 0,
+              scale: 1
+            };
+          }
+          
+          // Try to salvage animations if they exist
+          if (Array.isArray(el.animations) && el.animations.length > 0) {
+            // Filter to keep only animations with required fields
+            validElement.animations = el.animations
+              .filter((anim: any) => {
+                // Check if we have either the old format (type, startFrame, endFrame)
+                // or the new format (animationId, animationType, startAtFrame, durationInFrames)
+                return (
+                  (anim.animationId && anim.animationType && typeof anim.startAtFrame === 'number' && typeof anim.durationInFrames === 'number') ||
+                  (anim.type && typeof anim.startFrame === 'number' && typeof anim.endFrame === 'number')
+                );
+              })
+              .map((anim: any) => {
+                // Convert legacy format to new format if needed
+                if (anim.type && !anim.animationId) {
+                  return {
+                    animationId: randomUUID(),
+                    animationType: anim.type,
+                    startAtFrame: anim.startFrame || 0,
+                    durationInFrames: (anim.endFrame || 30) - (anim.startFrame || 0),
+                    easing: anim.easing || 'easeInOutCubic'
+                  };
+                }
+                
+                // Return animation with required fields
+                return {
+                  animationId: anim.animationId || randomUUID(),
+                  animationType: anim.animationType || anim.type || 'fadeIn',
+                  startAtFrame: anim.startAtFrame || anim.startFrame || 0,
+                  durationInFrames: anim.durationInFrames || 
+                    ((anim.endFrame || 30) - (anim.startAtFrame || anim.startFrame || 0)),
+                  // Include optional properties if available
+                  ...(anim.easing && { easing: anim.easing }),
+                  ...(anim.delayInFrames !== undefined && { delayInFrames: anim.delayInFrames }),
+                  ...(Array.isArray(anim.propertiesAnimated) && { propertiesAnimated: anim.propertiesAnimated })
+                };
+              });
+          }
+          
+          return validElement;
+        });
+      
+      // If we have valid elements, use them
+      if (validElements.length > 0) {
+        conservativeBrief.elements = validElements;
+      } else {
+        // Otherwise fallback to empty brief's elements
+        conservativeBrief.elements = emptyBrief.elements;
+      }
+    } else {
+      // Use default empty brief elements
+      conservativeBrief.elements = emptyBrief.elements;
+    }
+    
+    animationDesignerLogger.data(sceneId, `Created fallback brief with ${conservativeBrief.elements.length} elements from partial data`);
+    
+    return conservativeBrief as AnimationDesignBrief;
+  } catch (error) {
+    // If anything goes wrong during fallback creation, return the completely empty brief
+    animationDesignerLogger.error(sceneId, `Error creating fallback brief: ${error instanceof Error ? error.message : String(error)}`);
+    return emptyBrief;
+  }
 }
 
 // Main function to generate an Animation Design Brief
@@ -354,11 +538,62 @@ Follow these technical requirements:
 1. Every element must have a unique elementId
 2. Elements should have sensible positioning via initialLayout
 3. Animation timings must fit within the total durationInFrames
-4. Each animation needs startFrame and endFrame values
+4. Each animation needs startAtFrame and durationInFrames values
 5. Include at least one entrance and one exit animation for important elements
 6. For text elements, provide actual content that fits the purpose
 7. Use proper color values (hex format preferred)
 8. Ensure all required properties are present in your JSON output
+
+Here's an example of a valid element with animations:
+
+{
+  "elementId": "e8a65d7c-1234-5678-abcd-1234567890ab",
+  "elementType": "text",
+  "name": "Headline Text",
+  "content": "Our Amazing Product",
+  "initialLayout": {
+    "x": 960,
+    "y": 540,
+    "width": 800,
+    "height": 100,
+    "opacity": 0,
+    "rotation": 0,
+    "scale": 1
+  },
+  "animations": [
+    {
+      "animationId": "anim-fade-in",
+      "animationType": "fadeIn",
+      "startAtFrame": 0,
+      "durationInFrames": 30,
+      "easing": "easeOutCubic",
+      "propertiesAnimated": [
+        { "property": "opacity", "from": 0, "to": 1 }
+      ]
+    },
+    {
+      "animationId": "anim-slide-up",
+      "animationType": "slideUp",
+      "startAtFrame": 15,
+      "durationInFrames": 45,
+      "delayInFrames": 5,
+      "easing": "easeOutQuint",
+      "propertiesAnimated": [
+        { "property": "y", "from": 600, "to": 540 }
+      ]
+    },
+    {
+      "animationId": "anim-fade-out",
+      "animationType": "fadeOut",
+      "startAtFrame": 120,
+      "durationInFrames": 30,
+      "easing": "easeInCubic",
+      "propertiesAnimated": [
+        { "property": "opacity", "from": 1, "to": 0 }
+      ]
+    }
+  ]
+}
 
 Ensure your output is valid JSON and matches the required schema.`
       },
@@ -430,6 +665,26 @@ Please design a complete Animation Design Brief with appropriate elements and an
         briefSize: toolCall.function.arguments.length,
         elementsCount: generatedBrief.elements?.length || 0
       });
+      
+      // Add logging for raw arguments to help diagnose issues
+      animationDesignerLogger.data(sceneId, "RAW LLM Animation Design Brief Arguments", {
+        rawArguments: toolCall.function.arguments.substring(0, 1000) + 
+                     (toolCall.function.arguments.length > 1000 ? '...' : '')
+      });
+
+      // Log animation structure specifically to help diagnose issues
+      if (generatedBrief.elements && generatedBrief.elements.length > 0) {
+        const firstElementWithAnimations = generatedBrief.elements.find((el: any) => 
+          el.animations && el.animations.length > 0
+        );
+        
+        if (firstElementWithAnimations && firstElementWithAnimations.animations) {
+          animationDesignerLogger.data(sceneId, "First element animations structure", {
+            animationsCount: firstElementWithAnimations.animations.length,
+            firstAnimation: JSON.stringify(firstElementWithAnimations.animations[0])
+          });
+        }
+      }
     } catch (parseError) {
       animationDesignerLogger.error(sceneId, "Error parsing JSON from LLM response", { 
         error: parseError instanceof Error ? parseError.message : String(parseError),
@@ -484,7 +739,9 @@ Please design a complete Animation Design Brief with appropriate elements and an
           elementIssues: elementIssues.length > 0 ? elementIssues : undefined,
           animationIssues: animationIssues.length > 0 ? animationIssues : undefined,
           otherIssues: otherIssues.length > 0 ? otherIssues : undefined,
-          providedBrief: cleanedBrief ? JSON.stringify(cleanedBrief).substring(0, 500) + '...' : 'undefined brief'
+          rawZodIssues: validationResult.error.issues,
+          briefBeforeValidation: JSON.stringify(cleanedBrief).substring(0, 1000) + 
+                               (JSON.stringify(cleanedBrief).length > 1000 ? '...' : '')
         });
         
         // Create a fallback with the partial brief to recover as much as possible

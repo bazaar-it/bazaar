@@ -5,6 +5,7 @@ import { useState, useCallback } from "react";
 import type { RefObject } from "react";
 import { useVideoState } from "~/stores/videoState";
 import { replace } from "~/lib/patch";
+import type { Operation } from "fast-json-patch";
 
 // Types for the timeline drag and drop operations
 interface DragInfo {
@@ -36,6 +37,7 @@ interface TimelineDragAndDropProps {
   timelineRef: RefObject<HTMLDivElement>;
   dragInfo: DragInfo | null;
   maxRows: number;
+  projectId?: string; // Project ID for applying patches
 }
 
 /**
@@ -50,7 +52,8 @@ export const useTimelineDragAndDrop = ({
   resetDragState,
   timelineRef,
   dragInfo,
-  maxRows
+  maxRows,
+  projectId
 }: TimelineDragAndDropProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isInvalidDrag, setIsInvalidDrag] = useState(false);
@@ -201,11 +204,68 @@ export const useTimelineDragAndDrop = ({
     
   }, [isInvalidDrag, overlays, onOverlayChange, resetDragState, updateGhostElement]);
 
+  // Function to reposition scenes to avoid overlaps
+  const repositionScenes = useCallback(() => {
+    if (!projectId) return;
+    
+    // Get video state functions
+    const videoState = useVideoState();
+    const { getCurrentProps, applyPatch } = videoState;
+    const currentProps = getCurrentProps();
+    
+    if (!currentProps || !currentProps.scenes || currentProps.scenes.length < 2) return;
+    
+    const scenes = [...currentProps.scenes];
+    let hasChanges = false;
+    
+    // Sort scenes by start time
+    scenes.sort((a, b) => (a.start || 0) - (b.start || 0));
+    
+    // Check for overlaps and adjust
+    for (let i = 1; i < scenes.length; i++) {
+      const prevScene = scenes[i - 1];
+      const currentScene = scenes[i];
+      
+      if (!prevScene || !currentScene) continue;
+      
+      const prevEnd = (prevScene.start || 0) + (prevScene.duration || 0);
+      
+      // If current scene starts before previous one ends, move it
+      if ((currentScene.start || 0) < prevEnd) {
+        // Create a patch to move the overlapping scene
+        const sceneIndex = currentProps.scenes.findIndex(s => 
+          s && s.id && currentScene.id && s.id.toString() === currentScene.id.toString()
+        );
+        
+        if (sceneIndex !== -1) {
+          // Create typed operation patches
+          const patches: Operation[] = [
+            {
+              op: 'replace' as const,
+              path: `/scenes/${sceneIndex}/start`,
+              value: prevEnd
+            }
+          ];
+          
+          // Apply the patch
+          if (projectId) {
+            applyPatch(projectId, patches);
+            hasChanges = true;
+          }
+        }
+      }
+    }
+    
+    return hasChanges;
+  }, [projectId]);
+
+  // Return the public interface for this hook
   return {
     handleDragStart,
     handleDrag,
     handleDragEnd,
     isDragging,
-    isInvalidDrag
+    isInvalidDrag,
+    repositionScenes
   };
 };

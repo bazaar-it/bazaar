@@ -44,6 +44,18 @@ interface TimelineContextValue extends TimelineContextState, TimelineActions {
   handleWheelZoom: (e: WheelEvent, clientX: number) => void;
   handleTimelineClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   
+  // Timeline positioning utilities
+  pixelsPerFrame: number;
+  frameToX: (frame: number) => number;
+  xToFrame: (x: number) => number;
+  rowToY: (row: number) => number;
+  yToRow: (y: number) => number;
+  
+  // Enhanced drag and drop functionality
+  handleItemDragStart: (item: TimelineItemUnion, clientX: number, clientY: number, actionType: 'move' | 'resize-left' | 'resize-right') => void;
+  handleItemDrag: (clientX: number, clientY: number) => void;
+  handleItemDragEnd: () => void;
+  
   // New method to update timeline based on scene plan
   updateFromScenePlan: (scenes: Array<{id: string, type: string, durationInFrames: number}>) => void;
 }
@@ -91,7 +103,11 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   }, [initialDuration]);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [scrollPosition, setScrollPosition] = useState<number>(0);
-  const [ghostPosition, setGhostPosition] = useState<GhostPosition>({ left: 0, width: 0 });
+  const [ghostPosition, setGhostPosition] = useState<GhostPosition>({
+    left: 0,
+    width: 0,
+    row: 0
+  });
   const [isDragging, setIsDragging] = useState(false);
   
   // Validation settings
@@ -111,42 +127,75 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
 
   // Wheel zoom handler - zooms around mouse position
   const handleWheelZoom = useCallback((e: WheelEvent, clientX: number) => {
-    e.preventDefault();
+    e.preventDefault(); // Prevent browser zooming
     
     if (!timelineRef.current) return;
     
-    const timeline = timelineRef.current;
-    const timelineRect = timeline.getBoundingClientRect();
-    const mouseX = clientX - timelineRect.left;
-    const mouseXPercent = mouseX / timelineRect.width;
+    // Calculate zoom amount based on wheel delta
+    const zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
+    let newZoom = zoomLevel + zoomDelta;
+    newZoom = Math.max(0.5, Math.min(newZoom, 5)); // Clamp zoom level
     
-    // Adjust zoom level based on wheel direction
-    const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    const newZoom = Math.max(0.5, Math.min(5, zoomLevel + delta));
+    // Calculate zoom point relative to timeline
+    const rect = timelineRef.current.getBoundingClientRect();
+    const zoomPoint = clientX - rect.left;
     
-    // Adjust scroll position to keep mouse position constant
-    const oldScroll = scrollPosition;
-    const newScroll = oldScroll + (mouseXPercent * (newZoom - zoomLevel) * timelineRect.width);
+    // Calculate how the scroll position needs to change to keep the zoom point stationary
+    const zoomRatio = newZoom / zoomLevel;
+    const newScroll = scrollPosition * zoomRatio + (zoomPoint - zoomPoint * zoomRatio);
     
+    // Update state
     setZoomLevel(newZoom);
     setScrollPosition(newScroll);
   }, [zoomLevel, scrollPosition]);
+
+  // Timeline positioning utilities
+  // Calculate pixels per frame based on timeline width and zoom level
+  const pixelsPerFrame = useMemo(() => {
+    const timelineWidth = timelineRef.current?.clientWidth || 1000;
+    return (timelineWidth * zoomLevel) / durationInFrames;
+  }, [durationInFrames, timelineRef, zoomLevel]);
   
+  // Convert a frame number to X coordinate in pixels
+  const frameToX = useCallback((frame: number): number => {
+    return frame * pixelsPerFrame;
+  }, [pixelsPerFrame]);
+  
+  // Convert an X coordinate in pixels to the nearest frame number
+  const xToFrame = useCallback((x: number): number => {
+    return Math.max(0, Math.min(durationInFrames, Math.round(x / pixelsPerFrame)));
+  }, [durationInFrames, pixelsPerFrame]);
+  
+  // Convert a row number to Y coordinate in pixels
+  const rowToY = useCallback((row: number): number => {
+    const ROW_HEIGHT = 40; // Standard row height
+    return row * ROW_HEIGHT;
+  }, []);
+  
+  // Convert a Y coordinate in pixels to the nearest row number
+  const yToRow = useCallback((y: number): number => {
+    const ROW_HEIGHT = 40;
+    return Math.max(0, Math.min(maxRows - 1, Math.floor(y / ROW_HEIGHT)));
+  }, [maxRows]);
+
   // Timeline click handler for seeking
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (isDragging || !timelineRef.current) return;
     
-    const rect = timelineRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const pct = clickX / rect.width;
-    const frame = Math.floor(pct * durationInFrames);
+    // Get click position relative to timeline
+    const timeline = timelineRef.current;
+    const rect = timeline.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
     
-    // Seek to clicked position
-    setCurrentFrame(frame);
-    if (playerRef.current && typeof playerRef.current.seekTo === 'function') {
-      playerRef.current.seekTo(frame);
+    // Use our new positioning utility to convert x coordinate to frame
+    const targetFrame = xToFrame(relX);
+    
+    // Update timeline and player position
+    setCurrentFrame(targetFrame);
+    if (playerRef.current) {
+      playerRef.current.seekTo(targetFrame);
     }
-  }, [isDragging, durationInFrames]);
+  }, [isDragging, xToFrame, setCurrentFrame, playerRef]);
   
   // Frame-accurate player sync using rAF
   useEffect(() => {
@@ -239,6 +288,165 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
   const removeItem = useCallback((id: number) => {
     setItems(prevItems => prevItems.filter(item => item.id !== id));
   }, []);
+  
+  // Enhanced drag and drop functionality
+  const handleItemDragStart = useCallback((item: TimelineItemUnion, clientX: number, clientY: number, actionType: 'move' | 'resize-left' | 'resize-right') => {
+    // Set drag state
+    setIsDragging(true);
+    setInvalidDragOperation(false);
+    
+    // Map our action type to the expected dragType in DragInfo
+    const dragType = actionType;
+    
+    // Calculate pixels per frame for the current zoom level
+    const pxPerFrame = pixelsPerFrame;
+    
+    // Create drag info reference for tracking the operation
+    dragInfoRef.current = {
+      itemId: item.id,
+      dragType: dragType,
+      startX: clientX,
+      startFrame: item.from,
+      startDuration: item.durationInFrames,
+      startRow: item.row,
+      offsetX: 0,
+      pixelsPerFrame: pxPerFrame
+    };
+    
+    // Set up ghost element for visual feedback
+    setGhostPosition({
+      left: frameToX(item.from),
+      width: frameToX(item.durationInFrames) - frameToX(0),
+      row: item.row
+    });
+  }, [dragInfoRef, setIsDragging, setInvalidDragOperation, setGhostPosition, frameToX, pixelsPerFrame]);
+  
+  // Handle item dragging with enhanced position calculation
+  const handleItemDrag = useCallback((clientX: number, clientY: number) => {
+    if (!isDragging || !dragInfoRef.current || !timelineRef.current) return;
+    
+    const { 
+      itemId, 
+      dragType, 
+      startFrame, 
+      startDuration, 
+      startRow,
+      startX,
+      pixelsPerFrame: pxPerFrame
+    } = dragInfoRef.current;
+    
+    // Find the item being dragged
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    
+    // Calculate the current position based on drag type
+    let newFrame = startFrame;
+    let newDuration = startDuration;
+    let newRow = startRow;
+    
+    const timeline = timelineRef.current;
+    const rect = timeline.getBoundingClientRect();
+    
+    if (dragType === 'move') {
+      // Calculate horizontal drag distance and convert to frames
+      const dragDistanceX = clientX - startX;
+      const framesDragged = Math.round(dragDistanceX / pixelsPerFrame);
+      newFrame = Math.max(0, startFrame + framesDragged);
+      
+      // Ensure item doesn't go beyond timeline bounds
+      if (newFrame + newDuration > durationInFrames) {
+        newFrame = durationInFrames - newDuration;
+      }
+      
+      // Calculate new row based on vertical position
+      const relY = clientY - rect.top;
+      newRow = yToRow(relY);
+    }
+    else if (dragType === 'resize-left') {
+      // Resizing from start point (left edge)
+      const dragDistanceX = clientX - startX;
+      const framesDragged = Math.round(dragDistanceX / pixelsPerFrame);
+      
+      // Limit to ensure minimum duration
+      const maxFramesAdjustment = startDuration - minDuration;
+      const clampedFramesDragged = Math.max(-startFrame, Math.min(maxFramesAdjustment, framesDragged));
+      
+      newFrame = startFrame + clampedFramesDragged;
+      newDuration = startDuration - clampedFramesDragged;
+    }
+    else if (dragType === 'resize-right') {
+      // Resizing from end point (right edge)
+      const dragDistanceX = clientX - startX;
+      const framesDragged = Math.round(dragDistanceX / pixelsPerFrame);
+      
+      // Ensure minimum duration and that we don't exceed timeline bounds
+      newDuration = Math.max(minDuration, startDuration + framesDragged);
+      
+      // Don't extend beyond timeline duration
+      if (newFrame + newDuration > durationInFrames) {
+        newDuration = durationInFrames - newFrame;
+      }
+    }
+    
+    // Update the drag info with current values
+    dragInfoRef.current = {
+      ...dragInfoRef.current,
+      currentFrame: newFrame,
+      currentDuration: newDuration,
+      currentRow: newRow
+    };
+    
+    // Check for overlap to provide visual feedback
+    const draggedItem = { ...item, from: newFrame, durationInFrames: newDuration, row: newRow };
+    const overlaps = !validateOverlap(items, draggedItem);
+    setInvalidDragOperation(overlaps);
+    
+    // Update ghost element for visual feedback
+    setGhostPosition({
+      left: frameToX(newFrame),
+      width: frameToX(newDuration) - frameToX(0),
+      row: newRow
+    });
+  }, [isDragging, dragInfoRef, items, timelineRef, durationInFrames, minDuration, pixelsPerFrame, 
+      validateOverlap, setInvalidDragOperation, setGhostPosition, frameToX, yToRow]);
+  
+  // Handle drag end with validation
+  const handleItemDragEnd = useCallback(() => {
+    if (!isDragging || !dragInfoRef.current) {
+      setIsDragging(false);
+      setGhostPosition({ left: 0, width: 0 }); // Reset ghost position
+      return;
+    }
+    
+    const { 
+      itemId, 
+      currentFrame = dragInfoRef.current.startFrame, 
+      currentDuration = dragInfoRef.current.startDuration, 
+      currentRow = dragInfoRef.current.startRow 
+    } = dragInfoRef.current;
+    
+    // Reset UI state regardless of outcome
+    setIsDragging(false);
+    setGhostPosition({ left: 0, width: 0 }); // Reset ghost position
+    
+    // Find the item being dragged
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    
+    // Create updated item with new position
+    const updatedItem = { 
+      ...item, 
+      from: currentFrame, 
+      durationInFrames: currentDuration, 
+      row: currentRow 
+    };
+    
+    // Apply the update which will handle additional validation
+    updateItem(updatedItem);
+    
+    // Clear drag info
+    dragInfoRef.current = null;
+  }, [isDragging, dragInfoRef, items, updateItem, setIsDragging, setGhostPosition]);
   
   // Start and stop player sync loop
   const setIsPlaying = useCallback((playing: boolean) => {
@@ -508,6 +716,18 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     handleWheelZoom,
     handleTimelineClick,
     
+    // Timeline positioning utilities
+    pixelsPerFrame,
+    frameToX,
+    xToFrame,
+    rowToY,
+    yToRow,
+    
+    // Enhanced drag and drop functions
+    handleItemDragStart,
+    handleItemDrag,
+    handleItemDragEnd,
+    
     // New method for scene plan integration
     updateFromScenePlan,
   };
@@ -533,25 +753,118 @@ export const useTimeline = () => {
 /**
  * Custom hook for timeline zoom functionality
  * Wraps the zoom behavior from context in an easy-to-use interface
+ * with enhanced zoom precision and frame-focused zooming
  */
 export const useTimelineZoom = () => {
-  const { zoomLevel, setZoomLevel, scrollPosition, setScrollPosition, handleWheelZoom } = useTimeline();
+  const context = useTimeline();
+  if (!context) throw new Error('useTimelineZoom must be used within a TimelineProvider');
   
-  // Direct zoom methods
+  const { 
+    zoomLevel, 
+    setZoomLevel, 
+    scrollPosition, 
+    setScrollPosition, 
+    handleWheelZoom, 
+    durationInFrames,
+    timelineRef 
+  } = context;
+  
+  // Constants for zoom constraints
+  const ZOOM_CONSTRAINTS = {
+    min: 0.5,    // Minimum zoom level (zoomed out)
+    max: 5,      // Maximum zoom level (zoomed in)
+    default: 1,  // Default zoom level
+    step: 0.1,   // Standard zoom step
+  };
+  
+  // Direct zoom methods with improved behavior
   const zoomIn = useCallback(() => {
-    const newZoom = Math.min(5, zoomLevel + 0.1);
+    const newZoom = Math.min(ZOOM_CONSTRAINTS.max, zoomLevel + ZOOM_CONSTRAINTS.step);
+    
+    // Only update if actually changing
+    if (newZoom === zoomLevel) return;
+    
+    // Get current view center point before zooming
+    const timeline = timelineRef?.current;
+    if (!timeline) {
+      setZoomLevel(newZoom);
+      return;
+    }
+    
+    const viewportWidth = timeline.clientWidth;
+    const centerFramePosition = (scrollPosition + (viewportWidth / 2)) / (10 * zoomLevel);
+    
+    // Update zoom
     setZoomLevel(newZoom);
-  }, [zoomLevel, setZoomLevel]);
+    
+    // Adjust scroll to maintain center
+    const newScrollPosition = (centerFramePosition * 10 * newZoom) - (viewportWidth / 2);
+    setScrollPosition(Math.max(0, newScrollPosition));
+  }, [zoomLevel, setZoomLevel, timelineRef, scrollPosition, setScrollPosition]);
   
   const zoomOut = useCallback(() => {
-    const newZoom = Math.max(0.5, zoomLevel - 0.1);
+    const newZoom = Math.max(ZOOM_CONSTRAINTS.min, zoomLevel - ZOOM_CONSTRAINTS.step);
+    
+    // Only update if actually changing
+    if (newZoom === zoomLevel) return;
+    
+    // Get current view center point before zooming
+    const timeline = timelineRef?.current;
+    if (!timeline) {
+      setZoomLevel(newZoom);
+      return;
+    }
+    
+    const viewportWidth = timeline.clientWidth;
+    const centerFramePosition = (scrollPosition + (viewportWidth / 2)) / (10 * zoomLevel);
+    
+    // Update zoom
     setZoomLevel(newZoom);
-  }, [zoomLevel, setZoomLevel]);
+    
+    // Adjust scroll to maintain center
+    const newScrollPosition = (centerFramePosition * 10 * newZoom) - (viewportWidth / 2);
+    setScrollPosition(Math.max(0, newScrollPosition));
+  }, [zoomLevel, setZoomLevel, timelineRef, scrollPosition, setScrollPosition]);
   
   const resetZoom = useCallback(() => {
-    setZoomLevel(1);
+    setZoomLevel(ZOOM_CONSTRAINTS.default);
     setScrollPosition(0);
   }, [setZoomLevel, setScrollPosition]);
+  
+  // Focus the view on a specific frame with optimal zoom
+  const zoomToFrame = useCallback((frameNumber: number, customZoomLevel?: number) => {
+    const timeline = timelineRef?.current;
+    if (!timeline) return;
+    
+    // Use provided zoom level or calculate a reasonable default
+    const targetZoom = customZoomLevel || ZOOM_CONSTRAINTS.default * 1.5;
+    const newZoom = Math.max(ZOOM_CONSTRAINTS.min, Math.min(targetZoom, ZOOM_CONSTRAINTS.max));
+    
+    // Set the new zoom level
+    setZoomLevel(newZoom);
+    
+    // Center the view on the specified frame
+    const pixelsPerFrame = 10 * newZoom;
+    const frameOffset = frameNumber * pixelsPerFrame;
+    const viewportWidth = timeline.clientWidth;
+    
+    // Set scroll position to center the frame
+    const newScrollPosition = Math.max(0, frameOffset - (viewportWidth / 2));
+    setScrollPosition(newScrollPosition);
+  }, [timelineRef, setZoomLevel, setScrollPosition]);
+  
+  // Fit entire timeline in view
+  const fitView = useCallback(() => {
+    const timeline = timelineRef?.current;
+    if (!timeline || !durationInFrames) return;
+    
+    const viewportWidth = timeline.clientWidth;
+    const requiredWidth = durationInFrames * 10;
+    const fitZoom = Math.max(ZOOM_CONSTRAINTS.min, viewportWidth / requiredWidth);
+    
+    setZoomLevel(fitZoom);
+    setScrollPosition(0);
+  }, [timelineRef, durationInFrames, setZoomLevel, setScrollPosition]);
   
   return {
     zoomLevel,
@@ -560,6 +873,8 @@ export const useTimelineZoom = () => {
     zoomOut,
     resetZoom,
     handleWheelZoom,
+    zoomToFrame,
+    fitView,
   };
 };
 
