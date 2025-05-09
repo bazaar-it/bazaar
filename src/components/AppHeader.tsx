@@ -139,6 +139,17 @@ export default function AppHeader({
 
       {/* Right: User info & Render button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
+        <Button
+          variant="default"
+          size="sm"
+          className="gap-2"
+          onClick={onRender}
+          disabled={isRendering}
+        >
+          <DownloadIcon className="h-4 w-4" />
+          {isRendering ? "Exporting..." : "Export"}
+        </Button>
+        
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -166,16 +177,6 @@ export default function AppHeader({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        <Button
-          variant="default"
-          size="sm"
-          className="gap-2"
-          onClick={onRender}
-          disabled={isRendering}
-        >
-          <DownloadIcon className="h-4 w-4" />
-          {isRendering ? "Exporting..." : "Export"}
-        </Button>
       </div>
     </header>
   );

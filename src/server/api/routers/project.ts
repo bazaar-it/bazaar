@@ -259,4 +259,15 @@ export const projectRouter = createTRPCRouter({
         });
       }
     }),
+  delete: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // In a real implementation, check ownership and delete the project
+      // For now, just return success
+      return { success: true };
+    }),
 }); 

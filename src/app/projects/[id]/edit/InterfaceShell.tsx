@@ -6,7 +6,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Separator } from '~/components/ui/separator';
 import { Button } from '~/components/ui/button';
 import type { InputProps } from '~/types/input-props';
-import { ChatPanel, PreviewPanel } from "./panels";
+import { ChatPanel, PreviewPanel, FilesPanel } from "./panels";
 import TimelinePanel from "./panels/TimelinePanel";
 import Sidebar from "./Sidebar";
 import AppHeader from "~/components/AppHeader";
@@ -64,6 +64,14 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
   
   // Handle adding a panel from sidebar click
   const handleAddPanel = useCallback((panelType: string) => {
+    // Forward to the WorkspacePanels component if the ref is available
+    if (workspacePanelsRef.current) {
+      workspacePanelsRef.current.addPanel(panelType as any);
+    }
+  }, []);
+
+  // Handle panel button click from sidebar
+  const handlePanelButtonClick = useCallback((panelType: string) => {
     // Forward to the WorkspacePanels component if the ref is available
     if (workspacePanelsRef.current) {
       workspacePanelsRef.current.addPanel(panelType as any);
@@ -198,6 +206,7 @@ export default function InterfaceShell({ projectId, initialProps, initialProject
           onAddPanel={handleAddPanel}
           onPanelDragStart={handlePanelDragStart}
           onWidthChange={handleSidebarWidth}
+          onPanelButtonClick={handlePanelButtonClick}
         />
       </div>
 

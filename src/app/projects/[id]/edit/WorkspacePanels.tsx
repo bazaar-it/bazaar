@@ -9,6 +9,7 @@ import ChatPanel from './panels/ChatPanel';
 import PreviewPanel from './panels/PreviewPanel';
 import CodePanel from './panels/CodePanel';
 import UploadsPanel from './panels/UploadsPanel';
+import FilesPanel from './panels/FilesPanel';
 import TimelinePanel from './panels/TimelinePanel';
 import ProjectsPanel from './panels/ProjectsPanel';
 import { XIcon } from 'lucide-react';
@@ -21,6 +22,7 @@ const PANEL_COMPONENTS = {
   code: CodePanel,
   uploads: UploadsPanel,
   projects: ProjectsPanel,
+  files: FilesPanel,
 };
 
 const PANEL_LABELS = {
@@ -29,6 +31,7 @@ const PANEL_LABELS = {
   code: 'Code',
   uploads: 'Uploads',
   projects: 'Projects',
+  files: 'Files',
 };
 
 type PanelType = keyof typeof PANEL_COMPONENTS;
@@ -61,14 +64,15 @@ function SortablePanel({ id, children, style, className, onRemove }: {
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   
-  // Modified style to maintain visibility during dragging
+  // Improved style to maintain better visibility during dragging
   const mergedStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1, // Show at reduced opacity instead of hiding
-    zIndex: isDragging ? 10 : 1,
+    opacity: isDragging ? 0.9 : 1, // Increase opacity for better visibility
+    zIndex: isDragging ? 50 : 1, // Higher z-index to stay on top
     background: 'white',
-    boxShadow: isDragging ? '0 2px 8px rgba(0,0,0,0.12)' : undefined,
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.2)' : undefined, // More pronounced shadow
+    border: isDragging ? '2px solid #3b82f6' : undefined, // Add blue border when dragging
     height: '100%',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -78,23 +82,26 @@ function SortablePanel({ id, children, style, className, onRemove }: {
   // Special case for Code panel - don't add the header with X
   const isCodePanel = id === 'Code';
   
+  // Special case for Files panel - rename title from Projects to Files
+  const panelTitle = id === 'Projects' ? 'Files' : id;
+  
   return (
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-200 overflow-hidden ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
       {!isCodePanel && (
         <div 
-          className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 cursor-move"
+          className={`flex items-center justify-between px-3 py-2 border-b ${isDragging ? 'bg-blue-50' : 'bg-gray-50'} cursor-move`}
           {...attributes}
           {...listeners}
         >
-          <span className="font-medium text-sm">{id}</span>
+          <span className="font-medium text-sm">{panelTitle}</span>
           <button 
             onClick={onRemove} 
             className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
-            aria-label={`Close ${id} panel`}
+            aria-label={`Close ${panelTitle} panel`}
           >
             <XIcon className="h-4 w-4" />
           </button>
@@ -215,20 +222,20 @@ function DropZone({
   );
 }
 
-// Simplified drop animation for smoother transitions
+// Improve the drag overlay for better visual feedback
 const dropAnimationConfig: DropAnimation = {
   sideEffects: defaultDropAnimationSideEffects({
     styles: {
       active: {
-        opacity: '0.4',
+        opacity: '0.9', // Increased from 0.4 for better visibility
       },
     },
   }),
-  // Simpler keyframes without transform
-  keyframes() {
+  // Simpler keyframes with string transform values
+  keyframes({ transform }) {
     return [
-      { opacity: 0.4 },
-      { opacity: 1 }
+      { opacity: 0.9, transform: transform?.initial ? String(transform.initial) : undefined },
+      { opacity: 1, transform: 'translate3d(0, 0, 0)' }
     ];
   },
   easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
@@ -275,6 +282,7 @@ const WorkspacePanels = forwardRef<WorkspacePanelsHandle, WorkspacePanelsProps>(
       }
     }, []);
 
+    // Improve drag end handler to ensure smooth transitions
     const handleDragEnd = useCallback((event: DragEndEvent) => {
       setCurrentDraggedPanel(null);
       setActiveId(null);
@@ -286,7 +294,18 @@ const WorkspacePanels = forwardRef<WorkspacePanelsHandle, WorkspacePanelsProps>(
         setOpenPanels((panels) => {
           const oldIndex = panels.findIndex((p) => p.id === active.id);
           const newIndex = panels.findIndex((p) => p.id === over.id);
-          return arrayMove(panels, oldIndex, newIndex);
+          
+          // Use a more gentle animation transition for all panels
+          const newPanels = arrayMove(panels, oldIndex, newIndex);
+          
+          // Add a small delay to ensure smooth visual transition
+          setTimeout(() => {
+            document.querySelectorAll('.dragging').forEach(el => {
+              (el as HTMLElement).style.transition = 'all 0.25s ease';
+            });
+          }, 50);
+          
+          return newPanels;
         });
       }
     }, []);
@@ -380,6 +399,8 @@ const WorkspacePanels = forwardRef<WorkspacePanelsHandle, WorkspacePanelsProps>(
           return <CodePanel onClose={() => removePanel(panel.id)} />;
         case 'projects':
           return <ProjectsPanel projects={projects} currentProjectId={projectId} />;
+        case 'files':
+          return <FilesPanel projects={projects} currentProjectId={projectId} />;
         default:
           return null;
       }

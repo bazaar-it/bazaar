@@ -11,7 +11,7 @@ import {
   Code2Icon, 
   ChevronLeftIcon, 
   ChevronRightIcon, 
-  PlusIcon,
+  PlusIcon, 
   GanttChartIcon
 } from "~/components/ui/icons";
 import { Loader2 } from "lucide-react";
@@ -21,9 +21,8 @@ import { api } from "~/trpc/react";
 
 // Enhanced navItems with panel types for drag-and-drop
 const navItems = [
-  { label: "Projects", icon: FolderIcon, panelType: "projects" },
+  { label: "Files", icon: FolderIcon, panelType: "files" },
   { label: "Chat", icon: MessageSquareIcon, panelType: "chat" },
-  { label: "Uploads", icon: UploadIcon, panelType: "uploads" },
   { label: "Preview", icon: PlayIcon, panelType: "preview" },
   { label: "Code", icon: Code2Icon, panelType: "code" },
   { label: "Timeline", icon: GanttChartIcon, panelType: "timeline" },
@@ -89,7 +88,7 @@ export default function Sidebar({
     // Ensure minimum width of 170px and add slight buffer (+10px)
     return Math.max(170, Math.round(totalWidth + 10));
   }, []);
-
+  
   // Handler for creating a new project
   const handleCreateProject = async () => {
     if (isCreatingProject) return;
@@ -107,7 +106,7 @@ export default function Sidebar({
   const handlePanelButtonClick = (item: typeof navItems[0]) => {
     if (item.label === "Timeline") {
       onToggleTimeline?.();
-    } else if (item.panelType === "projects") {
+    } else if (item.panelType === "files") {
       setShowProjectsPanel(!showProjectsPanel);
       onPanelButtonClick?.(item.panelType);
     } else if (item.panelType) {
@@ -173,22 +172,29 @@ export default function Sidebar({
       
       {/* New Project Button */}
       <div className={`${collapsed ? 'flex items-center justify-center mt-5' : 'flex items-start px-4 mt-[20px]'}`}>
-        <Button
-          variant="ghost"
-          className={`h-11 w-11 flex items-center ${collapsed ? 'justify-center' : 'justify-start w-full'} rounded-full transition-all duration-200 hover:bg-gray-100`}
-          onClick={handleCreateProject}
-          disabled={isCreatingProject}
-          aria-label="New Project"
-        >
-          {isCreatingProject ? (
-            <Loader2 className="h-[34px] w-[34px] text-gray-500 animate-spin" />
-          ) : (
-            <PlusIcon className="h-[34px] w-[34px] text-gray-500" />
-          )}
-          {!collapsed && <span className="ml-3 text-sm font-normal whitespace-nowrap" style={{ fontFamily: 'system-ui' }}>{isCreatingProject ? "Creating..." : "New Project"}</span>}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className={`h-11 w-11 flex items-center ${collapsed ? 'justify-center' : 'justify-start w-full'} rounded-full transition-all duration-200 hover:bg-gray-100`}
+              onClick={handleCreateProject}
+              disabled={isCreatingProject}
+              aria-label="New Project"
+            >
+              {isCreatingProject ? (
+                <Loader2 className="h-[34px] w-[34px] text-gray-500 animate-spin" />
+              ) : (
+                <PlusIcon className="h-[34px] w-[34px] text-gray-500" />
+              )}
+              {!collapsed && <span className="ml-3 text-sm font-normal whitespace-nowrap" style={{ fontFamily: 'system-ui' }}>{isCreatingProject ? "Creating..." : "New Project"}</span>}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className={!collapsed ? 'hidden' : ''}>
+            {isCreatingProject ? "Creating..." : "New Project"}
+          </TooltipContent>
+        </Tooltip>
       </div>
-
+      
       {/* Tool icons only */}
       <nav className={`flex flex-col gap-2 flex-1 ${collapsed ? 'items-center' : 'items-start'} ${collapsed ? '' : 'px-4'}`}>
         {navItems.map((item) => (
@@ -197,7 +203,7 @@ export default function Sidebar({
                 <Button
                   variant="ghost"
                   className={`h-11 w-11 flex items-center ${collapsed ? 'justify-center' : 'justify-start w-full'} rounded-full transition-all duration-200 ${
-                    item.label === 'Projects' && showProjectsPanel ? 'bg-primary/10' : ''
+                    item.label === 'Files' && showProjectsPanel ? 'bg-primary/10' : ''
                   } hover:bg-gray-100 ${item.panelType ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   onClick={() => handlePanelButtonClick(item)}
                   draggable={!!item.panelType}
