@@ -733,7 +733,8 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
             placeholder={selectedSceneId 
               ? "Describe changes to this scene..." 
               : "Describe changes to your video..."}
-            className="flex-1"
+            className="flex-1 text-foreground"
+            style={{ color: "black" }}
             disabled={isStreaming || isLoadingMessages}
           />
           <Button 

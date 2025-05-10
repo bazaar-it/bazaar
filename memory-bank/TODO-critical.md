@@ -1,1 +1,12 @@
- 
+### 2. Fix Component Generation:
+- [x] **Debug Missing TSX Code Error:**
+  - [x] Added detailed logging to the build worker to diagnose why it thinks tsxCode is missing
+  - [x] Updated database query in buildCustomComponent.ts to explicitly request the tsxCode column
+  - [x] Implemented logging to track the data flow between component generation and build process
+- [ ] **Fix Animation Rendering:**
+  - [ ] Check for component references in window (window.__REMOTION_COMPONENT)
+  - [ ] Look for missing imports that might cause window.__REMOTION_COMPONENT not to be set
+  - [ ] Verify the dynamic loading mechanism in CustomScene.tsx
+- [ ] **Implement Asset Storage:**
+  - [ ] Verify asset R2 upload is working correctly
+  - [ ] Ensure component code has correct access to assets 

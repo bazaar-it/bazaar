@@ -784,7 +784,7 @@ export default function ScenePlanningHistoryPanel() {
   }
   
   return (
-    <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden bg-background">
+    <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden bg-white">
       {/* Image upload context */}
       <ContextDropZone onImagesChange={setUploadedImages} />
       {uploadedImages.length > 0 && (
@@ -800,15 +800,15 @@ export default function ScenePlanningHistoryPanel() {
           ))}
         </div>
       )}
-      <div className="p-4 border-b border-border bg-background">
+      <div className="p-4 border-b border-border bg-white">
         <h3 className="text-lg font-semibold text-foreground">Scene Planning History</h3>
         <p className="text-sm text-muted-foreground">
           See how your video ideas were broken down into scenes
         </p>
       </div>
-      <div className="flex-1 p-4 overflow-auto bg-background">
+      <div className="flex-1 p-4 overflow-auto bg-white text-foreground">
         {errorAlert && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+          <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-4">
             <div className="flex items-center">
               <AlertCircleIcon className="h-4 w-4 mr-2" />
               <strong className="font-bold mr-2">{errorAlert.title}</strong>
@@ -818,10 +818,10 @@ export default function ScenePlanningHistoryPanel() {
         )}
         {/* Scene Planning Progress Section - NEW */}
         {isOverallPlanningInProgress && (
-          <div className="p-4 bg-muted/30 border-b border-border">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
             <div className="flex items-center gap-2 mb-3">
               <Loader2Icon className="h-4 w-4 animate-spin text-primary" />
-              <h3 className="text-sm font-medium">Scene Planning in Progress</h3>
+              <h3 className="text-sm font-medium text-blue-800">Scene Planning in Progress</h3>
             </div>
             
             {(() => {
@@ -842,13 +842,13 @@ export default function ScenePlanningHistoryPanel() {
 
                 return (
                   <>
-                    <p className="text-sm">Planning {partialPlanInfo!.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo!.sceneCount} details received):</p>
+                    <p className="text-sm text-blue-700">Planning {partialPlanInfo!.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo!.sceneCount} details received):</p>
                     <div className="space-y-2">
                       {displayScenes.map((scene) => (
                         <div key={scene.key} className={`text-sm ${scene.isPlaceholder ? 'opacity-70' : ''}`}>
-                          <span className="font-medium">Scene {scene.number}:</span> {scene.description}
-                          {scene.durationInSeconds && <span className="text-xs text-muted-foreground"> ({scene.durationInSeconds}s)</span>}
-                          {scene.isPlaceholder && <Loader2Icon className="h-3 w-3 ml-2 flex-shrink-0 animate-spin text-muted-foreground" />}
+                          <span className="font-medium text-blue-900">Scene {scene.number}:</span> {scene.description}
+                          {scene.durationInSeconds && <span className="text-xs text-blue-600"> ({scene.durationInSeconds}s)</span>}
+                          {scene.isPlaceholder && <Loader2Icon className="h-3 w-3 ml-2 flex-shrink-0 animate-spin text-blue-500" />}
                         </div>
                       ))}
                     </div>
@@ -858,12 +858,12 @@ export default function ScenePlanningHistoryPanel() {
                 // Fallback: No sceneCount from LLM yet, but some scenes parsed (maintains previous behavior)
                 return (
                   <>
-                    <p className="text-sm">Planned scenes so far ({actualScenes.length}):</p>
+                    <p className="text-sm text-blue-700">Planned scenes so far ({actualScenes.length}):</p>
                     <div className="space-y-2">
                       {actualScenes.map((scene, i) => (
-                        <div key={`partial-scene-detail-${i}`} className="text-sm">
+                        <div key={`partial-scene-detail-${i}`} className="text-sm text-blue-800">
                           <span className="font-medium">Scene {i + 1}:</span> {scene.description}
-                          {scene.durationInSeconds && <span className="text-xs text-muted-foreground"> ({scene.durationInSeconds}s)</span>}
+                          {scene.durationInSeconds && <span className="text-xs text-blue-600"> ({scene.durationInSeconds}s)</span>}
                         </div>
                       ))}
                     </div>
@@ -872,7 +872,7 @@ export default function ScenePlanningHistoryPanel() {
               } else {
                 // Fallback: No sceneCount and no scenes parsed yet (generic message)
                 return (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-blue-700">
                     Our AI is breaking down your request into individual scenes and planning durations.
                     This may take a minute.
                   </p>
@@ -889,290 +889,201 @@ export default function ScenePlanningHistoryPanel() {
           <div key={`${plan.id}-${pIdx}`} className="mb-6 flex flex-col gap-2">
             {/* Header bubble */}
             <div
-              className="flex items-center gap-2 cursor-pointer"
               onClick={() => togglePlan(plan.id)}
+              className={`cursor-pointer rounded-[15px] shadow-sm px-4 py-3 flex justify-between items-center bg-gray-50 hover:bg-gray-100`}
             >
-              <div className="flex-1">
-                <div className="text-xs text-muted-foreground mb-1">
-                  {formatRelativeTime(plan.createdAt)} &bull; {plan.planData.sceneCount} scenes &bull; {plan.planData.totalDuration}s
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">Version {plan.planData?.fps === 30 ? 'o4-mini' : 'legacy'}</span>
+                  <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">✓ Complete</span>
                 </div>
-                <div className="font-medium text-foreground truncate">
-                  {plan.userPrompt}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {formatRelativeTime(plan.createdAt)}
+                </p>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                {expandedPlans[plan.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRegenerate(plan.id);
+                  }}
+                  size="sm"
+                  className="h-8 text-xs flex gap-1.5"
+                >
+                  <RefreshCwIcon className="h-3.5 w-3.5" />
+                  Regenerate
+                </Button>
+                <ChevronDown className={`h-5 w-5 transform transition-transform ${expandedPlans[plan.id] ? 'rotate-180' : ''}`} />
+              </div>
             </div>
+            
+            {/* Expanded content */}
             {expandedPlans[plan.id] && (
-              <div className="flex flex-col gap-4 mt-1">
-                {/* User Request bubble */}
-                <div className="rounded-xl bg-secondary text-foreground p-4 shadow-sm">
-                  <div className="text-xs font-medium mb-1 text-muted-foreground">User Request</div>
-                  <div className="whitespace-pre-line break-words text-sm">{plan.userPrompt}</div>
+              <div className="bg-white rounded-[15px] shadow-sm overflow-hidden">
+                {/* Scenes Section */}
+                <div className="text-foreground text-sm">
+                  {plan.planData?.scenes?.map((scene: ScenePlanScene, idx: number) => {
+                    // Get edited or original scene (if edited)
+                    const editedScene = editedScenes[scene.id] || {};
+                    const isEditing = editingSceneId === scene.id;
+                    const latestScene = {
+                      ...scene,
+                      ...editedScene,
+                    };
+                    
+                    const handleEditClick = () => {
+                      setEditingSceneId(scene.id);
+                      // Pre-populate edited values
+                      setEditedScenes({
+                        ...editedScenes,
+                        [scene.id]: {
+                          ...editedScenes[scene.id],
+                        },
+                      });
+                    };
+                    
+                    const handleSave = () => {
+                      setEditingSceneId(null);
+                      
+                      // Create JSON patches for edited fields
+                      if (!editedScenes[scene.id]) return;
+                        
+                      // Create patch ops for the changes to send to backend
+                      const patchOps: JsonPatch = [];
+                      
+                      // If description changed
+                      if (typeof editedScenes[scene.id]?.description === 'string') {
+                        patchOps.push({
+                          op: 'replace',
+                          path: `/scenes/${idx}/description`,
+                          value: editedScenes[scene.id]?.description,
+                        });
+                      }
+                      
+                      // If duration changed
+                      if (typeof editedScenes[scene.id]?.durationInSeconds === 'number') {
+                        patchOps.push({
+                          op: 'replace',
+                          path: `/scenes/${idx}/durationInSeconds`,
+                          value: editedScenes[scene.id]?.durationInSeconds,
+                        });
+                      }
+                      
+                      // Apply the patches locally via Zustand
+                      if (patchOps.length > 0) {
+                        applyPatch(patchOps);
+                      }
+                    };
+                    
+                    return (
+                      <div key={scene.id} className="mb-4 last:mb-0">
+                        {/* Render scene content */}
+                        <div className="bg-white p-4 rounded-lg border border-gray-100">
+                          {/* Scene Information Section */}
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold mb-2">Scene Information</h4>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Name:</div>
+                                <div className="font-medium">Scene {idx + 1}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Purpose:</div>
+                                <div>{latestScene.description}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Duration:</div>
+                                <div className="font-medium">{latestScene.durationInSeconds} frames</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground mb-1">Version:</div>
+                                <div>1.0</div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Design briefs section */}
+                          {briefsBySceneId[scene.id] && briefsBySceneId[scene.id]?.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-gray-100">
+                              <h4 className="text-sm font-semibold mb-2">Animation Design Briefs</h4>
+                              <div className="space-y-2">
+                                {briefsBySceneId[scene.id]?.map((brief) => (
+                                  <div key={brief.id} className="bg-gray-50 rounded-md p-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="text-xs font-medium">Model: {brief.llmModel}</span>
+                                      {renderBriefStatus(brief.status)}
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <button
+                                        onClick={() => toggleBrief(brief.id)}
+                                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                      >
+                                        {expandedBriefs[brief.id] ? 'Hide Details' : 'Show Details'}
+                                        <ChevronDown className={`h-3 w-3 transform transition-transform ${expandedBriefs[brief.id] ? 'rotate-180' : ''}`} />
+                                      </button>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleRegenerateBrief(scene.id)}
+                                        className="h-6 text-xs"
+                                      >
+                                        <RefreshCwIcon className="h-3 w-3 mr-1" />
+                                        Regenerate
+                                      </Button>
+                                    </div>
+                                    
+                                    {expandedBriefs[brief.id] && (
+                                      <div className="mt-2 pt-2 border-t border-gray-200">
+                                        {formatBriefContent(brief)}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="mt-4 flex justify-end gap-2">
+                            <Button 
+                              onClick={() => handleRegenerateBrief(scene.id)}
+                              size="sm"
+                              className="h-8 text-xs"
+                            >
+                              Generate Design Brief
+                            </Button>
+                            <Button
+                              type="button"
+                              onClick={handleEditClick}
+                              size="sm"
+                              className="h-8 text-xs"
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {/* LLM Reasoning + Context Tabs bubble */}
-                <div className="rounded-xl bg-secondary text-foreground p-4 shadow-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <button
-                      className={`text-xs font-medium px-2 py-1 rounded transition-colors ${tabSections[0] !== 'context' ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}
-                      onClick={() => setTabSections(['scenePlans'])}
-                    >LLM Reasoning</button>
-                    <button
-                      className={`text-xs font-medium px-2 py-1 rounded transition-colors ${tabSections[0] === 'context' ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}
-                      onClick={() => setTabSections(['briefs'])}
-                    >Context</button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 p-0 ml-auto" onClick={() => toggleSection(`${plan.id}-reasoning`)}>
-                      {expandedSections[`${plan.id}-reasoning`] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+
+                {/* Plan metadata section */}
+                <div className="border-t border-gray-100 p-4">
+                  <h4 className="text-xs font-semibold mb-2">Total Duration: {Math.round(plan.planData?.totalDuration || 0)}s at {plan.planData?.fps || 30} FPS</h4>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // Apply this scene plan to the timeline
+                        updateFromScenePlan(plan.planData);
+                        setLatestPlan(plan.id);
+                      }}
+                      className="text-xs h-8 flex items-center gap-1"
+                    >
+                      <PlayIcon className="h-3 w-3" />
+                      Apply to Timeline
                     </Button>
                   </div>
-                  {expandedSections[`${plan.id}-reasoning`] && (
-                    <>
-                      {tabSections[0] === 'context' ? (
-                        <ContextDropZone onImagesChange={setUploadedImages} />
-                      ) : (
-                        <div className="whitespace-pre-line break-words text-sm">{plan.planData.reasoning}</div>
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* Scenes bubble */}
-                <div className="rounded-xl bg-secondary text-foreground p-4 shadow-sm">
-                  <div className="text-xs font-medium mb-2 text-muted-foreground">Scenes</div>
-                   <div className="flex flex-col gap-3">
-                    {/* Scene editing state is managed at the component level */}
-                    {plan.planData.scenes.map((scene, idx) => {
-                      const isEditing = editingSceneId === scene.id;
-                      const editedScene = editedScenes[scene.id] || scene;
-                      
-                      // Check if this scene has any animation briefs
-                      const sceneBriefs = briefsBySceneId[scene.id] || [];
-                      const hasAnimationBriefs = sceneBriefs.length > 0;
-
-                      const handleEditClick = () => {
-                        setEditingSceneId(scene.id);
-                        setEditedScenes(prev => ({
-                          ...prev,
-                          [scene.id]: {
-                            id: scene.id,
-                            description: scene.description,
-                            durationInSeconds: scene.durationInSeconds,
-                            effectType: scene.effectType,
-                          }
-                        }));
-                      };
-
-                      const handleSave = () => {
-                        setEditingSceneId(null);
-                        // Optionally: persist editedScenes[scene.id] to backend here
-                      };
-
-                      return (
-                        <div
-                          key={`${plan.id}-${scene.id}-${idx}`}
-                          className="mx-4 my-3 bg-white border-gray-100 border rounded-[15px] shadow-sm p-3"
-                          onDragOver={e => e.preventDefault()}
-                          onDrop={e => {
-                            e.preventDefault();
-                            const imageId = e.dataTransfer.getData('imageId');
-                            const img = uploadedImages.find(i => i.id === imageId);
-                            if (img) {
-                              setSceneImages(prev => ({
-                                ...prev,
-                                [scene.id]: [...(prev[scene.id] || []), img],
-                              }));
-                            }
-                          }}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            {!isEditing ? (
-                              <>
-                                <span className="font-medium text-sm">Scene {idx + 1}: {scene.effectType}</span>
-                                <div className="flex gap-2 items-center">
-                                  <span className="text-xs text-muted-foreground">Duration: {scene.durationInSeconds}s</span>
-                                  <button className="ml-2 text-xs text-blue-500 underline" onClick={handleEditClick}>Edit</button>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <input
-                                  className="font-medium text-sm border rounded px-1 py-0.5 mr-2 w-32"
-                                  value={editedScene.effectType || ''}
-                                  onChange={e => setEditedScenes(prev => ({
-                                    ...prev,
-                                    [scene.id]: { ...editedScene, effectType: e.target.value }
-                                  }))}
-                                  placeholder="Type"
-                                />
-                                <input
-                                  className="text-xs border rounded px-1 py-0.5 w-20 mr-2"
-                                  type="number"
-                                  value={editedScene.durationInSeconds || 0}
-                                  onChange={e => setEditedScenes(prev => ({
-                                    ...prev,
-                                    [scene.id]: { ...editedScene, durationInSeconds: Number(e.target.value) }
-                                  }))}
-                                  placeholder="Duration"
-                                  min={1}
-                                />
-                                <button className="text-xs text-green-600 underline" onClick={handleSave}>Save</button>
-                              </>
-                            )}
-                          </div>
-                          {!isEditing ? (
-                            <div className="text-sm whitespace-pre-line">{scene.description}</div>
-                          ) : (
-                            <textarea
-                              className="text-sm border rounded px-1 py-0.5 w-full"
-                              value={editedScene.description || ''}
-                              onChange={e => setEditedScenes(prev => ({
-                                ...prev,
-                                [scene.id]: { ...editedScene, description: e.target.value }
-                              }))}
-                              rows={2}
-                            />
-                          )}
-                          
-                          {/* Animation Design Briefs Section */}
-                          {hasAnimationBriefs && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <div 
-                                className="flex items-center justify-between cursor-pointer"
-                                onClick={() => toggleSection(`brief-${scene.id}`)}
-                              >
-                                <span className="text-xs font-medium">Animation Design Briefs</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
-                                  {expandedSections[`brief-${scene.id}`] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </Button>
-                              </div>
-                              
-                              {expandedSections[`brief-${scene.id}`] && (
-                                <div className="mt-2 space-y-2">
-                                  {sceneBriefs.map((brief) => (
-                                    <div 
-                                      key={brief.id} 
-                                      className="bg-muted/50 rounded p-2 text-xs"
-                                    >
-                                      <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium">Version {brief.llmModel}</span>
-                                          {renderBriefStatus(brief.status)}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-6 w-6 p-0"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              toggleBrief(brief.id);
-                                            }}
-                                          >
-                                            {expandedBriefs[brief.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="text-xs text-muted-foreground mb-1">
-                                        Created {formatRelativeTime(new Date(brief.createdAt))}
-                                      </div>
-                                      
-                                      {expandedBriefs[brief.id] && (
-                                        <div className="mt-2 bg-background p-2 rounded overflow-x-auto">
-                                          {formatBriefContent(brief)}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                  
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="w-full mt-2"
-                                    disabled={regenerateBriefMutation.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRegenerateBrief(scene.id);
-                                    }}
-                                  >
-                                    {regenerateBriefMutation.isPending ? (
-                                      <>
-                                        <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
-                                        Regenerating...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <RefreshCwIcon className="h-3 w-3 mr-1" />
-                                        Regenerate Animation Brief
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                          
-                          {/* If no animation briefs yet, show a button to generate one */}
-                          {!hasAnimationBriefs && (
-                            <div className="mt-3 pt-2 border-t border-gray-100">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="w-full mt-1"
-                                disabled={regenerateBriefMutation.isPending}
-                                onClick={() => handleRegenerateBrief(scene.id)}
-                              >
-                                {regenerateBriefMutation.isPending ? (
-                                  <>
-                                    <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
-                                    Generating...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCwIcon className="h-3 w-3 mr-1" />
-                                    Generate Animation Brief
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                          
-                          {/* Attached images */}
-                          {sceneImages[scene.id]?.map(img => (
-                            <div key={img.id} className="flex flex-col items-center">
-                              <img src={img.url} className="h-10 w-10 object-cover rounded-[8px] shadow-sm" />
-                              {(analyzingImg[img.id] ?? false) && <Loader2Icon className="animate-spin mt-1 h-4 w-4" />}
-                              {(imageTags[img.id]?.length ?? 0) > 0 && (
-                                <div className="text-xs mt-1">{imageTags[img.id]?.join(', ')}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                    <div className="flex justify-end mt-2 gap-2">
-                      <Button 
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-1"
-                        onClick={() => console.log('Apply plan to timeline clicked - TBD')}
-                      >
-                        <PlayIcon size={14} />
-                        <span>Apply to Timeline</span>
-                      </Button>
-                      
-                      <button
-                        onClick={() => handleRegenerate(plan.id)}
-                        className="bg-muted/80 px-4 py-2 w-24 rounded-[15px] text-xs border border-gray-100 shadow-sm hover:bg-muted transition-colors"
-                      >
-                        Regenerate
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                {/* Total Duration bubble */}
-                <div className="rounded-[15px] bg-gray-50 text-muted-foreground text-xs p-3 text-right shadow-sm">
-                  Total Duration: {plan.planData.totalDuration}s at {plan.planData.fps} FPS
                 </div>
               </div>
             )}

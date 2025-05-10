@@ -149,6 +149,28 @@ async function processJob(jobId: string): Promise<void> {
       // Get the job details
       const job = await db.query.customComponentJobs.findFirst({
         where: eq(customComponentJobs.id, jobId),
+        columns: {
+          id: true,
+          status: true,
+          tsxCode: true,  // Explicitly selecting tsxCode
+          metadata: true,
+          projectId: true,
+          effect: true,
+          outputUrl: true,
+          errorMessage: true,
+          retryCount: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+      
+      // Add diagnostic logging to check the fetched job
+      buildLogger.start(jobId, "Fetched job data for build", {
+        jobId: job?.id,
+        status: job?.status,
+        hasTsxCodeInFetchedRecord: !!job?.tsxCode,
+        tsxCodeLengthInFetchedRecord: job?.tsxCode?.length ?? 0,
+        metadata: job?.metadata ? JSON.stringify(job.metadata).substring(0, 100) + '...' : null
       });
       
       if (!job) {
@@ -165,6 +187,9 @@ async function processJob(jobId: string): Promise<void> {
 
       // Check if tsxCode is available (it could be null after schema change)
       if (!job.tsxCode) {
+        buildLogger.error(jobId, "TSX code field is indeed null/undefined in the fetched job record", {
+          jobFields: Object.keys(job).join(', ')
+        });
         throw new Error("TSX code is missing for this job");
       }
       
@@ -535,6 +560,28 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     // Get the component job data
     const job = await db.query.customComponentJobs.findFirst({
       where: eq(customComponentJobs.id, jobId),
+      columns: {
+        id: true,
+        status: true,
+        tsxCode: true,  // Explicitly selecting tsxCode
+        metadata: true,
+        projectId: true,
+        effect: true,
+        outputUrl: true,
+        errorMessage: true,
+        retryCount: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    // Add diagnostic logging for buildCustomComponent
+    buildLogger.start(jobId, "Fetched job data for buildCustomComponent", {
+      jobId: job?.id,
+      status: job?.status,
+      hasTsxCode: !!job?.tsxCode,
+      tsxCodeLength: job?.tsxCode?.length ?? 0,
+      metadataKeys: job?.metadata ? Object.keys(job.metadata) : null
     });
 
     if (!job) {
