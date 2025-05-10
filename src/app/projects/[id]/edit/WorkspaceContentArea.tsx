@@ -510,7 +510,7 @@ const WorkspaceContentArea = forwardRef<WorkspaceContentAreaHandle, WorkspaceCon
 
     // Render with panels
     return (
-      <div className="h-full w-full relative">
+      <div className="h-full w-full relative bg-white dark:bg-gray-900">
         <PanelGroup direction="vertical" className="h-full">
           <Panel minSize={50} className="w-full">
             <DndContext 

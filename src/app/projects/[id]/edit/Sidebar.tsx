@@ -205,37 +205,16 @@ function CustomComponentsSidebar({ isCollapsed, projectId }: { isCollapsed: bool
 
   return (
     <div className="h-full flex flex-col">
-      {/* Enhanced header with improved styling */}
-      <div className={`flex items-center justify-between px-2 py-2 ${isCollapsed ? 'justify-center' : ''}`}>
-        <h3 className={`text-xs font-semibold text-gray-500 uppercase tracking-wide ${isCollapsed ? 'sr-only' : ''}`}>
-          Components
-        </h3>
-        {!isCollapsed && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-6 w-6 p-0 rounded-[15px] hover:bg-gray-300"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
-            {isExpanded ? (
-              <ChevronUpIcon className="h-4 w-4 text-gray-400" />
-            ) : (
-              <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-            )}
-          </Button>
-        )}
-      </div>
-      
-      {/* Enhanced search with modern styling */}
-      {isExpanded && !isCollapsed && (
-        <div className="px-2 py-1">
+      {/* Search input */}
+      {!isCollapsed && (
+        <div className="mb-2">
           <div className="relative">
-            <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+            <SearchIcon className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
             <Input
               placeholder="Search components..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 text-xs rounded-[15px] border-gray-300 bg-gray-200 focus:ring-1 focus:ring-primary/30 shadow-sm"
+              className="h-8 pl-8 text-xs rounded-lg border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 focus:ring-1 focus:ring-primary/30 shadow-sm"
             />
             {searchQuery && (
               <Button
@@ -244,102 +223,105 @@ function CustomComponentsSidebar({ isCollapsed, projectId }: { isCollapsed: bool
                 className="absolute right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0"
                 onClick={() => setSearchQuery("")}
               >
-                <TrashIcon className="h-3 w-3 text-gray-400" />
+                <TrashIcon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
               </Button>
             )}
           </div>
           <div className="flex justify-between items-center mt-1">
-            <span className="text-xs text-gray-500">{filteredComponents.length} components</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{filteredComponents.length} components</span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 rounded-[15px] hover:bg-gray-300"
+              className="h-6 w-6 p-0 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
               onClick={() => refetch()}
             >
-              <RefreshCwIcon className="h-3.5 w-3.5 text-gray-400" />
+              <RefreshCwIcon className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
             </Button>
           </div>
         </div>
       )}
       
-      {/* Components list with enhanced styling */}
+      {/* Components list */}
       <div className={`flex-1 overflow-auto ${isExpanded ? '' : 'hidden'}`}>
         {isLoading ? (
           <div className="flex justify-center items-center h-20">
-            <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+            <Loader2 className="h-5 w-5 text-gray-500 dark:text-gray-400 animate-spin" />
           </div>
         ) : filteredComponents.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-20 px-3 text-center">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {searchQuery ? "No matching components" : "No custom components yet"}
             </span>
           </div>
         ) : (
-          filteredComponents.map((component) => (
-            <div 
-              key={component.id}
-              className="flex items-center gap-2 p-2 hover:bg-gray-200 transition-colors rounded-[15px] mx-2 my-1 group cursor-pointer border border-gray-100 shadow-sm"
-              onClick={() => handleAddToVideo(component)}
-            >
-              {/* Component icon/thumbnail */}
-              <div className="flex-shrink-0 h-9 w-9 bg-gray-300 rounded-[15px] flex items-center justify-center overflow-hidden">
-                {component.outputUrl ? (
-                  <img 
-                    src={component.outputUrl} 
-                    alt={component.effect} 
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Code2Icon className="h-5 w-5 text-gray-500" />
+          <div className="space-y-1">
+            {filteredComponents.map((component) => (
+              <div 
+                key={component.id}
+                className="flex items-center gap-2 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 rounded-lg cursor-pointer"
+                onClick={() => handleAddToVideo(component)}
+              >
+                {/* Component icon/thumbnail */}
+                <div className="flex-shrink-0 h-9 w-9 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                  {component.outputUrl ? (
+                    <img 
+                      src={component.outputUrl} 
+                      alt={component.effect} 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Code2Icon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  )}
+                </div>
+                
+                {/* Component name and actions */}
+                {!isCollapsed && (
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="text-xs font-medium truncate text-gray-700 dark:text-gray-300">{component.effect}</span>
+                    
+                    {/* Render status indicator when needed */}
+                    <CustomComponentStatus 
+                      componentId={component.id} 
+                      onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl || undefined)}
+                    />
+                  </div>
+                )}
+
+                {/* Actions menu */}
+                {!isCollapsed && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                          <MoreVerticalIcon className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          handleRenameClick(component);
+                        }}
+                        className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700">
+                          <EditIcon className="mr-2 h-3.5 w-3.5" />
+                          <span>Rename</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(component);
+                          }}
+                        >
+                          <TrashIcon className="mr-2 h-3.5 w-3.5" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 )}
               </div>
-              
-              {/* Component name and actions with improved styling */}
-              {!isCollapsed && (
-                <div className="flex-1 min-w-0 flex flex-col">
-                  <span className="text-xs font-medium truncate text-gray-900">{component.effect}</span>
-                  
-                  {/* Render status indicator when needed */}
-                  <CustomComponentStatus 
-                    componentId={component.id} 
-                    onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl || undefined)}
-                  />
-                </div>
-              )}
-
-              {/* Actions menu with improved animation and styling */}
-              {!isCollapsed && (
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full shadow-sm hover:bg-gray-300">
-                        <MoreVerticalIcon className="h-3.5 w-3.5 text-gray-700" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-md shadow-md border border-gray-300 bg-white">
-                      <DropdownMenuItem onClick={(e) => {
-                        e.stopPropagation();
-                        handleRenameClick(component);
-                      }}>
-                        <EditIcon className="mr-2 h-3.5 w-3.5" />
-                        <span>Rename</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClick(component);
-                        }}
-                      >
-                        <TrashIcon className="mr-2 h-3.5 w-3.5" />
-                        <span>Delete</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     
@@ -388,19 +370,10 @@ export default function Sidebar({
     }
   }, [onToggleCollapse]);
   
-  // Calculate approx sidebar width based on the longest project name
+  // Calculate sidebar width based on collapsed state
   const sidebarWidth = useMemo(() => {
-    if (isCollapsed) return 58; // collapsed width
-    
-    // Find longest project name
-    const longestName = projects?.reduce((longest, current) => 
-      current.name.length > longest.length ? current.name : longest, ""
-    ) || "";
-    
-    // Calculate width: icon (40px) + padding (24px) + text width (approx 8px per char) + buffer (40px)
-    const width = Math.max(240, 40 + 24 + (longestName.length * 8) + 40);
-    return Math.min(width, 320); // cap at 320px max
-  }, [isCollapsed, projects]);
+    return isCollapsed ? '3rem' : '10rem'; // 3rem (collapsed) / 10rem (expanded)
+  }, [isCollapsed]);
   
   // Handle dragging panel icons from sidebar
   const handleDragStart = (e: React.DragEvent, panelType: PanelType) => {
@@ -442,72 +415,99 @@ export default function Sidebar({
     }
   };
 
+  // Filter navItems to only show preview and chat
+  const visibleNavItems = navItems.filter(item => 
+    item.type === 'preview' || item.type === 'chat'
+  );
+
   return (
     <TooltipProvider>
       <aside 
-        className={`flex flex-col h-full bg-white border border-gray-200 shadow-sm rounded-[15px] transition-all duration-200 ${isCollapsed ? 'items-center' : ''}`}
+        className={`flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-lg transition-all duration-200 ease-linear ${isCollapsed ? 'items-center' : 'items-start'}`}
         style={{ 
-          width: `${sidebarWidth}px`, 
-          maxWidth: '100%',
-          position: 'relative'
+          width: sidebarWidth,
+          maxWidth: isCollapsed ? '3rem' : '10rem',
+          minWidth: isCollapsed ? '3rem' : '10rem',
+          paddingTop: '25px',
+          paddingLeft: '10px',
+          paddingRight: isCollapsed ? '10px' : '20px' // More padding on right when expanded for text
         }}
       >
-        {/* Collapse/Expand button with improved styling */}
+        {/* Collapse/Expand button with improved styling - reduced padding and moved higher */}
         <button
-          className="absolute -right-4 top-4 z-10 bg-white border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-100 transition-all duration-200 shadow-md"
+          className="absolute -right-3 top-2 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
           onClick={toggleCollapse}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? (
-            <ChevronRightIcon className="h-4 w-4 text-gray-700" />
+            <ChevronRightIcon className="h-3 w-3 text-gray-700 dark:text-gray-300" />
           ) : (
-            <ChevronLeftIcon className="h-4 w-4 text-gray-700" />
+            <ChevronLeftIcon className="h-3 w-3 text-gray-700 dark:text-gray-300" />
           )}
         </button>
 
-        {/* New Project Button with enhanced styling */}
-        <div className={`mt-4 ${isCollapsed ? 'mx-auto' : 'px-3'}`}>
+        {/* New Project Button with enhanced styling - aligned left when expanded */}
+        <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
           {isCollapsed ? (
             <Button
-              className="h-11 w-11 rounded-[15px] flex items-center justify-center"
-              variant="default"
+              className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              variant="ghost"
               onClick={() => {
                 router.push('/projects/new');
               }}
             >
-              <PlusIcon className="h-5 w-5" />
+              <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
             </Button>
           ) : (
-            <NewProjectButton
-              className="h-11 w-full justify-start rounded-[15px] text-sm font-normal text-gray-900"
-              variant="default"
-              showIcon={true}
-            />
+            <Button 
+              className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              variant="ghost"
+              onClick={() => {
+                router.push('/projects/new');
+              }}
+            >
+              <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3" />
+              <span className="text-sm font-normal">New Project</span>
+            </Button>
           )}
         </div>
 
-        {/* Panel Navigation with draggable items */}
-        <nav className={`flex flex-col ${isCollapsed ? 'items-center mt-3' : 'px-3 mt-3'} space-y-1`}>
-          {navItems.map((item) => (
+        {/* Panel Navigation with only Preview and Chat visible - aligned left when expanded */}
+        <nav className={`flex flex-col w-full mt-3 gap-3 ${isCollapsed ? 'items-center' : ''}`}>
+          {visibleNavItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
-                <div
-                  className={`h-11 ${isCollapsed ? 'w-11 justify-center' : 'w-full'}`}
-                  draggable={item.type !== 'timeline'}
-                  onDragStart={(e) => handleDragStart(e, item.type)}
-                  onDragEnd={handleDragEnd}
-                >
-                  <Button 
-                    variant="ghost"
-                    className={`h-full w-full ${isCollapsed ? 'justify-center' : 'justify-start'} rounded-[15px] transition-all duration-200 hover:bg-gray-300 ${item.type === 'timeline' && timelineActive ? 'bg-primary/20' : 'bg-gray-200'} border border-gray-100 shadow-sm`}
-                    onClick={() => handlePanelClick(item.type)}
-                    data-panel-type={item.type}
-                  >
-                    <item.icon className={`h-5 w-5 ${item.type === 'timeline' && timelineActive ? 'text-primary' : 'text-gray-600'} ${isCollapsed ? '' : 'mr-3'}`} />
-                    {!isCollapsed && (
-                      <span className={`text-sm font-normal ${item.type === 'timeline' && timelineActive ? 'text-primary' : 'text-gray-900'}`}>{item.name}</span>
-                    )}
-                  </Button>
+                <div className={`flex ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
+                  {isCollapsed ? (
+                    <Button 
+                      variant="ghost"
+                      className="h-9 w-9 rounded-lg flex items-center justify-center transition-all duration-200 
+                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 
+                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                      onClick={() => handlePanelClick(item.type)}
+                      data-panel-type={item.type}
+                      draggable={item.type !== 'timeline'}
+                      onDragStart={(e) => handleDragStart(e, item.type)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="ghost"
+                      className="h-9 w-full flex items-center justify-start rounded-lg transition-all duration-200 
+                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800
+                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                      onClick={() => handlePanelClick(item.type)}
+                      data-panel-type={item.type}
+                      draggable={item.type !== 'timeline'}
+                      onDragStart={(e) => handleDragStart(e, item.type)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3" />
+                      <span className="text-sm font-normal">{item.name}</span>
+                    </Button>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right" className={!isCollapsed ? 'hidden' : ''}>
@@ -517,73 +517,25 @@ export default function Sidebar({
           ))}
         </nav>
 
-        {/* Timeline is now handled in the main navigation */}
+        {/* Separator */}
+        <div className="flex-grow"></div>
 
-      {/* Project List Section (Commented out as it's redundant with the Projects Panel) */}
-      {/* 
-      <div className="mt-6 mb-2">
-        <div 
-          className={`flex items-center justify-between ${isCollapsed ? 'justify-center mx-auto' : 'px-4'} py-1 cursor-pointer hover:bg-gray-300 bg-gray-200 rounded-[15px] transition-colors border border-gray-100 shadow-sm`}
-          onClick={() => setProjectsExpanded(!projectsExpanded)}
-        >
-          <span className={`font-medium text-xs text-gray-500 uppercase tracking-wide ${isCollapsed ? 'sr-only' : ''}`}>
-            Project List
-          </span>
-          {!isCollapsed && (
-            projectsExpanded ? 
-              <ChevronUpIcon className="h-4 w-4 text-gray-400" /> : 
-              <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-          )}
+        {/* Enhanced Custom Components Section - TEMPORARILY HIDDEN */}
+        {/* 
+        <div className="border-t border-gray-200 dark:border-gray-800 mt-2">
+          <div className={`p-2 ${isCollapsed ? 'px-1' : ''}`}>
+            <div className="flex items-center justify-between mb-2">
+              {!isCollapsed && (
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Components
+                </h3>
+              )}
+            </div>
+            <CustomComponentsSidebar isCollapsed={isCollapsed} projectId={currentProjectId} />
+          </div>
         </div>
-      </div>
-
-      {projectsExpanded && (
-        <nav className={`overflow-y-auto ${isCollapsed ? 'px-0' : 'px-3'} py-1 space-y-1 max-h-[30vh]`}>
-          {projects.map((project) => (
-            <Tooltip key={project.id}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={`/projects/${project.id}/edit`}
-                  scroll={false}
-                  replace={true}
-                  prefetch={true}
-                  className={`flex items-center gap-2 rounded-[15px] px-3 py-2 text-sm transition-colors whitespace-nowrap ${
-                    project.id === currentProjectId
-                      ? "bg-gray-300 text-gray-900 font-medium border border-gray-100 shadow-sm"
-                      : "bg-gray-200 hover:bg-gray-300 text-gray-800 border border-gray-100 shadow-sm"
-                  } ${isCollapsed ? 'justify-center w-10 h-10 mx-auto' : 'w-full'} cursor-pointer`}
-                  onClick={(e) => {
-                    // Prevent navigation if this is the current project
-                    if (project.id === currentProjectId) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  <ListIcon className="h-5 w-5 shrink-0" />
-                  {!isCollapsed && (
-                    <span
-                      className="truncate transition-all duration-200"
-                      style={{ maxWidth: 160 }}
-                    >
-                      {project.name}
-                    </span>
-                  )}
-                </Link>
-              </TooltipTrigger>
-              {isCollapsed && <TooltipContent side="right">{project.name}</TooltipContent>}
-            </Tooltip>
-          ))}
-        </nav>
-      )
-      */}
-
-      {/* Enhanced Custom Components Section with better styling */}
-      <div className="flex-1 overflow-auto border-t mt-4">
-        <div className={`${isCollapsed ? 'px-1' : 'px-3'} py-3`}>
-          <CustomComponentsSidebar isCollapsed={isCollapsed} projectId={currentProjectId} />
-        </div>
-      </div>
-    </aside>
-  </TooltipProvider>
+        */}
+      </aside>
+    </TooltipProvider>
   );
 }

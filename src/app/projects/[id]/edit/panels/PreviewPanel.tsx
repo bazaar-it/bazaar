@@ -8,7 +8,6 @@ import { useVideoState } from '~/stores/videoState';
 import { useTimeline } from '~/components/client/Timeline/TimelineContext';
 import type { InputProps } from '~/types/input-props';
 import { api } from '~/trpc/react';
-import DebugTimelineOverlay from '~/components/client/Preview/DebugTimelineOverlay';
 
 export default function PreviewPanel({ 
   projectId, 
@@ -30,9 +29,6 @@ export default function PreviewPanel({
   
   // Reference to the Remotion player
   const playerRef = useRef<PlayerRef>(null);
-  
-  // Debug mode toggle - IMPORTANT: must be before any conditionals to comply with React's Rules of Hooks
-  const [debugMode, setDebugMode] = useState(true);
 
   // Poll backend for updated project every second to reflect server-side patches
   const { data: projectData } = api.project.getById.useQuery(
@@ -80,28 +76,15 @@ export default function PreviewPanel({
 
   if (!inputProps) {
     return (
-      <div className="flex flex-col h-full items-center justify-center p-8">
+      <div className="flex flex-col h-full items-center justify-center bg-white dark:bg-gray-900">
         <div className="animate-pulse text-xl text-muted-foreground">Loading video preview...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100">
-        <div>
-          <h2 className="text-lg font-medium">Preview</h2>
-          <p className="text-sm text-muted-foreground">Video preview</p>
-        </div>
-        <button 
-          onClick={() => setDebugMode(!debugMode)}
-          className="text-xs px-2 py-1 rounded-[15px] bg-gray-100 hover:bg-gray-200 transition-colors shadow-sm"
-        >
-          {debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
-        </button>
-      </div>
-      
-      <div className="flex-1 rounded-[15px] shadow-sm overflow-hidden relative p-3">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+      <div className="flex-1 overflow-hidden relative">
         <Player
           ref={playerRef}
           component={DynamicVideo}
@@ -110,16 +93,13 @@ export default function PreviewPanel({
           compositionWidth={1280}
           compositionHeight={720}
           inputProps={inputProps}
-          style={{ width: '100%', height: 'auto', aspectRatio: '16/9', borderRadius: '12px' }}
+          style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }}
           controls
           autoPlay
           loop
           initialFrame={currentFrame}
           renderLoading={() => <div className="flex items-center justify-center h-full"><div className="text-sm text-muted-foreground animate-pulse">Loading...</div></div>}
         />
-        
-        {/* Debug overlay */}
-        {debugMode && <DebugTimelineOverlay projectId={projectId} />}
       </div>
     </div>
   );
