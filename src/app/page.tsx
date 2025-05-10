@@ -72,24 +72,19 @@ export default function HomePage() {
   
   // Example prompts for rotation
   const examplePrompts = [
-    "a crypto portfolio tracker with real-time alerts",
-    "a voice-to-slide presentation generator",
-    "a collaborative whiteboard for remote teams",
-    "a mobile habit tracker with streak rewards",
-    "a personal finance app for freelancers",
-    "a no-code form builder for customer onboarding",
-    "a SaaS dashboard for e-commerce analytics",
-    "a Chrome extension that summarizes articles",
-    "a calendar app that schedules based on energy levels",
-    "a startup pitch deck tool with AI voiceovers",
-    "a social media planner with auto-generated captions",
-    "an app that turns voice notes into structured tasks",
-    "a tool for editing videos using text commands",
-    "a marketplace for AI-generated UI components"
+    "a scene where bold white text saying 'Launch Day' pulses over a shifting pink-to-purple gradient with sparkles trailing off",
+    "a scene with a dark terminal-style background and green monospaced code being typed out line-by-line, Matrix-style",
+    "a product feature appearing one by one in 3D-style cards that fade in and float upward with a spring motion",
+    "a scene that zooms into a phone screen while a hand scrolls through an app, with UI elements bouncing softly",
+    "a typewriter-style text effect introducing 'Introducing FlowSync', with a glitch transition revealing the app logo",
+    "a looping animation of fireworks exploding in sync with sound pulses on a midnight blue background",
+    "a scene where 3 floating avatars rotate in 3D space while chat bubbles fade in above them",
+    "a kinetic typography scene where the phrase 'Speed. Style. Simplicity.' slams onto the screen in sync with bass hits",
+    "a scene with a sunrise horizon behind mountains, as the product name rises with the sun using smooth motion blur"
   ];
   
   // Rotating placeholder using the typewriter effect
-  const placeholderText = useTypewriterPrompt("Create a demo video for ", examplePrompts);
+  const placeholderText = useTypewriterPrompt("Create ", examplePrompts);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +118,7 @@ export default function HomePage() {
   // Example video cards data
   const exampleCards = [
     {
-      prompt: "Create a line-by-line animation of some Remotion code being generated",
+      prompt: "Create a line-by-line animation of code being generated",
       videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//aiCoding.mp4",
     },
     {
@@ -151,7 +146,7 @@ export default function HomePage() {
     {
       id: "save",
       question: "How do I save it?",
-      answer: "Click the \"Export\" button to render a full HD version."
+      answer: "We haven't implemented that yet — but it's coming soon. For now, we recommend screen recording. Your scenes will be saved to your account and rendering/exporting will be available in the next few days. Make sure you're signed up for updates to know when it goes live."
     },
     {
       id: "mobile",
@@ -170,7 +165,7 @@ export default function HomePage() {
     },
     {
       id: "what-is",
-      question: "What is Bazaar?",
+      question: "WTF is Bazaar?",
       answer: "Bazaar is a fine-tuned LLM for converting text descriptions into motion graphic videos."
     },
     {
@@ -221,8 +216,8 @@ export default function HomePage() {
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
         <div className="mb-16 w-full text-center">
-          <h1 className="text-6xl font-extrabold mb-6">Built it? Now Broadcast it.</h1>
-          <p className="text-xl text-gray-600">Create stunning software demo videos from a simple prompt</p>
+          <h1 className="text-6xl font-extrabold mb-6">Motion Graphics, Made Simple</h1>
+          <p className="text-xl text-gray-600">Create stunning motion graphic scenes from a simple prompt</p>
         </div>
         
         <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto" autoComplete="off">
@@ -248,7 +243,7 @@ export default function HomePage() {
         
         {/* Example videos section */}
         <section className="mt-20 w-full">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Vibe Code your Demo Video</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Create anything</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
             {exampleCards.map((card, index) => (
@@ -288,7 +283,7 @@ export default function HomePage() {
             <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
               <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">1</div>
               <h3 className="text-xl font-semibold mb-4">Describe</h3>
-              <p className="text-gray-600">Describe what you want to create — a product demo, scene, or animation.</p>
+              <p className="text-gray-600">Describe exactly what you want to create in a scene — the more detail the better</p>
             </div>
             
             {/* Step 2 */}
@@ -438,12 +433,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Login Modal Overlay */}
+      {/* Login Modal Overlay - Updated to be more compact */}
       {showLogin && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-0 overflow-hidden w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-2xl overflow-hidden w-auto max-w-sm relative">
+            <button 
+              className="absolute top-3 right-3 z-10 text-gray-500 hover:text-black w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors" 
+              onClick={() => setShowLogin(false)}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <LoginPage />
-            <button className="absolute top-4 right-4 text-gray-500 hover:text-black" onClick={() => setShowLogin(false)}>&times;</button>
           </div>
         </div>
       )}
