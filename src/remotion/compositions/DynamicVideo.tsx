@@ -1,5 +1,5 @@
 // src/remotion/compositions/DynamicVideo.tsx
-import React from "react";
+import React, { useMemo, useEffect, useRef } from 'react';
 import { AbsoluteFill, Sequence } from "remotion";
 
 import { TransitionSeries } from "@remotion/transitions";
@@ -18,10 +18,15 @@ import type {
 } from "../../types/input-props";
 
 import { sceneRegistry, TextScene } from "../components/scenes";
+import type { Scene } from '~/types/input-props';
+import { BackgroundColorScene } from '~/remotion/components/scenes/BackgroundColorScene';
+import { CustomScene } from '~/remotion/components/scenes/CustomScene';
+import { ImageScene } from '~/remotion/components/scenes/ImageScene';
+import { ShapeScene } from '~/remotion/components/scenes/ShapeScene';
 
 /**
  * Maps `"from-left"` → `"left"` (etc.) because the helper
- * directions don’t include the `"from-"` prefix.
+ * directions don't include the `"from-"` prefix.
  */
 const toHelperDir = (dir: string | undefined) =>
   (
@@ -58,54 +63,117 @@ const presentationFor = (
   }
 };
 
-export const DynamicVideo: React.FC<InputProps> = ({ scenes, meta }) => {
-  const hasTransitions = scenes.some((s) => s.transitionToNext);
+type CompositionProps = {
+  scenes: Scene[];
+  meta: InputProps['meta'];
+  refreshToken?: string; // Add a refresh token to force remounts
+};
 
-  // ──────────────────── WITH TRANSITIONS ────────────────────
-  if (hasTransitions) {
-    return (
-      <AbsoluteFill style={{ backgroundColor: meta?.backgroundColor ?? "#000" }}>
-        <TransitionSeries>
-          {scenes.map((scene, i) => {
-            const Scene = sceneRegistry[scene.type] ?? TextScene;
-            const next  = scenes[i + 1];
+/**
+ * A dynamic video composition that builds sequences based on scene data
+ * 
+ * This is the main composition that Remotion renders. It takes scene data
+ * and renders a sequence of components based on the scene type.
+ * 
+ * @param props Scene data for the video
+ * @returns A Remotion composition
+ */
+export const DynamicVideo: React.FC<CompositionProps> = ({ 
+  scenes,
+  meta,
+  refreshToken = 'default'
+}) => {
+  const prevRefreshToken = useRef<string>(refreshToken);
+  
+  // Log the refreshToken change
+  useEffect(() => {
+    if (prevRefreshToken.current !== refreshToken) {
+      console.log(`[DynamicVideo] RefreshToken changed: ${prevRefreshToken.current} -> ${refreshToken}`);
+      prevRefreshToken.current = refreshToken;
+    }
+  }, [refreshToken]);
 
-            return (
-              <React.Fragment key={scene.id}>
-                {/* In TransitionSeries you NEVER pass `from={…}` */}
-                <TransitionSeries.Sequence durationInFrames={scene.duration}>
-                  <Scene data={scene.data} />
-                </TransitionSeries.Sequence>
+  console.log('[DynamicVideo] Rendering with props:', {
+    sceneCount: scenes.length,
+    metaDuration: meta.duration,
+    refreshToken
+  });
 
-                {next && scene.transitionToNext && (
-                  <TransitionSeries.Transition
-                    presentation={presentationFor(scene.transitionToNext)}
-                    timing={linearTiming({
-                      durationInFrames: scene.transitionToNext.duration ?? 30,
-                    })}
-                  />
-                )}
-              </React.Fragment>
-            );
-          })}
-        </TransitionSeries>
-      </AbsoluteFill>
+  // Log scene details for debugging
+  useEffect(() => {
+    console.log('[DynamicVideo] Scenes after render:', 
+      scenes.map(scene => ({
+        id: scene.id,
+        type: scene.type,
+        componentId: scene.type === 'custom' ? scene.data.componentId : undefined,
+      }))
     );
-  }
+    console.log('[DynamicVideo] Current refreshToken:', refreshToken);
+  }, [scenes, refreshToken]);
 
-  // ──────────────────── NO TRANSITIONS ───────────────────────
+  // Get the scene component for a given scene type
+  const getSceneComponent = (scene: Scene) => {
+    // Generate a unique key for each scene that includes the refreshToken
+    // This ensures the scene remounts when refreshToken changes
+    const sceneKey = `scene-${scene.id}-${refreshToken}-${Date.now()}`;
+    console.log(`[DynamicVideo] Creating scene component for scene ${scene.id} with key ${sceneKey}`);
+    
+    switch (scene.type) {
+      case 'text':
+        return <TextScene key={sceneKey} data={scene.data} />;
+      case 'image':
+        return <ImageScene key={sceneKey} data={scene.data} />;
+      case 'background-color':
+        return <BackgroundColorScene key={sceneKey} data={scene.data} />;
+      case 'custom':
+        return <CustomScene key={sceneKey} data={{
+          componentId: scene.data.componentId as string,
+          ...scene.data,
+          refreshToken
+        }} />;
+      case 'shape':
+        return <ShapeScene key={sceneKey} data={scene.data} />;
+      default:
+        console.warn(`[DynamicVideo] Unknown scene type: ${scene.type}. Using fallback.`);
+        return (
+          <AbsoluteFill
+            key={sceneKey}
+            style={{
+              backgroundColor: '#000',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <h1>Unknown Scene Type: {scene.type}</h1>
+          </AbsoluteFill>
+        );
+    }
+  };
+
+  // Cache scene components between renders when inputs haven't changed
+  const sceneComponents = useMemo(() => {
+    return scenes.map((scene) => {
+      // Each scene has a start, duration, and component
+      return {
+        start: scene.start,
+        duration: scene.duration,
+        component: getSceneComponent(scene),
+      };
+    });
+  }, [scenes, refreshToken]); // Add refreshToken to dependencies
+
   return (
-    <AbsoluteFill style={{ backgroundColor: meta?.backgroundColor ?? "#000" }}>
-      {scenes.map((scene) => {
-        const Scene = sceneRegistry[scene.type] ?? TextScene;
-
+    <AbsoluteFill style={{ backgroundColor: meta.backgroundColor || '#000' }}>
+      {sceneComponents.map(({ start, duration, component }, index) => {
         return (
           <Sequence
-            key={scene.id}
-            from={scene.start}
-            durationInFrames={scene.duration}
+            key={`sequence-${index}-${refreshToken}`}
+            from={start}
+            durationInFrames={duration}
           >
-            <Scene data={scene.data} />
+            {component}
           </Sequence>
         );
       })}

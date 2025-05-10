@@ -249,4 +249,33 @@ export const customComponentRouter = createTRPCRouter({
       
       return results;
     }),
+
+  // Get a single component job by ID
+  getJobById: protectedProcedure
+    .input(z.object({ 
+      jobId: z.string().uuid() 
+    }))
+    .query(async ({ ctx, input }) => {
+      const job = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.jobId),
+        with: { project: true },
+      });
+      
+      if (!job) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Custom component job not found",
+        });
+      }
+      
+      // Verify the user has access to the project this job belongs to
+      if (job.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have access to this component job",
+        });
+      }
+      
+      return job;
+    }),
 });

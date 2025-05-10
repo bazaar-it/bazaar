@@ -77,7 +77,7 @@ export function analyzeSceneDescription(
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
   
-  const componentName = `${words}Scene` || 'CustomScene';
+  const componentName = sanitizeComponentName(`${words}Scene` || 'CustomScene');
   
   analyzerLogger.analyze(loggingId, `Analyzed scene description`, {
     description: description.substring(0, 100),
@@ -90,8 +90,8 @@ export function analyzeSceneDescription(
     description,
     durationInSeconds,
     fps,
-    effectType: "custom",
-    suggestedName: componentName
+    suggestedName: componentName,
+    durationInFrames: Math.round(durationInSeconds * fps)
   };
 }
 
@@ -297,5 +297,32 @@ function generateComponentName(description: string, position: string): string {
         componentName += 'Scene';
     }
     
+    // Sanitize the component name to ensure it's a valid JavaScript identifier
+    componentName = sanitizeComponentName(componentName);
+    
     return componentName;
+}
+
+/**
+ * Sanitizes a component name to ensure it's a valid JavaScript identifier
+ * - Cannot start with a number
+ * - Can only contain letters, numbers, $ and _
+ */
+function sanitizeComponentName(name: string): string {
+  if (!name) return 'CustomScene';
+  
+  // Remove any invalid characters
+  let sanitized = name.replace(/[^a-zA-Z0-9_$]/g, '');
+  
+  // If it starts with a number, prefix with "Scene"
+  if (/^[0-9]/.test(sanitized)) {
+    sanitized = `Scene${sanitized}`;
+  }
+  
+  // Ensure it's not empty
+  if (!sanitized) {
+    sanitized = 'CustomScene';
+  }
+  
+  return sanitized;
 } 

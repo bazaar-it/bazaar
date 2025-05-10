@@ -7,12 +7,28 @@ import { useParams } from 'next/navigation';
 import { api } from '~/trpc/react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from "~/components/ui/button";
-import { ChevronDown, ChevronUp, Loader2Icon, PlayIcon, RefreshCwIcon, AlertCircleIcon, CheckCircleIcon, ClockIcon } from "lucide-react";
+import { 
+  ChevronDown, 
+  ChevronUp, 
+  Loader2Icon, 
+  PlayIcon, 
+  RefreshCwIcon, 
+  AlertCircleIcon, 
+  CheckCircleIcon, 
+  ClockIcon,
+  CodeIcon,
+  PaletteIcon,
+  LayersIcon,
+  TypeIcon,
+  BoxIcon,
+  EyeIcon
+} from "lucide-react";
 import { useImageAnalysis } from "~/hooks/useImageAnalysis";
 import { TimelineContext } from '~/components/client/Timeline/TimelineContext';
 import { useVideoState } from "~/stores/videoState";
 import { type JsonPatch } from "~/types/json-patch";
-import { TRPCClientError } from "@trpc/client"; // Added import
+import { TRPCClientError } from "@trpc/client";
+import type { Operation } from "fast-json-patch";
 
 // Interfaces that match the database schema
 interface ScenePlanScene {
@@ -210,6 +226,93 @@ function extractScenePlanningInfo(
   return { sceneCount, scenes: extractedScenes, status, planStartTime: messageCreatedAt };
 }
 
+// Helper function to render a color preview
+const ColorPreview = ({ color, label }: { color: string; label: string }) => {
+  return (
+    <div className="flex items-center gap-2">
+      <div 
+        className="w-4 h-4 rounded-full border border-gray-200" 
+        style={{ backgroundColor: color }}
+      />
+      <span className="text-xs text-gray-600">{label}: <span className="text-gray-900">{color}</span></span>
+    </div>
+  );
+};
+
+// Helper function to render animation details
+const AnimationDetails = ({ animation }: { animation: any }) => {
+  return (
+    <div className="text-xs border border-gray-100 rounded-md p-2 bg-gray-50">
+      <div className="font-medium text-gray-700">{animation.animationType}</div>
+      <div className="flex flex-wrap gap-x-4 mt-1">
+        <span>Start: {animation.startAtFrame}</span>
+        <span>Duration: {animation.durationInFrames}</span>
+        <span>Easing: {animation.easing}</span>
+      </div>
+    </div>
+  );
+};
+
+// Helper function to render component status
+const ComponentStatus = ({ status, error }: { status: string; error?: string | null }) => {
+  switch (status) {
+    case 'complete':
+      return (
+        <div className="flex items-center gap-1.5 text-green-600">
+          <CheckCircleIcon className="h-4 w-4" />
+          <span className="text-xs font-medium">Complete</span>
+        </div>
+      );
+    case 'building':
+      return (
+        <div className="flex items-center gap-1.5 text-amber-600">
+          <Loader2Icon className="h-4 w-4 animate-spin" />
+          <span className="text-xs font-medium">Building</span>
+        </div>
+      );
+    case 'error':
+      return (
+        <div className="flex items-center gap-1.5 text-red-600" title={error || 'Unknown error'}>
+          <AlertCircleIcon className="h-4 w-4" />
+          <span className="text-xs font-medium">Error</span>
+        </div>
+      );
+    default:
+      return (
+        <div className="flex items-center gap-1.5 text-gray-500">
+          <ClockIcon className="h-4 w-4" />
+          <span className="text-xs font-medium">Pending</span>
+        </div>
+      );
+  }
+};
+
+// Helper function to render brief status
+const renderBriefStatus = (status: string): React.ReactNode => {
+  if (status === 'pending') {
+    return (
+      <div className="flex items-center text-amber-500">
+        <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
+        <span className="text-xs">Generating...</span>
+      </div>
+    );
+  } else if (status === 'complete') {
+    return (
+      <div className="flex items-center text-emerald-500">
+        <div className="h-2 w-2 rounded-full bg-emerald-500 mr-1" />
+        <span className="text-xs">Complete</span>
+      </div>
+    );
+  } else {
+    return (
+      <div className="flex items-center text-red-500">
+        <div className="h-2 w-2 rounded-full bg-red-500 mr-1" />
+        <span className="text-xs">Error</span>
+      </div>
+    );
+  }
+}
+
 export default function ScenePlanningHistoryPanel() {
   // --- Scene editing state (top-level, fixes React Hooks order) ---
   const [editingSceneId, setEditingSceneId] = React.useState<string | null>(null);
@@ -224,46 +327,41 @@ export default function ScenePlanningHistoryPanel() {
   const [tabSections, setTabSections] = useState<string[]>(['scenePlans', 'briefs']);
   const [latestPlan, setLatestPlan] = useState<string | null>(null);
   const imageAnalysis = useImageAnalysis();
-  // Create state for image analysis if not exposed by the hook
   const [analyzingImg, setAnalyzingImg] = useState<Record<string, boolean>>({});
   const [imageTags, setImageTags] = useState<Record<string, string[]>>({});
   const [errorAlert, setErrorAlert] = useState<{ title: string; message: string } | null>(null);
-  // New state to track if scene planning is in progress
   const [isOverallPlanningInProgress, setIsOverallPlanningInProgress] = useState<boolean>(false);
   const [partialPlanInfo, setPartialPlanInfo] = useState<PartialScenePlanInfo | null>(null);
 
-  // Get access to timeline context
   const timelineContext = useContext(TimelineContext);
   if (!timelineContext) {
     console.error("TimelineContext not found. ScenePlanningHistoryPanel might not function correctly.");
-    // Render a placeholder or error state if context is critical
-    // return <div>Error: Timeline context is not available.</div>;
+    return <div>Timeline context not available</div>;
   }
   const { updateFromScenePlan } = timelineContext!;
 
-  // Video state
-  const videoState = useVideoState();
-  const currentProps = videoState.getCurrentProps();
+  const { getCurrentProps, applyPatch } = useVideoState();
+  const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes ?? [];
 
-  // Get the project ID from the URL params
   const projectId = params.id;
   
-  // Fetch animation design briefs for this project
+  const [briefsBySceneId, setBriefsBySceneId] = useState<Record<string, AnimationDesignBrief[]>>({});
+  const [jobMap, setJobMap] = useState<Record<string, any>>({});
+  
   const { 
-    data: designBriefs, 
-    isLoading: briefsLoading,
+    data: designBriefsData,
+    isLoading: designBriefsLoading,
     refetch: refetchBriefs,
     error: briefsError
   } = api.animation.listDesignBriefs.useQuery(
     { projectId },
     { 
       enabled: !!projectId,
-      refetchInterval: 5000 // Poll every 5 seconds for updates
+      refetchInterval: 5000
     }
   );
     
-  // Handle any errors in design briefs fetch
   useEffect(() => {
     if (briefsError) {
       console.error("Failed to fetch animation design briefs:", briefsError?.message || briefsError);
@@ -274,42 +372,69 @@ export default function ScenePlanningHistoryPanel() {
     }
   }, [briefsError]);
   
-  // Organize briefs by sceneId for easier lookup
-  const briefsBySceneId = useMemo(() => {
-    if (!designBriefs) return {};
-    
-    return designBriefs.reduce((acc, brief) => {
-      if (!acc[brief.sceneId]) {
-        acc[brief.sceneId] = [];
+  // CORRECTED: Organize briefs by sceneId and fetch component jobs
+  useEffect(() => {
+    if (designBriefsData) {
+      const briefsByScene: Record<string, AnimationDesignBrief[]> = {};
+      for (const brief of designBriefsData) {
+        if (!briefsByScene[brief.sceneId]) {
+          briefsByScene[brief.sceneId] = [];
+        }
+        (briefsByScene[brief.sceneId] as AnimationDesignBrief[]).push(brief);
       }
-      acc[brief.sceneId]?.push(brief);
-      return acc;
-    }, {} as Record<string, AnimationDesignBrief[]>);
-  }, [designBriefs]);
+      setBriefsBySceneId(briefsByScene);
+    }
+  }, [designBriefsData]);
 
-  // Fetch planning history data
+  // Get all component jobs for the project - this avoids individual queries
+  const { data: componentJobs, isLoading: jobsLoading } = api.customComponent.listByProject.useQuery(
+    { projectId },
+    { enabled: !!projectId }
+  );
+  
+  // Map job data to briefIds when componentJobs data is available
+  useEffect(() => {
+    if (designBriefsData && componentJobs) {
+      const newJobMap: Record<string, any> = {};
+      
+      // Find briefs with component job IDs
+      const briefsWithComponents = designBriefsData.filter(
+        (brief) => brief.componentJobId
+      );
+      
+      // For each brief with a job, find the matching job in our componentJobs data
+      briefsWithComponents.forEach((brief) => {
+        if (!brief.componentJobId) return;
+        
+        const job = componentJobs.find(job => job.id === brief.componentJobId);
+        if (job) {
+          newJobMap[brief.id] = job;
+        }
+      });
+      
+      setJobMap(newJobMap);
+    }
+  }, [designBriefsData, componentJobs]);
+
   const { data: planningHistoryData, isLoading: planningHistoryLoading } = api.chat.getScenePlanningHistory.useQuery({
     projectId
   }, {
-    refetchInterval: 5000, // Auto refresh every 5 seconds
+    refetchInterval: 5000,
   });
   
-  // Get the current messages from the chat to detect scene planning in progress
   const { data: chatMessages, isLoading: chatMessagesLoading } = api.chat.getMessages.useQuery(
     { projectId },
     { 
       enabled: !!projectId,
-      refetchInterval: 3000 // Check more frequently for chat updates
+      refetchInterval: 3000
     }
   );
   
-  // Detect if scene planning is currently in progress and extract partial plan info
   useEffect(() => {
     if (planningHistoryData && planningHistoryData.length > 0) {
-      // If final data is loaded, ensure planning is marked as complete and clear partial info.
       setIsOverallPlanningInProgress(false);
-      setPartialPlanInfo(null); // Clear partial info when final data is available
-      return; // Stop further processing of chat messages for partial plan
+      setPartialPlanInfo(null);
+      return;
     }
 
     if (chatMessages && chatMessages.length > 0) {
@@ -317,33 +442,30 @@ export default function ScenePlanningHistoryPanel() {
         .filter(msg => msg.role === 'assistant' && msg.content)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
 
-      if (latestAssistantMessage) { // Check if latestAssistantMessage itself exists
+      if (latestAssistantMessage) {
         const extractedInfo = extractScenePlanningInfo(latestAssistantMessage.content, latestAssistantMessage.createdAt);
 
-        if (extractedInfo) { // Handle null return from extractScenePlanningInfo
+        if (extractedInfo) {
           setPartialPlanInfo(prevPartialPlan => {
-            // If new plan has scenes, and old one didn't, or if scene count changes, or status changes.
             if (!prevPartialPlan || 
                 prevPartialPlan.sceneCount !== extractedInfo.sceneCount || 
                 (prevPartialPlan.scenes?.length || 0) !== (extractedInfo.scenes?.length || 0) ||
                 prevPartialPlan.status !== extractedInfo.status ||
                 prevPartialPlan.planStartTime?.getTime() !== extractedInfo.planStartTime?.getTime()
             ) {
-              // Update overall planning progress based on new info
               if (extractedInfo.status === 'planning') {
                 setIsOverallPlanningInProgress(true);
               } else if (extractedInfo.status === 'complete' || extractedInfo.status === 'partial') {
-                // Consider planning in progress if scenes are still being detailed or count not met
                 const allDetailsFilled = extractedInfo.scenes && extractedInfo.sceneCount && 
                                          extractedInfo.scenes.length === extractedInfo.sceneCount && 
                                          extractedInfo.scenes.every(s => s.description !== 'Details generating...');
                 setIsOverallPlanningInProgress(!allDetailsFilled);
               } else {
-                setIsOverallPlanningInProgress(false); // Default if status is unexpected
+                setIsOverallPlanningInProgress(false);
               }
               return extractedInfo;
             }
-            return prevPartialPlan; // No significant change
+            return prevPartialPlan;
           });
         } else if (latestAssistantMessage.content) {
           // This 'else if' means extractedInfo is null, but latestAssistantMessage.content exists.
@@ -356,11 +478,10 @@ export default function ScenePlanningHistoryPanel() {
         }
       }
     } else if (chatMessagesLoading && !partialPlanInfo) {
-      // Initial loading state for the simple loader
       setIsOverallPlanningInProgress(true);
       setPartialPlanInfo({ status: 'planning', planStartTime: new Date(), scenes: [] });
     }
-  }, [chatMessages, planningHistoryData, chatMessagesLoading, partialPlanInfo]); // Removed partialPlanInfo from deps to avoid loops with setPartialPlanInfo
+  }, [chatMessages, planningHistoryData, chatMessagesLoading, partialPlanInfo]);
   
   const { 
     data: scenePlansQuery, 
@@ -371,21 +492,19 @@ export default function ScenePlanningHistoryPanel() {
     { projectId },
     { 
       enabled: !!projectId,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: (failureCount, error) => {
-        // Don't retry on 404 (no plans yet) or auth errors
         if (error instanceof TRPCClientError) {
           if (error.data?.httpStatus === 404 || error.data?.httpStatus === 401 || error.data?.httpStatus === 403) {
             return false;
           }
         }
-        return failureCount < 2; // Retry up to 2 times for other errors
+        return failureCount < 2;
       },
     }
   );
   
-  // Handle any errors in scene plans fetch
   useEffect(() => {
     if (scenePlansError) {
       console.error("Failed to fetch scene plans:", scenePlansError?.message || scenePlansError);
@@ -396,12 +515,10 @@ export default function ScenePlanningHistoryPanel() {
     }
   }, [scenePlansError]);
   
-  // Type safe history data
   const planningHistory = React.useMemo<ScenePlan[]>(() => {
     if (!planningHistoryData) return [];
     
     return planningHistoryData.map(plan => {
-      // Ensure plan.planData is properly typed
       const planData = plan.planData as ScenePlanData;
       return {
         ...plan,
@@ -410,7 +527,6 @@ export default function ScenePlanningHistoryPanel() {
     });
   }, [planningHistoryData]);
   
-  // Auto-expand the most recent plan when data loads
   useEffect(() => {
     if (planningHistory.length > 0) {
       const firstPlan = planningHistory[0];
@@ -423,7 +539,6 @@ export default function ScenePlanningHistoryPanel() {
     }
   }, [planningHistory]);
   
-  // Toggle a plan's expanded state
   const togglePlan = (planId: string) => {
     setExpandedPlans(prev => ({
       ...prev,
@@ -431,7 +546,6 @@ export default function ScenePlanningHistoryPanel() {
     }));
   };
   
-  // Toggle a section within a plan
   const toggleSection = (sectionId: string) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -439,38 +553,31 @@ export default function ScenePlanningHistoryPanel() {
     }));
   };
   
-  // Format relative time
   const formatRelativeTime = (date: Date): string => {
     return formatDistanceToNow(date, { addSuffix: true });
   };
   
-  // Stub handler for regenerating a plan with attached images
   const handleRegenerate = (planId: string) => {
     console.log(`Regenerate plan ${planId} with images:`, contextImages[planId]);
-    // TODO: Implement actual regeneration logic using the initiateChat mutation
-    console.log("Regenerate Plan: Regeneration logic not yet implemented."); // TODO: Replace with ShadCN Alert/Notification
+    console.log("Regenerate Plan: Regeneration logic not yet implemented.");
   };
 
   const regeneratePlanMutation = api.chat.initiateChat.useMutation({
     onSuccess: (data: any) => {
-      // Handle successful plan regeneration, e.g., update UI or refetch plans
-      console.log("Plan Regeneration Started: The plan is being regenerated."); // TODO: Replace with ShadCN Alert/Notification
-      // Potentially trigger a refetch of scene plans or handle streaming updates
+      console.log("Plan Regeneration Started: The plan is being regenerated.");
       if (data?.messageId) {
-        // If streaming, you might want to track this messageId
       }
-      // refetchScenePlans(); // Assuming you have a refetch function for scene plans
     },
     onError: (error: any) => {
-      console.error("Failed to regenerate plan:", error.message); // TODO: Replace with ShadCN Alert/Notification
+      console.error("Failed to regenerate plan:", error.message);
     },
   });
 
-  const regenerateBriefMutation = api.animation.generateDesignBrief.useMutation({ // Using generateDesignBrief, confirm if correct
+  const regenerateBriefMutation = api.animation.generateDesignBrief.useMutation({
     onSuccess: (data: any) => {
-      console.log("Brief Generation Started: The animation brief is being generated/regenerated."); // TODO: Replace with ShadCN Alert/Notification
-      refetchBriefs(); // Refetch the briefs list to show the new/updated brief
-      setErrorAlert(null); // Clear any previous errors on success
+      console.log("Brief Generation Started: The animation brief is being generated/regenerated.");
+      refetchBriefs();
+      setErrorAlert(null);
     },
     onError: (error: any) => {
       console.error("Failed to generate/regenerate brief:", error.message);
@@ -481,7 +588,6 @@ export default function ScenePlanningHistoryPanel() {
     },
   });
 
-  // Handler for regenerating an animation design brief for a specific scene
   const handleRegenerateBrief = (sceneId: string) => {
     if (!projectId) {
       setErrorAlert({ title: "Action Failed", message: "Project ID is missing. Cannot regenerate brief." });
@@ -495,34 +601,28 @@ export default function ScenePlanningHistoryPanel() {
       return;
     }
 
-    // Use default/hardcoded values for width, height, fps as InputProps doesn't contain them directly.
     const defaultWidth = 1920;
     const defaultHeight = 1080;
     const defaultFps = 30;
 
     const description = (sceneToRegenerate as any)?.description ?? "No description available";
-    // Ensure durationInFrames is a number. Use scene's duration if available, otherwise calculate from default FPS.
-    // The scene's duration from sceneSchema is already in frames.
     const durationInFrames = typeof (sceneToRegenerate as any)?.duration === 'number' 
       ? (sceneToRegenerate as any).duration 
-      : defaultFps * 5; // Default to 5 seconds if scene duration is not available
+      : defaultFps * 5;
 
     regenerateBriefMutation.mutate({
       projectId,
       sceneId,
-      // Mapping to the expected tRPC mutation input for generateDesignBrief
-      scenePurpose: description, // General purpose of the scene
-      sceneElementsDescription: description, // Can be more detailed if available, using general desc for now
+      scenePurpose: description,
+      sceneElementsDescription: description,
       dimensions: { 
         width: defaultWidth, 
         height: defaultHeight 
       },
       desiredDurationInFrames: durationInFrames,
-      // componentJobId, currentVideoContext, targetAudience, brandGuidelines, etc. are optional or might be derived backend.
     });
   };
 
-  // Helper function to format brief content for better display
   const formatBriefContent = (brief: AnimationDesignBrief): React.ReactNode => {
     if (brief.status === 'error') {
       return (
@@ -540,7 +640,6 @@ export default function ScenePlanningHistoryPanel() {
     );
     
     try {
-      // Extract key information from the brief
       const { 
         sceneName, 
         scenePurpose, 
@@ -638,33 +737,6 @@ export default function ScenePlanningHistoryPanel() {
     }
   }
 
-  // Helper function to render a brief status indicator
-  const renderBriefStatus = (status: string): React.ReactNode => {
-    if (status === 'pending') {
-      return (
-        <div className="flex items-center text-amber-500">
-          <Loader2Icon className="h-3 w-3 mr-1 animate-spin" />
-          <span className="text-xs">Generating...</span>
-        </div>
-      );
-    } else if (status === 'complete') {
-      return (
-        <div className="flex items-center text-emerald-500">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 mr-1" />
-          <span className="text-xs">Complete</span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center text-red-500">
-          <div className="h-2 w-2 rounded-full bg-red-500 mr-1" />
-          <span className="text-xs">Error</span>
-        </div>
-      );
-    }
-  }
-
-  // Helper function to toggle expanding a brief
   const toggleBrief = (briefId: string) => {
     setExpandedBriefs(prev => ({
       ...prev,
@@ -681,11 +753,9 @@ export default function ScenePlanningHistoryPanel() {
     );
   }
   
-  // When there are no plans but planning is in progress, show intermediate state
   if ((!planningHistoryData || planningHistoryData.length === 0) && isOverallPlanningInProgress) {
     return (
       <div className="flex flex-col h-full border border-gray-100 rounded-[15px] shadow-sm overflow-hidden">
-        {/* Image upload context */}
         <ContextDropZone onImagesChange={setUploadedImages} />
         <div className="p-4 border-b border-border bg-background">
           <h3 className="text-lg font-semibold text-foreground">Scene Planning History</h3>
@@ -722,7 +792,7 @@ export default function ScenePlanningHistoryPanel() {
 
                 return (
                   <>
-                    <p className="text-sm text-foreground mb-2">
+                    <p className="text-sm text-gray-800 mb-2">
                       Planning {partialPlanInfo!.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo!.sceneCount} details received):
                     </p>
                     <ul className="space-y-2 text-sm bg-background/50 p-3 rounded-md max-h-60 overflow-y-auto">
@@ -739,7 +809,6 @@ export default function ScenePlanningHistoryPanel() {
                   </>
                 );
               } else if (actualScenes.length > 0) {
-                // Fallback: No sceneCount from LLM yet, but some scenes parsed (maintains previous behavior)
                 return (
                   <>
                     <p className="text-sm text-foreground mb-2">Planned scenes so far ({actualScenes.length}):</p>
@@ -754,7 +823,6 @@ export default function ScenePlanningHistoryPanel() {
                   </>
                 );
               } else {
-                // Fallback: No sceneCount and no scenes parsed yet (generic message)
                 return (
                   <p className="text-sm text-muted-foreground mb-4">
                     Our AI is breaking down your request into individual scenes and planning durations.
@@ -776,16 +844,15 @@ export default function ScenePlanningHistoryPanel() {
 
   if (planningHistoryData?.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-4 text-muted-foreground">
-        <p>No scene planning history yet.</p>
-        <p className="text-sm">Try planning a video in the chat!</p>
+      <div className="text-center py-8">
+        <p className="text-gray-700">No scene plans yet.</p>
+        <p className="text-sm text-gray-600">Try planning a video in the chat!</p>
       </div>
     );
   }
   
   return (
     <div className="flex-1 flex flex-col min-h-0 h-full overflow-hidden bg-white">
-      {/* Image upload context */}
       <ContextDropZone onImagesChange={setUploadedImages} />
       {uploadedImages.length > 0 && (
         <div className="flex gap-2 overflow-x-auto my-4">
@@ -801,12 +868,12 @@ export default function ScenePlanningHistoryPanel() {
         </div>
       )}
       <div className="p-4 border-b border-border bg-white">
-        <h3 className="text-lg font-semibold text-foreground">Scene Planning History</h3>
-        <p className="text-sm text-muted-foreground">
+        <h3 className="text-lg font-semibold text-gray-900">Scene Planning History</h3>
+        <p className="text-sm text-gray-600">
           See how your video ideas were broken down into scenes
         </p>
       </div>
-      <div className="flex-1 p-4 overflow-auto bg-white text-foreground">
+      <div className="flex-1 p-4 overflow-auto bg-white text-gray-800">
         {errorAlert && (
           <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-4">
             <div className="flex items-center">
@@ -816,7 +883,6 @@ export default function ScenePlanningHistoryPanel() {
             </div>
           </div>
         )}
-        {/* Scene Planning Progress Section - NEW */}
         {isOverallPlanningInProgress && (
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
             <div className="flex items-center gap-2 mb-3">
@@ -855,7 +921,6 @@ export default function ScenePlanningHistoryPanel() {
                   </>
                 );
               } else if (actualScenes.length > 0) {
-                // Fallback: No sceneCount from LLM yet, but some scenes parsed (maintains previous behavior)
                 return (
                   <>
                     <p className="text-sm text-blue-700">Planned scenes so far ({actualScenes.length}):</p>
@@ -870,7 +935,6 @@ export default function ScenePlanningHistoryPanel() {
                   </>
                 );
               } else {
-                // Fallback: No sceneCount and no scenes parsed yet (generic message)
                 return (
                   <p className="text-sm text-blue-700">
                     Our AI is breaking down your request into individual scenes and planning durations.
@@ -887,17 +951,16 @@ export default function ScenePlanningHistoryPanel() {
         )}
         {planningHistory.map((plan, pIdx) => (
           <div key={`${plan.id}-${pIdx}`} className="mb-6 flex flex-col gap-2">
-            {/* Header bubble */}
             <div
               onClick={() => togglePlan(plan.id)}
               className={`cursor-pointer rounded-[15px] shadow-sm px-4 py-3 flex justify-between items-center bg-gray-50 hover:bg-gray-100`}
             >
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">Version {plan.planData?.fps === 30 ? 'o4-mini' : 'legacy'}</span>
+                  <span className="font-medium text-sm text-gray-900">Version {plan.planData?.fps === 30 ? 'o4-mini' : 'legacy'}</span>
                   <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">✓ Complete</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-600">
                   {formatRelativeTime(plan.createdAt)}
                 </p>
               </div>
@@ -918,13 +981,10 @@ export default function ScenePlanningHistoryPanel() {
               </div>
             </div>
             
-            {/* Expanded content */}
             {expandedPlans[plan.id] && (
               <div className="bg-white rounded-[15px] shadow-sm overflow-hidden">
-                {/* Scenes Section */}
-                <div className="text-foreground text-sm">
+                <div className="text-gray-800 text-sm">
                   {plan.planData?.scenes?.map((scene: ScenePlanScene, idx: number) => {
-                    // Get edited or original scene (if edited)
                     const editedScene = editedScenes[scene.id] || {};
                     const isEditing = editingSceneId === scene.id;
                     const latestScene = {
@@ -934,7 +994,6 @@ export default function ScenePlanningHistoryPanel() {
                     
                     const handleEditClick = () => {
                       setEditingSceneId(scene.id);
-                      // Pre-populate edited values
                       setEditedScenes({
                         ...editedScenes,
                         [scene.id]: {
@@ -946,13 +1005,8 @@ export default function ScenePlanningHistoryPanel() {
                     const handleSave = () => {
                       setEditingSceneId(null);
                       
-                      // Create JSON patches for edited fields
-                      if (!editedScenes[scene.id]) return;
-                        
-                      // Create patch ops for the changes to send to backend
                       const patchOps: JsonPatch = [];
                       
-                      // If description changed
                       if (typeof editedScenes[scene.id]?.description === 'string') {
                         patchOps.push({
                           op: 'replace',
@@ -961,7 +1015,6 @@ export default function ScenePlanningHistoryPanel() {
                         });
                       }
                       
-                      // If duration changed
                       if (typeof editedScenes[scene.id]?.durationInSeconds === 'number') {
                         patchOps.push({
                           op: 'replace',
@@ -970,80 +1023,78 @@ export default function ScenePlanningHistoryPanel() {
                         });
                       }
                       
-                      // Apply the patches locally via Zustand
                       if (patchOps.length > 0) {
-                        applyPatch(patchOps);
+                        applyPatch(projectId, patchOps as Operation[]);
                       }
                     };
                     
                     return (
                       <div key={scene.id} className="mb-4 last:mb-0">
-                        {/* Render scene content */}
                         <div className="bg-white p-4 rounded-lg border border-gray-100">
-                          {/* Scene Information Section */}
                           <div className="mb-4">
-                            <h4 className="text-sm font-semibold mb-2">Scene Information</h4>
+                            <h4 className="text-sm font-semibold mb-2 text-gray-900">Scene Information</h4>
                             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                               <div>
-                                <div className="text-xs text-muted-foreground mb-1">Name:</div>
-                                <div className="font-medium">Scene {idx + 1}</div>
+                                <div className="text-xs text-gray-600 mb-1">Name:</div>
+                                <div className="font-medium text-gray-900">Scene {idx + 1}</div>
                               </div>
                               <div>
-                                <div className="text-xs text-muted-foreground mb-1">Purpose:</div>
-                                <div>{latestScene.description}</div>
+                                <div className="text-xs text-gray-600 mb-1">Purpose:</div>
+                                <div className="text-gray-800">{latestScene.description}</div>
                               </div>
                               <div>
-                                <div className="text-xs text-muted-foreground mb-1">Duration:</div>
-                                <div className="font-medium">{latestScene.durationInSeconds} frames</div>
+                                <div className="text-xs text-gray-600 mb-1">Duration:</div>
+                                <div className="font-medium text-gray-900">{latestScene.durationInSeconds} frames</div>
                               </div>
                               <div>
-                                <div className="text-xs text-muted-foreground mb-1">Version:</div>
-                                <div>1.0</div>
+                                <div className="text-xs text-gray-600 mb-1">Version:</div>
+                                <div className="text-gray-900">1.0</div>
                               </div>
                             </div>
                           </div>
                           
-                          {/* Design briefs section */}
-                          {briefsBySceneId[scene.id] && briefsBySceneId[scene.id]?.length > 0 && (
+                          {briefsBySceneId && scene.id && (briefsBySceneId[scene.id]?.length ?? 0) > 0 && (
                             <div className="mt-4 pt-4 border-t border-gray-100">
-                              <h4 className="text-sm font-semibold mb-2">Animation Design Briefs</h4>
+                              <h4 className="text-sm font-semibold mb-2 text-gray-900">Animation Design Briefs</h4>
                               <div className="space-y-2">
                                 {briefsBySceneId[scene.id]?.map((brief) => (
-                                  <div key={brief.id} className="bg-gray-50 rounded-md p-3">
-                                    <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs font-medium">Model: {brief.llmModel}</span>
+                                  <div key={brief.id} className="bg-gray-50 rounded-md p-3 border border-gray-200">
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <span className="text-xs font-medium text-gray-900">Model: {brief.llmModel}</span>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          Created {formatDistanceToNow(new Date(brief.createdAt), { addSuffix: true })}
+                                        </div>
+                                      </div>
                                       {renderBriefStatus(brief.status)}
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                      <button
-                                        onClick={() => toggleBrief(brief.id)}
-                                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                      >
+                                    
+                                    <div 
+                                      className="cursor-pointer flex items-center mt-2 text-xs text-gray-600 hover:text-gray-900"
+                                      onClick={() => {
+                                        setExpandedBriefs(prev => ({
+                                          ...prev,
+                                          [brief.id]: !prev[brief.id]
+                                        }));
+                                      }}
+                                    >
+                                      <span>
                                         {expandedBriefs[brief.id] ? 'Hide Details' : 'Show Details'}
-                                        <ChevronDown className={`h-3 w-3 transform transition-transform ${expandedBriefs[brief.id] ? 'rotate-180' : ''}`} />
-                                      </button>
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleRegenerateBrief(scene.id)}
-                                        className="h-6 text-xs"
-                                      >
-                                        <RefreshCwIcon className="h-3 w-3 mr-1" />
-                                        Regenerate
-                                      </Button>
+                                      </span>
+                                      {expandedBriefs[brief.id] ? (
+                                        <ChevronUp className="h-3 w-3 ml-1" />
+                                      ) : (
+                                        <ChevronDown className="h-3 w-3 ml-1" />
+                                      )}
                                     </div>
                                     
-                                    {expandedBriefs[brief.id] && (
-                                      <div className="mt-2 pt-2 border-t border-gray-200">
-                                        {formatBriefContent(brief)}
-                                      </div>
-                                    )}
+                                    {expandedBriefs[brief.id] && renderBriefDetails(brief, jobMap)}
                                   </div>
                                 ))}
                               </div>
                             </div>
                           )}
 
-                          {/* Actions */}
                           <div className="mt-4 flex justify-end gap-2">
                             <Button 
                               onClick={() => handleRegenerateBrief(scene.id)}
@@ -1067,16 +1118,21 @@ export default function ScenePlanningHistoryPanel() {
                   })}
                 </div>
 
-                {/* Plan metadata section */}
                 <div className="border-t border-gray-100 p-4">
-                  <h4 className="text-xs font-semibold mb-2">Total Duration: {Math.round(plan.planData?.totalDuration || 0)}s at {plan.planData?.fps || 30} FPS</h4>
+                  <h4 className="text-xs font-semibold mb-2 text-gray-900">Total Duration: {Math.round(plan.planData?.totalDuration || 0)}s at {plan.planData?.fps || 30} FPS</h4>
                   <div className="flex justify-end gap-2">
                     <Button
                       type="button"
                       onClick={() => {
-                        // Apply this scene plan to the timeline
-                        updateFromScenePlan(plan.planData);
-                        setLatestPlan(plan.id);
+                        if (plan.planData && plan.planData.scenes) {
+                          const formattedScenes = plan.planData.scenes.map(scene => ({
+                            id: scene.id,
+                            type: scene.effectType || 'text',
+                            durationInFrames: Math.round((scene.durationInSeconds || 3) * 30)
+                          }));
+                          updateFromScenePlan(formattedScenes);
+                          setLatestPlan(plan.id);
+                        }
                       }}
                       className="text-xs h-8 flex items-center gap-1"
                     >
@@ -1093,3 +1149,124 @@ export default function ScenePlanningHistoryPanel() {
     </div>
   );
 }
+
+const renderBriefDetails = (brief: AnimationDesignBrief, currentJobMap: Record<string, any>) => {
+  if (!brief.designBrief) return null;
+  
+  const { colorPalette, elements } = brief.designBrief;
+  
+  return (
+    <div className="mt-2 space-y-3">
+      {colorPalette && (
+        <div>
+          <h5 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+            <PaletteIcon className="h-3.5 w-3.5 text-gray-500" />
+            <span>Color Palette</span>
+          </h5>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            {colorPalette.background && (
+              <ColorPreview color={colorPalette.background} label="Background" />
+            )}
+            {colorPalette.primary && (
+              <ColorPreview color={colorPalette.primary} label="Primary" />
+            )}
+            {colorPalette.secondary && (
+              <ColorPreview color={colorPalette.secondary} label="Secondary" />
+            )}
+            {colorPalette.textPrimary && (
+              <ColorPreview color={colorPalette.textPrimary} label="Text" />
+            )}
+            {colorPalette.accent && (
+              <ColorPreview color={colorPalette.accent} label="Accent" />
+            )}
+          </div>
+        </div>
+      )}
+      
+      {elements && elements.length > 0 && (
+        <div>
+          <h5 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+            <LayersIcon className="h-3.5 w-3.5 text-gray-500" />
+            <span>Scene Elements ({elements.length})</span>
+          </h5>
+          <div className="space-y-2 mt-1">
+            {elements.slice(0, 3).map((element: any, idx: number) => (
+              <div key={element.elementId || idx} className="border border-gray-100 rounded-md p-2 bg-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {element.elementType === 'text' ? (
+                      <TypeIcon className="h-3.5 w-3.5 text-blue-500" />
+                    ) : element.elementType === 'shape' ? (
+                      <BoxIcon className="h-3.5 w-3.5 text-purple-500" />
+                    ) : (
+                      <LayersIcon className="h-3.5 w-3.5 text-gray-500" />
+                    )}
+                    <span className="text-xs font-medium">{element.name || `Element ${idx + 1}`}</span>
+                  </div>
+                  <span className="text-xs text-gray-500">{element.elementType}</span>
+                </div>
+                
+                {element.content && (
+                  <div className="text-xs mt-1 text-gray-700 truncate">
+                    "{element.content.substring(0, 40)}{element.content.length > 40 ? '...' : ''}"
+                  </div>
+                )}
+                
+                {element.animations && element.animations.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-xs text-gray-500 mb-1">{element.animations.length} Animation{element.animations.length !== 1 ? 's' : ''}</div>
+                    <div className="space-y-1">
+                      {element.animations.slice(0, 1).map((animation: any, animIdx: number) => (
+                        <AnimationDetails key={animation.animationId || animIdx} animation={animation} />
+                      ))}
+                      {element.animations.length > 1 && (
+                        <div className="text-xs text-gray-500 italic">+{element.animations.length - 1} more...</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {elements.length > 3 && (
+              <div className="text-xs text-gray-500 text-center italic">+{elements.length - 3} more elements</div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {brief.componentJobId && currentJobMap && currentJobMap[brief.id] && (
+        <div>
+          <h5 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+            <CodeIcon className="h-3.5 w-3.5 text-gray-500" />
+            Component
+          </h5>
+          <div className="border border-gray-100 rounded-md p-2 bg-white">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium">{currentJobMap[brief.id]?.name || 'Unnamed Component'}</span>
+              <ComponentStatus 
+                status={currentJobMap[brief.id]?.status || 'unknown'} 
+                error={currentJobMap[brief.id]?.errorMessage} 
+              />
+            </div>
+            {currentJobMap[brief.id]?.status === 'complete' && (
+              <div className="flex justify-end mt-2">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    const outputUrl = currentJobMap[brief.id]?.outputUrl;
+                    if (outputUrl) {
+                      window.open(outputUrl, '_blank');
+                    }
+                  }}
+                >
+                  Preview <EyeIcon className="ml-1.5 h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

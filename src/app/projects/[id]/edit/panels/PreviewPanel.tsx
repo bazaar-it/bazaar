@@ -1,13 +1,12 @@
 // src/app/projects/[id]/edit/panels/PreviewPanel.tsx
 "use client";
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Player, type PlayerRef } from '@remotion/player';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Player } from '@remotion/player';
 import { DynamicVideo } from '~/remotion/compositions/DynamicVideo';
 import { useVideoState } from '~/stores/videoState';
 import { useTimeline } from '~/components/client/Timeline/TimelineContext';
 import type { InputProps } from '~/types/input-props';
-import { api } from '~/trpc/react';
 
 export default function PreviewPanel({ 
   projectId, 
@@ -16,90 +15,137 @@ export default function PreviewPanel({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { getCurrentProps, setProject, replace } = useVideoState();
+  const { getCurrentProps, setProject, forceRefresh } = useVideoState();
+  const { currentFrame } = useTimeline();
   
-  // Access the timeline context for bidirectional sync
-  const { 
-    currentFrame, 
-    setCurrentFrame, 
-    setPlayerRef,
-    setIsPlaying,
-    seekToFrame
-  } = useTimeline();
+  // State for tracking last refresh time
+  const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
+  const [lastKnownComponentIds, setLastKnownComponentIds] = useState<string[]>([]);
   
-  // Reference to the Remotion player
-  const playerRef = useRef<PlayerRef>(null);
-
-  // Poll backend for updated project every second to reflect server-side patches
-  const { data: projectData } = api.project.getById.useQuery(
-    { id: projectId },
-    {
-      enabled: !!projectId,
-      refetchInterval: 1000,
-      staleTime: 0,
-    },
-  );
-
-  // Initialize or update project data when projectId or initial props change
+  // Initialize project if initial props are provided
   useEffect(() => {
     if (initial) {
+      console.log('[PreviewPanel] Setting initial project props');
+      // Pass project string ID as first parameter
       setProject(projectId, initial);
     }
-  }, [projectId, initial, setProject]);
-
-  // Replace props if project data changed (e.g. LLM patch applied)
+  }, [initial, projectId, setProject]);
+  
+  // Get the current props from the video state
+  const currentProps = getCurrentProps();
+  
+  // Get the refresh token from the store (or generate a default one)
+  const storeRefreshToken = currentProps && 'refreshToken' in currentProps ? 
+    (currentProps as any).refreshToken : `token-${Date.now()}`;
+  
+  // Extract component IDs from the current props
+  const currentComponentIds = currentProps?.scenes
+    ?.filter(scene => scene.type === 'custom')
+    ?.map(scene => scene.data.componentId as string) || [];
+  
+  // Add debug logs to help track component IDs
   useEffect(() => {
-    if (projectData?.props) {
-      replace(projectId, projectData.props as InputProps);
+    console.debug('[PreviewPanel] Current component IDs:', currentComponentIds);
+    console.debug('[PreviewPanel] Last known component IDs:', lastKnownComponentIds);
+  }, [currentComponentIds, lastKnownComponentIds]);
+  
+  // Detect changes in components to trigger automatic refresh
+  useEffect(() => {
+    // Always update the last known component IDs
+    if (JSON.stringify(currentComponentIds) !== JSON.stringify(lastKnownComponentIds)) {
+      console.log('[PreviewPanel] Component IDs changed from', lastKnownComponentIds, 'to', currentComponentIds);
+      setLastKnownComponentIds(currentComponentIds);
+      
+      // If we have new components that weren't in the previous list, trigger refresh
+      const newComponents = currentComponentIds.filter(id => !lastKnownComponentIds.includes(id));
+      
+      if (newComponents.length > 0) {
+        console.log('[PreviewPanel] New components detected, forcing refresh:', newComponents);
+        handleRefresh();
+      }
     }
-  }, [projectData?.props, projectId, replace]);
-
-  // Handle play/pause state changes to sync with timeline
-  const handlePlaying = useCallback((playing: boolean) => {
-    setIsPlaying(playing);
-  }, [setIsPlaying]);
-
-  // When player loads, set the ref in timeline context
-  const handlePlayerRef = useCallback((player: PlayerRef | null) => {
-    if (player) {
-      setPlayerRef(player);
+  }, [currentComponentIds, projectId, lastKnownComponentIds]); // Dependency on projectId and lastKnownComponentIds
+  
+  // Force a refresh of the preview
+  const handleRefresh = useCallback(() => {
+    console.log('[PreviewPanel] 🔄 Refresh button clicked');
+    
+    // Log current scenes for debugging
+    if (currentProps?.scenes) {
+      console.log('[PreviewPanel] Current scenes during refresh:', 
+        currentProps.scenes.map(s => ({
+          id: s.id,
+          type: s.type,
+          componentId: s.type === 'custom' ? s.data.componentId : undefined
+        }))
+      );
     }
-  }, [setPlayerRef]);
-
-  // Handle frame changes from the player
-  const handleFrameChange = useCallback((frame: number) => {
-    setCurrentFrame(frame);
-  }, [setCurrentFrame]);
-
-  // Get the current project's props
-  const inputProps = getCurrentProps();
-
-  if (!inputProps) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center bg-white dark:bg-gray-900">
-        <div className="animate-pulse text-xl text-muted-foreground">Loading video preview...</div>
-      </div>
-    );
-  }
-
+    
+    // Force a browser cache clear for component scripts
+    console.log('[PreviewPanel] Attempting to clear component cache');
+    const scriptTags = document.querySelectorAll('script[src*="custom-components"]');
+    console.log(`[PreviewPanel] Found ${scriptTags.length} component script tags to refresh`);
+    
+    scriptTags.forEach(script => {
+      // Log the script being removed
+      console.log('[PreviewPanel] Removing script:', script.getAttribute('src'));
+      script.remove();
+    });
+    
+    // Use the store's forceRefresh instead of local state
+    console.log('[PreviewPanel] Calling forceRefresh on videoState store');
+    forceRefresh(projectId);
+    setLastRefreshTime(Date.now());
+  }, [forceRefresh, projectId, currentProps]);
+  
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900">
-      <div className="flex-1 overflow-hidden relative">
-        <Player
-          ref={playerRef}
-          component={DynamicVideo}
-          durationInFrames={inputProps.meta.duration}
-          fps={30}
-          compositionWidth={1280}
-          compositionHeight={720}
-          inputProps={inputProps}
-          style={{ width: '100%', height: 'auto', aspectRatio: '16/9' }}
-          controls
-          autoPlay
-          loop
-          initialFrame={currentFrame}
-          renderLoading={() => <div className="flex items-center justify-center h-full"><div className="text-sm text-muted-foreground animate-pulse">Loading...</div></div>}
-        />
+    <div className="relative h-full w-full flex flex-col">
+      <div className="relative flex-grow">
+        {/* Render the Player with a key for forcing remounts */}
+        {currentProps ? (
+          <Player
+            component={DynamicVideo}
+            inputProps={{
+              scenes: currentProps.scenes || [],
+              meta: currentProps.meta || { duration: 150 },
+              refreshToken: storeRefreshToken // Use store refresh token
+            }}
+            durationInFrames={currentProps.meta?.duration || 150}
+            fps={30}
+            style={{ width: '100%', height: '100%' }}
+            compositionWidth={1280}
+            compositionHeight={720}
+            initialFrame={currentFrame}
+            autoPlay={false}
+            loop
+            controls
+            key={`player-${storeRefreshToken}`} // IMPORTANT: Use store refresh token for Player key
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-black text-white">
+            <p>Loading project...</p>
+          </div>
+        )}
+        
+        {/* More visible refresh button overlay */}
+        <div className="absolute top-4 right-4 z-10">
+          <button 
+            onClick={handleRefresh}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 flex items-center shadow-lg"
+            title="Refresh Preview"
+            id="preview-refresh-button" // Add ID for easier debugging
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+        
+        {/* Last refreshed indicator */}
+        <div className="absolute bottom-4 right-4 z-10 text-xs text-white bg-black/50 px-2 py-1 rounded">
+          Last refreshed: {new Date(lastRefreshTime).toLocaleTimeString()}
+        </div>
       </div>
     </div>
   );

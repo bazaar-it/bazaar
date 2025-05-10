@@ -406,6 +406,25 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
               jobId: event.jobId,
               executionTime: executionTime
             });
+            
+            // CRITICAL: Force a refetch of video props when a component is generated
+            // This ensures the component is added to the timeline
+            if (event.jobId) {
+              console.log(`[ChatPanel] Component ${event.jobId} generated, refreshing video props`);
+              
+              // Wait 1 second to allow other updates to complete
+              setTimeout(() => {
+                // This will trigger a video props refresh via the API
+                // which will update the timeline
+                void refetchMessages();
+                
+                // After a few more seconds, check again to ensure the component
+                // is properly loaded
+                setTimeout(() => {
+                  void refetchMessages();
+                }, 3000);
+              }, 1000);
+            }
           }
           
           // Immediately stop streaming if a component was generated (has jobId)

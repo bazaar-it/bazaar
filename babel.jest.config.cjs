@@ -13,10 +13,10 @@ module.exports = {
   ],
   plugins: [
     "@babel/plugin-transform-runtime",
-    // Support dynamic imports without using the unsupported assumptions
+    // Support dynamic imports
     "@babel/plugin-syntax-dynamic-import",
     // Uncomment this when testing code that imports CJS modules from ESM
     // or when you encounter "Cannot use import statement outside a module" errors
-    // "babel-plugin-transform-import-meta"
+    "babel-plugin-transform-import-meta"
   ]
 };

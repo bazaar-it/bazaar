@@ -59,7 +59,7 @@ yarn-error.log*
 
 # Local data & caches
 *.sqlite
-*.log
+
 
 # Environment files
 .env

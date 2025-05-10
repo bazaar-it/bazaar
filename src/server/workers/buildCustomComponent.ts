@@ -51,7 +51,7 @@ export async function processPendingJobs() {
   try {
     // Find pending jobs
     const pendingJobs = await db.query.customComponentJobs.findMany({
-      where: eq(customComponentJobs.status, "pending"),
+      where: eq(customComponentJobs.status, "manual_build_retry"),
       limit: 10, // Get more jobs than we can process at once, to keep the queue filled
     });
 
@@ -210,11 +210,27 @@ async function processJob(jobId: string): Promise<void> {
           buildLogger.compile(jobId, "Compiling TSX code with esbuild...");
           jsCode = await compileWithEsbuild(wrappedTsx);
         } catch (esbuildError) {
-          buildLogger.error(jobId, "Error compiling with esbuild, using fallback", { error: esbuildError });
-          jsCode = await compileWithFallback(wrappedTsx);
+          buildLogger.error(jobId, "CRITICAL: esbuild compilation failed. ABORTING build for this component.", { 
+            error: esbuildError,
+            errorMessage: esbuildError instanceof Error ? esbuildError.message : String(esbuildError),
+            stack: esbuildError instanceof Error ? esbuildError.stack : undefined,
+            type: "COMPILE:ERROR"
+          });
+          
+          // Save a portion of the TSX code for debugging purposes
+          buildLogger.error(jobId, "Failed TSX code snippet (first 500 chars):", {
+            tsxSnippet: wrappedTsx.substring(0, 500) + "..."
+          });
+          
+          // Update job status to error and exit
+          await updateComponentStatus(jobId, 'error', db, undefined, `esbuild compilation failed: ${esbuildError instanceof Error ? esbuildError.message : String(esbuildError)}`);
+          return; // Exit processJob - do NOT use fallback
         }
       } else {
-        buildLogger.compile(jobId, "Using fallback compiler (esbuild not available)");
+        buildLogger.warn(jobId, "esbuild not available, using simple fallback compiler (this is not recommended for production)", {
+          type: "NO_ESBUILD"
+        });
+        // Only use fallback when esbuild is not available at all
         jsCode = await compileWithFallback(wrappedTsx);
       }
       

@@ -87,6 +87,9 @@ export const componentLogger = {
   complete: (jobId: string, message: string, meta: Record<string, any> = {}) => {
     logger.info(`[COMPONENT:COMPLETE][JOB:${jobId}] ${message}`, { ...meta, component: true });
   },
+  info: (jobId: string, message: string, meta?: Record<string, any>) => {
+    logger.info(`[COMPONENT:INFO][JOB:${jobId}] ${message}`, { ...meta, component: true });
+  }
 };
 
 export const buildLogger = {

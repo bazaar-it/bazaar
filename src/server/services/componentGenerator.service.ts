@@ -68,6 +68,9 @@ export async function generateComponent(
         }
     }
     
+    // Sanitize component name to ensure it's a valid JavaScript identifier
+    componentName = sanitizeComponentName(componentName);
+    
     // Estimate component complexity based on brief content
     const estimatedComplexity = Math.min(1.0, (brief.elements?.length || 1) * 0.05 + (brief.scenePurpose?.length || 0) * 0.002);
     
@@ -173,11 +176,22 @@ export async function generateComponent(
     enhancedDescriptionLines.push(`\n### ELEMENT-BY-ELEMENT IMPLEMENTATION GUIDE:`);
     enhancedDescriptionLines.push(`Each element from the AnimationDesignBrief must be translated into React/Remotion code following these guidelines:`);
     
+    // Add important restriction about images
+    enhancedDescriptionLines.push(`\n### IMPORTANT RESTRICTION - NO EXTERNAL ASSETS:`);
+    enhancedDescriptionLines.push(`- DO NOT reference or try to load any external images, videos, or other media files`);
+    enhancedDescriptionLines.push(`- DO NOT use the <Img> component from Remotion to load any image files`);
+    enhancedDescriptionLines.push(`- If the AnimationDesignBrief mentions image elements, implement them as:`);
+    enhancedDescriptionLines.push(`  * Colored rectangles or circles using <div> with backgroundColor and borderRadius`);
+    enhancedDescriptionLines.push(`  * SVG graphics created programmatically (rectangles, circles, paths)`);
+    enhancedDescriptionLines.push(`  * CSS gradients for more visual interest`);
+    enhancedDescriptionLines.push(`- Focus ONLY on animations, shapes, text elements, and colors`);
+    enhancedDescriptionLines.push(`- This temporary restriction ensures component reliability while asset management is being developed`);
+    
     // ElementType to JSX/DOM Translation Guide
     enhancedDescriptionLines.push(`\n#### ELEMENT TYPE TRANSLATION:`);
     enhancedDescriptionLines.push(`- 'text' → Use a <div> or <h1>-<h6> with appropriate styling`);
-    enhancedDescriptionLines.push(`- 'image' → Use Remotion's <Img src={content} /> component`);
-    enhancedDescriptionLines.push(`- 'video' → Use Remotion's <Video src={content} /> component`);
+    enhancedDescriptionLines.push(`- 'image' → DO NOT USE <Img>. Instead, use a <div> with solid background color or gradient`);
+    enhancedDescriptionLines.push(`- 'video' → DO NOT USE <Video>. Instead, use animated <div> elements`);
     enhancedDescriptionLines.push(`- 'shape' → Use appropriate shape elements (div with border-radius for circles/rounded rectangles, SVG for complex shapes)`);
     enhancedDescriptionLines.push(`- 'container' → Use a positioned <div> that may contain child elements`);
     
@@ -537,4 +551,28 @@ export async function updateComponentStatus(
             updatedAt: new Date()
         })
         .where(eq(customComponentJobs.id, jobId));
+}
+
+/**
+ * Sanitizes a component name to ensure it's a valid JavaScript identifier
+ * - Cannot start with a number
+ * - Can only contain letters, numbers, $ and _
+ */
+function sanitizeComponentName(name: string): string {
+    if (!name) return 'CustomScene';
+    
+    // Remove any invalid characters
+    let sanitized = name.replace(/[^a-zA-Z0-9_$]/g, '');
+    
+    // If it starts with a number, prefix with "Scene"
+    if (/^[0-9]/.test(sanitized)) {
+        sanitized = `Scene${sanitized}`;
+    }
+    
+    // Ensure it's not empty
+    if (!sanitized) {
+        sanitized = 'CustomScene';
+    }
+    
+    return sanitized;
 } 

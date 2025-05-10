@@ -55,6 +55,8 @@ interface VideoState {
     dbMessagesLoaded: boolean;
     // Store active streaming messages
     activeStreamingMessageId?: string | null;
+    // Store refresh token for forcing remounts
+    refreshToken?: string;
   }>;
   currentProjectId: string | null;
   
@@ -87,6 +89,9 @@ interface VideoState {
   
   // Clear optimistic messages (e.g., when switching projects)
   clearOptimisticMessages: (projectId: string) => void;
+  
+  // Force refresh of preview components by generating a new refresh token
+  forceRefresh: (projectId: string) => void;
 }
 
 // Default welcome message
@@ -423,6 +428,27 @@ export const useVideoState = create<VideoState>((set, get) => ({
           [projectId]: {
             ...state.projects[projectId],
             chatHistory: []
+          }
+        }
+      };
+    }),
+    
+  // Force refresh of preview components by generating a new refresh token
+  forceRefresh: (projectId) =>
+    set((state) => {
+      // Skip if project doesn't exist
+      if (!state.projects[projectId]) return state;
+      
+      // Generate a new refresh token
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            refreshToken: newRefreshToken
           }
         }
       };

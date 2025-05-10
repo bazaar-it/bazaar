@@ -113,22 +113,37 @@ export async function processComponentJob(jobId: string): Promise<void> {
     }
     
     try {
-      // Call the implementation that takes a description
-      const result = await generateComponentCode(jobId, prompt);
+      componentLogger.start(jobId, `Starting component generation for effect: "${prompt}"`);
       
-      // Save the result to the database
+      const result = await generateComponentCode(jobId, prompt, {
+        animationBrief: (job.metadata as any).animationBrief,
+      });
+      
+      componentLogger.info(jobId, `Successfully generated TSX code (${result.code.length} characters). Attempting to save...`);
+      
+      // CRITICALLY IMPORTANT: We must await this database update to avoid race conditions
       await db.update(customComponentJobs)
         .set({
           tsxCode: result.code,
-          status: 'building', // Mark as building so buildCustomComponent can pick it up
+          status: 'building',
           updatedAt: new Date()
         })
         .where(eq(customComponentJobs.id, jobId));
-        
-      componentLogger.complete(jobId, "Successfully generated TSX code");
+      
+      componentLogger.info(jobId, "DB update for TSX code and 'building' status complete. Triggering build directly.");
+      
+      // Import and call buildCustomComponent directly after DB update completes
+      try {
+        const buildModule = await import('~/server/workers/buildCustomComponent');
+        await buildModule.buildCustomComponent(jobId);
+        componentLogger.complete(jobId, "Successfully generated TSX code and triggered build");
+      } catch (importError) {
+        componentLogger.error(jobId, `Failed to import or call buildCustomComponent: ${importError instanceof Error ? importError.message : String(importError)}`);
+      }
     } catch (error) {
       componentLogger.error(jobId, "Error generating code", { 
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        type: "GENERATION_ERROR"
       });
       await updateComponentStatus(
         jobId, 
@@ -140,7 +155,8 @@ export async function processComponentJob(jobId: string): Promise<void> {
     }
   } catch (error) {
     componentLogger.error(jobId, "Error processing job", {
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      type: "PROCESSING_ERROR"
     });
     // Try to update status if possible
     try {
@@ -153,7 +169,8 @@ export async function processComponentJob(jobId: string): Promise<void> {
       );
     } catch (dbError) {
       componentLogger.error(jobId, "Could not update job status", { 
-        error: dbError instanceof Error ? dbError.message : String(dbError)
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        type: "STATUS_UPDATE_ERROR"
       });
     }
   }
@@ -189,14 +206,16 @@ export async function generateComponentCode(
       // Alternative approach for when the regex doesn't find good matches
       const words = description
         .split(/\s+/)
-        .filter((word) => word.length > 3)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .slice(0, 3);
-      if (words.length > 0) {
-        componentName = words.join('') + 'Scene';
-      }
+        .filter(word => word.length > 3)
+        .slice(0, 3)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+      
+      componentName = words.join('') + 'Scene';
     }
   }
+  
+  // Sanitize the component name
+  componentName = sanitizeComponentName(componentName);
 
   componentLogger.plan(jobId, `Using component name: ${componentName}`);
 
@@ -238,13 +257,23 @@ When creating React components with Remotion, please follow these guidelines:
 9. When generating TypeScript code, imports should include all necessary components and be properly structured.
 10. For visual styling, use CSS-in-JS (styled-components) or inline styles. This enables easier animation of properties.
 
+IMPORTANT RESTRICTION:
+- DO NOT use or reference any external images, videos, or other media files.
+- DO NOT use the <Img> component from Remotion to load images.
+- DO NOT include any code that attempts to load assets using URLs or file paths.
+- INSTEAD, create visual elements using CSS, SVG, or other programmatically generated graphics.
+- Focus on animations, shapes, text, and colors rather than loading external assets.
+- If the prompt mentions images, videos, or other assets, implement them as colored shapes, gradients, or SVG graphics.
+
 For animation:
 - Make extensive use of Remotion's animation utilities like interpolate and useCurrentFrame().
 - Separate entrance, main, and exit animations with clear timing windows.
 - Use spring() or other easing functions for natural movement.
 - Consider implementing progressive reveals of text or graphic elements.
+- Create simple shapes (circles, rectangles) using divs with appropriate styling.
+- Use SVG elements for more complex shapes and illustrations.
 
-IMPORTANT: Always return production-ready, styled TSX code that requires minimal editing.`
+IMPORTANT: Always return production-ready, styled TSX code that requires minimal editing. Use simple shapes, backgrounds, and text animations instead of external assets.`
         },
         {
           role: "user",
@@ -357,6 +386,9 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
 // Helper function to clean up and process generated code
 function processGeneratedCode(code: string, componentName: string): string {
   try {
+    // Ensure componentName is valid before processing
+    componentName = sanitizeComponentName(componentName);
+    
     // Fix common issues in the generated code
     
     // Some models include markdown code fences - remove them
@@ -376,6 +408,50 @@ function processGeneratedCode(code: string, componentName: string): string {
       processedCode = `"use client";\n\n${processedCode}`;
     }
     
+    // Remove any Img component imports
+    processedCode = processedCode.replace(/import\s+{([^}]*)Img([^}]*)}\s+from\s+['"]remotion['"]/g, (match, before, after) => {
+      return `import {${before}${after}} from 'remotion'`;
+    });
+    
+    // Remove any staticFile import if it exists
+    processedCode = processedCode.replace(/import\s+{([^}]*)staticFile([^}]*)}\s+from\s+['"]remotion['"]/g, (match, before, after) => {
+      return `import {${before}${after}} from 'remotion'`;
+    });
+    
+    // Clean up comma issues in imports that might be caused by removing items
+    processedCode = processedCode.replace(/import\s+{([^}]*)}\s+from\s+['"]remotion['"]/g, (match, importItems) => {
+      // Fix any potential double commas caused by removing items from import lists
+      const cleanedImports = importItems.replace(/,\s*,/g, ',').replace(/,\s*}/g, '}').replace(/{,\s*/g, '{');
+      return `import {${cleanedImports}} from 'remotion'`;
+    });
+    
+    // Process all imports to ensure there are no empty import brackets
+    processedCode = processedCode.replace(/import\s+{\s*}\s+from\s+['"][^'"]+['"]/g, '');
+    
+    // Remove any <Img> component usage with more robust regex that handles multiline
+    processedCode = processedCode.replace(/<Img[\s\n]+[^>]*src=\{[^}]*\}[^>]*>/g, 
+      `<div style={{ backgroundColor: '#3498db', width: '100px', height: '100px', borderRadius: '8px' }} />`);
+    
+    // Also catch single-quoted and double-quoted src attributes
+    processedCode = processedCode.replace(/<Img[\s\n]+[^>]*src=['"][^'"]*['"][^>]*>/g,
+      `<div style={{ backgroundColor: '#3498db', width: '100px', height: '100px', borderRadius: '8px' }} />`);
+    
+    // Replace any staticFile usage with a simple string
+    processedCode = processedCode.replace(/staticFile\(['"]([^'"]*)['"]\)/g, "''");
+    
+    // Remove any references to image file extensions
+    const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'];
+    
+    // Create a regex to match strings containing image extensions
+    const imageExtRegex = new RegExp(`['"][^'"]*\\.(${imageExtensions.join('|')})[^'"]*['"]`, 'g');
+    processedCode = processedCode.replace(imageExtRegex, "''");
+    
+    // Log what we've done
+    logger.debug(`Processed component code for ${componentName}`, {
+      component: true,
+      codeLength: processedCode.length
+    });
+    
     return processedCode;
   } catch (error) {
     logger.error(`Error processing generated code`, { 
@@ -386,4 +462,28 @@ function processGeneratedCode(code: string, componentName: string): string {
     // Return original code if processing fails
     return code;
   }
+}
+
+/**
+ * Sanitizes a component name to ensure it's a valid JavaScript identifier
+ * - Cannot start with a number
+ * - Can only contain letters, numbers, $ and _
+ */
+function sanitizeComponentName(name: string): string {
+  if (!name) return 'CustomComponent';
+  
+  // Remove any invalid characters
+  let sanitized = name.replace(/[^a-zA-Z0-9_$]/g, '');
+  
+  // If it starts with a number, prefix with "Scene"
+  if (/^[0-9]/.test(sanitized)) {
+    sanitized = `Scene${sanitized}`;
+  }
+  
+  // Ensure it's not empty
+  if (!sanitized) {
+    sanitized = 'CustomComponent';
+  }
+  
+  return sanitized;
 }

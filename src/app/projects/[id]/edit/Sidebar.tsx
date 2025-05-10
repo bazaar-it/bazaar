@@ -415,9 +415,9 @@ export default function Sidebar({
     }
   };
 
-  // Filter navItems to only show preview and chat
+  // Filter navItems to show preview, chat, scene planning, and projects panels
   const visibleNavItems = navItems.filter(item => 
-    item.type === 'preview' || item.type === 'chat'
+    item.type === 'preview' || item.type === 'chat' || item.type === 'sceneplanning' || item.type === 'projects'
   );
 
   return (
@@ -449,26 +449,19 @@ export default function Sidebar({
         {/* New Project Button with enhanced styling - aligned left when expanded */}
         <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
           {isCollapsed ? (
-            <Button
+            <NewProjectButton
               className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               variant="ghost"
-              onClick={() => {
-                router.push('/projects/new');
-              }}
-            >
-              <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-            </Button>
+              size="icon"
+              showIcon={true}
+            />
           ) : (
-            <Button 
+            <NewProjectButton 
               className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
               variant="ghost"
-              onClick={() => {
-                router.push('/projects/new');
-              }}
-            >
-              <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3" />
-              <span className="text-sm font-normal">New Project</span>
-            </Button>
+              size="default"
+              showIcon={true}
+            />
           )}
         </div>
 

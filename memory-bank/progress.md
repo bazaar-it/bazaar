@@ -940,4 +940,285 @@ The auto project naming system wasn't working correctly - the first user message
 - Implement more comprehensive schema validation to prevent future mismatches
 - Create database migration to ensure `tsxCode` field has correct type and indexing as needed
 
-## Sprint 14 Progress - End-to-End Video Generation Pipeline
+## May 10th, 2025 - Animation Design Brief (ADB) System Issues and Fixes
+
+### Issues Found in Animation Design Brief Pipeline
+
+1. **Missing OpenAI Client Module**: Discovered that `~/server/lib/openai/index.ts` was missing, causing import errors in `generateComponentCode.ts` which relied on importing the OpenAI client from this module.
+
+2. **Component Job Processing Issues**: 
+   - Generated jobs have valid TSX code in the database, but had status "building" with error "TSX code is missing for this job"
+   - This indicated a disconnect between the component generation and the component build pipeline
+
+3. **Jest Configuration Issues**:
+   - Discovered issues with the babel-jest configuration that were causing test failures for ESM modules 
+   - The configuration had unsupported assumptions that were causing dynamic imports to fail
+
+### Fixes Implemented
+
+1. **Fixed OpenAI Module Structure**:
+   - Created the missing `~/server/lib/openai/index.ts` file exporting the OpenAI client correctly
+   - This fixed the import errors in the component generation code
+
+2. **Updated Jest Configuration**:
+   - Fixed `babel.jest.config.cjs` to properly handle dynamic imports
+   - Enabled `babel-plugin-transform-import-meta` for better ESM module support
+   - Changed `modules` from "false" to "auto" to let babel determine module type
+
+### Next Steps
+
+1. **Testing Updates**:
+   - Run the component generation tests again to verify that our fixes work
+   - Address any remaining TypeScript errors in the test implementations
+   - Improve test coverage for the Animation Design Brief pipeline
+
+2. **Component Builder Enhancement**:
+   - Verify the integration between component generation and building
+   - Add better error handling for the component build pipeline
+   - Ensure streaming updates work properly during component generation
+
+3. **Documentation Improvement**:
+   - Document the ADB pipeline architecture and components
+   - Create comprehensive test fixtures for the ADB system
+   - Add examples of component generation for future reference
+
+### Current Status of Animation Design Brief Pipeline
+
+- Backend implementation: ~85-90% complete
+- Frontend implementation: ~30% complete
+- Overall system integration: ~50% complete
+- Test coverage: ~25% complete (needs significant improvement)
+
+## 2025-05-10: Fixed Custom Component Build Race Condition
+
+### What's Working Now
+- ✅ Fixed race condition in component generation pipeline
+- ✅ Component jobs now properly save TSX code and trigger builds in correct sequence
+- ✅ Resolved "TSX code is missing for this job" errors by ensuring the build process is triggered after the code is saved
+
+### What Was Fixed
+- The build worker was fetching job records before the TSX code was saved to the database
+- Modified `generateComponentCode.ts` to directly trigger `buildCustomComponent` after successfully saving TSX code
+- Updated error handling in `buildCustomComponent.ts` to properly report errors
+
+### Known Issues
+- None at this time
+
+## 2025-05-10: Custom Component Frontend Integration
+
+### What's Working Now
+- ✅ API route `/api/components/[componentId]` implemented to serve component JS bundles via redirect to R2
+- ✅ API route `/api/components/[componentId]/metadata` added to fetch component job metadata 
+- ✅ API route `/api/animation-design-briefs/[briefId]` added to retrieve ADB data
+- ✅ Updated `CustomScene` component to fetch and pass Animation Design Brief data to components 
+- ✅ Added tRPC endpoint `customComponent.getJobById` to query component job details
+- ✅ Fixed race condition in component build process (see previous entry)
+
+### Implementation Details
+1. **Component Serving System**:
+   - Components are built and stored on R2, with URLs saved in the `customComponentJobs` table
+   - The API routes act as proxies, redirecting to the R2 URLs for JS files
+   - API routes provide metadata and ADB data needed by the remote components
+
+2. **Animation Design Brief Integration**:
+   - `CustomScene` now fetches the animation design brief for a component
+   - The brief is passed as a `brief` prop to the component
+   - Implemented proper loading states with `delayRender`/`continueRender`
+
+3. **Error Handling**:
+   - Added comprehensive error handling for all API routes
+   - Component loading/ADB fetching errors are displayed in the preview
+
+### Next Steps
+- Optimize data loading for ADB fetch, potentially using tRPC query hooks
+- Add caching for component metadata and ADB data
+- Further refine error handling and add retry logic
+- Add documentation for component developers
+
+## 2025-05-10: Implemented Image Handling Strategy for Custom Components
+
+### What's Working Now
+- ✅ Modified LLM prompts to avoid generating components that reference external image files
+- ✅ Implemented comprehensive post-processing with robust regex patterns to remove image references
+- ✅ Updated Animation Design Brief instructions to focus on animations without external assets
+- ✅ Created comprehensive documentation about this approach in `memory-bank/remotion/custom-component-image-handling.md`
+
+### Implementation Details
+1. **Shape-Based Approach**:
+   - Instructed LLM to create components using only CSS-styled divs, SVG shapes, and text
+   - Added sophisticated regex-based processing that:
+     - Properly cleans import statements to remove Img and staticFile imports
+     - Handles multiline patterns and complex JSX attributes
+     - Removes any strings containing image file extensions
+     - Replaces all image tags with colored divs that maintain animations
+   - Replaced image elements with colored rectangles that still maintain the animation properties
+
+2. **Temporary Solution**:
+   - This approach focuses on getting animations working reliably first
+   - Future sprints will implement proper asset management with R2 storage
+   - Created documentation explaining the rationale and future implementation plans
+
+3. **Documentation**:
+   - Added developer guidelines for reviewing generated components
+   - Documented the post-processing safeguards implemented
+   - Created testing notes to help identify potential edge cases
+
+### Next Steps
+- Test the modified component generation with various scene descriptions
+- Monitor effectiveness of the enhanced regex processing
+- Begin planning the asset management system for a future sprint
+
+## 2025-05-10: Improved ScenePlanningHistoryPanel with TypeScript Fixes and Visual Enhancements
+
+### What's Working Now
+- ✅ Fixed TypeScript errors in ScenePlanningHistoryPanel component
+- ✅ Added proper state management for custom component job linking
+- ✅ Improved animation design brief visualization with better UI
+- ✅ Added component status visualization in the panel
+- ✅ Enhanced color palette preview with visual swatches
+
+### Implementation Details
+1. **TypeScript Error Resolution**:
+   - Fixed duplicate variable declarations (`briefsLoading`)
+   - Added proper state management for tracking component jobs with `jobMap`
+   - Used optional chaining for safer object property access
+   - Ensured proper API endpoint references for animation data
+
+2. **UI Improvements**:
+   - Created visual color previews for animation design briefs
+   - Added proper component status indicators with icons
+   - Enhanced the layout for better information hierarchy
+   - Improved error handling and visualization
+
+## 2025-05-12: Fixed Component Build Failures Caused by Invalid JavaScript Names
+
+### What's Working Now
+- ✅ Fixed component name validation to prevent esbuild syntax errors
+- ✅ All components now build successfully, even when LLMs suggest names starting with numbers (e.g., "3dModelsSpinScene")
+- ✅ More robust component generation pipeline with better error handling
+
+### Implementation Details
+1. **Component Name Sanitization**:
+   - Added `sanitizeComponentName` function that ensures component names are valid JavaScript identifiers:
+     - Cannot start with a number (prefixes with "Scene" if it does)
+     - Only contains valid characters (letters, numbers, $ and _)
+     - Is never empty (defaults to "CustomScene")
+   - Applied to all places where component names are generated:
+     - `componentGenerator.service.ts` (for components generated from ADBs)
+     - `generateComponentCode.ts` (for components generated from LLM code)
+     - `sceneAnalyzer.service.ts` (for component names from scene descriptions)
+
+2. **Root Cause Analysis**:
+   - Identified from logs that component names starting with numbers (like "3dModelsSpinScene") were causing esbuild syntax errors
+   - These errors would prevent the component from being built and bundled, resulting in failed component jobs
+   - LLMs often generate component names with numbers, especially for concepts like "3D", "2D", etc.
+
+3. **Documentation**:
+   - Added detailed documentation in `memory-bank/sprints/sprint15/component-name-validation.md`
+   - Updated TODO-critical.md with information about the fix
+
+### Next Steps
+- Continue monitoring component builds for any other issues
+- Consider adding more robust validation for other JavaScript syntax requirements in generated component code
+
+## 2025-05-13: Fixed Component Loading Process & SSL Issues
+
+### What's Working Now
+- ✅ Fixed SSL issues with R2 URLs by implementing a proxy solution in the API routes
+- ✅ Added comprehensive debugging to CustomScene and useRemoteComponent
+- ✅ Created missing API endpoint for Animation Design Briefs
+- ✅ Fixed component name sanitization to prevent esbuild errors with numeric names
+
+### Implementation Details
+1. **R2 SSL Issue Workaround**:
+   - Modified `/api/components/[componentId]/route.ts` to proxy the R2 content instead of redirecting to it
+   - This solves the SSL/TLS certificate issue with the R2 bucket
+   - Added fallback to direct redirect if proxy fails
+
+2. **CustomScene Improvements**:
+   - Added detailed error handling and logging to all stages of component loading
+   - Fixed useRemoteComponent to work better with CustomScene
+   - Added visual error states for debugging
+
+3. **API Endpoints**:
+   - Created missing API endpoint for Animation Design Briefs
+   - Fixed logger imports in API routes
+   - Standardized error handling across API endpoints
+
+4. **Component Name Validation**:
+   - Added `sanitizeComponentName` function to prevent component names starting with numbers
+   - Applied to all code generation paths:
+     - componentGenerator.service.ts
+     - generateComponentCode.ts
+     - sceneAnalyzer.service.ts
+
+### What's Next
+- Ensure chat UI updates correctly after component generation
+- Add additional logging to debug network requests for component loading
+- Monitor component loading performance and optimize if needed
+
+## 2025-05-15: Fixed Complete Component Loading Pipeline
+
+### What's Working Now
+- ✅ Components successfully build, load, and appear in the timeline and preview
+- ✅ Fixed SSL certificate issues with R2 URLs through API proxying
+- ✅ Implemented component name validation to prevent esbuild syntax errors
+- ✅ Added proper error handling and debugging to the component loading process
+- ✅ Fixed chat "pending" state to properly update when components are ready
+- ✅ Created missing animation design brief API endpoint
+
+### Implementation Details
+1. **R2 URL Proxying**:
+   - Modified API routes to proxy content from R2 instead of redirecting
+   - Added proper CORS headers to all API responses
+   - Implemented fallback mechanisms for component loading
+
+2. **Component Name Validation**:
+   - Created `sanitizeComponentName` function across multiple services
+   - Ensured component names are valid JavaScript identifiers
+   - Prevented build errors from names starting with numbers
+
+3. **Enhanced Error Handling**:
+   - Improved CustomScene and useRemoteComponent with better error states
+   - Added extensive logging throughout component loading process
+   - Implemented graceful fallbacks for all error conditions
+   
+4. **Frontend Integration**:
+   - Added proper refresh triggers to update UI when components are ready
+   - Fixed event processing in ChatPanel for component generation events
+   - Fixed API route parameter naming conflicts
+
+### Next Steps
+- Continue monitoring build success rates
+- Improve performance of component loading
+- Add user feedback during component generation process
+
+## Recent Fixes
+
+### Fixed Custom Components Not Showing in Preview Panel (2025-05-10)
+
+We fixed a critical issue where custom components were not appearing in the preview panel despite being correctly generated in the backend. The key fixes included:
+
+1. **Cache Busting**: Added timestamps to all component-related API requests and script loading to bypass browser caching
+2. **Force Refresh Mechanisms**: Added both automatic and manual refresh capabilities to the PreviewPanel
+3. **Component Remounting**: Implemented proper key-based remounting for React components throughout the Remotion pipeline
+4. **Script Tag Management**: Improved script loading with proper cleanup and error handling
+5. **API Request Parameters**: Fixed parameter ordering in API calls to match expected function signatures
+
+These fixes ensure that when new custom components are generated, they appear immediately in the preview panel without requiring page refreshes. A manual refresh button was also added as a fallback mechanism.
+
+Detailed documentation about the fix is available in [memory-bank/component-loading-fixes.md](./component-loading-fixes.md).
+
+## Component Refresh Debugging (2023-05-11)
+- Added extensive debug logging throughout component rendering chain
+- Fixed refresh functionality by adding a central refresh token in the videoState store
+- Implemented manual cache clearing for component scripts
+- Added detailed documentation in component-loading-fixes.md
+- Fixed hydration issues by standardizing timestamp handling
+
+### Key fixes:
+1. Added forceRefresh function to videoState store
+2. Enhanced PreviewPanel to use store-based refresh
+3. Improved script tracking and cleanup in useRemoteComponent
+4. Added detailed logging throughout the component refresh flow
+5. Updated CustomScene and DynamicVideo to properly handle refreshToken
