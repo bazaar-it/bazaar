@@ -5,31 +5,29 @@ import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Sign in to Bazaar Vid</h1>
+    <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
+      <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Sign in to Bazaar</h1>
 
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
-            className="flex w-full items-center justify-center gap-3 rounded-md bg-gray-900 py-2 px-4 text-white hover:bg-gray-700 transition"
-          >
-            <span className="flex items-center justify-center w-5 h-5">
-              <GitHubIcon className="w-full h-full" />
-            </span>
-            Sign in with GitHub
-          </button>
+      <div className="flex flex-col gap-4">
+        <button
+          onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+          className="flex w-full items-center justify-center gap-3 rounded-md bg-gray-900 py-2 px-4 text-white hover:bg-gray-700 transition"
+        >
+          <span className="flex items-center justify-center w-5 h-5">
+            <GitHubIcon className="w-full h-full" />
+          </span>
+          Sign in with GitHub
+        </button>
 
-          <button
-            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-            className="flex w-full items-center justify-center gap-3 rounded-md bg-blue-600 py-2 px-4 text-white hover:bg-blue-500 transition"
-          >
-            <span className="flex items-center justify-center w-5 h-5">
-              <GoogleIcon className="w-full h-full" />
-            </span>
-            Sign in with Google
-          </button>
-        </div>
+        <button
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          className="flex w-full items-center justify-center gap-3 rounded-md bg-blue-600 py-2 px-4 text-white hover:bg-blue-500 transition"
+        >
+          <span className="flex items-center justify-center w-5 h-5">
+            <GoogleIcon className="w-full h-full" />
+          </span>
+          Sign in with Google
+        </button>
       </div>
     </div>
   );

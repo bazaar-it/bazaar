@@ -1,5 +1,70 @@
 # Project Progress
 
+## 2025-05-XX: UI Simplification - Header Cleanup
+
+### 1. Project Title Removal
+- Removed the project title display and edit functionality from the center of the AppHeader
+- Commented out the entire section to maintain the original code for potential future reactivation
+- This simplifies the header UI and removes an element that was redundant with the auto-naming feature
+- The auto-naming functionality still works in the background, but the display has been hidden
+
+## Recent UI/UX Improvements - Video Player and Timeline
+
+We've been implementing significant UI/UX improvements to enhance the user experience in the Bazaar-Vid application:
+
+### Completed Improvements
+
+1. **Homepage UI Overhaul**
+   - ✅ Updated header text to "Built it? Now Broadcast it."
+   - ✅ Implemented larger multi-line text input for entering prompts
+   - ✅ Added example video cards in a responsive grid showing animations 
+   - ✅ Created auto-scrolling company logo carousel
+   - ✅ Added "Beta V1" label beside the logo
+   - ✅ Implemented expandable FAQ section with smooth animations
+   - ✅ Added email subscription form for updates
+   - ✅ Added typewriter-style rotating prompt to the input field showing different demo video ideas
+
+2. **Files Panel Improvements**
+   - ✅ Renamed panel from "Projects" to "Files" for clarity
+   - ✅ Fixed scrolling issues and improved responsive layouts
+   - ✅ Enhanced card hover states and spacing
+   - ✅ Streamlined upload zone UI
+
+3. **Video Player Enhancements**
+   - ✅ Improved synchronization between player and timeline
+   - ✅ Added debug mode toggle in PreviewPanel
+   - ✅ Enhanced loading states with proper animations
+
+4. **Timeline Interface**
+   - ✅ Implemented full drag-and-drop functionality
+   - ✅ Added visual feedback during drag operations
+   - ✅ Improved collision detection for timeline items
+   - ✅ Implemented track management with collapsible rows
+
+### Next UI/UX Improvements
+
+1. **Player Controls Enhancement** (Medium Priority)
+   - [ ] Add custom player controls that match the application design
+   - [ ] Implement keyboard shortcuts for player control
+   - [ ] Add frame-by-frame stepping functionality
+   - [ ] Create visual indicator for loading/buffering states
+
+2. **Timeline Refinement** (High Priority)
+   - [ ] Add timeline snapping functionality (snap to grid, snap to other items)
+   - [ ] Implement multi-select and group operations
+   - [ ] Create keyboard shortcut overlay/help panel
+   - [ ] Improve accessibility features
+
+3. **Animation Preview** (Medium Priority)
+   - [ ] Add quick preview for Animation Design Briefs
+   - [ ] Create visual indicators for component generation status
+   - [ ] Implement animation timing visualization
+
+4. **Responsive Design Improvements** (Low Priority)
+   - [ ] Optimize layout for tablet devices
+   - [ ] Improve mobile friendliness where applicable
+   - [ ] Create collapsible panels for smaller screens
+
 ## UI Improvements Integration - Latest Updates
 
 We've been integrating UI improvements from the `feature/ui-refactor` branch while maintaining the current backend architecture and functionality.
@@ -40,7 +105,24 @@ We've been integrating UI improvements from the `feature/ui-refactor` branch whi
 - Optimize performance of drag-and-drop interface
 - Review and refactor for code quality
 
+## 2023-05-XX: Editor UI Refinements
 
+### 1. Header Styling
+- Added 15px border-radius to the bottom corners of the header for improved aesthetics
+- Maintained square corners at the top for clean header-top alignment
+
+### 2. Temporarily Hidden Export Button
+- The Export button in the header has been temporarily hidden until the export feature is fully implemented
+- Button was commented out in the AppHeader component to prevent confusion for users
+
+### 3. AI-Generated Video Naming
+- Implemented a new feature that automatically generates a file name from the user's first chat prompt
+- Created a utility function `generateNameFromPrompt` in `src/lib/nameGenerator.ts` to clean and format user prompts into concise titles
+- The ChatPanel component now detects first messages in new projects and renames the project automatically
+- Implementation uses regex patterns to clean up common phrases and focuses on extracting meaningful words
+
+### 4. Sidebar Style Updates
+- Reduced the top padding in the sidebar from 50px to 30px per design specifications
 
 ## Sprint 14 Progress - End-to-End Video Generation Pipeline
 
@@ -731,6 +813,114 @@ The Animation Design Brief system now provides:
 - Testing the updated ADB generation system to ensure it produces valid briefs
 - Implementing remaining items from the TODO-critical.md document
 - Ensuring proper end-to-end integration with the component generator
+
+## UI Refinements - Sidebar Layout and Alignment
+
+### Changes Made
+- Adjusted sidebar width to a smaller fixed size (10rem) when expanded instead of full 16rem
+- Aligned items to the left when sidebar is expanded for better readability and accessibility
+- Ensured sidebar is vertically aligned with the workspace panel content
+- Improved padding with 10px on left and 20px on right when expanded
+- Fixed spacing calculations between sidebar and workspace panel
+- Used explicit top/bottom values for consistent vertical alignment
+- Added 15px extra vertical padding at the top of the sidebar (25px total) for better spacing
+- Removed shadow-sm from workspace panel to eliminate the stroke/border at the bottom
+- Fixed double spacing at the bottom of the page by removing redundant buffer zone
+
+### Benefits
+- More efficient use of horizontal space with narrower sidebar
+- Better content alignment when sidebar is expanded with left-aligned text
+- Improved visual balance with consistent spacing throughout the interface
+- More precise control over spacing and alignment
+- Reduced empty space between sidebar and workspace content
+- Cleaner visual appearance without unnecessary borders at the bottom of the workspace
+- Better vertical rhythm with proper padding above the first sidebar button
+- Consistent 10px spacing at the bottom of the page, eliminating redundant spacing
+
+### Next Steps
+- Continue refinement of spacing and alignment in other UI components
+- Test responsive behavior across different screen sizes
+- Consider additional UI improvements for better user experience
+
+## Homepage Text Updates
+
+### Changes Made
+- Updated main headline to "Motion Graphics, Made Simple"
+- Changed subheadline to "Create stunning motion graphic scenes from a simple prompt"
+- Replaced "Vibe Code your Demo Video" section heading with "Create anything"
+- Updated Step 1 description text in How it Works section to "Describe exactly what you want to create in a scene — the more detail the better"
+- Revised the FAQ answer for "How do I save it?" to provide more accurate information about the upcoming export feature
+- Changed typewriter prompt examples to feature motion graphic scene descriptions instead of app ideas
+- Updated typewriter prefix from "Create a demo video for" to simply "Create" to match the new examples
+- Generalized the first example card prompt by removing the specific mention of "Remotion"
+- Changed FAQ question from "What is Bazaar?" to "WTF is Bazaar?" for a more casual, attention-grabbing tone
+
+### Benefits
+- More accurate description of the product's purpose and capabilities
+- Clearer explanation of what users can create with the platform
+- Better guidance for users on how to write effective prompts
+- More transparent information about current limitations and upcoming features
+- Improved user expectations regarding saving/exporting functionality
+- Examples now better showcase the motion graphic capabilities of the platform
+- Prompts provide inspiration for the specific type of content users can create
+- Removed technical implementation details that may confuse non-technical users
+- More casual, modern tone that appeals to creative professionals and designers
+
+### Next Steps
+- Monitor user engagement with the updated text
+- Gather feedback on the clarity of instructions
+- Update the FAQ section as new features are implemented
+- Consider adding more targeted prompt examples as new capabilities are added
+
+## Auto Project Naming Fix
+
+### Issue
+The auto project naming system wasn't working correctly - the first user message wasn't being used to generate a project name and update the header.
+
+### Changes Made
+- Fixed the condition for auto-naming to use only `isFirstMessageRef` instead of also checking message counts
+- Added proper error handling around the name generation and project renaming code
+- Added detailed logging throughout the auto-naming process for easier debugging
+- Ensured `isFirstMessageRef` is explicitly set to true for new projects and false for existing projects
+- Improved success and error messages to be more visible in the console
+
+### Benefits
+- Projects are now automatically named based on the first chat message
+- More resilient error handling prevents naming failures from affecting other functionality
+- Improved logging makes it easier to diagnose any issues with the naming system
+- Better state management ensures consistent behavior across different usage patterns
+- Clear visual indication in the header when a project name is updated
+
+### Technical Details
+- The fix primarily involved improving the condition in the `handleSubmit` function that checks when to apply auto-naming
+- Added proper error boundary with try/catch around the naming code
+- Enhanced the initialization logic for the `isFirstMessageRef` state to ensure it works correctly on page load
+- Improved console logs with emoji indicators for better visibility in the developer console
+
+## Sign-in Page Redesign
+
+### Changes Made
+- Transformed the authentication UI from a full-height container to a compact, centered panel design
+- Changed the heading from "Sign in to Bazaar Vid" to "Sign in to Bazaar" for simplicity and brand consistency
+- Added a properly styled close button in the top-right corner with hover effects
+- Redesigned the login modal to be lighter and less intrusive
+- Improved the responsiveness and visual alignment of the authentication components
+- Made the modal more compact by removing unnecessary padding and adjusting dimensions
+
+### Benefits
+- Improved user experience with a less overwhelming authentication interface
+- Cleaner visual design that takes up only necessary screen space
+- Better alignment with modern authentication UI patterns
+- More consistent branding with the rest of the application
+- Enhanced affordance with the improved close button design and hover states
+- Reduced cognitive load during the authentication process
+
+### Technical Implementation
+- Removed the full-height container wrapper from the login component
+- Simplified the DOM structure for better performance
+- Added a clearly defined close button with SVG icon for better accessibility
+- Improved component reusability between standalone and modal contexts
+- Enhanced z-index handling to ensure proper modal layering
 
 ### Debug Findings - Component Generation Issues (May 10, 2025)
 

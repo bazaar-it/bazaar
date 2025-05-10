@@ -182,9 +182,9 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
   const initialDuration = initialProps?.meta?.duration || 0;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden relative bg-gray-50/30">
-      {/* App Header - Fixed at top with very high z-index */}
-      <div className="sticky top-0 z-50 w-full bg-white shadow-sm border-b border-gray-100">
+    <div className="h-screen flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
+      {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
+      <div className="sticky top-0 z-40 w-full bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 rounded-bl-[15px] rounded-br-[15px]">
         <AppHeader
           projectTitle={title}
           onRename={handleRename}
@@ -195,12 +195,19 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
         />
       </div>
       
-      <div className="flex-1 relative overflow-hidden px-2.5 pb-2.5 pt-2.5">
+      {/* Create a uniform 10px buffer zone below the header */}
+      <div className="h-[10px] w-full flex-shrink-0 bg-white dark:bg-gray-900"></div>
+      
+      {/* Main container with horizontal buffer zones on both sides */}
+      <div className="flex-1 relative overflow-hidden px-[10px]">
         {/* Main Content Area - Adjusts position based on sidebar expanded state */}
         <div
-          className="absolute top-0 bottom-0 right-0 z-0 bg-white/95 rounded-[15px] shadow-lg overflow-hidden" 
+          className="absolute inset-0 z-0 bg-white dark:bg-gray-900 rounded-lg overflow-hidden" 
           style={{
-            left: isSidebarExpanded ? 'calc(220px + 15px)' : 'calc(58px + 15px)', // Adjust based on sidebar width
+            left: isSidebarExpanded ? 'calc(10rem + 20px)' : 'calc(3rem + 15px + 10px)', 
+            right: '10px',
+            top: '0',
+            bottom: '10px',
             transition: 'left 0.3s cubic-bezier(0.4,0,0.2,1)'
           }}
         >
@@ -217,14 +224,14 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
               {/* Timeline panel - now integrated more directly */}
               {timelineMode === 'vertical' && (
                 <div 
-                  className="absolute bottom-0 left-0 right-0 border-t border-gray-100 bg-white overflow-hidden rounded-b-[15px]"
+                  className="absolute bottom-0 left-0 right-0 border-t border-gray-100 bg-white dark:bg-gray-900 overflow-hidden rounded-b-[15px]"
                   style={{ height: `${timelineHeight}px` }}
                 >
-                  <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
-                    <span className="font-medium text-sm text-gray-800">Timeline</span>
+                  <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 dark:bg-gray-800">
+                    <span className="font-medium text-sm text-gray-800 dark:text-gray-200">Timeline</span>
                     <div className="flex items-center gap-2">
                       <button 
-                        className="cursor-ns-resize p-1 rounded-[8px] hover:bg-gray-200/70 transition-colors"
+                        className="cursor-ns-resize p-1 rounded-[8px] hover:bg-gray-200/70 dark:hover:bg-gray-700/70 transition-colors"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           const startY = e.clientY;
@@ -252,7 +259,7 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
                       </button>
                       <button 
                         onClick={closeTimeline}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-[8px] hover:bg-gray-200/70"
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-[8px] hover:bg-gray-200/70 dark:hover:bg-gray-700/70"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -260,7 +267,7 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
                       </button>
                     </div>
                   </div>
-                  <div className="p-3 h-full overflow-y-auto bg-white text-gray-900">
+                  <div className="p-3 h-full overflow-y-auto bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
                     <TimelinePanel />
                   </div>
                 </div>
@@ -271,7 +278,7 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
         
         {/* Sidebar with absolute positioning that adjusts width based on expanded state */}
         <div 
-          className={`absolute left-0 top-0 bottom-0 ${isSidebarExpanded ? 'w-[220px]' : 'w-[58px]'} z-40 bg-white rounded-[15px] shadow-lg overflow-hidden border border-gray-200 transition-all duration-300`}>
+          className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <Sidebar
             projects={initialProjects}
             currentProjectId={projectId}

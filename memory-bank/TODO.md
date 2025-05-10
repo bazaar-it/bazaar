@@ -240,3 +240,41 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
 - [x] Basic UI for ADB display in ScenePlanningHistoryPanel.tsx
 - [x] Integration of ADBs with component generation
 - [x] Fixed temperature parameter issues with o4-mini model
+
+## UI/UX Improvement Tasks
+
+### HIGH Priority
+- Implement timeline snapping functionality
+  - Add snap-to-grid functionality with configurable grid size
+  - Implement snap-to-item edges for precise alignment
+  - Create visual indicators when snapping occurs
+  - Add toggle for enabling/disabling snapping
+- Implement multi-select for timeline items
+  - Add shift+click for range selection
+  - Add ctrl/cmd+click for individual item selection
+  - Implement group move/resize operations for selected items
+  - Create visual indicator for selected item group
+
+### MEDIUM Priority
+- Enhance video player controls
+  - Create custom player control UI matching the application design
+  - Add keyboard shortcuts for common player actions
+  - Implement frame-by-frame stepping (forward/backward)
+  - Add visual indicator for buffering/loading states
+- Implement Animation Design Brief preview
+  - Create visual preview of animation effects from briefs
+  - Add status indicators for component generation
+  - Implement quick edit functionality for animation properties
+  - Create visualization for animation timing and keyframes
+
+### LOW Priority
+- Improve responsive design
+  - Optimize layout for tablet devices
+  - Create collapsible panels for smaller screens
+  - Implement touch-friendly controls for mobile use
+  - Add responsive typography scaling
+- Add accessibility enhancements
+  - Implement keyboard navigation throughout the application
+  - Add ARIA attributes for screen reader support
+  - Improve focus management for keyboard users
+  - Create high-contrast theme option

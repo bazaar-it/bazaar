@@ -14,6 +14,7 @@ import type { Operation } from "fast-json-patch";
 import { useSelectedScene } from "~/components/client/Timeline/SelectedSceneContext";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { generateNameFromPrompt } from "~/lib/nameGenerator";
 
 export default function ChatPanel({ projectId }: { projectId: string }) {
   const [message, setMessage] = useState("");
@@ -30,9 +31,22 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     clearOptimisticMessages 
   } = useVideoState();
   
+  // Add ref to track if this is the first user message
+  const isFirstMessageRef = useRef(true);
+  
   // Get the currently selected scene from context
   const { selectedSceneId } = useSelectedScene();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Set up rename mutation
+  const renameMutation = api.project.rename.useMutation({
+    onSuccess: (data) => {
+      console.log("Project renamed successfully:", data);
+    },
+    onError: (error) => {
+      console.error("Failed to rename project:", error);
+    }
+  });
   
   // Get or create a persistent client ID for reconnection support
   const clientIdRef = useRef<string | null>(null);
@@ -480,10 +494,24 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     }
   };
 
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isStreaming) return;
+    
+    // Generate project name from first message
+    if (isFirstMessageRef.current && optimisticChatHistory.length === 0 && dbMessages?.length === 0) {
+      const generatedName = generateNameFromPrompt(message);
+      console.log(`Generated project name from first message: "${generatedName}"`);
+      
+      // Update project name
+      renameMutation.mutate({
+        id: projectId,
+        title: generatedName,
+      });
+      
+      // Update flag to prevent renaming on subsequent messages
+      isFirstMessageRef.current = false;
+    }
     
     // Start streaming response
     initiateChatMutation.mutate({
@@ -573,16 +601,19 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
   const isLoading = isLoadingMessages && !hasDbMessages && !hasOptimisticMessages;
   const showWelcome = !hasDbMessages && !hasOptimisticMessages && !isLoading;
 
+  // Check if we have any existing messages on load to determine if this is a new project
+  useEffect(() => {
+    if (dbMessages && dbMessages.length > 0) {
+      // If we already have messages, this isn't a new project
+      isFirstMessageRef.current = false;
+    }
+  }, [dbMessages]);
+
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-gray-100">
-        <h2 className="text-lg font-medium">Chat</h2>
-        <p className="text-sm text-muted-foreground">Describe changes to your video</p>
-      </div>
-      
       {/* Messages container */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {isLoading ? (
+        {isLoadingMessages ? (
           <div className="flex justify-center items-center h-10">
             <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
             <span className="ml-2 text-xs text-muted-foreground">Loading...</span>
@@ -720,12 +751,6 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
 
       {/* Message input */}
       <div className="p-4 border-t border-gray-100">
-        {!selectedSceneId && (
-          <div className="mb-2 flex items-center gap-2 text-xs text-amber-500">
-            <AlertTriangleIcon className="h-3 w-3" />
-            <span>No scene selected. Your changes will apply to the entire project.</span>
-          </div>
-        )}
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={message}
