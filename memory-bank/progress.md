@@ -1,5 +1,34 @@
 # Project Progress
 
+## NEXT_REDIRECT Error Fix (2025-05-11)
+
+### Issue
+- When using `redirect()` within try/catch blocks, users were seeing a `NEXT_REDIRECT` error
+- The redirect wasn't actually happening, and the error was visible in the console
+
+### Technical Explanation
+- The `redirect()` function in Next.js works by throwing a special error under the hood called `NEXT_REDIRECT`
+- This error is meant to be caught by Next.js's internal error handling to perform the redirection
+- When we put `redirect()` inside a try/catch block, we're catching Next.js's internal error and preventing the redirect
+
+### Solution
+- Move all `redirect()` calls outside of try/catch blocks
+- Fixed the `/projects/new` route by:
+  1. Capturing database operation results in a variable
+  2. Performing database operations inside try/catch for error safety
+  3. Moving the redirect logic outside the try/catch block
+  4. Ensuring redirects happen based on the operation results
+
+### Documentation
+- Created new documentation in `memory-bank/api-docs/next-redirect.md` explaining best practices
+- Documented proper patterns for using redirect with Server Actions
+- Referenced the GitHub issue discussing this problem
+
+### Benefits
+- Users can now create new projects without seeing errors
+- Redirects work properly after operations complete
+- Code follows Next.js best practices for error handling with redirects
+
 ## 2025-05-XX: UI Simplification - Header Cleanup
 
 ### 1. Project Title Removal
@@ -1222,3 +1251,25 @@ Detailed documentation about the fix is available in [memory-bank/component-load
 3. Improved script tracking and cleanup in useRemoteComponent
 4. Added detailed logging throughout the component refresh flow
 5. Updated CustomScene and DynamicVideo to properly handle refreshToken
+
+## Quick Fix - Project Creation Error (2025-05-11)
+
+### Issue
+- Users were encountering `duplicate key value violates unique constraint "project_unique_name"` errors when creating new projects
+- The error occurred because the `/projects/new` route was using a hardcoded "New Project" title for all projects
+- The database schema has a unique constraint on `(userId, title)` pairs in the projects table
+
+### Solution Implemented
+- Updated the `/projects/new` route to generate unique project titles
+- Implemented a solution similar to the existing logic in the TRPC router:
+  1. Query for all existing projects with titles matching "New Project%"
+  2. Find the highest number suffix in use (e.g., "New Project 5")
+  3. Generate a new title with the next sequential number (e.g., "New Project 6")
+  4. If no "New Project" titles exist, use "New Project" (first project)
+- Ensures that each user can create multiple projects without constraint violations
+
+### Benefits
+- Users can now create new projects without encountering database errors
+- Provides consistent naming scheme for auto-generated project titles
+- Preserves the unique constraint which prevents confusion from duplicate project names
+- Aligns the direct navigation approach (`/projects/new`) with the TRPC API route behavior
