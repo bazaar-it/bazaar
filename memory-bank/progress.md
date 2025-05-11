@@ -1273,3 +1273,63 @@ Detailed documentation about the fix is available in [memory-bank/component-load
 - Provides consistent naming scheme for auto-generated project titles
 - Preserves the unique constraint which prevents confusion from duplicate project names
 - Aligns the direct navigation approach (`/projects/new`) with the TRPC API route behavior
+
+## Homepage FAQ Content Updates (2025-05-13)
+
+### Changes Made
+- Updated "How does it work?" FAQ answer to be more specific about React and Remotion: "Write a description of the animation scene you want to make and click 'Create'. We'll generate a scene using React and Remotion code which you can iterate on and improve by explaining the changes you want to see via the chat pannel."
+- Updated "WTF is Bazaar?" FAQ answer to be more technically precise: "Bazaar converts text descriptions into React-based motion graphics scenes using LLMs."
+
+### Benefits
+- More accurate technical description of what the product does
+- Clearer explanation of the technology stack (React, Remotion)
+- Better user expectations about the iterative workflow
+- More precise positioning as a motion graphics tool rather than general video editor
+
+## [Date] AI-Powered Project Naming Implementation
+
+### Summary
+Implemented an LLM-based project title generation feature that automatically creates meaningful, contextually relevant titles for video projects based on the user's first prompt.
+
+### Components Added/Updated:
+- Created `src/server/services/titleGenerator.service.ts` - AI title generation service using OpenAI
+- Enhanced `src/lib/nameGenerator.ts` - Added AI-powered name generation with fallback to regex-based approach
+- Updated `src/server/api/routers/project.ts` - Integrated AI title generation in project creation process
+- Updated `src/app/projects/[id]/edit/panels/ChatPanel.tsx` - Enhanced first message handling with AI title generation
+
+### Documentation:
+- Created `memory-bank/ui/auto-naming-feature.md` - Comprehensive documentation of the feature
+
+### Key Features:
+- Titles are generated automatically from the user's first message
+- Uses OpenAI's function calling capability to ensure structured responses
+- Multiple fallback mechanisms ensure a title is always generated
+- Improves user experience by providing more relevant project titles
+
+### Next Steps:
+- Monitor title quality and tweak the prompt if necessary
+- Consider adding visual feedback when a project is renamed
+- Explore adding title customization options
+
+## [Current Date] Fixed Server-Side Environment Variable Access Error
+
+### Issue
+- Error: `❌ Attempted to access a server-side environment variable on the client`
+- The title generator service was being imported directly in client-side code
+- OpenAI API key was being accessed on the client, causing the build error
+
+### Solution Implemented
+- Created a dedicated tRPC procedure for AI title generation (`project.generateAITitle`)
+- Moved AI title generation logic to the server-side only
+- Updated `nameGenerator.ts` to remove server-side dependencies
+- Modified `ChatPanel.tsx` to use the tRPC mutation instead of direct function call
+- Ensured proper environment variable isolation between client and server
+
+### Technical Implementation
+- Added `generateAITitle` mutation procedure to `src/server/api/routers/project.ts`
+- Removed `generateAIProjectName` function from `src/lib/nameGenerator.ts`
+- Added tRPC mutation hook in `ChatPanel.tsx` for title generation
+- Used proper mutation pattern with callbacks instead of async/await
+
+### Documentation
+- Updated relevant files in memory-bank to document the proper pattern for accessing server-side resources from client code
