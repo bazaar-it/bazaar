@@ -19,14 +19,27 @@ export const webpackOverride = (currentConfiguration) => {
     configPath
   });
   
-  // Add crypto polyfill support (for UUID generation)
+  // Add polyfills for Node.js modules and handle node built-ins
   return {
     ...withTailwind,
     resolve: {
       ...withTailwind.resolve,
       fallback: {
         ...withTailwind.resolve?.fallback,
-        crypto: 'crypto-browserify'
+        // Add crypto polyfill support (for UUID generation)
+        crypto: 'crypto-browserify',
+        // Add empty fallbacks for Node.js built-in modules used in server-side code
+        // These might be imported by component code but aren't actually used in the browser
+        fs: false,
+        path: false,
+        os: false,
+        util: false,
+        stream: false,
+        buffer: false,
+        zlib: false,
+        http: false,
+        https: false,
+        child_process: false,
       }
     }
   };

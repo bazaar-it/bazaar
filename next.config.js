@@ -40,6 +40,29 @@ const config = {
       type: 'asset/resource',
     });
 
+    // Handle Node.js built-in modules in client-side code
+    if (!isServer) {
+      if (!config.resolve.fallback) {
+        config.resolve.fallback = {};
+      }
+      
+      // Provide empty mock implementations for Node.js built-in modules
+      // that might be imported in client-side code
+      Object.assign(config.resolve.fallback, {
+        fs: false,
+        path: false,
+        os: false,
+        crypto: false,
+        stream: false,
+        buffer: false,
+        util: false,
+        zlib: false,
+        http: false,
+        https: false,
+        child_process: false,
+      });
+    }
+
     // Mark esbuild as external to prevent bundling issues
     // This is required because esbuild needs to access its binary executable
     if (!config.externals) {

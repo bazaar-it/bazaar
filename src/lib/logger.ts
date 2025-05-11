@@ -5,11 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import { env } from '~/env';
 
-// Ensure logs directory exists
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
+// Check if we're running on the server or in the browser
+const isServer = typeof window === 'undefined';
 
 // Create formatters
 const consoleFormat = format.combine(
@@ -26,43 +23,68 @@ const fileFormat = format.combine(
   format.json()
 );
 
-// Create our transport configurations
-const fileTransportConfig = {
-  dirname: logsDir,
-  datePattern: 'YYYY-MM-DD',
-  maxSize: '20m',
-  maxFiles: '14d', // Keep logs for 14 days
-  format: fileFormat,
-};
+// Create either a server logger (with file transports) or a browser logger (console only)
+let logger;
 
-// Create logger instance
-const logger = createLogger({
-  level: env.NODE_ENV === 'production' ? 'info' : 'debug',
-  transports: [
-    // Console transport
-    new transports.Console({
-      format: consoleFormat,
-    }),
-    
-    // Rotating file transports for different log levels
-    new transports.DailyRotateFile({
-      ...fileTransportConfig,
-      filename: 'error-%DATE%.log',
-      level: 'error',
-    }),
-    new transports.DailyRotateFile({
-      ...fileTransportConfig,
-      filename: 'combined-%DATE%.log',
-    }),
-    // Special file for component generation logs
-    new transports.DailyRotateFile({
-      ...fileTransportConfig,
-      filename: 'components-%DATE%.log',
-      level: 'debug',
-    })
-  ],
-  exitOnError: false,
-});
+if (isServer) {
+  // Server-side initialization with file transports
+  // Ensure logs directory exists
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (fs.existsSync(logsDir)) {
+    // Directory exists, no need to create
+  } else {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+
+  // Create our transport configurations
+  const fileTransportConfig = {
+    dirname: logsDir,
+    datePattern: 'YYYY-MM-DD',
+    maxSize: '20m',
+    maxFiles: '14d', // Keep logs for 14 days
+    format: fileFormat,
+  };
+
+  // Create server logger instance with file transports
+  logger = createLogger({
+    level: env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transports: [
+      // Console transport
+      new transports.Console({
+        format: consoleFormat,
+      }),
+      
+      // Rotating file transports for different log levels
+      new transports.DailyRotateFile({
+        ...fileTransportConfig,
+        filename: 'error-%DATE%.log',
+        level: 'error',
+      }),
+      new transports.DailyRotateFile({
+        ...fileTransportConfig,
+        filename: 'combined-%DATE%.log',
+      }),
+      // Special file for component generation logs
+      new transports.DailyRotateFile({
+        ...fileTransportConfig,
+        filename: 'components-%DATE%.log',
+        level: 'debug',
+      })
+    ],
+    exitOnError: false,
+  });
+} else {
+  // Browser-side initialization - only use console transport
+  logger = createLogger({
+    level: 'debug',
+    transports: [
+      new transports.Console({
+        format: consoleFormat,
+      }),
+    ],
+    exitOnError: false,
+  });
+}
 
 // Create specialized loggers for different parts of the application
 export const componentLogger = {
