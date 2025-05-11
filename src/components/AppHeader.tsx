@@ -86,7 +86,6 @@ export default function AppHeader({
       </div>
 
       {/* Center: Project Title - Hidden as requested */}
-      {/* 
       <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center">
         {projectTitle ? (
           <div className="relative w-[280px] flex justify-center">
@@ -139,7 +138,6 @@ export default function AppHeader({
           </div>
         ) : null}
       </div>
-      */}
 
       {/* Right: User info & Export button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">

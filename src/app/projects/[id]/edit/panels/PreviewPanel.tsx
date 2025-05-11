@@ -100,6 +100,14 @@ export default function PreviewPanel({
   
   return (
     <div className="relative h-full w-full flex flex-col">
+      {/* Hidden button for panel header integration */}
+      <button
+        id="refresh-preview-button"
+        onClick={handleRefresh}
+        className="hidden"
+        aria-hidden="true"
+      />
+      
       <div className="relative flex-grow">
         {/* Render the Player with a key for forcing remounts */}
         {currentProps ? (
@@ -127,8 +135,8 @@ export default function PreviewPanel({
           </div>
         )}
         
-        {/* More visible refresh button overlay */}
-        <div className="absolute top-4 right-4 z-10">
+        {/* Hiding the refresh button overlay with CSS instead of removing it */}
+        <div className="absolute top-4 right-4 z-10" style={{ display: 'none' }}>
           <button 
             onClick={handleRefresh}
             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 flex items-center shadow-lg"
@@ -142,8 +150,8 @@ export default function PreviewPanel({
           </button>
         </div>
         
-        {/* Last refreshed indicator */}
-        <div className="absolute bottom-4 right-4 z-10 text-xs text-white bg-black/50 px-2 py-1 rounded">
+        {/* Hiding the last refreshed indicator with CSS instead of removing it */}
+        <div className="absolute bottom-4 right-4 z-10 text-xs text-white bg-black/50 px-2 py-1 rounded" style={{ display: 'none' }}>
           Last refreshed: {new Date(lastRefreshTime).toLocaleTimeString()}
         </div>
       </div>
