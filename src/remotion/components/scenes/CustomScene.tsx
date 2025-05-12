@@ -75,6 +75,13 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
         // First, find out what ADB ID is associated with this component
         // Add cache-busting timestamp to all API requests
         const apiTimestamp = Date.now(); // Fresh timestamp for API call
+        console.log(`[CustomScene] Fetching component metadata: /api/components/${componentId}/metadata?t=${apiTimestamp}`);
+        
+        // Add a timeout to the fetch to detect network issues
+        const timeout = setTimeout(() => {
+          console.error(`[CustomScene] Metadata fetch timeout for component ${componentId} after 5 seconds`);
+        }, 5000);
+        
         const componentJobResponse = await fetch(`/api/components/${componentId}/metadata?t=${apiTimestamp}`);
         
         if (!componentJobResponse.ok) {

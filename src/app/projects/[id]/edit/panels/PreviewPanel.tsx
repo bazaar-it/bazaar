@@ -21,6 +21,7 @@ export default function PreviewPanel({
   // State for tracking last refresh time
   const [lastRefreshTime, setLastRefreshTime] = useState(Date.now());
   const [lastKnownComponentIds, setLastKnownComponentIds] = useState<string[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false); // Add a state for tracking refresh
   
   // Initialize project if initial props are provided
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function PreviewPanel({
   // Force a refresh of the preview
   const handleRefresh = useCallback(() => {
     console.log('[PreviewPanel] 🔄 Refresh button clicked');
+    setIsRefreshing(true); // Set refreshing state to true
     
     // Log current scenes for debugging
     if (currentProps?.scenes) {
@@ -96,6 +98,11 @@ export default function PreviewPanel({
     console.log('[PreviewPanel] Calling forceRefresh on videoState store');
     forceRefresh(projectId);
     setLastRefreshTime(Date.now());
+    
+    // Reset refreshing state after a delay
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 2000);
   }, [forceRefresh, projectId, currentProps]);
   
   return (
@@ -131,20 +138,26 @@ export default function PreviewPanel({
         <div className="absolute top-4 right-4 z-10">
           <button 
             onClick={handleRefresh}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 flex items-center shadow-lg"
+            className={`${isRefreshing ? 'bg-green-600 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg px-4 py-2 flex items-center shadow-lg`}
             title="Refresh Preview"
             id="preview-refresh-button" // Add ID for easier debugging
+            disabled={isRefreshing}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
             </svg>
-            Refresh
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
         
         {/* Last refreshed indicator */}
         <div className="absolute bottom-4 right-4 z-10 text-xs text-white bg-black/50 px-2 py-1 rounded">
           Last refreshed: {new Date(lastRefreshTime).toLocaleTimeString()}
+        </div>
+        
+        {/* Add Component count for debugging */}
+        <div className="absolute bottom-4 left-4 z-10 text-xs text-white bg-black/50 px-2 py-1 rounded">
+          Custom components: {currentComponentIds.length}
         </div>
       </div>
     </div>

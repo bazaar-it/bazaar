@@ -1,12 +1,44 @@
-# Project Progress
+# Current Progress Status
 
-## 2025-05-XX: UI Simplification - Header Cleanup
+## Component Refresh Debugging (2025-05-11)
+We've implemented enhanced debugging tools and instrumentation to help diagnose the issue where custom components are not appearing in the preview panel despite being successfully generated. This includes:
 
-### 1. Project Title Removal
-- Removed the project title display and edit functionality from the center of the AppHeader
-- Commented out the entire section to maintain the original code for potential future reactivation
-- This simplifies the header UI and removes an element that was redundant with the auto-naming feature
-- The auto-naming functionality still works in the background, but the display has been hidden
+### Enhanced Debugging Approach
+- Added comprehensive console logging throughout the component loading pipeline
+- Added visual feedback in the UI to confirm when refresh actions are triggered
+- Modified script loading to use the API proxy route instead of direct R2 URLs
+- Added console interceptors to catch component-specific logs
+- Created a detailed debugging guide in memory-bank/component-loading-debugging.md
+
+### Core Components Fixed
+1. **useRemoteComponent.tsx**
+   - Now uses API proxy endpoint to avoid SSL/CORS issues
+   - Added better error reporting and logging
+   - Added console interceptors to catch component-specific logs
+
+2. **PreviewPanel.tsx**
+   - Added visual feedback during refresh operation
+   - Added component counter for better debugging
+   - Enhanced logging for script tag removal
+
+3. **DynamicVideo.tsx**
+   - Improved tracking of refreshToken changes
+   - Added detailed scene logging for custom components
+
+### Testing Steps
+1. Use browser console to monitor loading process
+2. Watch for specific log messages that indicate component loading
+3. Inspect network requests to verify components are being fetched
+4. Clear browser cache and try in incognito mode if needed
+
+### Additional Insights
+The root issue appears to be related to one of these areas:
+- Network connectivity to the API endpoints
+- Script loading and execution
+- React hydration issues with timestamp-based keys
+- Potential issues with the component JavaScript bundle content
+
+A complete debugging guide has been created at memory-bank/component-loading-debugging.md.
 
 ## Recent UI/UX Improvements - Video Player and Timeline
 

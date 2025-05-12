@@ -20,6 +20,50 @@ declare global {
  * @returns A React component that renders the remote component
  */
 export function useRemoteComponent(componentId: string | undefined) {
+  // Add console log interceptor for debugging
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Store original console methods
+      const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
+      const originalConsoleWarn = console.warn;
+      
+      // Intercept console.log
+      console.log = function(...args) {
+        // Add a marker to logs from custom components
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('REMOTION_COMPONENT')) {
+          args.unshift('🟢 [INTERCEPTED]');
+        }
+        originalConsoleLog.apply(console, args);
+      };
+      
+      // Intercept console.error
+      console.error = function(...args) {
+        // Add a marker to errors from custom components
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('REMOTION_COMPONENT') || args[0].includes('component'))) {
+          args.unshift('🔴 [INTERCEPTED]');
+        }
+        originalConsoleError.apply(console, args);
+      };
+      
+      // Intercept console.warn
+      console.warn = function(...args) {
+        // Add a marker to warnings from custom components
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('REMOTION_COMPONENT') || args[0].includes('component'))) {
+          args.unshift('🟠 [INTERCEPTED]');
+        }
+        originalConsoleWarn.apply(console, args);
+      };
+      
+      // Return cleanup function
+      return () => {
+        console.log = originalConsoleLog;
+        console.error = originalConsoleError;
+        console.warn = originalConsoleWarn;
+      };
+    }
+  }, []);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [component, setComponent] = useState<React.ComponentType<any> | null>(null);
@@ -56,7 +100,10 @@ export function useRemoteComponent(componentId: string | undefined) {
     script.id = scriptId; // Set an ID for easier removal
     
     // Add timestamp to URL to prevent browser caching
-    script.src = `https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/${componentId}.js?t=${timestamp}`;
+    script.src = `/api/components/${componentId}?t=${timestamp}`;
+    
+    // Log the actual script URL being used for debugging
+    console.log(`[useRemoteComponent] Loading script from: ${script.src}`);
     
     script.async = true;
     script.type = 'text/javascript';
@@ -75,6 +122,12 @@ export function useRemoteComponent(componentId: string | undefined) {
           console.error(`[useRemoteComponent] Component loaded but __REMOTION_COMPONENT not found: ${componentId}`);
           setError("Component loaded but not found in window.__REMOTION_COMPONENT");
           setLoading(false);
+          
+          // List all global variables to debug what might be available
+          console.log('[useRemoteComponent] Available globals:', 
+            Object.keys(window)
+              .filter(key => key.includes('REMOTION') || key.includes('Component'))
+          );
         }
       } catch (err) {
         console.error(`[useRemoteComponent] Error accessing component after load: ${err}`);

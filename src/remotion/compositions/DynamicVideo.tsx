@@ -88,15 +88,27 @@ export const DynamicVideo: React.FC<CompositionProps> = ({
   // Log the refreshToken change
   useEffect(() => {
     if (prevRefreshToken.current !== refreshToken) {
-      console.log(`[DynamicVideo] RefreshToken changed: ${prevRefreshToken.current} -> ${refreshToken}`);
+      console.log(`[DynamicVideo] 🔄 RefreshToken changed: ${prevRefreshToken.current} -> ${refreshToken}`);
       prevRefreshToken.current = refreshToken;
+      
+      // Log all the scenes that should be receiving the refresh token
+      const customScenes = scenes.filter(scene => scene.type === 'custom');
+      console.log(`[DynamicVideo] Custom scenes that will get new refreshToken:`, 
+        customScenes.map(s => ({
+          id: s.id,
+          componentId: s.data.componentId
+        }))
+      );
     }
-  }, [refreshToken]);
+  }, [refreshToken, scenes]);
 
   console.log('[DynamicVideo] Rendering with props:', {
     sceneCount: scenes.length,
     metaDuration: meta.duration,
-    refreshToken
+    refreshToken,
+    customSceneIds: scenes
+      .filter(scene => scene.type === 'custom')
+      .map(scene => scene.data.componentId)
   });
 
   // Log scene details for debugging
@@ -116,7 +128,11 @@ export const DynamicVideo: React.FC<CompositionProps> = ({
     // Generate a unique key for each scene that includes the refreshToken
     // This ensures the scene remounts when refreshToken changes
     const sceneKey = `scene-${scene.id}-${refreshToken}-${Date.now()}`;
-    console.log(`[DynamicVideo] Creating scene component for scene ${scene.id} with key ${sceneKey}`);
+    
+    // Add extra logging for custom scenes
+    if (scene.type === 'custom') {
+      console.log(`[DynamicVideo] 🎬 Creating custom scene component for ${scene.id} with componentId ${scene.data.componentId}, key: ${sceneKey}`);
+    }
     
     switch (scene.type) {
       case 'text':
