@@ -76,7 +76,7 @@ const navItems: WorkspacePanel[] = [
   { type: 'timeline', id: 'timeline', name: "Timeline", icon: ClockIcon, href: "#timeline" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
-  { type: 'sceneplanning', id: 'sceneplanning', name: "Scene Planning", icon: ListIcon, href: "#sceneplanning" },
+  { type: 'sceneplanning', id: 'sceneplanning', name: "Scene Planner", icon: ListIcon, href: "#sceneplanning" },
 ];
 
 function CustomComponentsSidebar({ isCollapsed, projectId }: { isCollapsed: boolean, projectId: string }) {
@@ -449,15 +449,24 @@ export default function Sidebar({
         {/* New Project Button with enhanced styling - aligned left when expanded */}
         <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
           {isCollapsed ? (
-            <NewProjectButton
-              className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-              variant="ghost"
-              size="icon"
-              showIcon={true}
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+                  onClick={() => router.push('/projects/new')}
+                >
+                  <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                New Project
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <NewProjectButton 
-              className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+              className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 pr-4"
               variant="ghost"
               size="default"
               showIcon={true}
@@ -490,7 +499,7 @@ export default function Sidebar({
                       variant="ghost"
                       className="h-9 w-full flex items-center justify-start rounded-lg transition-all duration-200 
                         bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800
-                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 pr-4"
                       onClick={() => handlePanelClick(item.type)}
                       data-panel-type={item.type}
                       draggable={item.type !== 'timeline'}
