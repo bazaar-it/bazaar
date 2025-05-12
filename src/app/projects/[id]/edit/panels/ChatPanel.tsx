@@ -48,6 +48,13 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     }
   });
   
+  // Set up AI title generation mutation
+  const generateAITitleMutation = api.project.generateAITitle.useMutation({
+    onError: (error) => {
+      console.error("Failed to generate AI title:", error);
+    }
+  });
+  
   // Get or create a persistent client ID for reconnection support
   const clientIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -513,20 +520,47 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isStreaming) return;
     
-    // Generate project name from first message
+    // Generate project name from first message using AI
     if (isFirstMessageRef.current && optimisticChatHistory.length === 0 && dbMessages?.length === 0) {
-      const generatedName = generateNameFromPrompt(message);
-      console.log(`Generated project name from first message: "${generatedName}"`);
+      // Capture message in a variable for use in callback
+      const firstMessage = message;
       
-      // Update project name
-      renameMutation.mutate({
-        id: projectId,
-        title: generatedName,
-      });
+      // Use AI-based title generation via tRPC
+      console.log("Generating AI-powered title from first message...");
+      
+      // Use the mutation with callbacks
+      generateAITitleMutation.mutate(
+        {
+          prompt: firstMessage,
+          contextId: projectId
+        },
+        {
+          onSuccess: (result) => {
+            const generatedTitle = result.title;
+            console.log(`Generated AI project name: "${generatedTitle}"`);
+            
+            // Update project name
+            renameMutation.mutate({
+              id: projectId,
+              title: generatedTitle,
+            });
+          },
+          onError: (error) => {
+            console.error("Error using AI title generation:", error);
+            const fallbackName = generateNameFromPrompt(firstMessage);
+            console.log(`Falling back to regex-based name: "${fallbackName}"`);
+            
+            renameMutation.mutate({
+              id: projectId,
+              title: fallbackName,
+            });
+          }
+        }
+      );
       
       // Update flag to prevent renaming on subsequent messages
       isFirstMessageRef.current = false;

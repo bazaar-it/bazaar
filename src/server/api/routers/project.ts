@@ -9,6 +9,8 @@ import { processUserMessageInProject } from "./chat";
 import { jsonPatchSchema, type JsonPatch } from "~/types/json-patch";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
+import { generateNameFromPrompt } from "~/lib/nameGenerator";
+import { generateTitle } from "~/server/services/titleGenerator.service";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -57,32 +59,53 @@ export const projectRouter = createTRPCRouter({
     }).optional())
     .mutation(async ({ ctx, input }) => {
       try {
-        // Get a list of all "Untitled Video" projects with their numbers
-        const userProjects = await ctx.db
-          .select({ title: projects.title })
-          .from(projects)
-          .where(
-            and(
-              eq(projects.userId, ctx.session.user.id),
-              like(projects.title, 'Untitled Video%')
-            )
-          );
+        // Generate title based on initialMessage if available
+        let title = "Untitled Video";
         
-        // Find the highest number used in "Untitled Video X" titles
-        let highestNumber = 0;
-        for (const project of userProjects) {
-          const match = project.title.match(/^Untitled Video (\d+)$/);
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num) && num > highestNumber) {
-              highestNumber = num;
-            }
+        if (input?.initialMessage) {
+          try {
+            // Use AI to generate a title from the initialMessage
+            const result = await generateTitle({
+              prompt: input.initialMessage,
+              contextId: "project-create"
+            });
+            title = result.title || "Untitled Video";
+          } catch (titleError) {
+            console.error("Error generating AI title:", titleError);
+            // Fall back to default naming scheme on error
           }
         }
         
-        // Generate a unique title with the next available number
-        const nextNumber = highestNumber + 1;
-        const title = userProjects.length === 0 ? "Untitled Video" : `Untitled Video ${nextNumber}`;
+        // If AI title generation failed or no initialMessage was provided,
+        // use the existing incremental naming scheme
+        if (title === "Untitled Video" || title === "New Project") {
+          // Get a list of all "Untitled Video" projects with their numbers
+          const userProjects = await ctx.db
+            .select({ title: projects.title })
+            .from(projects)
+            .where(
+              and(
+                eq(projects.userId, ctx.session.user.id),
+                like(projects.title, 'Untitled Video%')
+              )
+            );
+          
+          // Find the highest number used in "Untitled Video X" titles
+          let highestNumber = 0;
+          for (const project of userProjects) {
+            const match = project.title.match(/^Untitled Video (\d+)$/);
+            if (match && match[1]) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num) && num > highestNumber) {
+                highestNumber = num;
+              }
+            }
+          }
+          
+          // Generate a unique title with the next available number
+          const nextNumber = highestNumber + 1;
+          title = userProjects.length === 0 ? "Untitled Video" : `Untitled Video ${nextNumber}`;
+        }
         
         // Create a new project for the logged-in user with returning clause
         const inserted = await ctx.db
@@ -283,5 +306,33 @@ export const projectRouter = createTRPCRouter({
       });
 
       return plans;
+    }),
+  // New procedure for generating AI titles
+  generateAITitle: protectedProcedure
+    .input(z.object({
+      prompt: z.string(),
+      contextId: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // Call the AI title generator service
+        const result = await generateTitle({
+          prompt: input.prompt,
+          contextId: input.contextId || "api-call"
+        });
+        
+        // Return the generated title
+        return {
+          title: result.title || generateNameFromPrompt(input.prompt),
+          reasoning: result.reasoning
+        };
+      } catch (error) {
+        console.error("Error generating AI project title:", error);
+        // Fall back to the regex-based approach on error
+        return {
+          title: generateNameFromPrompt(input.prompt),
+          error: error instanceof Error ? error.message : "Unknown error"
+        };
+      }
     }),
 }); 

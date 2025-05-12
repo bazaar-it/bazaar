@@ -278,3 +278,10 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
   - Add ARIA attributes for screen reader support
   - Improve focus management for keyboard users
   - Create high-contrast theme option
+
+## Recently Fixed
+
+- ✅ Fixed `duplicate key value violates unique constraint "project_unique_name"` error when creating new projects
+  - Updated `/projects/new` route to generate unique project titles following the same pattern as the TRPC routes
+  - Now checks for existing projects with "New Project" title and adds a number suffix if needed
+  - Fixed on branch `Jack/Sunday`

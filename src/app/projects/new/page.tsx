@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, like } from "drizzle-orm";
 
 /**
  * Special route that automatically creates a new project and redirects to it
@@ -17,34 +17,64 @@ export default async function NewProjectPage() {
     redirect("/login");
   }
 
-  // Create a new project in the database
+  let newProject;
+  
   try {
-    const [newProject] = await db
+    // Get a list of all "New Project" projects with their numbers
+    const userProjects = await db
+      .select({ title: projects.title })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.userId, session.user.id),
+          like(projects.title, 'New Project%')
+        )
+      );
+    
+    // Find the highest number used in "New Project X" titles
+    let highestNumber = 0;
+    for (const project of userProjects) {
+      const match = project.title.match(/^New Project (\d+)$/);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > highestNumber) {
+          highestNumber = num;
+        }
+      }
+    }
+    
+    // Generate a unique title with the next available number
+    const nextNumber = highestNumber + 1;
+    const title = userProjects.length === 0 ? "New Project" : `New Project ${nextNumber}`;
+
+    const [insertedProject] = await db
       .insert(projects)
       .values({
         userId: session.user.id,
-        title: "New Project",
+        title: title,
         props: {
           meta: {
             duration: 10,
-            title: "New Project",
+            title: title,
             backgroundColor: "#111",
           },
           scenes: [],
         },
       })
       .returning();
-
-    if (newProject?.id) {
-      // Redirect to the new project's edit page
-      redirect(`/projects/${newProject.id}/edit`);
-    } else {
-      // Fallback to projects page if something went wrong
-      redirect("/projects");
-    }
+    
+    newProject = insertedProject;
   } catch (error) {
     console.error("Failed to create new project:", error);
     // Redirect to the projects page on error
+    redirect("/projects");
+  }
+
+  if (newProject?.id) {
+    // Redirect to the new project's edit page - moved outside try/catch
+    redirect(`/projects/${newProject.id}/edit`);
+  } else {
+    // Fallback to projects page if something went wrong
     redirect("/projects");
   }
 

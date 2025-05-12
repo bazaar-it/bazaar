@@ -33,6 +33,69 @@ export const generateCustomComponentFunctionDef = {
 };
 
 /**
+ * List of Node.js built-in modules that should be removed from component code
+ */
+const NODE_BUILT_INS = [
+  'fs', 'path', 'os', 'util', 'stream', 'buffer', 'zlib', 
+  'http', 'https', 'child_process', 'cluster', 'dgram', 
+  'dns', 'net', 'tls', 'repl', 'readline', 'crypto'
+];
+
+/**
+ * Sanitizes a component name to ensure it's a valid JavaScript identifier
+ * - Cannot start with a number
+ * - Can only contain letters, numbers, $ and _
+ */
+function sanitizeComponentName(name: string): string {
+  if (!name) return 'CustomComponent';
+  
+  // Remove any invalid characters
+  let sanitized = name.replace(/[^a-zA-Z0-9_$]/g, '');
+  
+  // If it starts with a number, prefix with "Scene"
+  if (/^[0-9]/.test(sanitized)) {
+    sanitized = `Scene${sanitized}`;
+  }
+  
+  // Ensure it's not empty
+  if (!sanitized) {
+    sanitized = 'CustomComponent';
+  }
+  
+  return sanitized;
+}
+
+/**
+ * Removes imports of Node.js built-in modules from component code
+ * that would cause errors in the browser
+ */
+function removeNodeBuiltInImports(code: string): string {
+  let sanitized = code;
+  
+  // Create a regex pattern for all Node built-ins
+  const builtInsPattern = NODE_BUILT_INS.join('|');
+  
+  // Match different import styles
+  const importPatterns = [
+    // ES Module imports
+    new RegExp(`import\\s+(?:\\*\\s+as\\s+\\w+|[\\w\\{\\}\\s,]+)\\s+from\\s+['"](?:${builtInsPattern})(?:/[^'"]*)?['"];?`, 'g'),
+    // Require style
+    new RegExp(`(?:const|let|var)\\s+(?:\\w+|\\{[^}]*\\})\\s*=\\s*require\\(['"](?:${builtInsPattern})(?:/[^'"]*)?['"]\\);?`, 'g'),
+    // Dynamic imports
+    new RegExp(`import\\(['"](?:${builtInsPattern})(?:/[^'"]*)?['"]\\)`, 'g')
+  ];
+  
+  // Replace each pattern with a comment
+  importPatterns.forEach(pattern => {
+    sanitized = sanitized.replace(pattern, (match) => {
+      return `// Removed Node.js module: ${match.trim()}`;
+    });
+  });
+  
+  return sanitized;
+}
+
+/**
  * Ensures there's only one default export in the generated code
  * by removing any duplicate export default statements
  */
@@ -324,45 +387,48 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
       model: "o4-mini"
     });
 
-    // Extract the first tool call (should be the only one)
+    // Extract tool call from the response
     const toolCall = response.choices[0]?.message.tool_calls?.[0];
     
     if (!toolCall || toolCall.function.name !== "generate_remotion_component") {
-      componentLogger.error(jobId, "Invalid response from OpenAI: No valid tool call", { type: "INVALID_RESPONSE" });
-      throw new Error("No valid tool call returned from OpenAI");
+      componentLogger.error(jobId, `LLM did not return expected tool call: ${JSON.stringify(response.choices[0]?.message)}`);
+      throw new Error("Failed to generate component: LLM did not return a valid tool call");
     }
     
-    // Parse the function arguments as JSON
-    let args;
+    // Parse the arguments from the function call
+    let args: any;
     try {
       args = JSON.parse(toolCall.function.arguments);
-      componentLogger.parse(jobId, "Successfully parsed LLM response");
-    } catch (e) {
-      componentLogger.error(jobId, `Failed to parse tool call arguments: ${e instanceof Error ? e.message : String(e)}`, { 
-        type: "PARSE" 
-      });
-      throw new Error(`Failed to parse component code: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (parseError) {
+      componentLogger.error(jobId, `Failed to parse tool call arguments: ${String(parseError)}`, { error: parseError });
+      throw new Error(`Failed to parse component generation arguments: ${String(parseError)}`);
     }
     
+    // Sanitize the component name and code
+    const sanitizedComponentName = sanitizeComponentName(args.componentName || 'CustomComponent');
+    
+    // Sanitize the component code in multiple steps:
+    // 1. Remove Node.js built-in imports
+    let sanitizedCode = removeNodeBuiltInImports(args.componentCode);
+    // 2. Ensure there's only one default export
+    sanitizedCode = sanitizeDefaultExports(sanitizedCode);
+    
+    componentLogger.plan(jobId, `Generated component "${sanitizedComponentName}" (${sanitizedCode.length} chars)`, {
+      generatedAt: new Date().toISOString(),
+      dependencies: args.dependencies || {},
+    });
+
     // Extract component details
-    const generatedComponentName = args.componentName || componentName;
-    const componentCode = args.componentCode;
-    const dependencies = args.dependencies || {};
-    
-    // Check if we have required data
-    if (!componentCode) {
-      componentLogger.error(jobId, "No component code returned from LLM", { type: "MISSING_CODE" });
-      throw new Error("No component code returned from OpenAI");
-    }
+    const generatedComponentName = sanitizedComponentName;
     
     // Log code length as a simple metric
-    componentLogger.parse(jobId, `Generated ${componentCode.length} bytes of component code for "${generatedComponentName}"`, {
-      codeLength: componentCode.length,
+    componentLogger.parse(jobId, `Generated ${sanitizedCode.length} bytes of component code for "${generatedComponentName}"`, {
+      codeLength: sanitizedCode.length,
       componentName: generatedComponentName
     });
     
     // Process the code to fix common issues
-    const processedCode = processGeneratedCode(componentCode, generatedComponentName);
+    const processedCode = processGeneratedCode(sanitizedCode, generatedComponentName);
     
     const totalDuration = Date.now() - startTime;
     componentLogger.complete(jobId, `Component generation complete in ${totalDuration}ms`, {
@@ -372,7 +438,7 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
     
     return {
       code: processedCode,
-      dependencies
+      dependencies: args.dependencies || {},
     };
   } catch (error) {
     componentLogger.error(jobId, `Component generation failed: ${error instanceof Error ? error.message : String(error)}`, {
@@ -462,28 +528,4 @@ function processGeneratedCode(code: string, componentName: string): string {
     // Return original code if processing fails
     return code;
   }
-}
-
-/**
- * Sanitizes a component name to ensure it's a valid JavaScript identifier
- * - Cannot start with a number
- * - Can only contain letters, numbers, $ and _
- */
-function sanitizeComponentName(name: string): string {
-  if (!name) return 'CustomComponent';
-  
-  // Remove any invalid characters
-  let sanitized = name.replace(/[^a-zA-Z0-9_$]/g, '');
-  
-  // If it starts with a number, prefix with "Scene"
-  if (/^[0-9]/.test(sanitized)) {
-    sanitized = `Scene${sanitized}`;
-  }
-  
-  // Ensure it's not empty
-  if (!sanitized) {
-    sanitized = 'CustomComponent';
-  }
-  
-  return sanitized;
 }
