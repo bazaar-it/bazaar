@@ -7,7 +7,7 @@ import { Separator } from '~/components/ui/separator';
 import { Button } from '~/components/ui/button';
 import type { InputProps } from '~/types/input-props';
 import { ChatPanel, PreviewPanel, ScenePlanningHistoryPanel, TimelinePanel } from "./panels";
-import Sidebar from "./Sidebar";
+import { Sidebar } from "./Sidebar";
 import AppHeader from "~/components/AppHeader";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";

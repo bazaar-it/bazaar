@@ -1,5 +1,6 @@
 // src/server/services/animationDesigner.service.ts
 import OpenAI from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema'; 
 import {
@@ -484,19 +485,38 @@ function createFallbackBrief(
 }
 
 // Main function to generate an Animation Design Brief
+interface LlmConfig {
+  model: string;
+  temperature?: number;
+  systemPrompt?: string;
+}
+
+const DEFAULT_ADB_SYSTEM_PROMPT = `You are an expert Animation Designer AI. Your task is to generate a detailed Animation Design Brief in JSON format based on the user's request. Adhere strictly to the provided JSON schema ('createAnimationDesignBrief' function). Be creative but ensure the output is technically sound and directly usable for animation generation. Focus on translating the user's intent into specific, actionable animation properties. Avoid generic descriptions. Ensure all required fields are present and valid according to the schema.`;
+
+/**
+ * Generates a detailed Animation Design Brief using an LLM based on input parameters.
+ * Handles validation, error conditions, and database persistence.
+ *
+ * @param params Parameters for generating the brief.
+ * @param llmConfig Optional configuration for the LLM call.
+ * @returns A promise resolving to the generated brief and its database ID.
+ */
 export async function generateAnimationDesignBrief(
-  params: AnimationBriefGenerationParams
+  params: AnimationBriefGenerationParams,
+  llmConfig: LlmConfig = { model: env.DEFAULT_ADB_MODEL || 'o4-mini' } 
 ): Promise<{ brief: AnimationDesignBrief; briefId: string }> {
   const startTime = Date.now();
   const { 
-    projectId, 
-    sceneId, 
-    scenePurpose, 
-    sceneElementsDescription, 
+    projectId,
+    sceneId: inputSceneId,
+    scenePurpose,
+    sceneElementsDescription,
     desiredDurationInFrames,
     dimensions, 
     componentJobId 
   } = params;
+  
+  const sceneId = ensureValidUuid(inputSceneId);
   
   animationDesignerLogger.start(sceneId, "Starting Animation Design Brief generation", {
     projectId,
@@ -523,102 +543,36 @@ export async function generateAnimationDesignBrief(
     });
 
     // Create a clean, descriptive prompt for the LLM
-    const messagesForLLM = [
-      {
-        role: 'system' as const,
-        content: `You are an expert animation and video designer specializing in creating detailed design briefs for animated scenes.
-
-Your task is to create a comprehensive Animation Design Brief for a single scene in a video. The brief should include:
-- A color palette that enhances the scene's purpose
-- Detailed element specifications (text, images, shapes)
-- Animation details with proper timing in frames
-- Appropriate layout and positioning
-
-Follow these technical requirements:
-1. Every element must have a unique elementId
-2. Elements should have sensible positioning via initialLayout
-3. Animation timings must fit within the total durationInFrames
-4. Each animation needs startAtFrame and durationInFrames values
-5. Include at least one entrance and one exit animation for important elements
-6. For text elements, provide actual content that fits the purpose
-7. Use proper color values (hex format preferred)
-8. Ensure all required properties are present in your JSON output
-
-Here's an example of a valid element with animations:
-
-{
-  "elementId": "e8a65d7c-1234-5678-abcd-1234567890ab",
-  "elementType": "text",
-  "name": "Headline Text",
-  "content": "Our Amazing Product",
-  "initialLayout": {
-    "x": 960,
-    "y": 540,
-    "width": 800,
-    "height": 100,
-    "opacity": 0,
-    "rotation": 0,
-    "scale": 1
-  },
-  "animations": [
-    {
-      "animationId": "anim-fade-in",
-      "animationType": "fadeIn",
-      "startAtFrame": 0,
-      "durationInFrames": 30,
-      "easing": "easeOutCubic",
-      "propertiesAnimated": [
-        { "property": "opacity", "from": 0, "to": 1 }
-      ]
-    },
-    {
-      "animationId": "anim-slide-up",
-      "animationType": "slideUp",
-      "startAtFrame": 15,
-      "durationInFrames": 45,
-      "delayInFrames": 5,
-      "easing": "easeOutQuint",
-      "propertiesAnimated": [
-        { "property": "y", "from": 600, "to": 540 }
-      ]
-    },
-    {
-      "animationId": "anim-fade-out",
-      "animationType": "fadeOut",
-      "startAtFrame": 120,
-      "durationInFrames": 30,
-      "easing": "easeInCubic",
-      "propertiesAnimated": [
-        { "property": "opacity", "from": 1, "to": 0 }
-      ]
-    }
-  ]
-}
-
-Ensure your output is valid JSON and matches the required schema.`
-      },
-      {
-        role: 'user' as const, 
-        content: `Create an Animation Design Brief for a scene with the following details:
+    const userPromptContent = `Create an Animation Design Brief for a scene with the following details:
 
 Scene Purpose: ${scenePurpose}
 Scene Description: ${sceneElementsDescription || 'Create a visually engaging scene'}
 Duration: ${desiredDurationInFrames} frames
 Dimensions: Width: ${dimensions.width}px, Height: ${dimensions.height}px
 
-Please design a complete Animation Design Brief with appropriate elements and animations.`
+Please design a complete Animation Design Brief with appropriate elements and animations.`;
+
+    const messagesForLLM: ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: llmConfig.systemPrompt || DEFAULT_ADB_SYSTEM_PROMPT, 
+      },
+      {
+        role: 'user',
+        content: userPromptContent
       }
     ];
 
     animationDesignerLogger.data(sceneId, "Sending request to OpenAI", { 
-      promptLength: messagesForLLM[1]?.content?.length || 0,
+      promptLength: userPromptContent.length, 
       duration: desiredDurationInFrames
     });
 
     // Call OpenAI with function calling
     const llmStartTime = Date.now();
     const response = await openai.chat.completions.create({
-      model: "o4-mini", // OpenAI model
+      model: llmConfig.model, // Use configured model
+      temperature: llmConfig.temperature, // Use configured temp (optional)
       messages: messagesForLLM,
       tools: [{
         type: "function",
@@ -645,7 +599,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
       });
       // Attempt to recover with a fallback brief
       const fallbackBrief = createFallbackBrief(sceneId, dimensions);
-      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, "fallback", componentJobId);
+      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, `fallback (intended: ${llmConfig.model})`, componentJobId);
       
       animationDesignerLogger.error(sceneId, "Using fallback brief due to invalid OpenAI response", { 
         briefId: fallbackBriefId 
@@ -667,7 +621,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
       });
       
       // Add logging for raw arguments to help diagnose issues
-      animationDesignerLogger.data(sceneId, "RAW LLM Animation Design Brief Arguments", {
+      animationDesignerLogger.data(sceneId, "RAW LLM Animation Design Brief Arguments", { 
         rawArguments: toolCall.function.arguments.substring(0, 1000) + 
                      (toolCall.function.arguments.length > 1000 ? '...' : '')
       });
@@ -693,7 +647,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
       
       // Attempt to recover with a fallback brief
       const fallbackBrief = createFallbackBrief(sceneId, dimensions);
-      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, "fallback", componentJobId);
+      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, `fallback+parseError (intended: ${llmConfig.model})`, componentJobId); // Adjusted tag
       
       animationDesignerLogger.error(sceneId, "Using fallback brief due to JSON parse error", { 
         briefId: fallbackBriefId 
@@ -746,7 +700,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
         
         // Create a fallback with the partial brief to recover as much as possible
         const fallbackBrief = createFallbackBrief(sceneId, dimensions, cleanedBrief);
-        const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, "fallback+partial", componentJobId);
+        const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, `fallback+partial (intended: ${llmConfig.model})`, componentJobId);
         
         animationDesignerLogger.error(sceneId, "Using fallback brief with partial data from LLM due to validation errors", {
           briefId: fallbackBriefId
@@ -766,7 +720,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
         projectId,
         sceneId,
         validBrief,
-        "o4-mini", // Record which model generated the brief
+        llmConfig.model, // Pass the actually used model name
         componentJobId
       );
       
@@ -787,8 +741,8 @@ Please design a complete Animation Design Brief with appropriate elements and an
       });
       
       // Create a complete fallback brief
-      const fallbackBrief = createFallbackBrief(sceneId, dimensions);
-      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, "error-fallback", componentJobId);
+      const fallbackBrief = createEmptyDesignBrief(sceneId, dimensions);
+      const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, `error-fallback (intended: ${llmConfig.model})`, componentJobId);
       
       animationDesignerLogger.error(sceneId, "Using complete fallback brief due to processing error", {
         briefId: fallbackBriefId
@@ -808,7 +762,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
     
     // Create a minimal fallback brief
     const fallbackBrief = createEmptyDesignBrief(sceneId, dimensions);
-    const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, "error-minimal", componentJobId);
+    const fallbackBriefId = await saveAnimationDesignBrief(projectId, sceneId, fallbackBrief, `error-minimal (intended: ${llmConfig.model})`, componentJobId);
     
     return { 
       brief: fallbackBrief, 
@@ -832,23 +786,3 @@ export interface AnimationBriefGenerationParams {
   brandGuidelines?: string; 
   componentJobId?: string; 
 }
-
-/*
-// Example test function - uncomment if needed
-// async function testGenerateBrief() {
-//   try {
-//     const exampleParams: AnimationBriefGenerationParams = {
-//       sceneId: 'test-scene-id',
-//       projectId: 'test-project-id',
-//       scenePurpose: 'Test animation',
-//       sceneElementsDescription: 'A simple test scene',
-//       desiredDurationInFrames: 60,
-//       dimensions: { width: 1920, height: 1080 },
-//     };
-//     const brief = await generateAnimationDesignBrief(exampleParams);
-//     console.log('Generated brief:', brief);
-//   } catch (error) {
-//     console.error('Test error:', error);
-//   }
-// }
-*/

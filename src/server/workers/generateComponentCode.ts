@@ -9,6 +9,7 @@ import { updateComponentStatus } from "~/server/services/componentGenerator.serv
 import { OpenAI } from "openai";
 import { env } from "~/env";
 import logger, { componentLogger } from "~/lib/logger";
+import { COMPONENT_TEMPLATE, applyComponentTemplate } from "./componentTemplate";
 
 /**
  * Type definition for the OpenAI function call that generates custom Remotion components
@@ -63,6 +64,25 @@ function sanitizeComponentName(name: string): string {
   }
   
   return sanitized;
+}
+
+/**
+ * Validates component syntax before storing
+ * @param code The component code to validate
+ * @returns An object with valid flag and optional error message
+ */
+function validateComponentSyntax(code: string): { valid: boolean; error?: string } {
+  try {
+    // Use Function constructor to check if code parses
+    // This won't execute the code, just check syntax
+    new Function('"use strict";' + code);
+    return { valid: true };
+  } catch (error) {
+    return { 
+      valid: false, 
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
 }
 
 /**
@@ -302,41 +322,47 @@ export async function generateComponentCode(
     // Call OpenAI with function calling enabled
     const response = await openai.chat.completions.create({
       model: "o4-mini", // Using the correct OpenAI model name
-      // temperature: 0.7, - Removed: o4-mini doesn't support custom temperature values
       messages: [
         {
           role: "system",
           content: `You are an expert React and Remotion developer. You build beautiful video components using Remotion and React.
           
-When creating React components with Remotion, please follow these guidelines:
-1. Each component must be a properly structured React component accepting props and returning valid JSX.
-2. Always use TypeScript for type safety, defining interfaces for props.
-3. For each component, define timing functions for entrance and exit animations.
-4. Smooth transitions between scenes are important - use interpolate, useCurrentFrame and other Remotion utilities.
-5. For better maintainability, use well-named and reusable sub-components.
-6. Maintain a professional and modern visual style.
-7. Import only what's needed - avoid excessive dependencies.
-8. Use the full 'remotion' import path, don't assume specific exports are available unless imported directly.
-9. When generating TypeScript code, imports should include all necessary components and be properly structured.
-10. For visual styling, use CSS-in-JS (styled-components) or inline styles. This enables easier animation of properties.
+When creating React components with Remotion, you will ONLY provide implementation details following a very strict template structure.
 
-IMPORTANT RESTRICTION:
-- DO NOT use or reference any external images, videos, or other media files.
-- DO NOT use the <Img> component from Remotion to load images.
-- DO NOT include any code that attempts to load assets using URLs or file paths.
-- INSTEAD, create visual elements using CSS, SVG, or other programmatically generated graphics.
-- Focus on animations, shapes, text, and colors rather than loading external assets.
-- If the prompt mentions images, videos, or other assets, implement them as colored shapes, gradients, or SVG graphics.
+You will NOT write complete component files. Instead:
+1. ONLY provide the COMPONENT_NAME, COMPONENT_IMPLEMENTATION, and COMPONENT_RENDER parts.
+2. These parts will be inserted into our template that already has:
+   - "use client" directive
+   - All necessary imports from React and Remotion
+   - Component structure with props
+   - window.__REMOTION_COMPONENT assignment
+
+COMPONENT STRUCTURE RULES:
+1. COMPONENT_NAME: Provide a CamelCase name for the component (e.g., BlueCircleScene)
+2. COMPONENT_IMPLEMENTATION: Provide ONLY the implementation logic inside the component function
+   - Access animation design brief data with props.brief
+   - Use frame, width, height, fps, and durationInFrames which are already defined
+   - Define variables, calculations, and animations here
+3. COMPONENT_RENDER: Provide ONLY the JSX content that goes inside the AbsoluteFill
+   - The AbsoluteFill wrapper is already included in the template
+   - Only provide what goes inside it
+
+IMPORTANT RESTRICTIONS:
+- DO NOT include imports - they're already in the template
+- DO NOT include the "use client" directive - it's already in the template
+- DO NOT include the window.__REMOTION_COMPONENT assignment - it's already in the template
+- DO NOT use or reference any external images, videos, or other media files
+- DO NOT use the <Img> component from Remotion
+- DO NOT include any code that attempts to load assets using URLs or file paths
+- DO NOT use staticFile from Remotion
+- INSTEAD, create visual elements using CSS, SVG, or other programmatically generated graphics
+- Focus on animations, shapes, text, and colors
 
 For animation:
-- Make extensive use of Remotion's animation utilities like interpolate and useCurrentFrame().
-- Separate entrance, main, and exit animations with clear timing windows.
-- Use spring() or other easing functions for natural movement.
-- Consider implementing progressive reveals of text or graphic elements.
-- Create simple shapes (circles, rectangles) using divs with appropriate styling.
-- Use SVG elements for more complex shapes and illustrations.
-
-IMPORTANT: Always return production-ready, styled TSX code that requires minimal editing. Use simple shapes, backgrounds, and text animations instead of external assets.`
+- Make extensive use of Remotion's animation utilities like interpolate and Easing
+- Create simple shapes using divs with appropriate styling
+- Use SVG elements for more complex shapes and illustrations
+- Access the Animation Design Brief data through props.brief`
         },
         {
           role: "user",
@@ -354,26 +380,22 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
               properties: {
                 componentName: {
                   type: "string",
-                  description: "Name of the React component to generate"
+                  description: "Name of the React component to generate (CamelCase)"
                 },
-                componentCode: {
+                componentImplementation: {
                   type: "string",
-                  description: "Complete TypeScript/TSX code for the component, including imports and export"
+                  description: "The implementation logic that will go inside the component function (without the function declaration or return statement)"
+                },
+                componentRender: {
+                  type: "string",
+                  description: "The JSX to render inside the AbsoluteFill (without the AbsoluteFill wrapper)"
                 },
                 componentDescription: {
                   type: "string",
                   description: "Brief description of what the component does"
-                },
-                dependencies: {
-                  type: "object",
-                  description: "Dependencies required for the component beyond React and Remotion",
-                  additionalProperties: {
-                    type: "string",
-                    description: "Version of the dependency (can be 'latest')"
-                  }
                 }
               },
-              required: ["componentName", "componentCode", "componentDescription"]
+              required: ["componentName", "componentImplementation", "componentRender", "componentDescription"]
             }
           }
         }
@@ -404,41 +426,61 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
       throw new Error(`Failed to parse component generation arguments: ${String(parseError)}`);
     }
     
-    // Sanitize the component name and code
+    // Sanitize the component name
     const sanitizedComponentName = sanitizeComponentName(args.componentName || 'CustomComponent');
     
-    // Sanitize the component code in multiple steps:
-    // 1. Remove Node.js built-in imports
-    let sanitizedCode = removeNodeBuiltInImports(args.componentCode);
-    // 2. Ensure there's only one default export
-    sanitizedCode = sanitizeDefaultExports(sanitizedCode);
-    
-    componentLogger.plan(jobId, `Generated component "${sanitizedComponentName}" (${sanitizedCode.length} chars)`, {
-      generatedAt: new Date().toISOString(),
-      dependencies: args.dependencies || {},
-    });
+    componentLogger.plan(jobId, `Generated component "${sanitizedComponentName}" parts`);
 
-    // Extract component details
-    const generatedComponentName = sanitizedComponentName;
+    // Apply the component template
+    const componentCode = applyComponentTemplate(
+      sanitizedComponentName,
+      args.componentImplementation || '',
+      args.componentRender || '<div>Empty component</div>'
+    );
+    
+    // Validate the generated component
+    const validation = validateComponentSyntax(componentCode);
+    if (!validation.valid) {
+      componentLogger.error(jobId, `Generated component has syntax errors: ${validation.error}`);
+      
+      // Create fallback component with error message
+      const fallbackComponent = applyComponentTemplate(
+        sanitizedComponentName,
+        `// Original implementation had syntax errors: ${validation.error}`,
+        `<div style={{ backgroundColor: 'rgba(255, 0, 0, 0.2)', padding: '20px', borderRadius: '8px', color: 'red' }}>
+          <h2>Component Error</h2>
+          <p>The component could not be generated correctly.</p>
+        </div>`
+      );
+      
+      const totalDuration = Date.now() - startTime;
+      componentLogger.complete(jobId, `Fallback component generation complete in ${totalDuration}ms`, {
+        duration: totalDuration,
+        componentName: sanitizedComponentName,
+        error: validation.error
+      });
+      
+      return {
+        code: fallbackComponent,
+        dependencies: {},
+      };
+    }
     
     // Log code length as a simple metric
-    componentLogger.parse(jobId, `Generated ${sanitizedCode.length} bytes of component code for "${generatedComponentName}"`, {
-      codeLength: sanitizedCode.length,
-      componentName: generatedComponentName
+    componentLogger.parse(jobId, `Generated ${componentCode.length} bytes of component code for "${sanitizedComponentName}"`, {
+      codeLength: componentCode.length,
+      componentName: sanitizedComponentName
     });
-    
-    // Process the code to fix common issues
-    const processedCode = processGeneratedCode(sanitizedCode, generatedComponentName);
     
     const totalDuration = Date.now() - startTime;
     componentLogger.complete(jobId, `Component generation complete in ${totalDuration}ms`, {
       duration: totalDuration,
-      componentName: generatedComponentName
+      componentName: sanitizedComponentName
     });
     
     return {
-      code: processedCode,
-      dependencies: args.dependencies || {},
+      code: componentCode,
+      dependencies: {},
     };
   } catch (error) {
     componentLogger.error(jobId, `Component generation failed: ${error instanceof Error ? error.message : String(error)}`, {
@@ -446,86 +488,5 @@ IMPORTANT: Always return production-ready, styled TSX code that requires minimal
       stack: error instanceof Error ? error.stack : undefined
     });
     throw error;
-  }
-}
-
-// Helper function to clean up and process generated code
-function processGeneratedCode(code: string, componentName: string): string {
-  try {
-    // Ensure componentName is valid before processing
-    componentName = sanitizeComponentName(componentName);
-    
-    // Fix common issues in the generated code
-    
-    // Some models include markdown code fences - remove them
-    let processedCode = code.replace(/```tsx?/g, '').replace(/```/g, '').trim();
-    
-    // Ensure code has proper exports
-    if (!processedCode.includes('export default') && !processedCode.includes('export const')) {
-      // Add export if missing
-      processedCode = processedCode.replace(
-        new RegExp(`(function|const) ${componentName}`),
-        `export $1 ${componentName}`
-      );
-    }
-    
-    // Fix missing "use client" directive
-    if (!processedCode.includes('"use client"') && !processedCode.includes("'use client'")) {
-      processedCode = `"use client";\n\n${processedCode}`;
-    }
-    
-    // Remove any Img component imports
-    processedCode = processedCode.replace(/import\s+{([^}]*)Img([^}]*)}\s+from\s+['"]remotion['"]/g, (match, before, after) => {
-      return `import {${before}${after}} from 'remotion'`;
-    });
-    
-    // Remove any staticFile import if it exists
-    processedCode = processedCode.replace(/import\s+{([^}]*)staticFile([^}]*)}\s+from\s+['"]remotion['"]/g, (match, before, after) => {
-      return `import {${before}${after}} from 'remotion'`;
-    });
-    
-    // Clean up comma issues in imports that might be caused by removing items
-    processedCode = processedCode.replace(/import\s+{([^}]*)}\s+from\s+['"]remotion['"]/g, (match, importItems) => {
-      // Fix any potential double commas caused by removing items from import lists
-      const cleanedImports = importItems.replace(/,\s*,/g, ',').replace(/,\s*}/g, '}').replace(/{,\s*/g, '{');
-      return `import {${cleanedImports}} from 'remotion'`;
-    });
-    
-    // Process all imports to ensure there are no empty import brackets
-    processedCode = processedCode.replace(/import\s+{\s*}\s+from\s+['"][^'"]+['"]/g, '');
-    
-    // Remove any <Img> component usage with more robust regex that handles multiline
-    processedCode = processedCode.replace(/<Img[\s\n]+[^>]*src=\{[^}]*\}[^>]*>/g, 
-      `<div style={{ backgroundColor: '#3498db', width: '100px', height: '100px', borderRadius: '8px' }} />`);
-    
-    // Also catch single-quoted and double-quoted src attributes
-    processedCode = processedCode.replace(/<Img[\s\n]+[^>]*src=['"][^'"]*['"][^>]*>/g,
-      `<div style={{ backgroundColor: '#3498db', width: '100px', height: '100px', borderRadius: '8px' }} />`);
-    
-    // Replace any staticFile usage with a simple string
-    processedCode = processedCode.replace(/staticFile\(['"]([^'"]*)['"]\)/g, "''");
-    
-    // Remove any references to image file extensions
-    const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'];
-    
-    // Create a regex to match strings containing image extensions
-    const imageExtRegex = new RegExp(`['"][^'"]*\\.(${imageExtensions.join('|')})[^'"]*['"]`, 'g');
-    processedCode = processedCode.replace(imageExtRegex, "''");
-    
-    // Log what we've done
-    logger.debug(`Processed component code for ${componentName}`, {
-      component: true,
-      codeLength: processedCode.length
-    });
-    
-    return processedCode;
-  } catch (error) {
-    logger.error(`Error processing generated code`, { 
-      type: "PROCESSING",
-      error: error instanceof Error ? error.message : String(error),
-      component: true
-    });
-    // Return original code if processing fails
-    return code;
   }
 }

@@ -218,7 +218,7 @@ export const customComponentRouter = createTRPCRouter({
       // If we only want successful components, add additional filters
       if (input.successfulOnly) {
         // A successful component must:
-        // 1. Have status="success"
+        // 1. Have status="complete" (not "success")
         // 2. Have a non-null outputUrl (indicating it was uploaded to R2)
         // We need to modify our base where condition
         query = ctx.db
@@ -238,7 +238,7 @@ export const customComponentRouter = createTRPCRouter({
           .innerJoin(projects, eq(customComponentJobs.projectId, projects.id))
           .where(and(
             eq(projects.userId, ctx.session.user.id),
-            eq(customComponentJobs.status, "success"),
+            eq(customComponentJobs.status, "complete"),
             // Use IS NOT NULL syntax for checking non-null outputUrl
             isNotNull(customComponentJobs.outputUrl)
           ));

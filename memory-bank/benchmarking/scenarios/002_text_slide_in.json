@@ -1,0 +1,9 @@
+{
+  "scenarioId": "002_text_slide_in",
+  "description": "Simple text sliding in from the left.",
+  "userPrompt": "Create a scene with the text 'Hello World' sliding in from the left edge of the screen over 1.5 seconds.",
+  "expectedOutcomeQualitative": "The text 'Hello World' should start off-screen to the left and move horizontally to the center of the screen, completing the movement in 1.5 seconds. Font style can be basic.",
+  "tags": ["simple", "slide", "text"],
+  "goldenAdbJsonPath": null,
+  "goldenTsxPath": null
+}

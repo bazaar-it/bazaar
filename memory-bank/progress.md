@@ -1,5 +1,63 @@
 # Current Progress Status
 
+## Custom Component Loading Fix (2025-05-12)
+
+### Root Cause Analysis
+After detailed investigation of custom component loading issues, we identified the exact problems causing components to fail to load:
+
+1. **Naked Import Pattern**: Components were using standalone destructuring imports like `import {useState} from 'react'` that our regex patterns weren't handling.
+
+2. **Variable Mismatch**: Components were using minified variable names like `a.createElement` instead of `React.createElement`, leading to undefined variable errors.
+
+3. **Syntax Error Cascading**: When syntax errors occurred, script execution stopped completely, preventing fallback mechanisms from working.
+
+### Implemented Fixes
+We enhanced `/src/app/api/components/[componentId]/route.ts` with several improvements:
+
+1. **Enhanced Preprocessing**: Added targeted regex patterns to handle naked destructuring imports and fix variable mismatches in createElement calls.
+
+2. **Syntax Validation**: Added a validation step that tests component code for syntax errors before sending it to the client.
+
+3. **Fallback Component**: Implemented an error recovery mechanism that generates a visual fallback component when syntax errors are detected, showing the error details instead of crashing.
+
+### Documentation
+Comprehensive documentation was added to:
+- `memory-bank/sprints/sprint16/component_loading_analysis.md` - Detailed analysis and diagnosis
+- `memory-bank/sprints/sprint16/component_loading_fix_pr.md` - Implementation plan and testing procedure
+
+### Next Steps
+- Monitor component loading success rates
+- Consider standardizing the component generation format long-term
+- Add automated testing for component loading edge cases
+
+## NEXT_REDIRECT Error Fix (2025-05-11)
+
+### Issue
+- When using `redirect()` within try/catch blocks, users were seeing a `NEXT_REDIRECT` error
+- The redirect wasn't actually happening, and the error was visible in the console
+
+### Technical Explanation
+- The `redirect()` function in Next.js works by throwing a special error under the hood called `NEXT_REDIRECT`
+- This error is meant to be caught by Next.js's internal error handling to perform the redirection
+- When we put `redirect()` inside a try/catch block, we're catching Next.js's internal error and preventing the redirect
+
+### Solution
+- Move all `redirect()` calls outside of try/catch blocks
+- Fixed the `/projects/new` route by:
+  1. Capturing database operation results in a variable
+  2. Performing database operations inside try/catch for error safety
+  3. Moving the redirect logic outside the try/catch block
+  4. Ensuring redirects happen based on the operation results
+
+### Documentation
+- Created new documentation in `memory-bank/api-docs/next-redirect.md` explaining best practices
+- Documented proper patterns for using redirect with Server Actions
+- Referenced the GitHub issue discussing this problem
+
+### Benefits
+- Users can now create new projects without seeing errors
+- Redirects work properly after operations complete
+- Code follows Next.js best practices for error handling with redirects
 ## Component Refresh Debugging (2025-05-11)
 We've implemented enhanced debugging tools and instrumentation to help diagnose the issue where custom components are not appearing in the preview panel despite being successfully generated. This includes:
 
@@ -304,12 +362,51 @@ We've been implementing the intelligent scene planning system that will dynamica
 
 ## Sprint 8 Progress - Comprehensive Test Suite Implementation
 
+We've implemented a comprehensive test suite for the# Bazaar-Vid Progress
+
+## Current Sprint
+
+### 2025-05-12: Custom Component Loading Fix
+
+#### Root Cause Analysis
+After detailed investigation of custom component loading issues, we identified the exact problems causing components to fail to load:
+
+1. **Naked Import Pattern**: Components were using standalone destructuring imports like `import {useState} from 'react'` that our regex patterns weren't handling.
+
+2. **Variable Mismatch**: Components were using minified variable names like `a.createElement` instead of `React.createElement`, leading to undefined variable errors.
+
+3. **Syntax Error Cascading**: When syntax errors occurred, script execution stopped completely, preventing fallback mechanisms from working.
+
+#### Implemented Fixes
+We enhanced `/src/app/api/components/[componentId]/route.ts` with several improvements:
+
+1. **Enhanced Preprocessing**: Added targeted regex patterns to handle naked destructuring imports and fix variable mismatches in createElement calls.
+
+2. **Syntax Validation**: Added a validation step that tests component code for syntax errors before sending it to the client.
+
+3. **Fallback Component**: Implemented an error recovery mechanism that generates a visual fallback component when syntax errors are detected, showing the error details instead of crashing.
+
+#### Documentation
+Comprehensive documentation was added to:
+- `memory-bank/sprints/sprint16/component_loading_analysis.md` - Detailed analysis and diagnosis
+- `memory-bank/sprints/sprint16/component_loading_fix_pr.md` - Implementation plan and testing procedure
+
+#### Next Steps
+- Monitor component loading success rates
+- Consider standardizing the component generation format long-term
+- Add automated testing for component loading edge cases
+
+## Previous Work
+
+### Sprint 8 Progress - Comprehensive Test Suite Implementation
+
 We've implemented a comprehensive test suite for the Bazaar-Vid project's LLM integration and video generation systems. These tests ensure the reliability and correctness of our core functionality.
 
 ### Completed Implementation (Sprint 8 - Test Suites)
 
 1. **LLM Integration Tests**
    - ✅ Created `openaiToolsAPI.test.ts` - Testing proper parsing of function calls from OpenAI's API, handling multiple tool calls, and graceful error handling
+{{ ... }}
    - ✅ Implemented `responseStreaming.test.ts` - Validating performance targets (<150ms initial response, <500ms first content)
    - ✅ Built `dualLLMArchitecture.test.ts` - Testing the intent + code generation pipeline with proper coordination between models
    - ✅ Added `errorRecovery.test.ts` - Implementing retry logic, fallbacks, and graceful degradation
@@ -1336,3 +1433,73 @@ Implemented an LLM-based project title generation feature that automatically cre
 
 ### Documentation
 - Updated relevant files in memory-bank to document the proper pattern for accessing server-side resources from client code
+
+## Sprint 16 - Custom Component Visibility and Export Handling (2025-05-12)
+
+### Session 1: Fixed Custom Component Panel Visibility
+
+- **Objective:** Fix issues preventing new custom components from being visible in the component panel.
+- **Issues Identified:**
+  - API routes using dynamic params incorrectly: `const { componentId } = params;` causing Next.js App Router errors
+  - Cache-control headers allowing stale component data: `'Cache-Control': 'public, max-age=3600'`
+  - Component status filter using incorrect status value ("success" instead of "complete")
+- **Changes Made:**
+  - Fixed dynamic params handling in API routes
+  - Updated cache control headers to use `no-store` to prevent caching
+  - Updated the custom component filter for status "complete" instead of "success"
+  - Added force refresh to the component panel
+  - Added manual refresh button in PreviewPanel
+
+### Session 2: Fixed Custom Component Loading and Exports
+
+- **Objective:** Fix issues with custom components not loading properly when added to the timeline.
+- **Issues Identified:**
+  - JavaScript files in R2 using named exports (e.g., `export { Y as BluePlanetCirclingScene }`) instead of assigning to `window.__REMOTION_COMPONENT`
+  - The `useRemoteComponent` hook expecting components to be available as `window.__REMOTION_COMPONENT`
+  - Metadata fetch timeouts due to export pattern issues
+- **Changes Made:**
+  - Modified `/api/components/[componentId]/route.ts` to inject code that handles named exports
+  - Updated `buildCustomComponent.ts` worker to handle multiple export patterns
+  - Added detection and handling for various export formats with fallbacks
+  - Added more Remotion imports like `Easing` to the global references
+  - Created documentation for custom component export handling
+
+### Session 3: Enhanced Component Loading with Comprehensive Fix (2025-05-12)
+
+- **Objective:** Resolve all component loading errors, especially the "Unexpected identifier 'React'. import call expects one or two arguments" error.
+- **Issues Identified:**
+  - Multiple patterns of invalid ES module imports (minified React imports like `import a from "react"`)
+  - Inconsistent export patterns across generated components
+  - Missing or malformed React and Remotion imports
+  - Import syntax errors causing JavaScript parsing failures
+  - Ineffective component detection logic for various export patterns
+- **Enhanced Solution Implemented:**
+  - Created modular code processing with specialized functions:
+    - `preprocessComponentCode()`: Fixes syntax issues before evaluation
+    - `analyzeComponentCode()`: Intelligently identifies component variables
+  - Expanded import fixes with comprehensive regex patterns for:
+    - Single-letter React imports: `import a from "react"` → `import React from "react"`
+    - Namespace imports: `import * as R from "react"` → `import React from "react"`
+    - Duplicate imports: Combined into single import statements
+    - Fixed invalid ES module syntax that causes parsing errors
+  - Implemented multi-layer component detection:
+    - Static analysis to find exports and React component patterns
+    - Runtime detection with global scope analysis for component variables
+    - Prioritization of variables following React naming conventions
+    - Emergency fallback with placeholder component if all detection fails
+  - Added extensive logging for debugging component loading issues
+  - Created comprehensive documentation in `memory-bank/remotion/custom-component-export-fix.md`
+
+### Results
+
+- All custom components now appear correctly in the component panel
+- Components can be successfully added to the timeline
+- The system correctly handles various export patterns and import formats
+- Components with minified/invalid imports now load and render properly
+- More robust component loading with better error handling and fallbacks
+
+### Next Steps
+
+- Consider standardizing the export format in the component generation process
+- Add more robust validation of components before storing in R2
+- Implement a component testing step before making components available

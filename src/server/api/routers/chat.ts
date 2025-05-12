@@ -936,20 +936,32 @@ Your component is being compiled and will be available soon.`;
                     ).newDocument;
                     
                     // Validate new props
-                const validated = inputPropsSchema.safeParse(nextProps);
-                if (!validated.success) {
-                    throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
-                }
-                
-                // Save changes
-                await ctx.db.update(projects)
-                    .set({ props: validated.data, updatedAt: new Date() })
-                    .where(eq(projects.id, projectId));
+                    const validated = inputPropsSchema.safeParse(nextProps);
+                    if (!validated.success) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "Resulting document invalid" });
+                    }
                     
-                await ctx.db.insert(patches).values({ 
-                    projectId, 
+                    // CRITICAL FIX: Generate a new refreshToken and add it to the props
+                    const refreshToken = `token-${Date.now()}`;
+                    // Use type assertion to add refreshToken
+                    (validated.data as any).refreshToken = refreshToken;
+                    
+                    // Save changes with the refreshToken
+                    await ctx.db.update(projects)
+                        .set({ 
+                            props: validated.data, 
+                            updatedAt: new Date() 
+                        })
+                        .where(eq(projects.id, projectId));
+                    
+                    // Store the patch in the patches table
+                    await ctx.db.insert(patches).values({ 
+                        projectId, 
                         patch: result.patches as unknown as JsonPatch 
-                });
+                    });
+                    
+                    // Add debug logging
+                    console.log(`[chat.ts] Applied scene plan patches with refreshToken: ${refreshToken}`);
                 }
                 
                 // Store assistant message

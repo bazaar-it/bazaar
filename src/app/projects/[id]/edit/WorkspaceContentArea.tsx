@@ -15,7 +15,8 @@ import {
   TimelinePanel, 
   ProjectsPanel, 
   LibraryPanel, 
-  ScenePlanningHistoryPanel 
+  ScenePlanningHistoryPanel,
+  CustomComponentsPanel
 } from './panels';
 import { XIcon, RefreshCwIcon } from 'lucide-react';
 import type { InputProps } from '~/types/input-props';
@@ -30,7 +31,8 @@ const PANEL_COMPONENTS = {
   templates: ProjectsPanel, // Temporarily using ProjectsPanel for Templates
   scenes: ProjectsPanel, // Temporarily using ProjectsPanel for Scenes
   timeline: TimelinePanel,
-  sceneplanning: ScenePlanningHistoryPanel
+  sceneplanning: ScenePlanningHistoryPanel,
+  customComponents: CustomComponentsPanel
 };
 
 const PANEL_LABELS = {
@@ -42,7 +44,8 @@ const PANEL_LABELS = {
   templates: 'Templates',
   scenes: 'Scenes',
   timeline: 'Timeline',
-  sceneplanning: 'Scene Planning'
+  sceneplanning: 'Scene Planning',
+  customComponents: 'Components'
 };
 
 export type PanelType = keyof typeof PANEL_COMPONENTS;
@@ -476,6 +479,9 @@ const WorkspaceContentArea = forwardRef<WorkspaceContentAreaHandle, WorkspaceCon
             projects={[]} 
             currentProjectId={projectId} 
           />;
+        case 'customComponents':
+          // Add support for the CustomComponentsPanel
+          return <CustomComponentsPanel projectId={projectId} />;
         default:
           return null;
       }

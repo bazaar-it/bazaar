@@ -285,3 +285,27 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
   - Updated `/projects/new` route to generate unique project titles following the same pattern as the TRPC routes
   - Now checks for existing projects with "New Project" title and adds a number suffix if needed
   - Fixed on branch `Jack/Sunday`
+
+## Custom Component System
+
+### Completed
+- ✅ Fix new custom components not showing up in the panel
+- ✅ Fix the API routes to correctly handle dynamic params
+- ✅ Fix custom component cache control headers
+- ✅ Fix component status handling to support "complete" status
+- ✅ Add manual refresh button to force component updates
+- ✅ Fix component loading from R2 with proper export handling
+- ✅ Handle named exports in custom components
+- ✅ Document custom component refresh mechanism
+- ✅ Document custom component export handling
+- ✅ Fix minified React import issue (`import a from "react"`) in generated components
+- ✅ Implement direct window assignment for component variables
+- ✅ Add fallback detection mechanisms for component exports
+- ✅ Create comprehensive documentation for component export fixes
+
+### Todo
+- Consider standardizing the export format in component generation
+- Add validation for components before storing in R2
+- Implement component testing before making components available
+- Add structured approach to component metadata
+- Improve error handling in custom components

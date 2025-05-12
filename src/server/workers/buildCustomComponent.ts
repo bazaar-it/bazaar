@@ -199,16 +199,12 @@ async function processJob(jobId: string): Promise<void> {
       // Sanitize TSX code (remove unsafe imports, etc.)
       const sanitizedTsx = sanitizeTsx(job.tsxCode);
       
-      // Wrap TSX with globalThis.React and Remotion references
-      const wrappedTsx = wrapTsxWithGlobals(sanitizedTsx);
-      
       // Compile the code - use esbuild if available, otherwise fallback
       let jsCode: string;
       
       if (esbuild) {
         try {
-          buildLogger.compile(jobId, "Compiling TSX code with esbuild...");
-          jsCode = await compileWithEsbuild(wrappedTsx);
+          jsCode = await compileWithEsbuild(sanitizedTsx);
         } catch (esbuildError) {
           buildLogger.error(jobId, "CRITICAL: esbuild compilation failed. ABORTING build for this component.", { 
             error: esbuildError,
@@ -219,7 +215,7 @@ async function processJob(jobId: string): Promise<void> {
           
           // Save a portion of the TSX code for debugging purposes
           buildLogger.error(jobId, "Failed TSX code snippet (first 500 chars):", {
-            tsxSnippet: wrappedTsx.substring(0, 500) + "..."
+            tsxSnippet: sanitizedTsx.substring(0, 500) + "..."
           });
           
           // Update job status to error and exit
@@ -231,7 +227,7 @@ async function processJob(jobId: string): Promise<void> {
           type: "NO_ESBUILD"
         });
         // Only use fallback when esbuild is not available at all
-        jsCode = await compileWithFallback(wrappedTsx);
+        jsCode = await compileWithFallback(sanitizedTsx);
       }
       
       buildLogger.upload(jobId, "Uploading to R2...");
@@ -292,12 +288,10 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
     throw new Error("esbuild is not loaded. Cannot compile.");
   }
 
-  const wrappedCode = wrapTsxWithGlobals(tsxCode);
-
   try {
     const result = await esbuild.build({
       stdin: {
-        contents: wrappedCode,
+        contents: tsxCode,
         resolveDir: process.cwd(), // Important for resolving any potential relative paths if ever used
         loader: 'tsx',
       },
@@ -307,7 +301,11 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
       platform: 'browser',
       target: 'es2020', // Modern JS target
       minify: true, // Minify the output
-      // Add any other necessary esbuild options here
+      loader: { '.tsx': 'tsx' },
+      jsxFactory: 'React.createElement',
+      jsxFragment: 'React.Fragment',
+      external: ['react', 'remotion'], // Mark as externals since provided globally
+      logLevel: 'warning',
     });
 
     if (result.errors.length > 0) {
@@ -471,8 +469,11 @@ function removeDuplicateDefaultExports(code: string): string {
  * The application expects the component to be assigned to window.__REMOTION_COMPONENT.
  */
 function wrapTsxWithGlobals(tsxCode: string): string {
+  // Remove the "use client" directive - it's not needed/valid in the browser script
+  let cleanedCode = tsxCode.replace(/^\s*["']use client["'];?\s*/m, '// "use client" directive removed for browser compatibility\n');
+  
   // Remove any existing React declarations to prevent duplicates
-  let cleanedCode = tsxCode.replace(/const\s+React\s*=\s*.*?;/g, '// React is provided globally');
+  cleanedCode = cleanedCode.replace(/const\s+React\s*=\s*.*?;/g, '// React is provided globally');
   
   // Try to extract component names from the code with improved patterns
   
@@ -485,6 +486,9 @@ function wrapTsxWithGlobals(tsxCode: string): string {
   // 3. Look for default exports
   const defaultExport = cleanedCode.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/);
   
+  // 4. Look for named exports
+  const namedExports = cleanedCode.match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/g) || [];
+  
   // Determine the best component name to use
   let componentName = 'CustomComponent';
   
@@ -492,6 +496,13 @@ function wrapTsxWithGlobals(tsxCode: string): string {
     // Prioritize the default export component name
     componentName = defaultExport[1];
     logger.debug(`Found default export component: ${componentName}`);
+  } else if (namedExports.length > 0 && namedExports[0]) {
+    // Extract name from first named export
+    const match = namedExports[0].match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/);
+    if (match && match[1]) {
+      componentName = match[1];
+      logger.debug(`Using named export component: ${componentName}`);
+    }
   } else if (funcComponents.length > 0 && funcComponents[0]) {
     // Extract name from the first function component
     const match = funcComponents[0].match(/function\s+([A-Za-z0-9_]+)/);
@@ -508,6 +519,27 @@ function wrapTsxWithGlobals(tsxCode: string): string {
     }
   }
   
+  // Check for export patterns and modify if needed
+  let modifiedCode = cleanedCode;
+  
+  // Check for export { X as Y } pattern
+  const exportPattern = /export\s*\{\s*([A-Za-z0-9_]+)(?:\s+as\s+([A-Za-z0-9_]+))?\s*\}/;
+  const exportMatch = modifiedCode.match(exportPattern);
+  
+  if (exportMatch) {
+    // We have a named export, modify it to also assign to window.__REMOTION_COMPONENT
+    const exportSource = exportMatch[1];
+    const exportTarget = exportMatch[2] || exportSource;
+    
+    // Replace the export with export + window assignment
+    modifiedCode = modifiedCode.replace(
+      exportPattern,
+      `export { ${exportSource} as ${exportTarget} };\n// Also assign to window.__REMOTION_COMPONENT\nwindow.__REMOTION_COMPONENT = ${exportSource};`
+    );
+    
+    logger.debug(`Modified named export to also assign to window.__REMOTION_COMPONENT: ${exportSource} as ${exportTarget}`);
+  }
+  
   // List of potential component names to try (with default as fallback)
   const componentNames = [
     componentName,
@@ -522,22 +554,7 @@ function wrapTsxWithGlobals(tsxCode: string): string {
     'CustomComponent'
   ];
   
-  // Generate component registration with fallbacks
-  const registrationCode = componentNames
-    .map((name, i) => 
-      i === 0 
-        ? `if (typeof ${name} !== 'undefined') {
-      window.__REMOTION_COMPONENT = ${name};
-      console.log('Component registered as window.__REMOTION_COMPONENT: ${name}');
-    }`
-        : `else if (typeof ${name} !== 'undefined') {
-      window.__REMOTION_COMPONENT = ${name};
-      console.log('Fallback component registered: ${name}');
-    }`
-    )
-    .join(' ');
-  
-  // Create wrapper that avoids duplicate React declarations
+  // Generate component registration with fallbacks using IIFE for reliable execution
   return `
 // Access React from global scope - DO NOT DECLARE React AGAIN INSIDE COMPONENT
 const React = window.React || globalThis.React;
@@ -555,16 +572,69 @@ const staticFile = window.Remotion?.staticFile;
 const Series = window.Remotion?.Series;
 const interpolateColors = window.Remotion?.interpolateColors;
 const OffthreadVideo = window.Remotion?.OffthreadVideo;
+const Easing = window.Remotion?.Easing;
 
 // Original component code (with React global references)
-${cleanedCode}
+${modifiedCode}
 
-// Register the component for the useRemoteComponent hook
-// This is the key integration point with the application
-${registrationCode}
-else {
-  console.error('Could not find any component to register. Tried: ${componentNames.join(', ')}');
-}
+// Use an IIFE to ensure reliable component registration in browser context
+(function() {
+  try {
+    // Clear any existing component registration
+    if (window.__REMOTION_COMPONENT) {
+      console.log('Clearing previous window.__REMOTION_COMPONENT');
+      delete window.__REMOTION_COMPONENT;
+    }
+    
+    // Try each potential component name in order
+    ${componentNames.map((name, idx) => 
+      idx === 0 
+        ? `if (typeof ${name} !== 'undefined') {
+        window.__REMOTION_COMPONENT = ${name};
+        console.log('Component registered as window.__REMOTION_COMPONENT: ${name}');
+      }`
+        : `else if (typeof ${name} !== 'undefined') {
+        window.__REMOTION_COMPONENT = ${name};
+        console.log('Fallback component registered: ${name}');
+      }`
+    ).join('\n    ')}
+    else {
+      console.error('Could not find any component to register. Tried: ${componentNames.join(', ')}');
+      
+      // Create a fallback error component as last resort
+      window.__REMOTION_COMPONENT = (props) => {
+        return React.createElement('div', {
+          style: {
+            backgroundColor: 'rgba(255, 0, 0, 0.2)',
+            padding: '20px',
+            borderRadius: '8px',
+            color: 'red'
+          }
+        }, [
+          React.createElement('h2', null, 'Component Error'),
+          React.createElement('p', null, 'The component could not be found.')
+        ]);
+      };
+    }
+  } catch(error) {
+    console.error('Error registering component:', error);
+    
+    // Create a fallback error component
+    window.__REMOTION_COMPONENT = (props) => {
+      return React.createElement('div', {
+        style: {
+          backgroundColor: 'rgba(255, 0, 0, 0.2)',
+          padding: '20px',
+          borderRadius: '8px',
+          color: 'red'
+        }
+      }, [
+        React.createElement('h2', null, 'Component Error'),
+        React.createElement('p', null, 'The component could not be generated correctly.')
+      ]);
+    };
+  }
+})();
 `;
 }
 
@@ -628,15 +698,22 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
 
     buildLogger.start(jobId, `Got ${job.tsxCode.length} bytes of TSX code`, { type: "CODE" });
 
-    // 1. Save the TSX code to a temporary file
+    // 1. Create temporary directory
     const tmpDir = path.join(os.tmpdir(), `bazaar-components-${jobId}`);
     await mkdir(tmpDir, { recursive: true });
+    buildLogger.start(jobId, `Created temporary directory ${tmpDir}`, { type: "FILES" });
     
-    const componentFilePath = path.join(tmpDir, "component.tsx");
-    await writeFile(componentFilePath, job.tsxCode);
-    buildLogger.start(jobId, `Wrote TSX file to ${componentFilePath}`, { type: "FILES" });
+    // --- REMOVED writing raw TSX to component.tsx ---
+    // const componentFilePath = path.join(tmpDir, "component.tsx");
+    // await writeFile(componentFilePath, job.tsxCode);
+    // buildLogger.start(jobId, `Wrote TSX file to ${componentFilePath}`, { type: "FILES" });
     
-    // 2. Compile with esbuild
+    // 2. Preprocess the TSX code
+    buildLogger.compile(jobId, "Preprocessing TSX code...");
+    const processedTsxCode = wrapTsxWithGlobals(job.tsxCode);
+    buildLogger.compile(jobId, `Preprocessing complete, processed code length: ${processedTsxCode.length}`);
+
+    // 3. Compile with esbuild using stdin
     const compileStartTime = Date.now();
     buildLogger.compile(jobId, "Starting esbuild compilation...");
     
@@ -661,15 +738,18 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         throw new Error("Failed to load esbuild");
       }
       
-      const outputDir = path.dirname(componentFilePath);
-      const outputPath = path.join(outputDir, "bundle.js");
-      
+      const outputPath = path.join(tmpDir, "bundle.js"); // Corrected output path
       // Configure esbuild
       const result = await esbuild.build({
-        entryPoints: [componentFilePath],
+        // --- UPDATED to use stdin instead of entryPoints ---
+        stdin: {
+          contents: processedTsxCode,
+          resolveDir: process.cwd(), // For resolving potential relative paths if needed
+          loader: 'tsx',
+        },
         bundle: true,
         outfile: outputPath,
-        format: 'esm',
+        format: 'iife', // IMPORTANT: Use IIFE format for browser execution
         target: 'es2020',
         platform: 'browser',
         minify: true,
@@ -684,7 +764,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         },
         jsxFactory: 'React.createElement',
         jsxFragment: 'React.Fragment',
-        external: ['react', 'remotion'],
+        external: ['react', 'remotion'], // Mark as externals since provided globally
         logLevel: 'warning',
       });
       
@@ -716,10 +796,9 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
           const [_, file, lineStr, column] = locationMatch;
           buildLogger.error(jobId, error.message, { type: "COMPILE:ERROR", location: `${file}:${lineStr}:${column}` });
           
-          // Try to read the problematic file section if available
+          // Try to log the problematic code section from the processed input
           try {
-            const fileContent = fs.readFileSync(componentFilePath, 'utf8');
-            const lines = fileContent.split('\n');
+            const lines = processedTsxCode.split('\n'); // Use processedTsxCode
             
             // Ensure lineStr is a string before parsing
             const lineNum = lineStr ? parseInt(lineStr, 10) : 0;
@@ -738,10 +817,10 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
               type: "COMPILE:ERROR:CODE", 
               codeContext: codeContext.join('\n')
             });
-          } catch (readError) {
-            buildLogger.error(jobId, "Could not read problematic file", { 
-              type: "COMPILE:ERROR", 
-              error: readError instanceof Error ? readError.message : String(readError)
+          } catch (logError) {
+            buildLogger.error(jobId, "Could not log problematic code section", { 
+              type: "COMPILE:ERROR:LOG", 
+              error: logError instanceof Error ? logError.message : String(logError)
             });
           }
         }
@@ -853,3 +932,8 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     return false;
   }
 }
+
+
+
+
+

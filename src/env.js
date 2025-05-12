@@ -18,6 +18,8 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: z.string(),
     DATABASE_URL: z.string().url(),
     DATABASE_URL_NON_POOLED: z.string().url(),
+    // Default model for Animation Design Brief generation
+    DEFAULT_ADB_MODEL: z.string().optional().default("o4-mini"),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -53,6 +55,7 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_URL_NON_POOLED: process.env.DATABASE_URL_NON_POOLED,
+    DEFAULT_ADB_MODEL: process.env.DEFAULT_ADB_MODEL,
     NODE_ENV: process.env.NODE_ENV,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     // R2 Storage Environment Variables

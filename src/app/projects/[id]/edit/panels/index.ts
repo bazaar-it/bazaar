@@ -7,4 +7,5 @@ export { default as UploadsPanel } from './UploadsPanel';
 export { default as ScenePlanningHistoryPanel } from './ScenePlanningHistoryPanel';
 export { default as ProjectsPanel } from './ProjectsPanel';
 export { default as LibraryPanel } from './LibraryPanel';
-export { default as Sidebar } from '../Sidebar'; 
+export { Sidebar } from '../Sidebar';  // Changed from default export to named export
+export { default as CustomComponentsPanel } from './CustomComponentsPanel'; // Added CustomComponentsPanel 

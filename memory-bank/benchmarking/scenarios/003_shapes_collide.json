@@ -1,0 +1,9 @@
+{
+  "scenarioId": "003_shapes_collide",
+  "description": "A blue square slides in from the left and a green circle slides in from the right, meeting near the center.",
+  "userPrompt": "Create a scene where a blue square slides in from the left and stops just left of center, and a green circle slides in from the right and stops just right of center. They should arrive at the same time after 2 seconds.",
+  "expectedOutcomeQualitative": "A blue square should move horizontally from the left edge to slightly left of the screen center. A green circle should move horizontally from the right edge to slightly right of the screen center. Both movements should take 2 seconds and finish simultaneously.",
+  "tags": ["moderate", "slide", "shape", "interaction"],
+  "goldenAdbJsonPath": null,
+  "goldenTsxPath": null
+}

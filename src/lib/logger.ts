@@ -1,5 +1,5 @@
 // src/lib/logger.ts
-import { createLogger, format, transports } from 'winston';
+import { createLogger, format, transports, Logger } from 'winston';
 import 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
@@ -24,7 +24,7 @@ const fileFormat = format.combine(
 );
 
 // Create either a server logger (with file transports) or a browser logger (console only)
-let logger;
+let logger: Logger;
 
 if (isServer) {
   // Server-side initialization with file transports

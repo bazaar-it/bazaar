@@ -21,9 +21,9 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const briefId = params.id;
+  const { id } = params;
   
-  apiRouteLogger.request(briefId, "ADB request received", {
+  apiRouteLogger.request(id, "ADB request received", {
     url: request.url,
     headers: Object.fromEntries([...request.headers.entries()])
   });
@@ -31,12 +31,12 @@ export async function GET(
   try {
     // Get the animation design brief from the database
     const brief = await db.query.animationDesignBriefs.findFirst({
-      where: eq(animationDesignBriefs.id, briefId),
+      where: eq(animationDesignBriefs.id, id),
     });
     
     // Handle not found case
     if (!brief) {
-      apiRouteLogger.error(briefId, "ADB not found");
+      apiRouteLogger.error(id, "ADB not found");
       return NextResponse.json({ error: "Animation design brief not found" }, { 
         status: 404,
         headers: {
@@ -47,7 +47,7 @@ export async function GET(
     }
     
     // Return the ADB data with proper CORS headers
-    apiRouteLogger.debug(briefId, "ADB found", { 
+    apiRouteLogger.debug(id, "ADB found", { 
       designBrief: brief.designBrief ? 'present' : 'missing',
       sceneId: brief.sceneId,
       createdAt: brief.createdAt
@@ -61,7 +61,7 @@ export async function GET(
       }
     });
   } catch (error) {
-    apiRouteLogger.error(briefId, "Error processing ADB request", { 
+    apiRouteLogger.error(id, "Error processing ADB request", { 
       error: error instanceof Error ? error.message : String(error)
     });
     return NextResponse.json({ error: "Internal server error" }, { 

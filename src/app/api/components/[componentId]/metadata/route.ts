@@ -21,11 +21,13 @@ export async function GET(
   request: Request,
   { params }: { params: { componentId: string } }
 ) {
+  // In Next.js App Router, params need to be handled carefully
+  // It's safer to access the property directly rather than destructuring
   const componentId = params.componentId;
   
   apiRouteLogger.request(componentId, "Component metadata request received", {
     url: request.url,
-    headers: Object.fromEntries([...request.headers.entries()])
+    headers: Object.fromEntries(request.headers.entries()),
   });
   
   try {
@@ -107,7 +109,7 @@ export async function GET(
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Cross-Origin-Resource-Policy': 'cross-origin',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'no-store',
       }
     });
   } catch (error) {
