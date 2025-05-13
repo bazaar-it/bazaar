@@ -144,6 +144,24 @@ function analyzeComponentCode(code: string, componentId: string): { mainComponen
       result.mainComponent = capitalizedVarMatch[1];
       return result;
     }
+    
+    // 6. Look for JSX component functions (const Component = () => {})
+    const arrowFunctionMatch = code.match(
+      /(?:var|const|let)\s+([A-Z][A-Za-z0-9_$]*)\s*=\s*(\(|\w+)\s*=>/
+    );
+    if (arrowFunctionMatch && arrowFunctionMatch[1]) {
+      result.mainComponent = arrowFunctionMatch[1];
+      return result;
+    }
+    
+    // 7. Look for any module.exports pattern (common in older JS)
+    const moduleExportsMatch = code.match(
+      /module\.exports\s*=\s*([A-Za-z0-9_$]+)/
+    );
+    if (moduleExportsMatch && moduleExportsMatch[1]) {
+      result.mainComponent = moduleExportsMatch[1];
+      return result;
+    }
   } catch (error) {
     // If analysis fails, log it but return empty result
     logger.error(`[API:COMPONENT:ERROR][ID:${componentId}] Component analysis failed`, { error });
@@ -244,138 +262,110 @@ export async function GET(
     // 2. Check for Remotion registration
     const hasRemotionRegistration = jsContent.includes('window.__REMOTION_COMPONENT') || jsContent.includes('global.__REMOTION_COMPONENT');
     
-    // 3. If no registration present, wrap with a reliable IIFE
-    if (!hasRemotionRegistration) {
-      apiRouteLogger.debug(componentId, "No Remotion component registration found, adding IIFE wrapper");
-      
-      // Add a wrapper IIFE that will register any component it can find
-      jsContent += `
-;(function() {
-  try {
-    // First try to find any component identifiers in the global scope
-    const componentCandidates = [];
-    for (const key in window) {
-      if (key.match(/^[A-Z]/) && typeof window[key] === 'function') {
-        componentCandidates.push(key);
-      }
+    // 3. IMPROVED: Always add an explicit component registration at the end
+    // First analyze the code to find the main component name
+    const analysis = analyzeComponentCode(jsContent, componentId);
+    const mainComponentName = analysis.mainComponent;
+    
+    // 4. Process the code for common issues
+    jsContent = preprocessComponentCode(jsContent, componentId);
+    
+    // 5. Add component registration code if needed
+    if (!hasRemotionRegistration && mainComponentName) {
+      // Add registration code to the end of the file
+      const registrationCode = `
+// Auto-registered component for Remotion
+if (typeof window !== 'undefined') {
+  console.log('[Component ${componentId}] Auto-registering component ${mainComponentName} to window.__REMOTION_COMPONENT');
+  window.__REMOTION_COMPONENT = ${mainComponentName};
+} else if (typeof global !== 'undefined') {
+  console.log('[Component ${componentId}] Auto-registering component ${mainComponentName} to global.__REMOTION_COMPONENT');
+  global.__REMOTION_COMPONENT = ${mainComponentName};
+}
+`;
+      jsContent += registrationCode;
+      apiRouteLogger.debug(componentId, `Added auto-registration for component: ${mainComponentName}`);
     }
     
-    // Prioritize components with 'Scene' in the name
-    const sceneComponent = componentCandidates.find(name => 
-      name.includes('Scene') || name.includes('Component')
-    );
+    // If we don't have explicit registration or a detected component name,
+    // add a fallback mechanism that tries to find any React component in the global scope
+    if (!hasRemotionRegistration && !mainComponentName) {
+      // Add a fallback global component detection mechanism
+      const fallbackCode = `
+// Fallback component detection for Remotion
+(function detectAndRegisterComponent() {
+  if (typeof window === 'undefined') return;
+  
+  console.log('[Component ${componentId}] Running fallback component detection');
+  
+  // Component already registered - nothing to do
+  if (window.__REMOTION_COMPONENT) {
+    console.log('[Component ${componentId}] Component already registered, skipping fallback detection');
+    return;
+  }
+  
+  // Look for likely component functions in the global scope
+  const componentCandidates = Object.keys(window).filter(key => {
+    // Skip known non-component globals
+    if (['React', 'Remotion', 'document', 'window', 'location'].includes(key)) return false;
     
-    if (sceneComponent) {
-      window.__REMOTION_COMPONENT = window[sceneComponent];
-      console.log('Auto-registered component from global scope:', sceneComponent);
-    } else if (componentCandidates.length > 0) {
-      window.__REMOTION_COMPONENT = window[componentCandidates[0]];
-      console.log('Auto-registered first available component:', componentCandidates[0]);
-    } else {
-      console.error('No component candidates found in global scope');
-      // Provide a fallback component
-      window.__REMOTION_COMPONENT = (props) => {
-        const React = window.React || { createElement: (type, props, ...children) => ({ type, props, children }) };
-        return React.createElement('div', {
-          style: { 
-            backgroundColor: 'rgba(255, 0, 0, 0.1)',
-            padding: '20px',
-            borderRadius: '8px',
-            color: 'red',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100%'
-          }
-        }, [
-          React.createElement('h2', {key: 'title'}, 'Component Not Found'),
-          React.createElement('p', {key: 'id'}, 'ID: ${componentId}'),
-          React.createElement('p', {key: 'info'}, 'No React component could be found in the global scope')
-        ]);
-      };
-    }
-  } catch(e) {
-    console.error('Error registering component:', e);
-    // Ensure there's always a fallback component
+    // Component names typically start with capital letter
+    if (!/^[A-Z]/.test(key)) return false;
+    
+    // Must be a function
+    return typeof window[key] === 'function';
+  });
+  
+  console.log('[Component ${componentId}] Found ' + componentCandidates.length + ' potential component candidates');
+  
+  if (componentCandidates.length > 0) {
+    // First try to find a component with Scene or Component in the name
+    const bestCandidate = componentCandidates.find(c => 
+      c.includes('Scene') || c.includes('Component')
+    ) || componentCandidates[0];
+    
+    console.log('[Component ${componentId}] Auto-registering component ' + bestCandidate + ' to window.__REMOTION_COMPONENT');
+    window.__REMOTION_COMPONENT = window[bestCandidate];
+  } else {
+    console.warn('[Component ${componentId}] No component candidates found in global scope');
+    // Create a simple fallback component in case no component is found
     window.__REMOTION_COMPONENT = (props) => {
-      const React = window.React || { createElement: () => ({}) };
-      return React.createElement('div', {
-        style: { 
-          backgroundColor: 'rgba(255, 0, 0, 0.1)',
-          padding: '20px',
-          borderRadius: '8px',
-          color: 'red',
-          textAlign: 'center'
-        }
-      }, ['Error loading component: ', e.toString()]);
+      const React = window.React;
+      const { AbsoluteFill } = window.Remotion || {};
+      
+      return React.createElement(
+        AbsoluteFill || 'div',
+        { style: { background: '#f44336', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' } },
+        React.createElement('div', { style: { textAlign: 'center' } }, [
+          React.createElement('h2', { key: 'title' }, 'Component Error'),
+          React.createElement('p', { key: 'message' }, 'Failed to find a valid component. Check browser console for details.'),
+          React.createElement('pre', { key: 'id', style: { fontSize: '12px' } }, '${componentId}')
+        ])
+      );
     };
   }
-})();`;
+})();
+`;
+      jsContent += fallbackCode;
+      apiRouteLogger.debug(componentId, "Added fallback component detection mechanism");
     }
     
-    // Validate that the JS is parseable before returning it
-    try {
-      // Just a syntax check - this won't execute the code
-      Function('"use strict";' + jsContent);
-      apiRouteLogger.debug(componentId, "Component code passed syntax validation");
-    } catch (syntaxError) {
-      // If the component has syntax errors, generate a fallback component
-      apiRouteLogger.error(componentId, `Component has syntax errors, providing fallback`, {
-        error: syntaxError instanceof Error ? syntaxError.message : String(syntaxError)
-      });
-      
-      // Generate a fallback component that will render properly
-      jsContent = `
-        console.error('[Component Loader] Original component had syntax error, using fallback');
-        
-        // IIFE to ensure reliable execution
-        ;(function() {
-          try {
-            // Ensure 'window' exists in this context if running server-side
-            const globalScope = typeof window !== 'undefined' ? window : global;
-            
-            globalScope.__REMOTION_COMPONENT = props => {
-              const React = globalScope.React || { createElement: (type, props, ...children) => ({ type, props, children }) };
-              return React.createElement('div', {
-                style: { 
-                  backgroundColor: 'rgba(255, 0, 0, 0.1)', 
-                  color: 'red',
-                  padding: '20px',
-                  borderRadius: '8px',
-                  fontFamily: 'sans-serif',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  height: '100%',
-                  width: '100%'
-                }
-              }, [
-                React.createElement('h2', {key: 'title'}, 'Component Syntax Error'),
-                React.createElement('p', {key: 'id'}, 'ID: ${componentId}'),
-                React.createElement('p', {key: 'error', style: {fontSize: '11px'}}, 'Error: ${syntaxError instanceof Error ? syntaxError.message.replace(/'/g, "\'") : String(syntaxError).replace(/'/g, "\'")}')
-              ]);
-            };
-          } catch(e) {
-            console.error('Error creating fallback component:', e);
-          }
-        })();
-      `;
-    }
+    // 6. Return the enhanced component code with proper content type
+    const headers = {
+      'Content-Type': 'application/javascript',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+    };
     
-    // Update the cache control header on the successful response to prevent stale data
-    return new NextResponse(jsContent, {
-      headers: {
-        'Content-Type': 'application/javascript',
-        'Cache-Control': 'no-store' // Prevent caching to ensure fresh content
-      },
-    });
+    return new NextResponse(jsContent, { status: 200, headers });
+    
   } catch (error) {
-    apiRouteLogger.error(componentId, "Error processing component request", { 
-      error: error instanceof Error ? error.message : String(error)
-    });
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    // Handle any unexpected errors
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    apiRouteLogger.error(componentId, `Unexpected error processing component request: ${errorMessage}`, { error });
+    
+    return NextResponse.json(
+      { error: "Internal server error", message: errorMessage },
+      { status: 500 }
+    );
   }
 } 

@@ -1,0 +1,191 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Component Test</title>
+      <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+      <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+      <style>
+        body {
+          margin: 0;
+          padding: 20px;
+          background: #111;
+          color: white;
+          font-family: system-ui, sans-serif;
+        }
+        .container {
+          max-width: 800px;
+          margin: 0 auto;
+          background: #222;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+          color: #61dafb;
+          margin-top: 0;
+        }
+        .success {
+          color: #4caf50;
+          font-weight: bold;
+        }
+        .error {
+          color: #f44336;
+          font-weight: bold;
+        }
+        #remotion-container {
+          width: 100%;
+          height: 400px;
+          background: black;
+          border-radius: 4px;
+          overflow: hidden;
+          position: relative;
+        }
+        .controls {
+          margin-top: 10px;
+          display: flex;
+          gap: 10px;
+        }
+        button {
+          padding: 8px 16px;
+          background: #61dafb;
+          border: none;
+          border-radius: 4px;
+          color: black;
+          font-weight: bold;
+          cursor: pointer;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Component Render Test</h1>
+        <p>Testing component with ID: <strong>ef4674df-b62d-4d1b-8afa-f21bcefc0176</strong></p>
+        <p>URL: <a href="https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/ef4674df-b62d-4d1b-8afa-f21bcefc0176.js" target="_blank">https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/ef4674df-b62d-4d1b-8afa-f21bcefc0176.js</a></p>
+        
+        <div id="remotion-container"></div>
+        
+        <div class="controls">
+          <button id="load-btn">Load Component</button>
+          <button id="clear-btn">Clear</button>
+        </div>
+        
+        <div>
+          <h2>Status:</h2>
+          <pre id="status"></pre>
+        </div>
+      </div>
+
+      <script>
+        // Mock Remotion API
+        window.Remotion = {
+          useCurrentFrame: () => 0,
+          useVideoConfig: () => ({
+            width: 1280,
+            height: 720,
+            fps: 30,
+            durationInFrames: 100
+          }),
+          AbsoluteFill: ({ children, style }) => {
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.top = '0';
+            div.style.left = '0';
+            div.style.width = '100%';
+            div.style.height = '100%';
+            if (style) {
+              Object.assign(div.style, style);
+            }
+            
+            // Use a setTimeout to allow the component to be defined
+            setTimeout(() => {
+              try {
+                if (typeof children === 'function') {
+                  div.appendChild(children());
+                } else if (typeof children === 'string') {
+                  div.innerHTML = children;
+                }
+              } catch (e) {
+                console.error('Error rendering children:', e);
+              }
+            }, 50);
+            
+            return div;
+          },
+          Sequence: ({ children }) => children,
+          interpolate: () => 0,
+          Easing: { bezier: () => () => 0 }
+        };
+        
+        function updateStatus(message, isError = false) {
+          const status = document.getElementById('status');
+          const entry = document.createElement('div');
+          entry.className = isError ? 'error' : 'success';
+          entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+          status.appendChild(entry);
+        }
+        
+        document.getElementById('load-btn').addEventListener('click', async () => {
+          const container = document.getElementById('remotion-container');
+          container.innerHTML = '';
+          updateStatus('Loading component script...');
+          
+          try {
+            const script = document.createElement('script');
+            script.src = "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/ef4674df-b62d-4d1b-8afa-f21bcefc0176.js";
+            script.async = true;
+            script.onload = () => {
+              updateStatus('Script loaded successfully');
+              
+              setTimeout(() => {
+                try {
+                  if (window.__REMOTION_COMPONENT) {
+                    updateStatus('Found __REMOTION_COMPONENT in window object');
+                    
+                    // Render the component
+                    try {
+                      const props = { test: 'Test Props' };
+                      const component = window.__REMOTION_COMPONENT(props);
+                      container.appendChild(component);
+                      updateStatus('Component rendered successfully');
+                    } catch (renderError) {
+                      updateStatus('Error rendering component: ' + renderError.message, true);
+                    }
+                  } else {
+                    updateStatus('__REMOTION_COMPONENT not found in window object', true);
+                  }
+                } catch (e) {
+                  updateStatus('Error accessing __REMOTION_COMPONENT: ' + e.message, true);
+                }
+              }, 100);
+            };
+            
+            script.onerror = (error) => {
+              updateStatus('Error loading script: ' + error, true);
+            };
+            
+            document.body.appendChild(script);
+          } catch (error) {
+            updateStatus('Error setting up component: ' + error.message, true);
+          }
+        });
+        
+        document.getElementById('clear-btn').addEventListener('click', () => {
+          const container = document.getElementById('remotion-container');
+          container.innerHTML = '';
+          window.__REMOTION_COMPONENT = undefined;
+          
+          // Remove any component scripts
+          document.querySelectorAll('script[src*="custom-components"]').forEach(script => {
+            script.remove();
+          });
+          
+          updateStatus('Cleared component');
+        });
+        
+        // Initial status
+        updateStatus('Test page loaded. Click "Load Component" to test rendering.');
+      </script>
+    </body>
+    </html>
+  

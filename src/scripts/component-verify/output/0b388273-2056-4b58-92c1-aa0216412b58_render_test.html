@@ -1,0 +1,71 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Render Test - 0b388273-2056-4b58-92c1-aa0216412b58</title>
+  <style>
+    body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #222; }
+    #remotion-player { border: 1px solid #444; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+  </style>
+</head>
+<body>
+  <div id="remotion-player" style="width: 1280px; height: 720px;"></div>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script>
+    window.Remotion = {
+      useCurrentFrame: () => 0,
+      useVideoConfig: () => ({ width: 1280, height: 720, fps: 30, durationInFrames: 300 }),
+      AbsoluteFill: React.forwardRef(({ style, children }, ref) => 
+        React.createElement('div', { ref, style: { ...style, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } }, children)
+      ),
+      interpolate: (input, inputRange, outputRange, options) => {
+        if (input <= inputRange[0]) return outputRange[0];
+        if (input >= inputRange[1]) return outputRange[1];
+        const progress = (input - inputRange[0]) / (inputRange[1] - inputRange[0]);
+        return outputRange[0] + progress * (outputRange[1] - outputRange[0]);
+      },
+      Sequence: React.forwardRef(({ children }, ref) => React.createElement(React.Fragment, { ref }, children)),
+    };
+  </script>
+  <script src="https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/0b388273-2056-4b58-92c1-aa0216412b58.js"></script>
+  <script type="module">
+    const container = document.getElementById('remotion-player');
+    const root = ReactDOM.createRoot(container);
+    
+    function renderComponent() {
+      if (window.CanaryTestComponent) {
+        console.log('Attempting to render CanaryTestComponent');
+        try {
+          const props = { title: "Canary Test Title", textColor: "white", backgroundColor: "blue" };
+          const element = React.createElement(window.CanaryTestComponent, props);
+          root.render(element);
+          console.log('CanaryTestComponent rendered.');
+        } catch (e) {
+          console.error('Error rendering CanaryTestComponent:', e);
+          container.innerHTML = '<p style="color:red;">Error rendering component: ' + e.message + '</p>';
+        }
+      } else {
+        console.error('CanaryTestComponent not found on window object after script load.');
+        container.innerHTML = '<p style="color:red;">Component (CanaryTestComponent) not found on window object.</p>';
+      }
+    }
+
+    const checkInterval = setInterval(() => {
+      if (window.CanaryTestComponent) {
+        clearInterval(checkInterval);
+        renderComponent();
+      }
+    }, 100);
+
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      if (!window.CanaryTestComponent) {
+        console.error('Timeout waiting for CanaryTestComponent to become available.');
+        container.innerHTML = '<p style="color:red;">Timeout waiting for component (CanaryTestComponent) to load.</p>';
+      }
+    }, 5000); // 5 seconds timeout
+  </script>
+</body>
+</html>

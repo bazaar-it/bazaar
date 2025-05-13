@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-05-13T14:15:05.779Z",
+  "componentId": "0b388273-2056-4b58-92c1-aa0216412b58",
+  "componentName": "Canary1747145699007",
+  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/0b388273-2056-4b58-92c1-aa0216412b58.js",
+  "apiEndpoint": "http://localhost:3000/api/components/0b388273-2056-4b58-92c1-aa0216412b58",
+  "success": false,
+  "errorMessage": "An unexpected error occurred during rendering test: [object Object]"
+}

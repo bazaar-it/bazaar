@@ -2,7 +2,7 @@
 import { db } from "~/server/db";
 import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import os from "os";
 import { measureDuration, recordMetric } from "~/lib/metrics";
 import path from "path";
@@ -882,6 +882,49 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         ETag: result.ETag, 
         size: bundleContent.length 
       });
+      
+      // NEW: Verify file exists in R2 before updating database
+      buildLogger.upload(jobId, "Verifying R2 upload with HeadObject check...");
+      
+      try {
+        // Use HeadObject to verify the file exists without downloading it
+        const headResult = await r2.send(
+          new HeadObjectCommand({
+            Bucket: env.R2_BUCKET_NAME,
+            Key: publicPath,
+          })
+        );
+        
+        if (headResult.$metadata.httpStatusCode === 200) {
+          buildLogger.upload(jobId, "R2 upload verification successful", { 
+            verificationStatus: headResult.$metadata.httpStatusCode,
+            contentLength: headResult.ContentLength,
+            contentType: headResult.ContentType
+          });
+          
+          // Only update database status if verification passed
+          const publicUrl = `${env.R2_PUBLIC_URL}/${publicPath}`;
+          buildLogger.complete(jobId, `Bundle URL: ${publicUrl}`);
+          
+          await db.update(customComponentJobs)
+            .set({ 
+              outputUrl: publicUrl,
+              status: "complete", // Consistently use "complete" status (not "success")
+              updatedAt: new Date()
+            })
+            .where(eq(customComponentJobs.id, jobId));
+            
+          buildLogger.complete(jobId, "Database updated with status='complete'");
+        } else {
+          throw new Error(`R2 verification failed: Unexpected status ${headResult.$metadata.httpStatusCode}`);
+        }
+      } catch (verifyError) {
+        buildLogger.error(jobId, `R2 upload verification failed: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`, { 
+          type: "R2_VERIFY" 
+        });
+        await updateComponentStatus(jobId, "error", db, undefined, `R2 verification error: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`);
+        return false;
+      }
     } catch (r2Error) {
       buildLogger.error(jobId, `R2 upload failed: ${r2Error instanceof Error ? r2Error.message : String(r2Error)}`, { 
         type: "R2_UPLOAD" 
@@ -890,18 +933,6 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
       return false;
     }
 
-    // 4. Update the job with CDN URL
-    const publicUrl = `${env.R2_PUBLIC_URL}/${publicPath}`;
-    buildLogger.complete(jobId, `Bundle URL: ${publicUrl}`);
-    
-    await db.update(customComponentJobs)
-      .set({ 
-        outputUrl: publicUrl,  // Using outputUrl instead of bundleUrl to match schema
-        status: "complete",
-        updatedAt: new Date()
-      })
-      .where(eq(customComponentJobs.id, jobId));
-    
     // Clean up the temp dir
     try {
       await rm(tmpDir, { recursive: true, force: true });

@@ -1,0 +1,5 @@
+{
+  "timestamp": "2025-05-13T13:46:05.160Z",
+  "error": "relation \"bazaar-vid_custom_component_job\" does not exist",
+  "stack": "error: relation \"bazaar-vid_custom_component_job\" does not exist\n    at /Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/scripts/component-verify/node_modules/pg-pool/index.js:45:11\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async storeComponentInDatabase (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/scripts/component-verify/verify-pipeline.js:120:20)\n    at async verifyComponentPipeline (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/scripts/component-verify/verify-pipeline.js:543:25)"
+}

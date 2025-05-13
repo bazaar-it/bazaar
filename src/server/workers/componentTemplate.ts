@@ -33,6 +33,10 @@ const {{COMPONENT_NAME}} = (props) => {
   );
 };
 
+// CRITICAL: Register component for Remotion - DO NOT REMOVE
+window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
+
+// Also export as default for module usage
 export default {{COMPONENT_NAME}};
 `;
 
@@ -49,8 +53,17 @@ export function applyComponentTemplate(
   implementation: string = '',
   render: string = '<div>Empty component</div>'
 ): string {
-  return COMPONENT_TEMPLATE
+  console.log(`Applying template for component: ${componentName}`);
+  
+  const result = COMPONENT_TEMPLATE
     .replace(/{{COMPONENT_NAME}}/g, componentName)
     .replace('{{COMPONENT_IMPLEMENTATION}}', implementation)
     .replace('{{COMPONENT_RENDER}}', render);
+    
+  // Verify the result contains the critical window assignment
+  if (!result.includes('window.__REMOTION_COMPONENT =')) {
+    console.error('Warning: Template application did not include window.__REMOTION_COMPONENT assignment');
+  }
+  
+  return result;
 }

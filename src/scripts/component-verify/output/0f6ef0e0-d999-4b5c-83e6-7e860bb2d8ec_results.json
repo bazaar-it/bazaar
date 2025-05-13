@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-05-13T14:10:09.457Z",
+  "componentId": "0f6ef0e0-d999-4b5c-83e6-7e860bb2d8ec",
+  "componentName": "Canary1747145403003",
+  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/0f6ef0e0-d999-4b5c-83e6-7e860bb2d8ec.js",
+  "apiEndpoint": "http://localhost:3000/api/components/0f6ef0e0-d999-4b5c-83e6-7e860bb2d8ec",
+  "success": false,
+  "errorMessage": "Error testing component rendering: net::ERR_FILE_NOT_FOUND at file:///Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/scripts/component-verify/output/0f6ef0e0-d999-4b5c-83e6-7e860bb2d8ec_render_test.html"
+}

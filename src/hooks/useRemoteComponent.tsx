@@ -7,6 +7,7 @@ import * as Remotion from 'remotion';
 declare global {
   interface Window {
     __REMOTION_COMPONENT?: React.ComponentType<any> | null; // Made optional to align with initial undefined state
+    [key: string]: any; // Allow indexing with string keys
   }
 }
 
@@ -67,6 +68,8 @@ export function useRemoteComponent(componentId: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [component, setComponent] = useState<React.ComponentType<any> | null>(null);
+  const [retryCount, setRetryCount] = useState(0); // Track retry attempts
+  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({}); // Store debug info
   
   // Extract the base component ID (without any cache busting params)
   const baseComponentId = useMemo(() => {
@@ -89,121 +92,259 @@ export function useRemoteComponent(componentId: string | undefined) {
       return;
     }
     
+    // Use a cleaner fetch approach with AbortController for better cleanup
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
     // Generate a NEW timestamp for each load attempt
     const timestamp = Date.now();
-    console.log(`[useRemoteComponent] Loading component: ${componentId} with timestamp: ${timestamp}`);
+    console.log(`[useRemoteComponent] Loading component: ${componentId} with timestamp: ${timestamp} (retry: ${retryCount})`);
     
-    // Clean up any previously loaded components
+    // Begin loading state
+    setLoading(true);
+    setError(null);
+    setDebugInfo({}); // Reset debug info
+    
+    // IMPROVED: More thorough cleanup of previous components
     const cleanupPreviousComponents = () => {
-      // Remove any existing script with this ID to prevent conflicts
+      // 1. Remove any existing script with this ID to prevent conflicts
       const existingScript = document.getElementById(scriptId as string);
       if (existingScript && existingScript.parentNode) {
         console.log(`[useRemoteComponent] Removing existing script for ${baseComponentId}`);
         existingScript.parentNode.removeChild(existingScript);
       }
       
-      // Find any other scripts that might be loading the same component (with different cache busting)
+      // 2. Find any other scripts that might be loading the same component (with different cache busting)
       const relatedScripts = document.querySelectorAll(`script[src*="${baseComponentId}"]`);
       if (relatedScripts.length > 0) {
         console.log(`[useRemoteComponent] Found ${relatedScripts.length} related scripts for ${baseComponentId}`);
         relatedScripts.forEach(script => {
-          if (script.id !== scriptId && script.parentNode) {
+          if (script.parentNode) {
             console.log(`[useRemoteComponent] Removing related script: ${script.getAttribute('src')}`);
             script.parentNode.removeChild(script);
           }
         });
       }
       
-      // Clear any existing component from window
-      if (window.__REMOTION_COMPONENT) {
+      // 3. Clear window.__REMOTION_COMPONENT to prevent conflicts
+      if (typeof window !== 'undefined' && window.__REMOTION_COMPONENT) {
         console.log(`[useRemoteComponent] Clearing previous window.__REMOTION_COMPONENT`);
         window.__REMOTION_COMPONENT = undefined;
       }
+      
+      // 4. IMPROVED: Wait a small delay to allow for DOM updates
+      return new Promise<void>(resolve => setTimeout(resolve, 50));
     };
     
-    // Clean up previous components
-    cleanupPreviousComponents();
-    
-    // Begin loading state
-    setLoading(true);
-    setError(null);
-    
-    // Use a script tag to load the component
-    const script = document.createElement('script');
-    script.id = scriptId as string; // Set an ID for easier removal
-    
-    // Add timestamp to URL to prevent browser caching - preserve any existing query params
-    const urlWithTimestamp = componentId.includes('?') 
-      ? `${componentId}&t=${timestamp}` 
-      : `${componentId}?t=${timestamp}`;
-    
-    // Construct the full URL
-    let scriptUrl = urlWithTimestamp;
-    if (!scriptUrl.startsWith('/api/')) {
-      scriptUrl = `/api/components/${urlWithTimestamp}`;
-    }
-    
-    script.src = scriptUrl;
-    
-    // Log the actual script URL being used for debugging
-    console.log(`[useRemoteComponent] Loading script from: ${script.src}`);
-    
-    script.async = true;
-    script.type = 'text/javascript';
-    
-    const handleScriptLoad = () => {
+    // Directly fetch the component code first instead of using script tag insertion
+    // This gives us more control over the loading process
+    const fetchAndLoadComponent = async () => {
       try {
-        // Check if the component was loaded successfully 
+        await cleanupPreviousComponents();
+        
+        // Construct the API URL with proper cache-busting
+        const urlWithTimestamp = componentId.includes('?') 
+          ? `${componentId}&t=${timestamp}&retry=${retryCount}` 
+          : `${componentId}?t=${timestamp}&retry=${retryCount}`;
+        
+        let apiUrl = urlWithTimestamp;
+        if (!apiUrl.startsWith('/api/')) {
+          apiUrl = `/api/components/${urlWithTimestamp}`;
+        }
+        
+        console.log(`[useRemoteComponent] Fetching component from: ${apiUrl}`);
+        
+        // Fetch the component code
+        const response = await fetch(apiUrl, { signal });
+        
+        if (!response.ok) {
+          throw new Error(`API returned status ${response.status}`);
+        }
+        
+        // Get the JavaScript code as text
+        const code = await response.text();
+        
+        // Create a script element
+        const script = document.createElement('script');
+        script.id = scriptId as string;
+        script.type = 'text/javascript';
+        
+        // Set up load handlers BEFORE adding to document
+        script.onload = () => {
+          handleComponentLoaded();
+        };
+        
+        script.onerror = (event) => {
+          handleScriptError('Script failed to load after insertion');
+        };
+        
+        // Directly set the text content instead of src to avoid CORS/caching issues
+        script.textContent = code;
+        
+        // Add to document body
+        document.body.appendChild(script);
+        console.log(`[useRemoteComponent] Added script element with inline code`);
+      } catch (err) {
+        if (signal.aborted) {
+          console.log(`[useRemoteComponent] Fetch aborted for ${componentId}`);
+          return;
+        }
+        
+        console.error(`[useRemoteComponent] Error fetching component:`, err);
+        handleScriptError(err instanceof Error ? err.message : String(err));
+      }
+    };
+    
+    // Handler for successful component loading
+    const handleComponentLoaded = () => {
+      try {
+        // Capture debug information
+        const debugData = {
+          timestamp: new Date().toISOString(),
+          retryCount,
+          hasRemotionComponent: !!window.__REMOTION_COMPONENT,
+          componentType: window.__REMOTION_COMPONENT ? typeof window.__REMOTION_COMPONENT : 'undefined', 
+          isFunction: window.__REMOTION_COMPONENT && typeof window.__REMOTION_COMPONENT === 'function',
+          remotionGlobals: !!window.Remotion,
+          reactGlobals: !!window.React
+        };
+        
+        setDebugInfo(debugData);
+        console.log(`[useRemoteComponent] Script loaded, debug info:`, debugData);
+        
+        // IMPROVED: More thorough component validation
         if (window.__REMOTION_COMPONENT) {
-          console.log(`[useRemoteComponent] Successfully loaded component: ${baseComponentId}`);
-          // Store the component locally to prevent losing reference
-          const loadedComponent = window.__REMOTION_COMPONENT;
-          setComponent(loadedComponent);
-          setLoading(false);
-          setError(null);
+          if (typeof window.__REMOTION_COMPONENT === 'function') {
+            // Store a local reference to avoid losing it if window.__REMOTION_COMPONENT changes
+            const loadedComponent = window.__REMOTION_COMPONENT;
+            
+            // Do a basic test to see if it's a valid React component
+            let isValidComponent = true;
+            try {
+              // Just check if it's a function, don't actually try to call it with empty props
+              // as many components will throw when rendered without required props
+              if (typeof loadedComponent !== 'function') {
+                isValidComponent = false;
+              }
+            } catch (error) {
+              console.warn(`[useRemoteComponent] Component validation warning (non-fatal):`, error);
+              // Don't set isValidComponent to false here, as we caught the error
+            }
+            
+            if (isValidComponent) {
+              console.log(`[useRemoteComponent] Successfully loaded component: ${baseComponentId}`);
+              setComponent(loadedComponent);
+              setLoading(false);
+              setError(null);
+              setRetryCount(0); // Reset retry count on success
+            } else {
+              handleRetry(`Component function exists but throws errors when invoked`);
+            }
+          } else {
+            // Component exists but is not a function
+            console.error(`[useRemoteComponent] window.__REMOTION_COMPONENT exists but is not a function: ${typeof window.__REMOTION_COMPONENT}`);
+            handleRetry(`Component is not a valid React component (got ${typeof window.__REMOTION_COMPONENT})`);
+          }
         } else {
-          console.error(`[useRemoteComponent] Component loaded but __REMOTION_COMPONENT not found: ${baseComponentId}`);
-          setError("Component loaded but not found in window.__REMOTION_COMPONENT");
-          setLoading(false);
+          console.error(`[useRemoteComponent] Component loaded but __REMOTION_COMPONENT not found`);
           
-          // List all global variables to debug what might be available
-          console.log('[useRemoteComponent] Available globals:', 
-            Object.keys(window)
-              .filter(key => key.includes('REMOTION') || key.includes('Component'))
-          );
+          // Try to recover by looking for components in global scope before retrying
+          tryFindComponentInGlobalScope();
         }
       } catch (err) {
-        console.error(`[useRemoteComponent] Error accessing component after load: ${err}`);
-        setError(`Error accessing component: ${err}`);
+        console.error(`[useRemoteComponent] Error accessing component after load:`, err);
+        handleRetry(`Error accessing component: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
+    
+    // Function to try to find the component in the global scope
+    const tryFindComponentInGlobalScope = () => {
+      console.log('[useRemoteComponent] Trying to find component in global scope');
+      
+      // Look for possible component functions in window
+      const candidateKeys = Object.keys(window).filter(key => {
+        if (key === 'React' || key === 'Remotion' || key === '__REMOTION_COMPONENT') return false;
+        
+        // Safe way to check window properties
+        const value = window[key];
+        return typeof value === 'function' && 
+               !key.startsWith('__') && 
+               /^[A-Z]/.test(key); // Component names typically start with uppercase
+      });
+      
+      console.log(`[useRemoteComponent] Found ${candidateKeys.length} potential components in global scope:`, candidateKeys);
+      
+      if (candidateKeys.length > 0) {
+        // Prioritize components with 'Scene' or 'Component' in the name
+        const sceneCandidate = candidateKeys.find(name => 
+          name.includes('Scene') || name.includes('Component')
+        );
+        
+        // Use the scene candidate if found, otherwise use the first candidate
+        const candidateKey = sceneCandidate || candidateKeys[0];
+        if (candidateKey) {
+          const candidate = window[candidateKey] as React.ComponentType<any>;
+          
+          console.log(`[useRemoteComponent] Trying candidate component: ${candidateKey}`);
+          
+          // Set it as the official component for future use
+          window.__REMOTION_COMPONENT = candidate;
+          
+          // Update our state
+          setComponent(candidate);
+          setLoading(false);
+          setError(null);
+        }
+      } else {
+        // No candidates found, try retry
+        handleRetry('No components found in global scope');
+      }
+    };
+    
+    // Enhanced retry logic with backoff
+    const handleRetry = (reason: string) => {
+      if (retryCount < 3) {
+        const nextRetry = retryCount + 1;
+        const delay = nextRetry * 1000; // Increase delay with each retry
+        
+        console.log(`[useRemoteComponent] Will retry (${nextRetry}/3) in ${delay}ms. Reason: ${reason}`);
+        
+        // Mark as having an error, but keep loading true during retry wait
+        setError(`Loading failed: ${reason}. Retrying...`);
+        
+        setTimeout(() => {
+          setRetryCount(nextRetry);
+          // Effect will re-run due to retryCount change
+        }, delay);
+      } else {
+        console.error(`[useRemoteComponent] Maximum retries reached (${retryCount}). Giving up.`);
+        setError(`Failed to load component after ${retryCount} retries: ${reason}`);
         setLoading(false);
       }
     };
     
-    const handleScriptError = (event: Event | string) => {
-      const errorMessage = typeof event === 'string' 
-        ? event 
-        : 'Failed to load component script';
-      
+    // Error handler for script loading
+    const handleScriptError = (errorMessage: string) => {
       console.error(`[useRemoteComponent] Script load error for ${baseComponentId}: ${errorMessage}`);
-      setError(errorMessage);
-      setLoading(false);
+      handleRetry(`Script load error: ${errorMessage}`);
     };
     
-    script.onload = handleScriptLoad;
-    script.onerror = handleScriptError;
+    // Start the loading process
+    fetchAndLoadComponent();
     
-    // Add the script to document
-    document.body.appendChild(script);
-    console.log(`[useRemoteComponent] Added script to document: ${script.src}`);
-    
-    // Clean up by removing the script tag
+    // Cleanup function
     return () => {
-      if (script.parentNode) {
+      // Abort any in-progress fetches
+      abortController.abort();
+      
+      // Clean up any script elements
+      const script = document.getElementById(scriptId as string);
+      if (script && script.parentNode) {
         script.parentNode.removeChild(script);
         console.log(`[useRemoteComponent] Cleanup: removed script for ${baseComponentId}`);
       }
     };
-  }, [componentId, scriptId, baseComponentId]); // Remove timestamp from dependencies
+  }, [componentId, scriptId, baseComponentId, retryCount]); // Add retryCount to dependencies
 
   // Provide a reload function to force component reloading
   const reloadComponent = () => {
@@ -211,7 +352,12 @@ export function useRemoteComponent(componentId: string | undefined) {
     setLoading(true);
     setError(null);
     setComponent(null);
-    window.__REMOTION_COMPONENT = undefined;
+    setDebugInfo({}); // Reset debug info
+    
+    // Reset window.__REMOTION_COMPONENT to undefined
+    if (typeof window !== 'undefined') {
+      window.__REMOTION_COMPONENT = undefined;
+    }
     
     // Force removal of the script tag to ensure a fresh load
     const existingScript = document.getElementById(scriptId as string);
@@ -222,13 +368,8 @@ export function useRemoteComponent(componentId: string | undefined) {
       console.log(`[useRemoteComponent] Script element not found during reload: ${scriptId}`);
     }
     
-    // List all script tags to debug potential issues
-    const allScripts = document.querySelectorAll('script');
-    console.log(`[useRemoteComponent] All current script tags (${allScripts.length} total):`, 
-      Array.from(allScripts)
-        .filter(s => s.src && s.src.includes('components'))
-        .map(s => ({ id: s.id, src: s.src }))
-    );
+    // Reset retry count and trigger a reload
+    setRetryCount(0);
   };
   
   // Return an object with the component and state information
@@ -236,7 +377,9 @@ export function useRemoteComponent(componentId: string | undefined) {
     Component: component ? component : LoadingErrorComponent,
     loading,
     error,
-    reload: reloadComponent
+    reload: reloadComponent,
+    debugInfo, // Expose debug info
+    retryCount // Expose retry count
   };
 }
 

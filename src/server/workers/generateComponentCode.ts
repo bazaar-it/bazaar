@@ -442,28 +442,7 @@ For animation:
     const validation = validateComponentSyntax(componentCode);
     if (!validation.valid) {
       componentLogger.error(jobId, `Generated component has syntax errors: ${validation.error}`);
-      
-      // Create fallback component with error message
-      const fallbackComponent = applyComponentTemplate(
-        sanitizedComponentName,
-        `// Original implementation had syntax errors: ${validation.error}`,
-        `<div style={{ backgroundColor: 'rgba(255, 0, 0, 0.2)', padding: '20px', borderRadius: '8px', color: 'red' }}>
-          <h2>Component Error</h2>
-          <p>The component could not be generated correctly.</p>
-        </div>`
-      );
-      
-      const totalDuration = Date.now() - startTime;
-      componentLogger.complete(jobId, `Fallback component generation complete in ${totalDuration}ms`, {
-        duration: totalDuration,
-        componentName: sanitizedComponentName,
-        error: validation.error
-      });
-      
-      return {
-        code: fallbackComponent,
-        dependencies: {},
-      };
+      throw new Error(`Generated component has syntax errors: ${validation.error}`);
     }
     
     // Log code length as a simple metric
