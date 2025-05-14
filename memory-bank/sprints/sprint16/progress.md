@@ -364,3 +364,86 @@ The root cause was identified in the browser console logs:
 
 ### Results
 The fix prevents JavaScript syntax errors in component execution and ensures reliable component registration for both template-based and legacy components.
+
+## Session 15 (2025-05-13) - Created Component Debugging Tools
+
+### Issues Addressed
+Looking at the database, we found that most custom components were failing to build with "Build error: Build failed" messages. The previous fixes did not completely solve the component generation and loading issues.
+
+### Root Causes Identified
+1. Multiple issues were identified in the component code:
+   - "use client" directives causing syntax errors in browser execution
+   - Import statement format issues (`import { useState } from 'react'}`)
+   - Single-letter variable names for React (`a.createElement`)
+   - Missing `window.__REMOTION_COMPONENT` assignment
+2. A structural issue in the buildCustomComponent.ts file where the main export function was nested inside another function
+
+### Solutions Implemented
+1. **Created Specialized Debugging Tools**:
+   - `debug-db.ts`: General-purpose database inspection tool for component jobs
+   - `diagnose-component.ts`: Analyzes component code for common issues
+   - `fix-component.ts`: Automatically fixes common component code issues
+   - `fix-build-system.ts`: Fixes structural issues in the build system
+
+2. **Documented Common Issues and Fixes**:
+   - Created a comprehensive guide for debugging component issues
+   - Provided example commands and workflows
+
+These tools will help us quickly diagnose and repair the broken components, as well as identify patterns to improve the component generation process long-term.
+
+## Session 16 (2025-05-13) - Created Database Debugging Tools
+
+### Issues Addressed
+Our previous tools required the full environment setup, making them difficult to use for debugging in isolation. We also needed a way to systematically identify and track component IDs for testing.
+
+### Root Causes Identified
+1. The env.js validation was blocking our debugging tools from running
+2. We had no easy way to extract component IDs from logs
+3. Direct database access was needed for component inspection
+
+### Solutions Implemented
+1. **Created Standalone Database Tools**:
+   - `extract-component-ids.js`: Scans logs for component IDs and builds a reference file
+   - `debug-standalone.ts`: Direct database access with minimal dependencies
+   - Created comprehensive setup documentation
+
+2. **Generated Component ID Reference**:
+   - Extracted 158 component IDs from logs
+   - Organized by first character for easy reference
+   - Added usage examples for all tools
+
+These tools will allow us to more easily diagnose issues with components without requiring the full environment setup, and provide a systematic way to test fixes across multiple components.
+
+## Component Loading Fixes
+
+We've developed a direct database script to fix component loading issues:
+
+### Created Scripts
+- **src/scripts/fix-components-db.ts** - A direct database connection script that:
+  - Connects to the real database using the provided credentials
+  - Queries all components from the database
+  - Identifies components with common issues:
+    - Presence of 'use client' directive
+    - Destructured import statements
+    - Missing window.__REMOTION_COMPONENT assignment
+    - Single-letter React variables (a.createElement)
+  - Fixes these issues automatically
+  - Saves both original and fixed versions of components for comparison
+  - Updates the components in the database
+
+- **src/scripts/run-component-fix.sh** - A shell script to run the component fixing process:
+  - Sets up all required environment variables
+  - Compiles the TypeScript file
+  - Runs the compiled script
+
+### Common Component Issues Fixed
+1. **'use client' directive removal** - This directive is invalid in direct browser execution
+2. **Import statement normalization** - Converting destructured imports to individual imports
+3. **React.createElement correction** - Ensuring all createElement calls use the full React namespace
+4. **Component registration** - Adding missing window.__REMOTION_COMPONENT assignments
+
+### Next Steps
+1. Run the script on the production database to fix all components
+2. Monitor component loading success rates after the fix
+3. Consider implementing these fixes in the component build system to prevent future occurrences
+4. Update component generation logic to avoid using problematic patterns

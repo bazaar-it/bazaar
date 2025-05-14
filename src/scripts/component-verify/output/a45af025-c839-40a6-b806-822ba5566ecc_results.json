@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-05-14T03:37:33.324Z",
+  "componentId": "a45af025-c839-40a6-b806-822ba5566ecc",
+  "componentName": "Canary1747193843356",
+  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/a45af025-c839-40a6-b806-822ba5566ecc.js",
+  "apiEndpoint": "http://localhost:3000/api/components/a45af025-c839-40a6-b806-822ba5566ecc",
+  "success": false,
+  "errorMessage": null
+}

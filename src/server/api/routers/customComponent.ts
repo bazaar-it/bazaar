@@ -4,6 +4,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { customComponentJobs, projects } from "~/server/db/schema";
 import { and, eq, desc, ne, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { preprocessTsx } from "~/server/utils/tsxPreprocessor";
 
 /**
  * Custom Component Router
@@ -277,5 +278,241 @@ export const customComponentRouter = createTRPCRouter({
       }
       
       return job;
+    }),
+    
+  // Fix a failed component using the TSX preprocessor
+  fixComponent: protectedProcedure
+    .input(z.object({
+      componentId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Get the component job
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.componentId),
+        with: { project: true }
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found"
+        });
+      }
+      
+      // Verify user owns the project
+      if (component.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to modify this component"
+        });
+      }
+      
+      // Check if there's code to fix
+      if (!component.tsxCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Component has no code to fix"
+        });
+      }
+      
+      // Apply the TSX preprocessor to fix common syntax issues
+      const result = preprocessTsx(component.tsxCode, component.effect);
+      
+      // Update the component with the fixed code and reset status to pending
+      const [updated] = await ctx.db.update(customComponentJobs)
+        .set({ 
+          tsxCode: result.code,
+          status: "pending", // Reset to pending so the build process will pick it up
+          errorMessage: result.fixed ? `Fixed issues: ${result.issues.join(", ")}` : "No issues found to fix",
+          updatedAt: new Date()
+        })
+        .where(eq(customComponentJobs.id, input.componentId))
+        .returning();
+      
+      if (!updated) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update component"
+        });
+      }
+      
+      // Return information about the fix
+      return {
+        componentId: updated.id,
+        fixed: result.fixed,
+        issues: result.issues,
+        status: updated.status
+      };
+    }),
+
+  /**
+   * Get a specific component by ID
+   */
+  getComponentById: protectedProcedure
+    .input(z.object({
+      componentId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.componentId)
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found"
+        });
+      }
+      
+      return component;
+    }),
+
+  /**
+   * Get components that can potentially be fixed by the TSX preprocessor
+   */
+  getFixableByProjectId: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify the user has access to this project
+      const project = await ctx.db.query.projects.findFirst({
+        where: and(
+          eq(projects.id, input.projectId),
+          eq(projects.userId, ctx.session.user.id)
+        ),
+      });
+
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found or you don't have access to it",
+        });
+      }
+
+      // Get failed components that might be fixable
+      const fixableComponents = await ctx.db.query.customComponentJobs.findMany({
+        where: and(
+          eq(customComponentJobs.projectId, input.projectId),
+          eq(customComponentJobs.status, "failed"),  // Currently focusing on failed components
+          isNotNull(customComponentJobs.tsxCode)     // Must have code to fix
+        ),
+        orderBy: desc(customComponentJobs.createdAt),
+      });
+      
+      return fixableComponents;
+    }),
+
+  /**
+   * Check if a component can be automatically fixed
+   */
+  canBeFixed: protectedProcedure
+    .input(z.object({
+      componentId: z.string().uuid()
+    }))
+    .query(async ({ ctx, input }) => {
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.componentId),
+        with: { project: true }
+      });
+      
+      if (!component || !component.tsxCode) {
+        return { fixable: false };
+      }
+      
+      // Verify user owns the project
+      if (component.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to access this component"
+        });
+      }
+
+      // Quick check if there are common fixable patterns in the code
+      const hasFixableIssues = component.tsxCode.includes('React.') || 
+                              !component.tsxCode.includes('export default') ||
+                              component.tsxCode.includes('import React');
+      
+      return { fixable: hasFixableIssues };
+    }),
+
+  /**
+   * Try to fix a component using the TSX preprocessor
+   */
+  tryToFix: protectedProcedure
+    .input(z.object({
+      componentId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Get the component job
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.componentId),
+        with: { project: true }
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found"
+        });
+      }
+      
+      // Verify user owns the project
+      if (component.project?.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to modify this component"
+        });
+      }
+      
+      // Check if there's code to fix
+      if (!component.tsxCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Component has no code to fix"
+        });
+      }
+
+      // Save original code if not already saved
+      const originalTsxCode = component.originalTsxCode || component.tsxCode;
+      
+      // Update status to fixing
+      await ctx.db.update(customComponentJobs)
+        .set({ 
+          status: "fixing",
+          originalTsxCode: originalTsxCode,
+          lastFixAttempt: new Date()
+        })
+        .where(eq(customComponentJobs.id, input.componentId));
+      
+      // Apply the TSX preprocessor to fix common syntax issues
+      const result = preprocessTsx(component.tsxCode, component.effect || "Component");
+      
+      // Update the component with the fixed code and reset status to pending for rebuild
+      const [updated] = await ctx.db.update(customComponentJobs)
+        .set({ 
+          tsxCode: result.code,
+          status: result.fixed ? "pending" : "failed", // Reset to pending so the build process will pick it up
+          errorMessage: result.fixed ? `Fixed issues: ${result.issues.join(", ")}` : "No issues found to fix",
+          fixIssues: result.issues.length > 0 ? result.issues.join(", ") : null,
+          updatedAt: new Date()
+        })
+        .where(eq(customComponentJobs.id, input.componentId))
+        .returning();
+      
+      if (!updated) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update component"
+        });
+      }
+      
+      // Return information about the fix
+      return {
+        componentId: updated.id,
+        fixed: result.fixed,
+        issues: result.issues,
+        status: updated.status
+      };
     }),
 });

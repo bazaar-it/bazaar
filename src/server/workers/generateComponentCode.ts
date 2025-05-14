@@ -69,18 +69,75 @@ function sanitizeComponentName(name: string): string {
 /**
  * Validates component syntax before storing
  * @param code The component code to validate
- * @returns An object with valid flag and optional error message
+ * @param componentName The name of the component for preprocessing attempts
+ * @returns An object with valid flag, optional error message, and preprocessed code if fixed
  */
-function validateComponentSyntax(code: string): { valid: boolean; error?: string } {
+function validateComponentSyntax(
+  code: string,
+  componentName: string = 'CustomComponent'
+): { 
+  valid: boolean; 
+  error?: string; 
+  processedCode?: string;
+  wasFixed?: boolean;
+  issues?: string[];
+} {
+  // First try to preprocess and fix common issues
+  let processedCode = code;
+  let wasFixed = false;
+  let issues: string[] = [];
+  
+  try {
+    // Import dynamically to avoid circular dependencies
+    const { preprocessTsx } = require('~/server/utils/tsxPreprocessor');
+    
+    if (typeof preprocessTsx === 'function') {
+      const preprocessResult = preprocessTsx(code, componentName);
+      
+      if (preprocessResult.fixed) {
+        processedCode = preprocessResult.code;
+        wasFixed = true;
+        issues = preprocessResult.issues;
+        
+        // Log pre-processing results
+        componentLogger.info('component-validation', `Preprocessor fixed ${issues.length} issues in component ${componentName}`, {
+          issues,
+          wasFixed
+        });
+      }
+    }
+  } catch (preprocessError) {
+    // If preprocessor fails, continue with original code
+    componentLogger.info('component-validation', `Preprocessor error: ${preprocessError instanceof Error ? preprocessError.message : String(preprocessError)}`, {
+      preprocessorStatus: 'error'
+    });
+  }
+  
+  // Now validate the potentially fixed code
   try {
     // Use Function constructor to check if code parses
     // This won't execute the code, just check syntax
-    new Function('"use strict";' + code);
+    new Function('"use strict";' + processedCode);
+    
+    // If we fixed issues, return the processed code
+    if (wasFixed) {
+      return { 
+        valid: true, 
+        processedCode,
+        wasFixed,
+        issues
+      };
+    }
+    
+    // Otherwise just return valid
     return { valid: true };
   } catch (error) {
     return { 
       valid: false, 
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      processedCode: wasFixed ? processedCode : undefined,
+      wasFixed,
+      issues
     };
   }
 }
@@ -195,22 +252,44 @@ export async function processComponentJob(jobId: string): Promise<void> {
       return;
     }
     
+    // Declare tsxCode variable at a higher scope to be accessible in catch block
+    let tsxCode = '';
+    
     try {
       componentLogger.start(jobId, `Starting component generation for effect: "${prompt}"`);
       
+      // Generate the component code
       const result = await generateComponentCode(jobId, prompt, {
         animationBrief: (job.metadata as any).animationBrief,
       });
       
-      componentLogger.info(jobId, `Successfully generated TSX code (${result.code.length} characters). Attempting to save...`);
+      // Check if the component was fixed during validation
+      const wasFixed = !!result.wasFixed;
+      const issues = result.issues || [];
+      tsxCode = result.processedCode || result.code;
+      
+      componentLogger.info(jobId, `Successfully generated TSX code (${tsxCode.length} characters)${wasFixed ? ' with automatic fixes' : ''}. Attempting to save...`, {
+        wasFixed,
+        issueCount: issues.length
+      });
+      
+      // Prepare update data with potential fix information
+      const updateData: any = {
+        tsxCode: tsxCode,
+        status: 'building',
+        updatedAt: new Date()
+      };
+      
+      // If the code was automatically fixed, store the original and the issues
+      if (wasFixed) {
+        updateData.originalTsxCode = result.originalCode;
+        updateData.fixIssues = issues.join(', ');
+        updateData.lastFixAttempt = new Date();
+      }
       
       // CRITICALLY IMPORTANT: We must await this database update to avoid race conditions
       await db.update(customComponentJobs)
-        .set({
-          tsxCode: result.code,
-          status: 'building',
-          updatedAt: new Date()
-        })
+        .set(updateData)
         .where(eq(customComponentJobs.id, jobId));
       
       componentLogger.info(jobId, "DB update for TSX code and 'building' status complete. Triggering build directly.");
@@ -224,38 +303,89 @@ export async function processComponentJob(jobId: string): Promise<void> {
         componentLogger.error(jobId, `Failed to import or call buildCustomComponent: ${importError instanceof Error ? importError.message : String(importError)}`);
       }
     } catch (error) {
-      componentLogger.error(jobId, "Error generating code", { 
-        error: error instanceof Error ? error.message : String(error),
-        type: "GENERATION_ERROR"
-      });
-      await updateComponentStatus(
+      await handleComponentGenerationError(
         jobId, 
-        'error', 
-        db, 
-        undefined, 
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error : new Error(String(error)), 
+        tsxCode // We can now access tsxCode from the higher scope
       );
+      return;
     }
-  } catch (error) {
-    componentLogger.error(jobId, "Error processing job", {
-      error: error instanceof Error ? error.message : String(error),
-      type: "PROCESSING_ERROR"
+  } catch (genError) {
+    componentLogger.error(jobId, `Failed to process job: ${genError instanceof Error ? genError.message : String(genError)}`);
+    await updateComponentStatus(
+      jobId, 
+      'error', 
+      db, 
+      undefined, 
+      genError instanceof Error ? genError.message : String(genError)
+    );
+  }
+}
+
+/**
+ * Handles errors during component generation and determines if the component is fixable
+ */
+async function handleComponentGenerationError(
+  jobId: string, 
+  error: Error, 
+  tsxCode: string | null
+): Promise<void> {
+  // If no code was generated, mark as failed
+  if (!tsxCode) {
+    await db.update(customComponentJobs)
+      .set({ 
+        status: "failed", 
+        errorMessage: error.message,
+        updatedAt: new Date() 
+      })
+      .where(eq(customComponentJobs.id, jobId));
+    
+    componentLogger.error(jobId, `Component generation failed: ${error.message}`);
+    return;
+  }
+  
+  // Try to get the component name for the preprocessor
+  const component = await db.query.customComponentJobs.findFirst({
+    where: eq(customComponentJobs.id, jobId)
+  });
+  
+  if (!component) {
+    componentLogger.error(jobId, "Job not found during error handling");
+    return;
+  }
+  
+  // Check if the preprocessor can fix the error
+  try {
+    // Load the preprocessor dynamically to avoid circular dependencies
+    const { preprocessTsx } = await import("~/server/utils/tsxPreprocessor");
+    const { fixed, issues } = preprocessTsx(tsxCode, component.effect);
+    
+    // Store the component with appropriate status
+    await db.update(customComponentJobs)
+      .set({ 
+        status: fixed ? "fixable" : "failed", 
+        errorMessage: error.message,
+        originalTsxCode: tsxCode,
+        fixIssues: issues.join(", "),
+        updatedAt: new Date() 
+      })
+      .where(eq(customComponentJobs.id, jobId));
+    
+    componentLogger.info(jobId, `Component marked as ${fixed ? "fixable" : "failed"}: ${error.message}`, {
+      fixed,
+      issues
     });
-    // Try to update status if possible
-    try {
-      await updateComponentStatus(
-        jobId, 
-        'error', 
-        db, 
-        undefined, 
-        `Failed to process job: ${error instanceof Error ? error.message : String(error)}`
-      );
-    } catch (dbError) {
-      componentLogger.error(jobId, "Could not update job status", { 
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        type: "STATUS_UPDATE_ERROR"
-      });
-    }
+  } catch (preprocessError) {
+    // If preprocessor fails, mark as failed
+    await db.update(customComponentJobs)
+      .set({ 
+        status: "failed", 
+        errorMessage: error.message,
+        updatedAt: new Date() 
+      })
+      .where(eq(customComponentJobs.id, jobId));
+    
+    componentLogger.error(jobId, `Component marked as failed (preprocessor error): ${error.message}`);
   }
 }
 
@@ -274,6 +404,10 @@ export async function generateComponentCode(
 ): Promise<{
   code: string;
   dependencies: Record<string, string>;
+  wasFixed?: boolean;
+  issues?: string[];
+  processedCode?: string;
+  originalCode?: string;
 }> {
   const startTime = Date.now();
   componentLogger.start(jobId, `Generating component for: "${description.substring(0, 50)}..."`);
@@ -439,16 +573,27 @@ For animation:
     );
     
     // Validate the generated component
-    const validation = validateComponentSyntax(componentCode);
+    const validation = validateComponentSyntax(componentCode, sanitizedComponentName);
     if (!validation.valid) {
       componentLogger.error(jobId, `Generated component has syntax errors: ${validation.error}`);
       throw new Error(`Generated component has syntax errors: ${validation.error}`);
     }
     
+    // Return any fixes made during validation
+    const result = {
+      code: validation.processedCode || componentCode,
+      dependencies: {},
+      wasFixed: validation.wasFixed,
+      issues: validation.issues,
+      processedCode: validation.processedCode,
+      originalCode: validation.wasFixed ? componentCode : undefined
+    };
+    
     // Log code length as a simple metric
-    componentLogger.parse(jobId, `Generated ${componentCode.length} bytes of component code for "${sanitizedComponentName}"`, {
-      codeLength: componentCode.length,
-      componentName: sanitizedComponentName
+    componentLogger.parse(jobId, `Generated ${result.code.length} bytes of component code for "${sanitizedComponentName}"`, {
+      codeLength: result.code.length,
+      componentName: sanitizedComponentName,
+      wasFixed: result.wasFixed
     });
     
     const totalDuration = Date.now() - startTime;
@@ -457,10 +602,7 @@ For animation:
       componentName: sanitizedComponentName
     });
     
-    return {
-      code: componentCode,
-      dependencies: {},
-    };
+    return result;
   } catch (error) {
     componentLogger.error(jobId, `Component generation failed: ${error instanceof Error ? error.message : String(error)}`, {
       type: "FATAL",

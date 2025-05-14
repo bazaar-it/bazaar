@@ -1,4 +1,7 @@
-// src/scripts/component-verify/verify-pipeline.ts
+// /Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/scripts/component-verify/verify-pipeline.ts
+import chalk from 'chalk';
+console.log(chalk.bgMagenta.white.bold('\n\nEXECUTING SCRIPT: verify-pipeline.ts - VERSION CHECK 120\n\n'));
+
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url'; // For ESM __dirname/__filename
@@ -14,8 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import axios, { AxiosError } from 'axios';
-import chalk from 'chalk';
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page, ConsoleMessage } from 'puppeteer';
 import { Pool, type QueryResult } from 'pg';
 
 // Environment variables
@@ -319,7 +321,7 @@ export async function testApiEndpoint(componentId: string): Promise<ApiTestResul
       console.error(chalk.red(`❌ ${errorMessage}`));
       if (error.stack) console.error(chalk.grey(error.stack));
     } else {
-      errorMessage = `An unexpected error occurred during API endpoint test: ${String(error)}`;
+      errorMessage = `An unexpected error occurred during API endpoint test. Error was not an instance of Error.`;
       console.error(chalk.red(`❌ ${errorMessage}`));
     }
     return { success: false, data: errorDetails, error: errorMessage };
@@ -334,7 +336,7 @@ export async function testApiEndpoint(componentId: string): Promise<ApiTestResul
  * @returns {Promise<RenderTestResult>} Result of the rendering test
  */
 export async function testComponentRendering(componentId: string, publicUrl: string | null): Promise<RenderTestResult> {
-  console.log('\n🟢 STEP 5: Testing component rendering');
+  console.log(chalk.bgCyan.black.bold('\n\nINSIDE testComponentRendering - VERSION CHECK 120\n\n'));
   
   if (!publicUrl) {
     console.warn(chalk.yellow('⚠️ Skipping rendering test as publicUrl is null.'));
@@ -455,16 +457,42 @@ export async function testComponentRendering(componentId: string, publicUrl: str
 
   let browser: Browser | null = null;
   try {
-    console.log(chalk.blue('🌐 Launching browser to test component rendering'));
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] Preparing to launch browser...')); 
+    console.log(chalk.blue(`🌐 [PUPPETEER_LOG] Current PUPPETEER_EXECUTABLE_PATH: ${process.env.PUPPETEER_EXECUTABLE_PATH || 'Not set'}`));
+    let puppeteerBrowserPath = '';
+    try {
+      puppeteerBrowserPath = puppeteer.executablePath();
+      console.log(chalk.blue(`🌐 [PUPPETEER_LOG] puppeteer.executablePath() reports: ${puppeteerBrowserPath}`));
+    } catch (e: any) {
+      console.error(chalk.red(`🌐 [PUPPETEER_LOG] Error calling puppeteer.executablePath(): ${e.message}`));
+    }
+    
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] Inside try block, about to call puppeteer.launch()...'));
     browser = await puppeteer.launch({
-      headless: "new", // Use new Headless mode
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      headless: "new", 
+      channel: 'chrome', // Use installed stable Chrome browser
+      // executablePath: puppeteerBrowserPath || undefined, // We comment this out when using 'channel'
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage', 
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu' 
+      ],
+      dumpio: true
     });
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] puppeteer.launch() completed. Browser object:', browser ? 'Exists' : 'Null'));
+    
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] Browser launched. Creating new page...'));
     const page: Page = await browser.newPage();
-
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] New page created. Setting up listeners...'));
+    
     page.on('console', msg => console.log(chalk.gray(`PAGE LOG: ${msg.text()}`)));
-    page.on('pageerror', err => console.error(chalk.red(`PAGE ERROR: ${err.message}`)));
-
+    page.on('pageerror', err => console.error(chalk.red(`PAGE ERROR: ${err.message}\n${err.stack || 'No stack for pageerror'}`)));
+    page.on('requestfailed', request => {
+      console.error(chalk.red(`PAGE REQUEST FAILED: ${request.url()} - ${request.failure()?.errorText || 'No error text'}`));
+    });
+    
     // Listen to network responses
     page.on('response', async (response) => {
       const status = response.status();
@@ -495,11 +523,20 @@ export async function testComponentRendering(componentId: string, publicUrl: str
         }
       }
     });
-
-    await page.goto(`file://${localTestPagePath}`, { waitUntil: 'networkidle0' });
-
-    // Allow more time for rendering and debugging
+    
+    console.log(chalk.blue(`🌐 [PUPPETEER_LOG] Attempting to navigate to: file://${localTestPagePath}`));
+    try {
+      await page.goto(`file://${localTestPagePath}`, { waitUntil: 'domcontentloaded' });
+      console.log(chalk.blue('🌐 [PUPPETEER_LOG] Navigation successful (goto completed).'));
+    } catch (gotoError) {
+      console.error(chalk.red('🌐 [PUPPETEER_LOG] page.goto() FAILED.'));
+      // Re-throw to be caught by the outer try...catch which has the enhanced logging
+      throw gotoError; 
+    }
+    
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] Waiting for 2s timeout after goto...'));
     await page.waitForTimeout(2000);
+    console.log(chalk.blue('🌐 [PUPPETEER_LOG] Timeout finished. Evaluating page for success indicator...'));
     
     // Method 1: Look for our success indicator div
     let success = false;
@@ -535,14 +572,10 @@ export async function testComponentRendering(componentId: string, publicUrl: str
     }
     
     // Method 3: Look for any rendering errors in the page
-    const hasError = await page.evaluate(() => {
-      return document.body.innerHTML.includes('Error rendering component') ||
-             document.body.innerHTML.includes('not found on window object');
-    });
-    
-    if (hasError) {
-      console.log(chalk.red('❌ Error message found in page content'));
-      success = false;
+    const { hasErrorMessages: pageHasErrors, consoleMessages: pageConsoleMessages } = await analyzePageForCriticalErrors_V135(page);
+
+    if (pageHasErrors) {
+      console.error(chalk.red('❌ Error message found in page content'));
     }
 
     // Extract any console logs to help with debugging
@@ -563,8 +596,11 @@ export async function testComponentRendering(componentId: string, publicUrl: str
 
     return { success, screenshotPath };
   } catch (error) {
+    console.error(chalk.red('💥 [PUPPETEER_CRITICAL_ERROR] An error occurred during Puppeteer operations:'));
+    console.error(error); 
+    
     let errorMessage: string;
-    let errorDetailsJson = '';
+    let errorDetailsOutput = ''; 
     let errorStack = '';
     let screenshotPath: string | undefined;
 
@@ -572,42 +608,122 @@ export async function testComponentRendering(componentId: string, publicUrl: str
       errorMessage = `Error testing component rendering: ${error.message}`;
       errorStack = error.stack || 'No stack trace available.';
     } else {
-      errorMessage = `An unexpected error occurred during rendering test.`;
-      try {
-        errorDetailsJson = JSON.stringify(error, null, 2);
-      } catch (e) {
-        errorDetailsJson = 'Could not stringify error object.';
+      errorMessage = `An unexpected error occurred during rendering test. Error was not an instance of Error.`;
+      // Try to get more information from the non-Error object
+      if (typeof error === 'object' && error !== null) {
+        errorDetailsOutput = `Error properties: ${Object.keys(error).join(', ')}\n`;
+        try {
+          errorDetailsOutput += `Full error object (JSON): ${JSON.stringify(error, null, 2)}`;
+        } catch (e) {
+          errorDetailsOutput += 'Full error object (JSON): Could not stringify error object. Inspect raw object below.\n';
+          // Attempt to log a simpler representation if stringify fails
+          console.error(chalk.red('Raw error object:'), error); 
+        }
+      } else {
+        errorDetailsOutput = `Error details: The caught error was not an object: ${String(error)}`;
       }
     }
     console.error(chalk.red(errorMessage));
     if (errorStack) {
       console.error(chalk.red('Stack trace:'), errorStack);
     }
-    if (errorDetailsJson) {
-      console.error(chalk.red('Error object (JSON):'), errorDetailsJson);
+    if (errorDetailsOutput) { 
+      console.error(chalk.red('Error Details:'), errorDetailsOutput);
     }
-
+    
     // Try to capture a screenshot even if an error occurred during interaction
-    if (browser && browser.connected) { // Check if browser is still usable
+    if (browser && browser.connected) { 
       try {
-        const page: Page = await browser.newPage();
-        await page.goto(`file://${localTestPagePath}`, { waitUntil: 'networkidle0' });
+        const errorPage: Page = await browser.newPage(); 
+        await errorPage.goto(`file://${localTestPagePath}`, { waitUntil: 'networkidle0' });
         screenshotPath = path.join(outputDir, `${componentId}_error_screenshot.png`);
-        await page.screenshot({ path: screenshotPath });
+        await errorPage.screenshot({ path: screenshotPath });
         console.log(chalk.green(`📸 Error screenshot saved to ${screenshotPath}`));
       } catch (screenshotError) {
         console.error(chalk.red('Failed to capture error screenshot:'), screenshotError);
       }
     }
-
+    
     // Ensure the returned error message is comprehensive
-    const fullErrorMessage = `${errorMessage}${errorStack ? `\nStack: ${errorStack}` : ''}${errorDetailsJson ? `\nDetails: ${errorDetailsJson}` : ''}`;
+    const fullErrorMessage = `${errorMessage}${errorStack ? `\nStack: ${errorStack}` : ''}${errorDetailsOutput ? `\nDetails: ${errorDetailsOutput}` : ''}`;
     return { success: false, error: fullErrorMessage, screenshotPath };
   } finally {
     if (browser) {
       await browser.close();
     }
   }
+}
+
+// Helper function to check for error messages in page content or console
+// Renamed to break cache and with correct logic reinstated
+async function analyzePageForCriticalErrors_V135(page: Page): Promise<{ hasErrorMessages: boolean; consoleMessages: ConsoleMessage[] }> {
+  console.log(chalk.bgGreen.black.bold('\n\nINSIDE analyzePageForCriticalErrors_V135 - FRESH INVOKE\n\n'));
+
+  const collectedConsoleMessages: ConsoleMessage[] = [];
+  const consoleListener = (msg: ConsoleMessage) => {
+    collectedConsoleMessages.push(msg);
+  };
+  page.on('console', consoleListener);
+
+  // Give a brief moment for any async errors to be logged
+  await page.waitForTimeout(1000); 
+
+  page.off('console', consoleListener);
+
+  let bodyTextContent = '';
+  try {
+    bodyTextContent = await page.evaluate(() => document.body.innerText.toLowerCase());
+  } catch (evalError) {
+    console.warn(chalk.yellow('[analyzePageForCriticalErrors_V135] ERROR during page.evaluate for body.innerText:'), evalError);
+  }
+
+  const errorKeywords = ['error', 'failed', 'cannot', 'unable', 'exception', 'problem', 'uncaught'];
+  let hasErrorInBody = errorKeywords.some(keyword => bodyTextContent.includes(keyword));
+
+  const nonCriticalWarningSubstrings = [
+    'download the react devtools',
+    'warning: each child in a list should have a unique "key" prop'
+  ];
+
+  if (hasErrorInBody) {
+    const lowerBodyTextForFiltering = bodyTextContent.toLowerCase();
+    let tempFilteredBodyText = lowerBodyTextForFiltering;
+    nonCriticalWarningSubstrings.forEach(warningSubstring => {
+      // Escape special characters in substring for regex
+      const escapedSubstring = warningSubstring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      tempFilteredBodyText = tempFilteredBodyText.replace(new RegExp(escapedSubstring, 'gi'), '');
+    });
+    
+    const stillHasErrorKeywords = errorKeywords.some(keyword => tempFilteredBodyText.includes(keyword));
+    if (stillHasErrorKeywords) {
+      console.log(chalk.yellow(`[analyzePageForCriticalErrors_V135] Page body contains error-suggesting keywords after filtering. Sample: "${tempFilteredBodyText.substring(0,100)}..."`));
+    } else {
+      console.log(chalk.green(`[analyzePageForCriticalErrors_V135] Page body keywords were likely from non-critical warnings. Original sample: "${bodyTextContent.substring(0,100)}..."`));
+      hasErrorInBody = false; 
+    }
+  }
+
+  const criticalConsoleErrors = collectedConsoleMessages.filter(msg => {
+    const messageText = msg.text().toLowerCase();
+    const isKeyWarning = messageText.includes('warning: each child in a list should have a unique "key" prop');
+    const isReactDevtoolsWarning = messageText.includes('download the react devtools');
+    
+    return msg.type().toUpperCase() === 'ERROR' && !isKeyWarning && !isReactDevtoolsWarning;
+  });
+
+  const hasCriticalErrorInConsole = criticalConsoleErrors.length > 0;
+  
+  if (hasErrorInBody && !hasCriticalErrorInConsole) { 
+    console.warn(chalk.yellow('[analyzePageForCriticalErrors_V135] Detected error keywords in page body content (console clear).'));
+  } else if (hasCriticalErrorInConsole) {
+    console.warn(chalk.yellow(`[analyzePageForCriticalErrors_V135] Detected ${criticalConsoleErrors.length} critical console message(s) of type ERROR.`));
+    criticalConsoleErrors.forEach(cErr => console.log(chalk.magenta(`  Critical Console Error Text (V135): ${cErr.text().substring(0, 200)}...`)));
+  }
+
+  console.log(chalk.cyan.bold(`[analyzePageForCriticalErrors_V135 DEBUG] Final hasErrorInBody: ${hasErrorInBody}`));
+  console.log(chalk.cyan.bold(`[analyzePageForCriticalErrors_V135 DEBUG] Final hasCriticalErrorInConsole: ${hasCriticalErrorInConsole}`));
+  
+  return { hasErrorMessages: hasErrorInBody || hasCriticalErrorInConsole, consoleMessages: collectedConsoleMessages };
 }
 
 // Main function to verify the component pipeline

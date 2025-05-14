@@ -29,6 +29,16 @@
             "date": 1747021655085,
             "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-12.log",
             "hash": "49dd38222fbdf124a4236982b019f8ab488bf2c39c7f8e5949d721e065e75d9e"
+        },
+        {
+            "date": 1747142952374,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-13.log",
+            "hash": "6f9dccb71e77a82b6510bb54193af257b58b9b0bd7a37cb834815900d8954c57"
+        },
+        {
+            "date": 1747155615006,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-14.log",
+            "hash": "64395e01a25e94d2b2f9e67bde3867c48ccc517428cd8b974338c81df70a69a0"
         }
     ],
     "hashType": "sha256"

@@ -143,6 +143,14 @@ Math.sin((frame / fps) * 2 + index) means amplitude depends on FPS; use constant
 svgIcons registry
 Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path counts will slow renders.
 
+## Pipeline Reliability Enhancements (Next Steps)
+
+- [ ] Convert verification scripts (e.g., `verify-pipeline.js`) to TypeScript for better type safety.
+- [ ] Implement automated canary testing to continuously validate the pipeline as part of CI/CD.
+- [ ] Add component preflight checks for early warning of rendering issues before full build/deploy.
+- [ ] Enhance the debug UI with more detailed component status information and diagnostic tools.
+- [ ] Continue to refine edge case handling for complex component generations (~5% of cases).
+
 ## Testing Infrastructure
 
 - [x] Set up Jest ESM configuration for Next.js 14
@@ -309,3 +317,141 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
 - Implement component testing before making components available
 - Add structured approach to component metadata
 - Improve error handling in custom components
+
+# TODO List - Component Pipeline Improvements
+
+## Required for Production
+
+1. **Fix Component R2/Database Sync**
+   - [x] Create verification toolkit for component pipeline testing
+   - [x] Fix component registration in API route
+   - [x] Improve error handling in useRemoteComponent hook
+   - [x] Enhance script cleanup in PreviewPanel
+   - [ ] Run full production test with 20+ different component types
+
+2. **Component Loading Reliability**
+   - [x] Implement better error reporting in component pipeline
+   - [x] Add visual feedback for component loading status
+   - [x] Fix script tag cleanup to be more targeted
+   - [ ] Add telemetry for component load times and success rates
+
+3. **Component Generation Improvements**
+   - [ ] Create standardized component templates with robust registration
+   - [ ] Add pre-processing of LLM output to ensure registration
+   - [ ] Implement runtime validation of components before storing
+
+## Nice-to-Have
+
+1. **Admin Tools**
+   - [ ] Create component admin dashboard in the UI
+   - [ ] Add batch tools for fixing multiple components
+   - [ ] Implement component versioning and rollback
+
+2. **CI/CD Integration**
+   - [ ] Add automated tests for component pipeline in CI
+   - [ ] Create canary tests that run in production environment
+   - [ ] Add monitoring alerts for component failures
+
+3. **Documentation**
+   - [ ] Create comprehensive documentation for component pipeline
+   - [ ] Document troubleshooting steps for common component issues
+   - [ ] Add examples of valid component patterns
+
+## For Future Sprints
+
+1. **Performance Optimizations**
+   - [ ] Implement component bundling for faster loading
+   - [ ] Add component caching at edge
+   - [ ] Optimize component registration for faster initialization
+
+2. **Feature Enhancements**
+   - [ ] Support for more complex component patterns
+   - [ ] Add component testing environment in the UI
+   - [ ] Implement component marketplace for sharing
+
+## Custom Component Pipeline Testing
+
+- [x] Implement integration tests for custom component JSON patch operations
+- [x] Create tests for PreviewPanel component loading and cleanup
+- [x] Fix test issues with special paths in Next.js ([id])
+- [x] Implement E2E test for full component generation pipeline
+- [x] Create documentation for component pipeline testing strategy
+- [x] Add tests for different component types and export patterns
+- [ ] Implement error case testing for component pipeline
+- [ ] Add performance metrics to E2E component tests 
+- [ ] Extend testing to include component loading via useRemoteComponent
+- [ ] Add visual testing for rendered components
+
+## Component Generation System Improvements
+
+- [ ] Update LLM prompts to standardize component generation patterns
+  - [ ] Ensure consistent export default statements
+  - [ ] Remove direct imports of React/Remotion from prompts
+  - [ ] Add comments in prompt examples about window.__REMOTION_COMPONENT
+- [ ] Enhance buildCustomComponent.ts to better handle edge cases
+  - [ ] Add pre-build static analysis to detect common issues
+  - [ ] Improve error handling for components with broken/missing imports
+  - [ ] Add component export validation before completing build
+- [ ] Create automated verification pipeline for existing components
+  - [ ] Convert the component-verify script to a worker process
+  - [ ] Add batch component rebuilding capability
+  - [ ] Create reporting system for component issues
+- [ ] Add component quality scoring system
+  - [ ] Implement heuristics to evaluate component code quality
+  - [ ] Track component health metrics over time
+  - [ ] Add visual verification tools for component testing
+
+## Component Generation Pipeline Improvements (Sprint 20)
+
+- [ ] Create syntax repair module (`repairComponentSyntax.ts`)
+  - [ ] Implement fix for duplicate variable declarations
+  - [ ] Implement fix for unescaped characters in string literals
+  - [ ] Implement fix for missing export statements
+  - [ ] Implement tag matching verification
+  - [ ] Add comprehensive unit tests
+
+- [ ] Update LLM prompts with syntax guidelines
+  - [ ] Add explicit variable declaration instructions
+  - [ ] Add SVG/JSX handling guidelines
+  - [ ] Add export requirements section
+  - [ ] Add self-verification instructions
+
+- [ ] Integrate repair into component generation pipeline
+  - [ ] Add repair step before validation
+  - [ ] Implement error classification
+  - [ ] Add metrics for repair effectiveness
+  - [ ] Create fallback component mechanism
+
+- [ ] Testing and validation
+  - [ ] Update E2E tests with problematic components
+  - [ ] Test with previously failed components
+  - [ ] Document success rate improvements
+  - [ ] Add comprehensive test coverage
+
+- [ ] Documentation
+  - [ ] Document the repair process
+  - [ ] Update component generation documentation
+  - [ ] Create developer guide for debugging component errors
+  - [ ] Document common error patterns and solutions
+
+## Sprint 20: Component Generation Pipeline
+
+- [ ] Integrate TSX preprocessor (src/server/utils/tsxPreprocessor.ts) into the component generation workflow
+  - [ ] Add to src/server/workers/generateComponentCode.ts before validation step
+  - [ ] Log preprocessing results for analytics
+  - [ ] Measure success rate improvement
+
+- [ ] Update LLM prompts for component generation
+  - [ ] Add explicit warnings about variable redeclaration
+  - [ ] Include proper JSX/SVG syntax examples
+  - [ ] Emphasize export and window assignment requirements
+
+- [ ] Add monitoring and telemetry
+  - [ ] Track types and frequency of syntax issues fixed
+  - [ ] Create dashboard for component generation success rate
+  - [ ] Set up alerts for persistent failure patterns
+
+- [ ] End-to-end testing
+  - [ ] Complete test suite for repairComponentSyntax.test.ts
+  - [ ] Update existing component generation tests to validate fixes
+  - [ ] Test with real-world component generation requests

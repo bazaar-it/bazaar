@@ -188,3 +188,37 @@ Added extensive debug logs throughout the component refresh chain:
 - Consider implementing a more robust versioning system for components
 - Add a polling mechanism to detect new components automatically
 - Implement a more explicit dependency tracking system 
+
+## Direct Database Component Fixes
+
+For mass fixing components in the database, we've created a script that connects directly to the database and fixes common issues:
+
+### Component Issues Fixed
+1. **'use client' directive removal** - This directive is invalid in direct browser execution
+2. **Import statement normalization** - Converting destructured imports to individual imports
+3. **React.createElement correction** - Ensuring all createElement calls use the full React namespace
+4. **Component registration** - Adding missing window.__REMOTION_COMPONENT assignments
+
+### Scripts
+- **src/scripts/fix-components-db.ts** - Database connection and fixing logic
+- **src/scripts/run-component-fix.sh** - Shell script to run the process with environment variables
+
+### How to Run
+
+1. Make sure the scripts are in place
+2. Make the shell script executable:
+   ```bash
+   chmod +x src/scripts/run-component-fix.sh
+   ```
+3. Run the script:
+   ```bash
+   ./src/scripts/run-component-fix.sh
+   ```
+
+The script will:
+1. Query all components from the database
+2. For each component with issues, generate a fixed version
+3. Save both original and fixed versions to a `fixed-components` directory
+4. Update the components in the database with fixed code
+
+This approach allows for bulk fixing of component issues without requiring the full environment setup. 

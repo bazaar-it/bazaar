@@ -1,5 +1,6 @@
-// src/app/projects/[id]/edit/panels/CustomComponentsPanel.tsx
-"use client";
+//src/app/projects/[id]/edit/panels/CustomComponentsPanel.tsx
+
+'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from "next/navigation";
@@ -13,7 +14,8 @@ import {
   ChevronDownIcon, 
   ChevronUpIcon, 
   RefreshCwIcon,
-  Code2Icon 
+  Code2Icon,
+  WrenchIcon
 } from "lucide-react";
 import { Loader2, PlusCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -24,6 +26,9 @@ import { CustomComponentStatus } from "~/components/CustomComponentStatus";
 import { useVideoState } from "~/stores/videoState";
 import { v4 as uuidv4 } from 'uuid';
 import type { Operation } from "fast-json-patch";
+// No toast imports - using inline feedback instead
+import { FixableComponentsList } from "./components/FixableComponentsList";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 
 interface CustomComponentsPanelProps {
   projectId: string;
@@ -103,15 +108,16 @@ const DeleteConfirmationDialog = ({ isOpen, onClose, onConfirm, title, descripti
 };
 
 export default function CustomComponentsPanel({ projectId }: CustomComponentsPanelProps) {
-  // This query now fetches only successful components with outputUrl (stored in R2)
-  // providing successfulOnly=true (the default) filters out duplicates and failed jobs
+  // Show all components, including failed ones (by setting successfulOnly to false)
   const { data, isLoading, refetch } = api.customComponent.listAllForUser.useQuery({ 
-    successfulOnly: true 
+    successfulOnly: false 
   }, {
     refetchInterval: 10000, // Refetch every 10 seconds
     retry: 3
   });
   
+  // Using inline feedback instead of toast notifications
+  const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info'; details?: string } | null>(null);
   const router = useRouter();
   const { applyPatch, getCurrentProps, forceRefresh } = useVideoState();
   
@@ -138,6 +144,33 @@ export default function CustomComponentsPanel({ projectId }: CustomComponentsPan
       setIsDeleteDialogOpen(false);
       setSelectedComponent(null);
       console.log("Component deleted successfully");
+    }
+  });
+
+  // Add the fix component mutation
+  const fixMutation = api.customComponent.fixComponent.useMutation({
+    onSuccess: (data) => {
+      refetch();
+      setFeedback({
+        message: data.fixed ? "Component fixed!" : "Component processed",
+        details: data.fixed 
+          ? `Fixed issues: ${data.issues.join(", ")}` 
+          : "No issues were found to fix",
+        type: data.fixed ? "success" : "error"
+      });
+      
+      // Clear feedback after 5 seconds
+      setTimeout(() => setFeedback(null), 5000);
+    },
+    onError: (error) => {
+      setFeedback({
+        message: "Failed to fix component",
+        details: error.message,
+        type: "error"
+      });
+      
+      // Clear feedback after 5 seconds
+      setTimeout(() => setFeedback(null), 5000);
     }
   });
 
@@ -265,6 +298,18 @@ export default function CustomComponentsPanel({ projectId }: CustomComponentsPan
     });
   };
 
+  const handleFixComponent = (componentId: string) => {
+    fixMutation.mutate({ componentId });
+  };
+
+  // Query for fixable components - moved before conditional return to avoid hooks order issues
+  const { data: fixableComponents, isLoading: isLoadingFixable } = api.customComponent.getFixableByProjectId.useQuery({
+    projectId
+  }, {
+    // Keep this query enabled
+    enabled: true,
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full p-4">
@@ -275,117 +320,164 @@ export default function CustomComponentsPanel({ projectId }: CustomComponentsPan
   }
 
   return (
-    <div className="h-full flex flex-col p-1 bg-white dark:bg-gray-900 rounded-lg shadow">
-      <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Custom Components</h3>
-        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className="h-7 w-7">
-          {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      {isExpanded && (
-        <>
-          <div className="p-2">
-            <div className="relative">
-              <SearchIcon className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
-              <Input
-                placeholder="Search components..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 pl-9 text-xs rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-1 focus:ring-primary/30 shadow-sm"
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1.5 top-1/2 transform -translate-y-1/2 h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                  onClick={() => setSearchQuery("")}
-                >
-                  ✕
-                </Button>
-              )}
+    <div className="flex flex-col w-full h-full">
+      <Tabs defaultValue="custom" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="custom">Custom Components</TabsTrigger>
+          <TabsTrigger value="fixable">Fixable Components</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="custom">
+          <div className="h-full flex flex-col p-1 bg-white dark:bg-gray-900 rounded-lg shadow mt-2">
+            <div className="flex items-center justify-between p-2 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Custom Components</h3>
+              <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className="h-7 w-7">
+                {isExpanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
+              </Button>
             </div>
-            
-            <div className="flex items-center mt-2">
-              <label className="flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={isAutoAddEnabled}
-                  onChange={() => setIsAutoAddEnabled(!isAutoAddEnabled)}
-                  className="form-checkbox h-3.5 w-3.5 text-primary border-gray-300 rounded"
-                />
-                <span className="ml-1.5 text-xs">Auto-add new components</span>
-              </label>
-            </div>
-          </div>
 
-          <div className="flex-grow overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-            {filteredComponents.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400">No components found.</p>
-              </div>
-            ) : (
-              filteredComponents.map((component) => (
-                <div 
-                  key={component.id} 
-                  className={cn(
-                    "flex items-center justify-between p-1.5 rounded-md bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors duration-150 shadow-sm border border-gray-200 dark:border-gray-700/50",
-                    processedComponents.includes(component.id) && "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/30"
-                  )}
-                >
-                  <div className="flex items-center min-w-0">
-                    <CustomComponentStatus 
-                      componentId={component.id} 
-                      onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl)} 
+            {isExpanded && (
+              <>
+                <div className="p-2">
+                  <div className="relative">
+                    <SearchIcon className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                    <Input
+                      placeholder="Search components..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="h-9 pl-9 text-xs rounded-md border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:ring-1 focus:ring-primary/30 shadow-sm"
                     />
-                    <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate ml-2" title={component.effect}>
-                      {component.effect}
-                    </span>
-                    {processedComponents.includes(component.id) && (
-                      <span className="ml-1.5 text-[10px] text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-1 py-0.5 rounded">
-                        Added
-                      </span>
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1.5 top-1/2 transform -translate-y-1/2 h-6 px-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        ✕
+                      </Button>
                     )}
                   </div>
-                  <div className="flex items-center flex-shrink-0 ml-1.5">
-                    <Button 
-                      variant="outline"
-                      size="sm" 
-                      onClick={() => handleAddToVideo(component)}
-                      disabled={(component.status !== 'complete' && componentStatuses[component.id]?.status !== 'complete') || (!component.outputUrl && !componentStatuses[component.id]?.outputUrl)}
-                      className="h-6 px-1.5 text-xs mr-1 border-primary/50 text-primary hover:bg-primary/10 dark:border-primary/40 dark:text-primary/90 dark:hover:bg-primary/20"
-                    >
-                      <PlusCircle className="h-3 w-3 mr-1" /> Add
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                          <MoreVerticalIcon className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-xs">
-                        <DropdownMenuItem onClick={() => handleRenameClick(component)} className="cursor-pointer">
-                          <EditIcon className="h-3 w-3 mr-1.5" /> Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDeleteClick(component)} className="text-red-500 dark:text-red-400 hover:!text-red-600 dark:hover:!text-red-500 cursor-pointer">
-                          <TrashIcon className="h-3 w-3 mr-1.5" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  
+                  <div className="flex items-center mt-2">
+                    <label className="flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={isAutoAddEnabled}
+                        onChange={() => setIsAutoAddEnabled(!isAutoAddEnabled)}
+                        className="form-checkbox h-3.5 w-3.5 text-primary border-gray-300 rounded"
+                      />
+                      <span className="ml-1.5 text-xs">Auto-add new components</span>
+                    </label>
                   </div>
                 </div>
-              ))
+
+                <div className="flex-grow overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                  {filteredComponents.length === 0 ? (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No components found.</p>
+                    </div>
+                  ) : (
+                    filteredComponents.map((component) => (
+                      <div 
+                        key={component.id} 
+                        className={cn(
+                          "flex items-center justify-between p-1.5 rounded-md bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors duration-150 shadow-sm border border-gray-200 dark:border-gray-700/50",
+                          processedComponents.includes(component.id) && "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/30",
+                          component.status === "error" && "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30"
+                        )}
+                      >
+                        <div className="flex items-center min-w-0">
+                          <CustomComponentStatus 
+                            componentId={component.id} 
+                            onStatusChange={(status, outputUrl) => handleStatusUpdate(component.id, status, outputUrl)} 
+                          />
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate ml-2" title={component.effect}>
+                            {component.effect}
+                          </span>
+                          {processedComponents.includes(component.id) && (
+                            <span className="ml-1.5 text-[10px] text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 px-1 py-0.5 rounded">
+                              Added
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center flex-shrink-0 ml-1.5">
+                          {/* Render Fix button for error components */}
+                          {(component.status === "error" || componentStatuses[component.id]?.status === "error") && (
+                            <Button 
+                              variant="outline"
+                              size="sm" 
+                              onClick={() => handleFixComponent(component.id)}
+                              disabled={fixMutation.isPending}
+                              className="h-6 px-1.5 text-xs mr-1 border-yellow-500/50 text-yellow-600 hover:bg-yellow-100 dark:border-yellow-600/40 dark:text-yellow-500 dark:hover:bg-yellow-900/20"
+                            >
+                              {fixMutation.isPending && fixMutation.variables?.componentId === component.id ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <WrenchIcon className="h-3 w-3 mr-1" />
+                              )}
+                              Fix
+                            </Button>
+                          )}
+                          
+                          {/* Existing Add button */}
+                          <Button 
+                            variant="outline"
+                            size="sm" 
+                            onClick={() => handleAddToVideo(component)}
+                            disabled={(component.status !== 'complete' && componentStatuses[component.id]?.status !== 'complete') || (!component.outputUrl && !componentStatuses[component.id]?.outputUrl)}
+                            className="h-6 px-1.5 text-xs mr-1 border-primary/50 text-primary hover:bg-primary/10 dark:border-primary/40 dark:text-primary/90 dark:hover:bg-primary/20"
+                          >
+                            <PlusCircle className="h-3 w-3 mr-1" /> Add
+                          </Button>
+                          
+                          {/* Rest of existing buttons */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6">
+                                <MoreVerticalIcon className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="text-xs">
+                              <DropdownMenuItem onClick={() => handleRenameClick(component)} className="cursor-pointer">
+                                <EditIcon className="h-3 w-3 mr-1.5" /> Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeleteClick(component)} className="text-red-500 dark:text-red-400 hover:!text-red-600 dark:hover:!text-red-500 cursor-pointer">
+                                <TrashIcon className="h-3 w-3 mr-1.5" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-2 border-t border-gray-200 dark:border-gray-700 mt-auto">
+                  <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading} className="w-full h-8 text-xs">
+                    {isLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCwIcon className="h-3.5 w-3.5 mr-1.5" />} 
+                    Refresh List
+                  </Button>
+                </div>
+              </>
             )}
           </div>
-
-          <div className="p-2 border-t border-gray-200 dark:border-gray-700 mt-auto">
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading} className="w-full h-8 text-xs">
-              {isLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RefreshCwIcon className="h-3.5 w-3.5 mr-1.5" />} 
-              Refresh List
-            </Button>
+        </TabsContent>
+        
+        <TabsContent value="fixable">
+          {/* Fixable components tab content */}
+          <div className="mt-2">
+            <FixableComponentsList
+              projectId={projectId}
+              components={fixableComponents || []}
+              isLoading={isLoadingFixable}
+              onFixComponent={handleFixComponent}
+              isFixing={fixMutation.isPending}
+              fixingComponentId={fixMutation.variables?.componentId}
+            />
           </div>
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       {selectedComponent && (

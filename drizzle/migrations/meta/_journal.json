@@ -43,6 +43,13 @@
       "when": 1746526448494,
       "tag": "0005_lively_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1747203080295,
+      "tag": "0006_left_kid_colt",
+      "breakpoints": true
     }
   ]
 }

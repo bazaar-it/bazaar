@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-05-14T03:30:50.241Z",
+  "componentId": "fe5efda2-5ffd-42a0-9586-39f7a536c596",
+  "componentName": "Canary1747193443047",
+  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/fe5efda2-5ffd-42a0-9586-39f7a536c596.js",
+  "apiEndpoint": "http://localhost:3000/api/components/fe5efda2-5ffd-42a0-9586-39f7a536c596",
+  "success": false,
+  "errorMessage": "An unexpected error occurred during rendering test. Error was not an instance of Error.\nDetails: Error properties: \nFull error object (JSON): {}"
+}

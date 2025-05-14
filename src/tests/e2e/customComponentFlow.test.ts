@@ -1,3 +1,4 @@
+// src/tests/e2e/customComponentFlow.test.ts
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import { db } from '~/server/db';
 import { customComponentJobs, projects, users } from '~/server/db/schema';
@@ -197,8 +198,8 @@ describe('Custom Component Generation Pipeline', () => {
     expect(job.status).toBe('pending');
     
     const tsxCode = `
-import { AbsoluteFill, useCurrentFrame } from 'remotion';
-import React from 'react';
+// import { AbsoluteFill, useCurrentFrame } from 'remotion';
+// import React from 'react';
 
 export default function FireworksEffect() {
   const frame = useCurrentFrame();
@@ -234,7 +235,7 @@ export default function FireworksEffect() {
     expect(updatedJob).toBeDefined();
     if (!updatedJob) throw new Error('Failed to fetch updated job');
     
-    expect(updatedJob.status).toBe('success');
+    expect(updatedJob.status).toBe('complete');
     expect(updatedJob.outputUrl).toBeDefined();
     
     expect(updatedJob.outputUrl).toContain(`${process.env.R2_PUBLIC_URL}`);

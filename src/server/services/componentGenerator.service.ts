@@ -84,13 +84,52 @@ export async function generateComponent(
     let enhancedDescriptionLines: string[] = [];
 
     // --- Role and High-Level Instructions ---
-    enhancedDescriptionLines.push(`### ROLE: You are an Expert Remotion Developer and Senior React Engineer.`);
+    enhancedDescriptionLines.push(`### ROLE: You are an Expert Remotion Developer and Senior React Engineer specializing in syntax-perfect TypeScript/JSX.`);
     enhancedDescriptionLines.push(`### TASK: Create a production-quality Remotion React functional component in TypeScript.`);
     enhancedDescriptionLines.push(`### COMPONENT NAME: '${componentName}'`);
     enhancedDescriptionLines.push(`### OBJECTIVE: Generate a component that precisely implements the provided AnimationDesignBrief with professional animations and visual effects.`);
     enhancedDescriptionLines.push(`### VIDEO CONFIG: Target video is ${actualWidth}x${actualHeight}px, ${actualDurationInFrames} frames total duration, at ${actualFps} FPS.`);
-    enhancedDescriptionLines.push(`### MANDATORY REQUIREMENTS:`);
+    
+    // --- Critical Syntax Requirements ---
+    enhancedDescriptionLines.push(`### SYNTAX REQUIREMENTS - FOLLOW EXACTLY:`);
     enhancedDescriptionLines.push(`- The FIRST line MUST be: // src/remotion/components/scenes/${componentName}.tsx`);
+    enhancedDescriptionLines.push(`- NEVER declare the same variable twice (e.g., 'const frame = useCurrentFrame()' should appear only ONCE)`);
+    enhancedDescriptionLines.push(`- ALWAYS properly close all JSX tags (use self-closing tags for elements like <img />, <path />, etc.)`);
+    enhancedDescriptionLines.push(`- ESCAPE any HTML/XML inside string literals using &lt; and &gt; instead of < and >`);
+    enhancedDescriptionLines.push(`- ENSURE the component has 'export default ${componentName}' at the end`);
+    enhancedDescriptionLines.push(`- VERIFY all opening and closing brackets/braces match properly`);
+
+    // --- Examples of Correct Syntax ---
+    enhancedDescriptionLines.push(`### EXAMPLES OF PROPER SYNTAX:`);
+    enhancedDescriptionLines.push(`// Correct - Single declaration of hooks at the beginning`);
+    enhancedDescriptionLines.push(`const frame = useCurrentFrame();`);
+    enhancedDescriptionLines.push(`const { width, height, fps, durationInFrames } = useVideoConfig();`);
+    enhancedDescriptionLines.push(`// Correct - Properly escaped HTML in strings`);
+    enhancedDescriptionLines.push(`const svgMarkup = "&lt;circle cx='50' cy='50' r='40'/&gt;";`);
+    enhancedDescriptionLines.push(`// Correct - Properly closed JSX tags`);
+    enhancedDescriptionLines.push(`return (`);
+    enhancedDescriptionLines.push(`  <div>`);
+    enhancedDescriptionLines.push(`    <circle cx={50} cy={50} r={40} />`);
+    enhancedDescriptionLines.push(`  </div>`);
+    enhancedDescriptionLines.push(`);`);
+
+    // --- Common Errors to Avoid ---
+    enhancedDescriptionLines.push(`### COMMON ERRORS TO AVOID:`);
+    enhancedDescriptionLines.push(`// ERROR: Redeclaring frame variable`);
+    enhancedDescriptionLines.push(`const frame = useCurrentFrame();`);
+    enhancedDescriptionLines.push(`// Later in the code... DON'T DO THIS:`);
+    enhancedDescriptionLines.push(`const frame = useCurrentFrame(); // Error: 'frame' already declared`);
+    enhancedDescriptionLines.push(`// ERROR: Unescaped HTML in strings`);
+    enhancedDescriptionLines.push(`const svgMarkup = "<circle cx='50' cy='50' r='40'/>"; // Use &lt; and &gt; instead`);
+    enhancedDescriptionLines.push(`// ERROR: Unclosed JSX tags`);
+    enhancedDescriptionLines.push(`return (`);
+    enhancedDescriptionLines.push(`  <div>`);
+    enhancedDescriptionLines.push(`    <circle cx={50} cy={50} r={40}> // Missing closing tag or self-close`);
+    enhancedDescriptionLines.push(`  </div>`);
+    enhancedDescriptionLines.push(`);`);
+
+    // --- Original Mandatory Requirements ---
+    enhancedDescriptionLines.push(`### MANDATORY REQUIREMENTS:`);
     enhancedDescriptionLines.push(`- The component MUST be a functional component using TypeScript (.tsx).`);
     enhancedDescriptionLines.push(`- ALWAYS use the Remotion hooks: useCurrentFrame() and useVideoConfig() for timing and dimensions.`);
     enhancedDescriptionLines.push(`- Component MUST accept props: { brief: AnimationDesignBrief } (assume this type is imported).`);

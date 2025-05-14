@@ -143,6 +143,9 @@ export const messages = createTable(
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .$onUpdate(() => new Date()),
+    originalTsxCode: d.text(), // Store the original code before fixing
+    lastFixAttempt: d.timestamp({ withTimezone: true }), // When the last fix attempt was made
+    fixIssues: d.text(), // Issues identified and fixed by the preprocessor
   }),
   (t) => [
     index("message_project_idx").on(t.projectId),
@@ -180,6 +183,9 @@ export const customComponentJobs = createTable(
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .$onUpdate(() => new Date()),
+    originalTsxCode: d.text(), // Store the original code before fixing
+    lastFixAttempt: d.timestamp({ withTimezone: true }), // When the last fix attempt was made
+    fixIssues: d.text() // Issues identified and fixed by the preprocessor
   }),
   (t) => [
     index("custom_component_job_project_idx").on(t.projectId),
@@ -294,6 +300,9 @@ export const animationDesignBriefs = createTable(
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .$onUpdate(() => new Date()),
+    originalTsxCode: d.text(), // Store the original code before fixing
+    lastFixAttempt: d.timestamp({ withTimezone: true }), // When the last fix attempt was made
+    fixIssues: d.text(), // Issues identified and fixed by the preprocessor
   }),
   (t) => [
     index("animation_design_brief_project_idx").on(t.projectId),

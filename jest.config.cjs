@@ -30,7 +30,7 @@ module.exports = {
   testPathIgnorePatterns: ['/node_modules/', '/.next/'],
   
   // Test patterns - ensure we catch .ts files
-  testMatch: ['**/__tests__/**/*.test.ts'],
+  testMatch: ['**/__tests__/**/*.test.ts', '<rootDir>/src/tests/**/*.test.ts'],
   
   // Tell Jest to recognize ESM files
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
@@ -43,14 +43,6 @@ module.exports = {
   
   // Setup file for global mocks
   setupFilesAfterEnv: ['./jest.setup.ts'],
-  
-  // Global settings for ts-jest
-  globals: {
-    'ts-jest': {
-      useESM: true,
-      isolatedModules: true,
-    }
-  },
   
   // Required for proper handling of ESM modules
   resolver: undefined

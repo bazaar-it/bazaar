@@ -331,7 +331,10 @@ export default function PreviewPanel({
   }, [updateComponentStatus]);
   
   return (
-    <div className="h-full flex flex-col bg-gray-900 relative overflow-hidden">
+    <div 
+      className="h-full flex flex-col bg-gray-900 relative overflow-hidden"
+      data-testid="preview-panel"
+    >
       <div className="flex items-center justify-between px-2 py-1 bg-gray-900 border-b border-gray-800">
         <h2 className="text-xs font-medium text-gray-300">Preview</h2>
         <div className="flex items-center space-x-2">

@@ -492,30 +492,44 @@ function wrapTsxWithGlobals(tsxCode: string): string {
   // Determine the best component name to use
   let componentName = 'CustomComponent';
   
-  if (defaultExport && defaultExport[1]) {
-    // Prioritize the default export component name
-    componentName = defaultExport[1];
-    logger.debug(`Found default export component: ${componentName}`);
-  } else if (namedExports.length > 0 && namedExports[0]) {
-    // Extract name from first named export
-    const match = namedExports[0].match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/);
-    if (match && match[1]) {
-      componentName = match[1];
-      logger.debug(`Using named export component: ${componentName}`);
+  // 1. Try 'export default function FunctionName ...'
+  const defaultFunctionExport = cleanedCode.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
+  if (defaultFunctionExport && defaultFunctionExport[1]) {
+    componentName = defaultFunctionExport[1];
+    logger.debug(`Found default export function: ${componentName}`);
+  } 
+  // 2. Else, try 'export default VariableNameOrClassName;' (could be a variable, class, or other identifier)
+  else {
+    const defaultIdentifierExport = cleanedCode.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;/);
+    if (defaultIdentifierExport && defaultIdentifierExport[1]) {
+      componentName = defaultIdentifierExport[1];
+      logger.debug(`Found default export identifier (variable/class): ${componentName}`);
     }
-  } else if (funcComponents.length > 0 && funcComponents[0]) {
-    // Extract name from the first function component
-    const match = funcComponents[0].match(/function\s+([A-Za-z0-9_]+)/);
-    if (match && match[1]) {
-      componentName = match[1];
-      logger.debug(`Using function component: ${componentName}`);
-    }
-  } else if (constComponents.length > 0 && constComponents[0]) {
-    // Extract name from const component declaration
-    const match = constComponents[0].match(/const\s+([A-Za-z0-9_]+)/);
-    if (match && match[1]) {
-      componentName = match[1];
-      logger.debug(`Using const component: ${componentName}`);
+    // 3. Else, try named exports (e.g., 'export function FunctionName', 'export const VariableName')
+    else if (namedExports.length > 0 && namedExports[0]) {
+      const match = namedExports[0].match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/);
+      if (match && match[1]) {
+        componentName = match[1];
+        logger.debug(`Using named export component: ${componentName}`);
+      }
+    } 
+    // 4. Else, try regular function declarations (e.g., 'function FunctionName')
+    else if (funcComponents.length > 0 && funcComponents[0]) {
+      const match = funcComponents[0].match(/function\s+([A-Za-z0-9_]+)/);
+      if (match && match[1]) {
+        componentName = match[1];
+        logger.debug(`Using function component: ${componentName}`);
+      }
+    } 
+    // 5. Else, try regular const declarations (e.g., 'const VariableName = ...')
+    else if (constComponents.length > 0 && constComponents[0]) {
+      const match = constComponents[0].match(/const\s+([A-Za-z0-9_]+)/);
+      if (match && match[1]) {
+        componentName = match[1];
+        logger.debug(`Using const component: ${componentName}`);
+      }
+    } else {
+      logger.debug(`No specific component name pattern matched, using default: ${componentName}`);
     }
   }
   
@@ -582,60 +596,28 @@ ${modifiedCode}
   try {
     // Clear any existing component registration
     if (window.__REMOTION_COMPONENT) {
-      console.log('Clearing previous window.__REMOTION_COMPONENT');
       delete window.__REMOTION_COMPONENT;
     }
     
-    // Try each potential component name in order
-    ${componentNames.map((name, idx) => 
-      idx === 0 
-        ? `if (typeof ${name} !== 'undefined') {
+    // Try each potential component name in order, starting with the best guess
+    if (typeof ${componentNames[0]} !== 'undefined') {
+        window.__REMOTION_COMPONENT = ${componentNames[0]};
+        console.log('Component registered as window.__REMOTION_COMPONENT: ${componentNames[0]}');
+      }
+    ${componentNames.slice(1).map(name => `
+    else if (typeof ${name} !== 'undefined') {
         window.__REMOTION_COMPONENT = ${name};
         console.log('Component registered as window.__REMOTION_COMPONENT: ${name}');
-      }`
-        : `else if (typeof ${name} !== 'undefined') {
-        window.__REMOTION_COMPONENT = ${name};
-        console.log('Fallback component registered: ${name}');
-      }`
-    ).join('\n    ')}
+      }
+    `).join('')}
     else {
-      console.error('Could not find any component to register. Tried: ${componentNames.join(', ')}');
-      
-      // Create a fallback error component as last resort
-      window.__REMOTION_COMPONENT = (props) => {
-        return React.createElement('div', {
-          style: {
-            backgroundColor: 'rgba(255, 0, 0, 0.2)',
-            padding: '20px',
-            borderRadius: '8px',
-            color: 'red'
-          }
-        }, [
-          React.createElement('h2', null, 'Component Error'),
-          React.createElement('p', null, 'The component could not be found.')
-        ]);
-      };
+      console.error('Remotion component could not be found by name or default export. Component may not render.');
     }
-  } catch(error) {
-    console.error('Error registering component:', error);
-    
-    // Create a fallback error component
-    window.__REMOTION_COMPONENT = (props) => {
-      return React.createElement('div', {
-        style: {
-          backgroundColor: 'rgba(255, 0, 0, 0.2)',
-          padding: '20px',
-          borderRadius: '8px',
-          color: 'red'
-        }
-      }, [
-        React.createElement('h2', null, 'Component Error'),
-        React.createElement('p', null, 'The component could not be generated correctly.')
-      ]);
-    };
+  } catch (e) {
+    console.error('Error registering Remotion component:', e);
   }
 })();
-`;
+  `;
 }
 
 export async function buildCustomComponent(jobId: string, forceRebuild = false): Promise<boolean> {
@@ -963,8 +945,3 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     return false;
   }
 }
-
-
-
-
-

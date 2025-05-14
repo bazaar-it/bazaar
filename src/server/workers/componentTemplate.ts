@@ -5,6 +5,7 @@
  */
 
 export const COMPONENT_TEMPLATE = `
+// src/remotion/components/scenes/{{COMPONENT_NAME}}.tsx
 // Component generated with Bazaar template - browser-compatible version
 
 // Using globals provided by Remotion environment
@@ -18,14 +19,17 @@ const {
   Easing
 } = window.Remotion || {};
 
+// SYNTAX NOTE: Do NOT declare frame or videoConfig variables again below
 // Component implementation goes here
 const {{COMPONENT_NAME}} = (props) => {
+  // IMPORTANT: These hook calls should NOT be duplicated anywhere else in the component
   const frame = useCurrentFrame();
   const { width, height, fps, durationInFrames } = useVideoConfig();
   
   // Animation Design Brief data is available in props.brief
   {{COMPONENT_IMPLEMENTATION}}
   
+  // REMINDER: Always properly close all JSX tags
   return (
     <AbsoluteFill style={{ backgroundColor: 'transparent' }}>
       {{COMPONENT_RENDER}}
@@ -55,9 +59,25 @@ export function applyComponentTemplate(
 ): string {
   console.log(`Applying template for component: ${componentName}`);
   
+  // Sanitize implementation to catch common errors
+  let sanitizedImplementation = implementation;
+  
+  // 1. Remove any duplicate frame declarations (common LLM mistake)
+  sanitizedImplementation = sanitizedImplementation.replace(
+    /const\s+frame\s*=\s*useCurrentFrame\(\);/g, 
+    '/* Hook already declared above */ '
+  );
+  
+  // 2. Remove any duplicate videoConfig declarations
+  sanitizedImplementation = sanitizedImplementation.replace(
+    /const\s+(?:videoConfig|config|\{\s*width,\s*height.*?\})\s*=\s*useVideoConfig\(\);/g,
+    '/* Hook already declared above */ '
+  );
+  
+  // Now apply the template with sanitized implementation
   const result = COMPONENT_TEMPLATE
     .replace(/{{COMPONENT_NAME}}/g, componentName)
-    .replace('{{COMPONENT_IMPLEMENTATION}}', implementation)
+    .replace('{{COMPONENT_IMPLEMENTATION}}', sanitizedImplementation)
     .replace('{{COMPONENT_RENDER}}', render);
     
   // Verify the result contains the critical window assignment
