@@ -69,6 +69,8 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
     }
     
     async function fetchAdbData() {
+      let timeoutId: NodeJS.Timeout | null = null;
+      
       try {
         setLoading(true);
         
@@ -77,35 +79,82 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
         const apiTimestamp = Date.now(); // Fresh timestamp for API call
         console.log(`[CustomScene] Fetching component metadata: /api/components/${componentId}/metadata?t=${apiTimestamp}`);
         
-        // Add a timeout to the fetch to detect network issues
-        const timeout = setTimeout(() => {
+        // Create an AbortController with timeout capability
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => {
+          controller.abort();
           console.error(`[CustomScene] Metadata fetch timeout for component ${componentId} after 5 seconds`);
         }, 5000);
         
-        const componentJobResponse = await fetch(`/api/components/${componentId}/metadata?t=${apiTimestamp}`);
+        // Fetch component metadata
+        const componentJobResponse = await fetch(`/api/components/${componentId}/metadata?t=${apiTimestamp}`, {
+          signal: controller.signal
+        });
+        
+        // Clear timeout as soon as we get a response
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
         
         if (!componentJobResponse.ok) {
+          // Check for 400 response with specific error about Animation Design Brief
+          if (componentJobResponse.status === 400) {
+            // Try to parse the error response
+            try {
+              const errorData = await componentJobResponse.json();
+              
+              // If this is specifically about a missing ADB ID, we can handle it gracefully
+              if (errorData?.error === "Animation design brief ID not found" || 
+                  (errorData?.message && errorData.message.includes("animation design brief"))) {
+                console.warn(`[CustomScene] Component ${componentId} does not have an ADB ID. Using default data.`);
+                // Continue without ADB data - just set it to null and proceed
+                setAdbData(null);
+                return; // Skip the rest of the function, but don't throw an error
+              }
+            } catch (parseError) {
+              // If we can't parse the error, fall through to the general error handling
+              console.error('[CustomScene] Error parsing 400 response:', parseError);
+            }
+          }
+          
           throw new Error(`Failed to fetch component metadata: ${componentJobResponse.status}`);
         }
         
-        const jobMetadata = await componentJobResponse.json();
-        const animationDesignBriefId = jobMetadata?.animationDesignBriefId;
-        
-        if (!animationDesignBriefId) {
-          throw new Error("Component job doesn't have an associated Animation Design Brief ID");
+        // Parse the JSON response
+        let jobMetadata;
+        try {
+          jobMetadata = await componentJobResponse.json();
+        } catch (jsonError: any) {
+          console.error('[CustomScene] JSON parse error:', jsonError);
+          throw new Error(`Failed to parse component metadata response: ${jsonError.message}`);
         }
         
+        const animationDesignBriefId = jobMetadata?.animationDesignBriefId;
+      
+        if (!animationDesignBriefId) {
+          console.warn(`[CustomScene] Component ${componentId} doesn't have an associated ADB ID in its metadata. Using default data.`);
+          // Set ADB data to null and continue instead of throwing an error
+          setAdbData(null);
+          return; // Skip the rest of the function
+        }
+      
         // Then, fetch the actual ADB data with a fresh cache-busting timestamp
         const adbResponse = await fetch(`/api/animation-design-briefs/${animationDesignBriefId}?t=${Date.now()}`);
-        
+      
         if (!adbResponse.ok) {
           throw new Error(`Failed to fetch Animation Design Brief: ${adbResponse.status}`);
         }
-        
+      
         const adbResponseData = await adbResponse.json();
         console.log(`[CustomScene] Successfully fetched ADB for component ${componentId}:`, adbResponseData.designBrief?.sceneId);
         setAdbData(adbResponseData.designBrief);
       } catch (err) {
+        // Clean up timeout if it's still active
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error(`[CustomScene] Failed to fetch ADB for component ${componentId}:`, errorMessage);
         setError(errorMessage);
@@ -199,10 +248,16 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
     <AbsoluteFill>
       <RemoteComponent 
         key={`component-${componentId}-${refreshKey}`}
-        componentId={componentId} 
-        brief={adbData} // Pass the Animation Design Brief
-        {...(data.refreshToken ? {refreshToken: data.refreshToken} : {})} // Pass refreshToken if it exists
-        {...(Object.keys(data).filter(k => k !== 'componentId' && k !== 'refreshToken').reduce((obj, key) => ({...obj, [key]: data[key]}), {}))} // Pass other props without duplicating componentId
+        scriptSrc={data.src as string} // Pass the R2 URL as scriptSrc
+        databaseId={componentId}      // Pass the DB job ID as databaseId
+        brief={adbData || {}} 
+        // Pass other data props, ensuring original componentId (database ID) is available if needed
+        // and refreshToken. We already pass databaseId explicitly.
+        {...{
+          ...Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'src' && key !== 'componentId')),
+          // databaseComponentId: componentId, // No longer needed, use databaseId prop
+          ...(data.refreshToken && { refreshToken: data.refreshToken }),
+        }}
       />
     </AbsoluteFill>
   );

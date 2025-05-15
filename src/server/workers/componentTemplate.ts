@@ -6,30 +6,27 @@
 
 export const COMPONENT_TEMPLATE = `
 // src/remotion/components/scenes/{{COMPONENT_NAME}}.tsx
-// Component generated with Bazaar template - browser-compatible version
+// Component generated with Bazaar template
 
-// Using globals provided by Remotion environment
-const React = window.React;
-const { 
-  AbsoluteFill,
-  useCurrentFrame,
-  useVideoConfig,
-  Sequence,
-  interpolate,
-  Easing
-} = window.Remotion || {};
+import React from 'react';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Sequence, interpolate, Easing } from 'remotion';
 
-// SYNTAX NOTE: Do NOT declare frame or videoConfig variables again below
-// Component implementation goes here
-const {{COMPONENT_NAME}} = (props) => {
-  // IMPORTANT: These hook calls should NOT be duplicated anywhere else in the component
+// TypeScript interfaces for props
+interface {{COMPONENT_NAME}}Props {
+  data: Record<string, unknown>;
+}
+
+/**
+ * {{COMPONENT_NAME}} - Custom Remotion component
+ */
+export const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) => {
+  // These hooks are imported above - DO NOT DECLARE THEM AGAIN
   const frame = useCurrentFrame();
   const { width, height, fps, durationInFrames } = useVideoConfig();
   
-  // Animation Design Brief data is available in props.brief
-  {{COMPONENT_IMPLEMENTATION}}
+  // Parse data with safe type casting
+  // {{COMPONENT_IMPLEMENTATION}}
   
-  // REMINDER: Always properly close all JSX tags
   return (
     <AbsoluteFill style={{ backgroundColor: 'transparent' }}>
       {{COMPONENT_RENDER}}
@@ -38,10 +35,12 @@ const {{COMPONENT_NAME}} = (props) => {
 };
 
 // CRITICAL: Register component for Remotion - DO NOT REMOVE
-window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
+if (typeof window !== 'undefined') {
+  window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
+}
 
-// Also export as default for module usage
 export default {{COMPONENT_NAME}};
+
 `;
 
 /**

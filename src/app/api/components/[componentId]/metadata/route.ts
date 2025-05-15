@@ -1,8 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 import logger from '~/lib/logger';
+
+// Specialized logger for this API route
+const metadataApiLogger = {
+  info: (componentId: string, message: string, meta?: any) => {
+    logger.info(`[MetadataAPI:${componentId}] ${message}`, meta);
+  },
+  error: (componentId: string, message: string, meta?: any) => {
+    logger.error(`[MetadataAPI:${componentId}] ${message}`, meta);
+  },
+  debug: (componentId: string, message: string, meta?: any) => {
+    logger.debug(`[MetadataAPI:${componentId}] ${message}`, meta);
+  }
+};
 
 // Create a specialized logger for component metadata API requests
 const apiRouteLogger = {
@@ -18,12 +31,18 @@ const apiRouteLogger = {
 };
 
 export async function GET(
-  request: Request,
-  { params }: { params: { componentId: string } }
+  request: NextRequest
 ) {
-  // In Next.js App Router, params need to be handled carefully
-  // It's safer to access the property directly rather than destructuring
-  const componentId = params.componentId;
+  // Extract componentId directly from the URL path to avoid params issues
+  const pathname = request.nextUrl.pathname;
+  const pathParts = pathname.split('/');
+  // The componentId will be the second to last part (/components/[componentId]/metadata)
+  const componentId = pathParts[pathParts.length - 2] || '';
+  
+  // Validate componentId
+  if (!componentId) {
+    return NextResponse.json({ error: 'Invalid component ID' }, { status: 400 });
+  }
   
   apiRouteLogger.request(componentId, "Component metadata request received", {
     url: request.url,
@@ -57,8 +76,8 @@ export async function GET(
       });
     }
     
-    // Check if the component is ready
-    if (job.status !== "complete") {
+    // Check if the component is ready - accept both "complete" and "ready" statuses
+    if (job.status !== "complete" && job.status !== "ready") {
       apiRouteLogger.debug(componentId, "Component job not ready", { status: job.status });
       return NextResponse.json({ 
         status: job.status,
@@ -72,8 +91,71 @@ export async function GET(
       });
     }
     
-    // Check if we have animation design brief ID
-    const metadata = job.metadata as Record<string, unknown> || {};
+    // SELF-HEALING: Get additional information to check for inconsistencies
+    const componentDetails = await db.query.customComponentJobs.findFirst({
+      where: eq(customComponentJobs.id, componentId),
+      columns: {
+        outputUrl: true,
+        tsxCode: true
+      }
+    });
+    
+    // Auto-repair mechanism for components with ready/complete status but missing outputUrl
+    if ((job.status === "ready" || job.status === "complete") && (!componentDetails?.outputUrl)) {
+      metadataApiLogger.error(componentId, "Detected component with ready/complete status but missing outputUrl", { 
+        status: job.status,
+        hasTsxCode: !!componentDetails?.tsxCode
+      });
+      
+      try {
+        // Update component to error state so it can be rebuilt
+        await db.update(customComponentJobs)
+          .set({
+            status: 'error',
+            errorMessage: `Component was marked as ${job.status} but had no output URL. Please rebuild.`,
+            updatedAt: new Date()
+          })
+          .where(eq(customComponentJobs.id, componentId));
+          
+        metadataApiLogger.info(componentId, "Auto-repaired component with missing outputUrl", {
+          previousStatus: job.status,
+          newStatus: 'error'
+        });
+        
+        // Return informative response
+        return NextResponse.json({ 
+          status: 'error', // Return error status instead of ready/complete
+          message: "Component needs to be rebuilt",
+          error: "Component had inconsistent state and was auto-repaired. Please rebuild."
+        }, { 
+          status: 400, // Return 400 to indicate there was an issue
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+          } 
+        });
+      } catch (repairError) {
+        metadataApiLogger.error(componentId, "Failed to auto-repair component", { error: repairError });
+      }
+    }
+    
+    // Check if we have metadata at all
+    if (!job.metadata) {
+      apiRouteLogger.error(componentId, "Component has NULL metadata");
+      return NextResponse.json({ 
+        error: "Component metadata missing",
+        message: "This component has no metadata. It may need to be rebuilt."
+      }, { 
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+        } 
+      });
+    }
+    
+    // Parse the metadata
+    const metadata = job.metadata as Record<string, unknown>;
     
     // Get animation design brief ID from job metadata (should be assigned during component generation)
     const animationDesignBriefId = metadata.animationDesignBriefId as string;

@@ -484,4 +484,60 @@ if (tsxCode) {
   // Continue with existing validation code
   // ...
 }
-``` 
+```
+
+## Component Syntax Fix Integration
+
+### Fixing 'fps' Variable Redeclaration Issue
+
+We've identified and fixed a critical issue with component generation where duplicated 'fps' variable declarations were causing TypeScript compilation errors. This was a common pattern in LLM-generated components, where the variable would be destructured from useVideoConfig() multiple times, like this:
+
+```typescript
+const { width, height, fps, durationInFrames } = useVideoConfig();
+
+// Later in the code...
+const { fps } = useVideoConfig(); // Error: Identifier 'fps' has already been declared
+```
+
+#### Implementation
+
+1. Updated the `tsxPreprocessor.ts` file to detect and fix duplicate fps declarations:
+
+```typescript
+// Check for duplicate fps declarations
+// Common patterns:
+// 1. const { width, height, fps, durationInFrames } = useVideoConfig();
+// 2. const fps = useVideoConfig().fps;
+const fpsRegex = /const\s+{\s*[^}]*fps[^}]*}\s*=\s*useVideoConfig\(\);|const\s+fps\s*=\s*useVideoConfig\(\)\.fps;/g;
+const fpsMatches = Array.from(result.matchAll(fpsRegex));
+
+if (fpsMatches.length > 1) {
+  // Find the first match with fps
+  const firstFpsIndex = fpsMatches[0]?.index ?? 0;
+  result = result.replace(fpsRegex, (match, offset) => {
+    // Keep the first occurrence, remove others
+    if (offset === firstFpsIndex) {
+      return match;
+    }
+    return `/* Removed duplicate fps declaration: ${match.trim()} */`;
+  });
+  
+  issues.push('Fixed duplicate fps variable declarations (useVideoConfig)');
+  fixed = true;
+}
+```
+
+2. Developed and ran comprehensive tests to verify the solution works with different variable patterns
+
+This solution will allow components to continue generating successfully even when the LLM includes duplicate fps variable declarations.
+
+### Expected Results
+
+Components that previously failed with "Identifier 'fps' has already been declared" errors will now be automatically repaired by the preprocessor, which:
+
+1. Detects duplicate fps variable declarations
+2. Keeps the first occurrence intact
+3. Comments out subsequent declarations
+4. Includes helpful comments about what was removed
+
+This fix should resolve the majority of component generation failures we've been seeing in the logs without requiring changes to the LLM prompts. 

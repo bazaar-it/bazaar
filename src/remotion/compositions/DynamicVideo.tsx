@@ -126,8 +126,8 @@ export const DynamicVideo: React.FC<CompositionProps> = ({
   // Get the scene component for a given scene type
   const getSceneComponent = (scene: Scene) => {
     // Generate a unique key for each scene that includes the refreshToken
-    // This ensures the scene remounts when refreshToken changes
-    const sceneKey = `scene-${scene.id}-${refreshToken}-${Date.now()}`;
+    // REMOVED Date.now() from the key to prevent unnecessary remounts
+    const sceneKey = `scene-${scene.id}-${refreshToken}`;
     
     // Add extra logging for custom scenes
     if (scene.type === 'custom') {

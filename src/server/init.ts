@@ -1,9 +1,12 @@
 // src/server/init.ts
 import { startBuildWorker } from './cron/buildWorker';
+import { startCodeGenWorker, stopCodeGenWorker } from './cron/codeGenWorker';
 
 // Track initialization state globally
 let isInitialized = false;
-let workerCleanup: (() => void) | null = null;
+
+// Store cleanup functions for multiple workers
+const workerCleanupFunctions: (() => void)[] = [];
 
 /**
  * Initialize server-side background processes.
@@ -26,7 +29,16 @@ export function initializeServer() {
   console.log('🚀 Initializing server background processes...');
 
   // Start component build worker
-  workerCleanup = startBuildWorker();
+  const buildWorkerStopper = startBuildWorker();
+  if (buildWorkerStopper) {
+    workerCleanupFunctions.push(buildWorkerStopper);
+  }
+
+  // Start component code generation worker
+  const codeGenWorkerStopper = startCodeGenWorker();
+  if (codeGenWorkerStopper) {
+    workerCleanupFunctions.push(codeGenWorkerStopper);
+  }
 
   // Mark as initialized
   isInitialized = true;
@@ -48,11 +60,16 @@ export function initializeServer() {
  */
 function cleanupServer() {
   console.log('🧹 Cleaning up server resources...');
-    if (workerCleanup) {
-      workerCleanup();
-      workerCleanup = null;
-      isInitialized = false;
+  // Call all registered cleanup functions
+  for (const cleanupFn of workerCleanupFunctions) {
+    try {
+      cleanupFn();
+    } catch (e) {
+      console.error('Error during worker cleanup:', e);
     }
+  }
+  workerCleanupFunctions.length = 0; // Clear the array
+  isInitialized = false;
 }
 
 // Export the cleanup function for manual use if needed

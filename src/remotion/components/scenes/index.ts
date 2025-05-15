@@ -6,12 +6,14 @@ import { GradientScene } from './GradientScene';
 import { ImageScene } from './ImageScene';
 import { ParticlesScene } from './ParticlesScene';
 import { ShapeScene } from './ShapeScene';
+import { SimpleShapeScene } from './SimpleShapeScene';
 import { SplitScreenScene } from './SplitScreenScene';
 import { SVGAnimationScene } from './SVGAnimationScene';
 import { TextAnimationScene } from './TextAnimationScene';
 import { TextScene } from './TextScene';
 import { ZoomPanScene } from './ZoomPanScene';
 import type { SceneType } from '../../../types/remotion-constants';
+import { SimpleColoredShape } from './SimpleColoredShape';
 
 // Common interface for all scene components
 export interface SceneProps {
@@ -25,6 +27,7 @@ export const sceneRegistry: Record<SceneType, FC<SceneProps>> = {
   'image': ImageScene as FC<SceneProps>,
   'background-color': BackgroundColorScene as FC<SceneProps>,
   'shape': ShapeScene as FC<SceneProps>,
+  'simple-shape': SimpleShapeScene as FC<SceneProps>,
   'gradient': GradientScene as FC<SceneProps>,
   'particles': ParticlesScene as FC<SceneProps>,
   'text-animation': TextAnimationScene as FC<SceneProps>,
@@ -32,7 +35,8 @@ export const sceneRegistry: Record<SceneType, FC<SceneProps>> = {
   'zoom-pan': ZoomPanScene as FC<SceneProps>,
   'svg-animation': SVGAnimationScene as FC<SceneProps>,
   // Custom components loaded dynamically via useRemoteComponent
-  'custom': CustomScene as FC<SceneProps>,
+  'custom': CustomScene as FC<SceneProps>,  'simple-colored-shape': SimpleColoredShape as FC<SceneProps>,
+
 };
 
 // Export all scenes
@@ -43,9 +47,11 @@ export {
   ImageScene,
   ParticlesScene,
   ShapeScene,
+  SimpleShapeScene,
   SplitScreenScene,
   SVGAnimationScene,
   TextAnimationScene,
   TextScene,
-  ZoomPanScene,
+  ZoomPanScene,  SimpleColoredShape,
+
 }; 

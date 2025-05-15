@@ -1,7 +1,7 @@
 // src/server/workers/__tests__/repairComponentSyntax.test.ts
 import { describe, it, expect } from '@jest/globals';
-import { repairComponentSyntax } from '../repairComponentSyntax';
-import { preprocessTsx } from '../../src/server/utils/tsxPreprocessor';
+import { repairComponentSyntax } from '~/server/workers/repairComponentSyntax';
+import { preprocessTsx } from '~/server/utils/tsxPreprocessor';
 
 describe('repairComponentSyntax', () => {
   it('should fix duplicate frame declarations', () => {

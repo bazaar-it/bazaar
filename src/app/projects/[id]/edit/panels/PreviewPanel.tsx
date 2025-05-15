@@ -203,7 +203,6 @@ export default function PreviewPanel({
       return; // Skip first run
     }
     
-    // Calculate added and removed components
     const addedComponents = currentComponentIds.filter(
       id => !lastKnownComponentIdsRef.current.includes(id)
     );
@@ -222,46 +221,33 @@ export default function PreviewPanel({
         previous: lastKnownComponentIdsRef.current
       });
       
-      // Update our refs
       lastKnownComponentIdsRef.current = [...currentComponentIds];
       
-      // Update component status for removed components
       if (removedComponents.length > 0) {
         setComponentStatus(prev => {
           const updated = { ...prev };
-          
-          // Mark removed components as "removed"
           removedComponents.forEach(id => {
             updated[id] = 'removed';
           });
-          
           return updated;
         });
-        
-        // Clean up removed components
         cleanupComponentScripts(removedComponents);
       }
       
-      // If we have added components, force a refresh
       if (addedComponents.length > 0) {
-        console.log('[PreviewPanel] New components detected, forcing refresh:', addedComponents);
-        
-        // Update component status for new components
+        console.log('[PreviewPanel] New components detected. UI will update based on refreshToken change from adding component.', addedComponents);
         setComponentStatus(prev => {
           const updated = { ...prev };
-          
-          // Mark added components as "loading"
           addedComponents.forEach(id => {
-            updated[id] = 'loading';
+            updated[id] = 'loading'; // Mark as loading, actual refresh is handled by the component adding logic
           });
-          
           return updated;
         });
-        
-        handleRefresh(false); // Don't do a full refresh - this allows incremental addition
+        // DO NOT call handleRefresh(false) here; CustomComponentsPanel already forces a refresh.
+        // handleRefresh(false); 
       }
     }
-  }, [currentComponentIds, cleanupComponentScripts, handleRefresh]);
+  }, [currentComponentIds, cleanupComponentScripts, handleRefresh]); // handleRefresh is still a dependency for other parts if any, or can be removed if only used by the removed line.
   
   // Add a useEffect to watch for refreshToken changes from the store
   useEffect(() => {

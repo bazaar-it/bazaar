@@ -53,6 +53,15 @@ export function preprocessTsx(
   let code = tsxCode;
 
   try {
+    // 0. Handle import statements first - convert to global variable access
+    const importFixes = convertImportToGlobals(code);
+    if (importFixes.fixed) {
+      code = importFixes.code;
+      issues.push(...importFixes.issues);
+      fixed = true;
+      logger.debug(`[TSX_PREPROCESS] Converted imports to globals in ${componentName}`);
+    }
+    
     // 1. Fix variable redeclarations
     const fixedRedeclarations = fixVariableRedeclarations(code);
     if (fixedRedeclarations.fixed) {
@@ -80,7 +89,25 @@ export function preprocessTsx(
       logger.debug(`[TSX_PREPROCESS] Fixed unescaped HTML in strings in ${componentName}`);
     }
     
-    // 4. Ensure there's a default export for the component if missing
+    // 4. Fix variable references (common issue with size/width/height and color/backgroundColor)
+    const variableRefFixes = fixCommonVariableReferences(code);
+    if (variableRefFixes.fixed) {
+      code = variableRefFixes.code;
+      issues.push(...variableRefFixes.issues);
+      fixed = true;
+      logger.debug(`[TSX_PREPROCESS] Fixed variable reference errors in ${componentName}`);
+    }
+    
+    // 5. Fix JSX structural issues (extra closing tags, missing tags)
+    const jsxStructureFixes = fixJsxStructure(code);
+    if (jsxStructureFixes.fixed) {
+      code = jsxStructureFixes.code;
+      issues.push(...jsxStructureFixes.issues);
+      fixed = true;
+      logger.debug(`[TSX_PREPROCESS] Fixed JSX structure issues in ${componentName}`);
+    }
+    
+    // 6. Ensure there's a default export for the component if missing
     const exportFixes = ensureComponentExport(code, componentName);
     if (exportFixes.fixed) {
       code = exportFixes.code;
@@ -116,91 +143,154 @@ function fixVariableRedeclarations(code: string): { code: string; issues: string
   let fixed = false;
   let result = code;
   
-  // Check for duplicate frame declarations
-  const frameRegex = /const\s+frame\s*=\s*useCurrentFrame\(\);/g;
-  const frameMatches = Array.from(result.matchAll(frameRegex));
-  
-  if (frameMatches.length > 1) {
-    // Keep only the first declaration
-    const firstMatchIndex = frameMatches[0]?.index ?? 0;
-    result = result.replace(frameRegex, (match, offset) => {
-      // Keep the first occurrence, remove others
-      if (offset === firstMatchIndex) {
-        return match;
-      }
-      return '/* Removed duplicate frame declaration */';
-    });
+  // Common Remotion hook redeclarations
+  const hookPatterns = [
+    // Frame hook patterns with various forms
+    { 
+      pattern: /const\s+frame\s*=\s*useCurrentFrame\(\);/g,
+      replacement: '// frame is already declared above',
+      issue: 'Fixed redeclaration of frame variable'
+    },
+    { 
+      pattern: /let\s+frame\s*=\s*useCurrentFrame\(\);/g,
+      replacement: '// frame is already declared above as const',
+      issue: 'Fixed redeclaration of frame variable'
+    },
+    { 
+      pattern: /var\s+frame\s*=\s*useCurrentFrame\(\);/g,
+      replacement: '// frame is already declared above as const',
+      issue: 'Fixed redeclaration of frame variable'
+    },
     
-    issues.push('Fixed duplicate frame declaration (useCurrentFrame)');
-    fixed = true;
-  }
+    // VideoConfig patterns with different forms
+    {
+      pattern: /const\s+(?:videoConfig|config)\s*=\s*useVideoConfig\(\);/g,
+      replacement: '// videoConfig is already available via destructured variables above',
+      issue: 'Fixed redeclaration of videoConfig'
+    },
+    {
+      pattern: /const\s*{\s*(?:width|height|fps|durationInFrames)[^}]*}\s*=\s*useVideoConfig\(\);/g,
+      replacement: '// videoConfig variables (width, height, fps, durationInFrames) are already declared above',
+      issue: 'Fixed redeclaration of videoConfig variables'
+    },
+    {
+      pattern: /let\s*{\s*(?:width|height|fps|durationInFrames)[^}]*}\s*=\s*useVideoConfig\(\);/g,
+      replacement: '// videoConfig variables are already declared above as const',
+      issue: 'Fixed redeclaration of videoConfig variables'
+    },
+    {
+      pattern: /var\s*{\s*(?:width|height|fps|durationInFrames)[^}]*}\s*=\s*useVideoConfig\(\);/g,
+      replacement: '// videoConfig variables are already declared above as const',
+      issue: 'Fixed redeclaration of videoConfig variables'
+    },
+
+    // Fix specific variable declarations from useVideoConfig
+    {
+      pattern: /const\s+width\s*=\s*(?:videoConfig|config)\.width;/g,
+      replacement: '// width is already declared above',
+      issue: 'Fixed redeclaration of width from videoConfig'
+    },
+    {
+      pattern: /const\s+height\s*=\s*(?:videoConfig|config)\.height;/g,
+      replacement: '// height is already declared above',
+      issue: 'Fixed redeclaration of height from videoConfig'
+    },
+    {
+      pattern: /const\s+fps\s*=\s*(?:videoConfig|config)\.fps;/g,
+      replacement: '// fps is already declared above',
+      issue: 'Fixed redeclaration of fps from videoConfig'
+    },
+    {
+      pattern: /const\s+durationInFrames\s*=\s*(?:videoConfig|config)\.durationInFrames;/g,
+      replacement: '// durationInFrames is already declared above',
+      issue: 'Fixed redeclaration of durationInFrames from videoConfig'
+    }
+  ];
   
-  // Check for duplicate videoConfig declarations
-  const configRegex = /const\s+(?:videoConfig|config)\s*=\s*useVideoConfig\(\);/g;
-  const configMatches = Array.from(result.matchAll(configRegex));
+  // Apply all hook redeclaration fixes
+  hookPatterns.forEach(({ pattern, replacement, issue }) => {
+    if (pattern.test(result)) {
+      result = result.replace(pattern, replacement);
+      issues.push(issue);
+      fixed = true;
+    }
+  });
   
-  if (configMatches.length > 1) {
-    // Keep only the first declaration
-    const firstConfigIndex = configMatches[0]?.index ?? 0;
-    result = result.replace(configRegex, (match, offset) => {
-      // Keep the first occurrence, remove others
-      if (offset === firstConfigIndex) {
-        return match;
-      }
-      return '/* Removed duplicate videoConfig declaration */';
-    });
-    
-    issues.push('Fixed duplicate videoConfig declaration (useVideoConfig)');
-    fixed = true;
-  }
+  // Fix duplicate React import patterns
+  const reactImportPatterns = [
+    /import\s+React\s+from\s+['"]react['"];?/g,
+    /import\s+\*\s+as\s+React\s+from\s+['"]react['"];?/g,
+    /import\s+{[^}]*}\s+from\s+['"]react['"];?/g
+  ];
+  
+  reactImportPatterns.forEach(pattern => {
+    if (pattern.test(result)) {
+      result = result.replace(pattern, '// React is already available as a global');
+      issues.push('Fixed duplicate React import');
+      fixed = true;
+    }
+  });
   
   return { code: result, issues, fixed };
 }
 
 /**
- * Fix unclosed JSX tags using a simple regex-based approach
- * Note: This is a simplified version - a real implementation would use a proper parser
+ * Fix unclosed JSX tags
  */
-function fixUnclosedJsxTags(code: string): { code: string; issues: string[]; fixed: boolean } {
+function fixUnclosedJsxTags(code: string): { code: string; fixed: boolean; issues: string[] } {
   const issues: string[] = [];
   let fixed = false;
   let result = code;
   
-  // Simple pattern to identify potential JSX opening tags that might be unclosed
-  // This regex looks for common SVG elements that are frequently unclosed in LLM output
-  const commonElements = ['circle', 'rect', 'path', 'g', 'svg', 'line', 'polyline', 'polygon'];
+  // STEP 1: Fix self-closing tags like <img>, <br>, etc.
+  const selfClosingTagsPattern = /<(img|br|hr|input|meta|link|source)([^>]*)>(?!\s*\/)/g;
   
-  for (const element of commonElements) {
-    // Look for patterns like: <element ... without a closing ">" or "/>"
-    const unclosedPattern = new RegExp(`<${element}[^>]*(?<!/)$`, 'gm');
-    const matches = result.match(unclosedPattern);
-    
-    if (matches && matches.length > 0) {
-      result = result.replace(unclosedPattern, `$& />`);
-      issues.push(`Fixed unclosed ${element} tag`);
-      fixed = true;
-    }
-    
-    // Look for patterns where there might be attributes but no closing tag
-    // e.g.: <circle cx="50" cy="50" r="40" fill="red" 
-    const missingClosingPattern = new RegExp(`<${element}[^>]*>[^<]*$`, 'gm');
-    const missingClosingMatches = result.match(missingClosingPattern);
-    
-    if (missingClosingMatches && missingClosingMatches.length > 0) {
-      result = result.replace(missingClosingPattern, `$&</${element}>`);
-      issues.push(`Added missing </${element}> closing tag`);
-      fixed = true;
-    }
+  if (selfClosingTagsPattern.test(result)) {
+    result = result.replace(selfClosingTagsPattern, '<$1$2 />');
+    issues.push('Fixed unclosed self-closing tags (img, br, hr, input, etc.)');
+    fixed = true;
   }
   
-  // Additionally, look for any line ending with an attribute without proper tag closure
-  const lineEndingWithAttr = /(\w+)=['"][^'"]*['"](\s*)$/gm;
-  const attrMatches = result.match(lineEndingWithAttr);
-  
-  if (attrMatches && attrMatches.length > 0) {
-    result = result.replace(lineEndingWithAttr, `$1="$2" />`);
-    issues.push('Fixed attribute with missing tag closure');
+  // STEP 2: Fix the specific pattern causing unterminated regex error:
+  // JSX closing tags immediately followed by closing parentheses
+  // For example: </p>);  ->  </p> );
+  const problematicPattern = /(<\/[a-z][a-z0-9]*>)(\s*\))/gi;
+  if (problematicPattern.test(result)) {
+    result = result.replace(problematicPattern, '$1 $2');
+    issues.push('Fixed JSX closing tags followed by parentheses (prevents regex parsing errors)');
     fixed = true;
+  }
+  
+  // STEP 3: Fix common unclosed tags using a simplified approach
+  const commonUnclosedTags = ['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'ul', 'ol', 'li', 'button', 'a'];
+  
+  for (const tag of commonUnclosedTags) {
+    // Count opening and closing tags
+    const openPattern = new RegExp(`<${tag}([^>]*)>`, 'g');
+    const closePattern = new RegExp(`<\/${tag}>`, 'g');
+    
+    const openMatches = (result.match(openPattern) || []).length;
+    const closeMatches = (result.match(closePattern) || []).length;
+    
+    // If more opening than closing tags, add closing tags at the end
+    if (openMatches > closeMatches) {
+      const diff = openMatches - closeMatches;
+      
+      // Add closing tags at the end before any return statement
+      result = result.replace(
+        /(return\s*\([\s\S]*?)(\);)/,
+        (match, beforeReturn, afterReturn) => {
+          let closingTags = '';
+          for (let i = 0; i < diff; i++) {
+            closingTags += `</${tag}>`;
+          }
+          return beforeReturn + closingTags + afterReturn;
+        }
+      );
+      
+      issues.push(`Added ${diff} missing </${tag}> tags`);
+      fixed = true;
+    }
   }
   
   return { code: result, issues, fixed };
@@ -214,23 +304,21 @@ function fixUnescapedHtmlInStrings(code: string): { code: string; issues: string
   let fixed = false;
   let result = code;
   
-  // Match string literals that contain < and > characters
-  // This is a simplified approach - a real implementation would use AST parsing
-  const stringLiteralPattern = /"([^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*')/g;
+  // Find string literals containing unescaped < > characters
+  const stringLiteralPattern = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/g;
   
+  // Replace < with &lt; and > with &gt; in string literals
   result = result.replace(stringLiteralPattern, (match) => {
-    // Only process if it contains < or > and looks like HTML/XML
-    if ((match.includes('<') && match.includes('>')) && 
-        /[<][a-zA-Z\/]/.test(match)) {
-      
-      const escaped = match
+    // Skip if the string appears to be JSX prop value
+    if (match.includes('<') || match.includes('>')) {
+      const replacedMatch = match
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
       
-      if (escaped !== match) {
-        issues.push('Fixed unescaped HTML characters in string literal');
+      if (replacedMatch !== match) {
         fixed = true;
-        return escaped;
+        issues.push('Escaped HTML tags in string literals');
+        return replacedMatch;
       }
     }
     return match;
@@ -247,33 +335,38 @@ function ensureComponentExport(code: string, componentName: string): { code: str
   let fixed = false;
   let result = code;
   
-  // Check if there's an export statement for this component
-  const hasDefaultExport = /export\s+default\s+(?:function\s+)?(\w+)/.test(code);
-  const hasNamedExport = new RegExp(`export\\s+(?:const|function|class)\\s+${componentName}`).test(code);
+  // Check if there's a default export for the component
+  const exportPattern = new RegExp(`export\\s+default\\s+${componentName}\\s*;?`);
   
-  // If no export is found, add default export at the end
-  if (!hasDefaultExport && !hasNamedExport) {
-    // Try to find the component function/class/const declaration
-    const componentDefRegex = new RegExp(`(?:function|class|const)\\s+${componentName}`);
-    const hasComponentDef = componentDefRegex.test(code);
+  if (!exportPattern.test(result)) {
+    // No default export found, add one
+    // First, check if the code defines the component
+    const componentDefPattern = new RegExp(`(const|function|class)\\s+${componentName}\\s*`);
     
-    if (hasComponentDef) {
-      // Add default export at the end
-      result += `\n\n// Added by pre-processor\nexport default ${componentName};\n`;
+    if (componentDefPattern.test(result)) {
+      // Component defined but not exported - add export at the end
+      result = result.trim();
+      if (!result.endsWith(';')) {
+        result += ';';
+      }
+      result += `\n\n// Added missing export\nexport default ${componentName};\n`;
       issues.push(`Added missing default export for ${componentName}`);
       fixed = true;
-    } else {
-      // If we can't find the component definition, log an issue
-      issues.push(`Could not find component declaration for ${componentName} to add export`);
     }
   }
   
-  // Ensure window.__REMOTION_COMPONENT is set
-  if (!code.includes('window.__REMOTION_COMPONENT')) {
-    result += `\n\n// Added by pre-processor - required for Remotion
-if (typeof window !== 'undefined') {
-  window.__REMOTION_COMPONENT = ${componentName};
-}\n`;
+  // Check for window.__REMOTION_COMPONENT assignment
+  const windowAssignmentPattern = /window\.__REMOTION_COMPONENT\s*=\s*\w+\s*;?/;
+  
+  if (!windowAssignmentPattern.test(result)) {
+    // Add the window assignment
+    result = result.trim();
+    if (!result.endsWith(';') && !result.endsWith('}')) {
+      result += ';';
+    }
+    result += `\n\n// Critical registration for Remotion
+window.__REMOTION_COMPONENT = ${componentName};
+`;
     issues.push('Added missing window.__REMOTION_COMPONENT assignment');
     fixed = true;
   }
@@ -282,9 +375,215 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Minimal syntax validation - placeholder for a real parser integration
- * In production, you would use TypeScript compiler or a proper JSX parser here
+ * Fix import statements by converting them to global variable access
  */
+function convertImportToGlobals(code: string): { code: string; issues: string[]; fixed: boolean } {
+  const issues: string[] = [];
+  let fixed = false;
+  let result = code;
+  
+  // Match React imports
+  const reactImportPattern = /import\s+(?:React|(?:{[^}]*}))\s+from\s+['"]react['"](;)?/g;
+  if (reactImportPattern.test(result)) {
+    result = result.replace(reactImportPattern, '// React provided by Remotion environment\nconst React = window.React;');
+    issues.push('Converted React import to global variable access');
+    fixed = true;
+  }
+  
+  // Match Remotion imports
+  const remotionImportPattern = /import\s+(?:{([^}]*)}\s+from\s+['"]remotion['"](;)?)/g;
+  const remotionMatches = result.match(remotionImportPattern);
+  
+  if (remotionMatches && remotionMatches.length > 0) {
+    // Extract the imported items from within the curly braces
+    const importListPattern = /import\s+{([^}]*)}\s+from\s+['"]remotion['"](?:;)?/;
+    const importListMatch = result.match(importListPattern);
+    
+    if (importListMatch && importListMatch[1]) {
+      const imports = importListMatch[1].split(',').map(s => s.trim());
+      
+      if (imports.length > 0) {
+        result = result.replace(
+          remotionImportPattern, 
+          `// Remotion imports provided by environment\nconst { ${imports.join(', ')} } = window.Remotion || {};`
+        );
+        issues.push('Converted Remotion imports to global variable access');
+        fixed = true;
+      }
+    }
+  }
+  
+  // Match other imports and convert to comments
+  const otherImportPattern = /import\s+.*?from\s+['"](?!react|remotion)([^'"]+)['"](?:;)?/g;
+  const otherMatches = result.match(otherImportPattern);
+  
+  if (otherMatches && otherMatches.length > 0) {
+    for (const match of otherMatches) {
+      // Extract the module path
+      const modulePathMatch = match.match(/from\s+['"]([^'"]+)['"]/);
+      const modulePath = modulePathMatch ? modulePathMatch[1] : 'unknown';
+      
+      result = result.replace(
+        match,
+        `// NOTE: Import from "${modulePath}" was removed - make sure to include any necessary resources inline\n// ${match}`
+      );
+      issues.push(`Commented out import from "${modulePath}" - may need manual integration`);
+      fixed = true;
+    }
+  }
+  
+  // Handle potential 'use client' directive
+  if (/'use client'|"use client"/.test(result)) {
+    result = result.replace(/'use client';?\n?|"use client";?\n?/g, '// Client directive removed - not needed in Remotion components\n');
+    issues.push("Removed 'use client' directive");
+    fixed = true;
+  }
+  
+  return { code: result, issues, fixed };
+}
+
+/**
+ * Fix common variable reference errors in component code
+ * This specifically targets issues where variables are used incorrectly (like width instead of size)
+ */
+function fixCommonVariableReferences(code: string): { code: string; issues: string[]; fixed: boolean } {
+  const issues: string[] = [];
+  let fixed = false;
+  let result = code;
+
+  // Pattern 1: Using 'width' or 'height' instead of 'size' in common component patterns
+  // Look for style objects containing width/height that should be using the size variable
+  const widthHeightPattern = /style=\{\{[^}]*?(?:width|height)\s*:\s*(?:width|height)[^}]*?\}\}/g;
+  const widthHeightMatches = result.match(widthHeightPattern);
+  
+  if (widthHeightMatches && widthHeightMatches.length > 0) {
+    // For each match, check if there's a 'size' variable in scope
+    const hasSizeVar = (/const\s+size\s*=/.test(result));
+    
+    if (hasSizeVar) {
+      // Replace width: width with width: size and height: height with height: size
+      result = result.replace(/width\s*:\s*width/g, 'width: size');
+      result = result.replace(/height\s*:\s*height/g, 'height: size');
+      issues.push('Fixed incorrect references to width/height (replaced with size)');
+      fixed = true;
+      logger.debug('[ESBUILD-FIX] Fixed width/height variable references');
+    }
+  }
+  
+  // Pattern 2: Using 'backgroundColor' instead of 'color' 
+  // This is a common error in simpler components
+  const bgColorPattern = /backgroundColor\s*:\s*backgroundColor/g;
+  const hasBgColorIssue = bgColorPattern.test(result);
+  
+  if (hasBgColorIssue) {
+    // Check if there's a 'color' variable in scope
+    const hasColorVar = (/const\s+color\s*=/.test(result));
+    
+    if (hasColorVar) {
+      result = result.replace(/backgroundColor\s*:\s*backgroundColor/g, 'backgroundColor: color');
+      issues.push('Fixed incorrect reference to backgroundColor (replaced with color)');
+      fixed = true;
+      logger.debug('[ESBUILD-FIX] Fixed backgroundColor variable reference');
+    }
+  }
+  
+  // Pattern 3: Replace reference to undefined 'frame' with useCurrentFrame()
+  if ((/frame(?![A-Za-z0-9_])[^=]*/).test(result) && !(/const\s+frame\s*=/).test(result)) {
+    // Frame is referenced but not declared - check if useCurrentFrame is used
+    if ((/useCurrentFrame/).test(result)) {
+      // Add frame declaration if missing
+      if (!(/const\s+frame\s*=\s*useCurrentFrame\(\)/).test(result)) {
+        // Find a good insertion point - after imports or at the top of the component function
+        const componentFnMatch = result.match(/(?:const|function)\s+(\w+)\s*(?:=|\()/); 
+        if (componentFnMatch) {
+          const insertPos = result.indexOf(componentFnMatch[0]);
+          result = result.slice(0, insertPos) + 
+                 'const frame = useCurrentFrame();\n\n  ' + 
+                 result.slice(insertPos);
+          issues.push('Added missing frame declaration using useCurrentFrame()');
+          fixed = true;
+          logger.debug('[ESBUILD-FIX] Added missing frame declaration');
+        }
+      }
+    }
+  }
+
+  return { code: result, issues, fixed };
+}
+
+/**
+ * Fix structural issues in JSX code
+ * This targets problems like extra closing divs, missing closing tags, etc.
+ */
+function fixJsxStructure(code: string): { code: string; issues: string[]; fixed: boolean } {
+  const issues: string[] = [];
+  let fixed = false;
+  let result = code;
+
+  // Pattern 0 (NEW): Remove semicolons after JSX closing tags - this causes errors in esbuild
+  const jsxSemicolonPattern = /(<\/\w+>);\s*(\)|,|{|$)/g;
+  if (jsxSemicolonPattern.test(result)) {
+    result = result.replace(jsxSemicolonPattern, '$1 $2');
+    issues.push('Removed semicolons after JSX closing tags');
+    fixed = true;
+    logger.debug('[ESBUILD-FIX] Removed semicolons after JSX closing tags');
+  }
+
+  // Pattern 1: Extra semicolon and parenthesis at the end of JSX ("</div>; );")
+  const extraSemicolonPattern = /(<\/\w+>)\s*;\s*\);/g;
+  if (extraSemicolonPattern.test(result)) {
+    result = result.replace(extraSemicolonPattern, '$1\n    );');
+    issues.push('Removed extra semicolon after closing JSX tag');
+    fixed = true;
+    logger.debug('[ESBUILD-FIX] Fixed extra semicolon issue in JSX');
+  }
+
+  // Pattern 2: Double closing JSX tags ("</div></div>" where only one should be)
+  // This requires careful analysis to avoid breaking valid nested tags
+  const doubleClosingPattern = /(<\/\w+>)\s*(<\/\w+>)\s*\);/g;
+  const doubleClosingMatch = result.match(doubleClosingPattern);
+  
+  if (doubleClosingMatch) {
+    // Check if there might be unbalanced tags by looking for a simple pattern
+    // This isn't perfect but catches common cases where there's one div too many
+    const openTags = (result.match(/<div/g) || []).length;
+    const closeTags = (result.match(/<\/div>/g) || []).length;
+    
+    if (closeTags > openTags) {
+      result = result.replace(doubleClosingPattern, '$1\n    );');
+      issues.push('Removed extra closing JSX tag - tags were unbalanced');
+      fixed = true;
+      logger.debug('[ESBUILD-FIX] Removed extra closing tag');
+    }
+  }
+
+  // Pattern 3: Missing closing JSX tag - look for return statements without matching close tags
+  const returnStatements = result.match(/return\s*\(\s*<([A-Za-z][A-Za-z0-9]*)[^>]*>[\s\S]*?(?:<\/\1>|\/>)/g) || [];
+  
+  for (const statement of returnStatements) {
+    const openingTagMatch = statement.match(/<([A-Za-z][A-Za-z0-9]*)/g) || [];
+    const closingTagMatch = statement.match(/<\/([A-Za-z][A-Za-z0-9]*)>/g) || [];
+    
+    if (openingTagMatch.length > closingTagMatch.length && openingTagMatch[0]) {
+      const mainTag = openingTagMatch[0].substring(1);
+      
+      if (mainTag) {
+        // Corrected regex: escape the parenthesis for new RegExp
+        const closingTagRegex = new RegExp(`</${mainTag}>\\s*\\)\\s*;\\s*$`); 
+        if (!closingTagRegex.test(result)) {
+          // Corrected replacement regex: ensure the regex itself is valid when constructed
+          result = result.replace(new RegExp('(\\s*\\)\\s*;\\s*)$'), `\n    </${mainTag}>$1`);
+          issues.push(`Added missing closing tag </${mainTag}>`);
+          fixed = true;
+          logger.debug(`[ESBUILD-FIX] Added missing closing JSX tag: </${mainTag}>`);
+        }
+      }
+    }
+  }
+
+  return { code: result, issues, fixed };
+}
+
 function validateBasicSyntax(code: string): void {
   // This function would use a real parser in production
   // For now, we'll do some basic checks

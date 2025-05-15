@@ -2,7 +2,8 @@
 import { processPendingJobs } from '../workers/buildCustomComponent';
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
+import logger from '~/lib/logger';
 
 const POLL_INTERVAL_MS = 10000; // Check every 10 seconds (increased from 5s)
 const ERROR_BACKOFF_MS = 30000; // If we hit errors, back off for 30 seconds
@@ -24,11 +25,11 @@ let isWorkerRunning = false;
 export function startBuildWorker() {
   // Prevent multiple instances of the worker
   if (isWorkerRunning && intervalId) {
-    console.log('⚠️ Build worker already running, skipping duplicate initialization');
+    logger.info('⚠️ Build worker already running, skipping duplicate initialization');
     return () => stopBuildWorker();
   }
   
-  console.log('🛠️ Starting custom component build worker...');
+  logger.info('🛠️ Starting custom component build worker...');
   isWorkerRunning = true;
   
   // Check if we have any pending jobs before starting the polling
@@ -41,7 +42,7 @@ export function startBuildWorker() {
       const now = Date.now();
       // Resume after backoff period
       if (now - lastErrorTime > ERROR_BACKOFF_MS) {
-        console.log('Resuming custom component job polling after error backoff');
+        logger.info('Resuming custom component job polling after error backoff');
         isPollingPaused = false;
       } else {
         return; // Skip this cycle
@@ -61,11 +62,11 @@ export function startBuildWorker() {
       
       // If we hit too many errors, pause polling temporarily
       if (consecutiveErrors >= 3) {
-        console.log(`Pausing custom component job polling for ${ERROR_BACKOFF_MS/1000} seconds due to errors`);
+        logger.info(`Pausing custom component job polling for ${ERROR_BACKOFF_MS/1000} seconds due to errors`);
         isPollingPaused = true;
       }
       
-      console.error('Error checking for pending jobs:', error);
+      logger.error('Error checking for pending jobs:', { error });
     }
   }, POLL_INTERVAL_MS);
   
@@ -78,7 +79,7 @@ export function startBuildWorker() {
  */
 function stopBuildWorker() {
   if (intervalId) {
-    console.log('Stopping custom component build worker...');
+    logger.info('Stopping custom component build worker...');
     clearInterval(intervalId);
     intervalId = null;
     isWorkerRunning = false;
@@ -90,21 +91,27 @@ function stopBuildWorker() {
  * @returns Number of pending jobs found
  */
 async function checkForPendingJobs(): Promise<number> {
+  logger.info("Build worker checking for jobs...");
+  
   try {
-    // Use count() correctly based on Drizzle ORM syntax
-    const result = await db
-      .select()
+    // Check if there are any jobs in 'building' or 'manual_build_retry' state
+    const jobsToBuild = await db
+      .select({ id: customComponentJobs.id })
       .from(customComponentJobs)
-      .where(eq(customComponentJobs.status, "pending"))
+      .where(or(
+        eq(customComponentJobs.status, "building"),
+        eq(customComponentJobs.status, "manual_build_retry")
+      ))
       .limit(1);
     
-    // If we found at least one job, process all pending jobs
-    if (result.length > 0) {
-      console.log(`Found pending jobs, processing...`);
+    // If we found at least one job, process all building jobs
+    if (jobsToBuild.length > 0) {
+      logger.info(`Found ${jobsToBuild.length} job(s) ready for build (status 'building' or 'manual_build_retry')`);
       await processPendingJobs();
-      return result.length;
+      return jobsToBuild.length;
     }
     
+    logger.debug("No jobs found with status 'building' or 'manual_build_retry'");
     return 0;
   } catch (error) {
     // Re-throw to let caller handle

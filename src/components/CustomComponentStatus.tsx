@@ -20,6 +20,13 @@ interface CustomComponentStatusProps {
   collapsed?: boolean; // Optional prop to show condensed view
 }
 
+// Define type for job status response
+interface JobStatusResponse {
+  status: string;
+  outputUrl?: string | null;
+  errorMessage?: string | null;
+}
+
 /**
  * Component for displaying the status of a custom component job
  * 
@@ -75,7 +82,12 @@ export function CustomComponentStatus({
     
     // Reset error counter when we get a successful response
     errorCountRef.current = 0;
-  }, [job]);
+    
+    // Debugging for components with ready status but missing outputUrl
+    if ((job.status === 'ready' || job.status === 'complete') && !job.outputUrl) {
+      console.warn(`[CustomComponentStatus] Warning: Component ${componentId} has status "${job.status}" but missing outputUrl`);
+    }
+  }, [job, componentId]);
 
   // Instead, log errors in useEffect
   useEffect(() => {
@@ -162,12 +174,12 @@ export function CustomComponentStatus({
     case "success":
     case "complete": // Handle both "success" (old) and "complete" (new standard)
       return (
-        <div className="text-green-500 flex items-center gap-1">
+        <div title={job.outputUrl ? `URL: ${job.outputUrl}` : 'Missing output URL! Use the debug button to fix.'} className={`text-green-500 flex items-center gap-1 ${!job.outputUrl ? 'opacity-50' : ''}`}>
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
-          <span className="text-xs">Ready</span>
+          <span className="text-xs">{job.outputUrl ? 'Ready' : 'Ready*'}</span>
         </div>
       );
     case "error":

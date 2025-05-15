@@ -45,10 +45,17 @@ export const customComponentRouter = createTRPCRouter({
           projectId: input.projectId,
           effect: input.effect, 
           tsxCode: input.tsxCode,
-          status: "pending",
+          status: "queued_for_generation",
         })
         .returning();
-      
+
+      if (!job) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create component job",
+        });
+      }
+
       return job;
     }),
     
@@ -67,15 +74,14 @@ export const customComponentRouter = createTRPCRouter({
       if (!component) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Component not found"
+          message: "Component not found",
         });
       }
       
-      // Verify user owns the project
-      if (component.project?.userId !== ctx.session.user.id) {
+      if (component.project.userId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You don't have permission to modify this component"
+          message: "You don't have permission to rename this component",
         });
       }
       
@@ -105,15 +111,14 @@ export const customComponentRouter = createTRPCRouter({
       if (!component) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Component not found"
+          message: "Component not found",
         });
       }
       
-      // Verify user owns the project
-      if (component.project?.userId !== ctx.session.user.id) {
+      if (component.project.userId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You don't have permission to delete this component"
+          message: "You don't have permission to delete this component",
         });
       }
       
@@ -137,26 +142,15 @@ export const customComponentRouter = createTRPCRouter({
       if (!job) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Custom component job not found",
+          message: "Component job not found",
         });
       }
       
-      // Verify the user has access to the project this job belongs to
-      const project = await ctx.db.query.projects.findFirst({
-        where: and(
-          eq(projects.id, job.projectId),
-          eq(projects.userId, ctx.session.user.id)
-        ),
-      });
-
-      if (!project) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have access to this component job",
-        });
-      }
-      
-      return job;
+      return { 
+        status: job.status, 
+        outputUrl: job.outputUrl,
+        errorMessage: job.errorMessage
+      };
     }),
     
   listByProject: protectedProcedure
@@ -164,7 +158,7 @@ export const customComponentRouter = createTRPCRouter({
       projectId: z.string().uuid() 
     }))
     .query(async ({ ctx, input }) => {
-      // Verify the user has access to this project
+      // Verify user has access to this project
       const project = await ctx.db.query.projects.findFirst({
         where: and(
           eq(projects.id, input.projectId),
@@ -189,14 +183,11 @@ export const customComponentRouter = createTRPCRouter({
       return userComponentJobs;
     }),
 
-  // List all custom components for the logged-in user across all projects
   listAllForUser: protectedProcedure
     .input(z.object({
-      // Optional flag to filter by successful components only
-      successfulOnly: z.boolean().optional().default(true),
+      successfulOnly: z.boolean().optional().default(false)
     }))
     .query(async ({ ctx, input }) => {
-      // Query for all projects owned by this user
       let query = ctx.db
         .select({
           // Select only the job fields we need to avoid ambiguity
@@ -218,9 +209,6 @@ export const customComponentRouter = createTRPCRouter({
       
       // If we only want successful components, add additional filters
       if (input.successfulOnly) {
-        // A successful component must:
-        // 1. Have status="complete" (not "success")
-        // 2. Have a non-null outputUrl (indicating it was uploaded to R2)
         // We need to modify our base where condition
         query = ctx.db
           .select({
@@ -245,15 +233,13 @@ export const customComponentRouter = createTRPCRouter({
           ));
       }
       
-      // Execute the query with ordering
       const results = await query.orderBy(desc(customComponentJobs.createdAt));
       
       return results;
     }),
 
-  // Get a single component job by ID
-  getJobById: protectedProcedure
-    .input(z.object({ 
+  getComponentJob: protectedProcedure
+    .input(z.object({
       jobId: z.string().uuid() 
     }))
     .query(async ({ ctx, input }) => {
@@ -265,23 +251,21 @@ export const customComponentRouter = createTRPCRouter({
       if (!job) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Custom component job not found",
+          message: "Component job not found",
         });
       }
       
-      // Verify the user has access to the project this job belongs to
-      if (job.project?.userId !== ctx.session.user.id) {
+      if (job.project.userId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You don't have access to this component job",
+          message: "You don't have permission to view this component job",
         });
       }
       
       return job;
     }),
-    
-  // Fix a failed component using the TSX preprocessor
-  fixComponent: protectedProcedure
+
+  retryComponentBuild: protectedProcedure
     .input(z.object({
       componentId: z.string().uuid()
     }))
@@ -295,27 +279,32 @@ export const customComponentRouter = createTRPCRouter({
       if (!component) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Component not found"
+          message: "Component not found",
         });
       }
       
-      // Verify user owns the project
-      if (component.project?.userId !== ctx.session.user.id) {
+      if (component.project.userId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You don't have permission to modify this component"
+          message: "You don't have permission to retry this component build",
         });
       }
       
-      // Check if there's code to fix
+      if (component.status === "pending" || component.status === "building") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Component build is already in progress",
+        });
+      }
+      
       if (!component.tsxCode) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Component has no code to fix"
+          message: "Component code is missing, cannot retry build",
         });
       }
       
-      // Apply the TSX preprocessor to fix common syntax issues
+      // Reset the status to pending to trigger a rebuild
       const result = preprocessTsx(component.tsxCode, component.effect);
       
       // Update the component with the fixed code and reset status to pending
@@ -323,7 +312,8 @@ export const customComponentRouter = createTRPCRouter({
         .set({ 
           tsxCode: result.code,
           status: "pending", // Reset to pending so the build process will pick it up
-          errorMessage: result.fixed ? `Fixed issues: ${result.issues.join(", ")}` : "No issues found to fix",
+          retryCount: component.retryCount + 1,
+          errorMessage: null,
           updatedAt: new Date()
         })
         .where(eq(customComponentJobs.id, input.componentId))
@@ -332,23 +322,14 @@ export const customComponentRouter = createTRPCRouter({
       if (!updated) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update component"
+          message: "Failed to retry component build",
         });
       }
       
-      // Return information about the fix
-      return {
-        componentId: updated.id,
-        fixed: result.fixed,
-        issues: result.issues,
-        status: updated.status
-      };
+      return updated;
     }),
 
-  /**
-   * Get a specific component by ID
-   */
-  getComponentById: protectedProcedure
+  getComponentCode: protectedProcedure
     .input(z.object({
       componentId: z.string(),
     }))
@@ -360,22 +341,21 @@ export const customComponentRouter = createTRPCRouter({
       if (!component) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Component not found"
+          message: "Component not found",
         });
       }
-      
-      return component;
+
+      return {
+        tsxCode: component.tsxCode
+      };
     }),
 
-  /**
-   * Get components that can potentially be fixed by the TSX preprocessor
-   */
-  getFixableByProjectId: protectedProcedure
+  getFixableComponents: protectedProcedure
     .input(z.object({
       projectId: z.string().uuid()
     }))
     .query(async ({ ctx, input }) => {
-      // Verify the user has access to this project
+      // Verify user access to project
       const project = await ctx.db.query.projects.findFirst({
         where: and(
           eq(projects.id, input.projectId),
@@ -403,48 +383,11 @@ export const customComponentRouter = createTRPCRouter({
       return fixableComponents;
     }),
 
-  /**
-   * Check if a component can be automatically fixed
-   */
-  canBeFixed: protectedProcedure
-    .input(z.object({
-      componentId: z.string().uuid()
-    }))
-    .query(async ({ ctx, input }) => {
-      const component = await ctx.db.query.customComponentJobs.findFirst({
-        where: eq(customComponentJobs.id, input.componentId),
-        with: { project: true }
-      });
-      
-      if (!component || !component.tsxCode) {
-        return { fixable: false };
-      }
-      
-      // Verify user owns the project
-      if (component.project?.userId !== ctx.session.user.id) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to access this component"
-        });
-      }
-
-      // Quick check if there are common fixable patterns in the code
-      const hasFixableIssues = component.tsxCode.includes('React.') || 
-                              !component.tsxCode.includes('export default') ||
-                              component.tsxCode.includes('import React');
-      
-      return { fixable: hasFixableIssues };
-    }),
-
-  /**
-   * Try to fix a component using the TSX preprocessor
-   */
-  tryToFix: protectedProcedure
+  applySyntaxFix: protectedProcedure
     .input(z.object({
       componentId: z.string().uuid()
     }))
     .mutation(async ({ ctx, input }) => {
-      // Get the component job
       const component = await ctx.db.query.customComponentJobs.findFirst({
         where: eq(customComponentJobs.id, input.componentId),
         with: { project: true }
@@ -453,66 +396,132 @@ export const customComponentRouter = createTRPCRouter({
       if (!component) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Component not found"
+          message: "Component not found",
         });
       }
       
-      // Verify user owns the project
-      if (component.project?.userId !== ctx.session.user.id) {
+      if (component.project.userId !== ctx.session.user.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You don't have permission to modify this component"
+          message: "You don't have access to this component",
         });
       }
       
-      // Check if there's code to fix
       if (!component.tsxCode) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Component has no code to fix"
+          message: "Component code is missing, cannot apply syntax fix",
         });
       }
-
-      // Save original code if not already saved
-      const originalTsxCode = component.originalTsxCode || component.tsxCode;
       
-      // Update status to fixing
+      // Apply the syntax fix and return the result for preview
+      const result = preprocessTsx(component.tsxCode, component.effect || "Component");
+      
+      return {
+        originalCode: component.tsxCode,
+        fixedCode: result.code,
+        issues: result.issues,
+        fixed: result.fixed
+      };
+    }),
+
+  confirmSyntaxFix: protectedProcedure
+    .input(z.object({
+      componentId: z.string().uuid()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.componentId),
+        with: { project: true }
+      });
+      
+      if (!component) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Component not found",
+        });
+      }
+      
+      if (component.project.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have access to this component",
+        });
+      }
+      
+      if (!component.tsxCode) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Component code is missing, cannot confirm syntax fix",
+        });
+      }
+      
+      // Apply the syntax fix
+      const result = preprocessTsx(component.tsxCode, component.effect || "Component");
+      
+      if (!result.fixed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No fixes were applied to the component",
+        });
+      }
+      
+      // Update the component with the fixed code
       await ctx.db.update(customComponentJobs)
-        .set({ 
-          status: "fixing",
-          originalTsxCode: originalTsxCode,
-          lastFixAttempt: new Date()
+        .set({
+          tsxCode: result.code,
+          updatedAt: new Date(),
+          status: "pending", // Reset status to pending to trigger rebuild
+          errorMessage: null, // Clear any previous error message
         })
         .where(eq(customComponentJobs.id, input.componentId));
       
-      // Apply the TSX preprocessor to fix common syntax issues
-      const result = preprocessTsx(component.tsxCode, component.effect || "Component");
+      return {
+        success: true,
+        message: "Syntax fix confirmed and code updated",
+      };
+    }),
+
+  resetStatus: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      newStatus: z.enum(["pending", "building", "complete", "error", "ready"])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Find the component
+      const component = await ctx.db.query.customComponentJobs.findFirst({
+        where: eq(customComponentJobs.id, input.id),
+        with: { project: true }
+      });
       
-      // Update the component with the fixed code and reset status to pending for rebuild
-      const [updated] = await ctx.db.update(customComponentJobs)
-        .set({ 
-          tsxCode: result.code,
-          status: result.fixed ? "pending" : "failed", // Reset to pending so the build process will pick it up
-          errorMessage: result.fixed ? `Fixed issues: ${result.issues.join(", ")}` : "No issues found to fix",
-          fixIssues: result.issues.length > 0 ? result.issues.join(", ") : null,
-          updatedAt: new Date()
-        })
-        .where(eq(customComponentJobs.id, input.componentId))
-        .returning();
-      
-      if (!updated) {
+      if (!component) {
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to update component"
+          code: "NOT_FOUND",
+          message: "Component not found",
         });
       }
       
-      // Return information about the fix
-      return {
-        componentId: updated.id,
-        fixed: result.fixed,
-        issues: result.issues,
-        status: updated.status
-      };
+      if (component.project.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to reset this component's status",
+        });
+      }
+      
+      // Update the component status
+      const [updated] = await ctx.db.update(customComponentJobs)
+        .set({ 
+          status: input.newStatus,
+          updatedAt: new Date(),
+          // If resetting to pending, clear the outputUrl and errorMessage
+          ...(input.newStatus === "pending" ? { 
+            outputUrl: null,
+            errorMessage: null 
+          } : {})
+        })
+        .where(eq(customComponentJobs.id, input.id))
+        .returning();
+      
+      return updated;
     }),
 });

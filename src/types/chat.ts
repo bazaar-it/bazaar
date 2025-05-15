@@ -25,9 +25,13 @@ export interface SceneResult {
  * Component job tracking information
  */
 export interface ComponentJob {
-  description: string;
-  jobId: string;
+  id: string;
   name: string;
+  prompt: string;
+  description?: string;
+  jobId?: string; // For backwards compatibility
+  variation?: string;
+  timeframe?: string;
 }
 
 /**

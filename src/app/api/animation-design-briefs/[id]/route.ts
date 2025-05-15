@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { db } from '~/server/db';
 import { eq } from 'drizzle-orm';
 import { animationDesignBriefs } from '~/server/db/schema';
@@ -18,10 +18,11 @@ const apiRouteLogger = {
 };
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest
 ) {
-  const { id } = params;
+  // Extract the id from the URL pattern directly to avoid params issues
+  const pathname = request.nextUrl.pathname;
+  const id = pathname.split('/').pop() || ''; // Safely extract the last part of the URL
   
   apiRouteLogger.request(id, "ADB request received", {
     url: request.url,

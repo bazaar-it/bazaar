@@ -55,12 +55,14 @@ export const SCENE_TYPES = [
   "custom", 
   "background-color", 
   "shape", 
+  "simple-shape", 
   "gradient", 
   "particles", 
   "text-animation", 
   "split-screen", 
   "zoom-pan", 
-  "svg-animation"
+  "svg-animation",
+  "simple-colored-shape", 
 ] as const;
 
 // Export the type derived from the constant

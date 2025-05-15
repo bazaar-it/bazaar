@@ -1,5 +1,5 @@
 // src/app/api/components/[componentId]/route.ts
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -72,7 +72,7 @@ function preprocessComponentCode(code: string, componentId: string): string {
     creatorVariables.forEach(varName => {
       // Ensure varName is defined before using it in RegExp
       if (varName) {
-        const pattern = new RegExp(`${varName}\.createElement`, 'g');
+        const pattern = new RegExp(`${varName}\\.createElement`, 'g');
         processedCode = processedCode.replace(pattern, 'React.createElement');
       }
     });
@@ -100,99 +100,104 @@ function preprocessComponentCode(code: string, componentId: string): string {
 function analyzeComponentCode(code: string, componentId: string): { mainComponent: string | null } {
   // Default result
   const result = { mainComponent: null as string | null };
-
+  
   try {
-    // Check for different export patterns
-    // 1. Named exports with "as" keyword: export { ComponentA as RenamedComponent }
-    const namedExportAsMatch = code.match(
-      /export\s*\{\s*([A-Za-z0-9_$]+)\s+as\s+([A-Za-z0-9_$]+)\s*\}/
-    );
-    if (namedExportAsMatch && namedExportAsMatch[1]) {
-      result.mainComponent = namedExportAsMatch[1]; // Original component name, not the renamed one
-      return result;
-    }
-
-    // 2. Simple named exports: export { ComponentName }
-    const namedExportMatch = code.match(/export\s*\{\s*([A-Za-z0-9_$]+)\s*\}/);
-    if (namedExportMatch && namedExportMatch[1]) {
-      result.mainComponent = namedExportMatch[1];
-      return result;
-    }
-
-    // 3. Default exports: export default ComponentName
-    const defaultExportMatch = code.match(/export\s+default\s+([A-Za-z0-9_$]+)/);
+    // Look for default exports (export default X)
+    const defaultExportMatch = code.match(/export\s+default\s+(?:const\s+)?([A-Za-z0-9_$]+)/);
     if (defaultExportMatch && defaultExportMatch[1]) {
       result.mainComponent = defaultExportMatch[1];
       return result;
     }
-
-    // 4. Look for React component declarations (function or const patterns)
-    // First try to find component names that include "Scene" which is common in our components
-    const sceneComponentMatch = code.match(
-      /(?:var|const|let|function)\s+([A-Z][A-Za-z0-9_$]*Scene[A-Za-z0-9_$]*)/
-    );
-    if (sceneComponentMatch && sceneComponentMatch[1]) {
-      result.mainComponent = sceneComponentMatch[1];
-      return result;
-    }
-
-    // 5. Look for any capitalized variable which might be a React component
-    const capitalizedVarMatch = code.match(
-      /(?:var|const|let|function)\s+([A-Z][A-Za-z0-9_$]*)/
-    );
-    if (capitalizedVarMatch && capitalizedVarMatch[1]) {
-      result.mainComponent = capitalizedVarMatch[1];
+    
+    // Look for function declarations with export default (export default function X)
+    const defaultFunctionMatch = code.match(/export\s+default\s+function\s+([A-Za-z0-9_$]+)/);
+    if (defaultFunctionMatch && defaultFunctionMatch[1]) {
+      result.mainComponent = defaultFunctionMatch[1];
       return result;
     }
     
-    // 6. Look for JSX component functions (const Component = () => {})
-    const arrowFunctionMatch = code.match(
-      /(?:var|const|let)\s+([A-Z][A-Za-z0-9_$]*)\s*=\s*(\(|\w+)\s*=>/
-    );
-    if (arrowFunctionMatch && arrowFunctionMatch[1]) {
-      result.mainComponent = arrowFunctionMatch[1];
+    // Look for immediately exported arrow functions (export const X = () => {})
+    const exportedArrowMatch = code.match(/export\s+const\s+([A-Za-z0-9_$]+)\s*=\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>/);
+    if (exportedArrowMatch && exportedArrowMatch[1]) {
+      result.mainComponent = exportedArrowMatch[1];
       return result;
     }
     
-    // 7. Look for any module.exports pattern (common in older JS)
-    const moduleExportsMatch = code.match(
-      /module\.exports\s*=\s*([A-Za-z0-9_$]+)/
-    );
-    if (moduleExportsMatch && moduleExportsMatch[1]) {
-      result.mainComponent = moduleExportsMatch[1];
+    // Look for exported function declarations (export function X)
+    const exportedFunctionMatch = code.match(/export\s+function\s+([A-Za-z0-9_$]+)/);
+    if (exportedFunctionMatch && exportedFunctionMatch[1]) {
+      result.mainComponent = exportedFunctionMatch[1];
       return result;
     }
+    
+    // Look for React component declarations (const X = () => {}, const X = React.FC<Props> = () => {})
+    const componentMatches = [...code.matchAll(/(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*(?::\s*React\.FC(?:<[^>]*>)?)?\s*=\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>/g)];
+    if (componentMatches.length > 0) {
+      // Take the first component match as the main component
+      const firstMatch = componentMatches[0];
+      result.mainComponent = firstMatch[1];
+      return result;
+    }
+    
   } catch (error) {
-    // If analysis fails, log it but return empty result
-    logger.error(`[API:COMPONENT:ERROR][ID:${componentId}] Component analysis failed`, { error });
+    // Ignore errors in analysis, just return null for main component
+    console.error(`[analyzeComponentCode] Error analyzing component ${componentId}:`, error);
   }
-
+  
   return result;
 }
 
 // Create a specialized logger for component API requests
 const apiRouteLogger = {
-  request: (componentId: string, message: string, meta: Record<string, any> = {}) => {
-    logger.info(`[API:COMPONENT:REQUEST][ID:${componentId}] ${message}`, meta);
+  request(componentId: string, message: string, meta: Record<string, any> = {}) {
+    logger.info(`[ComponentAPI:${componentId}] ${message}`, meta);
   },
-  redirect: (componentId: string, message: string, meta: Record<string, any> = {}) => {
-    logger.info(`[API:COMPONENT:REDIRECT][ID:${componentId}] ${message}`, meta);
+  redirect(componentId: string, message: string, meta: Record<string, any> = {}) {
+    logger.info(`[ComponentAPI:${componentId}] REDIRECT: ${message}`, meta);
   },
-  error: (componentId: string, message: string, meta: Record<string, any> = {}) => {
-    logger.error(`[API:COMPONENT:ERROR][ID:${componentId}] ${message}`, meta);
+  error(componentId: string, message: string, meta: Record<string, any> = {}) {
+    logger.error(`[ComponentAPI:${componentId}] ERROR: ${message}`, meta);
   },
-  debug: (componentId: string, message: string, meta: Record<string, any> = {}) => {
-    logger.debug(`[API:COMPONENT:DEBUG][ID:${componentId}] ${message}`, meta);
+  debug(componentId: string, message: string, meta: Record<string, any> = {}) {
+    logger.debug(`[ComponentAPI:${componentId}] ${message}`, meta);
   }
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: { componentId: string } }
-) {
-  // In Next.js App Router, params need to be handled carefully
-  // It's safer to destructure inside the function body
-  const componentId = params.componentId;
+export async function GET(request: NextRequest) {
+  // Extract componentId directly from the URL path to avoid params issues
+  const pathname = request.nextUrl.pathname;
+  const pathParts = pathname.split('/');
+  const componentId = pathParts[pathParts.length - 1] || '';
+  
+  // Validate componentId
+  if (!componentId) {
+    // Return JavaScript error instead of JSON
+    const errorScript = `
+      console.error("[Component Error] Invalid component ID");
+      // Set a descriptive error component
+      if (typeof window !== 'undefined') {
+        window.__REMOTION_COMPONENT = (props) => {
+          if (typeof React === 'undefined') return null;
+          return React.createElement(
+            'div',
+            { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+            [
+              React.createElement('h3', { key: 'title' }, 'Error'),
+              React.createElement('p', { key: 'message' }, 'Invalid component ID')
+            ]
+          );
+        };
+      }
+    `;
+    
+    return new NextResponse(errorScript, { 
+      status: 200, // Return 200 to allow the error component to render
+      headers: {
+        'Content-Type': 'application/javascript',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
+  }
   
   apiRouteLogger.request(componentId, "Component request received", {
     url: request.url,
@@ -216,63 +221,322 @@ export async function GET(
     // Handle not found case
     if (!job) {
       apiRouteLogger.error(componentId, "Component job not found");
-      return NextResponse.json({ error: "Component not found" }, { status: 404 });
+      
+      // Return JavaScript error instead of JSON
+      const errorScript = `
+        console.error("[Component Error] Component not found: ${componentId}");
+        // Set a descriptive error component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            return React.createElement(
+              'div',
+              { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+              [
+                React.createElement('h3', { key: 'title' }, 'Component Not Found'),
+                React.createElement('p', { key: 'message' }, 'The requested component could not be found'),
+                React.createElement('pre', { key: 'id' }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(errorScript, { 
+        status: 200, // Return 200 to allow the error component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
     }
     
-    // Check if the component is ready
-    if (job.status !== "complete" || !job.outputUrl) {
+    // Check if the component is ready - we treat both "ready" and "complete" as valid,
+    // but handle missing outputUrl separately
+    const isReady = job.status === "ready" || job.status === "complete";
+    
+    if (!isReady) {
+      // Handle error case first
       if (job.status === "error") {
-        apiRouteLogger.error(componentId, "Component job failed", { 
-          error: job.errorMessage || "Unknown error" 
+        const errorMessage = job.errorMessage || "Unknown error";
+        apiRouteLogger.error(componentId, "Component job failed", { error: errorMessage });
+        
+        // Return JavaScript error instead of JSON
+        const errorScript = `
+          console.error("[Component Error] Component build failed: ${errorMessage.replace(/"/g, '\\"')}");
+          // Set a descriptive error component
+          if (typeof window !== 'undefined') {
+            window.__REMOTION_COMPONENT = (props) => {
+              if (typeof React === 'undefined') return null;
+              return React.createElement(
+                'div',
+                { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+                [
+                  React.createElement('h3', { key: 'title' }, 'Component Build Failed'),
+                  React.createElement('p', { key: 'message' }, "${errorMessage.replace(/"/g, '\\"')}"),
+                  React.createElement('pre', { key: 'id' }, '${componentId}')
+                ]
+              );
+            };
+          }
+        `;
+        
+        return new NextResponse(errorScript, { 
+          status: 200, // Return 200 to allow the error component to render
+          headers: {
+            'Content-Type': 'application/javascript',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+          }
         });
-        return NextResponse.json({ 
-          error: "Component build failed", 
-          message: job.errorMessage || "Unknown error" 
-        }, { status: 500 });
       }
       
+      // Handle not ready case (pending, building, etc.)
       apiRouteLogger.debug(componentId, "Component job not ready", { status: job.status });
-      return NextResponse.json({ 
-        status: job.status,
-        message: "Component is still being processed"
-      }, { status: 202 });
+      
+      // Return JavaScript with loading component instead of JSON
+      const loadingScript = `
+        console.log("[Component] Component is still being processed: ${job.status}");
+        // Set a loading component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            
+            // Create a simple loading animation
+            const useCurrentFrame = window.Remotion?.useCurrentFrame || (() => 0);
+            const frame = useCurrentFrame();
+            const dots = '.'.repeat(Math.floor(frame / 15) % 4);
+            
+            return React.createElement(
+              'div',
+              { style: { 
+                background: '#2196f3', 
+                color: 'white', 
+                padding: '20px', 
+                borderRadius: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                width: '100%'
+              }},
+              [
+                React.createElement('h3', { key: 'title' }, 'Component Loading'),
+                React.createElement('p', { key: 'message' }, 'Status: ${job.status}' + dots),
+                React.createElement('pre', { key: 'id', style: { fontSize: '10px' } }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(loadingScript, { 
+        status: 200, // Return 200 to allow the loading component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
+    }
+    
+    // CRITICAL FIX: Handle component with ready status but no output URL
+    if (!job.outputUrl) {
+      apiRouteLogger.error(componentId, "Missing output URL for component with 'ready/complete' status");
+      
+      // Auto-fix: Update the component to error status so it can be fixed
+      try {
+        await db.update(customComponentJobs)
+          .set({
+            status: 'error',
+            errorMessage: `Component was marked as ${job.status} but has no output URL`,
+            updatedAt: new Date()
+          })
+          .where(eq(customComponentJobs.id, componentId));
+        
+        apiRouteLogger.debug(componentId, "Updated component status to 'error' so it can be rebuilt");
+      } catch (dbError) {
+        apiRouteLogger.error(componentId, "Failed to update component status", { error: dbError });
+      }
+      
+      // Return a fallback component with error UI
+      const fallbackScript = `
+        console.error("[Component Error] Component has ${job.status} status but no output URL");
+        console.info("[Component Info] Component has been marked as 'error' and can now be rebuilt");
+        // Set a descriptive error component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            return React.createElement(
+              'div',
+              { style: { 
+                background: '#ff9800', 
+                color: 'white', 
+                padding: '20px', 
+                borderRadius: '4px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                width: '100%' 
+              } },
+              [
+                React.createElement('h3', { key: 'title' }, 'Component Error: Missing Output URL'),
+                React.createElement('p', { key: 'message' }, 'This component is marked as "${job.status}" but has no compiled JavaScript output URL.'),
+                React.createElement('p', { key: 'info' }, 'The component has been automatically marked as "error" so it can be fixed.'),
+                React.createElement('p', { key: 'action' }, 'Please rebuild the component using the "Fix" button.'),
+                React.createElement('pre', { key: 'id', style: { fontSize: '10px' } }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(fallbackScript, { 
+        status: 200, // Return 200 to allow the error component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
     }
     
     // Fetch the JS content from the bundle URL
-    const r2Response = await fetch(job.outputUrl);
-    if (!r2Response.ok) {
-      apiRouteLogger.error(componentId, "Failed to fetch component bundle", { 
-        status: r2Response.status,
-        url: job.outputUrl 
+    apiRouteLogger.debug(componentId, `Fetching component code from ${job.outputUrl}`);
+    
+    // Attempt to fetch the component code
+    const response = await fetch(job.outputUrl);
+    
+    if (!response.ok) {
+      const statusText = response.statusText || `HTTP ${response.status}`;
+      const errorMessage = `Failed to fetch component: ${statusText}`;
+      apiRouteLogger.error(componentId, errorMessage, { status: response.status });
+      
+      // Return JavaScript error instead of JSON
+      const errorScript = `
+        console.error("[Component Error] ${errorMessage.replace(/"/g, '\\"')}");
+        // Set a descriptive error component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            return React.createElement(
+              'div',
+              { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+              [
+                React.createElement('h3', { key: 'title' }, 'Component Fetch Error'),
+                React.createElement('p', { key: 'message' }, "${errorMessage.replace(/"/g, '\\"')}"),
+                React.createElement('pre', { key: 'id' }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(errorScript, { 
+        status: 200, // Return 200 to allow the error component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
       });
-      return NextResponse.json({ error: "Failed to fetch component bundle" }, { status: 502 });
+    }
+    
+    // Re-process the component code
+    let jsContent;
+    try {
+      jsContent = await response.text();
+    } catch (fetchError) {
+      apiRouteLogger.error(componentId, "Error fetching component code", { error: fetchError });
+      
+      // Return an error component
+      const errorScript = `
+        console.error("[Component Error] Failed to fetch component code: ${componentId}");
+        // Set a descriptive error component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            return React.createElement(
+              'div',
+              { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+              [
+                React.createElement('h3', { key: 'title' }, 'Error Fetching Component'),
+                React.createElement('p', { key: 'message' }, 'Unable to fetch the component code.'),
+                React.createElement('pre', { key: 'id' }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(errorScript, { 
+        status: 200, // Return 200 to allow the error component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
     }
 
-    // Get the JS content
-    let jsContent = await r2Response.text();
+    // Check if the response is valid JavaScript or potentially an error JSON
+    if (jsContent.trim().startsWith('{') || jsContent.trim().startsWith('[')) {
+      apiRouteLogger.error(componentId, "Component outputUrl returned JSON instead of JavaScript", { content: jsContent.substring(0, 200) });
+      
+      // Attempt to parse the JSON to see if it contains an error message
+      let errorMessage = "Component URL returned JSON instead of JavaScript";
+      try {
+        const jsonResponse = JSON.parse(jsContent);
+        if (jsonResponse.error || jsonResponse.message) {
+          errorMessage = jsonResponse.error || jsonResponse.message;
+        }
+      } catch (parseError) {
+        // Ignore parse errors, stick with default message
+      }
+      
+      // Return an error component
+      const errorScript = `
+        console.error("[Component Error] ${errorMessage.replace(/"/g, '\\"')}");
+        // Set a descriptive error component
+        if (typeof window !== 'undefined') {
+          window.__REMOTION_COMPONENT = (props) => {
+            if (typeof React === 'undefined') return null;
+            return React.createElement(
+              'div',
+              { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+              [
+                React.createElement('h3', { key: 'title' }, 'Component Error'),
+                React.createElement('p', { key: 'message' }, "${errorMessage.replace(/"/g, '\\"')}"),
+                React.createElement('pre', { key: 'id' }, '${componentId}')
+              ]
+            );
+          };
+        }
+      `;
+      
+      return new NextResponse(errorScript, { 
+        status: 200, // Return 200 to allow the error component to render
+        headers: {
+          'Content-Type': 'application/javascript',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
+    }
     
-    // --- Log raw content BEFORE any processing for debugging syntax errors ---
-    apiRouteLogger.debug(componentId, `Raw component content fetched:\n---\n${jsContent}\n---`);
-    
-    // --- Critical Client-Side Fixes ---
-    
-    // 1. Remove "use client"; directive if present - it causes syntax errors in direct browser script execution
+    // 1. Remove any "use client" directives
     jsContent = jsContent.replace(/^\s*["']use client["'];?\s*/m, '// "use client" directive removed for browser compatibility\n');
     
-    // 2. Check for Remotion registration
-    const hasRemotionRegistration = jsContent.includes('window.__REMOTION_COMPONENT') || jsContent.includes('global.__REMOTION_COMPONENT');
-    
-    // 3. IMPROVED: Always add an explicit component registration at the end
-    // First analyze the code to find the main component name
-    const analysis = analyzeComponentCode(jsContent, componentId);
-    const mainComponentName = analysis.mainComponent;
-    
-    // 4. Process the code for common issues
+    // 2. Process the code for common issues
     jsContent = preprocessComponentCode(jsContent, componentId);
     
+    // 3. Extract information about exports and component variables
+    const codeInfo = analyzeComponentCode(jsContent, componentId);
+    
+    // 4. Check for Remotion registration
+    const hasRemotionRegistration = jsContent.includes('window.__REMOTION_COMPONENT') || jsContent.includes('global.__REMOTION_COMPONENT');
+    
     // 5. Add component registration code if needed
-    if (!hasRemotionRegistration && mainComponentName) {
+    if (!hasRemotionRegistration && codeInfo.mainComponent) {
       // Add registration code to the end of the file
+      const mainComponentName = codeInfo.mainComponent;
       const registrationCode = `
 // Auto-registered component for Remotion
 if (typeof window !== 'undefined') {
@@ -287,9 +551,9 @@ if (typeof window !== 'undefined') {
       apiRouteLogger.debug(componentId, `Added auto-registration for component: ${mainComponentName}`);
     }
     
-    // If we don't have explicit registration or a detected component name,
+    // 6. If we don't have explicit registration or a detected component name,
     // add a fallback mechanism that tries to find any React component in the global scope
-    if (!hasRemotionRegistration && !mainComponentName) {
+    if (!hasRemotionRegistration && !codeInfo.mainComponent) {
       // Add a fallback global component detection mechanism
       const fallbackCode = `
 // Fallback component detection for Remotion
@@ -350,7 +614,7 @@ if (typeof window !== 'undefined') {
       apiRouteLogger.debug(componentId, "Added fallback component detection mechanism");
     }
     
-    // 6. Return the enhanced component code with proper content type
+    // 7. Return the enhanced component code with proper content type
     const headers = {
       'Content-Type': 'application/javascript',
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
@@ -363,9 +627,32 @@ if (typeof window !== 'undefined') {
     const errorMessage = error instanceof Error ? error.message : String(error);
     apiRouteLogger.error(componentId, `Unexpected error processing component request: ${errorMessage}`, { error });
     
-    return NextResponse.json(
-      { error: "Internal server error", message: errorMessage },
-      { status: 500 }
-    );
+    // Return JavaScript error instead of JSON so it loads in the component
+    const errorScript = `
+      console.error("[Component Error] Internal server error: ${errorMessage.replace(/"/g, '\\"')}");
+      // Set a descriptive error component
+      if (typeof window !== 'undefined') {
+        window.__REMOTION_COMPONENT = (props) => {
+          if (typeof React === 'undefined') return null;
+          return React.createElement(
+            'div',
+            { style: { background: '#f44336', color: 'white', padding: '20px', borderRadius: '4px' } },
+            [
+              React.createElement('h3', { key: 'title' }, 'Internal Server Error'),
+              React.createElement('p', { key: 'message' }, "${errorMessage.replace(/"/g, '\\"')}"),
+              React.createElement('pre', { key: 'id' }, '${componentId}')
+            ]
+          );
+        };
+      }
+    `;
+    
+    return new NextResponse(errorScript, { 
+      status: 200, // Return 200 to allow the error component to render
+      headers: {
+        'Content-Type': 'application/javascript',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      }
+    });
   }
-} 
+}

@@ -1,7 +1,7 @@
 // src/server/workers/buildCustomComponent.ts
 import { db } from "~/server/db";
 import { customComponentJobs } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import os from "os";
 import { measureDuration, recordMetric } from "~/lib/metrics";
@@ -11,6 +11,7 @@ import { env } from "~/env";
 import * as fs from "fs";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
 import logger, { buildLogger } from "~/lib/logger";
+import { repairComponentSyntax, ensureRemotionComponentAssignment } from "./repairComponentSyntax";
 
 // Dynamically import esbuild to prevent bundling issues
 let esbuild: typeof import('esbuild') | null = null;
@@ -49,13 +50,16 @@ export async function processPendingJobs() {
   logger.info("Processing pending custom component jobs...");
   
   try {
-    // Find pending jobs
+    // Find jobs ready for build - look for "building" and "manual_build_retry" status
     const pendingJobs = await db.query.customComponentJobs.findMany({
-      where: eq(customComponentJobs.status, "manual_build_retry"),
+      where: or(
+        eq(customComponentJobs.status, "building"),
+        eq(customComponentJobs.status, "manual_build_retry")
+      ),
       limit: 10, // Get more jobs than we can process at once, to keep the queue filled
     });
 
-    logger.info(`Found ${pendingJobs.length} pending jobs`);
+    logger.info(`Found ${pendingJobs.length} jobs ready for build (status 'building' or 'manual_build_retry')`);
     
     // If no pending jobs, return early
     if (pendingJobs.length === 0) {
@@ -232,6 +236,33 @@ async function processJob(jobId: string): Promise<void> {
       
       buildLogger.upload(jobId, "Uploading to R2...");
 
+      // Verify the component has the required window.__REMOTION_COMPONENT assignment
+      const componentNameMatch = jsCode.match(/export\s+default\s+(?:function\s+)?(\w+)/);
+      if (componentNameMatch && componentNameMatch[1]) {
+        const componentName = componentNameMatch[1];
+        
+        // Check if the window.__REMOTION_COMPONENT assignment is present
+        if (!jsCode.includes('window.__REMOTION_COMPONENT')) {
+          buildLogger.warn(jobId, `Component bundle missing window.__REMOTION_COMPONENT assignment, adding it for ${componentName}`, { 
+            type: "COMPONENT_FIX" 
+          });
+          
+          // Add the assignment
+          const { code, added } = ensureRemotionComponentAssignment(jsCode, componentName);
+          if (added) {
+            // Use the fixed code for upload
+            jsCode = code;
+            buildLogger.compile(jobId, `Added window.__REMOTION_COMPONENT assignment for ${componentName}`);
+          }
+        } else {
+          buildLogger.compile(jobId, `Component already has window.__REMOTION_COMPONENT assignment`);
+        }
+      } else {
+        buildLogger.warn(jobId, "Could not determine component name to verify window.__REMOTION_COMPONENT assignment", { 
+          type: "COMPONENT_NAME_DETECTION" 
+        });
+      }
+
       // Upload to R2
       const key = `custom-components/${jobId}.js`;
       await s3.send(
@@ -281,6 +312,39 @@ async function processJob(jobId: string): Promise<void> {
 }
 
 /**
+ * Special fix for common syntax issues that cause build failures
+ */
+function fixSyntaxIssues(code: string): string {
+  // Fix 1: Replace patterns that cause "Unterminated regular expression" errors in esbuild
+  // First version: </tag>);
+  let fixed = code.replace(/(<\/[a-zA-Z][a-zA-Z0-9]*>)(\s*\);)/g, '$1; $2');
+  
+  // Second version: </tag>)
+  fixed = fixed.replace(/(<\/[a-zA-Z][a-zA-Z0-9]*>)(\s*\))/g, '$1; $2');
+  
+  // Add semicolons after all JSX closing tags as an extra safety measure
+  // THIS LINE IS LIKELY CAUSING THE ");" error, let's comment it out
+  // fixed = fixed.replace(/(<\/[a-zA-Z][a-zA-Z0-9]*>)(\s*(?![;\s\na-zA-Z<]))/g, '$1;$2');
+  
+  // Fix 2: Ensure proper TypeScript generics with React.FC
+  // Incorrect: React.FC<{data: ...}>
+  // Correct: React.FC<ComponentProps>
+  const reactFCPattern = /React\.FC(?:<{[^}]+}>)/g;
+  if (reactFCPattern.test(fixed)) {
+    logger.debug("[ESBUILD-FIX] Found potentially problematic React.FC pattern, fixing interface definition");
+    // This is a complex fix that would require more context-aware processing
+    // For now, we'll just log it and let the preprocessor handle it
+  }
+  
+  // Log if changes were made
+  if (fixed !== code) {
+    logger.debug("[ESBUILD-FIX] Applied syntax fixes to component code");
+  }
+  
+  return fixed;
+}
+
+/**
  * Compile TSX code using esbuild
  */
 async function compileWithEsbuild(tsxCode: string): Promise<string> {
@@ -288,10 +352,20 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
     throw new Error("esbuild is not loaded. Cannot compile.");
   }
 
+  // Apply comprehensive fixes for common syntax issues before compilation
+  const fixedTsxCode = fixSyntaxIssues(tsxCode);
+  
   try {
+    // Log the first few lines around line 45 to debug the issue
+    const lines = fixedTsxCode.split('\n');
+    const startLine = Math.max(0, 44 - 5);
+    const endLine = Math.min(lines.length, 45 + 5);
+    const debugLines = lines.slice(startLine, endLine).join('\n');
+    logger.debug("[ESBUILD] Code around line 45 (before compilation):", { debugLines });
+    
     const result = await esbuild.build({
       stdin: {
-        contents: tsxCode,
+        contents: fixedTsxCode,
         resolveDir: process.cwd(), // Important for resolving any potential relative paths if ever used
         loader: 'tsx',
       },
@@ -327,6 +401,13 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
     }
   } catch (error) {
     logger.error("[ESBUILD] Error during esbuild compilation:", { error });
+    
+    // If we still get the unterminated regex error, try the fallback compiler
+    if (error instanceof Error && error.message.includes('Unterminated regular expression')) {
+      logger.warn("[ESBUILD] Unterminated regular expression error persists, trying fallback compiler");
+      return compileWithFallback(tsxCode);
+    }
+    
     throw error; // Re-throw to be caught by processJob
   }
 }
@@ -379,23 +460,30 @@ if (typeof Component !== 'undefined') {
  */
 function sanitizeTsx(tsxCode: string): string {
   // First, remove duplicate default exports
-  const deduplicatedCode = removeDuplicateDefaultExports(tsxCode);
+  let sanitizedCode = removeDuplicateDefaultExports(tsxCode);
   
   // Check for and remove duplicate React declarations
   const reactDeclarationRegex = /const\s+React\s*=\s*(window\.React|require\(['"]react['"]\)|import\s+.*\s+from\s+['"]react['"])/g;
-  const reactMatches = Array.from(deduplicatedCode.matchAll(reactDeclarationRegex));
+  const reactMatches = Array.from(sanitizedCode.matchAll(reactDeclarationRegex));
   
   if (reactMatches.length > 0) {
     logger.debug(`Found ${reactMatches.length} React declarations, removing them to prevent duplicates:`, { 
       matches: reactMatches.map((match, i) => {
-        const lineNumber = deduplicatedCode.substring(0, match.index || 0).split('\n').length;
+        const lineNumber = sanitizedCode.substring(0, match.index || 0).split('\n').length;
         return `[${i}] Line ~${lineNumber}: ${match[0]}`;
       })
     });
   }
   
   // Remove React declarations
-  let sanitizedCode = deduplicatedCode.replace(reactDeclarationRegex, '// React is provided globally');
+  sanitizedCode = sanitizedCode.replace(reactDeclarationRegex, '// React is provided globally');
+  
+  // SPECIFIC FIX for </AbsoluteFill>; pattern from LLM
+  const faultySemicolonPattern = /<\/AbsoluteFill>\s*;/g;
+  if (faultySemicolonPattern.test(sanitizedCode)) {
+    buildLogger.warn("sanitizeTsx", "Detected and removing misplaced semicolon after </AbsoluteFill>.");
+    sanitizedCode = sanitizedCode.replace(faultySemicolonPattern, '</AbsoluteFill>');
+  }
   
   // Split by lines
   const lines = sanitizedCode.split('\n');
@@ -849,12 +937,42 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     const publicPath = `custom-components/${jobId}.js`;
     
     try {
+      // Verify the component has the required window.__REMOTION_COMPONENT assignment
+      const bundleContentStr = bundleContent.toString();
+      const componentNameMatch = bundleContentStr.match(/export\s+default\s+(?:function\s+)?(\w+)/);
+      let finalBundleContent = bundleContent;
+      
+      if (componentNameMatch && componentNameMatch[1]) {
+        const componentName = componentNameMatch[1];
+        
+        // Check if the window.__REMOTION_COMPONENT assignment is present
+        if (!bundleContentStr.includes('window.__REMOTION_COMPONENT')) {
+          buildLogger.warn(jobId, `Component bundle missing window.__REMOTION_COMPONENT assignment, adding it for ${componentName}`, { 
+            type: "COMPONENT_FIX" 
+          });
+          
+          // Add the assignment
+          const { code, added } = ensureRemotionComponentAssignment(bundleContentStr, componentName);
+          if (added) {
+            // Use the fixed code for upload
+            finalBundleContent = Buffer.from(code, 'utf-8');
+            buildLogger.compile(jobId, `Added window.__REMOTION_COMPONENT assignment for ${componentName}`);
+          }
+        } else {
+          buildLogger.compile(jobId, `Component already has window.__REMOTION_COMPONENT assignment`);
+        }
+      } else {
+        buildLogger.warn(jobId, "Could not determine component name to verify window.__REMOTION_COMPONENT assignment", { 
+          type: "COMPONENT_NAME_DETECTION" 
+        });
+      }
+      
       // Upload to R2
       const result = await r2.send(
         new PutObjectCommand({
           Bucket: env.R2_BUCKET_NAME,
           Key: publicPath,
-          Body: bundleContent,
+          Body: finalBundleContent,
           ContentType: 'application/javascript',
         })
       );
@@ -862,7 +980,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
       const r2Duration = Date.now() - r2StartTime;
       buildLogger.upload(jobId, `R2 upload successful in ${r2Duration}ms`, { 
         ETag: result.ETag, 
-        size: bundleContent.length 
+        size: finalBundleContent.length 
       });
       
       // NEW: Verify file exists in R2 before updating database

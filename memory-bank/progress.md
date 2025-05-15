@@ -1,6 +1,118 @@
 # Current Progress Status
 
+## Sprint 21: Enhanced Component Syntax Error Prevention & Pipeline Reliability (2025-05-15)
+
+We've implemented significant improvements to address the persistent fps variable redeclaration issue that was causing components to fail with "Identifier 'fps' has already been declared" errors.
+
+### Key Improvements
+
+1. **Preventative Template Modifications**:
+   - Modified the component template to make all hook declarations opt-in rather than automatic
+   - Commented out the useVideoConfig destructuring by default, preventing fps declarations unless explicitly needed
+   - Added clearer instructions in the template about when to uncomment the hooks
+
+2. **Enhanced Repair Function**:
+   - Expanded the `repairComponentSyntax.ts` function to handle more fps declaration patterns
+   - Added support for detecting fps accessed via direct property (useVideoConfig().fps)
+   - Added support for detecting fps accessed via secondary variables (videoConfig.fps)
+   - Implemented a more thorough pattern matching approach using multiple regex patterns
+
+3. **Implementation Strategy**:
+   - Two-pronged approach: prevention in the template + comprehensive repair for existing code
+   - Non-invasive fixes that preserve component logic while addressing syntax issues
+   - Robust handling of edge cases including nested destructuring and multiple access patterns
+
+### Impact
+
+The improvements should significantly increase the component generation success rate, particularly for components that use the fps variable from useVideoConfig(). This addresses one of the most common errors seen in the component generation pipeline.
+
+### Future Work
+
+- Continue monitoring component generation success rates
+- Consider adding more patterns if new variants of this issue are discovered
+- Update LLM prompts to explicitly warn against variable redeclaration
+
+## Sprint 21: Component Syntax Repair Enhancement (2025-05-15)
+
+We've successfully implemented additional improvements to the component syntax repair system built in Sprint 20. The system now more robustly handles LLM-generated component syntax errors.
+
+### Current Enhancement Focus
+- **Extended Error Pattern Detection**: Added support for more complex patterns of duplicate variable declarations, especially for variables like `fps` accessed via different patterns (destructuring vs direct property access)
+- **Improved Template Integration**: Better integration with the component template system to ensure consistent component structure
+- **Enhanced Validation Pipeline**: Integrated syntax repair directly into the component validation process with proper tracking of applied fixes
+- **Test Coverage**: Created comprehensive test cases for all identified error patterns
+
+### Implementation Details
+- Enhanced `repairComponentSyntax.ts` with more robust regex patterns for detecting and fixing syntax issues
+- Updated the component generation pipeline to preserve original code when fixes are applied
+- Added metadata tracking for fixed components (original code, list of applied fixes, timestamp)
+- Created TypeScript interfaces to properly type the component repair process
+
+### Key Benefits
+- Higher success rate for component generation across diverse animation patterns
+- Reduced maintenance overhead by preventing common syntax errors
+- Improved developer experience with clearer template documentation
+
+## Sprint 21: Custom Component Pipeline Reliability (2025-05-15)
+
+We've successfully resolved issues with specific components that were stuck in the component generation pipeline, improving overall system reliability.
+
+### Stuck Tetris Components Fix
+
+1. **Issue Analysis**:
+   - Identified Tetris-themed components stuck in "generating_code" status
+   - Components unable to progress through the build pipeline due to missing TSX code
+   - Build worker not picking up these components for processing
+
+2. **Solution Implementation**:
+   - Created a specialized script (`fix-tetris-components.js`) to repair the affected components
+   - Generated valid fallback TSX code specifically for Tetris-themed animations
+   - Updated component status from "generating_code" to "building" in the database
+   - Ensured proper TypeScript annotation and ES module compatibility
+
+3. **Technical Approach**:
+   - Used direct SQL updates to modify component status and code
+   - Implemented robust error handling and environment variable management
+   - Created detailed documentation in `memory-bank/fixes/tetris-components-fix.md`
+
+### Impact
+
+- Resolved issues with components that were previously stuck in the pipeline
+- Improved system reliability by ensuring components can transition through all pipeline stages
+- Created reusable patterns for addressing similar issues in the future
+
+### Future Work
+
+- Consider implementing preventative measures to detect stalled components automatically
+- Continue monitoring the component pipeline for similar issues
+- Develop a more comprehensive component repair toolkit
+
+### Key Benefits
+- Higher success rate for component generation, especially for complex animations requiring fps variables
+- Better debugging capabilities with original/fixed code comparison
+- More reliable component generation pipeline
+- Improved user experience with fewer failed components
+
+### Next Steps
+- Continue monitoring component generation success rates
+- Add visual tools for comparing original vs fixed component code
+- Create automated verification tools for component syntax analysis
+
 ## Sprint 20: Database Schema Migration (2025-05-15)
+
+### Fixed Critical Component Syntax Errors (2025-05-14)
+- **Problem**: Components were failing with syntax errors like `Identifier 'fps' has already been declared`.
+- **Solution**: Created and enhanced `repairComponentSyntax.ts` to fix common syntax errors:
+  - Detects and fixes duplicate variable declarations (frame, config, fps) in various formats
+  - Handles unescaped HTML in string literals
+  - Detects missing closing tags
+  - Adds missing exports
+  - Adds missing React and Remotion imports
+- **Implementation**: 
+  - Created comprehensive repair function with tests
+  - Integrated repair into component validation pipeline
+  - Added original/fixed code tracking for debugging
+- **Impact**: More reliable component generation, especially for complex animations requiring fps variables
 
 ### Completed
 We've successfully updated the database schema to support the Component Recovery System:
@@ -2069,4 +2181,245 @@ The custom component generation pipeline has been enhanced with a robust syntax 
 
 ### Expected Impact
 These improvements should significantly increase the success rate of component generation from ~20% to >80%, dramatically improving user experience when working with custom components.
-```
+
+## Sprint 20 Progress Update
+
+### Component Generation Repair System
+
+**Fixed critical component generation syntax errors:**
+
+- Implemented and enhanced `repairComponentSyntax.ts` to fix common syntax errors in generated components
+- Added specific fixes for duplicate variable declarations of `fps` variables
+- Updated the component generation pipeline to use the repair system before validation
+- Created comprehensive test suite for validating the repair functionality
+- Improved the regex replacement logic for more reliable variable deduplication
+
+**Impact:**
+- Components that previously failed with `Identifier 'fps' has already been declared` errors will now be successfully generated
+- More reliable component generation, especially for complex animations
+- Reduced dependency on perfect LLM output by adding automatic syntax repair capabilities
+
+### To Do
+- Monitor component generation success rate with the new repair system
+- Consider additional syntax repair patterns if new issues are discovered
+- Add more comprehensive logging to track which repair methods are most frequently used
+
+## Sprint 21: Custom Component Loading Fix (2025-05-15)
+
+We've implemented critical fixes for custom components that were stuck in "loading component" state with "no output URL" errors:
+
+### Key Fixes
+
+1. **Missing Output URL Fix**:
+   - Created a script to identify components with "ready" or "complete" status but missing outputUrl
+   - Added verification of R2 file existence before updating database records
+   - This resolves cases where components are marked as ready but can't be loaded in the UI
+
+2. **Remotion Component Assignment Fix**:
+   - Added mandatory `window.__REMOTION_COMPONENT` assignment to component template
+   - Enhanced `repairComponentSyntax.ts` to add this assignment if missing
+   - Created a repair script to add the assignment to existing components in R2 storage
+   - This fixes the issue where components don't register with the Remotion player
+
+3. **Improved Error Handling**:
+   - Added clearer error messages when components fail to load
+   - Implemented verification steps in the build process to ensure components are properly registered
+
+### Next Steps
+
+- Monitor component loading in production to ensure fixes are working
+- Consider adding automated tests to verify component loading in the future
+- Update the component generator to include more robust error handling
+
+## Sprint 21: Fix for "Component has no output URL" Issue (2025-05-15)
+
+We've addressed a critical issue where components were showing as "ready" in the UI but failed with "Component has no output URL, cannot add to video" errors when attempting to add them to the timeline.
+
+### Root Cause
+- Components were marked as "ready" in the database but their JavaScript files were missing from R2 storage
+- This inconsistent state caused the loading error when attempting to add them to the video
+
+### Key Fixes
+1. **Automatic Component Rebuilding**: Enhanced UI to automatically trigger rebuilds for components in this inconsistent state
+2. **Database Fix Script**: Created `fix-inconsistent-components.ts` to identify and reset affected components
+3. **Improved Error Handling**: Better feedback to users when components need rebuilding
+4. **UI Enhancement**: Added dedicated "Rebuild" button for components in this state
+
+See detailed documentation in `memory-bank/sprints/sprint21/debugging-missing-outputUrl.md`
+
+## Current Progress Update
+
+### Recent Improvements
+
+#### Custom Component Rendering Fix (Sprint 21)
+- ✅ Fixed issues with custom components not properly rendering in Remotion videos
+- ✅ Created a comprehensive helper script (`bazaar-components-helper.sh`) for managing and fixing components
+- ✅ Added detailed documentation on creating robust custom components
+- ✅ Improved error detection and handling for component issues
+- ✅ Created several targeted fix scripts for specific component problems:
+  - `fix-component-syntax.ts` - Fixes common syntax errors
+  - `fix-missing-outputUrl.ts` - Repairs components with missing output URLs
+  - `fix-remotion-component-assignment.ts` - Adds required Remotion component assignments
+  - `create-test-component.ts` - Creates a guaranteed working test component
+
+### What Works
+- Custom components can now be properly created, built, and added to videos
+- Component debugging tools provide clear diagnostics and automate fixes
+- Better error handling and feedback in the UI for component issues
+- Improved documentation guides users in creating compatible components
+
+### What's Next
+- Further improvements to component validation during the build process
+- Enhanced UI for component error reporting and troubleshooting
+- Development of a component library/marketplace for sharing working components
+
+### Known Issues
+- Some complex components may still fail to render correctly
+- Better error messages needed for certain component failure modes
+- Need to improve validation for components during build process
+
+## Sprint 22: Custom Component Fix System (2025-05-16)
+
+We've implemented a comprehensive Custom Component Fix System to address issues with custom Remotion components that were marked as "ready" but not appearing in the video preview. The system resolves three critical issues:
+
+### Key Problems Solved
+
+1. **Missing OutputUrl Values**:
+   - Components marked as "ready" or "complete" in the database had NULL outputUrl values
+   - This prevented the UI from loading these components even though they were successfully generated
+   - Fixed by generating proper R2 URLs based on component IDs and updating the database
+
+2. **Syntax Errors in Component Code**:
+   - Many components had syntax errors like extra semicolons after JSX closing tags
+   - These errors were preventing JavaScript execution in the browser
+   - Fixed by automatically detecting and removing these syntax errors
+
+3. **Missing Component Registration**:
+   - Components weren't properly registering with `window.__REMOTION_COMPONENT`
+   - Remotion requires this global assignment to find and render components
+   - Fixed by analyzing component code to find the component name and adding the proper assignment
+
+### Implementation Details
+
+- **Comprehensive Fix Script**: Created `fix-custom-components.ts` that can check and fix all issues in one operation
+- **Interactive Helper**: Developed `run-fix-custom-components.sh` that handles environment variables and provides a user-friendly interface
+- **UI Component**: Built `CustomComponentDiagnostic.tsx` to provide an in-app interface for diagnosing and fixing component issues
+- **Specialized Fix Functions**: Created targeted fix scripts for each issue type that can be run independently
+
+### Impact
+
+- Users can now use custom components that were previously showing as "ready" but not appearing in videos
+- The fix process can be run from the command line or through the UI
+- Detailed diagnostic information helps identify problematic components
+- Guaranteed working component creation for testing and verification
+
+### Documentation
+
+- Added comprehensive documentation in `memory-bank/component-fix-system.md`
+- Documented best practices for creating custom components
+- Included troubleshooting steps for persistent issues
+
+### Next Steps
+
+- Monitor fix success rates to identify any remaining component issues
+- Consider automating the fix process as part of the component generation pipeline
+- Enhance LLM prompts to generate components with fewer syntax errors
+
+## Sprint 22: Custom Component Add Button Fix - PERMANENT SOLUTION (2025-05-16)
+
+We've implemented a permanent fix for the issue where components marked as "Ready" in the UI couldn't be added to videos due to a logic error in the Add button disabled state calculation.
+
+### Permanent Fix Implemented
+
+1. **Fixed Button Disabled Logic**: 
+   - Modified the logic in `CustomComponentsPanel.tsx` to enable the Add button for all components with "ready" status, regardless of whether they have an outputUrl
+   - The previous logic incorrectly disabled Add buttons for components with missing outputUrl
+
+2. **Intelligent Add Button Handler**:
+   - Enhanced the Add button click handler to automatically detect and handle components with missing outputUrl
+   - When a user clicks Add on a component that needs rebuilding, it starts the rebuild process automatically
+   - Added user feedback to show what's happening
+
+3. **Automatic Component Addition**:
+   - Implemented auto-addition of rebuilt components once they're ready
+   - Components that were being rebuilt will automatically be added to the video when they reach "ready" status
+
+4. **Improved UI Feedback**:
+   - Added "Rebuilding" status indicator to show when components are being processed
+   - Enhanced the "Fix All Components" button to make it more obvious and user-friendly
+   - Improved error handling and user feedback for the entire component workflow
+
+### Impact
+
+This permanent fix provides a seamless experience for users:
+
+1. All components marked as "Ready" can now be added to videos with a single click
+2. Components that need rebuilding are handled automatically
+3. The UI provides clear feedback about what's happening
+4. No more frustration with disabled Add buttons for components that appear ready
+
+The fix is much better than browser console scripts as it permanently integrates into the application code.
+
+## Sprint 22: Custom Component Add Button Fix (2025-05-16)
+
+We've identified and created solutions for an issue where components marked as "Ready" in the Custom Components Panel couldn't be added to videos:
+
+### Problem Identified
+
+1. **Disabled Add Buttons**: Components showing "Ready" status had disabled Add buttons, preventing users from adding them to videos
+2. **Missing OutputUrl Logic**: The button disabled state logic didn't account for components with "ready" status but missing outputUrl values
+3. **User Experience Gap**: Users couldn't tell why some "Ready" components couldn't be added to videos
+
+### Solutions Implemented
+
+1. **Browser Console Fix**: Created a comprehensive browser console script that:
+   - Enables Add buttons for components that should be clickable
+   - Automatically triggers rebuilds for components marked as "Ready" but missing outputUrl
+   - Provides detailed diagnostics in the console
+
+2. **Documentation**: Added detailed documentation explaining:
+   - How to use the browser fix script
+   - The root cause of the problem
+   - Requirements for a permanent code fix
+
+3. **Permanent Fix Requirements**: Documented the specific code changes needed in `CustomComponentsPanel.tsx` to correctly handle components with "ready" status but missing outputUrl
+
+### Impact
+
+This fix allows users to immediately add components to their videos without waiting for a full code update. The browser console fix provides a temporary solution until the permanent fix can be implemented in the codebase.
+
+### Next Steps
+
+1. Implement the permanent code fix in `CustomComponentsPanel.tsx`
+2. Add more descriptive UI feedback when components need rebuilding
+3. Enhance the component generation process to prevent the issue from occurring
+4. Add automatic verification of outputUrl validity before allowing components to be marked as "Ready"
+
+## Sprint 22: Critical Bug Fix - Component Generation & Build Pipeline (2025-05-15)
+
+**Current Focus:** Resolving critical issues where newly generated custom components are either stuck in the "generating_code" status or failing during the build process with errors like "TSX code is missing for this job" or esbuild compilation errors.
+
+**Identified Problems & Hypotheses:**
+1.  **Race Condition:** The build worker (`src/server/cron/buildWorker.ts`) might be attempting to process jobs before the code generation pipeline (`src/server/workers/generateComponentCode.ts`) has successfully saved the `tsxCode` (either initial LLM output or fallback code) and updated the job status appropriately.
+2.  **Error Handling in Code Generation:** If errors occur during LLM code generation, validation (`validateComponentSyntax`), or preprocessing (`tsxPreprocessor.ts`, `repairComponentSyntax.ts`), the system might not be correctly saving the faulty/fallback TSX code to the database or updating the job status to `failed`/`fixable`.
+3.  **Preprocessing/Build Errors:**
+    *   Persistent regex errors in `src/server/utils/tsxPreprocessor.ts` (e.g., `Unmatched ')'`) were identified and addressed.
+    *   Overly aggressive semicolon insertion in `fixSyntaxIssues` within `src/server/workers/buildCustomComponent.ts` was causing `esbuild` errors (`Expected ")" but found ";"`) and has been addressed.
+    *   The error `Unexpected strict mode reserved word` indicates potential issues with LLM-generated code or our sanitization/templating process.
+
+**Recent Corrective Actions (Summary):**
+*   **Status Flow Overhaul:**
+    *   Initial job status set to `queued_for_generation` (in `customComponentRouter.create`).
+    *   `processComponentJob` in `generateComponentCode.ts` now sets status to `generating_code` at the start, then to `building` (on success) or `failed`/`fixable` (on error, after attempting to save code).
+    *   `buildWorker.ts` (specifically `checkForPendingJobs`) now polls for jobs with status `building` or `manual_build_retry`.
+*   **Regex Fix in `tsxPreprocessor.ts`:** Corrected problematic regex in `fixJsxStructure`.
+*   **`fixSyntaxIssues` Adjustment:** Commented out aggressive semicolon insertion in `buildCustomComponent.ts`.
+*   **Logging Enhancements:** Improved logging in `handleComponentGenerationError` to trace `tsxCode` saving.
+
+**Next Immediate Steps:**
+1.  Verify that the **code generation poller** (the mechanism that takes jobs from `queued_for_generation` and feeds them to `processComponentJob`) is correctly configured.
+2.  Conduct thorough end-to-end testing with new component generations.
+3.  Deeply analyze server logs for new job IDs to trace the new status flow and pinpoint where `tsxCode` might still be lost or where new errors arise.
+4.  Investigate the `Unexpected strict mode reserved word` error if it persists.
+
+---

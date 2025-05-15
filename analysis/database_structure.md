@@ -1,21 +1,21 @@
 # Database Structure Analysis
 
-*Generated on 2025-05-13T09:01:58.829Z*
+*Generated on 2025-05-15T16:04:54.265Z*
 
 ## Tables
 
 | # | Table Name | Row Count |
 |---|------------|----------:|
 | 1 | bazaar-vid_account | 4 |
-| 2 | bazaar-vid_animation_design_brief | 72 |
+| 2 | bazaar-vid_animation_design_brief | 102 |
 | 3 | bazaar-vid_component_error | 0 |
-| 4 | bazaar-vid_custom_component_job | 206 |
-| 5 | bazaar-vid_message | 277 |
-| 6 | bazaar-vid_metric | 337 |
-| 7 | bazaar-vid_patch | 117 |
-| 8 | bazaar-vid_project | 90 |
-| 9 | bazaar-vid_scene_plan | 43 |
-| 10 | bazaar-vid_user | 4 |
+| 4 | bazaar-vid_custom_component_job | 71 |
+| 5 | bazaar-vid_message | 310 |
+| 6 | bazaar-vid_metric | 387 |
+| 7 | bazaar-vid_patch | 260 |
+| 8 | bazaar-vid_project | 104 |
+| 9 | bazaar-vid_scene_plan | 55 |
+| 10 | bazaar-vid_user | 6 |
 | 11 | bazaar-vid_verificationToken | 0 |
 
 ## Component-Related Tables
@@ -53,19 +53,23 @@ No sample data available
 | updatedAt | timestamp with time zone | Yes | CURRENT_TIMESTAMP |
 | metadata | jsonb | Yes | - |
 | statusMessageId | uuid | Yes | - |
+| original_tsx_code | text | Yes | - |
+| last_fix_attempt | timestamp with time zone | Yes | - |
+| fix_issues | text | Yes | - |
+| originalTsxCode | text | Yes | - |
+| lastFixAttempt | timestamp with time zone | Yes | - |
+| fixIssues | text | Yes | - |
 
 #### Sample Data
 
-| id | projectId | effect | tsxCode | status | outputUrl | errorMessage | retryCount | createdAt | updatedAt | metadata | statusMessageId |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| d4077499-a97a-41f1-ad9e-365c95 | b12633a2-6d90-45a3-95ef-91d9ba | CreateARealisticScene | "use client";
-
-// src/remotion | building | - | TSX code is missing for this j | 1 | "2025-05-10T05:13:41.041Z"... | "2025-05-10T05:14:06.323Z"... | {"fps":30,"width":1920,"height... | 695657de-1078-4b33-892d-339d7d |
-| 21ed6225-0f3e-421f-83cb-9cf133 | 22965772-ed6f-4cf3-b468-39e545 | Test Fade Animation | 
-function FadeInText({ text =  | success | https://bazaar-vid-components. | - | 0 | "2025-05-04T12:05:25.381Z"... | "2025-05-04T12:05:28.735Z"... | - | - |
-| a23536e9-9dee-493a-8e87-0170df | 236b1935-0453-4904-8ac9-7ad941 | FireworksAnimationOverlayScene | "use client";
-
-// src/remotion | building | - | TSX code is missing for this j | 1 | "2025-05-10T05:35:46.165Z"... | "2025-05-10T05:36:22.578Z"... | {"fps":30,"width":1920,"height... | 78e2aa91-5a6b-4d6a-a6e7-2644ea |
+| id | projectId | effect | tsxCode | status | outputUrl | errorMessage | retryCount | createdAt | updatedAt | metadata | statusMessageId | original_tsx_code | last_fix_attempt | fix_issues | originalTsxCode | lastFixAttempt | fixIssues |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 82af8899-5e5f-488d-940b-0db519 | 00000000-0000-0000-0000-000000 | {"type":"fadeIn","duration":10 | 
+import { AbsoluteFill, useCur | error | - | Build error: Build failed with | 0 | "2025-05-13T14:02:52.221Z"... | "2025-05-13T14:02:53.187Z"... | - | - | - | - | - | - | - | - |
+| 270d79bf-2697-49eb-9ed4-5aacce | 00000000-0000-0000-0000-000000 | {"type":"fadeIn","duration":10 | 
+// import { AbsoluteFill, use | complete | https://pub-80969e2c6b73496db9 | - | 0 | "2025-05-14T03:14:34.559Z"... | "2025-05-14T03:14:38.568Z"... | - | - | - | - | - | - | - | - |
+| 8d57a2f9-47cd-4e7e-abd7-c7cf96 | 00000000-0000-0000-0000-000000 | {"type":"fadeIn","duration":10 | 
+import { AbsoluteFill, useCur | error | - | Build error: Build failed with | 0 | "2025-05-13T14:07:06.246Z"... | "2025-05-13T14:07:07.163Z"... | - | - | - | - | - | - | - | - |
 
 ## Custom Component Job Table Analysis
 
@@ -73,55 +77,58 @@ function FadeInText({ text =  | success | https://bazaar-vid-components. | - | 0
 
 | Status | Count |
 |--------|------:|
-| error | 131 |
-| complete | 31 |
-| success | 25 |
-| building | 19 |
+| complete | 28 |
+| error | 22 |
+| success | 10 |
+| failed | 9 |
+| building | 2 |
 
 ### Recent Components by Status
-
-#### error Components (Recent 5)
-
-| ID | Effect | Created At | Error |
-|----|--------|------------|-------|
-| e6ed348b-c7f2-4d26-9de4-6e03c9cd283a | HighenergyVerticalJumpScene | Tue May 13 2025 13:44:31 GMT+0700 (Indochina Time) | Build error: Build failed with 6 errors:
-<stdin>:2... |
-| 22a33b5b-cd53-453c-8545-559fe731bf2e | UiDashboardWalkthroughScene | Tue May 13 2025 13:24:45 GMT+0700 (Indochina Time) | Build error: Build failed with 6 errors:
-<stdin>:2... |
-| f6e6c8b6-f667-40ea-8b33-0e6341310f02 | AnimatedDancingBuddhaScene | Tue May 13 2025 13:23:40 GMT+0700 (Indochina Time) | Build error: Build failed with 6 errors:
-<stdin>:2... |
-| 8444922e-9aa7-4471-aa03-4bb8a653f1aa | DancingBuddhaAnimationScene | Tue May 13 2025 13:22:25 GMT+0700 (Indochina Time) | Build error: Build failed with 6 errors:
-<stdin>:2... |
-| 7fb81654-8967-48be-a5fa-72293f583f01 | AnimateThetestScene | Tue May 13 2025 09:18:00 GMT+0700 (Indochina Time) | Build error: Build failed with 9 errors:
-<stdin>:3... |
 
 #### complete Components (Recent 5)
 
 | ID | Effect | Created At | Error |
 |----|--------|------------|-------|
-| 50d8b936-9b5f-4988-b5ad-4be515268e61 | TheRedBubbleScene | Mon May 12 2025 20:50:23 GMT+0700 (Indochina Time) | - |
-| 31ba948d-4aef-4f7e-8d82-17e872dcabfa | ASmallRedScene | Mon May 12 2025 20:49:47 GMT+0700 (Indochina Time) | - |
-| 63cea45c-4018-407c-a82b-80a5bcb3dd76 | DisplayACleanScene | Mon May 12 2025 20:25:36 GMT+0700 (Indochina Time) | - |
-| 11905696-f0ac-4f00-969f-77e36c57d348 | BluePlanetCirclingScene | Mon May 12 2025 12:57:48 GMT+0700 (Indochina Time) | - |
-| 7bff90dd-a813-455e-9622-c2d7eb7fa36f | ASingleOrangeScene | Mon May 12 2025 12:22:39 GMT+0700 (Indochina Time) | - |
+| f390ee24-03b8-4c12-9a59-b71ae0c35b37 | {"type":"fadeIn","duration":1000,"target":"element... | Wed May 14 2025 11:26:43 GMT+0700 (Indochina Time) | - |
+| 5339d891-afd2-4266-8405-a15d74e7568c | CanaryTest_1747196027510 | Wed May 14 2025 11:13:49 GMT+0700 (Indochina Time) | - |
+| 0f520073-5716-4edc-8755-e6927f6d97a9 | CanaryTest_1747193899458 | Wed May 14 2025 10:38:21 GMT+0700 (Indochina Time) | - |
+| a45af025-c839-40a6-b806-822ba5566ecc | CanaryTest_1747193843357 | Wed May 14 2025 10:37:25 GMT+0700 (Indochina Time) | - |
+| 95902727-2bc2-49bf-a86e-8e56a60c3c45 | CanaryTest_1747193759885 | Wed May 14 2025 10:36:01 GMT+0700 (Indochina Time) | - |
+
+#### error Components (Recent 5)
+
+| ID | Effect | Created At | Error |
+|----|--------|------------|-------|
+| fdd0a1e2-fe9b-4f60-bafb-cad7da7d501d | AMinimalistCanvasScene | Thu May 15 2025 21:49:06 GMT+0700 (Indochina Time) | TSX code is missing for this job |
+| fa309597-d7f3-409c-9e7e-ee1aae6cca92 | FullscreenRetroSnakeScene | Thu May 15 2025 16:43:15 GMT+0700 (Indochina Time) | TSX code is missing for this job |
+| f2738a99-3576-4297-9233-cea63fe1e353 | TheBallBouncesScene | Thu May 15 2025 16:30:56 GMT+0700 (Indochina Time) | TSX code is missing for this job |
+| 7f8e1297-c5be-45d5-b1a5-20ccc7885544 | TheShoeKicksScene | Thu May 15 2025 16:30:33 GMT+0700 (Indochina Time) | TSX code is missing for this job |
+| 55c9be9b-5b21-42b1-8df1-63d079a377c7 | ACloseupOfScene | Thu May 15 2025 16:30:11 GMT+0700 (Indochina Time) | TSX code is missing for this job |
 
 #### success Components (Recent 5)
 
 | ID | Effect | Created At | Error |
 |----|--------|------------|-------|
-| 7ed548bb-7f5a-453c-b323-8d262e340f3b | Create a vibrant fireworks display animation that ... | Fri May 09 2025 09:54:06 GMT+0700 (Indochina Time) | - |
-| 2ae4084c-93be-4823-bee9-fb5429e8439b | Create a dramatic firework animation over a black ... | Fri May 09 2025 07:29:09 GMT+0700 (Indochina Time) | - |
-| fea60422-4225-4f19-96c3-28c87c8702f2 | Create an animated component of a floating house t... | Thu May 08 2025 11:26:43 GMT+0700 (Indochina Time) | - |
-| 75a0ef7d-0aeb-43c1-b42b-a88baa2d7cea | A vibrant fireworks display that fills the screen ... | Thu May 08 2025 09:36:31 GMT+0700 (Indochina Time) | - |
-| f14ba153-c105-480d-ade7-3a81ef5392bc | Create a visually stunning fireworks display effec... | Thu May 08 2025 08:01:15 GMT+0700 (Indochina Time) | - |
+| 35bfb3bc-bad3-4e7b-a856-157b69b0abdf | Test 3: Function Component Style with Props Destru... | Wed May 14 2025 23:05:22 GMT+0700 (Indochina Time) | - |
+| 2489eaf2-68e0-49e6-a583-960ee995aed7 | Test 2: Simplified Format with default export only | Wed May 14 2025 23:05:22 GMT+0700 (Indochina Time) | - |
+| ffb2ae8c-a5cc-4a5d-a96b-f728ed65c231 | Test 1: Standard Format with React.FC and explicit... | Wed May 14 2025 23:05:21 GMT+0700 (Indochina Time) | - |
+| af8b9fdd-aa0d-4f7f-b370-99649d56796f | Test 3: Function Component Style with Props Destru... | Wed May 14 2025 22:54:49 GMT+0700 (Indochina Time) | - |
+| 731bc18a-bfdf-4781-ad75-06cfde9a5890 | Test 2: Simplified Format with default export only | Wed May 14 2025 22:54:48 GMT+0700 (Indochina Time) | - |
+
+#### failed Components (Recent 5)
+
+| ID | Effect | Created At | Error |
+|----|--------|------------|-------|
+| dda49115-3318-4074-a087-a436a7f91f27 | ADynamicFireworksScene | Wed May 14 2025 08:24:09 GMT+0700 (Indochina Time) | Generated component has syntax errors: Identifier ... |
+| 1a0c7f8e-cd45-4eee-8bf1-75a14cfbee65 | ShowcaseADynamicScene | Wed May 14 2025 08:09:53 GMT+0700 (Indochina Time) | Generated component has syntax errors: Unexpected ... |
+| a472b2ac-b0b0-4e88-881f-bc05359aeedf | BlueFireworksSceneScene | Wed May 14 2025 07:58:02 GMT+0700 (Indochina Time) | Generated component has syntax errors: Unexpected ... |
+| 023648f4-609b-4431-ad60-e2c01e43990d | CloseupCustomShotScene | Wed May 14 2025 07:54:32 GMT+0700 (Indochina Time) | Generated component has syntax errors: Identifier ... |
+| 8e6c6f61-c73b-47c2-8031-6e5629f2ab47 | AnAnimatedFlyingScene | Wed May 14 2025 07:54:09 GMT+0700 (Indochina Time) | Generated component has syntax errors: Unexpected ... |
 
 #### building Components (Recent 5)
 
 | ID | Effect | Created At | Error |
 |----|--------|------------|-------|
-| a23536e9-9dee-493a-8e87-0170dfae432e | FireworksAnimationOverlayScene | Sat May 10 2025 12:35:46 GMT+0700 (Indochina Time) | TSX code is missing for this job |
-| d4077499-a97a-41f1-ad9e-365c9587efee | CreateARealisticScene | Sat May 10 2025 12:13:41 GMT+0700 (Indochina Time) | TSX code is missing for this job |
-| 12559deb-5500-4fd6-b489-ef3d3dc41584 | SwipeupCalltoactionAnimatedScene | Sat May 10 2025 11:39:43 GMT+0700 (Indochina Time) | TSX code is missing for this job |
-| ca16ab14-e057-4977-9ca7-1f1552cebaee | FeatureListBurstsScene | Sat May 10 2025 11:38:50 GMT+0700 (Indochina Time) | TSX code is missing for this job |
-| 5a8942ea-16d0-4df6-9362-c6b313a26bdf | SlowmotionPlatetophoneMorphScene | Sat May 10 2025 11:38:19 GMT+0700 (Indochina Time) | TSX code is missing for this job |
+| 46a6e2c8-8e1f-408a-b4a8-a131ec82e48a | OnceARowScene | Thu May 15 2025 22:12:47 GMT+0700 (Indochina Time) | esbuild compilation failed: Build failed with 1 er... |
+| 69ecccb5-862c-43a7-b5a5-ddd7cf7776f3 | AnimateVariousTetrominoScene | Thu May 15 2025 22:12:17 GMT+0700 (Indochina Time) | esbuild compilation failed: Build failed with 1 er... |
 

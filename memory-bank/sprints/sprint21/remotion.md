@@ -1,0 +1,1 @@
+getting to show video animotion in the remotion player

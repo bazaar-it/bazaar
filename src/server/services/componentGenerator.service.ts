@@ -538,15 +538,21 @@ export async function generateComponent(
         projectId: projectId,
         effect: componentName,
         statusMessageId: assistantMessageId,
-        status: "pending",
+        status: "queued_for_generation",
         metadata: jobData
     }).returning();
 
-    console.log(`Created component generation job: ${jobId} for ${componentName}`);
+    console.log(`Created component generation job: ${jobId} for ${componentName} with status 'queued_for_generation'`);
 
     // Start generating the code (don't await - this happens asynchronously)
     // This will update the job status when complete
-    processComponentJob(jobId)
+    processComponentJob({
+        id: jobId,
+        name: componentName,
+        prompt: enhancedDescription,
+        // Convert brief to string if it exists to match the expected types
+        variation: animationDesignBriefId ? JSON.stringify(brief) : undefined 
+    })
         .catch(error => {
             console.error(`Error generating component code for job ${jobId}:`, error);
         });
