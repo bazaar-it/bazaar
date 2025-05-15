@@ -175,6 +175,15 @@ export const customComponentJobs = createTable(
     outputUrl: d.text(), // URL to the compiled JS hosted on R2
     errorMessage: d.text(), // Error message if compilation failed
     retryCount: d.integer().default(0).notNull(), // Number of retry attempts
+    // A2A protocol support fields
+    taskId: d.text('task_id'), // A2A task ID
+    internalStatus: d.varchar('internal_status', { length: 50 }), // For internal tracking
+    requiresInput: d.boolean('requires_input').default(false), // Whether user input is needed
+    inputType: d.text('input_type'), // What kind of input is needed
+    taskState: d.jsonb('task_state'), // Current A2A task state details
+    artifacts: d.jsonb('artifacts'), // A2A artifacts collection
+    sseEnabled: d.boolean('sse_enabled').default(false), // Whether SSE is enabled for this task
+    // Timestamps
     createdAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -190,6 +199,7 @@ export const customComponentJobs = createTable(
   (t) => [
     index("custom_component_job_project_idx").on(t.projectId),
     index("custom_component_job_status_idx").on(t.status),
+    index("custom_component_job_task_id_idx").on(t.taskId),
   ],
 );
 
@@ -318,3 +328,37 @@ export const animationDesignBriefsRelations = relations(animationDesignBriefs, (
     references: [customComponentJobs.id] 
   }),
 }));
+
+// --- Agent Messages table ---
+// Stores messages exchanged between agents for A2A protocol support
+export const agentMessages = createTable(
+  "agent_message",
+  (d) => ({
+    id: d.text().primaryKey(), // UUID for the message
+    sender: d.text().notNull(), // Name of the sending agent
+    recipient: d.text().notNull(), // Name of the recipient agent
+    type: d.text().notNull(), // Message type (e.g., 'BUILD_COMPONENT_REQUEST')
+    payload: d.jsonb().notNull(), // Contains Message parts, task IDs, etc.
+    correlationId: d.text('correlation_id'), // Optional ID linking related messages
+    status: d.text().default('pending').notNull(), // Message status ('pending', 'processed', 'failed')
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    processedAt: d.timestamp({ withTimezone: true, mode: 'date' })
+  }),
+  (t) => [
+    index("agent_message_correlation_id_idx").on(t.correlationId),
+    index("agent_message_type_idx").on(t.type),
+    index("agent_message_sender_idx").on(t.sender),
+    index("agent_message_recipient_idx").on(t.recipient),
+  ],
+);
+
+// Add custom index for task ID in payload
+export const agentMessagesIndexes = {
+  byTaskId: sql`CREATE INDEX IF NOT EXISTS "idx_agent_messages_task_id" ON "bazaar-vid_agent_message" ((payload->>'taskId'))`,
+};
+
+// Add history field to customComponentJobs to support A2A protocol task history
+export const customComponentJobsUpdate = sql`
+  ALTER TABLE "bazaar-vid_custom_component_job" 
+  ADD COLUMN IF NOT EXISTS "history" JSONB
+`;

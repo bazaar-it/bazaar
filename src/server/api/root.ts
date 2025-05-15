@@ -7,6 +7,7 @@ import { customComponentFixRouter } from "./routers/customComponentFix";
 import { timelineRouter } from "~/server/api/routers/timeline";
 import { videoRouter } from "~/server/api/routers/video";
 import { animationRouter } from "~/server/api/routers/animation";
+import { a2aRouter } from "~/server/api/routers/a2a";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -25,6 +26,7 @@ export const appRouter = createTRPCRouter({
   timeline: timelineRouter,
   video: videoRouter,
   animation: animationRouter,
+  a2a: a2aRouter,
 });
 
 // export type definition of API

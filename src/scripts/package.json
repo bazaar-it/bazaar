@@ -1,0 +1,22 @@
+{
+  "name": "bazaar-vid-scripts",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Scripts for Bazaar-Vid development and maintenance",
+  "main": "index.js",
+  "scripts": {
+    "fix": "node bin/fix-components.js",
+    "analyze": "node bin/analyze-components.js",
+    "migrate": "node bin/migrate-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "zod": "^3.22.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
