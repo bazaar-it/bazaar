@@ -20,6 +20,9 @@ export WATCHPACK_POLLING=true
 export CHOKIDAR_USEPOLLING=true
 export NODE_OPTIONS="--max-old-space-size=4096"
 
+# Enable Message Bus architecture
+export USE_MESSAGE_BUS=true
+
 echo "Set environment variables for stability"
 echo "Starting Next.js dev server AND standalone TaskProcessor..."
 
@@ -213,7 +216,15 @@ sleep 5
 
 # Run the standalone task processor
 echo "Starting standalone TaskProcessor..."
-$TSX_CMD --require tsconfig-paths/register --no-warnings /tmp/run-task-processor-fixed.ts &
+
+# Check if .env.local exists and modify the command accordingly
+if [ -f ".env.local" ]; then
+  echo "Using environment variables from .env.local for TaskProcessor"
+  npx dotenv -e .env.local -- $TSX_CMD --require tsconfig-paths/register --no-warnings /tmp/run-task-processor-fixed.ts &
+else
+  echo "Warning: .env.local file not found. TaskProcessor may fail to start."
+  $TSX_CMD --require tsconfig-paths/register --no-warnings /tmp/run-task-processor-fixed.ts &
+fi
 TASK_PROCESSOR_PID=$!
 
 echo "Started Next.js (PID: $NEXT_PID) and TaskProcessor (PID: $TASK_PROCESSOR_PID)"

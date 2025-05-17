@@ -54,6 +54,18 @@ export abstract class BaseAgent {
   protected openai: OpenAI | null = null;
   protected modelName: string = 'gpt-4o-mini';
   protected temperature: number = 0.7;
+
+  /**
+   * Central MessageBus accessor for all agents.  Having a getter avoids each
+   * agent file importing the bus directly and makes it easy to replace the
+   * implementation (e.g. swap EventEmitter for Redis) without changing agent
+   * code.
+   */
+  protected get bus() {
+    // Lazy-load to break circular-import issues.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("./message-bus").messageBus as typeof import("./message-bus").messageBus;
+  }
   
   constructor(name: string, taskManager: TaskManager, description?: string, useOpenAI: boolean = false) {
     this.name = name;
@@ -61,13 +73,29 @@ export abstract class BaseAgent {
     this.description = description || `${name} Agent`;
     
     // Initialize OpenAI if needed
-    if (useOpenAI && process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-      a2aLogger.info(null, `Agent ${this.name} initialized with OpenAI integration.`);
+    if (useOpenAI) {
+      console.log(`${name}: Trying to initialize OpenAI. API Key available: ${Boolean(process.env.OPENAI_API_KEY)}`);
+      
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          this.openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+          });
+          console.log(`${name}: Successfully initialized OpenAI client`);
+          a2aLogger.info("agent_init", `Agent ${this.name} initialized with OpenAI integration.`);
+        } catch (error) {
+          console.error(`${name}: Error initializing OpenAI:`, error);
+          a2aLogger.error("agent_init_error", `Error initializing OpenAI for ${this.name}: ${error instanceof Error ? error.message : String(error)}`);
+          // Still allow the agent to initialize even without OpenAI
+          this.openai = null;
+        }
+      } else {
+        console.warn(`${name}: OpenAI requested but API key is missing`);
+        a2aLogger.warn("agent_init_warning", `Agent ${this.name} requested OpenAI but API key is missing`);
+        this.openai = null;
+      }
     } else {
-      a2aLogger.info(null, `Agent ${this.name} initialized without OpenAI integration.`);
+      a2aLogger.info("agent_init", `Agent ${this.name} initialized without OpenAI integration.`);
     }
   }
   
@@ -150,13 +178,13 @@ export abstract class BaseAgent {
     const taskId = payload.taskId || payload.componentJobId;
     
     if (success) {
-      a2aLogger.info(taskId || null, `[${sender} → ${recipient}] ${type}`, {
+      a2aLogger.info(taskId || "unknown_task", `[${sender} → ${recipient}] ${type}`, {
         messageId: id,
         correlationId,
         payload: JSON.stringify(payload).substring(0, 200) + "..."
       });
     } else {
-      a2aLogger.error(taskId || null, `Failed message [${sender} → ${recipient}] ${type}`, null, {
+      a2aLogger.error(taskId || "unknown_task", `Failed message [${sender} → ${recipient}] ${type}`, new Error("Message delivery failed"), {
         messageId: id,
         correlationId,
         payload: JSON.stringify(payload).substring(0, 200) + "..."
@@ -276,7 +304,7 @@ export abstract class BaseAgent {
     temperature?: number
   ): Promise<string | null> {
     if (!this.openai) {
-      a2aLogger.error(null, `${this.name}: Attempted to use LLM without OpenAI initialization`, null);
+      a2aLogger.error("llm_error", `${this.name}: Attempted to use LLM without OpenAI initialization`);
       return null;
     }
     
@@ -292,7 +320,7 @@ export abstract class BaseAgent {
       
       return response.choices[0]?.message.content || null;
     } catch (error: any) {
-      a2aLogger.error(null, `LLM generation error in ${this.name}: ${error.message}`, error);
+      a2aLogger.error("llm_error", `LLM generation error in ${this.name}: ${error.message}`, error);
       return null;
     }
   }
@@ -307,7 +335,7 @@ export abstract class BaseAgent {
     temperature: number = 0
   ): Promise<T | null> {
     if (!this.openai) {
-      a2aLogger.error(null, `${this.name}: Attempted to use LLM without OpenAI initialization`, null);
+      a2aLogger.error("llm_error", `${this.name}: Attempted to use LLM without OpenAI initialization`);
       return null;
     }
     
@@ -325,7 +353,7 @@ export abstract class BaseAgent {
       const content = response.choices[0]?.message.content || '{}';
       return JSON.parse(content) as T;
     } catch (error: any) {
-      a2aLogger.error(null, `LLM structured generation error in ${this.name}: ${error.message}`, error);
+      a2aLogger.error("llm_error", `LLM structured generation error in ${this.name}: ${error.message}`, error);
       return null;
     }
   }

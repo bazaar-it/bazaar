@@ -42,6 +42,14 @@ export const env = createEnv({
       (val) => (val ? parseInt(String(val), 10) : undefined),
       z.number().positive().optional()
     ),
+    // Toggle to enable the new message bus routing (`true` by default)
+    USE_MESSAGE_BUS: z.preprocess(
+      (val) => {
+        if (val === undefined) return true; // default
+        return String(val).toLowerCase() === 'true';
+      },
+      z.boolean().optional()
+    ),
     DISABLE_BACKGROUND_WORKERS: z.preprocess(
       // Coerce 'true' to true, 'false' to false, otherwise undefined
       (val) => (String(val).toLowerCase() === 'true' ? true : String(val).toLowerCase() === 'false' ? false : undefined),
@@ -84,6 +92,7 @@ export const env = createEnv({
     // Worker Configuration Runtime Environment Variables
     WORKER_POLLING_INTERVAL: process.env.WORKER_POLLING_INTERVAL,
     TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
+    USE_MESSAGE_BUS: process.env.USE_MESSAGE_BUS,
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
   },
   /**

@@ -16,6 +16,12 @@ const {
   mockDbSelect 
 } = createDrizzleMock();
 
+// Define types for the mock return values to avoid type errors
+type DbRowResult = { id: string };
+type DbUpdateResult = { affected: number };
+type OpenAIResponse = ReturnType<typeof createOpenAIToolCallResponse>;
+type OpenAIError = Error;
+
 // Global variable to hold the OpenAI mock for use in tests
 let mockOpenAICreate: jest.Mock;
 
@@ -100,13 +106,17 @@ describe('animationDesigner.service', () => {
     jest.clearAllMocks();
     
     // Set up default mock implementations for database calls
+    // Type-safe implementation of database mocks using our defined types
     mockDbInsert.mockImplementation(() => {
       return {
         values: jest.fn().mockImplementation(() => {
           return {
-            returning: jest.fn().mockResolvedValue([{
-              id: 'test-brief-id'
-            }])
+            returning: jest.fn().mockImplementation(() => {
+              // Use explicit Promise typing to avoid 'never' type errors
+              return Promise.resolve<DbRowResult[]>([
+                { id: 'test-brief-id' }
+              ]);
+            })
           };
         })
       };
@@ -116,7 +126,12 @@ describe('animationDesigner.service', () => {
       return {
         set: jest.fn().mockImplementation(() => {
           return {
-            where: jest.fn().mockResolvedValue([{ affected: 1 }])
+            where: jest.fn().mockImplementation(() => {
+              // Use explicit Promise typing to avoid 'never' type errors
+              return Promise.resolve<DbUpdateResult[]>([
+                { affected: 1 }
+              ]);
+            })
           };
         })
       };
@@ -155,9 +170,8 @@ describe('animationDesigner.service', () => {
       };
       
       // Mock the OpenAI API response using the helper from mockingHelpers
-      mockOpenAICreate.mockResolvedValue(
-        createOpenAIToolCallResponse('create_animation_design_brief', briefData)
-      );
+      const mockedResponse = createOpenAIToolCallResponse('create_animation_design_brief', briefData);
+      mockOpenAICreate.mockResolvedValue(mockedResponse);
 
       // Call the function
       const result = await generateAnimationDesignBrief(params);

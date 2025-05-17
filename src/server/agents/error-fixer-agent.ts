@@ -46,7 +46,17 @@ export class ErrorFixerAgent extends BaseAgent {
             console.error(`ErrorFixerAgent Error: ${errorMsg}`, payload);
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
-            return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
+            
+            const errorFixerErrorResponse = this.createA2AMessage(
+              "COMPONENT_PROCESS_ERROR", 
+              taskId, 
+              "CoordinatorAgent", 
+              this.createSimpleTextMessage(errorMsg), 
+              undefined, 
+              correlationId
+            );
+            await this.bus.publish(errorFixerErrorResponse);
+            return null;
           }
 
           await this.logAgentMessage(message, true);
@@ -58,7 +68,7 @@ export class ErrorFixerAgent extends BaseAgent {
             const fixSuccessMsg = `Component errors fixed successfully with ${fixResult.fixes.length} fixes.`;
             await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(fixSuccessMsg), undefined, 'generating');
             
-            return this.createA2AMessage(
+            const rebuildRequest = this.createA2AMessage(
               "REBUILD_COMPONENT_REQUEST",
               taskId,
               "BuilderAgent",
@@ -71,12 +81,14 @@ export class ErrorFixerAgent extends BaseAgent {
                 animationDesignBrief 
               }
             );
+            await this.bus.publish(rebuildRequest);
+            return null;
           } else {
             const fixFailedAttempts = attempts + 1;
             const fixFailedMsg = `Failed to fix component errors after ${fixFailedAttempts} attempt(s). Issues: ${fixResult.fixes.join(", ") || 'none'}`;
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(fixFailedMsg), undefined, 'failed');
             
-            return this.createA2AMessage(
+            const fixFailureResponse = this.createA2AMessage(
               "COMPONENT_FIX_ERROR",
               taskId,
               "CoordinatorAgent", 
@@ -84,6 +96,8 @@ export class ErrorFixerAgent extends BaseAgent {
               undefined,
               correlationId
             );
+            await this.bus.publish(fixFailureResponse);
+            return null;
           }
 
         default:
@@ -95,7 +109,17 @@ export class ErrorFixerAgent extends BaseAgent {
       console.error(`Error processing message in ErrorFixerAgent (type: ${type}): ${error.message}`, { payload, error });
       await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`ErrorFixerAgent error: ${error.message}`), undefined, 'failed');
       await this.logAgentMessage(message, false);
-      return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(`ErrorFixerAgent error: ${error.message}`), undefined, correlationId);
+      
+      const errorResponse = this.createA2AMessage(
+        "COMPONENT_PROCESS_ERROR", 
+        taskId, 
+        "CoordinatorAgent", 
+        this.createSimpleTextMessage(`ErrorFixerAgent error: ${error.message}`), 
+        undefined, 
+        correlationId
+      );
+      await this.bus.publish(errorResponse);
+      return null;
     }
   }
 

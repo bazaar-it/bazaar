@@ -43,7 +43,17 @@ export class BuilderAgent extends BaseAgent {
             console.error(`BuilderAgent Error: ${errorMsg}`, payload);
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
-            return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
+            
+            const errorResponse = this.createA2AMessage(
+              "COMPONENT_PROCESS_ERROR",
+              taskId,
+              "CoordinatorAgent",
+              this.createSimpleTextMessage(errorMsg),
+              undefined,
+              correlationId
+            );
+            await this.bus.publish(errorResponse);
+            return null;
           }
 
           await this.logAgentMessage(message, true);
@@ -65,49 +75,85 @@ export class BuilderAgent extends BaseAgent {
             const sourceCodeArtifact = this.createSimpleFileArtifact(taskId + "-source.tsx", "", "text/tsx", "Original source code with syntax errors");
             // Ideally, the 'data' field of the artifact would contain the base64 of componentCode if not using a URL
             // For now, we assume ErrorFixerAgent can get it from DB or it's passed in payload of COMPONENT_SYNTAX_ERROR
-            return this.createA2AMessage(
+            
+            const syntaxErrorMessage = this.createA2AMessage(
               "COMPONENT_SYNTAX_ERROR",
               taskId,
               "ErrorFixerAgent",
               this.createSimpleTextMessage(syntaxErrorMsg),
               [/* sourceCodeArtifact */], // Consider passing componentCode directly in payload if not too large
-              correlationId
+              correlationId,
+              {
+                componentCode,
+                errors: generationResult.error,
+                animationDesignBrief
+              }
             );
+            await this.bus.publish(syntaxErrorMessage);
+            return null;
           }
 
           await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Building component..."), undefined, 'building');
-          const buildSuccessful = await buildCustomComponent(taskId, false);
 
-          if (buildSuccessful) {
-            // Refetch job to get outputUrl as buildCustomComponent updates it internally
+          const buildResult = await buildCustomComponent(taskId, true /* forceRebuild */);
+
+          if (buildResult) {
+            // Since buildCustomComponent returns a boolean, we need to get the actual URL from the database
             const updatedJob = await db.query.customComponentJobs.findFirst({ where: eq(customComponentJobs.id, taskId) });
             const outputUrl = updatedJob?.outputUrl;
-
-            if (outputUrl) {
-              const buildSuccessMsg = "Component built successfully.";
-              const builtArtifact = this.createSimpleFileArtifact(taskId + "-bundle.js", outputUrl, "application/javascript", "Built component bundle");
-              await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(buildSuccessMsg), [builtArtifact], 'built');
-              await this.addTaskArtifact(taskId, builtArtifact);
-              
-              return this.createA2AMessage(
-                "COMPONENT_BUILD_SUCCESS", 
-                taskId,
-                "CoordinatorAgent", 
-                this.createSimpleTextMessage(buildSuccessMsg),
-                [builtArtifact],
-                correlationId
-              );
-            } else {
+            
+            if (!outputUrl) {
               const buildErrorMsg = "Component build succeeded but outputUrl is missing.";
               await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), undefined, 'failed');
-              return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(buildErrorMsg), undefined, correlationId);
+              
+              const missingUrlErrorResponse = this.createA2AMessage(
+                "COMPONENT_BUILD_ERROR", 
+                taskId, 
+                "ErrorFixerAgent", 
+                this.createSimpleTextMessage(buildErrorMsg), 
+                undefined, 
+                correlationId
+              );
+              await this.bus.publish(missingUrlErrorResponse);
+              return null;
             }
+            
+            const buildSuccessMsg = "Component built successfully.";
+            const builtArtifact = this.createSimpleFileArtifact(taskId + "-bundle.js", outputUrl, "application/javascript", "Built component bundle");
+            
+            await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(buildSuccessMsg), [builtArtifact], 'built');
+            await this.addTaskArtifact(taskId, builtArtifact);
+            
+            const buildSuccessResponse = this.createA2AMessage(
+              "COMPONENT_BUILD_SUCCESS", 
+              taskId,
+              "CoordinatorAgent", 
+              this.createSimpleTextMessage(buildSuccessMsg),
+              [builtArtifact],
+              correlationId
+            );
+            await this.bus.publish(buildSuccessResponse);
+            return null;
           } else {
-            // Refetch job to get errorMessage
             const failedJob = await db.query.customComponentJobs.findFirst({ where: eq(customComponentJobs.id, taskId) });
             const buildErrorMsg = `Component build failed: ${failedJob?.errorMessage || 'Unknown build error'}`;
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), undefined, 'failed');
-            return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(buildErrorMsg), undefined, correlationId);
+            
+            const buildErrorResponse = this.createA2AMessage(
+              "COMPONENT_BUILD_ERROR",
+              taskId, 
+              "ErrorFixerAgent",
+              this.createSimpleTextMessage(buildErrorMsg),
+              undefined,
+              correlationId,
+              {
+                componentCode, // Pass generated code
+                errors: buildErrorMsg, // Pass error message
+                animationDesignBrief  // Pass the brief
+              }
+            );
+            await this.bus.publish(buildErrorResponse);
+            return null;
           }
 
         case "REBUILD_COMPONENT_REQUEST": 
@@ -117,7 +163,17 @@ export class BuilderAgent extends BaseAgent {
             console.error(`BuilderAgent Error: ${errorMsg}`, payload);
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
-            return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
+            
+            const errorResponse = this.createA2AMessage(
+              "COMPONENT_PROCESS_ERROR", 
+              taskId, 
+              "CoordinatorAgent", 
+              this.createSimpleTextMessage(errorMsg), 
+              undefined, 
+              correlationId
+            );
+            await this.bus.publish(errorResponse);
+            return null;
           }
 
           await this.logAgentMessage(message, true);
@@ -139,7 +195,7 @@ export class BuilderAgent extends BaseAgent {
               await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(rebuildSuccessMsg), [rebuiltArtifact], 'built');
               await this.addTaskArtifact(taskId, rebuiltArtifact);
               
-              return this.createA2AMessage(
+              const successResponse = this.createA2AMessage(
                 "COMPONENT_BUILD_SUCCESS", 
                 taskId,
                 "CoordinatorAgent", 
@@ -147,16 +203,29 @@ export class BuilderAgent extends BaseAgent {
                 [rebuiltArtifact],
                 correlationId
               );
+              await this.bus.publish(successResponse);
+              return null;
             } else {
-                const rebuildErrorMsg = "Component rebuild succeeded but outputUrl is missing.";
-                await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), undefined, 'failed');
-                return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(rebuildErrorMsg), undefined, correlationId);
+              const rebuildErrorMsg = "Component rebuild succeeded but outputUrl is missing.";
+              await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), undefined, 'failed');
+              
+              const missingUrlErrorResponse = this.createA2AMessage(
+                "COMPONENT_BUILD_ERROR", 
+                taskId, 
+                "ErrorFixerAgent", 
+                this.createSimpleTextMessage(rebuildErrorMsg), 
+                undefined, 
+                correlationId
+              );
+              await this.bus.publish(missingUrlErrorResponse);
+              return null;
             }
           } else {
             const failedJob = await db.query.customComponentJobs.findFirst({ where: eq(customComponentJobs.id, taskId) });
             const rebuildErrorMsg = `Component rebuild failed: ${failedJob?.errorMessage || 'Unknown build error'}`;
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), undefined, 'failed');
-            return this.createA2AMessage(
+            
+            const rebuildErrorResponse = this.createA2AMessage(
               "COMPONENT_BUILD_ERROR",
               taskId, 
               "CoordinatorAgent",
@@ -164,6 +233,8 @@ export class BuilderAgent extends BaseAgent {
               undefined,
               correlationId
             );
+            await this.bus.publish(rebuildErrorResponse);
+            return null;
           }
 
         default:

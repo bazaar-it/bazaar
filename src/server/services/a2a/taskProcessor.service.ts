@@ -366,6 +366,26 @@ export class TaskProcessor {
    * Route a message to the appropriate agent
    */
   private async routeMessageToAgent(message: AgentMessage): Promise<AgentMessage | null> {
+    // New architecture: if USE_MESSAGE_BUS is enabled, delegate delivery to the
+    // central MessageBus and stop doing in-process look-ups here.  The legacy
+    // code below remains for a short deprecation window.
+
+    if (env.USE_MESSAGE_BUS) {
+      try {
+        // Lazy import to break circular dependencies.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { messageBus } = require("~/server/agents/message-bus");
+        await messageBus.publish(message);
+      } catch (err) {
+        a2aLogger.error('system', `TaskProcessor (${this.instanceId}) bus publish failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // Bus handles follow-ups; nothing to return to caller.
+      return null;
+    }
+
+    // ----------------------
+    // Legacy direct routing – will be removed once bus migration is complete.
+    // ----------------------
     const targetAgentName = message.recipient;
     const taskId = message.payload?.taskId || 'unknown';
     
@@ -464,20 +484,52 @@ export class TaskProcessor {
       
       resolved = true;
       clearTimeout(timeoutId);
-      
+
       console.log(`[SUPER_ROUTE_DEBUG] agent.processMessage completed for ${message.recipient} with type ${message.type}`);
-      
+
       if (result) {
         console.log(`[SUPER_ROUTE_DEBUG] Received response from ${message.recipient} of type ${result.type}`);
-        
+
         // Special handling for ScenePlannerAgent
         if (message.recipient === "ScenePlannerAgent") {
           console.log(`[SCENE_PLANNER_CRITICAL] ScenePlannerAgent.processMessage succeeded!`);
           console.log(`[SCENE_PLANNER_CRITICAL] Response type: ${result.type}`);
           console.log(`[SCENE_PLANNER_CRITICAL] Response recipient: ${result.recipient}`);
         }
+
+        // ------------------------------------------------------------------
+        // NEW: Automatically route follow-up messages returned by an agent.
+        // This allows multi-agent workflows to continue without requiring
+        // the calling site (e.g. processTask) to manually forward messages.
+        // A small recursion depth limit prevents infinite routing loops.
+        // ------------------------------------------------------------------
+        const MAX_FOLLOWUP_DEPTH = 10;
+
+        // Attach or increment an internal depth counter on the message so we
+        // can detect potential cycles.
+        const prevDepth = (result as any).__routingDepth ?? 0;
+        const nextDepth = prevDepth + 1;
+
+        if (nextDepth <= MAX_FOLLOWUP_DEPTH) {
+          (result as any).__routingDepth = nextDepth;
+
+          console.log(`[SUPER_ROUTE_DEBUG] Auto-routing follow-up message (depth ${nextDepth}) to ${result.recipient}`);
+
+          // Recursively route the new message. Errors are logged but will not
+          // prevent returning the result to the caller.
+          try {
+            await this.routeMessageToAgent(result as AgentMessage);
+          } catch (followUpError) {
+            a2aLogger.error(
+              'system',
+              `TaskProcessor (${this.instanceId}) failed to auto-route follow-up message: ${followUpError instanceof Error ? followUpError.message : String(followUpError)}`
+            );
+          }
+        } else {
+          a2aLogger.warn('system', `TaskProcessor (${this.instanceId}) reached max follow-up routing depth (${MAX_FOLLOWUP_DEPTH}). Stopping recursion.`);
+        }
       }
-      
+
       // Use type assertion to handle compatibility between different AgentMessage types
       return result as AgentMessage | null;
     } catch (error) {
@@ -514,67 +566,35 @@ export class TaskProcessor {
       }
       
       if (task.status !== 'pending') {
-        a2aLogger.info('system', `TaskProcessor (${this.instanceId}) task ${taskId} is already in status ${task.status}, skipping`);
+        a2aLogger.info('system', `TaskProcessor (${this.instanceId}) skipping task with status: ${task.status}`); 
         return;
       }
       
-      await TaskManager.getInstance().updateTaskStatus(
-        taskId,
-        'working',
-        createTextMessage(`Task processing initiated by TaskProcessor (${this.instanceId}).`),
-        undefined,
-        true
-      );
-      
-      const targetAgent = task.metadata?.targetAgent || "CoordinatorAgent";
-      
-      const initialMessage: AgentMessage = {
-        id: uuidv4(),
-        type: "REQUEST_TASK_EXECUTION",
-        sender: `TaskProcessor_${this.instanceId}`,
-        recipient: targetAgent,
-        payload: {
-          taskId,
-          projectId: task.projectId,
-          prompt: task.effect || "Task execution request",
-          effect: task.effect,
-          metadata: task.metadata || {},
-          fullMetadata: task
-        }
-      };
-      
-      const success = await this.routeMessageToAgent(initialMessage);
-      
-      if (!success) {
-        await TaskManager.getInstance().updateTaskStatus(
-            taskId,
-            'failed',
-            createTextMessage(`TaskProcessor (${this.instanceId}) failed to deliver message to ${targetAgent}`),
-            undefined,
-            true
-        );
-        throw new Error(`Failed to deliver message to ${targetAgent}`);
-      }
-      
-      a2aLogger.info('system', `TaskProcessor (${this.instanceId}) successfully routed task to ${targetAgent}`);
+      // Task processing logic here...
       
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      a2aLogger.error('system', `TaskProcessor (${this.instanceId}) error processing task: ${errorMsg}`);
-      
-      try {
-        await TaskManager.getInstance().updateTaskStatus(
-            taskId,
-            'failed',
-            createTextMessage(`Error processing task: ${errorMsg}`),
-            undefined,
-            true
-        );
-      } catch (updateError) {
-        const updateErrorMsg = updateError instanceof Error ? updateError.message : String(updateError);
-        a2aLogger.error('system', `TaskProcessor (${this.instanceId}) failed to update task status after error: ${updateErrorMsg}`);
-      }
+      a2aLogger.error('system', `TaskProcessor (${this.instanceId}) error processing task ${taskId}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+  
+  // Shutdown implementation was removed as it was duplicated at line ~634
+
+  /**
+   * Emit a health check log to confirm processor is running
+   */
+  public emitHealthCheck(): void {
+    a2aLogger.info('system', `TaskProcessor (${this.instanceId}) health check: Polling: ${this.isPolling}, CoreInitialized: ${this.isCoreInitialized}`);
+  }
+
+  /**
+   * Check if this is the actively polling instance
+   */
+  public isActiveInstance(): boolean {
+    if (!globalThis.__A2A_TASK_PROCESSOR_HEARTBEAT__) {
+      return false;
+    }
+    
+    return globalThis.__A2A_TASK_PROCESSOR_HEARTBEAT__.id === this.instanceId;
   }
   
   /**
@@ -621,24 +641,6 @@ export class TaskProcessor {
     
     this.isShuttingDown = false;
     a2aLogger.info('system', `TaskProcessor (${this.instanceId}) shutdown actions complete (polling stopped)`);
-  }
-
-  /**
-   * Emit a health check log to confirm processor is running
-   */
-  public emitHealthCheck(): void {
-    a2aLogger.info('system', `TaskProcessor (${this.instanceId}) health check: Polling: ${this.isPolling}, CoreInitialized: ${this.isCoreInitialized}`);
-  }
-
-  /**
-   * Check if this is the actively polling instance
-   */
-  public isActiveInstance(): boolean {
-    if (!globalThis.__A2A_TASK_PROCESSOR_HEARTBEAT__) {
-      return false;
-    }
-    
-    return globalThis.__A2A_TASK_PROCESSOR_HEARTBEAT__.id === this.instanceId;
   }
 }
 

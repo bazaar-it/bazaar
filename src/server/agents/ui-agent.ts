@@ -6,10 +6,19 @@ import { createTextMessage, createStatusUpdateEvent, createArtifactUpdateEvent }
 import { db } from "~/server/db";
 import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
+import { a2aLogger } from "~/lib/logger";
+import { env } from "~/env";
+import { MessageBus } from "./message-bus";
 
 export class UIAgent extends BaseAgent {
   constructor(taskManager: TaskManager) {
     super("UIAgent", taskManager, "Handles UI notifications for A2A tasks via SSE.", true);
+    
+    // Register this agent with the Message Bus
+    if (env.USE_MESSAGE_BUS) {
+      this.bus.registerAgent(this);
+      a2aLogger.info('ui_agent', `UIAgent registered with MessageBus`);
+    }
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -17,13 +26,14 @@ export class UIAgent extends BaseAgent {
     const taskId = payload.taskId || payload.componentJobId;
 
     if (!taskId) {
-      console.error("UIAgent Error: Missing taskId in message payload", payload);
+      a2aLogger.error('ui_agent', `Missing taskId in message payload`, { payload });
       await this.logAgentMessage(message);
       return null;
     }
 
     try {
       await this.logAgentMessage(message, true);
+      a2aLogger.debug('ui_agent', `Processing ${type} message for task ${taskId}`, { correlationId });
 
       // Fetch the latest task details to ensure we have all info for the SSE event
       const taskStatus = await this.taskManager.getTaskStatus(taskId);
@@ -32,43 +42,109 @@ export class UIAgent extends BaseAgent {
         case "TASK_COMPLETED_NOTIFICATION":
           // Task is fully complete. TaskManager has already updated the state.
           // UIAgent's role here is to ensure an SSE event is emitted if not already handled by TaskManager's stream.
-          // This also handles the case where UIAgent is directly notified.
           if (taskStatus.state === 'completed') {
+            a2aLogger.info('ui_agent', `Sending completion SSE for task ${taskId}`, { state: taskStatus.state });
             const sseEvent = createStatusUpdateEvent(taskStatus);
             const taskStream = this.taskManager.createTaskStream(taskId);
             taskStream.next(sseEvent);
-            // If this is the final notification, complete the stream.
             taskStream.complete(); 
+
+            // If Message Bus is enabled, send a confirmation back to the coordinator
+            if (env.USE_MESSAGE_BUS) {
+              const confirmationMessage = this.createA2AMessage(
+                "UI_NOTIFICATION_DELIVERED",
+                taskId,
+                message.sender,
+                this.createSimpleTextMessage(`Task completion notification delivered for ${taskId}`),
+                undefined,
+                correlationId,
+                { success: true, notificationType: "completion" }
+              );
+              await this.bus.publish(confirmationMessage);
+              return null;
+            }
           } else {
-            // If task isn't actually completed, log a warning. State should be handled by TaskManager.
-            console.warn(`UIAgent received TASK_COMPLETED_NOTIFICATION for task ${taskId} but its state is ${taskStatus.state}`);
+            a2aLogger.warn('ui_agent', `Received TASK_COMPLETED_NOTIFICATION for task ${taskId} but state is ${taskStatus.state}`);
           }
           break;
 
         case "TASK_FAILED_NOTIFICATION":
           if (taskStatus.state === 'failed') {
+            a2aLogger.info('ui_agent', `Sending failure SSE for task ${taskId}`, { state: taskStatus.state });
             const sseEvent = createStatusUpdateEvent(taskStatus);
             const taskStream = this.taskManager.createTaskStream(taskId);
             taskStream.next(sseEvent);
             taskStream.complete();
+
+            // If Message Bus is enabled, send a confirmation back to the coordinator
+            if (env.USE_MESSAGE_BUS) {
+              const confirmationMessage = this.createA2AMessage(
+                "UI_NOTIFICATION_DELIVERED",
+                taskId,
+                message.sender,
+                this.createSimpleTextMessage(`Task failure notification delivered for ${taskId}`),
+                undefined,
+                correlationId,
+                { success: true, notificationType: "failure" }
+              );
+              await this.bus.publish(confirmationMessage);
+              return null;
+            }
           } else {
-            console.warn(`UIAgent received TASK_FAILED_NOTIFICATION for task ${taskId} but its state is ${taskStatus.state}`);
+            a2aLogger.warn('ui_agent', `Received TASK_FAILED_NOTIFICATION for task ${taskId} but state is ${taskStatus.state}`);
           }
           break;
         
-        // Potentially handle other UI-specific notifications if needed
+        case "TASK_PROGRESS_UPDATE":
+          // Handle progress updates by sending an SSE but not completing the stream
+          a2aLogger.info('ui_agent', `Sending progress update SSE for task ${taskId}`, { progress: payload.progress });
+          const progressEvent = createStatusUpdateEvent({
+            ...taskStatus,
+            progress: payload.progress || taskStatus.progress
+          });
+          const progressStream = this.taskManager.createTaskStream(taskId);
+          progressStream.next(progressEvent);
+          
+          if (env.USE_MESSAGE_BUS) {
+            const confirmationMessage = this.createA2AMessage(
+              "UI_NOTIFICATION_DELIVERED",
+              taskId,
+              message.sender,
+              this.createSimpleTextMessage(`Progress update notification delivered for ${taskId}`),
+              undefined,
+              correlationId,
+              { success: true, notificationType: "progress" }
+            );
+            await this.bus.publish(confirmationMessage);
+            return null;
+          }
+          break;
 
         default:
-          console.warn(`UIAgent received unhandled message type: ${type}, payload: ${JSON.stringify(payload)}`);
+          a2aLogger.warn('ui_agent', `Received unhandled message type: ${type}`, { taskId });
           return null;
       }
-    } catch (error: any) {
-      console.error(`Error processing message in UIAgent (type: ${type}): ${error.message}`, { payload, error });
-      // UIAgent typically doesn't change task state, but logs errors.
-      // If a critical error happens in UIAgent itself, it might need to notify an admin or a master coordinator.
-      await this.logAgentMessage(message, false); // Log original message as pending due to error in processing
+    } catch (error) {
+      a2aLogger.error('ui_agent', `Error processing ${type} message: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined, { taskId, correlationId });
+      
+      // If Message Bus is enabled, send an error notification back to the sender
+      if (env.USE_MESSAGE_BUS) {
+        const errorMessage = this.createA2AMessage(
+          "UI_NOTIFICATION_FAILED",
+          taskId,
+          message.sender,
+          this.createSimpleTextMessage(`Failed to deliver notification: ${error instanceof Error ? error.message : String(error)}`),
+          undefined,
+          correlationId,
+          { success: false, error: error instanceof Error ? error.message : String(error) }
+        );
+        await this.bus.publish(errorMessage);
+      }
+      
+      await this.logAgentMessage(message, false); // Log original message as pending due to error
     }
-    return null; // UIAgent typically doesn't send messages back into the agent flow
+    
+    return null; // UIAgent typically doesn't send messages back when not using Message Bus
   }
 
   getAgentCard() {

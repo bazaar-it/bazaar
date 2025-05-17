@@ -17,6 +17,7 @@ import type {
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema"; 
 import { createTextMessage } from "../../types/a2a"; 
 import { a2aLogger } from "~/lib/logger";
+import { env } from "~/env";
 
 // Define Agent Names used by CoordinatorAgent
 const AGENT_NAME = {
@@ -160,8 +161,18 @@ Respond with JSON in this format:
             );
           }
 
-          const scenePlannerAgent = new ScenePlannerAgent(this.taskManager);
-          const scenePlanResponse = await scenePlannerAgent.processMessage(scenePlannerMessage);
+          let scenePlanResponse: AgentMessage | null = null;
+
+          if (env.USE_MESSAGE_BUS) {
+            // Publish via message bus for decoupled routing
+            await this.bus.publish(scenePlannerMessage);
+            // In bus mode we don't wait for an immediate synchronous response.
+            scenePlanResponse = null;
+          } else {
+            // Legacy direct call path
+            const scenePlannerAgent = new ScenePlannerAgent(this.taskManager);
+            scenePlanResponse = await scenePlannerAgent.processMessage(scenePlannerMessage);
+          }
 
           a2aLogger.info(
             `${logPrefix} Received response from ScenePlannerAgent`,
@@ -174,18 +185,19 @@ Respond with JSON in this format:
           );
 
           if (!scenePlanResponse) {
-            const errorMessage = createTextMessage({
-              type: "ERROR",
-              sender: this.name,
-              recipient: message.sender,
-              payload: { 
-                success: false, 
-                error: "No response from ScenePlannerAgent",
-                taskId 
-              }
-            });
             a2aLogger.error(logPrefix, "Failed to get response from ScenePlannerAgent");
-            return errorMessage;
+            const errorMessage = this.createA2AMessage(
+              "ERROR",
+              taskId,
+              message.sender,
+              this.createSimpleTextMessage("No response from ScenePlannerAgent"),
+              undefined,
+              message.id,
+              { success: false, error: "No response from ScenePlannerAgent" }
+            );
+            
+            if (env.USE_MESSAGE_BUS) await this.bus.publish(errorMessage);
+            return env.USE_MESSAGE_BUS ? null : errorMessage;
           }
           return scenePlanResponse;
           
@@ -237,7 +249,7 @@ Respond with JSON in this format:
           
           a2aLogger.agentProcess(this.name, videoTaskId, type, `Task state updated to working, creating follow-up for ${targetAgent}.`);
           
-          return this.createA2AMessage(
+          const createScenePlanResponse = this.createA2AMessage(
             "CREATE_SCENE_PLAN_REQUEST",
             videoTaskId,
             targetAgent,
@@ -251,6 +263,9 @@ Respond with JSON in this format:
               metadata: payload.metadata
             }
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(createScenePlanResponse);
+          return env.USE_MESSAGE_BUS ? null : createScenePlanResponse;
           
         case "CREATE_COMPONENT_REQUEST":
           const { animationDesignBrief, projectId: componentProjectId } = payload;
@@ -304,14 +319,22 @@ Respond with JSON in this format:
           
           a2aLogger.agentProcess(this.name, newTaskId, type, "Task state updated to working, creating follow-up for BuilderAgent.");
           
-          return this.createA2AMessage(
-            "BUILD_COMPONENT_REQUEST",
+          const generateComponentResponse = this.createA2AMessage(
+            "GENERATE_COMPONENT_REQUEST",
             newTaskId,
-            "BuilderAgent",
-            this.createSimpleTextMessage("Request to build component from Animation Design Brief."),
+            AGENT_NAME.BUILDER_AGENT,
+            this.createSimpleTextMessage("Generating component from Animation Design Brief"),
             undefined,
-            correlationId
+            correlationId,
+            {
+              projectId: componentProjectId,
+              effect: animationDesignBrief.sceneName || "custom",
+              animationDesignBrief
+            }
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(generateComponentResponse);
+          return env.USE_MESSAGE_BUS ? null : generateComponentResponse;
 
         case "SCENE_PLAN_CREATED":
           if (!taskId) {
@@ -345,7 +368,7 @@ Respond with JSON in this format:
           );
           
           // Forward the scene plan to the ADBAgent to create an animation design brief
-          return this.createA2AMessage(
+          const sceneResponse = this.createA2AMessage(
             "CREATE_ANIMATION_DESIGN_REQUEST",
             taskId,
             "ADBAgent",
@@ -360,6 +383,9 @@ Respond with JSON in this format:
               metadata: payload.metadata
             }
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(sceneResponse);
+          return env.USE_MESSAGE_BUS ? null : sceneResponse;
 
         case "SCENE_PLAN_SUCCESS":
           if (!taskId) {
@@ -435,7 +461,7 @@ Respond with JSON in this format:
           await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(userFriendlyMessage), undefined, 'component_generation_failed' as ComponentJobStatus); 
           await this.logAgentMessage(message, true);
 
-          return this.createA2AMessage(
+          const componentErrorNotificationResponse = this.createA2AMessage(
             "TASK_FAILED_NOTIFICATION",
             taskId,
             "UIAgent",
@@ -443,6 +469,9 @@ Respond with JSON in this format:
             undefined,
             correlationId
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(componentErrorNotificationResponse);
+          return env.USE_MESSAGE_BUS ? null : componentErrorNotificationResponse;
         
         case "COMPONENT_BUILD_SUCCESS":
           if (!taskId) {
@@ -464,7 +493,7 @@ Respond with JSON in this format:
           }
           
           await this.logAgentMessage(message, true);
-          return this.createA2AMessage(
+          const storeComponentResponse = this.createA2AMessage(
             "STORE_COMPONENT_REQUEST",
             taskId,
             "R2StorageAgent",
@@ -472,6 +501,9 @@ Respond with JSON in this format:
             payload.artifacts as Artifact[] | undefined,
             correlationId
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(storeComponentResponse);
+          return env.USE_MESSAGE_BUS ? null : storeComponentResponse;
 
         case "COMPONENT_STORED_SUCCESS":
           if (!taskId) {
@@ -490,7 +522,7 @@ Respond with JSON in this format:
           );
           await this.logAgentMessage(message, true);
 
-          return this.createA2AMessage(
+          const completionNotificationResponse = this.createA2AMessage(
             "TASK_COMPLETED_NOTIFICATION",
             taskId,
             "UIAgent",
@@ -498,6 +530,9 @@ Respond with JSON in this format:
             artifactsToNotify,
             correlationId
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(completionNotificationResponse);
+          return env.USE_MESSAGE_BUS ? null : completionNotificationResponse;
 
         case "COMPONENT_STORAGE_FAILED": {
           if (!taskId) {
@@ -521,7 +556,7 @@ Respond with JSON in this format:
           );
           await this.logAgentMessage(message, true); 
 
-          return this.createA2AMessage(
+          const storageFailedResponse = this.createA2AMessage(
             "TASK_FAILED_NOTIFICATION",
             taskId,
             AGENT_NAME.UI_AGENT,
@@ -530,6 +565,9 @@ Respond with JSON in this format:
             correlationId,
             { error: { message: csfUserFriendlyError, details: csfErrorDetails } }
           );
+          
+          if (env.USE_MESSAGE_BUS) await this.bus.publish(storageFailedResponse);
+          return env.USE_MESSAGE_BUS ? null : storageFailedResponse;
         }
 
         case "COMPONENT_GENERATION_FAILED": {
@@ -723,7 +761,7 @@ Based on this description, which agent should handle this request first, what ac
         reason: string;
       }>(analysisPrompt, this.SYSTEM_PROMPT);
     } catch (error) {
-      a2aLogger.error(null, `Error in determineProcessingFlow: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
+      a2aLogger.error('coordinator_agent', `Error in determineProcessingFlow: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
       return null;
     }
   }
@@ -741,7 +779,7 @@ Please provide a clear, user-friendly explanation of what went wrong and potenti
       
       return response;
     } catch (error) {
-      a2aLogger.error(null, `Error in analyzeError: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
+      a2aLogger.error('coordinator_agent', `Error in analyzeError: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
       return null;
     }
   }
@@ -755,7 +793,7 @@ Please provide a clear, user-friendly explanation of what went wrong and potenti
       
       return response;
     } catch (error) {
-      a2aLogger.error(null, `Error in generateSuccessMessage: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
+      a2aLogger.error('coordinator_agent', `Error in generateSuccessMessage: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : undefined);
       return null;
     }
   }

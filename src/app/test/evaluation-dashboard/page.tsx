@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '~/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
@@ -12,11 +12,21 @@ import { AnimationDesignBriefViewer } from '~/client/components/test-harness/Ani
 import { CodeViewer } from '~/client/components/test-harness/CodeViewer';
 import { RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { AgentMessageList } from '~/client/components/a2a/AgentMessageList';
+import { useAgentMessages } from '~/client/hooks/a2a/useAgentMessages';
 
 export default function EvaluationDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const [currentTaskId, setCurrentTaskId] = useState<string>('');
   const router = useRouter();
+  
+  // Use the agent messages hook to get real-time agent communication
+  const { messages, isConnected } = useAgentMessages({ 
+    taskId: currentTaskId,
+    onMessage: useCallback((message: any) => {
+      console.log('New agent message received:', message);
+    }, [])
+  });
 
   const handleRefresh = () => {
     router.refresh();
@@ -77,7 +87,24 @@ export default function EvaluationDashboard() {
                 </TabsContent>
 
                 <TabsContent value="agents">
-                  <AgentNetworkGraph taskId={currentTaskId} />
+                  {currentTaskId ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div className="lg:col-span-1 h-[500px]">
+                        <AgentNetworkGraph taskId={currentTaskId} />
+                      </div>
+                      <div className="lg:col-span-1">
+                        <AgentMessageList 
+                          messages={messages} 
+                          title="Real-time Agent Messages" 
+                          maxHeight="500px"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-center p-8 text-gray-500">
+                      Create a task using the panel on the left to begin.
+                    </p>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="generation">

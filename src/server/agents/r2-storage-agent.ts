@@ -44,7 +44,17 @@ export class R2StorageAgent extends BaseAgent {
             console.error(`R2StorageAgent Error: ${errorMsg}`, payload);
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
-            return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
+            
+            const errorResponse = this.createA2AMessage(
+              "COMPONENT_PROCESS_ERROR", 
+              taskId, 
+              "CoordinatorAgent", 
+              this.createSimpleTextMessage(errorMsg), 
+              undefined, 
+              correlationId
+            );
+            await this.bus.publish(errorResponse);
+            return null;
           }
 
           await this.logAgentMessage(message, true);
@@ -65,7 +75,7 @@ export class R2StorageAgent extends BaseAgent {
             await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(storeSuccessMsg), undefined, 'complete' as ComponentJobStatus);
             await this.addTaskArtifact(taskId, builtArtifact); 
             
-            return this.createA2AMessage(
+            const successResponse = this.createA2AMessage(
               "COMPONENT_STORED_SUCCESS", 
               taskId,
               "CoordinatorAgent", 
@@ -73,10 +83,13 @@ export class R2StorageAgent extends BaseAgent {
               [builtArtifact],
               correlationId
             );
+            await this.bus.publish(successResponse);
+            return null;
           } else {
             const r2ErrorMsg = "Component failed R2 verification or storage.";
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(r2ErrorMsg), undefined, 'r2_failed' as ComponentJobStatus);
-            return this.createA2AMessage(
+            
+            const r2ErrorResponse = this.createA2AMessage(
               "R2_STORAGE_ERROR", 
               taskId, 
               "CoordinatorAgent", 
@@ -84,6 +97,8 @@ export class R2StorageAgent extends BaseAgent {
               undefined,
               correlationId
             );
+            await this.bus.publish(r2ErrorResponse);
+            return null;
           }
 
         default:
@@ -95,7 +110,17 @@ export class R2StorageAgent extends BaseAgent {
       console.error(`Error processing message in R2StorageAgent (type: ${type}): ${error.message}`, { payload, error });
       await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`R2StorageAgent internal error: ${error.message}`), undefined, 'failed');
       await this.logAgentMessage(message, false);
-      return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(`R2StorageAgent error: ${error.message}`), undefined, correlationId);
+      
+      const errorResponse = this.createA2AMessage(
+        "COMPONENT_PROCESS_ERROR", 
+        taskId, 
+        "CoordinatorAgent", 
+        this.createSimpleTextMessage(`R2StorageAgent error: ${error.message}`), 
+        undefined, 
+        correlationId
+      );
+      await this.bus.publish(errorResponse);
+      return null;
     }
   }
 

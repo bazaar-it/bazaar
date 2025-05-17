@@ -1,0 +1,15 @@
+{"level":"info","message":"🛠️ Initializing custom component build worker... Base poll interval: 10s","timestamp":"2025-05-17T20:33:57.478Z","worker":"BuildWorker"}
+{"level":"info","message":"🕒 Staggering worker start by 2971ms","timestamp":"2025-05-17T20:33:57.479Z","worker":"BuildWorker"}
+{"level":"info","message":"🛠️ Initializing Custom Component Code Generation Worker... Base poll interval: 10s","timestamp":"2025-05-17T20:33:57.479Z","worker":"CodeGenWorker"}
+{"level":"info","message":"🕒 Staggering worker start by 1908ms","timestamp":"2025-05-17T20:33:57.479Z","worker":"CodeGenWorker"}
+{"level":"info","message":"🚀 Code Generation Worker started.","timestamp":"2025-05-17T20:33:59.389Z","worker":"CodeGenWorker"}
+{"level":"info","message":"Code Generation Worker checking for jobs with status 'queued_for_generation'...","timestamp":"2025-05-17T20:33:59.392Z","worker":"CodeGenWorker"}
+{"level":"info","message":"No jobs found with status 'queued_for_generation'.","timestamp":"2025-05-17T20:33:59.670Z","worker":"CodeGenWorker"}
+{"level":"info","message":"🚀 Build Worker started.","timestamp":"2025-05-17T20:34:00.451Z","worker":"BuildWorker"}
+{"level":"debug","message":"Build worker checking for jobs with status 'building' or 'manual_build_retry'...","timestamp":"2025-05-17T20:34:00.451Z","worker":"BuildWorker"}
+{"level":"debug","message":"No jobs found with status 'building' or 'manual_build_retry'.","timestamp":"2025-05-17T20:34:00.724Z","worker":"BuildWorker"}
+{"level":"info","message":"Polling for jobs. Current interval: 10s.","timestamp":"2025-05-17T20:34:09.395Z","worker":"CodeGenWorker"}
+{"level":"info","message":"Code Generation Worker checking for jobs with status 'queued_for_generation'...","timestamp":"2025-05-17T20:34:09.395Z","worker":"CodeGenWorker"}
+{"level":"info","message":"No jobs found with status 'queued_for_generation'.","timestamp":"2025-05-17T20:34:09.672Z","worker":"CodeGenWorker"}
+{"level":"info","message":"💤 No new jobs found for 1 cycle(s). Backing off. Next poll in 20s.","timestamp":"2025-05-17T20:34:09.672Z","worker":"CodeGenWorker"}
+{"level":"info","message":"Stopping custom component build worker...","timestamp":"2025-05-17T20:34:10.070Z","worker":"BuildWorker"}

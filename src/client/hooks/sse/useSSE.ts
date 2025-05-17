@@ -7,6 +7,7 @@ import type {
   SSEEventPayload,
   TaskStatusUpdateData,
   TaskArtifactUpdateData,
+  AgentMessageData,
 } from '~/types/a2a';
 
 // Define SSEEventType based on the string literals used in SSEEventPayload types
@@ -21,6 +22,7 @@ const SSEEventType = {
 interface UseSSEOptions {
   onTaskStatusUpdate?: (payload: Extract<SSEEventPayload, { type: 'task_status_update' }>) => void;
   onTaskArtifactUpdate?: (payload: Extract<SSEEventPayload, { type: 'task_artifact_update' }>) => void;
+  onAgentMessage?: (payload: Extract<SSEEventPayload, { type: 'agent_message' }>) => void;
   onError?: (payload: Extract<SSEEventPayload, { type: 'error' }>) => void;
   onHeartbeat?: (payload: Extract<SSEEventPayload, { type: 'heartbeat' }>) => void;
   onOpen?: () => void;

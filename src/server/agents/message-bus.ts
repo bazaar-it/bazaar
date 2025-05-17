@@ -29,7 +29,7 @@ export class MessageBus {
   registerAgent(agent: BaseAgent): void {
     this.agents.set(agent.getName().toLowerCase(), agent);
     this.agentSubscribers.set(agent.getName().toLowerCase(), []);
-    a2aLogger.info(null, `MessageBus: Registered agent: ${agent.getName()}`);
+    a2aLogger.info('message_bus', `MessageBus: Registered agent: ${agent.getName()}`);
   }
 
   getAgent(name: string): BaseAgent | undefined {
@@ -157,3 +157,94 @@ export class MessageBus {
 }
 
 export const messageBus = MessageBus.getInstance(); 
+
+// Add global monitoring subscription for all agent messages
+messageBus.subscribeToAgentMessages('*', async (message) => {
+  a2aLogger.debug(
+    'message_bus', 
+    `[A2A:BUS] ${message.sender} → ${message.recipient}: ${message.type}`,
+    { 
+      messageId: message.id,
+      taskId: message.payload?.taskId,
+      type: message.type
+    }
+  );
+});
+
+// Add specific monitoring for error messages
+const errorTypes = [
+  'SCENE_PLAN_ERROR',
+  'COMPONENT_GENERATION_FAILED',
+  'COMPONENT_FIX_ERROR',
+  'COMPONENT_STORAGE_FAILED',
+  'ADB_GENERATION_ERROR',
+  'R2_STORAGE_ERROR'
+];
+
+messageBus.subscribeToAgentMessages('CoordinatorAgent', async (message) => {
+  if (errorTypes.includes(message.type)) {
+    // Track error messages specifically
+    a2aLogger.error(
+      'error_tracking',
+      `[ERROR TRACKING] ${message.type} from ${message.sender}`,
+      null,
+      {
+        messageId: message.id,
+        taskId: message.payload?.taskId,
+        errorDetails: message.payload?.error,
+        timestamp: new Date().toISOString()
+      }
+    );
+  }
+});
+
+// Performance monitoring for high-latency message flows
+let processingTimes = new Map<string, {start: number, type: string}>();
+
+// Track when messages are sent to agents that typically have high latency
+messageBus.subscribeToAgentMessages('ScenePlannerAgent', async (message) => {
+  if (message.type === 'CREATE_SCENE_PLAN_REQUEST') {
+    processingTimes.set(message.id, {start: Date.now(), type: message.type});
+  }
+});
+
+messageBus.subscribeToAgentMessages('BuilderAgent', async (message) => {
+  if (message.type === 'GENERATE_COMPONENT_REQUEST') {
+    processingTimes.set(message.id, {start: Date.now(), type: message.type});
+  }
+});
+
+// Track completions to measure latency
+messageBus.subscribeToAgentMessages('*', async (message) => {
+  if (message.correlationId && processingTimes.has(message.correlationId)) {
+    const startData = processingTimes.get(message.correlationId);
+    if (startData) {
+      const processingTime = Date.now() - startData.start;
+      a2aLogger.info(
+        'performance_metrics',
+        `[PERF] ${startData.type} → ${message.type} took ${processingTime}ms`,
+        {
+          messageId: message.id,
+          correlationId: message.correlationId,
+          processingTimeMs: processingTime,
+          sourceType: startData.type,
+          responseType: message.type
+        }
+      );
+      // Clean up tracked message
+      processingTimes.delete(message.correlationId);
+    }
+  }
+});
+
+// Periodically clean up old processing time entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  const oneHourMs = 60 * 60 * 1000;
+  processingTimes.forEach((data, id) => {
+    if (now - data.start > oneHourMs) {
+      processingTimes.delete(id);
+      a2aLogger.warn('performance_metrics', `[PERF] Message ${id} of type ${data.type} has been processing for >1 hour - tracking removed`);
+    }
+  });
+}, 15 * 60 * 1000); // Clean up every 15 minutes

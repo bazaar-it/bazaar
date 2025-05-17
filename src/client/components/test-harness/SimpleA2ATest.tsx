@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { Label } from '~/components/ui/label';
-import { createTextMessage } from '~/types/a2a';
+import { v4 as uuidv4 } from 'uuid';
 
 // Import our SSE components
 import { useSSE, useTaskStatus } from '~/client/hooks/sse';
@@ -61,11 +61,26 @@ export function SimpleA2ATest() {
   const handleCreateTask = () => {
     if (!selectedAgentType || !prompt.trim()) return;
     
-    const message = createTextMessage(prompt.trim());
+    // Create a message object that matches the expected structure
+    const message = {
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+      parts: [{ type: "text" as const, text: prompt.trim() }]
+    };
     
     createTaskMutation.mutate({
-      agentType: selectedAgentType,
-      message
+      params: {
+        message,
+        projectId: 'test-project', // Required parameter
+        effect: prompt.substring(0, 60), // Required parameter
+        targetAgent: selectedAgentType, // This is the correct parameter name
+        animationDesignBrief: {
+          description: prompt,
+          sceneName: 'Test Scene'
+        }
+      },
+      prompt, // Pass the original prompt
+      model: 'gpt-4o-mini' // Optional parameter
     });
   };
   

@@ -156,6 +156,7 @@ export interface TaskStatus {
   updatedAt: string;
   message?: Message;
   artifacts?: Artifact[];
+  progress?: number; // Progress value between 0-100
 }
 
 /**
@@ -227,13 +228,27 @@ export interface TaskArtifactUpdateData {
 }
 
 /**
+ * Data structure for agent messages from the Message Bus
+ */
+export interface AgentMessageData {
+  task_id: string;
+  message_id: string;
+  from: string;
+  to: string;
+  type: string;
+  timestamp: string;
+  payload: any; // Component job, scene plan, error, etc.
+}
+
+/**
  * Discriminated union for the actual payload of an SSEEvent's data field (after JSON parsing)
  */
 export type SSEEventPayload =
   | { type: 'task_status_update'; data: TaskStatusUpdateData }
   | { type: 'task_artifact_update'; data: TaskArtifactUpdateData }
-  | { type: 'heartbeat'; data: { timestamp: string } } // Example heartbeat
-  | { type: 'error'; data: { code: number; message: string } }; // Example error event
+  | { type: 'agent_message'; data: AgentMessageData }
+  | { type: 'error'; data: { code: number; message: string } }
+  | { type: 'heartbeat'; data: { timestamp: string } };
 
 /**
  * SSE Event structure as sent over the wire.

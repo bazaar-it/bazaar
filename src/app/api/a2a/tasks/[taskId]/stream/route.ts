@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { SSEEvent } from "~/types/a2a";
 import { a2aLogger } from "~/lib/logger";
+import { messageBus } from "~/server/agents/message-bus";
+import type { AgentMessage } from "~/server/agents/base-agent";
+import crypto from "crypto";
 
 /**
  * Server-Sent Events (SSE) endpoint for task status updates
@@ -20,7 +23,7 @@ export async function GET(
     a2aLogger.sseSubscription(taskId, "SSE connection requested.");
     
     if (!taskId) {
-      a2aLogger.warn(null, "SSE connection denied: Task ID is required.");
+      a2aLogger.warn("system", "SSE connection denied: Task ID is required.");
       return new Response('Task ID is required', { status: 400 });
     }
     
@@ -64,8 +67,8 @@ export async function GET(
           }
         }
         
-        // Register for updates
-        const cleanup = taskManager.subscribeToTaskUpdates(taskId, (update) => {
+        // Register for task updates
+        const taskCleanup = taskManager.subscribeToTaskUpdates(taskId, (update) => {
           if (update.type === 'status') {
             sendEvent('task_status_update', {
               task_id: taskId,
@@ -81,12 +84,57 @@ export async function GET(
           }
         });
         
+        // Register for agent message bus events related to this task
+        // Set up a message bus listener and filter for task-related messages
+        
+        // Common agent names in the A2A system
+        const agentNames = [
+          'CoordinatorAgent',
+          'ScenePlannerAgent',
+          'ADBAgent',
+          'BuilderAgent',
+          'ErrorFixerAgent',
+          'R2StorageAgent'
+        ];
+        
+        // Keep track of message subscribers for cleanup
+        const messageBusCleanups: Array<() => void> = [];
+        
+        // For each agent, subscribe to messages
+        for (const agentName of agentNames) {
+          const messageBusCleanup = messageBus.subscribeToAgentMessages(agentName, async (message: AgentMessage) => {
+            // Only relay messages related to this specific task
+            const taskIdInMessage = 
+              (message.payload as any)?.taskId || 
+              (message.payload as any)?.componentJobId;
+              
+            if (taskIdInMessage === taskId) {
+              // Send the agent communication event to the client
+              sendEvent('agent_message', {
+                task_id: taskId,
+                message_id: message.id,
+                from: message.sender,
+                to: message.recipient,
+                type: message.type,
+                timestamp: new Date().toISOString(),
+                payload: message.payload
+              });
+            }
+          });
+          
+          messageBusCleanups.push(messageBusCleanup);
+        }
+        
         // Close stream when appropriate (e.g., task reaches terminal state)
         const intervalId = setInterval(async () => {
           const currentStatus = await taskManager.getTaskStatus(taskId);
           if (['completed', 'failed', 'canceled', 'unknown'].includes(currentStatus.state)) {
             clearInterval(intervalId);
-            cleanup();
+            
+            // Clean up all subscriptions
+            taskCleanup();
+            messageBusCleanups.forEach(cleanupFn => cleanupFn());
+            
             controller.close();
             a2aLogger.sseSubscription(taskId, `SSE stream closed due to terminal task state: ${currentStatus.state}.`);
           }
@@ -95,7 +143,11 @@ export async function GET(
         // Handle client disconnection
         request.signal.addEventListener('abort', () => {
           clearInterval(intervalId);
-          cleanup();
+          
+          // Clean up all subscriptions
+          taskCleanup();
+          messageBusCleanups.forEach(cleanupFn => cleanupFn());
+          
           controller.close();
           a2aLogger.sseSubscription(taskId, "SSE stream aborted by client.");
         });
@@ -113,10 +165,12 @@ export async function GET(
     });
   } catch (error: any) {
     // Try to get taskId if possible, even in error, for better logging context
-    let taskIdForErrorLog: string | null = null;
+    let taskIdForErrorLog = "system";
     try {
       const resolvedParams = await Promise.resolve(context?.params);
-      taskIdForErrorLog = resolvedParams?.taskId || null;
+      if (resolvedParams?.taskId) {
+        taskIdForErrorLog = resolvedParams.taskId;
+      }
     } catch (_) {
       // Ignore if context or params are not available
     }

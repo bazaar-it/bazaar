@@ -9,6 +9,7 @@ import { R2StorageAgent } from "~/server/agents/r2-storage-agent";
 import { initializeA2AFileTransport, a2aLogger } from "~/lib/logger";
 import { type TaskManager } from "./taskManager.service";
 import { env } from "~/env";
+import { messageBus } from "~/server/agents/message-bus";
 
 // Registry of agents for lookup by name 
 // This replaces the import from agentRegistry.service to avoid conflict
@@ -31,6 +32,13 @@ export function registerAgent(agent: BaseAgent): void {
   
   agentRegistry[agentName] = agent;
   console.log(`Registered agent: ${agentName}`);
+
+  // Also register with the central MessageBus so publish/subscribe works.
+  try {
+    messageBus.registerAgent(agent);
+  } catch (err) {
+    // In case an agent is registered twice with the bus, ignore.
+  }
 }
 
 /**
@@ -57,34 +65,77 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
   
   try {
     // Create agent instances with the right constructor signatures
-    const coordinatorAgent = new CoordinatorAgent(taskManager);
-    const scenePlannerAgent = new ScenePlannerAgent(taskManager);
-    const builderAgent = new BuilderAgent({ modelName: env.DEFAULT_ADB_MODEL }, taskManager);
-    const uiAgent = new UIAgent(taskManager);
-    const errorFixerAgent = new ErrorFixerAgent({ modelName: env.DEFAULT_ADB_MODEL }, taskManager);
-    const r2StorageAgent = new R2StorageAgent(taskManager);
+    const agents = [];
     
-    // Create the array of all agents
-    const agents = [
-      coordinatorAgent,
-      scenePlannerAgent,
-      builderAgent,
-      uiAgent,
-      errorFixerAgent,
-      r2StorageAgent,
-    ];
+    try {
+      const coordinatorAgent = new CoordinatorAgent(taskManager);
+      agents.push(coordinatorAgent);
+      a2aLogger.info("agent_creation", `Created CoordinatorAgent successfully`);
+    } catch (error) {
+      a2aLogger.error("agent_creation_error", `Failed to create CoordinatorAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
     
-    // Explicitly register each agent
-    agents.forEach(agent => {
-      registerAgent(agent);
-      a2aLogger.info("agent_registration", `Registered agent: ${agent.getName()}`);
-    });
+    try {
+      const scenePlannerAgent = new ScenePlannerAgent(taskManager);
+      agents.push(scenePlannerAgent);
+      a2aLogger.info("agent_creation", `Created ScenePlannerAgent successfully`);
+    } catch (error) {
+      a2aLogger.error("agent_creation_error", `Failed to create ScenePlannerAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
     
-    // Mark initialization as complete
-    agentsInitialized = true;
+    try {
+      console.log(`Attempting to create BuilderAgent with modelName=${env.DEFAULT_ADB_MODEL || 'gpt-4'}`);
+      console.log(`OPENAI_API_KEY available: ${Boolean(process.env.OPENAI_API_KEY)}`); 
+      
+      const builderAgent = new BuilderAgent({ modelName: env.DEFAULT_ADB_MODEL || 'gpt-4' }, taskManager);
+      agents.push(builderAgent);
+      a2aLogger.info("agent_creation", `Created BuilderAgent successfully`);
+    } catch (error) {
+      console.error(`BUILDER AGENT ERROR: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(error); // Log the full error object
+      a2aLogger.error("agent_creation_error", `Failed to create BuilderAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
     
-    // Log the initialized agents
-    a2aLogger.info("agent_initialization_complete", `Successfully initialized ${agents.length} agents: ${agents.map(a => a.getName()).join(', ')}`);
+    try {
+      const uiAgent = new UIAgent(taskManager);
+      agents.push(uiAgent);
+      a2aLogger.info("agent_creation", `Created UIAgent successfully`);
+    } catch (error) {
+      a2aLogger.error("agent_creation_error", `Failed to create UIAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    try {
+      const errorFixerAgent = new ErrorFixerAgent({ modelName: env.DEFAULT_ADB_MODEL || 'gpt-4' }, taskManager);
+      agents.push(errorFixerAgent);
+      a2aLogger.info("agent_creation", `Created ErrorFixerAgent successfully`);
+    } catch (error) {
+      a2aLogger.error("agent_creation_error", `Failed to create ErrorFixerAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    try {
+      const r2StorageAgent = new R2StorageAgent(taskManager);
+      agents.push(r2StorageAgent);
+      a2aLogger.info("agent_creation", `Created R2StorageAgent successfully`);
+    } catch (error) {
+      a2aLogger.error("agent_creation_error", `Failed to create R2StorageAgent: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    // Only register agents that were successfully created
+    if (agents.length > 0) {
+      // Explicitly register each agent
+      agents.forEach(agent => {
+        registerAgent(agent);
+        a2aLogger.info("agent_registration", `Registered agent: ${agent.getName()}`);
+      });
+      
+      // Mark initialization as complete
+      agentsInitialized = true;
+      
+      // Log the initialized agents
+      a2aLogger.info("agent_initialization_complete", `Successfully initialized ${agents.length} agents: ${agents.map(a => a.getName()).join(', ')}`);
+    } else {
+      a2aLogger.error("agent_initialization_failed", "No agents could be initialized successfully");
+    }
     
     return agents;
   } catch (error) {
