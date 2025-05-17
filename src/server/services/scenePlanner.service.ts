@@ -12,7 +12,7 @@ import {
   type AnimationBriefGenerationParams 
 } from "./animationDesigner.service";
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
-import logger, { scenePlannerLogger } from "~/lib/logger";
+import { scenePlannerLogger } from "~/lib/logger";
 
 // Define the database type
 type DB = typeof db;
@@ -196,9 +196,11 @@ export async function handleScenePlan(
                     
                     // Add to our tracking
                     componentJobs.push({
+                        id: crypto.randomUUID(), // Add missing id field
                         description: scene.description,
-                        jobId,
-                        name: effect
+                        jobId: scene.id,
+                        name: scene.name || effect,
+                        prompt: scene.description, // Add missing prompt field
                     });
                     
                     // If we have an emitter, update scene status = "building"

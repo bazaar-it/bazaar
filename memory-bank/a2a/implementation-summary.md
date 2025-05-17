@@ -82,4 +82,69 @@ The immediate next steps include:
 - **Phase 4 (SSE Implementation)**: Partially complete
 - **Phase 5 (Testing & Integration)**: Not started
 
-The implementation is currently on track with the planned timeline, with approximately 60% of the core work completed. 
+The implementation is currently on track with the planned timeline, with approximately 60% of the core work completed.
+
+# A2A Agent Implementation with LLM Intelligence
+
+## Overview
+
+We've successfully enhanced our Agent-to-Agent (A2A) system by integrating OpenAI's language models to provide real intelligence to our agents. This follows the official Google A2A protocol while adding LLM capabilities for better reasoning, decision-making, and user communication.
+
+## Key Components Implemented
+
+### 1. BaseAgent with LLM Support
+
+The core `BaseAgent` class now includes:
+
+- OpenAI integration for generating responses
+- Structured JSON response support for complex decision-making
+- Task status management through the A2A protocol
+- Artifact generation capabilities
+- Agent Card support for capability advertisement
+
+### 2. Intelligent CoordinatorAgent
+
+The `CoordinatorAgent` has been enhanced with:
+
+- Task route analysis using LLM to determine optimal processing flow
+- Error analysis for better user-facing explanations
+- Success message generation for improved user feedback
+- Artifact creation showing agent reasoning and decisions
+
+## A2A Protocol Compliance
+
+Our implementation follows the official Google A2A specifications:
+
+- JSON-RPC communication structure
+- Standard task states (submitted, working, input-required, completed, canceled, failed)
+- SSE streaming for real-time updates
+- Multi-modal message support with different part types
+- Proper agent discovery through Agent Cards
+
+## Agent Intelligence Features
+
+1. **Decision Making**: Agents can analyze requests and determine the optimal processing route
+2. **Error Handling**: Improved error analysis and user-friendly explanations
+3. **Success Communication**: Better user feedback on successful operations
+4. **Reasoning Transparency**: Decision artifacts show agent reasoning
+
+## Implementation Notes
+
+- Each agent can be initialized with or without LLM capabilities
+- LLM usage is throttled and managed to prevent excessive API calls
+- Structured JSON responses ensure type safety in agent decision-making
+- All agent communication adheres to the A2A protocol for interoperability
+
+## Next Steps
+
+1. Add more specialized agents with domain-specific LLM capabilities
+2. Implement agent-to-agent chat for multi-step reasoning
+3. Improve agent memory for better context awareness
+4. Add streaming capabilities for real-time agent reasoning feedback
+5. Create an agent testing harness for evaluating agent performance
+
+## References
+
+- [Google A2A Specification](https://google.github.io/A2A/specification/)
+- [A2A Communication Protocol](https://google.github.io/A2A/specification/agent-to-agent-communication/)
+- [Agent Discovery](https://google.github.io/A2A/specification/agent-discovery/) 

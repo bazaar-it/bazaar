@@ -1,6 +1,7 @@
+// src/server/services/titleGenerator.service.ts
 import { env } from "~/env";
 import OpenAI from "openai";
-import logger from "~/lib/logger";
+import logger from '~/lib/logger';
 
 // Initialize OpenAI client
 const openai = new OpenAI({

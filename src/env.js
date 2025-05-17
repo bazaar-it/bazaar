@@ -32,6 +32,21 @@ export const env = createEnv({
     R2_PUBLIC_URL: z.string().url(),
     // Cron Job Configuration
     CRON_SECRET: z.string().min(1),
+
+    // Worker Configuration (Server-side)
+    WORKER_POLLING_INTERVAL: z.preprocess(
+      (val) => (val ? parseInt(String(val), 10) : undefined),
+      z.number().positive().optional()
+    ),
+    TASK_PROCESSOR_POLLING_INTERVAL: z.preprocess(
+      (val) => (val ? parseInt(String(val), 10) : undefined),
+      z.number().positive().optional()
+    ),
+    DISABLE_BACKGROUND_WORKERS: z.preprocess(
+      // Coerce 'true' to true, 'false' to false, otherwise undefined
+      (val) => (String(val).toLowerCase() === 'true' ? true : String(val).toLowerCase() === 'false' ? false : undefined),
+      z.boolean().optional()
+    ),
   },
 
   /**
@@ -66,6 +81,10 @@ export const env = createEnv({
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     // Cron Job Environment Variables
     CRON_SECRET: process.env.CRON_SECRET,
+    // Worker Configuration Runtime Environment Variables
+    WORKER_POLLING_INTERVAL: process.env.WORKER_POLLING_INTERVAL,
+    TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
+    DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

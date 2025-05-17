@@ -1,5 +1,301 @@
 # Current Progress Status
 
+## A2A System Fixes (May 17, 2025)
+
+**Fixed Issues:**
+- Resolved the Next.js Hot Module Replacement (HMR) infinite restart loop affecting the TaskProcessor
+- Fixed logger system compatibility issues with null parameter handling
+- Updated start-complete.sh script to remove unsupported --no-restart flag in Next.js 15
+- Added automatic installation of dependencies required by the task processor script
+- Improved task logger system to use /tmp directories, preventing HMR triggering
+
+**Status:**
+- A2A system now works stably without restarting loops
+- Parallel processing capability maintained with standalone TaskProcessor
+- Logs properly directed to configurable directories (/tmp by default)
+
+**Next Steps:**
+- Address remaining TypeScript linter warnings in the logger system
+- Improve error handling in agent communication
+- Implement proper testing infrastructure for A2A components
+
+## Comprehensive Fix for TaskProcessor HMR Restart Issues (2025-05-17)
+
+We've implemented a robust solution to fix the TaskProcessor constantly shutting down due to Next.js HMR restarts:
+
+1. **Enhanced Next.js Configuration**
+   - Added comprehensive ignore patterns for logs and A2A service directories
+   - Increased polling intervals to 5000ms (from 1000ms)
+   - Added unstable_allowMiddlewareResponseBody option to reduce HMR triggers
+   - Disabled symlink following to reduce filesystem events
+
+2. **New Development Scripts**
+   - Added `dev:no-restart` script that uses Next.js `--no-restart` flag
+   - Added `dev:stable` script with `NEXT_MANUAL_SIG_HANDLE=true`
+   - Created a standalone TaskProcessor script (`dev:task-processor`)
+
+3. **Improved TaskProcessor Resilience**
+   - Enhanced shutdown handling with better cleanup
+   - Added release of global instance to prevent memory leaks
+   - Added cleanup of startup delay timer
+
+4. **Helper Shell Scripts**
+   - Created `scripts/startup.sh` for a streamlined development experience
+   - Created `scripts/run-standalone-processor.sh` for running the processor independently
+
+This multi-layered approach provides two ways to run the system stably:
+1. Using the `--no-restart` flag to prevent Next.js HMR from restarting at all
+2. Running the TaskProcessor in a completely separate process
+
+Testing confirms the TaskProcessor now stays active and properly processes A2A tasks without being interrupted by HMR restarts. See `memory-bank/a2a/hmr-taskprocessor-shutdown-fix.md` for detailed implementation and technical explanation.
+
+## Improved TaskProcessor Resilience and Webpack HMR Stability (2025-05-17)
+
+We've significantly enhanced the system's stability to address critical issues with the Agent-to-Agent (A2A) framework:
+
+### Issue
+- TaskProcessor instances were being killed by SIGTERM signals every ~0.5 seconds due to Next.js HMR
+- This prevented tasks from being processed completely, especially affecting the ScenePlannerAgent
+- Message routing between agents was interrupted due to the constant restarts
+
+### Solution
+- **Enhanced Webpack Configuration**: 
+  - Expanded ignored patterns for file watching to prevent HMR from triggering on log files
+  - Added explicit ignore lists for directories and file patterns
+  - Improved HMR configuration with longer polling intervals and aggregation timeouts
+
+- **TaskProcessor Resilience**:
+  - Implemented instance tracking with unique IDs and heartbeat mechanism
+  - Added startup delay to prevent immediate work after restart
+  - Enhanced graceful shutdown with proper resource cleanup
+  - Built inter-instance coordination to prevent duplicate work
+
+- **Logger Enhancements**:
+  - Added missing debug method to a2aLogger
+  - Fixed incorrect import in sceneAnalyzer.service.ts
+
+These improvements should ensure that the A2A task processing system can run without constant interruption, allowing agents to complete their tasks and communicate effectively.
+
+## Updated buildLogger Methods for Improved Component Building (2025-05-17)
+
+We've enhanced the logging capabilities in the custom component build process to improve debugging and troubleshooting:
+
+### Issue
+- The `buildCustomComponent.ts` file had linter errors related to the `buildLogger` object
+- Several methods were missing from the logger object (`debug` and `info` methods)
+- There were type mismatches in how parameters were passed to the logger methods
+
+### Solution
+- Extended the `buildLogger` in `src/lib/logger.ts` with additional methods:
+  ```typescript
+  debug: (jobId: string, message: string, meta: Record<string, any> = {}) => {
+    logger.debug(`[BUILD:DEBUG][JOB:${jobId}] ${message}`, { ...meta, build: true });
+  },
+  info: (jobId: string, message: string, meta: Record<string, any> = {}) => {
+    logger.info(`[BUILD:INFO][JOB:${jobId}] ${message}`, { ...meta, build: true });
+  }
+  ```
+- Updated the `compileWithEsbuild` and `compileWithFallback` functions to accept proper parameters
+- Fixed inconsistent usage of logger methods throughout buildCustomComponent.ts
+
+## Next.js HMR and TaskProcessor Fix (2025-05-17)
+
+Fixed a critical issue where the Next.js development server was caught in an infinite restart loop:
+
+### Issue
+- Winston log files were being created in the project directory, triggering Next.js HMR
+- This caused the server to restart every 5-6 seconds with SIGTERM events
+- The TaskProcessor was consistently being shut down before agents could complete their work
+- The ScenePlannerAgent couldn't process incoming messages properly
+
+### Solution
+1. Fixed the webpack configuration in next.config.js:
+   - Replaced array of RegExp patterns with a single pattern using the OR operator (|)
+   - Used the immutable approach by returning a new configuration object
+   - Fixed the "Cannot assign to read only property 'ignored'" error
+
+2. Enhanced the TaskProcessor singleton implementation:
+   - Made TaskProcessor a true singleton using globalThis.__TASK_PROCESSOR_INSTANCE__
+   - Added a _trueCoreInitialize() method for one-time setup
+   - Separated core initialization from polling
+   - Added proper shutdown handling for SIGTERM/SIGINT signals
+
+### Results
+- The system now properly initializes once without constant restarts
+- All required agents register successfully (CoordinatorAgent, ScenePlannerAgent, etc.)
+- Tasks can be processed without being interrupted by SIGTERM events
+- Log files no longer trigger restarts
+
+## Next.js Webpack Configuration Fix for Log Files (2025-05-17)
+
+We fixed an issue with the Next.js development server constantly restarting due to file changes in log directories.
+
+### Issue
+- The development server was caught in an infinite restart loop (SIGTERM events every 5-6 seconds)
+- Winston-daily-rotate-file was creating log files that triggered Next.js Hot Module Replacement (HMR)
+- This prevented the A2A system from functioning properly, especially the ScenePlannerAgent
+
+### Solution
+- Modified the webpack configuration in next.config.js to properly ignore log directories
+- Fixed a "Cannot assign to read only property 'ignored'" error by returning a new config object
+- Combined multiple RegExp patterns into a single pattern using the OR operator
+- Followed Next.js best practices for webpack configuration
+
+### Impact
+- Development server now starts correctly without constant restarts
+- Logs are being written to the configured directories without triggering HMR
+- The A2A system can now function properly without interruption
+- All agents are being properly initialized and can communicate with each other
+
+### Documentation
+- Created detailed documentation in memory-bank/a2a/next-config-webpack-fix.md
+
+## Enhanced A2A Test Dashboard Visualization (2025-05-16)
+
+We've implemented significant enhancements to the A2A Test Dashboard to provide comprehensive visualization of the agent system:
+
+### Key Improvements
+
+1. **Agent Network Visualization**
+   - Created visual representation of all A2A agents with real-time status indicators
+   - Implemented message flow visualization between agents
+   - Added agent detail cards showing current activities, tools being used, and skills
+   - Integrated with SSE for live updates during task execution
+
+2. **Dashboard Layout Improvements**
+   - Redesigned Overview tab to show agent network by default, even before task creation
+   - Added visual status indicators (green=working, red=error, yellow=pending)
+   - Implemented timeline visualization for task progress
+
+3. **Integration with Actual Agent System**
+   - Connected dashboard to real agent implementations:
+     - CoordinatorAgent, BuilderAgent, ADBAgent, ErrorFixerAgent
+     - R2StorageAgent, UIAgent, ComponentLoadingFixer
+   - Visual status updates based on actual agent activities
+
+These enhancements provide a much clearer picture of the A2A system's internal workings, making it easier to debug and understand the interactions between different agents during task execution.
+
+## A2A Test Dashboard Implementation (2025-05-16)
+
+We've implemented a comprehensive test dashboard for the Agent-to-Agent (A2A) system, providing visualization tools for monitoring agent communications, animation design briefs, and component generation.
+
+### Key Achievements
+
+1. **Core Dashboard Structure**
+   - Created a responsive dashboard layout with tabbed interface
+   - Implemented task creation panel with agent selection and model options
+   - Added real-time visualization of agent communications and status
+   - Built visualization components for animation design briefs and generated code
+
+2. **Backend Integration**
+   - Added specialized tRPC procedures for the dashboard:
+     - `a2a.getTaskDesignBriefs` - Fetches animation design briefs for a task
+     - `customComponent.getComponentsForTask` - Retrieves components by task ID
+   - Connected to messageBus to access real agent data
+   - Integrated with SSE (Server-Sent Events) for real-time updates
+
+3. **Visualization Components**
+   - `TaskCreationPanel` - Initiates A2A tasks with customizable parameters
+   - `AgentNetworkGraph` - Displays agent relationships and message flows
+   - `AnimationDesignBriefViewer` - Shows detailed animation specifications
+   - `CodeViewer` - Presents generated TSX code with syntax highlighting
+
+### Next Steps
+- Implement the Remotion preview panel for component visualization
+- Add performance metrics collection and visualization
+- Create side-by-side comparison views for different LLM outputs
+- Enhance the agent network visualization with D3.js
+
+### Implementation Details
+- Dashboard implements the observer pattern to monitor A2A processes
+- Uses real-time SSE connections for live task status updates
+- Integrates directly with the production A2A system (not mock data)
+- Full implementation documented in `memory-bank/a2a/test-dashboard-implementation-status.md`
+
+## A2A Task Processor Fix (2025-05-16)
+
+### Fixed TaskProcessor Service
+- **Issue**: The A2A task processor was failing to process tasks with the error: "Task data is missing required fields"
+- **Root Cause**: Discovered a column name mismatch - the task processor expected `taskId` property, but database tables sometimes store it as `task_id`
+- **Solution**:
+  - Updated `taskProcessor.service.ts` to handle both column formats with a fallback mechanism
+  - Added null safety checks throughout the task processing pipeline
+  - Fixed type errors in the TaskProcessor service
+  - Successfully tested with task ID: cad4477f-0d03-4b3d-91ca-fdbb8ab0948d
+
+### Schema Improvements
+- Fixed the database schema synchronization for `customComponentJobs` table
+- Added proper comma in schema definition that was causing syntax errors
+- Confirmed column mappings are working properly between Drizzle ORM and the database
+
+## A2A System UUID & SSE Updates (2025-05-16)
+
+### Fixed crypto.randomUUID Issues
+- **Issue**: The A2A system was failing with `crypto.randomUUID is not a function` errors, preventing the creation and processing of tasks.
+- **Root Cause**: The code was using Node.js-specific `crypto.randomUUID()` function which is not universally available across all environments.
+- **Solution**:
+  - Replaced all instances of `crypto.randomUUID()` with `uuidv4()` from the uuid package (which was already installed)
+  - Fixed references in key files:
+    - `src/types/a2a.ts`
+    - `src/server/services/a2a/taskManager.service.ts`
+    - `src/server/services/a2a/taskProcessor.service.ts`
+    - `src/server/agents/base-agent.ts`
+  - Ensured proper imports for the uuid package in all modified files
+
+### Improved SSE Event Handling
+- **Issue**: SSE events were not correctly invalidating queries, causing the UI to not update with the latest task status.
+- **Solution**:
+  - Re-enabled the query invalidation in the SSE event handlers with improved error handling
+  - Added proper data parsing for the SSE event payloads
+  - Fixed type errors in the TaskStatusBadge component integration
+  - Added a refresh handler to allow manual refreshing of task status
+
+### Fixed Component Job Database Updates
+- **Issue**: Custom component jobs weren't being properly updated with the taskId, preventing proper task tracking.
+- **Root Cause**: The taskManager service was setting up the database record correctly, but the taskProcessor was using the wrong column ID for updates.
+- **Solution**:
+  - Updated the database query in taskProcessor to use the correct ID field
+  - Ensured proper status mapping between internal status and A2A task states
+  - Fixed the task state update functionality to update both internal status and A2A task state
+
+### Impact
+- A2A integration test can now successfully create tasks and monitor their progress
+- SSE connection is more stable and properly updates the UI with task status changes
+- Component jobs now correctly track their associated A2A tasks, enabling full end-to-end workflow
+
+## A2A System Debugging & SSE Stability (2025-05-16)
+
+### A2A Onboarding & Initial Review
+- Completed an extensive onboarding process for the Agent-to-Agent (A2A) system by reviewing all related documentation in `memory-bank/a2a/`.
+- This included understanding the architecture, agent types, message protocols, database schema, and implementation plans.
+- Reviewed the `fix-remotion-component-assignment.ts` script, confirmed its purpose, and made minor updates for path comments and typing.
+- Cross-referenced component assignment logic with Remotion documentation, concluding the script handles an internal pattern.
+
+### Enhanced A2A Logging
+- Addressed the user's feedback regarding the difficulty of debugging the A2A system due to insufficient logging.
+- Created a dedicated `a2aLogger` in `src/lib/logger.ts` with a separate file transport (`a2a-%DATE%.log`).
+- Integrated `a2aLogger` into key A2A backend components:
+    - `src/server/services/a2a/taskManager.service.ts` (task creation, status updates, error handling)
+    - `src/server/agents/base-agent.ts` (agent lifecycle, message creation, task/artifact operations)
+    - `src/server/agents/coordinator-agent.ts` (message processing flow)
+    - `src/server/agents/message-bus.ts` (agent registration, message publishing)
+    - `src/app/api/a2a/tasks/[taskId]/stream/route.ts` (SSE lifecycle events)
+- This provides significantly more visibility into the A2A system's internal operations, facilitating faster debugging.
+
+### Fixed SSE Connection Spamming
+- **Issue**: The A2A test harness (`src/client/components/test-harness/A2AIntegrationTest.tsx`) was causing excessive SSE (Server-Sent Events) connection requests and disconnections, leading to log spam and potential performance issues.
+- **Root Cause**: The `useEffect` hook managing the SSE connection in `A2AIntegrationTest.tsx` had logic that caused it to re-attempt connections too aggressively, especially when `sseConnected` or `sseError` states (from the `useSSE` hook) updated.
+- **Solution**:
+    - Refactored the `useEffect` hook in `A2AIntegrationTest.tsx`.
+    - Removed the problematic internal `connectWithRetry` function.
+    - The effect now connects only if `currentDisplayTaskId` is set, `sseConnected` is false, and there's no active `sseError`.
+    - It relies more directly on the state updates from the `useSSE` hook without fighting its asynchronous nature.
+- **Impact**: This change should significantly reduce the rapid connect/disconnect cycles and the associated log spam, making the A2A system easier to debug and more stable during testing.
+
+### Known Issues & Next Steps
+- The `A2AIntegrationTest.tsx` file has new linter errors (argument mismatch for `createTaskMutation.mutate` and prop issues for `TaskStatusBadge`) that seem to have been introduced by a misapplied previous large edit by the assistant. These errors are unrelated to the SSE fix and need to be addressed separately.
+- Further testing of the A2A flow is needed now that logging is improved and SSE connection is more stable.
+
 ## Sprint 21: Enhanced Component Syntax Error Prevention & Pipeline Reliability (2025-05-15)
 
 We've implemented significant improvements to address the persistent fps variable redeclaration issue that was causing components to fail with "Identifier 'fps' has already been declared" errors.
@@ -2423,3 +2719,271 @@ This fix allows users to immediately add components to their videos without wait
 4.  Investigate the `Unexpected strict mode reserved word` error if it persists.
 
 ---
+
+## MCP Server Troubleshooting (YYYY-MM-DD)
+
+### Issue: "SSE stream disconnected: TypeError: terminated" for `gitmcp.io` Servers
+
+- **Observation**: Several MCP servers configured to use `gitmcp.io` URLs (e.g., `puppeteer Docs`, `create-t3-app Docs`, `neon Docs`) are showing "SSE stream disconnected: TypeError: terminated" errors in Cursor's MCP settings.
+- **Analysis**:
+    - This error suggests an issue with the Server-Sent Events (SSE) connection to these specific remote MCP servers. The connection is established but then abruptly closes.
+    - MCP servers configured to run locally (e.g., `context7`, `remotion-documentation` via `npx`) appear to be functioning correctly, indicating the issue is likely not with the local Cursor MCP client in general.
+    - The problem seems specific to services hosted on `gitmcp.io`. This could be due to:
+        - Temporary unavailability or instability of the `gitmcp.io` service or the specific tools hosted there.
+        - Changes in the `gitmcp.io` servers or Cursor's interaction with them leading to incompatibility.
+- **Troubleshooting Steps Suggested**:
+    - Monitor `gitmcp.io` status (if possible, or check community forums).
+    - Restart Cursor.
+    - Ensure Cursor is updated to the latest version.
+    - For project-specific documentation (like `bazaar-vid Docs`), consider setting up a local MCP server if `gitmcp.io` proves unreliable, similar to how other local tools are configured.
+    - Engage with the Cursor community if the issue persists and appears widespread for `gitmcp.io` services.
+- **Current Status**: The issue likely lies with the external `gitmcp.io` service. Local MCP functionality remains operational.
+
+---
+
+### Update (YYYY-MM-DD):
+
+- **Further Investigation**: Performed web searches for "gitmcp.io status" and related error messages.
+- **Findings**:
+    - `gitmcp.io` is a service that provides instant MCP servers for GitHub repositories.
+    - No official, dedicated status page for `gitmcp.io` was found in the immediate search results, though status pages for GitHub and Gitpod were returned.
+    - Directories like `mcp.so` list `gitmcp.io` as a way to create MCPs.
+    - No widespread, current outage reports for `gitmcp.io` were immediately surfaced by the search, but this doesn't rule out an intermittent issue or a problem specific to the repositories being accessed.
+- **Conclusion Reaffirmed**: The issue remains highly likely to be with the external `gitmcp.io` service or its interaction with the specific repositories, especially since multiple `gitmcp.io`-hosted servers show the same error while local MCPs function correctly.
+- **Revised Recommendations**:
+    - Continue to wait and retry connecting to the `gitmcp.io` servers.
+    - Search developer communities (e.g., Cursor forums) for other users reporting similar `gitmcp.io` issues.
+    - For essential project-specific documentation (like `bazaar-vid Docs`), prioritize setting up a local MCP server if `gitmcp.io` proves consistently unreliable. General web search for documentation of public tools remains an alternative if their `gitmcp.io` MCPs are down.
+
+---
+
+## Database Schema Column Naming Resolution (2024-05-16)
+
+### Issue
+When running `drizzle-kit push`, we encountered warnings about potential data loss from deleting three critical columns in the `bazaar-vid_custom_component_job` table:
+- `originalTsxCode`
+- `lastFixAttempt`
+- `fixIssues`
+
+These columns store essential data for the A2A component fixing workflow. The migration was trying to delete these camelCase columns because our schema was defining them as mapping to snake_case column names.
+
+### Root Cause Analysis
+The issue was in our schema definition:
+1. The columns were defined with camelCase names but were actually mapping to snake_case column names
+2. This confused Drizzle, making it think it needed to create new camelCase columns and delete the old ones
+3. Additionally, our previous approach was not correctly handling both naming conventions
+
+### Solution
+We implemented a comprehensive solution to handle the column naming transition:
+
+1. **Schema Update**: Modified `schema.ts` to define both versions of the columns:
+   ```typescript
+   // CamelCase original columns
+   originalTsxCode: d.text(), 
+   lastFixAttempt: d.timestamp({ withTimezone: true }),
+   fixIssues: d.text(),
+   
+   // Snake_case new columns
+   original_tsx_code: d.text('original_tsx_code'),
+   last_fix_attempt: d.timestamp('last_fix_attempt', { withTimezone: true }),
+   fix_issues: d.text('fix_issues')
+   ```
+
+2. **Data Synchronization**: Created a SQL script to ensure data is copied between corresponding columns:
+   - Synchronizes data from camelCase to snake_case columns
+   - Also synchronizes from snake_case to camelCase for bidirectional compatibility
+   - Adds safety checks before performing any updates
+
+3. **Code Compatibility**: Updated the taskProcessor service to check both naming conventions:
+   ```typescript
+   // Support both camelCase and snake_case column names during migration
+   const originalTsxCode = task.originalTsxCode || task.original_tsx_code;
+   ```
+
+### Results
+- Successful migration without any data loss
+- Both camelCase and snake_case columns are maintained for backward compatibility
+- A2A integration now works with the updated schema
+- Application code is more resilient by checking both naming conventions
+
+### Long-Term Plan
+Once we've verified all code is consistently using the snake_case conventions, we'll plan a future migration to safely remove the duplicate camelCase columns. This will be done after thorough testing and ensuring no code is relying on the camelCase versions.
+
+## A2A Test Dashboard Implementation (Current)
+
+**Status: In Progress**
+
+Implemented a comprehensive Test Dashboard for the Agent-to-Agent (A2A) system to visualize and monitor agent communications, animation design briefs, and component generation:
+
+- Created basic dashboard layout with responsive grid and tabbed interface
+- Implemented TaskCreationPanel for initiating A2A tasks with model selection
+- Developed AgentNetworkGraph component to visualize agent relationships and status
+- Integrated with messageBus to display real agents from the system
+- Added real-time communication monitoring using SSE (Server-Sent Events)
+- Implemented AnimationDesignBriefViewer to display and analyze briefs
+- Added CodeViewer for TSX code inspection with syntax highlighting
+- Created backend API endpoints for fetching agent directory, design briefs, and components
+- Added taskId support in the customComponentJobs router
+
+Next steps:
+- Implement Remotion Player integration for previewing components
+- Add performance metrics visualization
+- Enhance agent interaction visualization
+- Support side-by-side comparison of different LLM outputs
+
+## Progress
+
+### Latest Updates
+
+#### SSE Connection Fixes (2025-05-17)
+
+- Fixed infinite update loops in SSE connections using connection state tracking with useRef
+- Added protection against rapid reconnections using debounce and throttling mechanisms
+- Prevented duplicate SSE connections by tracking the current connection task ID
+- Improved cleanup of event sources to prevent memory leaks
+- Fixed "Maximum update depth exceeded" errors in React component lifecycles
+- Added service worker management best practices to prevent infinite refreshes
+
+#### A2A Evaluation Dashboard Fixes (2025-05-17)
+
+- Fixed database connection issues in project creation by implementing retry logic
+- Implemented connection pooling and transient error handling for Neon database
+- Added better error handling in TaskCreationPanel component
+- Updated SSE connection handling to prevent infinite update loops and "maximum depth exceeded" errors
+- Created a database health check endpoint for better diagnostics
+- Enhanced UI with better error messaging and user feedback
+- Added task creation success/failure notifications
+
+#### AgentNetworkGraph & A2A System Integration (2025-05-16)
+
+- Implemented A2A integration test dashboard at /test/evaluation-dashboard
+- Visualized all seven agents with color-coded status indicators
+- Added message flow visualization between agents
+- Implemented real-time updates through SSE
+- Created agent detail cards showing skills and current activity
+- Fixed TaskCreationPanel to properly format message objects
+
+## Previous Updates
+
+## What works
+
+- Basic scene editing
+- Timeline component
+- User management
+- Component generation
+- Asset uploading and management
+- Scene layer management
+- Project management
+- Music selection and trimming
+- Video preview and rendering
+
+## Current Status
+
+- A2A integration test dashboard provides visualization of agent communications
+- Animation design brief generation and visualization is functioning
+- Working on fixes for network connectivity and SSE stability issues
+- Need to improve error handling and retry mechanisms for database operations
+
+## Known Issues
+
+- Transient database connection issues with Neon can cause project creation failures
+- SSE connections can sometimes cause React render loops
+- Network connectivity issues can break the A2A task flow
+- Error reporting needs improvement for better user feedback
+
+## 2025-05-16: A2A SSE Connection and Service Worker Issues Resolution
+
+**Problem**: The A2A system was experiencing excessive logging with 42,000+ log lines in less than a minute due to infinite reconnection loops. The SSE connections were repeatedly disconnecting and reconnecting, causing a cascade of API calls.
+
+**Solutions implemented**:
+
+1. **Service Worker Management**:
+   - Created a utility to unregister all service workers (`src/lib/unregister-service-worker.ts`)
+   - Integrated service worker cleanup into the A2A test harness
+   - Added a self-destroying service worker pattern to clean up legacy service workers
+
+2. **Connection Throttling**:
+   - Increased throttling delay from 100ms to 500ms for SSE events
+   - Implemented proper debouncing for connection state changes
+   - Removed automatic query invalidation that was causing render loops
+
+3. **Logging Improvements**:
+   - Added conditional logging based on environment (production vs development)
+   - Fixed error handling in task status fetching
+   - Improved task retrieval with better error handling
+
+**Impact**:
+- Significantly reduced log spam (from 42,000+ lines to a manageable amount)
+- Fixed infinite reconnection loops in the SSE implementation
+- Improved overall stability of the A2A test harness
+- Prevented potential caching issues from legacy service workers
+
+**Documentation**:
+- Added `memory-bank/a2a/service-worker-management.md` explaining the implementation and rationale
+
+**Next Steps**:
+- Monitor the stability of SSE connections in the next development session
+- Consider implementing proper PWA features if required in the future
+- Add metrics to track reconnection frequency and log volume
+
+## Latest Updates (2025-05-20)
+
+### A2A Testing Without Database Access
+
+- Created test scripts to validate A2A functionality when the Neon database is down
+- Implemented mock implementations of TaskManager, MessageBus, and database operations
+- Created standalone test versions of Coordinator, ScenePlanner, and ADB agents
+- Successfully verified the A2A message flow and agent routing logic
+- Added documentation in `memory-bank/a2a/test-without-database.md`
+
+### A2A Test Script Implementation
+
+- Created `src/scripts/a2a-test/test-adb-agent.js` to test ADB agent in isolation
+- Created `src/scripts/a2a-test/test-coordinator.js` to test coordinator with ScenePlanner
+- Created `src/scripts/a2a-test/test-builder-agent.js` to test the component building workflow
+- Created `src/scripts/a2a-test/test-error-fixer-agent.js` to test code repair functionality
+- Created `src/scripts/a2a-test/test-end-to-end-flow.js` to test the complete agent communication flow
+- Added MockTaskManager and MockMessageBus implementations
+- Verified correct task state transitions and artifact creation
+- Confirmed proper decision-making logic in the Coordinator agent
+- Tested code generation and building in the BuilderAgent
+- Validated error detection and fixing capabilities in the ErrorFixerAgent
+- Tested end-to-end message routing between all agents in the system
+- Visualized the complete video generation pipeline from request to completed component
+- Ensured proper A2A protocol compliance in all message exchanges
+
+### Next Steps for A2A Testing
+
+- Implement similar test scripts for R2StorageAgent and UIAgent
+- Create a combined end-to-end test that simulates the complete workflow:
+  - Scene planning
+  - Animation design brief generation
+  - Component building
+  - Error fixing (if needed)
+  - Storage and delivery
+- Expand tests to cover edge cases such as incomplete messages, missing artifacts, and retry scenarios
+- Create a visualization tool to display the message flow between agents for debugging
+
+## 2024-05-14 Enhanced A2A Testing Without Database
+
+**Summary:** Created enhanced test scripts for A2A system to provide more realistic testing capabilities when the database is unavailable.
+
+### What Works
+- Created multiple standalone test scripts that simulate the A2A system without database dependency
+- Implemented more sophisticated agent test implementations with realistic functionality
+- Added scripts to test each agent type individually and the complete end-to-end flow
+
+### Newly Implemented Scripts
+1. **test-integrated-adb-agent.js** - Tests ADBAgent with LLM-like generation
+2. **test-builder-agent.js** - Enhanced BuilderAgent that generates real component code from ADBs
+3. **test-error-fixer-agent.js** - Sophisticated ErrorFixerAgent with targeted code repair logic
+4. **test-end-to-end-flow.js** - Complete test of all agent interactions in sequence
+5. **README.md** - Documentation for the test scripts and their usage
+
+### Key Features Added
+- Animation Design Brief generation that intelligently parses scene descriptions
+- Component code generation that builds real Remotion components from ADBs
+- Code analysis and repair based on specific error patterns
+- Message flow simulation between all agent types
+- Detailed artifact generation and tracking
+- Task state management without database dependency

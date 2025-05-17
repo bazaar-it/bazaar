@@ -1,5 +1,6 @@
 import { BaseAgent, type AgentMessage } from "./base-agent";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
+import type { TaskManager } from "~/server/services/a2a/taskManager.service";
 import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from "~/types/a2a";
 import { createTextMessage, createFileArtifact, mapA2AToInternalState } from "~/types/a2a";
 import { generateComponentCode } from "~/server/workers/generateComponentCode";
@@ -8,9 +9,18 @@ import { db } from "~/server/db";
 import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
+export interface BuilderAgentParams {
+  modelName: string;
+}
+
 export class BuilderAgent extends BaseAgent {
-  constructor() {
-    super("BuilderAgent", "Generates and builds Remotion components from Animation Design Briefs.");
+  constructor(params: BuilderAgentParams, taskManager: TaskManager) {
+    super(
+      "BuilderAgent", 
+      taskManager, 
+      "Generates and builds Remotion components from Animation Design Briefs.",
+      true // useOpenAI
+    );
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -31,13 +41,13 @@ export class BuilderAgent extends BaseAgent {
           if (!animationDesignBrief || !projectId) {
             const errorMsg = "Missing animationDesignBrief or projectId in BUILD_COMPONENT_REQUEST.";
             console.error(`BuilderAgent Error: ${errorMsg}`, payload);
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
             return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
           }
 
           await this.logAgentMessage(message, true);
-          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Generating component code..."), 'generating');
+          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Generating component code..."), undefined, 'generating');
 
           // Generate component code
           // generateComponentCode returns an object: { code: string, ..., valid?: boolean, error?: string, processedCode?: string }
@@ -50,7 +60,7 @@ export class BuilderAgent extends BaseAgent {
 
           if (!generationResult.valid && generationResult.error) {
             const syntaxErrorMsg = `Component syntax validation failed: ${generationResult.error}`;
-            await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(syntaxErrorMsg), 'failed');
+            await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(syntaxErrorMsg), undefined, 'failed');
             // Create an artifact with the source code for the ErrorFixerAgent
             const sourceCodeArtifact = this.createSimpleFileArtifact(taskId + "-source.tsx", "", "text/tsx", "Original source code with syntax errors");
             // Ideally, the 'data' field of the artifact would contain the base64 of componentCode if not using a URL
@@ -65,7 +75,7 @@ export class BuilderAgent extends BaseAgent {
             );
           }
 
-          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Building component..."), 'building');
+          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Building component..."), undefined, 'building');
           const buildSuccessful = await buildCustomComponent(taskId, false);
 
           if (buildSuccessful) {
@@ -76,7 +86,7 @@ export class BuilderAgent extends BaseAgent {
             if (outputUrl) {
               const buildSuccessMsg = "Component built successfully.";
               const builtArtifact = this.createSimpleFileArtifact(taskId + "-bundle.js", outputUrl, "application/javascript", "Built component bundle");
-              await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(buildSuccessMsg), 'built');
+              await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(buildSuccessMsg), [builtArtifact], 'built');
               await this.addTaskArtifact(taskId, builtArtifact);
               
               return this.createA2AMessage(
@@ -89,14 +99,14 @@ export class BuilderAgent extends BaseAgent {
               );
             } else {
               const buildErrorMsg = "Component build succeeded but outputUrl is missing.";
-              await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), 'failed');
+              await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), undefined, 'failed');
               return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(buildErrorMsg), undefined, correlationId);
             }
           } else {
             // Refetch job to get errorMessage
             const failedJob = await db.query.customComponentJobs.findFirst({ where: eq(customComponentJobs.id, taskId) });
             const buildErrorMsg = `Component build failed: ${failedJob?.errorMessage || 'Unknown build error'}`;
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(buildErrorMsg), undefined, 'failed');
             return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(buildErrorMsg), undefined, correlationId);
           }
 
@@ -105,13 +115,13 @@ export class BuilderAgent extends BaseAgent {
           if (!fixedCode) {
             const errorMsg = "Missing fixedCode in REBUILD_COMPONENT_REQUEST.";
             console.error(`BuilderAgent Error: ${errorMsg}`, payload);
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
             return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
           }
 
           await this.logAgentMessage(message, true);
-          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Rebuilding component with fixed code..."), 'building');
+          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Rebuilding component with fixed code..."), undefined, 'building');
 
           await db.update(customComponentJobs)
             .set({ tsxCode: fixedCode })
@@ -126,7 +136,7 @@ export class BuilderAgent extends BaseAgent {
             if (outputUrl) {
               const rebuildSuccessMsg = "Component rebuilt successfully.";
               const rebuiltArtifact = this.createSimpleFileArtifact(taskId + "-bundle.js", outputUrl, "application/javascript", "Rebuilt component bundle");
-              await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(rebuildSuccessMsg), 'built');
+              await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(rebuildSuccessMsg), [rebuiltArtifact], 'built');
               await this.addTaskArtifact(taskId, rebuiltArtifact);
               
               return this.createA2AMessage(
@@ -139,13 +149,13 @@ export class BuilderAgent extends BaseAgent {
               );
             } else {
                 const rebuildErrorMsg = "Component rebuild succeeded but outputUrl is missing.";
-                await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), 'failed');
+                await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), undefined, 'failed');
                 return this.createA2AMessage("COMPONENT_BUILD_ERROR", taskId, "ErrorFixerAgent", this.createSimpleTextMessage(rebuildErrorMsg), undefined, correlationId);
             }
           } else {
             const failedJob = await db.query.customComponentJobs.findFirst({ where: eq(customComponentJobs.id, taskId) });
             const rebuildErrorMsg = `Component rebuild failed: ${failedJob?.errorMessage || 'Unknown build error'}`;
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(rebuildErrorMsg), undefined, 'failed');
             return this.createA2AMessage(
               "COMPONENT_BUILD_ERROR",
               taskId, 
@@ -163,7 +173,7 @@ export class BuilderAgent extends BaseAgent {
       }
     } catch (error: any) {
       console.error(`Error processing message in BuilderAgent (type: ${type}): ${error.message}`, { payload, error });
-      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`BuilderAgent internal error: ${error.message}`), 'failed');
+      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`BuilderAgent internal error: ${error.message}`), undefined, 'failed');
       await this.logAgentMessage(message, false);
       return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(`BuilderAgent error: ${error.message}`), undefined, correlationId);
     }

@@ -182,6 +182,7 @@ export const customComponentJobs = createTable(
     inputType: d.text('input_type'), // What kind of input is needed
     taskState: d.jsonb('task_state'), // Current A2A task state details
     artifacts: d.jsonb('artifacts'), // A2A artifacts collection
+    history: d.jsonb('history'), // Added history field for A2A task history
     sseEnabled: d.boolean('sse_enabled').default(false), // Whether SSE is enabled for this task
     // Timestamps
     createdAt: d
@@ -192,9 +193,17 @@ export const customComponentJobs = createTable(
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .$onUpdate(() => new Date()),
-    originalTsxCode: d.text(), // Store the original code before fixing
-    lastFixAttempt: d.timestamp({ withTimezone: true }), // When the last fix attempt was made
-    fixIssues: d.text() // Issues identified and fixed by the preprocessor
+    
+    // KEEP BOTH VERSIONS OF COLUMNS (camelCase and snake_case)
+    // CamelCase original columns - need to preserve these
+    originalTsxCode: d.text(), // Camel case version
+    lastFixAttempt: d.timestamp({ withTimezone: true }), // Camel case version
+    fixIssues: d.text(), // Camel case version
+    
+    // Snake_case new columns
+    original_tsx_code: d.text('original_tsx_code'), // Snake case version
+    last_fix_attempt: d.timestamp('last_fix_attempt', { withTimezone: true }), // Snake case version
+    fix_issues: d.text('fix_issues') // Snake case version
   }),
   (t) => [
     index("custom_component_job_project_idx").on(t.projectId),
@@ -335,13 +344,16 @@ export const agentMessages = createTable(
   "agent_message",
   (d) => ({
     id: d.text().primaryKey(), // UUID for the message
-    sender: d.text().notNull(), // Name of the sending agent
-    recipient: d.text().notNull(), // Name of the recipient agent
-    type: d.text().notNull(), // Message type (e.g., 'BUILD_COMPONENT_REQUEST')
-    payload: d.jsonb().notNull(), // Contains Message parts, task IDs, etc.
-    correlationId: d.text('correlation_id'), // Optional ID linking related messages
-    status: d.text().default('pending').notNull(), // Message status ('pending', 'processed', 'failed')
-    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    sender: d.text("sender").notNull(), // Name of the sending agent
+    recipient: d.text("recipient").notNull(), // Name of the recipient agent
+    type: d.text("type").notNull(), // Type of the message (e.g., TASK_START, DATA_REQUEST)
+    payload: d.jsonb("payload").$type<Record<string, any>>().notNull(), // Content of the message, typed
+    correlationId: d.text("correlation_id"), // Optional ID to correlate messages
+    status: d.text("status").default('pending').notNull(), // e.g., pending, processed, failed
+    createdAt: d
+      .timestamp({ withTimezone: true, mode: 'date' })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
     processedAt: d.timestamp({ withTimezone: true, mode: 'date' })
   }),
   (t) => [
@@ -362,3 +374,95 @@ export const customComponentJobsUpdate = sql`
   ALTER TABLE "bazaar-vid_custom_component_job" 
   ADD COLUMN IF NOT EXISTS "history" JSONB
 `;
+
+// --- Component Test Cases table ---
+// Stores test cases for component generation evaluation
+export const componentTestCases = createTable(
+  "component_test_case",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    prompt: d.text().notNull(),
+    category: d.varchar({ length: 50 }).notNull(),
+    complexity: d.integer().notNull(),
+    edgeCases: d.jsonb().default([]),
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("component_test_cases_category_idx").on(t.category),
+  ],
+);
+
+// --- Component Evaluation Metrics table ---
+// Stores metrics from component generation evaluation
+export const componentEvaluationMetrics = createTable(
+  "component_evaluation_metric",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    testCaseId: d.uuid().notNull().references(() => componentTestCases.id),
+    timestamp: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    
+    // Test case metadata
+    category: d.varchar({ length: 50 }).notNull(),
+    complexity: d.integer().notNull(),
+    edgeCases: d.jsonb().default([]),
+    
+    // Pipeline success metrics
+    success: d.boolean().notNull(),
+    errorStage: d.varchar({ length: 50 }),
+    errorType: d.varchar({ length: 100 }),
+    errorMessage: d.text(),
+    
+    // Timing metrics
+    promptSubmissionTime: d.timestamp({ withTimezone: true }).notNull(),
+    codeGenerationStartTime: d.timestamp({ withTimezone: true }),
+    codeGenerationEndTime: d.timestamp({ withTimezone: true }),
+    validationStartTime: d.timestamp({ withTimezone: true }),
+    validationEndTime: d.timestamp({ withTimezone: true }),
+    buildStartTime: d.timestamp({ withTimezone: true }),
+    buildEndTime: d.timestamp({ withTimezone: true }),
+    uploadStartTime: d.timestamp({ withTimezone: true }),
+    uploadEndTime: d.timestamp({ withTimezone: true }),
+    componentCompletionTime: d.timestamp({ withTimezone: true }),
+    
+    // Derived timing metrics
+    timeToFirstToken: d.integer(),
+    codeGenerationTime: d.integer(),
+    validationTime: d.integer(),
+    buildTime: d.integer(),
+    uploadTime: d.integer(),
+    totalTime: d.integer(),
+    
+    // Code quality metrics
+    syntaxErrorCount: d.integer(),
+    eslintErrorCount: d.integer(),
+    eslintWarningCount: d.integer(),
+    codeLength: d.integer(),
+    
+    // Rendering metrics
+    renderSuccess: d.boolean(),
+    renderErrorMessage: d.text(),
+    
+    // References
+    componentId: d.varchar({ length: 100 }),
+    outputUrl: d.text(),
+    taskId: d.uuid(),
+    
+    // A2A specific metrics
+    stateTransitions: d.jsonb().default([]),
+    artifacts: d.jsonb().default([]),
+    
+    // Analysis fields
+    analysisNotes: d.text(),
+    tags: d.jsonb().default([]),
+  }),
+  (t) => [
+    index("component_evaluation_metrics_test_case_id_idx").on(t.testCaseId),
+    index("component_evaluation_metrics_success_idx").on(t.success),
+    index("component_evaluation_metrics_timestamp_idx").on(t.timestamp),
+    index("component_evaluation_metrics_category_idx").on(t.category),
+  ],
+);
+
+export const componentEvaluationMetricsRelations = relations(componentEvaluationMetrics, ({ one }) => ({
+  testCase: one(componentTestCases, { fields: [componentEvaluationMetrics.testCaseId], references: [componentTestCases.id] }),
+}));

@@ -1,6 +1,6 @@
 // src/server/api/routers/customComponent.ts
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { customComponentJobs, projects } from "~/server/db/schema";
 import { and, eq, desc, ne, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -523,5 +523,37 @@ export const customComponentRouter = createTRPCRouter({
         .returning();
       
       return updated;
+    }),
+
+  // Get all components for a specific task (used by A2A test dashboard)
+  getComponentsForTask: publicProcedure
+    .input(z.object({
+      taskId: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        // Query components associated with this task
+        const components = await ctx.db.query.customComponentJobs.findMany({
+          where: eq(customComponentJobs.taskId, input.taskId),
+          orderBy: [desc(customComponentJobs.createdAt)],
+        });
+
+        // Return the components with formatted fields
+        return components.map(component => ({
+          id: component.id,
+          effect: component.effect || "Unknown effect",
+          tsxCode: component.tsxCode || "",
+          status: component.status,
+          outputUrl: component.outputUrl,
+          errorMessage: component.errorMessage,
+          createdAt: component.createdAt
+        }));
+      } catch (error) {
+        console.error("Failed to fetch components for task:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to fetch components for task: ${String(error)}`,
+        });
+      }
     }),
 });

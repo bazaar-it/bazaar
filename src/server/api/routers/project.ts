@@ -11,6 +11,8 @@ import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/nameGenerator";
 import { generateTitle } from "~/server/services/titleGenerator.service";
+import { db, executeWithRetry } from "~/server/db";
+import { v4 } from "uuid";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -80,15 +82,15 @@ export const projectRouter = createTRPCRouter({
         // use the existing incremental naming scheme
         if (title === "Untitled Video" || title === "New Project") {
           // Get a list of all "Untitled Video" projects with their numbers
-          const userProjects = await ctx.db
+          const userProjects = await executeWithRetry(() => ctx.db
             .select({ title: projects.title })
             .from(projects)
             .where(
               and(
-                eq(projects.userId, ctx.session.user.id),
+                eq(projects.userId, ctx.session?.user?.id || 'system'),
                 like(projects.title, 'Untitled Video%')
               )
-            );
+            ));
           
           // Find the highest number used in "Untitled Video X" titles
           let highestNumber = 0;
@@ -108,14 +110,15 @@ export const projectRouter = createTRPCRouter({
         }
         
         // Create a new project for the logged-in user with returning clause
-        const inserted = await ctx.db
+        // Use executeWithRetry to handle potential database connection issues
+        const inserted = await executeWithRetry(() => ctx.db
           .insert(projects)
           .values({
-            userId: ctx.session.user.id,
+            userId: ctx.session?.user?.id || 'system',
             title,
             props: DEFAULT_PROJECT_PROPS,
           })
-          .returning();
+          .returning());
 
         const insertResult = inserted[0];
           
@@ -143,6 +146,7 @@ export const projectRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create project",
+          cause: error,
         });
       }
     }),

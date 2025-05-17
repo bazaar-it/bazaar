@@ -39,10 +39,11 @@ jest.mock("../base-agent", () => {
 describe("UIAgent", () => {
   let uiAgent: UIAgent;
   const mockTaskId = "mock-task-ui";
+  const mockTaskManager = taskManager as jest.Mocked<typeof taskManager>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    uiAgent = new UIAgent();
+    uiAgent = new UIAgent(mockTaskManager);
   });
 
   const createNotificationMessage = (type: "TASK_COMPLETED_NOTIFICATION" | "TASK_FAILED_NOTIFICATION", errorMsg?: string): AgentMessage => ({

@@ -25,6 +25,7 @@ interface UseSSEOptions {
   onHeartbeat?: (payload: Extract<SSEEventPayload, { type: 'heartbeat' }>) => void;
   onOpen?: () => void;
   onClose?: () => void;
+  throttleDelay?: number; // Optional throttling delay for event processing
 }
 
 interface UseSSEResult {
@@ -34,6 +35,29 @@ interface UseSSEResult {
   disconnect: () => void;
 }
 
+// Improved debounce function with clearer types
+const debounce = <T extends (...args: any[]) => any>(fn: T, ms = 100): ((...args: Parameters<T>) => void) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  
+  return function(...args: Parameters<T>) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    
+    timeoutId = setTimeout(() => {
+      fn(...args);
+      timeoutId = null;
+    }, ms);
+  };
+};
+
+// Global Map to track SSE connections across the app
+// This prevents multiple connections to the same task ID
+const activeConnections = new Map<string, {
+  refCount: number;
+  eventSource: EventSource;
+}>();
+
 /**
  * Hook for managing SSE connections to the A2A backend
  * 
@@ -41,56 +65,98 @@ interface UseSSEResult {
  * @returns Connection state and control functions
  */
 export function useSSE(options: UseSSEOptions = {}): UseSSEResult {
-  const eventSourceRef = useRef<EventSource | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const currentTaskIdRef = useRef<string | null>(null);
+  const lastEventTimeRef = useRef<Record<string, number>>({});
+  const throttleDelay = options.throttleDelay || 500; // Increased from 50ms to 500ms
+  const isConnectingRef = useRef(false); // Prevent concurrent connection attempts
   
-  // Removed: const { getSSEUrl } = api.useContext();
-  // Removed: const subscribeToTaskMutation = api.a2a.subscribeToTask.useMutation();
-  // Removed: const unsubscribeFromTaskMutation = api.a2a.unsubscribeFromTask.useMutation();
+  // Store handlers in refs to avoid dependency changes triggering reconnects
+  const handlersRef = useRef(options);
+  handlersRef.current = options;
+  
+  // Debounced state setters to avoid rapid updates
+  const debouncedSetIsConnected = useCallback(
+    debounce((value: boolean) => {
+      setIsConnected(value);
+    }, 100),
+    []
+  );
+  
+  const debouncedSetError = useCallback(
+    debounce((value: Error | null) => {
+      setError(value);
+    }, 100),
+    []
+  );
 
   const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      console.log(`SSE connection closed for task: ${currentTaskIdRef.current}`);
-      eventSourceRef.current = null;
+    const taskId = currentTaskIdRef.current;
+    if (!taskId) return;
+    
+    console.log(`Disconnecting SSE for task: ${taskId}`);
+    
+    // Update global connection tracking
+    const connection = activeConnections.get(taskId);
+    if (connection) {
+      connection.refCount--;
+      
+      if (connection.refCount <= 0) {
+        connection.eventSource.close();
+        activeConnections.delete(taskId);
+        console.log(`Closed SSE connection for task: ${taskId} (last reference)`);
+      } else {
+        console.log(`Decreased ref count for SSE connection to task: ${taskId}, now: ${connection.refCount}`);
+      }
     }
-    setIsConnected(false);
+    
+    debouncedSetIsConnected(false);
     currentTaskIdRef.current = null;
-    options.onClose?.();
-  }, [options]);
+    handlersRef.current.onClose?.();
+  }, [debouncedSetIsConnected]);
 
   /**
-   * Process an incoming SSE event
+   * Process an incoming SSE event with throttling
    */
   const processEvent = useCallback((event: MessageEvent<string>) => {
     try {
+      // Parse the event data
       const parsedEvent = JSON.parse(event.data) as SSEEventPayload;
+      const eventType = parsedEvent.type;
       
+      // Apply per-event-type throttling
+      const now = Date.now();
+      const lastTime = lastEventTimeRef.current[eventType] || 0;
+      
+      if (now - lastTime < throttleDelay) {
+        return; // Skip this event if too soon after previous event of same type
+      }
+      
+      lastEventTimeRef.current[eventType] = now;
+      
+      // Dispatch the event to appropriate handler
       switch (parsedEvent.type) {
         case SSEEventType.TaskStatusUpdate:
-          options.onTaskStatusUpdate?.(parsedEvent);
+          handlersRef.current.onTaskStatusUpdate?.(parsedEvent);
           break;
         case SSEEventType.TaskArtifactUpdate:
-          options.onTaskArtifactUpdate?.(parsedEvent);
+          handlersRef.current.onTaskArtifactUpdate?.(parsedEvent);
           break;
         case SSEEventType.Error:
-          setError(new Error(`SSE Error: ${parsedEvent.data.message} (${parsedEvent.data.code})`));
-          options.onError?.(parsedEvent);
+          debouncedSetError(new Error(`SSE Error: ${parsedEvent.data.message}`));
+          handlersRef.current.onError?.(parsedEvent);
           break;
         case SSEEventType.Heartbeat:
-          options.onHeartbeat?.(parsedEvent);
+          handlersRef.current.onHeartbeat?.(parsedEvent);
           break;
         default:
-          const unhandledEvent = parsedEvent as any;
-          console.warn('Unknown SSE event type:', unhandledEvent.type);
+          console.warn('Unknown SSE event type:', (parsedEvent as any).type);
       }
     } catch (e) {
       console.error('Failed to parse SSE message:', event.data, e);
-      setError(e instanceof Error ? e : new Error('Failed to parse SSE message'));
     }
-  }, [options]);
+  }, [throttleDelay, debouncedSetError]);
 
   /**
    * Connect to the SSE endpoint
@@ -98,61 +164,120 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEResult {
   const connect = useCallback((taskId: string) => {
     if (typeof window === 'undefined') return;
     if (!taskId) {
-      console.error("SSE Connect: taskId is required.");
+      console.error('Cannot connect SSE: taskId is required');
       return;
     }
-
-    // If already connected to the same task, do nothing
-    if (eventSourceRef.current && eventSourceRef.current.readyState !== EventSource.CLOSED && currentTaskIdRef.current === taskId) {
-        console.log(`SSE Connect: Already connected to task ${taskId}`);
-        return;
-    }
-
-    // If connected to a different task, or if current es is closed/null, disconnect first
-    if (eventSourceRef.current) {
-        disconnect();
+    
+    // Prevent concurrent connection attempts
+    if (isConnectingRef.current) {
+      console.log('Connection already in progress, skipping');
+      return;
     }
     
+    // If already connected to the same task, don't reconnect
+    if (currentTaskIdRef.current === taskId && isConnected) {
+      console.log(`Already connected to task: ${taskId}`);
+      return;
+    }
+    
+    // If connected to a different task, disconnect first
+    if (currentTaskIdRef.current && currentTaskIdRef.current !== taskId) {
+      disconnect();
+    }
+    
+    isConnectingRef.current = true;
     currentTaskIdRef.current = taskId;
     
     try {
-      const url = `/api/a2a/tasks/${taskId}/stream`; 
+      // Check if there's already a connection for this task
+      if (activeConnections.has(taskId)) {
+        // Reuse existing connection
+        const existingConnection = activeConnections.get(taskId)!;
+        existingConnection.refCount++;
+        
+        console.log(`Reusing existing SSE connection for task: ${taskId}, ref count: ${existingConnection.refCount}`);
+        debouncedSetIsConnected(true);
+        handlersRef.current.onOpen?.();
+        isConnectingRef.current = false;
+        return;
+      }
+      
+      // Create new connection
+      console.log(`Creating new SSE connection for task: ${taskId}`);
+      const url = `/api/a2a/tasks/${taskId}/stream`;
       const eventSource = new EventSource(url, { withCredentials: true });
-
+      
+      // Store in global connection tracking
+      activeConnections.set(taskId, {
+        refCount: 1,
+        eventSource
+      });
+      
       eventSource.onopen = () => {
-        setIsConnected(true);
-        setError(null);
-        options.onOpen?.();
-        console.log(`SSE connection opened for task: ${taskId}`);
-      };
-
-      eventSource.onmessage = processEvent;
-
-      eventSource.onerror = (errEvent) => {
-        console.error('SSE connection error:', errEvent);
-        const sseError = new Error('SSE connection error');
-        setError(sseError);
-        setIsConnected(false); 
-        options.onError?.({type: SSEEventType.Error, data: {code: (errEvent as any).status || -1 , message: "SSE connection error"}});
-        eventSource.close(); 
-        if (eventSourceRef.current === eventSource) {
-            eventSourceRef.current = null;
+        // Check if the current task is still what we're connecting to
+        if (currentTaskIdRef.current !== taskId) {
+          console.log(`Task changed during connection, closing: ${taskId}`);
+          if (activeConnections.has(taskId)) {
+            const conn = activeConnections.get(taskId)!;
+            conn.refCount--;
+            if (conn.refCount <= 0) {
+              conn.eventSource.close();
+              activeConnections.delete(taskId);
+            }
+          }
+          isConnectingRef.current = false;
+          return;
         }
+        
+        console.log(`SSE connection opened for task: ${taskId}`);
+        debouncedSetIsConnected(true);
+        debouncedSetError(null);
+        handlersRef.current.onOpen?.();
+        isConnectingRef.current = false;
       };
-
-      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = processEvent;
+      
+      eventSource.onerror = (errEvent) => {
+        console.error(`SSE error for task ${taskId}:`, errEvent);
+        
+        // Only set error if this is still the current task
+        if (currentTaskIdRef.current === taskId) {
+          debouncedSetError(new Error('SSE connection error'));
+          debouncedSetIsConnected(false);
+          
+          handlersRef.current.onError?.({
+            type: SSEEventType.Error,
+            data: {
+              code: (errEvent as any).status || -1,
+              message: 'SSE connection error'
+            }
+          });
+        }
+        
+        // Clean up from global tracking
+        if (activeConnections.has(taskId)) {
+          const conn = activeConnections.get(taskId)!;
+          conn.refCount--;
+          if (conn.refCount <= 0) {
+            activeConnections.delete(taskId);
+          }
+        }
+        
+        isConnectingRef.current = false;
+      };
       
     } catch (err) {
-      const connectError = err instanceof Error ? err : new Error('Failed to create SSE connection');
-      setError(connectError);
-      setIsConnected(false);
+      console.error(`Error creating SSE connection for task ${taskId}:`, err);
+      debouncedSetError(err instanceof Error ? err : new Error('Failed to create SSE connection'));
+      debouncedSetIsConnected(false);
+      currentTaskIdRef.current = null;
+      isConnectingRef.current = false;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, processEvent, disconnect]); // Added disconnect to dependency array for connect
+  }, [disconnect, isConnected, processEvent, debouncedSetIsConnected, debouncedSetError]);
 
-  // Auto-connect on mount and clean up on unmount
+  // Clean up on unmount
   useEffect(() => {
-    // Cleanup on unmount
     return () => {
       disconnect();
     };
@@ -162,6 +287,6 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEResult {
     isConnected,
     error,
     connect,
-    disconnect,
+    disconnect
   };
 }

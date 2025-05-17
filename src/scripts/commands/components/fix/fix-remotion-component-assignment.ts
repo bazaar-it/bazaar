@@ -3,7 +3,7 @@
  * and fix them by adding it correctly based on component name detection
  * 
  * Usage:
- * npx tsx src/scripts/fix-remotion-component-assignment.ts [project-id]
+ * npx tsx src/scripts/commands/components/fix/fix-remotion-component-assignment.ts [project-id]
  */
 
 import { db } from '~/server/db';
@@ -12,8 +12,16 @@ import { eq, and } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
+// Define a subset type for the component job data
+interface CustomComponentJobSubset {
+  id: string;
+  tsxCode?: string | null;
+  effect?: string | null;
+  // Add other fields if needed by the script, though projectId is used in query, not directly on comp object here
+}
+
 // Get project ID from command line args (optional)
-const projectId = process.argv[2];
+const projectId: string | undefined = process.argv[2];
 
 // Pattern to detect window.__REMOTION_COMPONENT assignment
 const MISSING_REMOTION_COMPONENT = /window\.__REMOTION_COMPONENT\s*=/;
@@ -37,7 +45,7 @@ async function fixRemotionComponentAssignment() {
     }
     
     // Execute the query
-    const allComponents = await query;
+    const allComponents: CustomComponentJobSubset[] = await query;
     
     if (allComponents.length === 0) {
       console.log('No components found.');
@@ -53,7 +61,7 @@ async function fixRemotionComponentAssignment() {
     }
     
     // Find components missing the assignment
-    const componentsNeedingFix = allComponents.filter(comp => {
+    const componentsNeedingFix = allComponents.filter((comp: CustomComponentJobSubset) => {
       if (!comp.tsxCode) return false;
       return !MISSING_REMOTION_COMPONENT.test(comp.tsxCode);
     });
@@ -81,7 +89,7 @@ async function fixRemotionComponentAssignment() {
       console.log(`Original code backed up to ${backupFile}`);
       
       // Try to find the component name
-      let componentName = null;
+      let componentName: string | null = null;
       
       // Try to match a component definition like 'const MyComponent = ...'
       const componentNameMatch = component.tsxCode.match(/const\s+(\w+)\s*=\s*[\(\{]/);
@@ -103,7 +111,7 @@ async function fixRemotionComponentAssignment() {
         componentName = component.effect
           .replace(/[^a-zA-Z0-9 ]/g, '') // Remove non-alphanumeric and space
           .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
           .join('');
           
         // Ensure it's a valid identifier
@@ -136,13 +144,13 @@ async function fixRemotionComponentAssignment() {
         
         console.log(`✅ Component ${component.id} updated and queued for rebuild`);
         fixedCount++;
-      } catch (error) {
+      } catch (error: any) { // Explicitly type error for logging
         console.error(`Error updating component ${component.id}:`, error);
       }
     }
     
     console.log(`\n✅ Fixed ${fixedCount} of ${componentsNeedingFix.length} components.`);
-  } catch (error) {
+  } catch (error: any) { // Explicitly type error for logging
     console.error('Error:', error);
     process.exit(1);
   }

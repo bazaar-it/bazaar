@@ -1,3 +1,4 @@
+// src/server/services/sceneAnalyzer.service.ts
 import { type SceneAnalysis } from '~/types/chat';
 import logger from '~/lib/logger';
 

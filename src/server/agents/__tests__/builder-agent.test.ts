@@ -1,6 +1,6 @@
 // src/server/agents/__tests__/builder-agent.test.ts
 
-import { BuilderAgent } from "../builder-agent";
+import { BuilderAgent, type BuilderAgentParams } from "../builder-agent";
 import { BaseAgent, type AgentMessage } from "../base-agent";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { Task, Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from "~/types/a2a";
@@ -76,15 +76,20 @@ jest.mock("~/server/db", () => ({
 }));
 
 describe("BuilderAgent", () => {
-  let builder: BuilderAgent;
+  let builderAgent: BuilderAgent;
   const mockTaskId = "mock-task-builder";
   const mockProjectId = "mock-project-builder";
   const mockAnimationDesignBrief = { sceneName: "Build Scene", description: "A scene to build" };
   const mockComponentCode = "export default function TestScene() { return <div/>; }";
 
+  const defaultBuilderParams: BuilderAgentParams = {
+    modelName: 'test-builder-model',
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    builder = new BuilderAgent();
+    const mockTaskManager = taskManager as jest.Mocked<typeof taskManager>;
+    builderAgent = new BuilderAgent(defaultBuilderParams, mockTaskManager);
 
     (generateComponentCode as jest.Mock).mockResolvedValue({
       code: mockComponentCode,
@@ -112,7 +117,7 @@ describe("BuilderAgent", () => {
 
     it("should send COMPONENT_PROCESS_ERROR if animationDesignBrief is missing", async () => {
       const incomingMessage = createBuildRequestMessage({ animationDesignBrief: undefined });
-      const response = await builder.processMessage(incomingMessage);
+      const response = await builderAgent.processMessage(incomingMessage);
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_PROCESS_ERROR");
       expect(response?.recipient).toBe("CoordinatorAgent");
@@ -121,7 +126,7 @@ describe("BuilderAgent", () => {
 
     it("should send COMPONENT_PROCESS_ERROR if projectId is missing", async () => {
       const incomingMessage = createBuildRequestMessage({ projectId: undefined });
-      const response = await builder.processMessage(incomingMessage);
+      const response = await builderAgent.processMessage(incomingMessage);
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_PROCESS_ERROR");
       expect(response?.recipient).toBe("CoordinatorAgent");
@@ -130,7 +135,7 @@ describe("BuilderAgent", () => {
 
     it("should store generated tsxCode in the database", async () => {
       const incomingMessage = createBuildRequestMessage();
-      await builder.processMessage(incomingMessage);
+      await builderAgent.processMessage(incomingMessage);
       expect(mockDbUpdateDirect).toHaveBeenCalledWith(customComponentJobs);
       expect(mockDbUpdateSet).toHaveBeenCalledWith({ tsxCode: mockComponentCode });
       // expect(mockDbUpdateWhere).toHaveBeenCalledWith(eq(customComponentJobs.id, mockTaskId)); // This check is tricky with mock structure
@@ -141,7 +146,7 @@ describe("BuilderAgent", () => {
       mockDbFindFirst.mockResolvedValueOnce({ id: mockTaskId, outputUrl: null, errorMessage: null }); // Simulate missing outputUrl
 
       const incomingMessage = createBuildRequestMessage();
-      const response = await builder.processMessage(incomingMessage);
+      const response = await builderAgent.processMessage(incomingMessage);
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_BUILD_ERROR");
       expect(response?.recipient).toBe("ErrorFixerAgent");
@@ -149,7 +154,7 @@ describe("BuilderAgent", () => {
     });
 
     it("should call generateComponentCode with correct parameters", async () => {
-      await builder.processMessage(createBuildRequestMessage());
+      await builderAgent.processMessage(createBuildRequestMessage());
       expect(generateComponentCode).toHaveBeenCalledWith(mockTaskId, mockAnimationDesignBrief.description, mockAnimationDesignBrief);
     });
 
@@ -159,14 +164,14 @@ describe("BuilderAgent", () => {
         valid: false,
         error: "Syntax error!",
       });
-      const response = await builder.processMessage(createBuildRequestMessage());
+      const response = await builderAgent.processMessage(createBuildRequestMessage());
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'working', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_SYNTAX_ERROR");
       expect(response?.recipient).toBe("ErrorFixerAgent");
     });
 
     it("should call buildCustomComponent if code generation is valid", async () => {
-      await builder.processMessage(createBuildRequestMessage());
+      await builderAgent.processMessage(createBuildRequestMessage());
       expect(buildCustomComponent).toHaveBeenCalledWith(mockTaskId, false);
     });
 
@@ -182,7 +187,7 @@ describe("BuilderAgent", () => {
         id: mockTaskId, outputUrl: mockOutputUrl 
       });
 
-      const response = await builder.processMessage(createBuildRequestMessage());
+      const response = await builderAgent.processMessage(createBuildRequestMessage());
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'working', expect.anything(), 'built');
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'working', expect.anything(), 'built');
       expect(response?.type).toBe("COMPONENT_BUILD_SUCCESS");
@@ -199,7 +204,7 @@ describe("BuilderAgent", () => {
         id: mockTaskId, errorMessage: "esbuild failed" 
       });
 
-      const response = await builder.processMessage(createBuildRequestMessage());
+      const response = await builderAgent.processMessage(createBuildRequestMessage());
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_BUILD_ERROR");
       expect(response?.recipient).toBe("ErrorFixerAgent");
@@ -223,7 +228,7 @@ describe("BuilderAgent", () => {
 
     it("should send COMPONENT_PROCESS_ERROR if fixedCode is missing", async () => {
       const incomingMessage = createRebuildRequestMessage({ fixedCode: undefined });
-      const response = await builder.processMessage(incomingMessage);
+      const response = await builderAgent.processMessage(incomingMessage);
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_PROCESS_ERROR");
       expect(response?.recipient).toBe("CoordinatorAgent");
@@ -235,7 +240,7 @@ describe("BuilderAgent", () => {
       mockDbFindFirst.mockResolvedValueOnce({ id: mockTaskId, outputUrl: null, errorMessage: null }); // Simulate missing outputUrl after rebuild
 
       const incomingMessage = createRebuildRequestMessage();
-      const response = await builder.processMessage(incomingMessage);
+      const response = await builderAgent.processMessage(incomingMessage);
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_BUILD_ERROR");
       expect(response?.recipient).toBe("ErrorFixerAgent"); // Should probably go to Coordinator if rebuild with fixer input fails
@@ -243,7 +248,7 @@ describe("BuilderAgent", () => {
     });
 
     it("should store fixed code and attempt to rebuild", async () => {
-      await builder.processMessage(createRebuildRequestMessage());
+      await builderAgent.processMessage(createRebuildRequestMessage());
       expect(mockDbUpdateDirect).toHaveBeenCalledWith(customComponentJobs);
       expect(buildCustomComponent).toHaveBeenCalledWith(mockTaskId, false); 
     });
@@ -257,7 +262,7 @@ describe("BuilderAgent", () => {
         id: mockTaskId, outputUrl: mockOutputUrl 
       });
       
-      const response = await builder.processMessage(createRebuildRequestMessage());
+      const response = await builderAgent.processMessage(createRebuildRequestMessage());
       expect(response?.type).toBe("COMPONENT_BUILD_SUCCESS");
       expect(response?.payload.artifacts[0].url).toBe(mockOutputUrl);
     });
@@ -270,7 +275,7 @@ describe("BuilderAgent", () => {
         id: mockTaskId, errorMessage: "rebuild failed badly" 
       });
 
-      const response = await builder.processMessage(createRebuildRequestMessage());
+      const response = await builderAgent.processMessage(createRebuildRequestMessage());
       expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything(), 'failed');
       expect(response?.type).toBe("COMPONENT_BUILD_ERROR");
       expect(response?.recipient).toBe("CoordinatorAgent"); // Escalates to Coordinator
@@ -279,7 +284,7 @@ describe("BuilderAgent", () => {
 
   describe("getAgentCard", () => {
     it("should return an agent card with specific skills for building", () => {
-      const card = builder.getAgentCard();
+      const card = builderAgent.getAgentCard();
       expect(card.name).toBe("BuilderAgent");
       expect(card.skills).toHaveLength(2);
       expect(card.skills.find(s => s.id === "generate-code-from-brief")).toBeDefined();

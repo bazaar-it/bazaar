@@ -207,6 +207,49 @@ export async function down(db) {
 }
 ```
 
+### Handling Conflicts with Existing Columns
+
+In some scenarios, particularly when evolving schemas that DrizzleKit didn't initially create or manage perfectly, running `drizzle-kit push` or `drizzle-kit migrate` might propose dropping existing columns that are still in use. This can happen if the local Drizzle schema definition diverges from the actual database structure in a way that Drizzle interprets as needing to remove columns to match the local definition.
+
+**Problem Example:**
+If `drizzle-kit push` attempts to:
+- ADD new A2A-related columns (e.g., `task_id`, `internal_status`).
+- DELETE existing, necessary columns (e.g., `originalTsxCode`, `lastFixAttempt`, `fixIssues`).
+
+**Safe Resolution Strategy: Direct SQL Execution Script**
+
+To avoid accidental data loss in such situations, a safer approach is to bypass Drizzle's automatic push/migration for the conflicting changes and apply the necessary additions (like new columns) directly via a SQL script.
+
+We encountered this exact issue and resolved it using a Node.js script (e.g., `src/scripts/add-a2a-columns.js`) that:
+1. Connects directly to the database (e.g., Neon).
+2. Executes `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` statements for each required new column.
+3. This ensures that new columns are added without affecting existing ones.
+
+**Example Script Snippet (`src/scripts/add-a2a-columns.js`):**
+```javascript
+// Simplified example
+import postgres from 'postgres';
+
+async function addColumns() {
+  const sql = postgres(process.env.DATABASE_URL); // Ensure DATABASE_URL is set
+
+  try {
+    await sql`ALTER TABLE "bazaar-vid_custom_component_job" ADD COLUMN IF NOT EXISTS "task_id" TEXT;`;
+    await sql`ALTER TABLE "bazaar-vid_custom_component_job" ADD COLUMN IF NOT EXISTS "internal_status" VARCHAR(50);`;
+    // ... add other A2A columns similarly ...
+    console.log("Successfully added A2A columns to the table!");
+  } catch (error) {
+    console.error("Error adding columns:", error);
+  } finally {
+    await sql.end();
+  }
+}
+
+addColumns();
+```
+
+After running such a script, the database schema will be updated with the new columns. It's then crucial to ensure your local Drizzle schema definition (`src/server/db/schema.ts`) accurately reflects the *complete* state of the table in the database, including both the old and newly added columns, to prevent Drizzle from trying to remove columns in subsequent operations.
+
 ## A2A Protocol-Specific Queries
 
 ### Get Task with History and Artifacts

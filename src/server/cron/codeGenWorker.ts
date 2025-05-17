@@ -5,10 +5,17 @@ import { eq } from 'drizzle-orm';
 import logger from '~/lib/logger';
 import os from 'os';
 import type { ComponentJob } from '~/types/chat'; // Assuming ComponentJob is defined here or accessible
+import { env } from '~/env';
 
-const POLL_INTERVAL_MS = 10000; // Check every 10 seconds
+// --- Smarter Polling Configuration ---
+const DEFAULT_POLL_INTERVAL_MS = env.WORKER_POLLING_INTERVAL || 30000; // Check every 30 seconds by default or from env
+const MAX_POLL_INTERVAL_MS = 5 * 60 * 1000; // Max 5 minutes backoff
 const ERROR_BACKOFF_MS = 30000; // If we hit errors, back off for 30 seconds
 const MAX_CONCURRENT_CODE_GENERATIONS = Math.max(1, os.cpus().length - 2); // Leave one for build, one for system
+
+let pollIntervalMs = DEFAULT_POLL_INTERVAL_MS; // Base interval, can be overridden by env at start
+let currentPollIntervalMs = DEFAULT_POLL_INTERVAL_MS; // Active interval, changes with backoff
+let noJobCycles = 0; // Counter for consecutive polls finding no jobs
 
 let consecutiveErrors = 0;
 let lastErrorTime = 0;
@@ -22,40 +29,71 @@ let activeCodeGenerations = 0;
 const codeGenWorkerLogger = logger.child({ worker: 'CodeGenWorker' });
 
 export function startCodeGenWorker() {
+  if (env.DISABLE_BACKGROUND_WORKERS) {
+    codeGenWorkerLogger.info('🚫 Code Generation Worker is disabled via DISABLE_BACKGROUND_WORKERS environment variable.');
+    return () => {}; // Return a no-op function
+  }
+
   if (isWorkerRunning && intervalId) {
     codeGenWorkerLogger.info('⚠️ Code Generation Worker already running, skipping duplicate initialization');
     return () => stopCodeGenWorker();
   }
-  
-  codeGenWorkerLogger.info('🛠️ Starting Custom Component Code Generation Worker...');
+
+  pollIntervalMs = env.WORKER_POLLING_INTERVAL || DEFAULT_POLL_INTERVAL_MS;
+  currentPollIntervalMs = pollIntervalMs;
+  codeGenWorkerLogger.info(`🛠️ Initializing Custom Component Code Generation Worker... Base poll interval: ${pollIntervalMs / 1000}s`);
+
   isWorkerRunning = true;
-  
-  void checkForQueuedJobs(); // Initial check
-  
-  intervalId = setInterval(async () => {
-    if (isPollingPaused) {
-      const now = Date.now();
-      if (now - lastErrorTime > ERROR_BACKOFF_MS) {
-        codeGenWorkerLogger.info('Resuming code generation job polling after error backoff');
-        isPollingPaused = false;
-      } else {
-        return;
+
+  // Staggered start
+  const initialDelay = Math.random() * 5000; // 0 to 5 seconds
+  codeGenWorkerLogger.info(`🕒 Staggering worker start by ${initialDelay.toFixed(0)}ms`);
+
+  setTimeout(() => {
+    codeGenWorkerLogger.info('🚀 Code Generation Worker started.');
+    void checkForQueuedJobs(true); // Initial check, indicate it's the first run
+
+    intervalId = setInterval(async () => {
+      if (isPollingPaused) {
+        const now = Date.now();
+        if (now - lastErrorTime > ERROR_BACKOFF_MS) {
+          codeGenWorkerLogger.info('Resuming code generation job polling after error backoff');
+          isPollingPaused = false;
+        } else {
+          return;
+        }
       }
-    }
-    
-    try {
-      await checkForQueuedJobs();
-      consecutiveErrors = 0;
-    } catch (error) {
-      consecutiveErrors++;
-      lastErrorTime = Date.now();
-      if (consecutiveErrors >= 3) {
-        codeGenWorkerLogger.info(`Pausing code generation job polling for ${ERROR_BACKOFF_MS/1000} seconds due to errors`);
-        isPollingPaused = true;
+
+      try {
+        const jobsFound = await checkForQueuedJobs();
+        consecutiveErrors = 0;
+
+        if (jobsFound) {
+          noJobCycles = 0;
+          if (currentPollIntervalMs !== pollIntervalMs) {
+            currentPollIntervalMs = pollIntervalMs;
+            codeGenWorkerLogger.info(`💡 Jobs found. Resetting poll interval to ${currentPollIntervalMs / 1000}s.`);
+          }
+        } else {
+          noJobCycles++;
+          const nextInterval = Math.min(MAX_POLL_INTERVAL_MS, pollIntervalMs * Math.pow(2, noJobCycles));
+          if (nextInterval !== currentPollIntervalMs) {
+            currentPollIntervalMs = nextInterval;
+            codeGenWorkerLogger.info(`💤 No new jobs found for ${noJobCycles} cycle(s). Backing off. Next poll in ${currentPollIntervalMs / 1000}s.`);
+          }
+        }
+      } catch (error) {
+        consecutiveErrors++;
+        lastErrorTime = Date.now();
+        if (consecutiveErrors >= 3) {
+          codeGenWorkerLogger.info(`Pausing code generation job polling for ${ERROR_BACKOFF_MS / 1000} seconds due to errors`);
+          isPollingPaused = true;
+          currentPollIntervalMs = ERROR_BACKOFF_MS; // Use error backoff interval
+        }
+        codeGenWorkerLogger.error('Error in code generation worker loop:', { error });
       }
-      codeGenWorkerLogger.error('Error in code generation worker loop:', { error });
-    }
-  }, POLL_INTERVAL_MS);
+    }, currentPollIntervalMs); // Use dynamic interval
+  }, initialDelay);
 
   return () => stopCodeGenWorker();
 }
@@ -66,38 +104,40 @@ export function stopCodeGenWorker() {
     clearInterval(intervalId);
     intervalId = null;
     isWorkerRunning = false;
+    currentPollIntervalMs = pollIntervalMs; // Reset interval for next start
+    noJobCycles = 0;
   }
 }
 
-async function checkForQueuedJobs(): Promise<void> {
-  codeGenWorkerLogger.info("Code Generation Worker checking for jobs with status 'queued_for_generation'...");
-  
+async function checkForQueuedJobs(isInitialRun = false): Promise<boolean> {
+  if (!isInitialRun) {
+    codeGenWorkerLogger.info(`Polling for jobs. Current interval: ${currentPollIntervalMs / 1000}s.`);
+  }
+
+  let jobsProcessedThisCycle = false;
   try {
+    codeGenWorkerLogger.info("Code Generation Worker checking for jobs with status 'queued_for_generation'...");
+
     const jobsToProcess = await db.query.customComponentJobs.findMany({
       where: eq(customComponentJobs.status, "queued_for_generation"),
       limit: MAX_CONCURRENT_CODE_GENERATIONS * 2, // Fetch a bit more to keep queue full
-      columns: { // Select all necessary fields for processComponentJob
+      columns: {
         id: true,
         effect: true, // This will be 'name' in processComponentJob
         metadata: true, // This contains the 'prompt' and 'variation' (brief)
-        // Add other fields if processComponentJob needs them directly from job record
       }
     });
 
     if (jobsToProcess.length > 0) {
       codeGenWorkerLogger.info(`Found ${jobsToProcess.length} job(s) in 'queued_for_generation' state.`);
+      jobsProcessedThisCycle = true;
       for (const job of jobsToProcess) {
-        // Ensure job is not already in the queue or being processed
         if (!codeGenQueue.find(q => q.jobId === job.id) && activeCodeGenerations < MAX_CONCURRENT_CODE_GENERATIONS) {
-          // Construct the input for processComponentJob carefully
-          // It primarily needs id, name, prompt, and variation (optional)
           const jobInputForProcess: ComponentJob = {
             id: job.id,
             name: job.effect || 'DefaultComponentName', // Fallback for name
-            prompt: (job.metadata as any)?.prompt || 'Default prompt', 
+            prompt: (job.metadata as any)?.prompt || 'Default prompt',
             variation: (job.metadata as any)?.variation, // This could be the stringified brief
-            // status: 'queued_for_generation', // REMOVED - processComponentJob handles internal status
-            // projectId: (job.metadata as any)?.projectId || '', // REMOVED - processComponentJob uses ID to fetch if needed
           };
 
           const genPromise = queueCodeGeneration(jobInputForProcess);
@@ -109,22 +149,22 @@ async function checkForQueuedJobs(): Promise<void> {
     }
   } catch (error) {
     codeGenWorkerLogger.error("Error checking for 'queued_for_generation' jobs:", { error });
-    throw error; // Re-throw to be caught by the main loop's error handler
+    throw error;
   }
+  return jobsProcessedThisCycle;
 }
 
 async function queueCodeGeneration(jobInput: ComponentJob): Promise<void> {
   while (activeCodeGenerations >= MAX_CONCURRENT_CODE_GENERATIONS) {
-    await new Promise(resolve => setTimeout(resolve, 200)); // Check more frequently
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
-  
+
   activeCodeGenerations++;
-  
+
   try {
     await processJobForCodeGeneration(jobInput);
   } finally {
     activeCodeGenerations--;
-    // Remove from queue after processing
     const index = codeGenQueue.findIndex(q => q.jobId === jobInput.id);
     if (index > -1) {
       codeGenQueue.splice(index, 1);
@@ -135,12 +175,10 @@ async function queueCodeGeneration(jobInput: ComponentJob): Promise<void> {
 async function processJobForCodeGeneration(jobInput: ComponentJob): Promise<void> {
   codeGenWorkerLogger.info(`Starting code generation for job ${jobInput.id} (${jobInput.name})`);
   try {
-    // processComponentJob will handle its own status updates (generating_code -> building/failed)
     await processComponentJob(jobInput);
     codeGenWorkerLogger.info(`Finished processing code generation for job ${jobInput.id}`);
   } catch (error) {
     codeGenWorkerLogger.error(`Error during processComponentJob for ${jobInput.id}:`, { error });
-    // Ensure status is updated to 'failed' if processComponentJob fails catastrophically before setting status
     try {
       await db.update(customComponentJobs)
         .set({ status: 'failed', errorMessage: `CodeGenWorker: Unhandled error in processComponentJob: ${error instanceof Error ? error.message : String(error)}`, updatedAt: new Date() })
@@ -151,7 +189,6 @@ async function processJobForCodeGeneration(jobInput: ComponentJob): Promise<void
   }
 }
 
-// Optional: Log status of the worker for debugging
 export function getCodeGenWorkerStatus() {
   return {
     isRunning: isWorkerRunning,
@@ -161,4 +198,4 @@ export function getCodeGenWorkerStatus() {
     consecutiveErrors,
     lastErrorTime
   };
-} 
+}

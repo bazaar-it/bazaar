@@ -1,284 +1,783 @@
-import { CoordinatorAgent } from "../coordinator-agent";
-import { BaseAgent, type AgentMessage } from "../base-agent";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
-import type { Task, Message, Artifact, TaskState } from "~/types/a2a";
-import { createTextMessage, createFileArtifact } from "~/types/a2a";
-import crypto from "crypto";
+// src/server/agents/__tests__/coordinator-agent.test.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Mock TaskManager
-jest.mock("~/server/services/a2a/taskManager.service", () => ({
+import { jest } from "@jest/globals";
+import { BaseAgent, type AgentMessage } from '../base-agent'; 
+// Ensure Part is aliased as MessagePart and all are type-only imports
+import { createTextMessage, type Message, type Part as MessagePart, type Task, type TaskState, type TextPart, type Artifact, type ComponentJobStatus } from "~/types/a2a"; 
+import crypto from "crypto";
+import type { OpenAI } from 'openai';
+
+// Import the actual CoordinatorAgent for type checking and instantiation
+import { CoordinatorAgent } from '../coordinator-agent';
+// Now import the taskManager, which will be the mocked version from taskManager.service
+import { taskManager as mockedTaskManager } from '../../services/a2a/taskManager.service';
+
+// Renamed mock functions to match actual BaseAgent method names
+const mockCreateA2AMessage = jest.fn<BaseAgent['createA2AMessage']>();
+const mockLogAgentMessage = jest.fn<BaseAgent['logAgentMessage']>();
+const mockUpdateTaskState = jest.fn<BaseAgent['updateTaskState']>().mockImplementation(
+  async (taskId: string, state: TaskState, status?: ComponentJobStatus, result?: any, error?: any) => {
+    console.log(`Mocked updateTaskState for taskId: ${taskId}, state: ${state}, status: ${status}, result: ${result}, error: ${error}`);
+    // updateTaskState in BaseAgent returns Promise<void>
+    // No explicit return needed for void promise
+  }
+);
+const mockAddTaskArtifact = jest.fn<BaseAgent['addTaskArtifact']>();
+const mockGenerateStructuredResponse = jest.fn<BaseAgent['generateStructuredResponse']>();
+const mockGenerateResponse = jest.fn<BaseAgent['generateResponse']>();
+
+// Mock BaseAgent FIRST to ensure it's mocked before CoordinatorAgent imports it.
+jest.mock('../base-agent', () => {
+  const MockOpenAI = jest.fn().mockImplementation(() => ({ /* empty mock OpenAI object */ }) as jest.Mocked<OpenAI>);
+
+  // Define the signature for the constructor implementation function
+  const mockConstructorImplementation = (
+    name: string,
+    taskManager: any, // Consider using a more specific mock type for taskManager
+    description?: string,
+    useOpenAI: boolean = false
+  ): BaseAgent => {
+    const instance: Partial<BaseAgent> & { [key: string]: any } = {
+      name: name,
+      taskManager: taskManager,
+      description: description || `${name} Agent`,
+      openai: useOpenAI ? (MockOpenAI() as OpenAI) : null,
+      createMessage: jest.fn<BaseAgent['createMessage']>(),
+      createA2AMessage: mockCreateA2AMessage,
+      logAgentMessage: mockLogAgentMessage,
+      updateTaskState: mockUpdateTaskState,
+      addTaskArtifact: mockAddTaskArtifact,
+      generateStructuredResponse: mockGenerateStructuredResponse,
+      generateResponse: mockGenerateResponse,
+      extractTextFromMessage: jest.fn<BaseAgent['extractTextFromMessage']>().mockImplementation((message?: Message) => {
+        if (!message?.parts) return "";
+        return message.parts.filter(p => p.type === 'text').map(p => (p as TextPart).text).join("\n");
+      }),
+      createSimpleTextMessage: jest.fn<BaseAgent['createSimpleTextMessage']>().mockImplementation((text: string) => createTextMessage(text)),
+      getName: jest.fn<BaseAgent['getName']>().mockReturnValue(name),
+    };
+    return instance as BaseAgent;
+  };
+
+  // Create the mock constructor using jest.fn with the typed implementation
+  const MockedBaseAgentConstructor = jest.fn<typeof mockConstructorImplementation>(mockConstructorImplementation);
+
+  return { BaseAgent: MockedBaseAgentConstructor };
+});
+
+// Standalone mock functions with explicit types
+const mockCreateTask = jest.fn<
+  (projectId: string, params: Record<string, any>) => Promise<Task>
+>();
+const mockGetTaskById = jest.fn<
+  (taskId: string) => Promise<Task | null>
+>();
+const mockUpdateTaskStatus = jest.fn<
+  (
+    taskId: string,
+    a2aState: TaskState,
+    message: Message | string,
+    artifacts?: Artifact[],
+    isInternalStateUpdate?: boolean
+  ) => Promise<void>
+>();
+const mockTaskManagerAddTaskArtifact = jest.fn< 
+  (taskId: string, artifact: Artifact) => Promise<void>
+>();
+
+// Mock the entire TaskManager module using a relative path
+// The factory now uses the standalone mock functions.
+jest.mock("../../services/a2a/taskManager.service", () => ({
   taskManager: {
-    createTask: jest.fn(),
-    updateTaskState: jest.fn(), // Mocked in BaseAgent tests, but specific calls can be asserted here
-    addTaskArtifact: jest.fn(), // Mocked in BaseAgent tests
-    // getTaskStatus: jest.fn(), // Not directly called by CoordinatorAgent in these test cases
+    createTask: mockCreateTask,
+    getTaskById: mockGetTaskById,
+    updateTaskStatus: mockUpdateTaskStatus,
+    addTaskArtifact: mockTaskManagerAddTaskArtifact, 
   },
 }));
 
-// Mock BaseAgent methods that are called internally or by super()
-const mockLogAgentMessage = jest.fn();
-const mockUpdateTaskStateBase = jest.fn(); // To distinguish from taskManager.updateTaskState
-
-jest.mock("../base-agent", () => {
-  const originalBaseAgent = jest.requireActual("../base-agent").BaseAgent;
-  return {
-    BaseAgent: jest.fn().mockImplementation((name, description) => {
-      const agent = new originalBaseAgent(name, description);
-      agent.logAgentMessage = mockLogAgentMessage;
-      agent.updateTaskState = mockUpdateTaskStateBase; // Mock specific BaseAgent method
-      // We can also mock createA2AMessage if we want to inspect its arguments without side effects
-      agent.createA2AMessage = jest.fn((type, taskId, recipient, message, artifacts, correlationId, payload) => ({
-        id: crypto.randomUUID(), type, payload: { taskId, message, artifacts, ...(payload || {}) }, sender: name, recipient, correlationId
-      }));
-      agent.createSimpleTextMessage = jest.fn((text) => createTextMessage(text)); // Use actual helper
-      return agent;
-    }),
-    AgentMessage: jest.requireActual("../base-agent").AgentMessage,
+// Helper for default createA2AMessage mock (renamed from flexibleCreateA2AMessageImplementation)
+const flexibleCreateA2AMessage = (
+  type: string,
+  taskId: string,
+  recipient: string,
+  message?: Message,
+  artifacts?: Artifact[],
+  correlationId?: string,
+  additionalPayload?: Record<string, any>
+): AgentMessage => {
+  const finalPayload: Partial<AgentMessage['payload']> = {
+    taskId: taskId,
+    additionalPayload: additionalPayload
   };
-});
 
+  if (message) {
+    finalPayload.message = message;
+  }
+
+  if (artifacts && artifacts.length > 0) {
+    finalPayload.artifacts = artifacts;
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    type: type,
+    payload: finalPayload as AgentMessage['payload'],
+    sender: "CoordinatorAgent", 
+    recipient,
+    correlationId: correlationId ?? undefined,
+    timestamp: new Date().toISOString(), // Changed from createdAt
+  };
+};
+
+// Helper for default logAgentMessage mock (newly defined or renamed)
+const flexibleLogAgentMessage = async (message: AgentMessage, success: boolean = true): Promise<void> => {
+  // Basic mock implementation - can be enhanced if specific logging side effects are needed for tests
+  // console.log(`Mocked logAgentMessage: ${success ? 'SUCCESS' : 'FAIL'} - ${message.type}`);
+  return Promise.resolve();
+};
+
+// Helper for default updateTaskState mock (newly defined or renamed)
+const flexibleUpdateTaskState = async (
+  taskId: string, 
+  state: TaskState, 
+  messageInput?: Message | string, 
+  artifacts?: Artifact[], 
+  internalStatus?: ComponentJobStatus | null
+): Promise<void> => {
+  // console.log(`Mocked updateTaskState: taskId=${taskId}, state=${state}`);
+  return Promise.resolve(); 
+};
+
+// Helper for default generateStructuredResponse mock (newly defined or renamed)
+export const flexibleGenerateStructuredResponse = async <T>(
+  prompt: string,
+  systemPrompt: string,
+  temperature: number = 0
+): Promise<T | null> => {
+  // Default behavior: return a simple object or null based on some condition
+  // This is a placeholder; real logic would be more sophisticated.
+  console.log(`flexibleGenerateStructuredResponse called with prompt: ${prompt.substring(0,100)}..., systemPrompt: ${systemPrompt.substring(0,100)}..., temp: ${temperature}`);
+  
+  // Example: Simulate an LLM call that might succeed or fail
+  if (prompt.includes("fail")) {
+    return null;
+  }
+  // A very generic response structure
+  return { answertype: "generic_structured_response", details: "Mocked flexible response" } as unknown as T;
+};
+
+// Helper for default addTaskArtifact mock (newly defined)
+const flexibleAddTaskArtifact = async (taskId: string, artifact: Artifact): Promise<void> => {
+  // console.log(`Mocked addTaskArtifact: taskId=${taskId}, artifactId=${artifact.id}`);
+  return Promise.resolve();
+};
+
+// Helper for default createMessagePart mock (restored)
+// Note: MessagePart is now an alias for Part from '~/types/a2a'
+const flexibleCreateMessagePartImplementation = (text: string, partTypeParam: 'text' | 'json' = 'text'): MessagePart => {
+  const actualPartType = partTypeParam === 'json' ? 'data' : 'text'; // Map 'json' to 'data' for Part.type
+  // This implementation should align with the Part interface from '~/types/a2a'
+  // For example, if type is 'data', 'text' field might be irrelevant or 'data' field should be used.
+  const part: MessagePart = {
+    type: actualPartType, 
+    id: crypto.randomUUID(),
+    // Ensure 'createdAt' is not part of the core Part type unless intended via extension
+  };
+  if (actualPartType === 'text') {
+    (part as any).text = text; // Should be TextPart
+  }
+  // if (actualPartType === 'data') { (part as any).data = JSON.parse(text); } // Example if text is JSON string for data part
+  return part;
+};
+
+const mockCreateMessagePart = jest.fn<(text: string, type?: 'text' | 'json') => MessagePart>();
 
 describe("CoordinatorAgent", () => {
   let coordinator: CoordinatorAgent;
-  const mockTaskId = "mock-task-id-coord";
-  const mockProjectId = "mock-project-id-coord";
-  const mockAnimationDesignBrief = { sceneName: "Test Scene", description: "A test scene" };
+  const mockTaskId = "mock-task-123"; 
+  const mockVideoTaskId = "video-task-id-001";
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    coordinator = new CoordinatorAgent();
+  // Default LLM response for routing/decision making by CoordinatorAgent
+  let llmDecision: any = { nextStepAgent: "BuilderAgent", reason: "Ready to build" }; 
 
-    // Setup mock return value for taskManager.createTask
-    (taskManager.createTask as jest.Mock).mockResolvedValue({
+  let defaultMockTask: Task;
+
+  beforeAll(() => {
+    // Debug: Check if standalone mocks are indeed mock functions
+    console.log('mockCreateTask is mock?', jest.isMockFunction(mockCreateTask));
+    console.log('mockGetTaskById is mock?', jest.isMockFunction(mockGetTaskById));
+
+    // Setup a default mock return value using the standalone mock function
+    mockCreateTask.mockResolvedValue(({
       id: mockTaskId,
-      state: 'submitted',
+      state: "submitted",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      message: createTextMessage("Task created"),
-    } as Task);
+      message: createTextMessage("Default mock task created by mockCreateTask in beforeAll"),
+      // Removed: retries, projectId
+    } as Task));
+  });
+
+  beforeEach(() => {
+    // Reset and re-apply default flexible implementations for all BaseAgent mocks
+    mockLogAgentMessage.mockReset().mockImplementation(flexibleLogAgentMessage);
+    mockUpdateTaskState.mockReset().mockImplementation(flexibleUpdateTaskState);
+    mockGenerateStructuredResponse.mockReset().mockImplementation(flexibleGenerateStructuredResponse);
+    mockCreateA2AMessage.mockReset().mockImplementation(flexibleCreateA2AMessage);
+    mockGenerateResponse.mockReset().mockResolvedValue("Default mock LLM response"); 
+    mockAddTaskArtifact.mockReset().mockImplementation(flexibleAddTaskArtifact);
+
+    // Reset TaskManager mocks
+    mockGetTaskById.mockReset();
+    mockCreateTask.mockReset();
+    mockUpdateTaskStatus.mockReset(); 
+    mockCreateMessagePart.mockImplementation(flexibleCreateMessagePartImplementation);
+
+    coordinator = new CoordinatorAgent(mockedTaskManager); 
+
+    // REMOVED Spies on BaseAgent methods as jest.mock should handle this
   });
 
   describe("processMessage - CREATE_COMPONENT_REQUEST", () => {
     const incomingMessage: AgentMessage = {
       id: crypto.randomUUID(),
       type: "CREATE_COMPONENT_REQUEST",
-      payload: { 
-        animationDesignBrief: mockAnimationDesignBrief,
-        projectId: mockProjectId,
-        // taskId or componentJobId might be passed if this is part of a larger flow
+      payload: {
+        projectId: "mock-project-id-coord",
+        animationDesignBrief: { sceneName: "Test Scene", description: "A test scene" },
       },
-      sender: "ADBAgent", // Example sender
+      sender: "ADBAgent", 
       recipient: "CoordinatorAgent",
+      correlationId: "corr-component-req",
+      timestamp: new Date().toISOString(), // Changed from createdAt
     };
+    const mockTaskId = "mock-task-id-for-component-req"; // Specific ID for this block
 
-    it("should create a new task via TaskManager", async () => {
-      await coordinator.processMessage(incomingMessage);
-      expect(taskManager.createTask).toHaveBeenCalledWith(mockProjectId, {
-        effect: mockAnimationDesignBrief.sceneName,
-        animationDesignBrief: mockAnimationDesignBrief,
-      });
+    beforeEach(() => {
+      mockCreateTask.mockResolvedValueOnce({
+        id: mockTaskId,
+        state: 'submitted',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        message: createTextMessage("Task created for component"),
+        artifacts: [],
+        // Removed: retries, projectId, messages array
+      } as Task);
     });
 
     it("should log the incoming message", async () => {
       await coordinator.processMessage(incomingMessage);
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingMessage, true);
+      const callsToLogAgentMessage = mockLogAgentMessage.mock.calls;
+      const foundCallWithTrue = callsToLogAgentMessage.some(callArgs => 
+        callArgs[0] === incomingMessage && callArgs[1] === true
+      );
+      expect(foundCallWithTrue).toBe(true);
     });
 
-    it("should update task state to 'working' after creating the task", async () => {
+    it("should update task state to 'working'", async () => {
       await coordinator.processMessage(incomingMessage);
-      // The updateTaskState in BaseAgent is called, which internally calls taskManager.updateTaskStatus
-      expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'working', 
-        expect.objectContaining({ parts: [{ type: 'text', text: expect.stringContaining("forwarding to BuilderAgent")}] })
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockTaskId,
+        "working",
+        expect.any(Object), // Message object or string
+        undefined, // Artifacts
+        "PROCESSING"
       );
     });
 
-    it("should return a BUILD_COMPONENT_REQUEST message for BuilderAgent", async () => {
+    it("should request LLM for next step agent", async () => {
+      // Setup: Ensure getTaskById returns a task so LLM is called
+      mockGetTaskById.mockResolvedValueOnce({
+        id: mockTaskId,
+        state: "submitted",
+        message: createTextMessage("Initial task message from mockGetTaskById"),
+        artifacts: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array
+      } as Task);
+      await coordinator.processMessage(incomingMessage);
+      expect(mockGenerateStructuredResponse).toHaveBeenCalled();
+    });
+
+    it("should create and log an A2A message for the next agent based on LLM response", async () => {
+      const nextAgent = "TestNextAgent";
+      mockGenerateStructuredResponse.mockResolvedValueOnce({ nextStepAgent: nextAgent, reason: "test reason" });
+      mockGetTaskById.mockResolvedValueOnce({
+        id: mockTaskId,
+        state: "submitted",
+        message: createTextMessage("Initial task message from mockGetTaskById"),
+        artifacts: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array
+      } as Task);
+
       const response = await coordinator.processMessage(incomingMessage);
-      expect(response).toBeDefined();
-      expect(response?.type).toBe("BUILD_COMPONENT_REQUEST");
-      expect(response?.recipient).toBe("BuilderAgent");
-      expect(response?.payload.taskId).toBe(mockTaskId);
-      expect(response?.payload.message.parts[0].text).toContain("Request to build component");
-      expect(response?.correlationId).toBe(incomingMessage.id);
-    });
-  });
 
-  describe("processMessage - Various Error Message Types", () => {
-    const errorTypesToTest: AgentMessage['type'][] = [
-      "COMPONENT_PROCESS_ERROR",
-      "COMPONENT_FIX_ERROR",
-      "R2_STORAGE_ERROR",
-      "ADB_GENERATION_ERROR"
-    ];
-
-    errorTypesToTest.forEach((errorType) => {
-      it(`should handle ${errorType}, update task to 'failed', and prepare TASK_FAILED_NOTIFICATION for UIAgent`, async () => {
-        const specificErrorPayload = { error: `${errorType} occurred`, taskId: mockTaskId };
-        const incomingErrorMessage: AgentMessage = {
-          id: crypto.randomUUID(),
-          type: errorType,
-          payload: specificErrorPayload,
-          sender: "SourceAgent", 
-          recipient: "CoordinatorAgent",
-        };
-
-        // The processMessage itself will call createA2AMessage internally
-        const response = await coordinator.processMessage(incomingErrorMessage);
-
-        expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', 
-          expect.objectContaining({ parts: [{type: 'text', text: specificErrorPayload.error }] })
-        );
-        expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingErrorMessage, true);
-        
-        // Check the response that CoordinatorAgent returns
-        expect(response).toBeDefined();
-        expect(response?.type).toBe("TASK_FAILED_NOTIFICATION");
-        expect(response?.recipient).toBe("UIAgent");
-        expect(response?.payload.taskId).toBe(mockTaskId);
-        expect(response?.payload.message.parts[0].text).toContain(`Task failed: ${specificErrorPayload.error}`);
-      });
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "TASK_ASSIGNMENT",
+        mockTaskId,
+        nextAgent,
+        expect.any(Object),
+        expect.any(Array),
+        incomingMessage.id
+      );
+      // Check if the created message (from mockCreateA2AMessage's return) was logged
+      const createdMessage = mockCreateA2AMessage.mock.results[0]?.value;
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(createdMessage, true);
+      expect(response).toEqual(createdMessage);
     });
 
-    // Test for graceful handling of missing taskId in error messages, moved from the old error handling block
-    it("should handle missing taskId in error payload gracefully", async () => {
-      const incomingErrorMessageWithoutTaskId: AgentMessage = {
-        id: crypto.randomUUID(),
-        type: "COMPONENT_PROCESS_ERROR", 
-        payload: { error: "Some error, no task ID" }, // No taskId here
-        sender: "BuilderAgent",
-        recipient: "CoordinatorAgent",
-      };
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    it("should handle LLM failure gracefully, log error, and update task to error state", async () => {
+      mockGenerateStructuredResponse.mockResolvedValueOnce(null); // Simulate LLM failure
+      mockGetTaskById.mockResolvedValueOnce({
+        id: mockTaskId,
+        state: "submitted",
+        message: createTextMessage("Initial task message from mockGetTaskById"),
+        artifacts: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array
+      } as Task);
+
+      const response = await coordinator.processMessage(incomingMessage);
+
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingMessage, true); // Initial log
+      // Check for error logging related to LLM failure
+      const errorLogCall = mockLogAgentMessage.mock.calls.find(call => 
+        call[0].type === 'ERROR_INTERNAL' && call[0].recipient === "CoordinatorAgent"
+      );
+      expect(errorLogCall).toBeDefined();
+      if(errorLogCall) {
+        expect(errorLogCall[0].payload.error).toContain("LLM failed to provide a next step");
+      }
       
-      const response = await coordinator.processMessage(incomingErrorMessageWithoutTaskId);
-      
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockTaskId,
+        "failed",
+        expect.stringContaining("LLM failed to provide a next step"),
+        undefined,
+        "FAILED"
+      );
       expect(response).toBeNull();
-      expect(mockUpdateTaskStateBase).not.toHaveBeenCalled(); // Should not try to update state without taskId
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingErrorMessageWithoutTaskId, true); // Should still log the incoming message
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Missing taskId in error message payload"), expect.anything());
-      consoleErrorSpy.mockRestore();
+    });
+
+     it("should use generateResponse if generateStructuredResponse fails and taskManager.getTaskById returns a task with currentStep 'ERROR_HANDLER'", async () => {
+      mockGenerateStructuredResponse.mockResolvedValueOnce(null); // First LLM call fails
+      mockGetTaskById.mockResolvedValueOnce({
+        id: mockTaskId, 
+        state: "failed", // Task is in an error state
+        message: createTextMessage("Initial task message from mockGetTaskById"),
+        artifacts: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array
+      } as Task);
+      mockGenerateResponse.mockResolvedValueOnce("Fallback LLM general response"); // Fallback LLM call succeeds
+
+      await coordinator.processMessage(incomingMessage);
+      expect(mockGenerateResponse).toHaveBeenCalled();
+      // Further assertions for this specific path could be added here, e.g. task state update after fallback
     });
   });
 
-  describe("processMessage - COMPONENT_BUILD_SUCCESS", () => {
-    const successPayload = { taskId: mockTaskId, artifacts: [{ id: "artifact1", type: "file", mimeType: "application/javascript", url: "/build.js", createdAt: new Date().toISOString() } as Artifact] };
-    const incomingSuccessMessage: AgentMessage = {
+  describe("processMessage - TASK_COMPLETED_NOTIFICATION", () => {
+    const taskCompletedMessage: AgentMessage = {
       id: crypto.randomUUID(),
-      type: "COMPONENT_BUILD_SUCCESS",
-      payload: successPayload,
+      type: "TASK_COMPLETED_NOTIFICATION",
       sender: "BuilderAgent",
       recipient: "CoordinatorAgent",
+      payload: {
+        taskId: mockVideoTaskId,
+        message: createTextMessage("Task completed"),
+        artifacts: [{ id: "artifact1", type: "file", mimeType: "application/javascript", url: "/build.js", createdAt: new Date().toISOString() } as Artifact],
+      },
+      timestamp: new Date().toISOString(), // Changed from createdAt
     };
 
-    it("should log the success message and forward to R2StorageAgent", async () => {
-      const response = await coordinator.processMessage(incomingSuccessMessage);
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingSuccessMessage, true);
-      expect(response?.type).toBe("STORE_COMPONENT_REQUEST");
-      expect(response?.recipient).toBe("R2StorageAgent");
-      expect(response?.payload.taskId).toBe(mockTaskId);
-      expect(response?.payload.artifacts).toEqual(successPayload.artifacts);
+    it("should log the incoming TASK_COMPLETED_NOTIFICATION message", async () => {
+      await coordinator.processMessage(taskCompletedMessage);
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(taskCompletedMessage, true);
     });
-  });
 
-  describe("processMessage - COMPONENT_STORED_SUCCESS", () => {
-    const storedPayload = { taskId: mockTaskId, artifacts: [{ id: "artifact1", type: "file", mimeType: "application/javascript", url: "/r2/build.js", createdAt: new Date().toISOString() } as Artifact] };
-    const incomingStoredMessage: AgentMessage = {
-      id: crypto.randomUUID(),
-      type: "COMPONENT_STORED_SUCCESS",
-      payload: storedPayload,
-      sender: "R2StorageAgent",
-      recipient: "CoordinatorAgent",
-    };
-
-    it("should update task state to 'completed' and notify UIAgent", async () => {
-      const response = await coordinator.processMessage(incomingStoredMessage);
-      expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'completed', 
-        expect.objectContaining({ parts: [{type: 'text', text: "Component stored successfully."}] })
+    it("should update the task state to 'completed' using data from the message", async () => {
+      await coordinator.processMessage(taskCompletedMessage);
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockVideoTaskId,
+        "completed",
+        taskCompletedMessage.payload.message, // message
+        taskCompletedMessage.payload.artifacts, // artifacts
+        "COMPLETED" // internalStatus
       );
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingStoredMessage, true);
-      expect(response?.type).toBe("TASK_COMPLETED_NOTIFICATION");
-      expect(response?.recipient).toBe("UIAgent");
-      expect(response?.payload.taskId).toBe(mockTaskId);
-      expect(response?.payload.artifacts).toEqual(storedPayload.artifacts);
     });
-  });
 
-  describe("processMessage - Unhandled Message Type", () => {
-    it("should log and return null for an unhandled message type", async () => {
-      const unhandledMessage: AgentMessage = {
-        id: crypto.randomUUID(),
-        type: "TOTALLY_UNKNOWN_MESSAGE_TYPE",
-        payload: { taskId: mockTaskId, data: "some data" },
-        sender: "SomeOtherAgent",
-        recipient: "CoordinatorAgent",
-      };
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    it("should not call LLM for TASK_COMPLETED_NOTIFICATION", async () => {
+      await coordinator.processMessage(taskCompletedMessage);
+      expect(mockGenerateStructuredResponse).not.toHaveBeenCalled();
+      expect(mockGenerateResponse).not.toHaveBeenCalled();
+    });
 
-      const response = await coordinator.processMessage(unhandledMessage);
-
+    it("should return null as there's no further message to send", async () => {
+      const response = await coordinator.processMessage(taskCompletedMessage);
       expect(response).toBeNull();
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(unhandledMessage); // Should be logged as pending
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining("CoordinatorAgent received unhandled message type: TOTALLY_UNKNOWN_MESSAGE_TYPE"));
-      consoleWarnSpy.mockRestore();
     });
   });
 
-  describe("processMessage - Edge Cases for CoordinatorAgent Internal Errors", () => {
-    it("should log original message as unprocessed if updateTaskState (called by coordinator for error) itself fails", async () => {
-      const errorMessageFromAgent = "DB connection lost during update";
-      const errorPayload = { error: errorMessageFromAgent, taskId: mockTaskId };
-      const incomingErrorMessage: AgentMessage = {
+  describe("processMessage - TASK_REJECTION_NOTIFICATION", () => {
+    const taskRejectionMessage: AgentMessage = {
+      id: crypto.randomUUID(),
+      type: "TASK_REJECTION_NOTIFICATION",
+      sender: "BuilderAgent",
+      recipient: "CoordinatorAgent",
+      payload: {
+        taskId: mockVideoTaskId,
+        message: createTextMessage("Task rejected"),
+        artifacts: [{ id: "artifact1", type: "file", mimeType: "application/javascript", url: "/build.js", createdAt: new Date().toISOString() } as Artifact],
+      },
+      timestamp: new Date().toISOString(), // Changed from createdAt
+    };
+
+    it("should log the incoming TASK_REJECTION_NOTIFICATION message", async () => {
+      await coordinator.processMessage(taskRejectionMessage);
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(taskRejectionMessage, true);
+    });
+
+    it("should update the task state to 'failed' using data from the message", async () => {
+      await coordinator.processMessage(taskRejectionMessage);
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockVideoTaskId,
+        "failed",
+        taskRejectionMessage.payload.message, // message
+        taskRejectionMessage.payload.artifacts, // artifacts
+        "FAILED" // internalStatus
+      );
+    });
+
+    it("should not call LLM for TASK_REJECTION_NOTIFICATION", async () => {
+      await coordinator.processMessage(taskRejectionMessage);
+      expect(mockGenerateStructuredResponse).not.toHaveBeenCalled();
+      expect(mockGenerateResponse).not.toHaveBeenCalled();
+    });
+
+    it("should return null as there's no further message to send", async () => {
+      const response = await coordinator.processMessage(taskRejectionMessage);
+      expect(response).toBeNull();
+    });
+  });
+
+  describe("processMessage - ERROR_NOTIFICATION", () => {
+    let errorNotificationMessage: AgentMessage;
+
+    beforeEach(() => {
+      errorNotificationMessage = {
         id: crypto.randomUUID(),
-        type: "COMPONENT_PROCESS_ERROR",
-        payload: errorPayload,
+        type: "ERROR_NOTIFICATION",
         sender: "BuilderAgent",
         recipient: "CoordinatorAgent",
+        payload: {
+          taskId: mockVideoTaskId,
+          message: createTextMessage("Error occurred"),
+          artifacts: [{ id: "artifact1", type: "file", mimeType: "application/javascript", url: "/build.js", createdAt: new Date().toISOString() } as Artifact],
+        },
+        timestamp: new Date().toISOString(), // Changed from createdAt
       };
-      
-      const dbUpdateError = new Error("DB update failed during Coordinator's attempt to set error state");
-      (mockUpdateTaskStateBase as jest.Mock).mockImplementation(async (taskIdParam, stateParam) => {
-        if (taskIdParam === mockTaskId && stateParam === 'failed') {
-          throw dbUpdateError; 
-        }
-        return Promise.resolve();
+    });
+
+    it("should log the incoming ERROR_NOTIFICATION message", async () => {
+      await coordinator.processMessage(errorNotificationMessage);
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(errorNotificationMessage, true);
+    });
+
+    it("should update task state to 'failed' and then attempt LLM based error handling", async () => {
+      mockGetTaskById.mockResolvedValueOnce({ 
+        id: mockVideoTaskId, 
+        state: "working", 
+        createdAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array. `message` and `artifacts` can be undefined or set if needed.
       });
-      
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockGenerateStructuredResponse.mockResolvedValueOnce({ nextStepAgent: "ErrorFixerAgent", reason: "Attempting to fix error" });
 
-      const response = await coordinator.processMessage(incomingErrorMessage);
-      
-      expect(response).toBeNull(); 
-      expect(mockUpdateTaskStateBase).toHaveBeenCalledWith(mockTaskId, 'failed', expect.anything());
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingErrorMessage, true);
-      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingErrorMessage, false);
+      await coordinator.processMessage(errorNotificationMessage);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      // Find the specific console.error call from the CoordinatorAgent's catch block
-      const relevantConsoleCall = consoleErrorSpy.mock.calls.find(call => 
-        typeof call[0] === 'string' && call[0].includes("Error processing message in CoordinatorAgent")
+      // First, update to failed state from notification
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockVideoTaskId,
+        "failed",
+        errorNotificationMessage.payload.message,
+        errorNotificationMessage.payload.artifacts,
+        "FAILED"
       );
-      expect(relevantConsoleCall).toBeDefined(); // Ensure the specific log was made
 
-      if (relevantConsoleCall) { // Type guard for relevantConsoleCall
-        expect(relevantConsoleCall[0]).toContain(`Error processing message in CoordinatorAgent (type: ${incomingErrorMessage.type}): ${dbUpdateError.message}`);
-        expect(relevantConsoleCall[1]).toEqual(expect.objectContaining({
-          payload: incomingErrorMessage.payload,
-          error: dbUpdateError 
-        }));
-      }
-      consoleErrorSpy.mockRestore();
+      // Then, LLM should be called for error handling strategy
+      expect(mockGenerateStructuredResponse).toHaveBeenCalled();
+      
+      // Then, a new task assignment message should be created for the error handling agent
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "TASK_ASSIGNMENT",
+        mockVideoTaskId,
+        "ErrorFixerAgent",
+        expect.any(Object), // Original message or a wrapper
+        expect.any(Array),
+        errorNotificationMessage.id
+      );
+    });
+    
+    it("should handle LLM failure during error processing by logging and returning null", async () => {
+      mockGetTaskById.mockResolvedValueOnce({ 
+        id: mockVideoTaskId, 
+        state: "working", 
+        createdAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString() 
+      });
+      mockGenerateStructuredResponse.mockResolvedValueOnce(null); // LLM fails to give error handling step
+
+      const response = await coordinator.processMessage(errorNotificationMessage);
+
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'ERROR_INTERNAL' }), false);
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(
+        mockVideoTaskId,
+        "failed",
+        expect.stringContaining("LLM failed to provide a next step for error handling"),
+        undefined,
+        "FAILED"
+      ); // This might be called twice, once for initial error, once for LLM fail. Let's check for the second one.
+      expect(response).toBeNull();
     });
   });
 
-  describe("getAgentCard", () => {
-    it("should return an agent card with specific skills", () => {
-      const card = coordinator.getAgentCard();
-      expect(card.name).toBe("CoordinatorAgent");
-      expect(card.skills).toBeDefined();
-      expect(card.skills).toHaveLength(1);
-      if (card.skills && card.skills[0]) {
-        expect(card.skills[0].id).toBe("orchestrate-component-generation");
+  describe("processMessage - GENERAL_MESSAGE_REQUEST for information", () => {
+    const generalMessageRequest: AgentMessage = {
+      id: crypto.randomUUID(),
+      type: "GENERAL_MESSAGE_REQUEST",
+      sender: "RequestingAgent",
+      recipient: "CoordinatorAgent",
+      payload: {
+        taskId: mockVideoTaskId,
+        message: createTextMessage("What is the current task status?"),
+      },
+      timestamp: new Date().toISOString(), // Changed from createdAt
+    };
+
+    it("should log the incoming GENERAL_MESSAGE_REQUEST", async () => {
+      await coordinator.processMessage(generalMessageRequest);
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(generalMessageRequest, true);
+    });
+
+    it("should use generateResponse (general LLM) to answer the informational request", async () => {
+      mockGenerateResponse.mockResolvedValueOnce("This is a general answer.");
+      await coordinator.processMessage(generalMessageRequest);
+      expect(mockGenerateResponse).toHaveBeenCalled();
+      expect(mockGenerateStructuredResponse).not.toHaveBeenCalled(); // Should not use structured response here
+    });
+
+    it("should create and log an A2A message with the LLM's answer", async () => {
+      const llmAnswer = "The current task status is working.";
+      mockGenerateResponse.mockResolvedValueOnce(llmAnswer);
+      
+      const response = await coordinator.processMessage(generalMessageRequest);
+
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "GENERAL_MESSAGE_RESPONSE",
+        mockVideoTaskId,
+        "RequestingAgent", // recipient is the original sender
+        expect.objectContaining({ parts: expect.arrayContaining([expect.objectContaining({ text: llmAnswer })]) }),
+        [],
+        generalMessageRequest.id
+      );
+      const createdMessage = mockCreateA2AMessage.mock.results[0]?.value;
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(createdMessage, true);
+      expect(response).toEqual(createdMessage);
+    });
+
+    it("should handle LLM (generateResponse) failure by logging error and sending an error response", async () => {
+      mockGenerateResponse.mockResolvedValueOnce(null); // LLM fails
+      await coordinator.processMessage(generalMessageRequest);
+
+      // Error log for LLM failure
+      const errorLogCall = mockLogAgentMessage.mock.calls.find(call => 
+        call[0].type === 'ERROR_INTERNAL' && call[0].recipient === "CoordinatorAgent"
+      );
+      expect(errorLogCall).toBeDefined();
+      if (errorLogCall) {
+        expect(errorLogCall[0].payload.error).toContain("LLM failed to generate a response for GENERAL_MESSAGE_REQUEST");
       }
+
+      // Send GENERAL_MESSAGE_RESPONSE with error content
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "GENERAL_MESSAGE_RESPONSE",
+        mockVideoTaskId,
+        "RequestingAgent",
+        expect.objectContaining({ parts: expect.arrayContaining([expect.objectContaining({ text: expect.stringContaining("Sorry, I couldn't process your request due to an internal error.") })]) }),
+        [],
+        generalMessageRequest.id
+      );
     });
   });
-}); 
+
+  describe("processMessage - Unhandled message types", () => {
+    const unhandledMessage: AgentMessage = {
+      id: crypto.randomUUID(),
+      type: "UNHANDLED_TYPE",
+      sender: "SomeAgent",
+      recipient: "CoordinatorAgent",
+      payload: {
+        taskId: mockVideoTaskId,
+        message: createTextMessage("This is an unhandled message type"),
+      },
+      timestamp: new Date().toISOString(), // Changed from createdAt
+    };
+
+    it("should log the unhandled message", async () => {
+      await coordinator.processMessage(unhandledMessage);
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(unhandledMessage, true);
+    });
+
+    it("should call generateStructuredResponse for routing/decision on unhandled types", async () => {
+      mockGetTaskById.mockResolvedValueOnce({ id: mockVideoTaskId, state: "working" } as any);
+      await coordinator.processMessage(unhandledMessage);
+      expect(mockGenerateStructuredResponse).toHaveBeenCalled();
+    });
+
+    it("should send TASK_REJECTION if LLM suggests no agent or fails for unhandled type", async () => {
+      mockGetTaskById.mockResolvedValueOnce({ id: mockVideoTaskId, state: "working" } as any);
+      mockGenerateStructuredResponse.mockResolvedValueOnce(null); // LLM fails or suggests no agent
+      
+      const response = await coordinator.processMessage(unhandledMessage);
+
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "TASK_REJECTION",
+        mockVideoTaskId,
+        unhandledMessage.sender,
+        expect.objectContaining({ parts: expect.arrayContaining([expect.objectContaining({text: expect.stringContaining("Unable to handle message type UNHANDLED_TYPE")})])}),
+        [],
+        unhandledMessage.id
+      );
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(mockCreateA2AMessage.mock.results[0]?.value, true);
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(mockVideoTaskId, "failed", expect.any(Object), undefined, "FAILED");
+      expect(response).toEqual(mockCreateA2AMessage.mock.results[0]?.value);
+    });
+
+    it("should route to LLM-suggested agent if applicable for unhandled type", async () => {
+      const suggestedNextAgent = "SpecializedAgent";
+      mockGetTaskById.mockResolvedValueOnce({ id: mockVideoTaskId, state: "working" } as any);
+      mockGenerateStructuredResponse.mockResolvedValueOnce({ nextStepAgent: suggestedNextAgent, reason: "Routing to specialized agent for unhandled type" });
+
+      await coordinator.processMessage(unhandledMessage);
+
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith(
+        "TASK_ASSIGNMENT", // Or a more generic routing type if defined
+        mockVideoTaskId,
+        suggestedNextAgent,
+        expect.any(Object), // Original message or a wrapper
+        expect.any(Array),
+        unhandledMessage.id
+      );
+    });
+  });
+
+  describe("Error Handling in _handleErrorAndUpdateState", () => {
+    it("should log error, update task state, and potentially call LLM for error strategy", async () => {
+      // This tests the private method _handleErrorAndUpdateState indirectly via a path that calls it.
+      // Let's use the ERROR_NOTIFICATION path which explicitly calls it.
+      mockGetTaskById.mockResolvedValueOnce({ 
+        id: mockVideoTaskId, 
+        state: "working", 
+        createdAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString(),
+        // Removed: retries, projectId, messages array
+      });
+      mockGenerateStructuredResponse.mockResolvedValueOnce({ nextStepAgent: "ErrorFixerAgent", reason: "Fixing now" });
+
+      await coordinator.processMessage(errorNotificationMessage); // errorNotificationMessage defined in its describe block
+
+      // Log incoming error notification
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(errorNotificationMessage, true);
+      // Update task to failed from the notification
+      expect(mockUpdateTaskState).toHaveBeenCalledWith(mockVideoTaskId, "failed", errorNotificationMessage.payload.message, errorNotificationMessage.payload.artifacts, "FAILED");
+      // LLM called for error strategy
+      expect(mockGenerateStructuredResponse).toHaveBeenCalledTimes(1); // Only once for the error handling strategy
+      // Task assignment to error handling agent
+      expect(mockCreateA2AMessage).toHaveBeenCalledWith("TASK_ASSIGNMENT", mockVideoTaskId, "ErrorFixerAgent", expect.any(Object), expect.any(Array), errorNotificationMessage.id);
+    });
+
+    it("should handle LLM failure when deciding error strategy", async () => {
+      mockGetTaskById.mockResolvedValueOnce({ 
+        id: mockVideoTaskId, 
+        state: "working", 
+        createdAt: new Date().toISOString(), 
+        updatedAt: new Date().toISOString() 
+      });
+      mockGenerateStructuredResponse.mockResolvedValueOnce(null); // LLM fails to give strategy
+
+      await coordinator.processMessage(errorNotificationMessage);
+
+      // Final update to failed state due to LLM failure in error handling
+      const updateCalls = mockUpdateTaskState.mock.calls;
+      const finalErrorCall = updateCalls.find(call => call[0] === mockVideoTaskId && call[1] === "failed" && typeof call[2] === 'string' && call[2].includes("LLM failed to provide a next step for error handling"));
+      expect(finalErrorCall).toBeDefined();
+      // Ensure internalStatus was FAILED for this update
+      expect(finalErrorCall?.[4]).toBe("FAILED");
+      
+      // Log the internal error for LLM failure
+      const errorLogCall = mockLogAgentMessage.mock.calls.find(call => 
+        call[0].type === 'ERROR_INTERNAL' && call[0].recipient === "CoordinatorAgent" && !call[1] // success = false
+      );
+      expect(errorLogCall).toBeDefined();
+    });
+  });
+
+  // Test for when a task is not found by getTaskById
+  describe("Task Not Found scenarios", () => {
+    it("should log an error and not proceed if task not found for CREATE_COMPONENT_REQUEST", async () => {
+      mockGetTaskById.mockResolvedValueOnce(null); // Task not found
+      const incomingMessage: AgentMessage = {
+        id: "msg-create-notfound",
+        type: "CREATE_COMPONENT_REQUEST",
+        sender: "APIService",
+        recipient: "CoordinatorAgent",
+        payload: { taskId: "non-existent-task", componentName: "TestComponent", props: { text: "Hello" } },
+        timestamp: new Date().toISOString(), // Changed from createdAt
+      };
+      const response = await coordinator.processMessage(incomingMessage);
+
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(incomingMessage, true);
+      const errorLogCall = mockLogAgentMessage.mock.calls.find(call => 
+        call[0].type === 'ERROR_INTERNAL' && 
+        call[0].recipient === "CoordinatorAgent" && 
+        call[0].payload.error.includes("Task not found: non-existent-task")
+      );
+      expect(errorLogCall).toBeDefined();
+      expect(mockUpdateTaskState).not.toHaveBeenCalledWith("non-existent-task", expect.anything(), expect.anything(), expect.anything(), expect.anything());
+      expect(mockGenerateStructuredResponse).not.toHaveBeenCalled();
+      expect(response).toBeNull();
+    });
+
+    it("should log an error and not proceed if task not found for ERROR_NOTIFICATION", async () => {
+      mockGetTaskById.mockResolvedValueOnce(null); // Task not found
+      const localErrorNotificationMessage: AgentMessage = { // Defined locally for this test
+        id: "msg-error-notfound",
+        type: "ERROR_NOTIFICATION",
+        sender: "BuilderAgent",
+        recipient: "CoordinatorAgent",
+        payload: { taskId: "non-existent-task-for-error", message: createTextMessage("Build failed") },
+        timestamp: new Date().toISOString(), // Changed from createdAt
+      };
+      const response = await coordinator.processMessage(localErrorNotificationMessage); 
+
+      expect(mockLogAgentMessage).toHaveBeenCalledWith(localErrorNotificationMessage, true);
+       const errorLogCall = mockLogAgentMessage.mock.calls.find(call => 
+        call[0].type === 'ERROR_INTERNAL' && 
+        call[0].recipient === "CoordinatorAgent" && 
+        call[0].payload.error.includes("Task not found: non-existent-task-for-error")
+      );
+      expect(errorLogCall).toBeDefined();
+      expect(mockUpdateTaskState).not.toHaveBeenCalledWith("non-existent-task-for-error", expect.anything(), expect.anything(), expect.anything(), expect.anything());
+      expect(mockGenerateStructuredResponse).not.toHaveBeenCalled();
+      expect(response).toBeNull();
+    });
+  });
+});

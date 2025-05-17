@@ -63,4 +63,32 @@ export class AgentRegistry {
 }
 
 // Export singleton instance
-export const agentRegistry = AgentRegistry.getInstance(); 
+export const agentRegistry = AgentRegistry.getInstance();
+
+// Global registry of agents
+const agentRegistryGlobal: Record<string, BaseAgent> = {};
+
+/**
+ * Register an agent in the global registry
+ */
+export function registerAgentGlobal(agent: BaseAgent): void {
+  const agentName = agent.getName();
+  agentRegistryGlobal[agentName] = agent;
+  console.log(`Registered agent: ${agentName}`);
+}
+
+/**
+ * Get an agent by name from the global registry
+ */
+export function getAgentGlobal(agentName: string): BaseAgent | undefined {
+  return agentRegistryGlobal[agentName];
+}
+
+/**
+ * Get all registered agents from the global registry
+ */
+export function getAllAgentsGlobal(): BaseAgent[] {
+  return Object.values(agentRegistryGlobal);
+}
+
+// ... rest of existing code ... 

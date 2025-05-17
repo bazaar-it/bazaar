@@ -9,6 +9,7 @@ import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { StructuredAgentMessage, SSEEvent } from "~/types/a2a";
 import { Subject } from "rxjs";
 import crypto from "crypto";
+import { a2aLogger } from "~/lib/logger"; // Import a2aLogger
 
 export class MessageBus {
   private static instance: MessageBus;
@@ -26,9 +27,9 @@ export class MessageBus {
   }
 
   registerAgent(agent: BaseAgent): void {
-    this.agents.set(agent.name.toLowerCase(), agent);
-    this.agentSubscribers.set(agent.name.toLowerCase(), []);
-    console.log(`MessageBus: Registered agent: ${agent.name}`);
+    this.agents.set(agent.getName().toLowerCase(), agent);
+    this.agentSubscribers.set(agent.getName().toLowerCase(), []);
+    a2aLogger.info(null, `MessageBus: Registered agent: ${agent.getName()}`);
   }
 
   getAgent(name: string): BaseAgent | undefined {
@@ -48,7 +49,10 @@ export class MessageBus {
       createdAt: new Date(),
     });
 
-    console.log(`MessageBus: Published message ${message.id} from ${message.sender} to ${message.recipient} (Type: ${message.type})`);
+    const taskId = (message.payload as any)?.taskId || (message.payload as any)?.componentJobId || "N/A";
+    a2aLogger.messageBusDelivery(message.id, message.recipient, taskId, 
+      { sender: message.sender, type: message.type, status: "published_to_bus_and_db" }
+    );
 
     // SSE updates are primarily handled by TaskManager based on state changes.
     // The direct SSE emission block related to a 'progress' variable that was previously here has been removed.
@@ -63,6 +67,7 @@ export class MessageBus {
         await db.update(agentMessages)
           .set({ status: "processed", processedAt: new Date() })
           .where(eq(agentMessages.id, message.id));
+        a2aLogger.messageBusDelivery(message.id, message.recipient, taskId, { status: "processed_by_agent", agentName: recipientAgent.getName() });
 
         if (responseMessage) {
           const newResponseMessage = {
@@ -72,14 +77,19 @@ export class MessageBus {
           };
           await this.publish(newResponseMessage);
         }
-      } catch (error) {
-        console.error(`MessageBus: Error processing message ${message.id} by ${recipientAgent.name}:`, error);
+      } catch (error: any) {
+        console.error(`MessageBus: Error processing message ${message.id} by ${recipientAgent.getName()}:`, error);
+        a2aLogger.error(taskId, `MessageBus: Error processing message ${message.id} by ${recipientAgent.getName()}. Error: ${error.message}`, error, 
+          { messageId: message.id, recipientAgent: recipientAgent.getName(), originalSender: message.sender, messageType: message.type }
+        );
         await db.update(agentMessages)
           .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: String(error) } })
           .where(eq(agentMessages.id, message.id));
       }
     } else {
-      console.warn(`MessageBus: No agent registered for recipient: ${message.recipient}. Message ID: ${message.id}`);
+      a2aLogger.warn(taskId, `MessageBus: No agent registered for recipient: ${message.recipient}. Message ID: ${message.id}`, 
+        { messageId: message.id, recipient: message.recipient, originalSender: message.sender, messageType: message.type }
+      );
       await db.update(agentMessages)
         .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: `Recipient not found: ${message.recipient}` } })
         .where(eq(agentMessages.id, message.id));

@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 7
+    },
+    "auditLog": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/.1bc4fa54f1207b431a51766100050eadcb633598-audit.json",
+    "files": [
+        {
+            "date": 1747382937483,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/a2a-2025-05-16.log",
+            "hash": "199c430045e324f7a7a9cfc460b7be9b04bc25d8a6d7d56559c014c51c13584d"
+        },
+        {
+            "date": 1747420099751,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/a2a-2025-05-17.log",
+            "hash": "3ad00448b23cf5d8d067b66233adb2049fbd745c53fb32e02ccb0ae6305ab87a"
+        }
+    ],
+    "hashType": "sha256"
+}

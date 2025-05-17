@@ -1,12 +1,29 @@
 // src/server/init.ts
 import { startBuildWorker } from './cron/buildWorker';
 import { startCodeGenWorker, stopCodeGenWorker } from './cron/codeGenWorker';
+import { TaskProcessor } from '~/server/services/a2a/taskProcessor.service';
 
-// Track initialization state globally
-let isInitialized = false;
+// Create a global object for truly persisting state across HMR cycles
+declare global {
+  // eslint-disable-next-line no-var
+  var __SERVER_INITIALIZED: boolean;
+  // eslint-disable-next-line no-var
+  var __SERVER_CLEANUP_FUNCTIONS: (() => void)[];
+}
 
-// Store cleanup functions for multiple workers
-const workerCleanupFunctions: (() => void)[] = [];
+// Initialize global state if it doesn't exist
+if (typeof global.__SERVER_INITIALIZED === 'undefined') {
+  global.__SERVER_INITIALIZED = false;
+}
+
+// Initialize global cleanup functions array if it doesn't exist
+if (!global.__SERVER_CLEANUP_FUNCTIONS) {
+  global.__SERVER_CLEANUP_FUNCTIONS = [];
+}
+
+// Use global references for initialization state and cleanup functions
+const isInitialized = global.__SERVER_INITIALIZED;
+const workerCleanupFunctions = global.__SERVER_CLEANUP_FUNCTIONS;
 
 /**
  * Initialize server-side background processes.
@@ -39,9 +56,18 @@ export function initializeServer() {
   if (codeGenWorkerStopper) {
     workerCleanupFunctions.push(codeGenWorkerStopper);
   }
+  
+  // Start A2A task processor
+  if (TaskProcessor.getInstance()) {
+    TaskProcessor.getInstance().startPolling();
+    workerCleanupFunctions.push(() => TaskProcessor.getInstance().shutdown());
+    console.log('🤖 Started A2A task processor service');
+  } else {
+    console.log('ℹ️ A2A task processor is not available or disabled');
+  }
 
-  // Mark as initialized
-  isInitialized = true;
+  // Mark as initialized in the global state
+  global.__SERVER_INITIALIZED = true;
 
   // Clean up on process exit
   process.on('beforeExit', cleanupServer);
@@ -69,7 +95,7 @@ function cleanupServer() {
     }
   }
   workerCleanupFunctions.length = 0; // Clear the array
-  isInitialized = false;
+  global.__SERVER_INITIALIZED = false;
 }
 
 // Export the cleanup function for manual use if needed

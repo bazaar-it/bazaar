@@ -10,7 +10,7 @@ import { mkdir, writeFile, readFile, rm } from "fs/promises";
 import { env } from "~/env";
 import * as fs from "fs";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
-import logger, { buildLogger } from "~/lib/logger";
+import logger, { buildLogger } from '~/lib/logger';
 import { repairComponentSyntax, ensureRemotionComponentAssignment } from "./repairComponentSyntax";
 
 // Dynamically import esbuild to prevent bundling issues
@@ -208,7 +208,7 @@ async function processJob(jobId: string): Promise<void> {
       
       if (esbuild) {
         try {
-          jsCode = await compileWithEsbuild(sanitizedTsx);
+          jsCode = await compileWithEsbuild(sanitizedTsx, jobId);
         } catch (esbuildError) {
           buildLogger.error(jobId, "CRITICAL: esbuild compilation failed. ABORTING build for this component.", { 
             error: esbuildError,
@@ -231,7 +231,7 @@ async function processJob(jobId: string): Promise<void> {
           type: "NO_ESBUILD"
         });
         // Only use fallback when esbuild is not available at all
-        jsCode = await compileWithFallback(sanitizedTsx);
+        jsCode = await compileWithFallback(sanitizedTsx, jobId);
       }
       
       buildLogger.upload(jobId, "Uploading to R2...");
@@ -347,7 +347,7 @@ function fixSyntaxIssues(code: string): string {
 /**
  * Compile TSX code using esbuild
  */
-async function compileWithEsbuild(tsxCode: string): Promise<string> {
+async function compileWithEsbuild(tsxCode: string, jobId: string = "unknown"): Promise<string> {
   if (!esbuild) {
     throw new Error("esbuild is not loaded. Cannot compile.");
   }
@@ -361,7 +361,7 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
     const startLine = Math.max(0, 44 - 5);
     const endLine = Math.min(lines.length, 45 + 5);
     const debugLines = lines.slice(startLine, endLine).join('\n');
-    logger.debug("[ESBUILD] Code around line 45 (before compilation):", { debugLines });
+    buildLogger.debug(jobId, "[ESBUILD] Code around line 45 (before compilation):", { debugLines });
     
     const result = await esbuild.build({
       stdin: {
@@ -383,29 +383,29 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
     });
 
     if (result.errors.length > 0) {
-      logger.error("[ESBUILD] Build failed with errors:", { errors: JSON.stringify(result.errors, null, 2) });
+      buildLogger.error(jobId, "[ESBUILD] Build failed with errors:", { errors: JSON.stringify(result.errors, null, 2) });
       // Potentially throw an error or handle as a failed build
       // For now, logging and attempting to proceed if output exists
     }
     if (result.warnings.length > 0) {
-      logger.warn("[ESBUILD] Build completed with warnings:", { warnings: JSON.stringify(result.warnings, null, 2) });
+      buildLogger.warn(jobId, "[ESBUILD] Build completed with warnings:", { warnings: JSON.stringify(result.warnings, null, 2) });
     }
 
     if (result.outputFiles && result.outputFiles.length > 0 && result.outputFiles[0]) {
       const compiledJs = result.outputFiles[0].text;
-      logger.info("[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
-      logger.debug("[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) }); // Optional: log snippet
+      buildLogger.info(jobId, "[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
+      buildLogger.debug(jobId, "[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) }); // Optional: log snippet
       return compiledJs;
     } else {
       throw new Error("esbuild compilation did not produce output files.");
     }
   } catch (error) {
-    logger.error("[ESBUILD] Error during esbuild compilation:", { error });
+    buildLogger.error(jobId, "[ESBUILD] Error during esbuild compilation:", { error: error instanceof Error ? error.message : String(error) });
     
     // If we still get the unterminated regex error, try the fallback compiler
     if (error instanceof Error && error.message.includes('Unterminated regular expression')) {
-      logger.warn("[ESBUILD] Unterminated regular expression error persists, trying fallback compiler");
-      return compileWithFallback(tsxCode);
+      buildLogger.warn(jobId, "[ESBUILD] Unterminated regular expression error persists, trying fallback compiler");
+      return compileWithFallback(tsxCode, jobId);
     }
     
     throw error; // Re-throw to be caught by processJob
@@ -416,8 +416,8 @@ async function compileWithEsbuild(tsxCode: string): Promise<string> {
  * Fallback compilation method that uses simple transforms
  * This is used when esbuild is not available or fails
  */
-async function compileWithFallback(tsxCode: string): Promise<string> {
-  logger.info("Using simplified fallback compilation method");
+async function compileWithFallback(tsxCode: string, jobId: string = "unknown"): Promise<string> {
+  buildLogger.info(jobId, "Using simplified fallback compilation method");
   
   // Perform some basic transformations:
   // 1. Remove TypeScript types
@@ -481,7 +481,7 @@ function sanitizeTsx(tsxCode: string): string {
   // SPECIFIC FIX for </AbsoluteFill>; pattern from LLM
   const faultySemicolonPattern = /<\/AbsoluteFill>\s*;/g;
   if (faultySemicolonPattern.test(sanitizedCode)) {
-    buildLogger.warn("sanitizeTsx", "Detected and removing misplaced semicolon after </AbsoluteFill>.");
+    logger.warn("Detected and removing misplaced semicolon after </AbsoluteFill>.");
     sanitizedCode = sanitizedCode.replace(faultySemicolonPattern, '</AbsoluteFill>');
   }
   
@@ -542,7 +542,7 @@ function removeDuplicateDefaultExports(code: string): string {
       );
     }
     
-    logger.info(`Successfully sanitized duplicate exports, keeping first export default statement`);
+    logger.info("Successfully sanitized duplicate exports, keeping first export default statement");
     return sanitizedCode;
   }
   

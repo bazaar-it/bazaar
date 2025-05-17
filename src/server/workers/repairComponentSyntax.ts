@@ -1,4 +1,4 @@
-import logger from "~/lib/logger";
+import { logger } from "~/lib/logger";
 
 /**
  * Repairs common syntax errors in LLM-generated TSX code

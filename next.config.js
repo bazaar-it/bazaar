@@ -16,7 +16,7 @@ const config = {
   reactStrictMode: true,
   
   // Configure webpack to ignore problematic files
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (!config.resolve) {
       config.resolve = {};
     }
@@ -74,6 +74,69 @@ const config = {
       config.externals.push('esbuild');
     }
 
+    // Configure webpack to ignore logs directory for file watching
+    if (dev) {
+      // Define comprehensive patterns to ignore using only string patterns
+      // Webpack expects string patterns, not RegExp objects
+      const ignoredPatterns = [
+        // Directories to completely ignore
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/logs/**',
+        '**/tmp/**',
+        '**/temp/**',
+        '**/a2a-logs/**',
+        '**/combined-logs/**',
+        '**/error-logs/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/build/**',
+        
+        // A2A specific directories to prevent TaskProcessor restarts
+        '**/src/server/services/a2a/**',
+        '**/src/server/agents/**',
+        '**/src/server/workers/**',
+        
+        // File patterns to ignore
+        '**/*.log',
+        '**/*.log.*',
+        '**/combined-*.log',
+        '**/error-*.log',
+        '**/a2a-*.log',
+        '**/components-*.log',
+        '**/.DS_Store',
+        '**/*.generated.*',
+        '**/debug-*',
+        '**/winston-*',
+        
+        // Specific log files
+        '**/combined.log',
+        '**/error.log',
+        '**/a2a.log',
+        
+        // Temp files 
+        '**/*.tmp',
+        '**/*.temp',
+        '**/~*'
+      ];
+      
+      // Return a new config object with watchOptions property
+      return {
+        ...config,
+        watchOptions: {
+          ...(config.watchOptions || {}),
+          ignored: ignoredPatterns,
+          // Add longer polling interval to reduce CPU usage
+          poll: 5000, // Check for changes every 5 seconds
+          // Add aggregation delay to prevent multiple restarts
+          aggregateTimeout: 5000, // Wait 5 seconds after changes before restarting
+          // Reduce file system events 
+          followSymlinks: false
+        }
+      };
+    }
+
+    // Return the config if we're not in dev mode
     return config;
   },
   
@@ -120,7 +183,6 @@ const config = {
     // Don't show verbose logs for page compilation
     pagesBufferLength: 5,
   },
-
 };
 
 export default config;

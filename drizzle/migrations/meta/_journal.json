@@ -50,6 +50,20 @@
       "when": 1747203080295,
       "tag": "0006_left_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1747390390246,
+      "tag": "0007_heavy_otto_octavius",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1747392228867,
+      "tag": "0008_minor_malice",
+      "breakpoints": true
     }
   ]
 }

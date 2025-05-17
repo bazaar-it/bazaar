@@ -1,9 +1,11 @@
+// src/types/a2a.ts
 /**
  * Type definitions for Google A2A protocol implementation
  * @see https://github.com/google/A2A
  */
 
 import crypto from "crypto";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Standard A2A task states as defined in the Google A2A protocol
@@ -128,6 +130,7 @@ export interface Message {
   id: string;
   createdAt: string;
   parts: Part[];
+  metadata?: Record<string, any>; // Added optional metadata field
 }
 
 /**
@@ -337,7 +340,7 @@ export interface AnimationBriefGenerationParams {
  */
 export const createTextMessage = (text: string): Message => {
   return {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     createdAt: new Date().toISOString(),
     parts: [
       { type: 'text', text } as TextPart
@@ -356,12 +359,12 @@ export const createFileArtifact = (
   name?: string
 ): Artifact => {
   return {
-    id,
+    id: id,
     type: 'file',
     mimeType,
     url,
     description,
-    name: name || id,
+    name,
     createdAt: new Date().toISOString()
   };
 };
@@ -378,7 +381,7 @@ export const createStructuredAgentMessage = (
   artifacts?: Artifact[]
 ): StructuredAgentMessage => {
   return {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     taskId,
     sender,
     recipient,
@@ -394,7 +397,7 @@ export const createStructuredAgentMessage = (
  */
 export const createStatusUpdateEvent = (taskStatus: TaskStatus): SSEEvent => {
   return {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     event: 'status',
     data: JSON.stringify(taskStatus)
   };
@@ -405,7 +408,7 @@ export const createStatusUpdateEvent = (taskStatus: TaskStatus): SSEEvent => {
  */
 export const createArtifactUpdateEvent = (artifact: Artifact): SSEEvent => {
   return {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     event: 'artifact',
     data: JSON.stringify(artifact)
   };

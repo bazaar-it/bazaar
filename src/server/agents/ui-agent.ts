@@ -1,5 +1,6 @@
+// src/server/agents/ui-agent.ts
 import { BaseAgent, type AgentMessage } from "./base-agent";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
+import type { TaskManager } from "~/server/services/a2a/taskManager.service";
 import type { Message, Artifact, TaskState, AgentSkill } from "~/types/a2a";
 import { createTextMessage, createStatusUpdateEvent, createArtifactUpdateEvent } from "~/types/a2a";
 import { db } from "~/server/db";
@@ -7,8 +8,8 @@ import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
 export class UIAgent extends BaseAgent {
-  constructor() {
-    super("UIAgent", "Handles UI notifications for A2A tasks via SSE.");
+  constructor(taskManager: TaskManager) {
+    super("UIAgent", taskManager, "Handles UI notifications for A2A tasks via SSE.", true);
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -25,7 +26,7 @@ export class UIAgent extends BaseAgent {
       await this.logAgentMessage(message, true);
 
       // Fetch the latest task details to ensure we have all info for the SSE event
-      const taskStatus = await taskManager.getTaskStatus(taskId);
+      const taskStatus = await this.taskManager.getTaskStatus(taskId);
 
       switch (type) {
         case "TASK_COMPLETED_NOTIFICATION":
@@ -34,7 +35,7 @@ export class UIAgent extends BaseAgent {
           // This also handles the case where UIAgent is directly notified.
           if (taskStatus.state === 'completed') {
             const sseEvent = createStatusUpdateEvent(taskStatus);
-            const taskStream = taskManager.createTaskStream(taskId);
+            const taskStream = this.taskManager.createTaskStream(taskId);
             taskStream.next(sseEvent);
             // If this is the final notification, complete the stream.
             taskStream.complete(); 
@@ -47,7 +48,7 @@ export class UIAgent extends BaseAgent {
         case "TASK_FAILED_NOTIFICATION":
           if (taskStatus.state === 'failed') {
             const sseEvent = createStatusUpdateEvent(taskStatus);
-            const taskStream = taskManager.createTaskStream(taskId);
+            const taskStream = this.taskManager.createTaskStream(taskId);
             taskStream.next(sseEvent);
             taskStream.complete();
           } else {

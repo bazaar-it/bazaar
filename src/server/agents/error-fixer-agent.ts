@@ -1,15 +1,28 @@
-import { BaseAgent, type AgentMessage } from "./base-agent";
+// src/server/agents/error-fixer-agent.ts
+import { BaseAgent, type AgentMessage, type AgentMessagePayload } from "./base-agent";
+import type { TaskManager } from "~/server/services/a2a/taskManager.service";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from "~/types/a2a";
 import { createTextMessage, createFileArtifact, mapA2AToInternalState } from "~/types/a2a";
-import { repairComponentSyntax } from "~/server/workers/repairComponentSyntax"; // Corrected import name
+import { repairComponentSyntax } from "~/server/workers/repairComponentSyntax"; 
 import { db } from "~/server/db";
 import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
+export interface ErrorFixerAgentParams {
+  modelName: string;
+}
+
 export class ErrorFixerAgent extends BaseAgent {
-  constructor() {
-    super("ErrorFixerAgent", "Analyzes and attempts to fix errors in component code.");
+  constructor(params: ErrorFixerAgentParams, taskManager: TaskManager) {
+    super(
+      "ErrorFixerAgent", 
+      taskManager, 
+      "Analyzes and attempts to fix errors in component code.",
+      true // useOpenAI
+    );
+    // Potentially initialize modelName if needed by this agent specifically
+    // this.modelName = params.modelName;
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -31,30 +44,37 @@ export class ErrorFixerAgent extends BaseAgent {
           if (!componentCode || !errors) {
             const errorMsg = "Missing componentCode or errors in error fixing request.";
             console.error(`ErrorFixerAgent Error: ${errorMsg}`, payload);
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
             return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
           }
 
           await this.logAgentMessage(message, true);
-          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Attempting to fix component errors..."), 'fixing');
+          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Attempting to fix component errors..."), undefined, 'fixing');
 
           const fixResult = await repairComponentSyntax(componentCode);
 
           if (fixResult.fixedSyntaxErrors && fixResult.code && fixResult.code !== componentCode) {
             const fixSuccessMsg = `Component errors fixed successfully with ${fixResult.fixes.length} fixes.`;
-            await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(fixSuccessMsg), 'generating');
+            await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage(fixSuccessMsg), undefined, 'generating');
             
-            return this.createMessage(
+            return this.createA2AMessage(
               "REBUILD_COMPONENT_REQUEST",
-              { taskId, fixedCode: fixResult.code, originalErrors: errors, animationDesignBrief }, 
+              taskId,
               "BuilderAgent",
-              correlationId
+              this.createSimpleTextMessage("Component code fixed. Requesting rebuild."),
+              undefined,
+              correlationId,
+              {
+                fixedCode: fixResult.code, 
+                originalErrors: errors, 
+                animationDesignBrief 
+              }
             );
           } else {
             const fixFailedAttempts = attempts + 1;
             const fixFailedMsg = `Failed to fix component errors after ${fixFailedAttempts} attempt(s). Issues: ${fixResult.fixes.join(", ") || 'none'}`;
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(fixFailedMsg), 'fix_failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(fixFailedMsg), undefined, 'failed');
             
             return this.createA2AMessage(
               "COMPONENT_FIX_ERROR",
@@ -73,7 +93,7 @@ export class ErrorFixerAgent extends BaseAgent {
       }
     } catch (error: any) {
       console.error(`Error processing message in ErrorFixerAgent (type: ${type}): ${error.message}`, { payload, error });
-      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`ErrorFixerAgent internal error: ${error.message}`), 'failed');
+      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`ErrorFixerAgent error: ${error.message}`), undefined, 'failed');
       await this.logAgentMessage(message, false);
       return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(`ErrorFixerAgent error: ${error.message}`), undefined, correlationId);
     }

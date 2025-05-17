@@ -52,10 +52,12 @@ describe("ADBAgent", () => {
   const mockSceneId = "mock-scene-adb";
   const mockBriefData = { title: "Generated ADB" };
   const mockBriefId = "mock-brief-id";
+  const mockTaskManager = taskManager as jest.Mocked<typeof taskManager>; // Cast for type safety
 
   beforeEach(() => {
     jest.clearAllMocks();
-    adbAgent = new ADBAgent();
+    // Instantiate ADBAgent with the mocked taskManager
+    adbAgent = new ADBAgent(mockTaskManager);
 
     (generateAnimationDesignBrief as jest.Mock).mockResolvedValue({
       brief: mockBriefData,

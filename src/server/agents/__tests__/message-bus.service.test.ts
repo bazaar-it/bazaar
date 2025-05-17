@@ -13,7 +13,14 @@ class MockBusAgent extends BaseAgent {
   public processMessageMock = jest.fn<Promise<AgentMessage | null>, [AgentMessage]>();
 
   constructor(name: string) {
-    super(name);
+    // Mock a minimal taskManager for BaseAgent constructor
+    const mockTaskManager = {
+      updateTaskState: jest.fn(),
+      addTaskArtifact: jest.fn(),
+      getTaskById: jest.fn(),
+      // Add other methods if BaseAgent's constructor/methods directly use them
+    } as unknown as typeof taskManager; // Cast to avoid full mock type for simplicity
+    super(name, mockTaskManager, `Mock agent ${name}`);
     this.processMessageMock.mockResolvedValue(null); // Default to no response
   }
 

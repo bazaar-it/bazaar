@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
 import { OpenAI } from "openai";
 import { env } from "~/env";
-import logger, { componentLogger } from "~/lib/logger";
+import logger, { componentLogger } from '~/lib/logger';
 import { COMPONENT_TEMPLATE, applyComponentTemplate } from "./componentTemplate";
 import { repairComponentSyntax } from './repairComponentSyntax';
 import { preprocessTsx } from '../utils/tsxPreprocessor';
@@ -629,7 +629,10 @@ For animation:
       args.componentImplementation || '',
       args.componentRender || '<div>Empty component</div>'
     );
-    
+
+    // Log the raw assembled component code BEFORE validation
+    componentLogger.info(jobId, `Raw assembled component code for "${sanitizedComponentName}" (length: ${componentCode.length}):\n${componentCode.substring(0, 2000)}${componentCode.length > 2000 ? '... (truncated)' : ''}`);
+
     // Validate the generated component
     const validation = validateComponentSyntax(componentCode, sanitizedComponentName);
     if (!validation.valid) {

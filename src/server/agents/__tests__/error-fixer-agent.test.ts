@@ -1,9 +1,9 @@
-import { ErrorFixerAgent } from "../error-fixer-agent";
-import { BaseAgent, type AgentMessage } from "../base-agent";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
-import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from "~/types/a2a";
-import { createTextMessage, createFileArtifact, mapA2AToInternalState } from "~/types/a2a";
-import { repairComponentSyntax } from "~/server/workers/repairComponentSyntax";
+import { ErrorFixerAgent, type ErrorFixerAgentParams } from '../error-fixer-agent';
+import { BaseAgent, type AgentMessage } from '../base-agent';
+import { taskManager } from '~/server/services/a2a/taskManager.service';
+import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from '~/types/a2a';
+import { createTextMessage, createFileArtifact, mapA2AToInternalState } from '~/types/a2a';
+import { repairComponentSyntax } from '~/server/workers/repairComponentSyntax';
 import crypto from "crypto";
 
 // Mock repairComponentSyntax worker
@@ -15,12 +15,15 @@ jest.mock("~/server/workers/repairComponentSyntax", () => ({
 jest.mock("~/server/services/a2a/taskManager.service", () => ({
   taskManager: {
     updateTaskState: jest.fn(), 
+    getTaskById: jest.fn(),
+    addTaskArtifact: jest.fn(),
   },
 }));
 
 // Mock BaseAgent methods
 const mockLogAgentMessage = jest.fn();
-const mockUpdateTaskStateBase = jest.fn();
+const mockUpdateTaskStateBase = jest.fn(); 
+const mockAddTaskArtifactBase = jest.fn();
 const mockCreateA2AMessageBase = jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId, payload) => ({
   id: crypto.randomUUID(), type, payload: { taskId, message, artifacts, ...(payload || {}) }, sender: "ErrorFixerAgent", recipient, correlationId
 }));
@@ -36,9 +39,10 @@ jest.mock("../base-agent", () => {
       const agent = new originalBaseAgent(name, description);
       agent.logAgentMessage = mockLogAgentMessage;
       agent.updateTaskState = mockUpdateTaskStateBase;
+      agent.addTaskArtifact = mockAddTaskArtifactBase;
       agent.createA2AMessage = mockCreateA2AMessageBase;
+      agent.createMessage = mockCreateMessageBase; 
       agent.createSimpleTextMessage = mockCreateSimpleTextMessageBase;
-      agent.createMessage = mockCreateMessageBase; // Ensure this is mocked
       return agent;
     }),
     AgentMessage: jest.requireActual("../base-agent").AgentMessage,
@@ -51,10 +55,19 @@ describe("ErrorFixerAgent", () => {
   const mockComponentCode = "const A = 1; const A = 2; export default A;";
   const mockErrors = ["Duplicate declaration A"];
   const mockAnimationDesignBrief = { description: "Test brief" };
+  const defaultErrorFixerParams: ErrorFixerAgentParams = {
+    modelName: 'test-fixer-model',
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    errorFixer = new ErrorFixerAgent();
+    errorFixer = new ErrorFixerAgent(defaultErrorFixerParams, taskManager as jest.Mocked<typeof taskManager>);
+
+    // Spy on BaseAgent methods
+    jest.spyOn(BaseAgent.prototype, 'logAgentMessage').mockImplementation(mockLogAgentMessage);
+    jest.spyOn(BaseAgent.prototype, 'updateTaskState').mockImplementation(mockUpdateTaskStateBase);
+    jest.spyOn(BaseAgent.prototype, 'addTaskArtifact').mockImplementation(mockAddTaskArtifactBase);
+    jest.spyOn(BaseAgent.prototype, 'createA2AMessage').mockImplementation(mockCreateA2AMessageBase);
   });
 
   const createErrorFixRequestMessage = (
@@ -93,7 +106,7 @@ describe("ErrorFixerAgent", () => {
       expect(response?.recipient).toBe("BuilderAgent");
       expect(response?.payload.fixedCode).toBe(fixedCode);
       expect(response?.payload.taskId).toBe(mockTaskId);
-      expect(mockCreateMessageBase).toHaveBeenCalled(); // Check if createMessage was used
+      expect(mockCreateMessageBase).toHaveBeenCalled(); 
     });
 
     it("should send COMPONENT_FIX_ERROR to CoordinatorAgent if fix is unsuccessful (no changes made)", async () => {
@@ -122,7 +135,7 @@ describe("ErrorFixerAgent", () => {
         expect(firstPart.type).toBe('text');
         expect(firstPart.text).toBeDefined();
         if (typeof firstPart.text === 'string') { 
-          const errorText = firstPart.text; // Assign to new const
+          const errorText = firstPart.text; 
           expect(errorText).toContain("Failed to fix component errors after 1 attempt(s). Issues: none");
         }
       }

@@ -1,5 +1,7 @@
+// src/server/agents/r2-storage-agent.ts
 import { BaseAgent, type AgentMessage } from "./base-agent";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
+import { taskManager as globalTaskManagerInstance } from "~/server/services/a2a/taskManager.service"; // Renamed to avoid conflict if taskManager is passed to constructor
+import type { TaskManager } from "~/server/services/a2a/taskManager.service"; // Import TaskManager type
 import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from "~/types/a2a";
 import { createTextMessage, createFileArtifact, mapA2AToInternalState } from "~/types/a2a";
 // Placeholder for r2.service functions - assume they will be available
@@ -12,8 +14,13 @@ import { customComponentJobs } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
 export class R2StorageAgent extends BaseAgent {
-  constructor() {
-    super("R2StorageAgent", "Handles storing and verification of component bundles in R2.");
+  constructor(taskManager: TaskManager) { // Added taskManager parameter
+    super(
+      "R2StorageAgent", 
+      taskManager, // Passed taskManager to super()
+      "Handles storing and verification of component bundles in R2.",
+      true // Enable OpenAI integration
+    );
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -35,14 +42,14 @@ export class R2StorageAgent extends BaseAgent {
           if (!builtArtifact || !builtArtifact.url) {
             const errorMsg = "Missing component artifact or artifact URL in STORE_COMPONENT_REQUEST.";
             console.error(`R2StorageAgent Error: ${errorMsg}`, payload);
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), 'failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');
             await this.logAgentMessage(message, true);
             return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(errorMsg), undefined, correlationId);
           }
 
           await this.logAgentMessage(message, true);
           // Use a valid ComponentJobStatus for internal tracking, e.g., 'building' or a new one like 'storing'
-          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Storing component bundle in R2..."), 'building' as ComponentJobStatus);
+          await this.updateTaskState(taskId, 'working', this.createSimpleTextMessage("Storing component bundle in R2..."), undefined, 'building' as ComponentJobStatus);
 
           const outputUrl = builtArtifact.url;
           const isValidInR2 = await verifyR2Component(outputUrl);
@@ -55,7 +62,7 @@ export class R2StorageAgent extends BaseAgent {
               .set({ outputUrl: outputUrl, updatedAt: new Date() })
               .where(eq(customComponentJobs.id, componentJobId));
             
-            await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(storeSuccessMsg), 'complete');
+            await this.updateTaskState(taskId, 'completed', this.createSimpleTextMessage(storeSuccessMsg), undefined, 'complete' as ComponentJobStatus);
             await this.addTaskArtifact(taskId, builtArtifact); 
             
             return this.createA2AMessage(
@@ -68,7 +75,7 @@ export class R2StorageAgent extends BaseAgent {
             );
           } else {
             const r2ErrorMsg = "Component failed R2 verification or storage.";
-            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(r2ErrorMsg), 'r2_failed');
+            await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(r2ErrorMsg), undefined, 'r2_failed' as ComponentJobStatus);
             return this.createA2AMessage(
               "R2_STORAGE_ERROR", 
               taskId, 
@@ -86,7 +93,7 @@ export class R2StorageAgent extends BaseAgent {
       }
     } catch (error: any) {
       console.error(`Error processing message in R2StorageAgent (type: ${type}): ${error.message}`, { payload, error });
-      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`R2StorageAgent internal error: ${error.message}`), 'failed');
+      await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`R2StorageAgent internal error: ${error.message}`), undefined, 'failed');
       await this.logAgentMessage(message, false);
       return this.createA2AMessage("COMPONENT_PROCESS_ERROR", taskId, "CoordinatorAgent", this.createSimpleTextMessage(`R2StorageAgent error: ${error.message}`), undefined, correlationId);
     }

@@ -1,5 +1,7 @@
+// src/server/agents/adb-agent.ts
 import { BaseAgent, type AgentMessage } from "./base-agent";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
+// import { taskManager } from "~/server/services/a2a/taskManager.service"; // Not needed here, AdbAgent receives taskManager via constructor
+import type { TaskManager } from '../services/a2a/taskManager.service'; // Added TaskManager import
 import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus, AnimationBriefGenerationParams } from "~/types/a2a";
 import { createTextMessage, createFileArtifact, mapA2AToInternalState } from "~/types/a2a";
 import { generateAnimationDesignBrief } from "~/server/services/animationDesigner.service";
@@ -9,8 +11,8 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
 export class ADBAgent extends BaseAgent {
-  constructor() {
-    super("ADBAgent", "Handles Animation Design Brief (ADB) generation and management.");
+  constructor(taskManager: TaskManager) {
+    super("ADBAgent", taskManager, "Handles Animation Design Brief (ADB) generation and management.", true);
   }
 
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
@@ -42,7 +44,8 @@ export class ADBAgent extends BaseAgent {
           await this.logAgentMessage(message, true);
           await this.updateTaskState(taskId, 'working', 
             this.createSimpleTextMessage("Generating Animation Design Brief..."), 
-            existingJobId ? mapA2AToInternalState('working') : 'pending' // If job exists, it becomes working, else it's pending until full task created by Coordinator
+            undefined, // Added undefined for artifacts
+            mapA2AToInternalState('working') // If job exists, it becomes working, else it's pending until full task created by Coordinator
           );
 
           // Prepare params for generateAnimationDesignBrief
@@ -76,7 +79,8 @@ export class ADBAgent extends BaseAgent {
           await this.addTaskArtifact(taskId, adbArtifact);
           await this.updateTaskState(taskId, 'completed', // This specific ADB generation task is complete
             this.createSimpleTextMessage("Animation Design Brief generated successfully."),
-            existingJobId ? mapA2AToInternalState('completed') : 'pending' 
+            undefined, // Added undefined for artifacts
+            mapA2AToInternalState('completed') 
           );
 
           // Send brief to CoordinatorAgent to start the component generation process
@@ -97,7 +101,7 @@ export class ADBAgent extends BaseAgent {
     } catch (error: any) {
       console.error(`Error processing message in ADBAgent (type: ${type}): ${error.message}`, { payload, error });
       if (taskId) {
-        await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`ADBAgent error: ${error.message}`), 'failed');
+        await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(`ADBAgent error: ${error.message}`), undefined, 'failed');
       }
       await this.logAgentMessage(message, false);
       // Notify Coordinator about the failure if a task was involved
