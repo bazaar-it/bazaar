@@ -241,12 +241,28 @@ export interface AgentMessageData {
 }
 
 /**
+ * Data structure for agent communication events - used for visualizing agent interactions
+ */
+export interface AgentCommunicationData {
+  type: 'agent_communication';
+  data: {
+    from: string;
+    to: string;
+    messageType: string;
+    timestamp: string;
+    taskId: string;
+    payload?: any;
+  };
+}
+
+/**
  * Discriminated union for the actual payload of an SSEEvent's data field (after JSON parsing)
  */
 export type SSEEventPayload =
   | { type: 'task_status_update'; data: TaskStatusUpdateData }
   | { type: 'task_artifact_update'; data: TaskArtifactUpdateData }
   | { type: 'agent_message'; data: AgentMessageData }
+  | { type: 'agent_communication'; data: AgentCommunicationData['data'] }
   | { type: 'error'; data: { code: number; message: string } }
   | { type: 'heartbeat'; data: { timestamp: string } };
 

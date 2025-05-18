@@ -17,6 +17,7 @@ import type { TaskState, Message, Artifact } from '~/types/a2a';
 export enum SSEEventType {
   TaskStatusUpdate = 'task_status_update',
   TaskArtifactUpdate = 'task_artifact_update',
+  AgentCommunication = 'agent_communication',
   Error = 'error',
   Heartbeat = 'heartbeat'
 }
@@ -71,9 +72,24 @@ export interface HeartbeatEvent extends BaseSSEEvent {
 }
 
 /**
+ * Agent communication event for tracking agent messages
+ */
+export interface AgentCommunicationEvent extends BaseSSEEvent {
+  type: SSEEventType.AgentCommunication;
+  data: {
+    from: string;
+    to: string;
+    messageType: string;
+    timestamp: string;
+    taskId: string;
+    payload?: any;
+  };
+}
+
+/**
  * Union type for all SSE events
  */
-export type SSEEvent = TaskStatusUpdateEvent | TaskArtifactUpdateEvent | ErrorEvent | HeartbeatEvent;
+export type SSEEvent = TaskStatusUpdateEvent | TaskArtifactUpdateEvent | AgentCommunicationEvent | ErrorEvent | HeartbeatEvent;
 
 /**
  * Client connection information

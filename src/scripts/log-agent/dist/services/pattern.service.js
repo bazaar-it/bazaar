@@ -1,0 +1,232 @@
+/**
+ * Pattern matching service for log analysis
+ * Uses regex patterns to identify common issues
+ */
+export class PatternService {
+    patterns;
+    constructor() {
+        this.patterns = this.definePatterns();
+    }
+    /**
+     * Define the regex patterns for common issues
+     * @returns Array of log patterns
+     */
+    definePatterns() {
+        return [
+            // Connection refused errors
+            {
+                id: 'connection-refused',
+                name: 'Connection Refused',
+                regex: /ECONNREFUSED|connection\s+refused|unable\s+to\s+connect|connection\s+failed/i,
+                level: 'error',
+                type: 'network',
+                fingerprint: (match, log) => {
+                    // Extract the host/port if present
+                    const hostMatch = log.message.match(/(\d+\.\d+\.\d+\.\d+|localhost):?(\d+)?/);
+                    const host = hostMatch ? hostMatch[0] : 'unknown-host';
+                    return `connection-refused-${host}`;
+                },
+                summary: (match, log) => `Connection refused to ${log.message.match(/(\d+\.\d+\.\d+\.\d+|localhost):?(\d+)?/)?.[0] || 'a service'}`,
+            },
+            // Task processor errors
+            {
+                id: 'task-processor-error',
+                name: 'Task Processor Error',
+                regex: /TaskProcessor.*?(failed|error|exception|crashed)/i,
+                level: 'error',
+                type: 'service',
+                fingerprint: (match, log) => {
+                    const errorType = log.message.match(/error:?\s+([^:,\n]+)/i)?.[1] || 'unknown';
+                    return `task-processor-error-${errorType.toLowerCase().replace(/\s+/g, '-')}`;
+                },
+                summary: (match, log) => {
+                    const errorType = log.message.match(/error:?\s+([^:,\n]+)/i)?.[1] || 'unknown';
+                    return `TaskProcessor encountered an error: ${errorType}`;
+                },
+            },
+            // Agent initialization failures
+            {
+                id: 'agent-init-failure',
+                name: 'Agent Initialization Failure',
+                regex: /(failed|error|unable)\s+to\s+(initialize|create|start)\s+agent/i,
+                level: 'error',
+                type: 'agent',
+                fingerprint: (match, log) => {
+                    const agentType = log.agentId ||
+                        log.message.match(/agent\s+['"]?([a-zA-Z0-9_-]+)['"]?/i)?.[1] ||
+                        'unknown';
+                    return `agent-init-failure-${agentType}`;
+                },
+                summary: (match, log) => {
+                    const agentType = log.agentId ||
+                        log.message.match(/agent\s+['"]?([a-zA-Z0-9_-]+)['"]?/i)?.[1] ||
+                        'unknown';
+                    return `Failed to initialize agent "${agentType}"`;
+                },
+            },
+            // Memory leaks or high memory usage
+            {
+                id: 'memory-issue',
+                name: 'Memory Issue',
+                regex: /(memory leak|high memory usage|out of memory|heap\s+(?:usage|allocation|size))/i,
+                level: 'warn',
+                type: 'resource',
+                fingerprint: (match, log) => 'memory-issue',
+                summary: (match, log) => {
+                    const memValue = log.message.match(/(\d+(?:\.\d+)?\s*(?:MB|GB))/i)?.[1] || '';
+                    return `Potential memory issue detected${memValue ? ` (${memValue})` : ''}`;
+                },
+            },
+            // Database connection issues
+            {
+                id: 'db-connection-issue',
+                name: 'Database Connection Issue',
+                regex: /(database|db|postgres(?:ql)?)\s+(?:connection|query)\s+(?:failed|timeout|error)/i,
+                level: 'error',
+                type: 'database',
+                fingerprint: (match, log) => {
+                    const errorType = log.message.match(/(?:error|failed):\s+([^:,\n]+)/i)?.[1] || 'connection-issue';
+                    return `db-issue-${errorType.toLowerCase().replace(/\s+/g, '-')}`;
+                },
+                summary: (match, log) => {
+                    const errorType = log.message.match(/(?:error|failed):\s+([^:,\n]+)/i)?.[1] || 'connection issue';
+                    return `Database ${errorType}`;
+                },
+            },
+            // A2A Message Errors
+            {
+                id: 'a2a-message-error',
+                name: 'A2A Message Error',
+                regex: /a2a.*?message.*?(failed|error|invalid|malformed)/i,
+                level: 'error',
+                type: 'communication',
+                fingerprint: (match, log) => {
+                    const fromAgent = log.metadata?.from || 'unknown';
+                    const toAgent = log.metadata?.to || 'unknown';
+                    return `a2a-message-error-${fromAgent}-to-${toAgent}`;
+                },
+                summary: (match, log) => {
+                    const fromAgent = log.metadata?.from || 'unknown';
+                    const toAgent = log.metadata?.to || 'unknown';
+                    return `A2A message error from ${fromAgent} to ${toAgent}`;
+                },
+            },
+            // TypeErrors and SyntaxErrors
+            {
+                id: 'code-error',
+                name: 'Code Error',
+                regex: /(TypeError|SyntaxError|ReferenceError|RangeError):\s/i,
+                level: 'error',
+                type: 'code',
+                fingerprint: (match, log) => {
+                    const errorType = match[1];
+                    const errorMsg = log.message.substring(log.message.indexOf(errorType)).split('\n')[0];
+                    return `${errorType.toLowerCase()}-${this.hashString(errorMsg).substring(0, 8)}`;
+                },
+                summary: (match, log) => {
+                    const errorType = match[1];
+                    const errorMsg = log.message.substring(log.message.indexOf(errorType)).split('\n')[0];
+                    return errorMsg;
+                },
+            },
+            // Timeouts
+            {
+                id: 'timeout',
+                name: 'Timeout',
+                regex: /timeout\s+(?:occurred|exceeded|error)|timed?\s*out/i,
+                level: 'warn',
+                type: 'performance',
+                fingerprint: (match, log) => {
+                    const operation = log.message.match(/(\w+(?:\s+\w+)?)\s+timeout/i)?.[1] || 'operation';
+                    return `timeout-${operation.toLowerCase().replace(/\s+/g, '-')}`;
+                },
+                summary: (match, log) => {
+                    const operation = log.message.match(/(\w+(?:\s+\w+)?)\s+timeout/i)?.[1] || 'operation';
+                    return `Timeout occurred during ${operation}`;
+                },
+            },
+            // Render/Media Processing Errors
+            {
+                id: 'render-error',
+                name: 'Render Error',
+                regex: /(render|rendering|media\s+processing)\s+(?:failed|error)/i,
+                level: 'error',
+                type: 'rendering',
+                fingerprint: (match, log) => {
+                    const errorDetail = log.message.match(/error:?\s+([^:,\n]+)/i)?.[1] || 'unknown';
+                    return `render-error-${errorDetail.toLowerCase().replace(/\s+/g, '-')}`;
+                },
+                summary: (match, log) => {
+                    const errorDetail = log.message.match(/error:?\s+([^:,\n]+)/i)?.[1] || '';
+                    return `Rendering failed${errorDetail ? `: ${errorDetail}` : ''}`;
+                },
+            },
+            // OpenAI API Errors
+            {
+                id: 'openai-error',
+                name: 'OpenAI API Error',
+                regex: /openai.*?(api|request|rate\s*limit|error)/i,
+                level: 'error',
+                type: 'external-api',
+                fingerprint: (match, log) => {
+                    const errorType = log.message.match(/(?:error|failed):\s+([^:,\n]+)/i)?.[1] || 'api-error';
+                    return `openai-error-${errorType.toLowerCase().replace(/\s+/g, '-')}`;
+                },
+                summary: (match, log) => {
+                    const errorDetail = log.message.match(/(?:error|failed):\s+([^:,\n]+)/i)?.[1] || 'API error';
+                    return `OpenAI ${errorDetail}`;
+                },
+            },
+        ];
+    }
+    /**
+     * Create a simple hash of a string for fingerprinting
+     * @param str The string to hash
+     * @returns A hash string
+     */
+    hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash.toString(16);
+    }
+    /**
+     * Check a log entry against all patterns
+     * @param log The log entry to check
+     * @returns The detected issue or null if no pattern matches
+     */
+    checkLog(log) {
+        for (const pattern of this.patterns) {
+            const match = log.message.match(pattern.regex);
+            if (match) {
+                const fingerprint = pattern.fingerprint(match, log);
+                return {
+                    fingerprint,
+                    type: pattern.type,
+                    level: pattern.level,
+                    summary: pattern.summary(match, log),
+                    source: log.source || 'unknown',
+                    count: 1,
+                    firstSeen: log.timestamp,
+                    lastSeen: log.timestamp,
+                    notified: false,
+                    runId: log.runId,
+                    relatedLogs: [],
+                };
+            }
+        }
+        return null;
+    }
+    /**
+     * Get all available patterns
+     * @returns Array of patterns
+     */
+    getPatterns() {
+        return this.patterns;
+    }
+}
+// Export singleton instance
+export const patternService = new PatternService();

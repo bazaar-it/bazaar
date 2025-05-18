@@ -49,7 +49,7 @@ const A2A_AGENT_ROLES = {
   ComponentLoadingFixer: "Component Loading Fixes"
 };
 
-export function AgentNetworkGraph({ taskId }: AgentNetworkGraphProps) {
+export function AgentNetworkGraph({ taskId }: AgentNetworkGraphProps): React.ReactNode {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentInfo | null>(null);
@@ -94,44 +94,58 @@ export function AgentNetworkGraph({ taskId }: AgentNetworkGraphProps) {
       }
     },
     onAgentCommunication: (payload: any) => {
+      console.log("[AgentGraph] Received agent communication event:", payload);
+      
       try {
-        const data = typeof payload.data === 'string' ? JSON.parse(payload.data) : payload.data;
+        // Extract the data structure from the payload
+        const data = payload.data;
         
-        if (data.type === 'agent_communication') {
+        if (data) {
+          // Create a message object for our UI
           const newMessage: Message = {
-            id: payload.id || `msg-${Date.now()}`,
-            from: data.data.from,
-            to: data.data.to,
-            type: data.data.messageType,
-            timestamp: data.data.timestamp,
-            payload: data.data.payload
+            id: `msg-${Date.now()}`,
+            from: data.from,
+            to: data.to,
+            type: data.messageType,
+            timestamp: data.timestamp,
+            payload: data.payload
           };
           
           // Add the new message to our messages state
-          setMessages(prev => [newMessage, ...prev].slice(0, 100));
+          setMessages((prev: Message[]) => [newMessage, ...prev].slice(0, 100));
           
-          // Update agent statuses based on the message
-          if (data.data.from) {
-            updateAgentStatus(data.data.from, 'working', `Sending ${data.data.messageType} to ${data.data.to}`);
-          }
-          if (data.data.to) {
-            // Set the recipient agent to working state
-            updateAgentStatus(data.data.to, 'working', `Processing ${data.data.messageType}`);
+          // Update the status of both the sender and receiver agents to show activity
+          updateAgentStatus(data.from, 'working', `Sending ${data.messageType}`);
+          updateAgentStatus(data.to, 'working', `Receiving ${data.messageType}`);
+          
+          // After a short delay, set them back to idle if no other updates come in
+          setTimeout(() => {
+            // Check if the agents still exist in the list before updating
+            const fromAgent = agents.find((a: AgentInfo) => a.name === data.from);
+            const toAgent = agents.find((a: AgentInfo) => a.name === data.to);
             
-            // For specific message types, set appropriate state and status message
-            if (data.data.messageType === 'CREATE_SCENE_PLAN_REQUEST' && data.data.to === 'ScenePlannerAgent') {
-              updateAgentStatus('ScenePlannerAgent', 'working', 'Generating scene plan');
-            } else if (data.data.messageType === 'SCENE_PLAN_CREATED' && data.data.to === 'CoordinatorAgent') {
-              updateAgentStatus('ScenePlannerAgent', 'completed', 'Scene plan created');
-              updateAgentStatus('CoordinatorAgent', 'working', 'Routing scene plan to ADBAgent');
-            } else if (data.data.messageType === 'CREATE_ANIMATION_DESIGN_REQUEST' && data.data.to === 'ADBAgent') {
-              updateAgentStatus('ADBAgent', 'working', 'Generating animation design brief');
+            if (fromAgent?.status === 'working') {
+              updateAgentStatus(data.from, 'idle');
             }
+            
+            if (toAgent?.status === 'working') {
+              updateAgentStatus(data.to, 'idle');
+            }
+          }, 3000); // 3 second activity visualization
+          
+          // For specific message types, set appropriate state and status message
+          if (data.messageType === 'CREATE_SCENE_PLAN_REQUEST' && data.to === 'ScenePlannerAgent') {
+            updateAgentStatus('ScenePlannerAgent', 'working', 'Generating scene plan');
+          } else if (data.messageType === 'SCENE_PLAN_CREATED' && data.to === 'CoordinatorAgent') {
+            updateAgentStatus('ScenePlannerAgent', 'completed', 'Scene plan created');
+            updateAgentStatus('CoordinatorAgent', 'working', 'Routing scene plan to ADBAgent');
+          } else if (data.messageType === 'CREATE_ANIMATION_DESIGN_REQUEST' && data.to === 'ADBAgent') {
+            updateAgentStatus('ADBAgent', 'working', 'Generating animation design brief');
           }
           
           console.log("[AgentGraph] Added message:", newMessage);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Error processing SSE agent communication:", err);
       }
     },

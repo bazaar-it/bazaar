@@ -14,6 +14,7 @@ import type {
 const SSEEventType = {
   TaskStatusUpdate: 'task_status_update',
   TaskArtifactUpdate: 'task_artifact_update',
+  AgentCommunication: 'agent_communication',
   Heartbeat: 'heartbeat',
   Error: 'error',
 } as const;
@@ -23,6 +24,7 @@ interface UseSSEOptions {
   onTaskStatusUpdate?: (payload: Extract<SSEEventPayload, { type: 'task_status_update' }>) => void;
   onTaskArtifactUpdate?: (payload: Extract<SSEEventPayload, { type: 'task_artifact_update' }>) => void;
   onAgentMessage?: (payload: Extract<SSEEventPayload, { type: 'agent_message' }>) => void;
+  onAgentCommunication?: (payload: Extract<SSEEventPayload, { type: 'agent_communication' }>) => void;
   onError?: (payload: Extract<SSEEventPayload, { type: 'error' }>) => void;
   onHeartbeat?: (payload: Extract<SSEEventPayload, { type: 'heartbeat' }>) => void;
   onOpen?: () => void;
@@ -144,6 +146,10 @@ export function useSSE(options: UseSSEOptions = {}): UseSSEResult {
           break;
         case SSEEventType.TaskArtifactUpdate:
           handlersRef.current.onTaskArtifactUpdate?.(parsedEvent);
+          break;
+        case SSEEventType.AgentCommunication:
+          // Handle agent communication events
+          handlersRef.current.onAgentCommunication?.(parsedEvent);
           break;
         case SSEEventType.Error:
           debouncedSetError(new Error(`SSE Error: ${parsedEvent.data.message}`));

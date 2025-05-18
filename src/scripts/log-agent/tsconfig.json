@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+} 

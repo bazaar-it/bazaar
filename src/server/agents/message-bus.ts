@@ -6,7 +6,9 @@ import { db } from "~/server/db";
 import { agentMessages } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
-import type { StructuredAgentMessage, SSEEvent } from "~/types/a2a";
+import type { StructuredAgentMessage, SSEEvent as ClientSSEEvent } from "~/types/a2a";
+import { SSEEventType, type SSEEvent as InternalSSEEvent, type AgentCommunicationEvent } from "~/server/services/a2a/sseManager.service";
+import { v4 as uuidv4 } from "uuid";
 import { Subject } from "rxjs";
 import crypto from "crypto";
 import { a2aLogger } from "~/lib/logger"; // Import a2aLogger
@@ -53,6 +55,21 @@ export class MessageBus {
     a2aLogger.messageBusDelivery(message.id, message.recipient, taskId, 
       { sender: message.sender, type: message.type, status: "published_to_bus_and_db" }
     );
+    
+    // Emit agent communication as an SSE event for UI visualization
+    if (taskId !== "N/A") {
+      try {
+        // Publish agent communication event for UI visualization
+        this.publishAgentCommunication(taskId, {
+          from: message.sender,
+          to: message.recipient,
+          messageType: message.type,
+          payload: message.payload
+        });
+      } catch (err) {
+        a2aLogger.warn(taskId, `Failed to emit agent communication event: ${err}`);
+      }
+    }
 
     // SSE updates are primarily handled by TaskManager based on state changes.
     // The direct SSE emission block related to a 'progress' variable that was previously here has been removed.
@@ -132,7 +149,7 @@ export class MessageBus {
    * Creates or retrieves an SSE stream for a specific task.
    * This now directly uses the TaskManager's capability.
    */
-  public getTaskStream(taskId: string): Subject<SSEEvent> {
+  public getTaskStream(taskId: string): Subject<ClientSSEEvent> {
     return taskManager.createTaskStream(taskId);
   }
 
@@ -141,10 +158,87 @@ export class MessageBus {
    * This is a utility that might be used by agents if they need to push updates directly.
    * Typically, TaskManager handles SSE emissions based on state changes.
    */
-  public emitToTaskStream(taskId: string, event: SSEEvent): void {
+  public emitToTaskStream(taskId: string, event: InternalSSEEvent): void {
+    // Convert internal event to client-compatible event format
+    const clientEvent = this.convertToClientEvent(event);
+    
+    // Get the task stream
     const stream = taskManager.createTaskStream(taskId); // Ensures stream exists
-    stream.next(event);
+    
+    // Send the event
+    stream.next(clientEvent);
     // Note: Closing the stream should be handled by the TaskManager when a task reaches a terminal state.
+  }
+  
+  /**
+   * Convert internal SSE event to client-compatible format
+   */
+  private convertToClientEvent(internalEvent: InternalSSEEvent): ClientSSEEvent {
+    // Generate an ID for the event
+    const id = uuidv4();
+    
+    // Determine event type based on the internal event type
+    let eventType = 'message';
+    switch (internalEvent.type) {
+      case SSEEventType.TaskStatusUpdate:
+        eventType = 'task_status_update';
+        break;
+      case SSEEventType.TaskArtifactUpdate:
+        eventType = 'task_artifact_update';
+        break;
+      case SSEEventType.AgentCommunication:
+        eventType = 'agent_communication';
+        break;
+      case SSEEventType.Error:
+        eventType = 'error';
+        break;
+      case SSEEventType.Heartbeat:
+        eventType = 'heartbeat';
+        break;
+    }
+    
+    // Create the client-compatible event
+    return {
+      id,
+      event: eventType,
+      data: JSON.stringify(internalEvent)
+    };
+  }
+  
+  /**
+   * Publish an agent communication event for message passing visualization
+   * @param taskId Task ID
+   * @param data Communication details including sender, recipient, etc.
+   */
+  public publishAgentCommunication(taskId: string, data: {
+    from: string;
+    to: string;
+    messageType: string;
+    payload?: any;
+  }): void {
+    // Create event
+    const event: AgentCommunicationEvent = {
+      type: SSEEventType.AgentCommunication,
+      timestamp: new Date().toISOString(),
+      data: {
+        from: data.from,
+        to: data.to,
+        messageType: data.messageType,
+        timestamp: new Date().toISOString(),
+        taskId: taskId,
+        payload: data.payload
+      }
+    };
+    
+    // Send to subscribers
+    this.emitToTaskStream(taskId, event);
+    
+    // Log the communication
+    a2aLogger.debug(
+      "agent_communication",
+      `[AGENT_MSG] ${data.from} → ${data.to}: ${data.messageType}`,
+      { taskId, messageType: data.messageType }
+    );
   }
 
   // Cleanup method if needed, e.g., on server shutdown

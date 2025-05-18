@@ -58,11 +58,18 @@ echo "Starting Next.js dev server..."
 npm run dev:no-restart &
 NEXT_PID=$!
 
+# Start Log Agent in background
+echo "Building & starting Log Agent on port 3002..."
+npm run build:log-agent
+npm run log-agent &
+LOG_AGENT_PID=$!
+
 # Function to cleanup on exit
 cleanup() {
   echo "Shutting down processes..."
   kill $TASK_PROCESSOR_PID 2>/dev/null
   kill $NEXT_PID 2>/dev/null
+  kill $LOG_AGENT_PID 2>/dev/null
   wait
   echo "All processes terminated. Exiting."
   exit 0
@@ -71,6 +78,6 @@ cleanup() {
 # Set trap for signals
 trap cleanup SIGINT SIGTERM
 
-# Wait for either process to finish
-wait $NEXT_PID $TASK_PROCESSOR_PID
+# Wait for any process to finish
+wait $NEXT_PID $TASK_PROCESSOR_PID $LOG_AGENT_PID
 cleanup
