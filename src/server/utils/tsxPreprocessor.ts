@@ -220,7 +220,8 @@ function fixVariableRedeclarations(code: string): { code: string; issues: string
   const reactImportPatterns = [
     /import\s+React\s+from\s+['"]react['"];?/g,
     /import\s+\*\s+as\s+React\s+from\s+['"]react['"];?/g,
-    /import\s+{[^}]*}\s+from\s+['"]react['"];?/g
+    /import\s+{[^}]*}\s+from\s+['"]react['"];?/g,
+    /import\s+React\s*,\s*{[^}]*}\s+from\s+['"]react['"];?/g
   ];
   
   reactImportPatterns.forEach(pattern => {
@@ -383,6 +384,16 @@ function convertImportToGlobals(code: string): { code: string; issues: string[];
   let result = code;
   
   // Match React imports
+  const reactDefaultNamedPattern = /import\s+React\s*,\s*{([^}]+)}\s+from\s+['"]react['"];?/g;
+  if (reactDefaultNamedPattern.test(result)) {
+    result = result.replace(reactDefaultNamedPattern, (_m, names) => {
+      const imports = names.split(',').map((s: string) => s.trim()).join(', ');
+      return `// React provided by Remotion environment\nconst React = window.React;\nconst { ${imports} } = window.React;`;
+    });
+    issues.push('Converted React import to global variable access');
+    fixed = true;
+  }
+
   const reactImportPattern = /import\s+(?:React|(?:{[^}]*}))\s+from\s+['"]react['"](;)?/g;
   if (reactImportPattern.test(result)) {
     result = result.replace(reactImportPattern, '// React provided by Remotion environment\nconst React = window.React;');
