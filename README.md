@@ -221,3 +221,33 @@ All detailed documentation is maintained in the `/memory-bank` folder. Key docum
 
 *Last update: 2025-05-18*
 
+## 10 Log Agent
+
+The Log Agent is a standalone service that analyzes runtime logs for patterns and
+issues. It can perform automated checks and optional LLM-powered analysis to
+help diagnose problems during development.
+
+### Starting the Log Agent
+
+```bash
+npm run log:agent
+```
+
+Or use the helper script which also starts Redis if needed:
+
+```bash
+scripts/start-log-agent.sh
+```
+
+### Required environment variables
+
+- `LOG_AGENT_PORT` – Port to run the service (default `3002`)
+- `LOG_AGENT_REDIS_URL` – Redis connection URL
+- `OPENAI_API_KEY` – API key for LLM analysis
+- `LOG_AGENT_OPENAI_MODEL` – OpenAI model (`gpt-4o-mini`)
+- `LOG_AGENT_MAX_TOKENS` – Token limit for analysis
+- `LOG_AGENT_ISSUE_THRESHOLD` – Issue notification threshold
+
+See [memory-bank/logs/log-agent.md](memory-bank/logs/log-agent.md) for detailed
+documentation.
+
