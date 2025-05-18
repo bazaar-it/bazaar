@@ -209,7 +209,8 @@ import a from "react";import{useState,useEffect}from"react";
 
 Transformation:
 1. Combine imports: `import React, {useState, useEffect} from "react"`
-2. Continue with component detection
+2. Convert React imports to global references using `window.React`
+3. Continue with component detection
 
 ### Scenario 3: No Exports Found
 ```javascript

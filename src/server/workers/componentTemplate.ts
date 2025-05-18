@@ -35,9 +35,16 @@ export const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) 
 };
 
 // CRITICAL: Register component for Remotion - DO NOT REMOVE
-if (typeof window !== 'undefined') {
-  window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
-}
+(function register() {
+  if (typeof window !== 'undefined') {
+    try {
+      window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
+      console.log('Successfully registered component: {{COMPONENT_NAME}}');
+    } catch (e) {
+      console.error('Error registering component:', e);
+    }
+  }
+})();
 
 export default {{COMPONENT_NAME}};
 

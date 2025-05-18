@@ -21,7 +21,7 @@ We created a template file (`src/server/workers/componentTemplate.ts`) that all 
 "use client";
 
 import React from 'react';
-import { 
+import {
   AbsoluteFill,
   useCurrentFrame,
   useVideoConfig,
@@ -34,10 +34,10 @@ import {
 const COMPONENT_NAME = (props) => {
   const frame = useCurrentFrame();
   const { width, height, fps, durationInFrames } = useVideoConfig();
-  
+
   // Implementation details go here
   COMPONENT_IMPLEMENTATION
-  
+
   return (
     <AbsoluteFill style={{ backgroundColor: 'transparent' }}>
       COMPONENT_RENDER
@@ -45,9 +45,20 @@ const COMPONENT_NAME = (props) => {
   );
 };
 
-// This is required - DO NOT modify this line
-window.__REMOTION_COMPONENT = COMPONENT_NAME;
+// This is required - DO NOT modify this block
+(function register() {
+  if (typeof window !== 'undefined') {
+    try {
+      window.__REMOTION_COMPONENT = COMPONENT_NAME;
+    } catch (e) {
+      console.error('Error registering component:', e);
+    }
+  }
+})();
 ```
+
+The registration code is wrapped in an immediately invoked function (IIFE) to
+ensure it executes reliably when the component bundle loads.
 
 ### 2. Updated Component Generation Process
 
