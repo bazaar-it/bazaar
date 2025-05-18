@@ -29,7 +29,7 @@
 1. **Preview is props‑driven only.** `@remotion/player` lives in a single `"use client"` island, fed by `inputProps` JSON.
 2. **LLM edits === JSON Patches** compliant with RFC 6902. No live TS/JS execution.
 3. **One auth call per request.** Use `await auth()` (from `@/auth.ts`) inside Route Handlers / Server Components. Never instantiate extra clients.
-4. **One DB client.** Import `db` from `@/db` (Drizzle). No direct `pg` or Prisma.
+4. **One DB client.** import { db } from '~/server/db';` (Drizzle). No direct `pg` or Prisma.
 5. **Type safety end‑to‑end.** Schema lives in `db/schema.ts` + shared `InputProps` Zod type.
 6. **Keep it tiny.** Prefer explicit SQL to heavy abstractions; avoid unnecessary dependencies.
 7. **Use standard UUIDs.** Always use `randomUUID()` from Node.js crypto module for database IDs, not `nanoid()` or other formats.

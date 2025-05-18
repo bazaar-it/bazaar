@@ -115,7 +115,7 @@ Focus on identifying:
 Be concise but thorough in your analysis.`;
         try {
             // Make request through circuit breaker
-            const answer = await this.breaker.fire(systemPrompt, `Query: ${request.query}\n\nLogs:\n${logText}`);
+            const answerFromLLM = await this.breaker.fire(systemPrompt, `Query: ${request.query}\n\nLogs:\n${logText}`);
             // Calculate token usage for this request
             const tokenUsage = {
                 prompt: metrics.promptTokens - initialMetrics.promptTokens,
@@ -124,7 +124,8 @@ Be concise but thorough in your analysis.`;
                     (metrics.completionTokens - initialMetrics.completionTokens),
             };
             return {
-                answer,
+                question: request.query,
+                answer: String(answerFromLLM),
                 runId: request.runId,
                 tokenUsage,
             };
@@ -133,6 +134,7 @@ Be concise but thorough in your analysis.`;
             console.error('Log analysis failed:', error.message);
             // Fallback to simple analysis when OpenAI is unavailable
             return {
+                question: request.query,
                 answer: this.fallbackAnalysis(request, logs),
                 runId: request.runId,
                 tokenUsage: { prompt: 0, completion: 0, total: 0 },

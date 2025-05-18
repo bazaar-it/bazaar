@@ -9,6 +9,8 @@
     "moduleDetection": "force",
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
 
     /* Strictness */
     "strict": true,
@@ -17,7 +19,6 @@
 
     /* Bundled projects */
     "lib": ["dom", "dom.iterable", "ES2022"],
-    "noEmit": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "preserve",

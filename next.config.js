@@ -141,7 +141,13 @@ const config = {
   },
   
   // Transpile Remotion library
-  transpilePackages: ["@remotion/cli", "@remotion/player", "@remotion/renderer", "remotion"],
+  transpilePackages: [
+    "@remotion/cli", 
+    "@remotion/player", 
+    "@remotion/renderer", 
+    "remotion",
+    "src/scripts/log-agent"
+  ],
   
   // External packages that should be bundled separately
   serverExternalPackages: ['@prisma/client', 'drizzle-orm', 'esbuild', '@aws-sdk/client-s3', 'sharp'],

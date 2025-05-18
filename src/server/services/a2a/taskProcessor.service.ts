@@ -370,6 +370,13 @@ export class TaskProcessor {
     // central MessageBus and stop doing in-process look-ups here.  The legacy
     // code below remains for a short deprecation window.
 
+    // Log the value of USE_MESSAGE_BUS at the point of decision
+    a2aLogger.info(message.payload?.taskId || 'system', `[TaskProcessor] Routing decision: USE_MESSAGE_BUS is ${env.USE_MESSAGE_BUS}`, { 
+      messageId: message.id,
+      recipient: message.recipient,
+      type: message.type
+    });
+
     if (env.USE_MESSAGE_BUS) {
       try {
         // Lazy import to break circular dependencies.

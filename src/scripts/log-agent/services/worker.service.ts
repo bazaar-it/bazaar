@@ -15,7 +15,7 @@ interface IssueJob {
   isNew: boolean;
 }
 
-// Redis connection options
+// Redis connection options - use nested config properties
 const redisConnection: ConnectionOptions = {
   host: new URL(config.redis.url).hostname,
   port: parseInt(new URL(config.redis.url).port || '6379', 10),

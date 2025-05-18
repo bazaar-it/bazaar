@@ -16,6 +16,7 @@ import { TaskManager } from "~/server/services/a2a/taskManager.service";
 import { handleScenePlan } from "~/server/services/scenePlanner.service";
 import { analyzeSceneContent } from "../services/sceneAnalyzer.service";
 import { db } from "~/server/db";
+import { messageBus } from "./message-bus";
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Local types
@@ -48,6 +49,9 @@ declare global {
 // ScenePlannerAgent class
 // ────────────────────────────────────────────────────────────────────────────────
 export class ScenePlannerAgent extends BaseAgent {
+  // Store a reference to the global message bus as fallback
+  private messageBusFallback = messageBus;
+  
   constructor(taskManager: TaskManager) {
     super(
       "ScenePlannerAgent",
@@ -55,15 +59,53 @@ export class ScenePlannerAgent extends BaseAgent {
       "Creates structured scene plans for videos",
       true,
     );
-
-    this.modelName = "gpt-4o-mini"; // creative LLM
-    this.temperature = 0.7;
-
-    a2aLogger.info(
-      "agent_init",
-      `ScenePlannerAgent constructed at ${new Date().toISOString()}`,
-    );
+    this.modelName = env.DEFAULT_ADB_MODEL || "gpt-4o-mini";
+    this.temperature = 1;
+    a2aLogger.info("system", `ScenePlannerAgent constructor finished. Model: ${this.modelName}, Temp: ${this.temperature}. OpenAI Client: ${this.openai ? 'Available' : 'Not Available'}`, { module: "agent_constructor" });
+    a2aLogger.info("system", `ScenePlannerAgent will use handleScenePlan from scenePlanner.service.ts for scene processing`, { module: "agent_constructor", integration: "scenePlanner.service.ts" });
+    
+    // Validate message bus connection
+    if (env.USE_MESSAGE_BUS) {
+      if (!this.bus) {
+        a2aLogger.error("system", "ScenePlannerAgent: Message bus is undefined in BaseAgent. Will use global messageBus as fallback.", { module: "agent_constructor" });
+      } else {
+        a2aLogger.info("system", "ScenePlannerAgent: Message bus connection from BaseAgent is available.", { module: "agent_constructor" });
+      }
+    }
+    
     globalThis.__SCENE_PLANNER_AGENT_CONSTRUCTED = new Date().toISOString();
+  }
+
+  /**
+   * Handle publishing to message bus with fallback
+   */
+  private async publishToMessageBus(message: AgentMessage, taskId: string, logContext: Record<string, any>): Promise<boolean> {
+    if (!env.USE_MESSAGE_BUS) {
+      return false;
+    }
+    
+    try {
+      // First try the message bus from BaseAgent
+      if (this.bus) {
+        await this.bus.publish(message);
+        a2aLogger.info(taskId, "Message successfully published to bus", { ...logContext, messageType: message.type });
+        return true;
+      }
+      
+      // If BaseAgent's bus is undefined, try the fallback global messageBus
+      if (this.messageBusFallback) {
+        await this.messageBusFallback.publish(message);
+        a2aLogger.info(taskId, "Message published to fallback global messageBus", { ...logContext, messageType: message.type });
+        return true;
+      }
+      
+      a2aLogger.error(taskId, "Cannot publish message: No message bus available (both this.bus and fallback are undefined)", { ...logContext, messageType: message.type });
+      return false;
+    } catch (busError) {
+      a2aLogger.error(taskId, `Failed to publish message to bus: ${busError instanceof Error ? busError.message : String(busError)}`, 
+        { ...logContext, error: busError, messageType: message.type });
+      return false;
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────────
@@ -71,33 +113,37 @@ export class ScenePlannerAgent extends BaseAgent {
   // ──────────────────────────────────────────────────────────────────────────────
   async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
     const taskId = message.payload?.taskId ?? message.id ?? randomUUID();
-    const logPrefix = `[ScenePlannerAgent][${taskId}]`;
-    const start = Date.now();
+    const logContext = { 
+      agentName: this.name, 
+      taskId, 
+      messageId: message.id, 
+      messageType: message.type, 
+      sender: message.sender, 
+      module: "scene_planner_processMessage" 
+    };
+    a2aLogger.info(taskId, "Enter processMessage", { ...logContext, payloadKeys: Object.keys(message.payload || {}) });
 
-    const prompt =
-      message.payload?.prompt ||
-      (Array.isArray(message.payload?.message?.parts)
-        ? message.payload!.message.parts.find(
-            (p: any) => typeof p?.text === "string",
-          )?.text ?? "Create a generic video scene plan"
-        : "Create a generic video scene plan");
+    const prompt = this.extractTextFromMessage(message.payload?.message as Message | undefined) || message.payload?.prompt;
 
-    a2aLogger.info(`${logPrefix} Received message`, {
-      messageId: message.id,
-      sender: message.sender,
-      promptPreview: prompt.slice(0, 60),
-    });
+    if (!prompt) {
+      a2aLogger.error(taskId, "No prompt found in message payload.", logContext);
+      await this.updateTaskState(taskId, "failed", this.createSimpleTextMessage("ScenePlannerAgent: No prompt provided."), undefined, "failed");
+      return this.createA2AMessage("SCENE_PLAN_ERROR", taskId, message.sender, this.createSimpleTextMessage("No prompt in request for scene planning."), undefined, message.correlationId);
+    }
 
-    // 1️⃣ Mark task as working
-    await this.taskManager.updateTaskStatus(
+    a2aLogger.info(taskId, "Processing scene plan request", { ...logContext, promptPreview: prompt.substring(0, 100) });
+
+    await this.updateTaskState(
       taskId,
       "working",
       this.createSimpleTextMessage("Planning scenes for your video…"),
+      undefined,
+      "scene_planning_started" as ComponentJobStatus
     );
 
     try {
-      // 2️⃣ Generate scene plan via LLM
-      const scenePlan = await this.generateScenePlan(prompt);
+      const scenePlan = await this.generateScenePlan(taskId, prompt);
+      a2aLogger.info(taskId, "Scene plan generated by LLM.", { ...logContext, sceneCount: scenePlan.scenes.length, totalDuration: scenePlan.totalDuration });
 
       // 3️⃣ Optional scene analysis – flag super‑complex scenes
       const flaggedScenes: string[] = [];
@@ -113,8 +159,15 @@ export class ScenePlannerAgent extends BaseAgent {
       }
 
       // 4️⃣ Persist in DB (so the editor can pick it up later)
+      a2aLogger.info(taskId, `Calling handleScenePlan from scenePlanner.service.ts with ${scenePlan.scenes.length} scenes`, { 
+        ...logContext, 
+        integration: "scenePlanner.service.ts",
+        projectId: message.payload?.projectId,
+        sceneCount: scenePlan.scenes.length 
+      });
+      
       await handleScenePlan(
-        taskId,
+        message.payload?.projectId || "unknown_project", 
         message.payload?.userId ?? "system",
         {
           scenes: scenePlan.scenes,
@@ -125,81 +178,114 @@ export class ScenePlannerAgent extends BaseAgent {
         `msg-${uuidv4()}`,
         db,
       );
+      a2aLogger.info(taskId, "Scene plan persisted to database.", logContext);
 
-      // 5️⃣ Mark task as completed
-      await this.taskManager.updateTaskStatus(
-        taskId,
-        "completed",
-        this.createSimpleTextMessage(
-          `Scene plan ready – ${scenePlan.scenes.length} scenes, total ${scenePlan.totalDuration.toFixed(
-            1,
-          )} s$${flaggedScenes.length ? `; ⚠️ check ${flaggedScenes.join(", ")}` : ""}.`,
-        ),
+      const successMessage = this.createSimpleTextMessage(
+        `Scene plan ready – ${scenePlan.scenes.length} scenes, total ${scenePlan.totalDuration.toFixed(1)}s. Forwarding for ADB generation.`
       );
+      await this.updateTaskState(taskId, "completed", successMessage, undefined, "scene_planning_completed" as ComponentJobStatus);
 
-      // 6️⃣ Emit bus response
-      const response: AgentMessage = {
-        id: uuidv4(),
-        type: "SCENE_PLAN_COMPLETED",
-        sender: this.name,
-        recipient: message.sender,
-        payload: {
-          taskId,
-          projectId: message.payload?.projectId,
-          scenePlan,
-          correlationId: message.id,
-        },
-      };
+      const responseMessage = this.createA2AMessage(
+        "SCENE_PLAN_CREATED",
+        taskId,
+        "CoordinatorAgent",
+        successMessage,
+        [this.createDataArtifact(scenePlan, "scene-plan", "Generated scene plan")],
+        message.correlationId,
+        { scenePlans: scenePlan }
+      );
+      
+      const processingTime = message.timestamp ? (Date.now() - new Date(message.timestamp).getTime()) / 1000 : -1;
+      a2aLogger.info(taskId, `Scene planning successfully completed. Sending to Coordinator. Processing time: ${processingTime.toFixed(2)}s`, { ...logContext, sceneCount: scenePlan.scenes.length });
+      
+      // Try to publish via message bus
+      const publishSuccess = await this.publishToMessageBus(responseMessage, taskId, logContext);
+      
+      // If message bus is enabled and publishing succeeded, return null
+      if (env.USE_MESSAGE_BUS && publishSuccess) {
+        return null;
+      }
+      
+      // Otherwise, fall back to direct return
+      return responseMessage;
 
-      if (env.USE_MESSAGE_BUS) await this.bus.publish(response);
-
-      a2aLogger.info(`${logPrefix} Completed in ${(Date.now() - start) / 1000}s`);
-      return env.USE_MESSAGE_BUS ? null : response;
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      a2aLogger.error(`${logPrefix} Error: ${errorMsg}`);
+      a2aLogger.error(taskId, `Error during scene planning in processMessage: ${errorMsg}`, { ...logContext, error: err, errorStack: (err instanceof Error ? err.stack : undefined) });
 
-      await this.taskManager.updateTaskStatus(
-        taskId,
-        "failed",
-        this.createSimpleTextMessage(`Failed to create scene plan: ${errorMsg}`),
+      await this.updateTaskState(taskId, "failed", this.createSimpleTextMessage(`Failed to create scene plan: ${errorMsg}`), undefined, "failed");
+
+      const errorResponse = this.createA2AMessage(
+        "SCENE_PLAN_ERROR", 
+        taskId, 
+        message.sender, 
+        this.createSimpleTextMessage(`Scene planning failed: ${errorMsg}`),
+        undefined,
+        message.correlationId
       );
-
-      const errorResponse: AgentMessage = {
-        id: uuidv4(),
-        type: "SCENE_PLAN_ERROR",
-        sender: this.name,
-        recipient: message.sender,
-        payload: {
-          taskId,
-          error: errorMsg,
-          correlationId: message.id,
-        },
-      };
-
-      if (env.USE_MESSAGE_BUS) await this.bus.publish(errorResponse);
-      return env.USE_MESSAGE_BUS ? null : errorResponse;
+      
+      // Try to publish via message bus
+      const publishSuccess = await this.publishToMessageBus(errorResponse, taskId, logContext);
+      
+      // If message bus is enabled and publishing succeeded, return null
+      if (env.USE_MESSAGE_BUS && publishSuccess) {
+        return null;
+      }
+      
+      // Otherwise, fall back to direct return
+      return errorResponse;
     }
   }
 
   // ──────────────────────────────────────────────────────────────────────────────
   // Helpers
   // ──────────────────────────────────────────────────────────────────────────────
-  private async generateScenePlan(prompt: string): Promise<EnhancedScenePlan> {
-    const systemPrompt = `You are an expert video editor creating a scene plan for a short video.\n- Ensure smooth transitions between scenes\n- Vary scene types for visual interest\n- Consider the overall narrative flow\n- Total video length should be 15‒60 seconds\n\nReturn **valid JSON only** in the following schema:\n{\n  \"intent\": string,\n  \"reasoning\": string,\n  \"scenes\": [\n    { id, description, durationInSeconds, effectType? }\n  ],\n  \"fps\": number\n}`;
-
-    const raw = await this.generateStructuredResponse<EnhancedScenePlan>(
-      prompt,
-      systemPrompt,
-    );
-    if (!raw || !Array.isArray(raw.scenes) || !raw.scenes.length) {
-      throw new Error("LLM returned no scenes");
+  private async generateScenePlan(taskId: string, prompt: string): Promise<EnhancedScenePlan> {
+    const systemPrompt = `You are an expert video editor creating a scene plan for a short video.\n- Ensure smooth transitions between scenes\n- Vary scene types for visual interest\n- Consider the overall narrative flow\n- Total video length should be 15‒60 seconds\n\nReturn **valid JSON only** in the following schema:\n{\n  "intent": string,\n  "reasoning": string,\n  "scenes": [\n    { "id": string, "description": string, "durationInSeconds": number, "effectType"?: string }\n  ],\n  "fps": number\n}`;
+    const logContext = { agentName: this.name, taskId, module: "scene_planner_generateScenePlan" };
+    a2aLogger.info(taskId, "Sending prompt to LLM for scene plan generation.", { ...logContext, promptLength: prompt.length, systemPromptPreview: systemPrompt.substring(0, 100) });
+    
+    let rawLLMResponse: string | null = null;
+    try {
+      const response = await this.openai?.chat.completions.create({
+        model: this.modelName,
+        messages: [
+          { role: 'system' as const, content: systemPrompt },
+          { role: 'user' as const, content: prompt }
+        ],
+        temperature: this.temperature,
+        response_format: { type: 'json_object' }
+      });
+      rawLLMResponse = response?.choices[0]?.message.content || null;
+    } catch (llmError) {
+      a2aLogger.error(taskId, "LLM call failed in generateScenePlan", { ...logContext, error: llmError });
+      throw llmError; // Re-throw to be caught by processMessage
     }
 
-    const scenes: Scene[] = raw.scenes.map((s, i) => ({
-      id: s.id || `scene-${i + 1}`,
+    if (!rawLLMResponse) {
+      a2aLogger.error(taskId, "LLM returned null or empty response for scene plan.", logContext);
+      throw new Error("LLM returned null or empty response for scene plan.");
+    }
+    a2aLogger.info(taskId, "Raw LLM response received.", { ...logContext, responseLength: rawLLMResponse.length, responsePreview: rawLLMResponse.substring(0, 200) });
+
+    let parsedPlan: EnhancedScenePlan;
+    try {
+      parsedPlan = JSON.parse(rawLLMResponse);
+    } catch (parseError) {
+      a2aLogger.error(taskId, "Failed to parse LLM JSON response for scene plan.", { ...logContext, rawResponse: rawLLMResponse, error: parseError });
+      throw new Error(`Failed to parse LLM JSON response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
+
+    if (!parsedPlan || !Array.isArray(parsedPlan.scenes) || !parsedPlan.scenes.length) {
+      a2aLogger.error(taskId, "LLM returned no scenes or invalid plan structure.", { ...logContext, parsedPlan });
+      throw new Error("LLM returned no scenes or invalid plan structure.");
+    }
+    a2aLogger.info(taskId, `LLM successfully parsed into ${parsedPlan.scenes.length} scenes.`, { ...logContext });
+
+    const scenes: Scene[] = parsedPlan.scenes.map((s, i) => ({
+      id: s.id || `scene-${uuidv4()}`, // Ensure unique ID
       description: s.description || `Scene ${i + 1}`,
-      durationInSeconds: Math.max(3, Math.min(10, s.durationInSeconds || 5)),
+      durationInSeconds: Math.max(1, Math.min(30, s.durationInSeconds || 5)), // Ensure duration is reasonable
       effectType: s.effectType ?? "text",
     }));
 
@@ -208,11 +294,11 @@ export class ScenePlannerAgent extends BaseAgent {
     return {
       scenes,
       totalDuration,
-      intent: raw.intent || "Generated video based on prompt",
-      reasoning: raw.reasoning,
-      fps: raw.fps ?? 30,
-      style: raw.style,
-      mood: raw.mood,
+      intent: parsedPlan.intent || "Generated video based on prompt",
+      reasoning: parsedPlan.reasoning,
+      fps: parsedPlan.fps ?? 30,
+      style: parsedPlan.style,
+      mood: parsedPlan.mood,
     };
   }
 
@@ -243,7 +329,7 @@ export class ScenePlannerAgent extends BaseAgent {
     ];
   }
 
-  // A tiny helper so we don’t have to import createTextMessage everywhere
+  // A tiny helper so we don't have to import createTextMessage everywhere
   public createSimpleTextMessage(text: string): Message {
     return {
       id: uuidv4(),

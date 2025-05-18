@@ -91,6 +91,7 @@ export class LogAgentTransport extends Transport {
             entries: [...this.buffer],
             runId: this.runId,
             source: this.source,
+            timestamp: new Date().toISOString(), // Add required timestamp property
         };
         // Clear buffer immediately to prevent data loss if send fails
         this.buffer = [];

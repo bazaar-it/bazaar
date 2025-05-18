@@ -29,9 +29,14 @@ export class MessageBus {
   }
 
   registerAgent(agent: BaseAgent): void {
-    this.agents.set(agent.getName().toLowerCase(), agent);
-    this.agentSubscribers.set(agent.getName().toLowerCase(), []);
-    a2aLogger.info('message_bus', `MessageBus: Registered agent: ${agent.getName()}`);
+    const agentNameLower = agent.getName().toLowerCase();
+    this.agents.set(agentNameLower, agent);
+    this.agentSubscribers.set(agentNameLower, []); // Initialize subscribers for this agent
+    a2aLogger.info(null, `MessageBus: Registered agent`, { 
+      agentName: agent.getName(),
+      lowercaseName: agentNameLower,
+      module: "message_bus_registration"
+    });
   }
 
   getAgent(name: string): BaseAgent | undefined {
@@ -52,9 +57,14 @@ export class MessageBus {
     });
 
     const taskId = (message.payload as any)?.taskId || (message.payload as any)?.componentJobId || "N/A";
-    a2aLogger.messageBusDelivery(message.id, message.recipient, taskId, 
-      { sender: message.sender, type: message.type, status: "published_to_bus_and_db" }
-    );
+    a2aLogger.info(taskId, `MessageBus: Publishing message`, { 
+      messageId: message.id,
+      type: message.type,
+      sender: message.sender,
+      recipient: message.recipient,
+      status: "published_to_bus_and_db",
+      module: "message_bus_publish"
+    });
     
     // Emit agent communication as an SSE event for UI visualization
     if (taskId !== "N/A") {
@@ -75,7 +85,8 @@ export class MessageBus {
     // The direct SSE emission block related to a 'progress' variable that was previously here has been removed.
     // Agents should call taskManager.updateTaskState which handles SSE emissions for task status changes.
 
-    const recipientAgent = this.agents.get(message.recipient.toLowerCase());
+    const recipientAgentNameLower = message.recipient.toLowerCase();
+    const recipientAgent = this.agents.get(recipientAgentNameLower);
 
     if (recipientAgent) {
       try {
@@ -95,31 +106,47 @@ export class MessageBus {
           await this.publish(newResponseMessage);
         }
       } catch (error: any) {
-        console.error(`MessageBus: Error processing message ${message.id} by ${recipientAgent.getName()}:`, error);
-        a2aLogger.error(taskId, `MessageBus: Error processing message ${message.id} by ${recipientAgent.getName()}. Error: ${error.message}`, error, 
-          { messageId: message.id, recipientAgent: recipientAgent.getName(), originalSender: message.sender, messageType: message.type }
-        );
+        a2aLogger.error(taskId, `MessageBus: Error processing message by agent.`, { 
+          messageId: message.id, 
+          recipientAgentName: recipientAgent.getName(),
+          recipientAgentNameLower,
+          errorMessage: error.message,
+          errorStack: error.stack,
+          module: "message_bus_processing_error"
+        });
         await db.update(agentMessages)
           .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: String(error) } })
           .where(eq(agentMessages.id, message.id));
       }
     } else {
-      a2aLogger.warn(taskId, `MessageBus: No agent registered for recipient: ${message.recipient}. Message ID: ${message.id}`, 
-        { messageId: message.id, recipient: message.recipient, originalSender: message.sender, messageType: message.type }
-      );
+      a2aLogger.warn(taskId, `MessageBus: No agent registered for recipient.`, { 
+        messageId: message.id, 
+        recipient: message.recipient,
+        recipientLowercase: recipientAgentNameLower,
+        availableAgents: Array.from(this.agents.keys()),
+        module: "message_bus_recipient_not_found"
+      });
       await db.update(agentMessages)
         .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: `Recipient not found: ${message.recipient}` } })
         .where(eq(agentMessages.id, message.id));
     }
 
     // Notify any direct subscribers for this agent (e.g., for logging or other side effects)
-    const subscribers = this.agentSubscribers.get(message.recipient.toLowerCase());
+    const subscribers = this.agentSubscribers.get(recipientAgentNameLower);
     if (subscribers) {
+      a2aLogger.info(taskId, `MessageBus: Notifying ${subscribers.length} direct subscribers for agent`, { 
+        agentName: message.recipient, 
+        module: "message_bus_notify_subscribers"
+      });
       for (const callback of subscribers) {
         try {
           await callback(message);
-        } catch (subError) {
-          console.error(`MessageBus: Error in subscriber for ${message.recipient}:`, subError);
+        } catch (subError: any) {
+          a2aLogger.error(taskId, `MessageBus: Error in subscriber for agent.`, { 
+            agentName: message.recipient, 
+            errorMessage: subError.message, 
+            module: "message_bus_subscriber_error"
+          });
         }
       }
     }
@@ -134,10 +161,22 @@ export class MessageBus {
     const subs = this.agentSubscribers.get(normalizedAgentName) || [];
     subs.push(callback);
     this.agentSubscribers.set(normalizedAgentName, subs);
+    a2aLogger.info(null, `MessageBus: New direct subscription added for agent messages.`, { 
+      agentName: agentName,
+      normalizedAgentName: normalizedAgentName,
+      subscriberCount: subs.length,
+      module: "message_bus_subscription"
+    });
     
     return () => {
       const currentSubs = this.agentSubscribers.get(normalizedAgentName) || [];
       this.agentSubscribers.set(normalizedAgentName, currentSubs.filter(cb => cb !== callback));
+      a2aLogger.info(null, `MessageBus: Subscription removed for agent messages.`, { 
+        agentName: agentName,
+        normalizedAgentName: normalizedAgentName,
+        remainingSubscribers: currentSubs.filter(cb => cb !== callback).length,
+        module: "message_bus_unsubscription"
+      });
     };
   }
   
@@ -272,7 +311,8 @@ const errorTypes = [
   'COMPONENT_FIX_ERROR',
   'COMPONENT_STORAGE_FAILED',
   'ADB_GENERATION_ERROR',
-  'R2_STORAGE_ERROR'
+  'R2_STORAGE_ERROR',
+  'COMPONENT_PROCESS_ERROR' // Added this based on its usage
 ];
 
 messageBus.subscribeToAgentMessages('CoordinatorAgent', async (message) => {

@@ -216,23 +216,39 @@ export class PatternService {
    * @returns The detected issue or null if no pattern matches
    */
   checkLog(log: LogEntry): Issue | null {
+    // Skip pattern matching if message is empty, null or undefined
+    if (!log || !log.message) {
+      return null;
+    }
+    
+    const message = String(log.message); // Ensure message is a string
+    
     for (const pattern of this.patterns) {
-      const match = log.message.match(pattern.regex);
-      if (match) {
-        const fingerprint = pattern.fingerprint(match, log);
-        return {
-          fingerprint,
-          type: pattern.type,
-          level: pattern.level,
-          summary: pattern.summary(match, log),
-          source: log.source || 'unknown',
-          count: 1,
-          firstSeen: log.timestamp,
-          lastSeen: log.timestamp,
-          notified: false,
-          runId: log.runId,
-          relatedLogs: [],
-        };
+      try {
+        const match = message.match(pattern.regex);
+        if (match) {
+          const fingerprint = pattern.fingerprint(match, log);
+          return {
+            fingerprint,
+            type: pattern.type,
+            level: pattern.level,
+            summary: pattern.summary(match, log),
+            source: log.source || 'unknown',
+            count: 1,
+            firstSeen: log.timestamp,
+            lastSeen: log.timestamp,
+            notified: false,
+            runId: log.runId,
+            relatedLogs: [],
+          };
+        }
+      } catch (error: unknown) {
+        // Log the error but continue processing other patterns
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Error matching pattern ${pattern.id}: ${errorMessage}`, {
+          pattern: pattern.name,
+          logContent: message.substring(0, 100) + (message.length > 100 ? '...' : '')
+        });
       }
     }
     return null;

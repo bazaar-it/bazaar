@@ -11,10 +11,13 @@ export async function register() {
       console.error('❌ Failed to load server-log-config.js:', error);
     }
     
-    // Only register server initialization once, on actual server startup
-    
-    // Dynamically import the initializeServer function to avoid client-side imports
-    const { initializeServer } = await import('./src/server/init');
-    initializeServer();
+    try {
+      // Dynamically import the initializeServer function to avoid client-side imports
+      const { initializeServer } = await import('./src/server/init.js');
+      await initializeServer();
+      console.log('✅ Server initialization completed successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize server:', error);
+    }
   }
 } 

@@ -25,7 +25,7 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
 1. **Preview is props-driven only.** `@remotion/player` lives in a single `"use client"` island, fed by `inputProps` JSON.
 2. **LLM edits === JSON Patches** compliant with RFC 6902. No live TS/JS execution.
 3. **One auth call per request.** Use `await auth()` inside Route Handlers / Server Components.
-4. **One DB client.** Import `db` from `@/db` (Drizzle). No direct `pg` or Prisma.
+4. **One DB client.** Import `db` from '~/server/db' (Drizzle). No direct `pg` or Prisma.
 5. **Type safety end-to-end.** Schema lives in `db/schema.ts` + shared `InputProps` Zod types.
 6. **Keep it tiny.** Prefer explicit SQL to heavy abstractions; avoid unnecessary dependencies.
 8. **Rigorous validation.** Always validate external inputs with Zod schemas before processing.
@@ -133,6 +133,14 @@ The Agent-to-Agent (A2A) system implements Google's A2A protocol to enable auton
 6. **Testing**:
    - Run `npm test && npm lint && npm type-check` before proposing changes
    - Update tests when modifying functionality
+
+## MCP Tool Usage
+
+| Tool | Purpose |
+|------|---------|  
+| log_query | Ask questions about current logs via Log Agent |
+| log_clear | Flush logs & start fresh run |
+| log_issues | List deduped issues for a run |
 
 ## Documentation
 

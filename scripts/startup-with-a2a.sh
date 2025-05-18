@@ -17,8 +17,8 @@ export COMBINED_LOG_DIR=/tmp/combined-logs
 export TASK_PROCESSOR_STARTUP_DELAY=10000
 export TASK_PROCESSOR_HEARTBEAT_INTERVAL=5000
 
-# The OpenAI API key and DEFAULT_ADB_MODEL will be loaded from .env.local
-# Make sure the values in .env.local are correct
+# export OPENAI_API_KEY=${OPENAI_API_KEY:-} # Rely on .env.local
+# export DEFAULT_ADB_MODEL=${DEFAULT_ADB_MODEL:-o4-mini} # Rely on .env.local
 
 # Enable Message Bus architecture
 export USE_MESSAGE_BUS=true
@@ -28,56 +28,90 @@ export WATCHPACK_POLLING=true
 export CHOKIDAR_USEPOLLING=true
 export NODE_OPTIONS="--max-old-space-size=4096"
 
-# Verify that critical environment variables are available
-if [ -n "$OPENAI_API_KEY" ]; then
-  echo "OPENAI_API_KEY is set (starts with $(echo $OPENAI_API_KEY | cut -c1-5)...)"
-else
-  echo "WARNING: OPENAI_API_KEY is not set, agent LLM functionality may be limited"
-fi
+# Verify that critical environment variables are available (this check might now fail if not in shell env)
+# It's more important that the Node processes find them via .env.local
+# if [ -n "$OPENAI_API_KEY" ]; then
+#   echo "OPENAI_API_KEY is set (starts with $(echo $OPENAI_API_KEY | cut -c1-5)...)"
+# else
+#   echo "WARNING: OPENAI_API_KEY is not set by script, relying on .env.local for Node processes"
+# fi
 
-if [ -n "$DEFAULT_ADB_MODEL" ]; then
-  echo "DEFAULT_ADB_MODEL=$DEFAULT_ADB_MODEL"
-else
-  echo "WARNING: DEFAULT_ADB_MODEL is not set, using default value"
-fi
+# if [ -n "$DEFAULT_ADB_MODEL" ]; then
+#   echo "DEFAULT_ADB_MODEL=$DEFAULT_ADB_MODEL (from script variable)"
+# else
+#   echo "WARNING: DEFAULT_ADB_MODEL is not set by script, relying on .env.local for Node processes"
+# fi
 
 echo "Environment variables set - Message Bus ENABLED"
-echo "Starting Next.js with polling-based HMR stability"
 
-# Export these variables to make sure they're available to child processes
-echo "LOG_DIR=$LOG_DIR"
-echo "A2A_LOG_DIR=$A2A_LOG_DIR"
-echo "USE_MESSAGE_BUS=$USE_MESSAGE_BUS"
+# --- Log Agent Start ---
+echo "Attempting to start Log Agent and capture its output..."
+LOG_AGENT_ERROR_LOG="/tmp/log_agent_error.log"
+rm -f $LOG_AGENT_ERROR_LOG
 
-echo "Starting TaskProcessor in background..."
+# Extract the OpenAI API key from .env.local if it exists
+if [ -f .env.local ]; then
+  export OPENAI_API_KEY=$(grep OPENAI_API_KEY .env.local | cut -d '=' -f2)
+  export MAX_TOKENS=$(grep MAX_TOKENS .env.local | cut -d '=' -f2)
+  echo "✓ Passed OpenAI API key from .env.local to Log Agent environment"
+  if [ -n "$MAX_TOKENS" ]; then
+    echo "✓ Using MAX_TOKENS=$MAX_TOKENS for Log Agent"
+  else
+    export MAX_TOKENS=8000
+    echo "✓ Using default MAX_TOKENS=8000 for Log Agent"
+  fi
+else
+  echo "⚠️ No .env.local file found. OpenAI integration may not work."
+fi
+
+(cd src/scripts/log-agent && exec tsx --tsconfig tsconfig.json server.ts 2> $LOG_AGENT_ERROR_LOG) &
+LOG_AGENT_PID=$!
+echo "Log Agent potentially started with PID $LOG_AGENT_PID. Waiting 5 seconds..."
+sleep 5
+if ps -p $LOG_AGENT_PID > /dev/null; then
+  echo "✅ Log Agent (PID $LOG_AGENT_PID) appears to be running."
+else
+  echo "❌ Log Agent (PID $LOG_AGENT_PID) is NOT running or exited quickly."
+  if [ -f $LOG_AGENT_ERROR_LOG ]; then
+    echo "--- Log Agent Errors (from $LOG_AGENT_ERROR_LOG) ---"
+    cat $LOG_AGENT_ERROR_LOG
+    echo "-------------------------------------------------"
+  else
+    echo "No error log found for Log Agent."
+  fi
+fi
+# --- Log Agent End ---
+
+# --- TaskProcessor Start ---
+echo "Starting TaskProcessor in background... (will use .env.local)"
 npm run dev:task-processor-patched &
 TASK_PROCESSOR_PID=$!
 
-# Start Next.js dev server with environment variables for stability
-echo "Starting Next.js dev server..."
-npm run dev:no-restart &
-NEXT_PID=$!
-
-# Start Log Agent in background
-echo "Building & starting Log Agent on port 3002..."
-npm run build:log-agent
-npm run log-agent &
-LOG_AGENT_PID=$!
+# --- Next.js Start ---
+echo "Starting Next.js dev server (foreground)... (will use .env.local)"
+npm run dev:no-restart # Removed &
+NEXT_PID=$! 
 
 # Function to cleanup on exit
 cleanup() {
   echo "Shutting down processes..."
-  kill $TASK_PROCESSOR_PID 2>/dev/null
-  kill $NEXT_PID 2>/dev/null
-  kill $LOG_AGENT_PID 2>/dev/null
+  if [ -n "$LOG_AGENT_PID" ]; then echo "Stopping Log Agent (PID $LOG_AGENT_PID)..."; kill $LOG_AGENT_PID 2>/dev/null; fi
+  if [ -n "$TASK_PROCESSOR_PID" ]; then echo "Stopping Task Processor (PID $TASK_PROCESSOR_PID)..."; kill $TASK_PROCESSOR_PID 2>/dev/null; fi
+  # For foreground Next.js, SIGINT from Ctrl+C should handle it, but kill if PID exists
+  if [ -n "$NEXT_PID" ] && ps -p $NEXT_PID > /dev/null; then echo "Stopping Next.js (PID $NEXT_PID)..."; kill $NEXT_PID 2>/dev/null; fi
+  sleep 1
+  echo "Ensuring ports are free..."
+  lsof -t -i:3000 | xargs kill -9 2>/dev/null || true
+  lsof -t -i:3002 | xargs kill -9 2>/dev/null || true
   wait
   echo "All processes terminated. Exiting."
+  rm -f $LOG_AGENT_ERROR_LOG
   exit 0
 }
 
-# Set trap for signals
 trap cleanup SIGINT SIGTERM
 
-# Wait for any process to finish
-wait $NEXT_PID $TASK_PROCESSOR_PID $LOG_AGENT_PID
-cleanup
+# Since Next.js is in foreground, script will wait here until it's stopped (e.g., Ctrl+C)
+# If Next.js crashes, the script will also proceed to cleanup.
+wait $NEXT_PID 2>/dev/null # Wait for Next.js explicitly
+cleanup # Call cleanup when Next.js finishes or is interrupted

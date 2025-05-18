@@ -5,6 +5,10 @@ import path from 'path';
 import fs from 'fs';
 import { env } from '~/env';
 
+// Imports from the Log Agent scripts - extensionless for Next.js bundler resolution
+import { addLogAgentTransport } from '~/scripts/log-agent/integration'; 
+import { generateRunId, config as logAgentConfig } from '~/scripts/log-agent/config';
+
 // Fix for function parameters that allow null taskId
 type StringOrNull = string | null;
 
@@ -22,15 +26,15 @@ declare module 'winston' {
     sseSubscription: (taskId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
     
     // BuildLogger extensions
-    start: (jobId: string, message: string, meta?: Record<string, any>) => Logger;
-    compile: (jobId: string, message: string, meta?: Record<string, any>) => Logger;
-    upload: (jobId: string, message: string, meta?: Record<string, any>) => Logger;
-    complete: (jobId: string, message: string, meta?: Record<string, any>) => Logger;
+    start: (jobId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    compile: (jobId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    upload: (jobId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    complete: (jobId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
     
     // ScenePlannerLogger extensions
-    adb: (planId: string, sceneId: string, message: string, meta?: Record<string, any>) => Logger;
-    component: (planId: string, sceneId: string, message: string, meta?: Record<string, any>) => Logger;
-    db: (planId: string, message: string, meta?: Record<string, any>) => Logger;
+    adb: (planId: StringOrNull, sceneId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    component: (planId: StringOrNull, sceneId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    db: (planId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
   }
 
   // We don't need to redefine standard methods, but we do need to support null taskId
@@ -159,6 +163,31 @@ if (isServer) {
   });
   
   console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
+
+  const currentRunId = process.env.LOG_RUN_ID || generateRunId();
+  const agentUrl = process.env.LOG_AGENT_URL || `http://localhost:${logAgentConfig.port}`;
+
+  console.log(`Integrating Log Agent Transport with runId: ${currentRunId} to URL: ${agentUrl}`);
+
+  addLogAgentTransport(logger, {
+    agentUrl: agentUrl,
+    source: 'main-app',
+    runId: currentRunId,
+  });
+
+  addLogAgentTransport(a2aLogger, {
+    agentUrl: agentUrl,
+    source: 'a2a-system',
+    runId: currentRunId,
+  });
+
+  addLogAgentTransport(componentsLogger, {
+    agentUrl: agentUrl,
+    source: 'components-worker',
+    runId: currentRunId,
+  });
+  
+  console.log('Log Agent Transport integrated with server-side loggers.');
 } else {
   // Simple console logger for client-side
   logger = createLogger({
@@ -307,63 +336,90 @@ const buildLogger = logger.child({ module: 'build' });
 // Add specialized loggers for different modules
 const animationDesignerLogger = logger.child({ module: 'animationDesigner' });
 
-// Compatibility for old buildLogger interface
-buildLogger.start = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.debug(`[BUILD:START][JOB:${jobId}] ${message}`, { ...meta, build: true });
+// Store original Winston logger methods before overriding
+const origBuildDebug = buildLogger.debug.bind(buildLogger);
+const origBuildInfo = buildLogger.info.bind(buildLogger);
+const origBuildWarn = buildLogger.warn.bind(buildLogger);
+const origBuildError = buildLogger.error.bind(buildLogger);
+
+// Compatibility for old buildLogger interface - now with properly typed methods
+buildLogger.start = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.debug(normalizedJobId, `[BUILD:START][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.compile = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.debug(`[BUILD:COMPILE][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.compile = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.debug(normalizedJobId, `[BUILD:COMPILE][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.upload = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.debug(`[BUILD:UPLOAD][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.upload = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.debug(normalizedJobId, `[BUILD:UPLOAD][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.error = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.error(`[BUILD:ERROR][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.error = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.error(normalizedJobId, `[BUILD:ERROR][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.warn = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.warn(`[BUILD:WARN][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.warn = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.warn(normalizedJobId, `[BUILD:WARN][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.complete = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.info(`[BUILD:COMPLETE][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.complete = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.info(normalizedJobId, `[BUILD:COMPLETE][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.debug = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.debug(`[BUILD:DEBUG][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.debug = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.debug(normalizedJobId, `[BUILD:DEBUG][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
-buildLogger.info = (jobId: string, message: string, meta: Record<string, any> = {}) => {
-  buildLogger.info(`[BUILD:INFO][JOB:${jobId}] ${message}`, { ...meta, build: true });
+buildLogger.info = (jobId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedJobId = jobId || 'unknown-job';
+  logger.info(normalizedJobId, `[BUILD:INFO][JOB:${normalizedJobId}] ${message}`, { ...meta, build: true });
   return buildLogger;
 };
 
+// Store original Winston logger methods for scenePlannerLogger before overriding
+const origScenePlannerDebug = scenePlannerLogger.debug.bind(scenePlannerLogger);
+const origScenePlannerInfo = scenePlannerLogger.info.bind(scenePlannerLogger);
+const origScenePlannerError = scenePlannerLogger.error.bind(scenePlannerLogger);
+
 // Compatibility for old scenePlannerLogger interface
-scenePlannerLogger.start = (planId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.debug(`[PIPELINE:START][PLAN:${planId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.start = (planId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  logger.debug(normalizedPlanId, `[PIPELINE:START][PLAN:${normalizedPlanId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
-scenePlannerLogger.adb = (planId: string, sceneId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.debug(`[PIPELINE:ADB][PLAN:${planId}][SCENE:${sceneId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.adb = (planId: StringOrNull, sceneId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  const normalizedSceneId = sceneId || 'unknown-scene';
+  logger.debug(normalizedPlanId, `[PIPELINE:ADB][PLAN:${normalizedPlanId}][SCENE:${normalizedSceneId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
-scenePlannerLogger.component = (planId: string, sceneId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.debug(`[PIPELINE:COMPONENT][PLAN:${planId}][SCENE:${sceneId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.component = (planId: StringOrNull, sceneId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  const normalizedSceneId = sceneId || 'unknown-scene';
+  logger.debug(normalizedPlanId, `[PIPELINE:COMPONENT][PLAN:${normalizedPlanId}][SCENE:${normalizedSceneId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
-scenePlannerLogger.db = (planId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.debug(`[PIPELINE:DB][PLAN:${planId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.db = (planId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  logger.debug(normalizedPlanId, `[PIPELINE:DB][PLAN:${normalizedPlanId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
-scenePlannerLogger.error = (planId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.error(`[PIPELINE:ERROR][PLAN:${planId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.error = (planId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  logger.error(normalizedPlanId, `[PIPELINE:ERROR][PLAN:${normalizedPlanId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
-scenePlannerLogger.complete = (planId: string, message: string, meta: Record<string, any> = {}) => {
-  scenePlannerLogger.info(`[PIPELINE:COMPLETE][PLAN:${planId}] ${message}`, { ...meta, scenePlanner: true });
+scenePlannerLogger.complete = (planId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedPlanId = planId || 'unknown-plan';
+  logger.info(normalizedPlanId, `[PIPELINE:COMPLETE][PLAN:${normalizedPlanId}] ${message}`, { ...meta, scenePlanner: true });
   return scenePlannerLogger;
 };
 

@@ -19,6 +19,7 @@ export interface LogBatch {
   entries: LogEntry[];
   runId: string;
   source: string;
+  timestamp?: string;
 }
 
 export interface Issue {
@@ -53,6 +54,7 @@ export interface QnaRequest {
 }
 
 export interface QnaResponse {
+  question: string;
   answer: string;
   runId: string;
   tokenUsage?: {
@@ -128,6 +130,7 @@ export interface LogAgentConfig {
     bodyLimit: string; // e.g., '200kb'
     maxLines: number; // Max lines per batch
   };
+  question?: string;
 }
 
 export interface MetricsData {
@@ -143,4 +146,32 @@ export interface NotificationPayload {
   issue: Issue;
   runId: string;
   timestamp: string;
+}
+
+export interface IssueRecord {
+  id: string;
+  fingerprint: string;
+  message: string;
+  level: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+  runId: string;
+  source: string;
+  meta?: Record<string, any>;
+}
+
+export interface QnaResponse {
+  question: string;
+  answer: string;
+  context?: string;
+}
+
+export interface LogAgentConfig {
+  redisUrl: string;
+  port: number;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  maxTokens?: number;
+  issueThreshold?: number;
 } 

@@ -1,6 +1,8 @@
+// src/scripts/log-agent/config.ts
+// import { LogAgentConfig } from './types.js'; // Comment out this import
 import dotenv from 'dotenv';
 
-// Define LogAgentConfig interface directly in this file to avoid import issues
+// Define LogAgentConfig interface directly in this file
 export interface LogAgentConfig {
   port: number;
   redis: {
@@ -26,6 +28,7 @@ export interface LogAgentConfig {
     bodyLimit: string; // e.g., '200kb'
     maxLines: number; // Max lines per batch
   };
+  question?: string; // Making question optional
 }
 
 // Load environment variables
@@ -40,9 +43,9 @@ const DEFAULT_CONFIG: LogAgentConfig = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
-    model: process.env.LOG_AGENT_OPENAI_MODEL || 'gpt-4o-mini',
-    maxTokens: parseInt(process.env.LOG_AGENT_MAX_TOKENS || '7000', 10),
-    timeout: parseInt(process.env.LOG_AGENT_OPENAI_TIMEOUT || '30000', 10),
+    model: process.env.LOG_AGENT_OPENAI_MODEL || 'gpt-3.5-turbo',
+    maxTokens: parseInt(process.env.LOG_AGENT_MAX_TOKENS || '4000', 10),
+    timeout: parseInt(process.env.LOG_AGENT_OPENAI_TIMEOUT || '15000', 10),
   },
   worker: {
     concurrency: parseInt(process.env.LOG_AGENT_WORKER_CONCURRENCY || '3', 10),

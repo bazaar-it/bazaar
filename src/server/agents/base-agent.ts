@@ -72,31 +72,31 @@ export abstract class BaseAgent {
     this.taskManager = taskManager;
     this.description = description || `${name} Agent`;
     
-    // Initialize OpenAI if needed
+    const logContext = { agentName: this.name, module: "agent_constructor" };
+
     if (useOpenAI) {
-      console.log(`${name}: Trying to initialize OpenAI. API Key available: ${Boolean(process.env.OPENAI_API_KEY)}`);
-      
+      // Use null for taskId in system/initialization logs
+      a2aLogger.info(null, `Agent ${this.name} is configured to use OpenAI. Checking API Key...`, logContext);
       if (process.env.OPENAI_API_KEY) {
         try {
           this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
           });
-          console.log(`${name}: Successfully initialized OpenAI client`);
-          a2aLogger.info("agent_init", `Agent ${this.name} initialized with OpenAI integration.`);
+          a2aLogger.info(null, `Agent ${this.name}: Successfully initialized OpenAI client with model ${this.modelName}.`, logContext);
         } catch (error) {
-          console.error(`${name}: Error initializing OpenAI:`, error);
-          a2aLogger.error("agent_init_error", `Error initializing OpenAI for ${this.name}: ${error instanceof Error ? error.message : String(error)}`);
-          // Still allow the agent to initialize even without OpenAI
+          const err = error as any;
+          a2aLogger.error(null, `Agent ${this.name}: Error initializing OpenAI client. It will be disabled. Error: ${err?.message || 'Unknown OpenAI init error'}`, { ...logContext, errorDetails: JSON.stringify(err) });
           this.openai = null;
         }
       } else {
-        console.warn(`${name}: OpenAI requested but API key is missing`);
-        a2aLogger.warn("agent_init_warning", `Agent ${this.name} requested OpenAI but API key is missing`);
+        a2aLogger.warn(null, `Agent ${this.name}: OpenAI usage was requested, but OPENAI_API_KEY is not set. OpenAI features will be disabled.`, logContext);
         this.openai = null;
       }
     } else {
-      a2aLogger.info("agent_init", `Agent ${this.name} initialized without OpenAI integration.`);
+      a2aLogger.info(null, `Agent ${this.name} initialized without OpenAI integration.`, logContext);
     }
+    // Log agent construction after OpenAI init attempt.
+    a2aLogger.info(null, `Agent ${this.name} constructed. OpenAI initialized: ${!!this.openai}`, { ...logContext, openAIInitialized: !!this.openai });
   }
   
   /**

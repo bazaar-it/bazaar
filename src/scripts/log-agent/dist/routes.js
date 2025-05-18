@@ -1,39 +1,16 @@
-// src/scripts/log-agent/server.ts
-import * as dotenv from 'dotenv';
-import express from 'express';
-import * as promBundle from 'express-prom-bundle';
-import { config, generateRunId } from './config.js';
+// src/scripts/log-agent/routes.js
+import { Router } from 'express';
 import { redisService } from './services/redis.service.js';
 import { openaiService } from './services/openai.service.js';
 import { workerService } from './services/worker.service.js';
-// Load environment variables
-dotenv.config();
-// Create Express app
-const app = express();
-// Setup Prometheus metrics
-const metricsMiddleware = promBundle.default({
-    includeMethod: true,
-    includePath: true,
-    includeStatusCode: true,
-    includeUp: true,
-    customLabels: { app: 'log-agent' },
-    promClient: {
-        collectDefaultMetrics: {
-            timestamps: true,
-        },
-    },
-});
-// Add middleware
-app.use(metricsMiddleware);
-app.use(express.json({ limit: config.server.bodyLimit }));
-// DO NOT Register external routes - define them directly below
-// app.use(routes);
+import { generateRunId } from './config.js';
+const router = Router();
 // Add basic health check
-app.get('/health', (req, res) => {
+router.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 // Add metrics endpoint
-app.get('/metrics', async (req, res) => {
+router.get('/metrics', async (req, res) => {
     try {
         const metricsData = {
             worker: await workerService.getMetrics(),
@@ -47,7 +24,7 @@ app.get('/metrics', async (req, res) => {
     }
 });
 // Log ingestion endpoint
-app.post('/ingest', async (req, res) => {
+router.post('/ingest', async (req, res) => {
     console.log('[LOG_AGENT_INGESTION] Received POST request to /ingest');
     const startTime = Date.now();
     try {
@@ -56,12 +33,7 @@ app.post('/ingest', async (req, res) => {
         if (!batch || !batch.entries || !batch.runId || !batch.source) {
             return res.status(400).json({ error: 'Invalid log batch format' });
         }
-        if (batch.entries.length > config.server.maxLines) {
-            return res.status(400).json({
-                error: `Batch exceeds maximum line count (${config.server.maxLines})`,
-                retry: true,
-            });
-        }
+        // Additional validation can be added here
         const jobId = await workerService.addLogBatch(batch);
         const processingTime = Date.now() - startTime;
         return res.status(202).json({
@@ -81,7 +53,7 @@ app.post('/ingest', async (req, res) => {
     }
 });
 // Log querying endpoint
-app.post('/qna', async (req, res) => {
+router.post('/qna', async (req, res) => {
     const startTime = Date.now();
     try {
         const requestBody = req.body;
@@ -89,7 +61,7 @@ app.post('/qna', async (req, res) => {
             return res.status(400).json({ error: 'Invalid QnA request format' });
         }
         const runId = requestBody.runId || 'latest';
-        const { logs } = await redisService.getLogs(runId, undefined, undefined, config.openai.maxTokens);
+        const { logs } = await redisService.getLogs(runId, undefined, undefined, requestBody.maxTokens);
         if (logs.length === 0) {
             return res.status(404).json({
                 error: 'No logs found for the specified runId',
@@ -113,7 +85,7 @@ app.post('/qna', async (req, res) => {
     }
 });
 // Get raw logs endpoint
-app.get('/raw', async (req, res) => {
+router.get('/raw', async (req, res) => {
     try {
         const runId = req.query.runId || 'latest';
         const source = req.query.source;
@@ -141,7 +113,7 @@ app.get('/raw', async (req, res) => {
     }
 });
 // Get issues endpoint
-app.get('/issues', async (req, res) => {
+router.get('/issues', async (req, res) => {
     try {
         const runId = req.query.runId || 'latest';
         const source = req.query.source;
@@ -169,7 +141,7 @@ app.get('/issues', async (req, res) => {
     }
 });
 // Clear logs and start new run
-app.post('/control/clear', async (req, res) => {
+router.post('/control/clear', async (req, res) => {
     try {
         const requestBody = req.body || {};
         const previousRunId = await redisService.getLatestRun();
@@ -193,27 +165,4 @@ app.post('/control/clear', async (req, res) => {
         });
     }
 });
-// Graceful shutdown
-const gracefulShutdown = async () => {
-    console.info('🚦 Shutting down Log Agent server gracefully...');
-    try {
-        console.log('Stopping worker service...');
-        await workerService.close();
-        console.log('Closing Redis connections...');
-        await redisService.close();
-        console.info('✅ Shutdown complete');
-        process.exit(0);
-    }
-    catch (error) {
-        console.error('❌ Error during shutdown:', error);
-        process.exit(1);
-    }
-};
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
-const PORT = config.port;
-app.listen(PORT, () => {
-    console.info(`✅ Log Agent server running on port ${PORT}`);
-    console.info(`📊 Metrics available at http://localhost:${PORT}/metrics`);
-    console.info(`🚦 Health check at http://localhost:${PORT}/health`);
-});
+export default router;

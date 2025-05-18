@@ -4,46 +4,64 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { TaskProcessor } from "~/server/services/a2a/taskProcessor.service";
 import { a2aLogger } from "~/lib/logger";
+import { agentRegistry as globalAgentRegistry } from "~/server/services/a2a/initializeAgents";
+import { messageBus } from "~/server/agents/message-bus";
 
 export const debugRouter = createTRPCRouter({
   // Get the status of all A2A agents
   getAgentStatus: publicProcedure.query(async () => {
-    // Get TaskProcessor instance
-    const processor = TaskProcessor.getInstance();
-    
-    // Log activity for debugging
-    console.log("[DEBUG] Getting agent status");
-    a2aLogger.info("debug_endpoint", "[DEBUG] getAgentStatus called");
+    a2aLogger.info("system", "[DEBUGROUTER] getAgentStatus called", { module: "debug_api" });
     
     try {
-      // Get all agents registered with the TaskProcessor
-      // @ts-expect-error - Accessing private property for debugging
-      const registeredAgents = processor.registeredAgents || [];
+      const processor = TaskProcessor.getInstance();
       
-      // Get agent details
-      const agents = registeredAgents.map(agent => ({
-        name: agent.getName(),
-        constructedAt: (globalThis as any).__SCENE_PLANNER_AGENT_CONSTRUCTED || "unknown",
-      }));
+      // Get agents from multiple sources to help diagnose registration issues
+      // Global agent registry (from initializeAgents.ts)
+      const globalRegistryAgentNames = Object.keys(globalAgentRegistry);
       
-      // Get TaskProcessor details
-      // @ts-expect-error - Accessing private properties for debugging
+      // Message bus registered agents
+      const messageBusAgents = Array.from(messageBus["agents"]?.keys() || []);
+      
+      // Safely access processor properties - use object access notation
+      // This avoids the need for @ts-expect-error and works better
       const processorInfo = {
-        instanceId: processor.instanceId,
-        pollingStarted: processor.isPolling,
-        startupTime: processor.startupTime,
-        coreInitialized: processor.isCoreInitialized,
-        registeredAgentCount: registeredAgents.length
+        // Use type assertion to safely access private props (only for debugging)
+        instanceId: (processor as any).instanceId || 'unknown',
+        isPolling: (processor as any).isPolling || false,
+        startupTimestamp: (processor as any).startupTimestamp || 0,
+        isCoreInitialized: (processor as any).isCoreInitialized || false,
+        
+        // Public properties and methods
+        registeredAgentCount: (processor as any).registeredAgents?.length || 0,
+        isActive: processor.isActiveInstance?.() || false
       };
       
+      // ScenePlannerAgent diagnostic info
+      const scenePlannerConstructed = (globalThis as any).__SCENE_PLANNER_AGENT_CONSTRUCTED || 'unknown';
+      const scenePlannerRouteError = (globalThis as any).__SCENE_PLANNER_ROUTE_ERROR || null;
+      
+      // Enhanced response with agent information from multiple sources
       return {
         success: true,
         processor: processorInfo,
-        agents: agents,
+        agentRegistry: {
+          globalRegistry: globalRegistryAgentNames,
+          messageBusRegistry: messageBusAgents,
+          // Detailed information about critical agents
+          scenePlanner: {
+            inGlobalRegistry: globalRegistryAgentNames.includes('ScenePlannerAgent'),
+            inMessageBus: messageBusAgents.includes('scenePlannerAgent') || messageBusAgents.includes('ScenePlannerAgent'),
+            constructedAt: scenePlannerConstructed,
+            lastRouteError: scenePlannerRouteError
+          }
+        },
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error("[DEBUG] Error getting agent status:", error);
+      a2aLogger.error("system", `[DEBUGROUTER] Error getting agent status: ${error instanceof Error ? error.message : String(error)}`, { 
+        error: error instanceof Error ? error.stack : String(error) 
+      });
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -58,25 +76,45 @@ export const debugRouter = createTRPCRouter({
       message: z.string().default("Create a short intro animation for a tech company called TestCo")
     }))
     .mutation(async ({ input }) => {
+      a2aLogger.info("system", "[DEBUGROUTER] testScenePlannerAgent called", { message: input.message });
+      
       try {
-        console.log("[DEBUG] Testing ScenePlannerAgent with message:", input.message);
-        a2aLogger.info("debug_endpoint", "[DEBUG] testScenePlannerAgent called", { message: input.message });
+        // Get ScenePlannerAgent from multiple sources to see which one works
+        const scenePlannerFromGlobal = globalAgentRegistry['ScenePlannerAgent'];
+        const scenePlannerFromBus = (messageBus as any).getAgent?.('ScenePlannerAgent');
         
-        // Get TaskProcessor instance
+        // Get processor instance for additional diagnostics
         const processor = TaskProcessor.getInstance();
         
-        // @ts-expect-error - Accessing private property for debugging
-        const agents = processor.registeredAgents || [];
-        const scenePlannerAgent = agents.find(agent => agent.getName() === "ScenePlannerAgent");
+        // Try to get agent from processor's registered agents
+        const registeredAgents = (processor as any).registeredAgents || [];
+        const scenePlannerFromProcessor = registeredAgents.find(
+          (agent: any) => agent.getName?.() === "ScenePlannerAgent"
+        );
+        
+        // Pick the first available agent instance
+        const scenePlannerAgent = scenePlannerFromGlobal || scenePlannerFromBus || scenePlannerFromProcessor;
         
         if (!scenePlannerAgent) {
-          console.error("[DEBUG] ScenePlannerAgent not found in registered agents!");
-          return { success: false, error: "ScenePlannerAgent not found" };
+          a2aLogger.error("system", "[DEBUGROUTER] ScenePlannerAgent not found in any registry", {
+            globalRegistry: !!globalAgentRegistry['ScenePlannerAgent'],
+            messageBus: !!scenePlannerFromBus,
+            processor: !!scenePlannerFromProcessor
+          });
+          
+          return { 
+            success: false, 
+            error: "ScenePlannerAgent not found in any registry",
+            agentRegistry: {
+              globalRegistry: Object.keys(globalAgentRegistry),
+              messageBusRegistry: Array.from(messageBus["agents"]?.keys() || [])
+            }
+          };
         }
         
-        console.log("[DEBUG] Found ScenePlannerAgent, creating test message");
+        a2aLogger.info("system", "[DEBUGROUTER] ScenePlannerAgent found, creating test message");
         
-        // Create a test message
+        // Create a test message with required fields
         const testMessage = {
           id: `test-message-${Date.now()}`,
           type: "CREATE_SCENE_PLAN_REQUEST",
@@ -87,36 +125,39 @@ export const debugRouter = createTRPCRouter({
             taskId: `test-task-${Date.now()}`,
             prompt: input.message,
             projectId: "debug-project-id",
+            userId: "debug-user-id",
             message: {
               createdAt: new Date().toISOString(),
               id: `message-${Date.now()}`,
               parts: [{ text: input.message, type: "text" }]
-            },
-            metadata: {
-              animationDesignBrief: {
-                description: input.message,
-                sceneName: "DebugRequest"
-              }
             }
           }
         };
         
-        // Send the message directly to the agent
-        console.log("[DEBUG] Sending test message to ScenePlannerAgent");
-        // @ts-expect-error - Test message may not exactly match AgentMessage type
-        const response = await scenePlannerAgent.processMessage(testMessage);
+        // Use type assertion when passing to processMessage
+        const response = await scenePlannerAgent.processMessage(testMessage as any);
         
         return {
           success: true,
           response: response ? {
             type: response.type,
             recipient: response.recipient,
-            payload: response.payload
+            payloadSummary: {
+              taskId: response.payload?.taskId,
+              message: response.payload?.message?.parts?.[0]?.text,
+              type: response.type
+            }
           } : null,
+          sceneAgentSource: scenePlannerFromGlobal ? "globalRegistry" : 
+                           scenePlannerFromBus ? "messageBus" : 
+                           scenePlannerFromProcessor ? "processor" : "unknown",
           timestamp: new Date().toISOString()
         };
       } catch (error) {
-        console.error("[DEBUG] Error testing ScenePlannerAgent:", error);
+        a2aLogger.error("system", `[DEBUGROUTER] Error testing ScenePlannerAgent: ${error instanceof Error ? error.message : String(error)}`, {
+          error: error instanceof Error ? error.stack : String(error)
+        });
+        
         return {
           success: false,
           error: error instanceof Error ? error.message : String(error),

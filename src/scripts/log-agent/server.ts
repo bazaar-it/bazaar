@@ -1,13 +1,13 @@
 // src/scripts/log-agent/server.ts
 
 import * as dotenv from 'dotenv';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import * as promBundle from 'express-prom-bundle';
 import { config, generateRunId } from './config.js';
 import { redisService } from './services/redis.service.js';
 import { openaiService } from './services/openai.service.js';
 import { workerService } from './services/worker.service.js';
-import { LogBatch, LogEntry, QnaRequest, ClearRequest } from './types.js';
+import { LogBatch, QnaRequest, ClearRequest } from './types.js';
 
 // Load environment variables
 dotenv.config();
@@ -33,20 +33,22 @@ const metricsMiddleware = promBundle.default({
 app.use(metricsMiddleware);
 app.use(express.json({ limit: config.server.bodyLimit }));
 
+// DO NOT Register external routes - define them directly below
+// app.use(routes);
+
 // Add basic health check
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Add metrics endpoint
-app.get('/metrics', async (req, res) => {
+app.get('/metrics', async (req: Request, res: Response) => {
   try {
-    const metrics = {
+    const metricsData = {
       worker: await workerService.getMetrics(),
       openai: openaiService.getMetrics(),
     };
-    
-    res.status(200).json(metrics);
+    res.status(200).json(metricsData);
   } catch (error) {
     console.error('Error fetching metrics:', error);
     res.status(500).json({ error: 'Failed to fetch metrics' });
@@ -54,30 +56,23 @@ app.get('/metrics', async (req, res) => {
 });
 
 // Log ingestion endpoint
-app.post('/ingest', async (req, res) => {
+app.post('/ingest', async (req: Request, res: Response) => {
+  console.log('[LOG_AGENT_INGESTION] Received POST request to /ingest'); 
   const startTime = Date.now();
-  
   try {
     const batch = req.body as LogBatch;
-    
-    // Validate batch
+    console.log('[LOG_AGENT_INGESTION] Batch received:', JSON.stringify(batch, null, 2).substring(0, 500)); 
     if (!batch || !batch.entries || !batch.runId || !batch.source) {
       return res.status(400).json({ error: 'Invalid log batch format' });
     }
-    
-    // Check line count
     if (batch.entries.length > config.server.maxLines) {
       return res.status(400).json({
         error: `Batch exceeds maximum line count (${config.server.maxLines})`,
         retry: true,
       });
     }
-    
-    // Queue for processing
     const jobId = await workerService.addLogBatch(batch);
-    
     const processingTime = Date.now() - startTime;
-    
     return res.status(202).json({
       message: `Batch of ${batch.entries.length} logs queued for processing`,
       runId: batch.runId,
@@ -87,7 +82,6 @@ app.post('/ingest', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error processing log batch:', error);
-    
     return res.status(500).json({
       error: 'Failed to process log batch',
       message: error.message,
@@ -96,52 +90,38 @@ app.post('/ingest', async (req, res) => {
 });
 
 // Log querying endpoint
-app.post('/qna', async (req, res) => {
+app.post('/qna', async (req: Request, res: Response) => {
   const startTime = Date.now();
-  
   try {
-    const request = req.body as QnaRequest;
-    
-    // Validate request
-    if (!request || !request.query) {
+    const requestBody = req.body as QnaRequest;
+    if (!requestBody || !requestBody.query) {
       return res.status(400).json({ error: 'Invalid QnA request format' });
     }
-    
-    // Default to 'latest' if runId not provided
-    const runId = request.runId || 'latest';
-    
-    // Get logs for analysis
+    const runId = requestBody.runId || 'latest';
     const { logs } = await redisService.getLogs(
       runId,
-      undefined, // All sources
-      undefined, // No filter
-      config.openai.maxTokens // Limit logs to avoid token limits
+      undefined, 
+      undefined, 
+      config.openai.maxTokens
     );
-    
     if (logs.length === 0) {
       return res.status(404).json({
         error: 'No logs found for the specified runId',
         runId,
       });
     }
-    
-    // Analyze with OpenAI
-    const response = await openaiService.analyzeLogs(
-      { ...request, runId },
+    const responseData = await openaiService.analyzeLogs(
+      { ...requestBody, runId },
       logs
     );
-    
     const processingTime = Date.now() - startTime;
-    
-    // Return analysis
     return res.status(200).json({
-      ...response,
+      ...responseData,
       logCount: logs.length,
       processingTime,
     });
   } catch (error: any) {
     console.error('Error analyzing logs:', error);
-    
     return res.status(500).json({
       error: 'Failed to analyze logs',
       message: error.message,
@@ -150,15 +130,13 @@ app.post('/qna', async (req, res) => {
 });
 
 // Get raw logs endpoint
-app.get('/raw', async (req, res) => {
+app.get('/raw', async (req: Request, res: Response) => {
   try {
     const runId = req.query.runId as string || 'latest';
     const source = req.query.source as string | undefined;
     const filter = req.query.filter as string | undefined;
     const limit = parseInt(req.query.limit as string || '100', 10);
     const offset = parseInt(req.query.offset as string || '0', 10);
-    
-    // Get logs
     const result = await redisService.getLogs(
       runId,
       source,
@@ -166,7 +144,6 @@ app.get('/raw', async (req, res) => {
       limit,
       offset
     );
-    
     return res.status(200).json({
       logs: result.logs,
       total: result.total,
@@ -179,7 +156,6 @@ app.get('/raw', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching raw logs:', error);
-    
     return res.status(500).json({
       error: 'Failed to fetch logs',
       message: error.message,
@@ -188,15 +164,13 @@ app.get('/raw', async (req, res) => {
 });
 
 // Get issues endpoint
-app.get('/issues', async (req, res) => {
+app.get('/issues', async (req: Request, res: Response) => {
   try {
     const runId = req.query.runId as string || 'latest';
     const source = req.query.source as string | undefined;
     const level = req.query.level as string | undefined;
     const limit = parseInt(req.query.limit as string || '50', 10);
     const offset = parseInt(req.query.offset as string || '0', 10);
-    
-    // Get issues
     const result = await redisService.getIssues(
       runId,
       source,
@@ -204,7 +178,6 @@ app.get('/issues', async (req, res) => {
       limit,
       offset
     );
-    
     return res.status(200).json({
       issues: result.issues,
       total: result.total,
@@ -217,7 +190,6 @@ app.get('/issues', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error fetching issues:', error);
-    
     return res.status(500).json({
       error: 'Failed to fetch issues',
       message: error.message,
@@ -226,27 +198,18 @@ app.get('/issues', async (req, res) => {
 });
 
 // Clear logs and start new run
-app.post('/control/clear', async (req, res) => {
+app.post('/control/clear', async (req: Request, res: Response) => {
   try {
-    const request = req.body as ClearRequest || {};
-    
-    // Get (optional) previous runId before starting new run
+    const requestBody = req.body as ClearRequest || {};
     const previousRunId = await redisService.getLatestRun();
-    
-    // Clear previous run if it exists
     if (previousRunId) {
       await redisService.clearRun(previousRunId);
     }
-    
-    // Start new run
     const newRun = await redisService.startNewRun(
-      request.newRunId || generateRunId(),
-      request.callback
+      requestBody.newRunId || generateRunId(),
+      requestBody.callback
     );
-    
-    // Reset OpenAI metrics for the new run
     openaiService.resetMetrics();
-    
     return res.status(200).json({
       message: 'Started new log run',
       previousRunId: newRun.previousRunId,
@@ -255,7 +218,6 @@ app.post('/control/clear', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error clearing logs:', error);
-    
     return res.status(500).json({
       error: 'Failed to clear logs',
       message: error.message,
@@ -265,28 +227,23 @@ app.post('/control/clear', async (req, res) => {
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
-  console.info('Shutting down gracefully...');
-  
+  console.info('🚦 Shutting down Log Agent server gracefully...');
   try {
-    // Close workers first
+    console.log('Stopping worker service...');
     await workerService.close();
-    
-    // Then close Redis connection
+    console.log('Closing Redis connections...');
     await redisService.close();
-    
-    console.info('Shutdown completed successfully');
+    console.info('✅ Shutdown complete');
     process.exit(0);
   } catch (error) {
-    console.error('Error during shutdown:', error);
+    console.error('❌ Error during shutdown:', error);
     process.exit(1);
   }
 };
 
-// Handle termination signals
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Start server
 const PORT = config.port;
 app.listen(PORT, () => {
   console.info(`✅ Log Agent server running on port ${PORT}`);

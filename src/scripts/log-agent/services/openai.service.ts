@@ -17,8 +17,10 @@ const metrics = {
 // Circuit breaker options
 const breakerOptions = {
   timeout: config.openai.timeout,
-  errorThresholdPercentage: 50,
-  resetTimeout: 30000, // 30 seconds
+  errorThresholdPercentage: 40, // Lower threshold to be more conservative
+  resetTimeout: 60000, // 60 seconds - give more time between retries
+  rollingCountTimeout: 60 * 1000, // 1 minute - time window for error rate calculation
+  rollingCountBuckets: 10, // Number of buckets for error tracking
 };
 
 /**
@@ -71,6 +73,15 @@ export class OpenAIService {
    */
   private async makeOpenAIRequest(prompt: string, userMessage: string): Promise<string> {
     try {
+      console.log('Attempting OpenAI request with:', {
+        model: config.openai.model,
+        apiKeyAvailable: !!config.openai.apiKey,
+        apiKeyLength: config.openai.apiKey ? config.openai.apiKey.length : 0,
+        maxTokens: config.openai.maxTokens,
+        promptLength: prompt.length,
+        userMessageLength: userMessage.length
+      });
+
       const response = await this.client.chat.completions.create({
         model: config.openai.model,
         messages: [
@@ -78,7 +89,13 @@ export class OpenAIService {
           { role: 'user', content: userMessage },
         ],
         temperature: 0.3,
-        max_tokens: 1024,
+        max_tokens: Math.min(config.openai.maxTokens, 4096), // Respect configured max tokens but cap at 4096
+      });
+      
+      console.log('OpenAI request succeeded:', {
+        model: response.model,
+        promptTokens: response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens
       });
       
       // Update metrics
@@ -89,7 +106,26 @@ export class OpenAIService {
       
       return response.choices[0]?.message?.content || 'No response from OpenAI';
     } catch (error: any) {
-      console.error('OpenAI API Error:', error.message);
+      console.error('OpenAI API Error:', {
+        message: error.message,
+        type: error.type,
+        status: error.status,
+        code: error.code,
+        param: error.param
+      });
+      
+      if (error.code === 'invalid_api_key') {
+        console.error('Invalid API Key. Please check your OPENAI_API_KEY environment variable.');
+      } else if (error.code === 'model_not_found') {
+        console.error(`Model '${config.openai.model}' not found. Check if the model name is correct.`);
+      } else if (error.code === 'insufficient_quota' || error.status === 429) {
+        console.error('⚠️ OpenAI API quota exceeded. Please check your billing status and limits.');
+        console.error('Using a smaller model like gpt-3.5-turbo instead of gpt-4 may help stay within quota limits.');
+        
+        // Add a longer delay for quota errors to prevent rapid retries
+        await new Promise(resolve => setTimeout(resolve, 5000)); 
+      }
+      
       throw new Error(`OpenAI API Error: ${error.message}`);
     }
   }
@@ -103,6 +139,8 @@ export class OpenAIService {
   async analyzeLogs(request: QnaRequest, logs: LogEntry[]): Promise<QnaResponse> {
     const startTime = Date.now();
     const initialMetrics = { ...metrics };
+    
+    console.log(`Analyzing logs for query: "${request.query}". Total logs: ${logs.length}`);
     
     // Prepare log data for OpenAI
     const logText = logs.map(log => {
@@ -128,11 +166,12 @@ Focus on identifying:
 4. Performance issues
 5. Specific answers to user queries
 
-Be concise but thorough in your analysis.`;
+Be concise but thorough in your analysis. 
+When discussing errors, provide potential root causes and solutions when possible.`;
 
     try {
       // Make request through circuit breaker
-      const answer = await this.breaker.fire(systemPrompt, `Query: ${request.query}\n\nLogs:\n${logText}`);
+      const answerFromLLM = await this.breaker.fire(systemPrompt, `Query: ${request.query}\n\nLogs:\n${logText}`);
       
       // Calculate token usage for this request
       const tokenUsage = {
@@ -143,7 +182,8 @@ Be concise but thorough in your analysis.`;
       };
       
       return {
-        answer,
+        question: request.query,
+        answer: String(answerFromLLM),
         runId: request.runId,
         tokenUsage,
       };
@@ -152,6 +192,7 @@ Be concise but thorough in your analysis.`;
       
       // Fallback to simple analysis when OpenAI is unavailable
       return {
+        question: request.query,
         answer: this.fallbackAnalysis(request, logs),
         runId: request.runId,
         tokenUsage: { prompt: 0, completion: 0, total: 0 },

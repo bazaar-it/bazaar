@@ -1,6 +1,6 @@
 import winston from 'winston';
 import axios from 'axios';
-import { createLogAgentTransport } from './logger-transport.js';
+import { createLogAgentTransport } from './logger-transport';
 import { config, generateRunId } from './config.js';
 
 /**

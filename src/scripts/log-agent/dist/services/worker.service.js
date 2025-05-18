@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { redisService } from './redis.service.js';
 import { patternService } from './pattern.service.js';
 import { notificationService } from './notification.service.js';
-// Redis connection options
+// Redis connection options - use nested config properties
 const redisConnection = {
     host: new URL(config.redis.url).hostname,
     port: parseInt(new URL(config.redis.url).port || '6379', 10),

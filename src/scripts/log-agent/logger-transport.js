@@ -1,43 +1,13 @@
+// src/scripts/log-agent/logger-transport.js
 import Transport from 'winston-transport';
 import axios from 'axios';
-// import { LogEntry, LogBatch } from './types.js'; // Temporarily comment out LogBatch
-import { type LogEntry } from './types.js'; // Keep LogEntry if needed by the class
-
-// Define LogBatch locally for now to remove the import dependency
-interface TempLogBatch {
-  entries: LogEntry[];
-  runId: string;
-  source: string;
-  timestamp?: string;
-}
-
-interface LogAgentTransportOptions {
-  level?: string;
-  agentUrl: string;
-  source: string;
-  runId: string;
-  batchSize?: number;
-  batchInterval?: number;
-  onError?: (error: Error) => void;
-}
 
 /**
  * Winston transport for sending logs to the Log Agent
  * Implements batching to reduce network overhead
  */
 export class LogAgentTransport extends Transport {
-  private readonly agentUrl: string;
-  private readonly source: string;
-  private runId: string;
-  private readonly batchSize: number;
-  private readonly batchInterval: number;
-  private readonly onError?: (error: Error) => void;
-  
-  private buffer: LogEntry[] = [];
-  private timer: NodeJS.Timeout | null = null;
-  private isSending = false;
-
-  constructor(options: LogAgentTransportOptions) {
+  constructor(options) {
     super(options);
     
     this.agentUrl = options.agentUrl.endsWith('/') 
@@ -49,6 +19,9 @@ export class LogAgentTransport extends Transport {
     this.batchSize = options.batchSize || 50;
     this.batchInterval = options.batchInterval || 5000; // 5 seconds
     this.onError = options.onError;
+    this.buffer = [];
+    this.timer = null;
+    this.isSending = false;
     
     this.startTimer();
   }
@@ -56,7 +29,7 @@ export class LogAgentTransport extends Transport {
   /**
    * Start the timer for flushing logs on interval
    */
-  private startTimer() {
+  startTimer() {
     if (this.timer) {
       clearInterval(this.timer);
     }
@@ -73,9 +46,9 @@ export class LogAgentTransport extends Transport {
 
   /**
    * Update the run ID for the transport
-   * @param runId The new run ID
+   * @param {string} runId The new run ID
    */
-  setRunId(runId: string) {
+  setRunId(runId) {
     // Flush any existing logs with the old runId
     this.flush();
     
@@ -85,10 +58,10 @@ export class LogAgentTransport extends Transport {
 
   /**
    * Winston transport log method
-   * @param info The log info object
-   * @param callback Callback function
+   * @param {object} info The log info object
+   * @param {Function} callback Callback function
    */
-  log(info: any, callback: () => void) {
+  log(info, callback) {
     setImmediate(() => {
       this.emit('logged', info);
     });
@@ -97,9 +70,9 @@ export class LogAgentTransport extends Transport {
     const { level, message, timestamp, ...meta } = info;
     
     // Create log entry
-    const logEntry: LogEntry = {
+    const logEntry = {
       timestamp: timestamp || new Date().toISOString(),
-      level: level as any,
+      level,
       message,
       source: this.source,
       runId: this.runId,
@@ -126,8 +99,7 @@ export class LogAgentTransport extends Transport {
     }
     
     this.isSending = true;
-    // Use the temporary local LogBatch interface
-    const batch: TempLogBatch = { 
+    const batch = { 
       entries: [...this.buffer],
       runId: this.runId,
       source: this.source,
@@ -144,7 +116,7 @@ export class LogAgentTransport extends Transport {
         },
         timeout: 5000, // 5 second timeout
       });
-    } catch (error: any) {
+    } catch (error) {
       if (this.onError) {
         this.onError(new Error(`Failed to send logs to Log Agent: ${error.message}`));
       }
@@ -170,9 +142,9 @@ export class LogAgentTransport extends Transport {
 
 /**
  * Helper function to create a Log Agent transport
- * @param options Transport options
- * @returns The created transport
+ * @param {object} options Transport options
+ * @returns {LogAgentTransport} The created transport
  */
-export function createLogAgentTransport(options: LogAgentTransportOptions) {
+export function createLogAgentTransport(options) {
   return new LogAgentTransport(options);
 }

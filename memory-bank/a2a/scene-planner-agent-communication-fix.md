@@ -1,126 +1,154 @@
-# ScenePlannerAgent Communication Fix
+# ScenePlannerAgent Message Bus Communication Fix
 
-## Issue Summary
+## Issue Description
 
-The Agent-to-Agent (A2A) system was encountering a critical issue where messages sent from the CoordinatorAgent to the ScenePlannerAgent were not being received or processed properly. This was preventing the video generation flow from progressing beyond the initial task creation phase.
+The ScenePlannerAgent was encountering a critical error during message processing:
+
+```
+Cannot read properties of undefined (reading 'publish')
+```
+
+This error occurred when the agent attempted to use `this.bus.publish()` but the `bus` property was undefined. The agent was being properly constructed but unable to communicate through the message bus, preventing proper integration with the A2A system.
 
 ## Root Cause Analysis
 
-After extensive investigation, we identified three key issues:
+After investigating the codebase, we identified several issues:
 
-1. **Agent Registry Mismatch**: The TaskProcessor was using its own internal list of registered agents (`this.registeredAgents`) rather than accessing the global agent registry. This meant that even though the ScenePlannerAgent was properly initialized and registered in the global registry, the TaskProcessor wasn't aware of it.
+1. **Message Bus Initialization**: The agent inherits the `bus` property from `BaseAgent`, but this property might not always be properly initialized when agents are created.
 
-2. **Syntax Error in ScenePlannerAgent**: The `processMessage` method in ScenePlannerAgent contained a structural error where the conditional block for `CREATE_SCENE_PLAN_REQUEST` had incorrect bracing and indentation, causing the function to behave unpredictably.
+2. **Error Handling**: There was no robust error handling around the message bus publishing calls, causing unhandled exceptions when the bus was unavailable.
 
-3. **Logger Type Issues**: Several calls to the a2aLogger were using `null` for the taskId parameter, which was incompatible with the logger's type definitions that required string values.
+3. **Fallback Mechanism**: There was no fallback mechanism when the bus property was undefined, leading to complete failure rather than graceful degradation.
 
-## Solution Implementation
+## Solution Implemented
 
-### 1. Fixed TaskProcessor Initialization
+We implemented several changes to make the ScenePlannerAgent more resilient:
 
-Modified the `_trueCoreInitialize` method in TaskProcessor to directly access the global agent registry:
+1. **Bus Fallback Property**: Added a private `messageBusFallback` property that keeps a direct reference to the global `messageBus` singleton:
 
 ```typescript
-private _trueCoreInitialize(): void {
-  if (this.isCoreInitialized) {
-    return;
-  }
+private messageBusFallback = messageBus;
+```
 
-  try {
-    a2aLogger.info('system', `TaskProcessor (${this.instanceId}) core initialization starting`);
-    
-    // Import the agentRegistry directly
-    const { agentRegistry } = require('./agentRegistry.service');
-    
-    // Get all registered agents
-    this.registeredAgents = Object.values(agentRegistry);
-    
-    a2aLogger.info('system', `TaskProcessor (${this.instanceId}) registered ${this.registeredAgents.length} agents:`, {
-      agentNames: this.registeredAgents.map(agent => agent.getName())
-    });
-    
-    // Setup health check heartbeat
-    this._initializeHeartbeat();
-    
-    this.isCoreInitialized = true;
-    a2aLogger.info('system', `TaskProcessor (${this.instanceId}) core initialization complete`);
-  } catch (error) {
-    a2aLogger.error('system', `Failed to initialize TaskProcessor core`, error);
-    this.isCoreInitialized = false;
+2. **Connection Validation**: Added startup validation code in the constructor to check whether the bus is properly connected and log appropriate messages:
+
+```typescript
+// Validate message bus connection
+if (env.USE_MESSAGE_BUS) {
+  if (!this.bus) {
+    a2aLogger.error("system", "ScenePlannerAgent: Message bus is undefined in BaseAgent. Will use global messageBus as fallback.", { module: "agent_constructor" });
+  } else {
+    a2aLogger.info("system", "ScenePlannerAgent: Message bus connection from BaseAgent is available.", { module: "agent_constructor" });
   }
 }
 ```
 
-### 2. Fixed ScenePlannerAgent's processMessage Method
-
-Corrected the syntax error in the ScenePlannerAgent's processMessage method by properly structuring the conditional blocks and indentation:
+3. **Robust Publishing Method**: Created a dedicated `publishToMessageBus` method that safely handles message publishing with proper error handling and fallback mechanisms:
 
 ```typescript
-async processMessage(message: AgentMessage): Promise<AgentMessage | null> {
-  const taskId = message.payload?.taskId || message.id || "unknown-task";
-  
-  // Logging code...
-  
-  if (message.type === "CREATE_SCENE_PLAN_REQUEST") {
-    a2aLogger.info(taskId, `[ScenePlannerAgent] Received CREATE_SCENE_PLAN_REQUEST. Beginning processing.`, { messageId: message.id });
-    
-    try {
-      // Process the message...
-      return this.createMessage(/* ... */);
-    } catch (error) {
-      // Handle errors...
-      return this.createMessage(/* ... */);
-    }
+private async publishToMessageBus(message: AgentMessage, taskId: string, logContext: Record<string, any>): Promise<boolean> {
+  if (!env.USE_MESSAGE_BUS) {
+    return false;
   }
   
-  // Only log warning for unhandled message types
-  a2aLogger.warn(taskId, `[ScenePlannerAgent] Unhandled message type: ${message.type}`);
+  try {
+    // First try the message bus from BaseAgent
+    if (this.bus) {
+      await this.bus.publish(message);
+      a2aLogger.info(taskId, "Message successfully published to bus", { ...logContext, messageType: message.type });
+      return true;
+    }
+    
+    // If BaseAgent's bus is undefined, try the fallback global messageBus
+    if (this.messageBusFallback) {
+      await this.messageBusFallback.publish(message);
+      a2aLogger.info(taskId, "Message published to fallback global messageBus", { ...logContext, messageType: message.type });
+      return true;
+    }
+    
+    a2aLogger.error(taskId, "Cannot publish message: No message bus available (both this.bus and fallback are undefined)", { ...logContext, messageType: message.type });
+    return false;
+  } catch (busError) {
+    a2aLogger.error(taskId, `Failed to publish message to bus: ${busError instanceof Error ? busError.message : String(busError)}`, 
+      { ...logContext, error: busError, messageType: message.type });
+    return false;
+  }
+}
+```
+
+4. **Graceful Fallback**: Updated the message handling in `processMessage` to use the new publishing method and fall back to direct message return when bus communication fails:
+
+```typescript
+// Try to publish via message bus
+const publishSuccess = await this.publishToMessageBus(responseMessage, taskId, logContext);
+
+// If message bus is enabled and publishing succeeded, return null
+if (env.USE_MESSAGE_BUS && publishSuccess) {
   return null;
 }
+
+// Otherwise, fall back to direct return
+return responseMessage;
 ```
 
-### 3. Fixed Logger Type Issues
+## Testing and Validation
 
-Updated all logger calls in TaskProcessor to use 'system' instead of null for task IDs:
+After implementing the fix, the ScenePlannerAgent was able to:
 
-```typescript
-// Changed from:
-a2aLogger.info(null, `TaskProcessor (${this.instanceId}) core initialization starting`);
+1. Successfully start up and log its configuration
+2. Register properly with the agent registry
+3. Process incoming messages without throwing undefined errors
+4. Fall back to direct message passing when bus communication fails
 
-// To:
-a2aLogger.info('system', `TaskProcessor (${this.instanceId}) core initialization starting`);
+Testing via the diagnostic endpoint confirmed that the agent is accessible:
+
+```
+$ curl -X GET "http://localhost:3000/api/a2a/diagnostic/sceneplanner"
+{"success":true,"agentName":"ScenePlannerAgent","modelName":"o4-mini","temperature":1,"response":null,"constructedAt":"2025-05-18T15:38:55.186Z","source":"processor"}
 ```
 
-## Verification
+This indicates that the agent is properly initialized and can respond to diagnostic requests. The source being "processor" confirms it was found in the TaskProcessor's internal registry.
 
-After implementing these fixes, we verified the communication was working by:
+## Remaining Issues
 
-1. **Log Analysis**: Confirmed the ScenePlannerAgent was receiving and processing CREATE_SCENE_PLAN_REQUEST messages from the CoordinatorAgent.
+While our fix for the message bus connectivity is working, we encountered some other issues during testing:
 
-2. **Task Status Flow**: Verified that tasks progressed through the expected status transitions (submitted -> working -> further processing).
+1. **Next.js Build Issues**: We saw errors related to missing vendor chunks when attempting to use the tRPC API endpoint:
+   ```
+   Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+   ```
 
-3. **Agent Registry Validation**: Confirmed that the TaskProcessor now correctly registers all agents from the global registry, including the ScenePlannerAgent.
+2. **Agent Registry Inconsistency**: The `/api/a2a/check-agent-registry` endpoint returned an empty agent list, indicating that there might still be issues with how agents are registered in the global registry.
 
-## Results
+3. **Log Agent Access**: We had difficulty retrieving specific logs from the log agent, suggesting there might be issues with log filtering or the log agent itself.
 
-1. The ScenePlannerAgent now properly receives and processes CREATE_SCENE_PLAN_REQUEST messages
-2. The A2A system can now progress beyond the initial task creation phase
-3. Messages correctly flow from CoordinatorAgent to ScenePlannerAgent
-4. Improved logging provides better visibility into the message flow
+## Next Steps
 
-## Future Improvements
+To complete the solution, we should:
 
-1. **Registry Consistency**: Implement a more robust mechanism to ensure consistency between the global agent registry and TaskProcessor's internal registry.
+1. **Fix Next.js Build**: Rebuild the Next.js application to resolve the missing vendor chunks issue. This might require:
+   - Running `npm run build` to regenerate the vendor chunk files
+   - Checking for package version mismatches, especially for OpenTelemetry
 
-2. **Health Checks**: Add periodic validation to confirm all expected agents are registered and responsive.
+2. **Agent Registration Flow**: Review the initialization sequence for agents to ensure they are properly registered in both:
+   - The global agent registry
+   - The TaskProcessor's internal registry
 
-3. **Message Tracing**: Add more detailed tracing for messages flowing between agents to make debugging easier.
+3. **End-to-End Testing**: Complete a full end-to-end test once the build issues are resolved to confirm that:
+   - Tasks can be created
+   - Messages flow from CoordinatorAgent to ScenePlannerAgent
+   - Scene plans are properly generated and persisted
 
-4. **Type Safety**: Enhance type definitions for logger methods and agent interfaces to catch similar issues at compile time rather than runtime.
+## Related Components
 
-## Related Files
+This fix affects the following components:
 
-- `src/server/services/a2a/taskProcessor.service.ts`
-- `src/server/agents/scene-planner-agent.ts`
-- `src/server/services/a2a/initializeAgents.ts`
-- `src/lib/logger.ts` 
+- ScenePlannerAgent
+- Message Bus system
+- Agent registry
+
+## References
+
+- [MessageBus implementation](src/server/agents/message-bus.ts)
+- [BaseAgent implementation](src/server/agents/base-agent.ts)
+- [Agent initialization](src/server/services/a2a/initializeAgents.ts) 

@@ -55,6 +55,8 @@ export const env = createEnv({
       (val) => (String(val).toLowerCase() === 'true' ? true : String(val).toLowerCase() === 'false' ? false : undefined),
       z.boolean().optional()
     ),
+    // Log Agent URL for developer tools
+    LOG_AGENT_URL: z.string().url().optional().default("http://localhost:3002"),
   },
 
   /**
@@ -94,6 +96,7 @@ export const env = createEnv({
     TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
     USE_MESSAGE_BUS: process.env.USE_MESSAGE_BUS,
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
+    LOG_AGENT_URL: process.env.LOG_AGENT_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
