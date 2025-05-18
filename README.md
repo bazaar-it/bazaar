@@ -1,10 +1,12 @@
-# Cursor Agent Guide – Bazaar‑Vid
+# Bazaar-Vid: AI-Powered Video Creation Platform
 
-> **Purpose** Give Cursor (or Codex CLI) a single, authoritative source of truth so every file it touches follows the same ground rules.  Paste this into the repo root (or `.cursor/README.md`).
+> **Purpose**: This README provides an overview of the Bazaar-Vid platform, its components, and development guidelines.
+
+> **Documentation**: For detailed documentation, refer to the `/memory-bank` folder, which contains comprehensive documentation on all aspects of the project.
 
 ---
 
-## 1 Project snapshot
+## 1 Project Overview
 
 | Layer | Choice |
 |-------|--------|
@@ -15,9 +17,10 @@
 | Auth | **Auth.js v5** + Drizzle adapter (tables in same DB) |
 | API | **tRPC v11** (HTTP + WS links) |
 | Video | **Remotion** (@remotion/player for preview, @remotion/lambda for renders) |
-| Realtime | tRPC WebSocket link for streaming updates |
+| Realtime | Server-Sent Events (SSE) for A2A updates, tRPC WebSocket for streaming |
 | Storage | Cloudflare R2 (S3‑compatible) for image / MP4 assets |
 | LLM | OpenAI API with GPT-4o-mini model (note: use "gpt-4o-mini", not "gpt-o4-mini") |
+| Agent System | Google's Agent-to-Agent (A2A) protocol implementation |
 
 ---
 
@@ -76,8 +79,8 @@
 
 1. **Deps**
    ```bash
-   pnpm add @remotion/player@4.0.291 @remotion/cli@4.0.291 remotion@4.0.291
-   pnpm add -D @remotion/renderer@4.0.291 @remotion/lambda@4.0.291
+   npm add @remotion/player@4.0.291 @remotion/cli@4.0.291 remotion@4.0.291
+   npm add -D @remotion/renderer@4.0.291 @remotion/lambda@4.0.291
    ```
 2. **Config**
    *`remotion.config.ts`* in repo root:
@@ -155,13 +158,13 @@
    }
    ```
 5. **Local dev**
-   * `pnpm exec remotion studio` for Remotion studio.
+   * `npm exec remotion studio` for Remotion studio.
 
 ---
 
 ## 5 Styling conventions (21stst.dev)
 
-* Tailwind preset: `pnpm add -D @21stst/tailwind-config` ➜ extend in `tailwind.config.ts`.
+* Tailwind preset: `npm add -D @21stst/tailwind-config` ➜ extend in `tailwind.config.ts`.
 * Use semantic classes (`text-primary`) over raw color classes (`text-blue-500`).
 * Shadows & radius sizes use 21stst scale.
 * First line in every file should be a comment about the relative path to maintain context.
@@ -191,12 +194,30 @@
 
 1. **Always update docs:** if you add a table ➜ update `schema.ts` + README.
 2. **Keep PRs atomic** – one feature / one migration / one test.
-3. **No unused code** – run `pnpm test && pnpm lint && pnpm type-check` locally before proposing.
+3. **No unused code** – run `npm test && npm lint && npm type-check` locally before proposing.
 5. **Validate everything** – LLM JSON patches must pass Zod before persisting.
 6. **Use proper UUIDs** – Always use `randomUUID()` for database IDs, not `nanoid()`.
 7. **Add path comments** – First line in every file should indicate its relative path.
 
 ---
 
-*Last update: 2025-05-01*
+## 9 Documentation
+
+All detailed documentation is maintained in the `/memory-bank` folder. Key documentation includes:
+
+### Core Documentation
+
+- **[agent.md](/memory-bank/agent.md)** - Comprehensive documentation of the A2A system
+- **[a2a](/memory-bank/a2a/)** - Detailed A2A implementation docs
+- **[api-docs](/memory-bank/api-docs/)** - API endpoints documentation
+- **[sprints](/memory-bank/sprints/)** - Sprint planning and progress docs
+- **[remotion](/memory-bank/remotion/)** - Remotion component documentation
+
+### Development Guides
+
+- **[db-analysis-toolkit.md](/memory-bank/db-analysis-toolkit.md)** - Database analysis tools
+- **[testing](/memory-bank/testing/)** - Testing strategy and tools
+- **[scripts_documentation](/memory-bank/scripts_documentation/)** - Utility scripts documentation
+
+*Last update: 2025-05-18*
 
