@@ -22,6 +22,8 @@ export TASK_PROCESSOR_HEARTBEAT_INTERVAL=5000
 
 # Enable Message Bus architecture
 export USE_MESSAGE_BUS=true
+# Enable ScenePlannerAgent patch so it registers correctly
+export APPLY_SCENE_PLANNER_PATCH=true
 
 # Set environment variables for stable development experience
 export WATCHPACK_POLLING=true
