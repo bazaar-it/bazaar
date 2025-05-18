@@ -121,86 +121,7 @@ Respond with JSON in this format:
             }
           );
 
-          // Forward to ScenePlannerAgent with enhanced logging
-          const scenePlannerMessage: AgentMessage = {
-            id: uuidv4(),
-            type: "CREATE_SCENE_PLAN_REQUEST",
-            sender: this.name,
-            recipient: "ScenePlannerAgent",
-            timestamp: new Date().toISOString(),
-            payload: {
-              ...payload,
-              taskId,
-              correlationId: correlationId || message.id,
-              // Add additional context for debugging
-              _debug: {
-                originalMessageId: message.id,
-                processedAt: new Date().toISOString()
-              }
-            }
-          };
-
-          // Log the message being sent to ScenePlannerAgent
-          a2aLogger.info(
-            `${logPrefix} Forwarding to ScenePlannerAgent`,
-            {
-              messageId: scenePlannerMessage.id,
-              payloadKeys: Object.keys(scenePlannerMessage.payload),
-              promptPreview: payload.prompt 
-                ? `${payload.prompt.substring(0, 100)}${payload.prompt.length > 100 ? '...' : ''}` 
-                : 'no prompt',
-              correlationId: scenePlannerMessage.payload.correlationId
-            }
-          );
-          
-          // Add debug logging for the full payload in development
-          if (process.env.NODE_ENV === 'development') {
-            a2aLogger.debug(
-              `${logPrefix} Full payload for ScenePlannerAgent`,
-              JSON.stringify(scenePlannerMessage.payload, null, 2)
-            );
-          }
-
-          let scenePlanResponse: AgentMessage | null = null;
-
-          if (env.USE_MESSAGE_BUS) {
-            // Publish via message bus for decoupled routing
-            await this.bus.publish(scenePlannerMessage);
-            // In bus mode we don't wait for an immediate synchronous response.
-            scenePlanResponse = null;
-          } else {
-            // Legacy direct call path
-            const scenePlannerAgent = new ScenePlannerAgent(this.taskManager);
-            scenePlanResponse = await scenePlannerAgent.processMessage(scenePlannerMessage);
-          }
-
-          a2aLogger.info(
-            `${logPrefix} Received response from ScenePlannerAgent`,
-            {
-              messageId: scenePlanResponse?.id,
-              type: scenePlanResponse?.type,
-              success: !!scenePlanResponse?.payload?.success,
-              error: scenePlanResponse?.payload?.error
-            }
-          );
-
-          if (!scenePlanResponse) {
-            a2aLogger.error(logPrefix, "Failed to get response from ScenePlannerAgent");
-            const errorMessage = this.createA2AMessage(
-              "ERROR",
-              taskId,
-              message.sender,
-              this.createSimpleTextMessage("No response from ScenePlannerAgent"),
-              undefined,
-              message.id,
-              { success: false, error: "No response from ScenePlannerAgent" }
-            );
-            
-            if (env.USE_MESSAGE_BUS) await this.bus.publish(errorMessage);
-            return env.USE_MESSAGE_BUS ? null : errorMessage;
-          }
-          return scenePlanResponse;
-          
+          // Create a task for this video generation request
           const videoTask = await this.taskManager.createTask(projectId, {
             effect: prompt.substring(0, 60) + "...",
             message: createTextMessage(prompt)
@@ -249,23 +170,80 @@ Respond with JSON in this format:
           
           a2aLogger.agentProcess(this.name, videoTaskId, type, `Task state updated to working, creating follow-up for ${targetAgent}.`);
           
-          const createScenePlanResponse = this.createA2AMessage(
-            "CREATE_SCENE_PLAN_REQUEST",
-            videoTaskId,
-            targetAgent,
-            this.createSimpleTextMessage(`Request to create scene plan from prompt: ${prompt.substring(0, 100)}...`),
-            undefined,
-            correlationId,
-            {
+          // Create message to send to ScenePlannerAgent
+          const scenePlannerMessage: AgentMessage = {
+            id: uuidv4(),
+            type: "CREATE_SCENE_PLAN_REQUEST",
+            sender: this.name,
+            recipient: targetAgent,
+            timestamp: new Date().toISOString(),
+            payload: {
               projectId,
               userId,
+              taskId: videoTaskId,
               prompt,
-              metadata: payload.metadata
+              correlationId: correlationId || message.id,
+              metadata: payload.metadata,
+              // Add additional context for debugging
+              _debug: {
+                originalMessageId: message.id,
+                processedAt: new Date().toISOString()
+              }
+            }
+          };
+
+          // Log the message being sent to ScenePlannerAgent
+          a2aLogger.info(
+            `${logPrefix} Forwarding to ${targetAgent}`,
+            {
+              messageId: scenePlannerMessage.id,
+              recipient: targetAgent,
+              payloadKeys: Object.keys(scenePlannerMessage.payload),
+              promptPreview: payload.prompt 
+                ? `${payload.prompt.substring(0, 100)}${payload.prompt.length > 100 ? '...' : ''}` 
+                : 'no prompt',
+              correlationId: scenePlannerMessage.payload.correlationId
             }
           );
           
-          if (env.USE_MESSAGE_BUS) await this.bus.publish(createScenePlanResponse);
-          return env.USE_MESSAGE_BUS ? null : createScenePlanResponse;
+          // Add debug logging for the full payload in development
+          if (process.env.NODE_ENV === 'development') {
+            a2aLogger.debug(
+              `${logPrefix} Full payload for ${targetAgent}`,
+              JSON.stringify(scenePlannerMessage.payload, null, 2)
+            );
+          }
+
+          // Send the message either via message bus or direct call
+          if (env.USE_MESSAGE_BUS) {
+            // Publish via message bus for decoupled routing
+            await this.bus.publish(scenePlannerMessage);
+            return null; // In bus mode we don't wait for an immediate synchronous response
+          } else {
+            // Legacy direct call path for ScenePlannerAgent
+            if (targetAgent === "ScenePlannerAgent") {
+              const scenePlannerAgent = new ScenePlannerAgent(this.taskManager);
+              const scenePlanResponse = await scenePlannerAgent.processMessage(scenePlannerMessage);
+              
+              if (!scenePlanResponse) {
+                a2aLogger.error(logPrefix, "Failed to get response from ScenePlannerAgent");
+                const errorMessage = this.createA2AMessage(
+                  "ERROR",
+                  videoTaskId,
+                  message.sender,
+                  this.createSimpleTextMessage("No response from ScenePlannerAgent"),
+                  undefined,
+                  message.id,
+                  { success: false, error: "No response from ScenePlannerAgent" }
+                );
+                return errorMessage;
+              }
+              return scenePlanResponse;
+            } else {
+              // For any other agent, just return the message
+              return scenePlannerMessage;
+            }
+          }
           
         case "CREATE_COMPONENT_REQUEST":
           const { animationDesignBrief, projectId: componentProjectId } = payload;
