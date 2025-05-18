@@ -1,3 +1,4 @@
+// src/scripts/log-agent/integration.ts
 import winston from 'winston';
 import axios from 'axios';
 import { createLogAgentTransport } from './logger-transport.js';

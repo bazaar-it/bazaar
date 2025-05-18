@@ -1,3 +1,4 @@
+// src/scripts/log-agent/cli.ts
 import axios from 'axios';
 import { program } from 'commander';
 import readline from 'readline';

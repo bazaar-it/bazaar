@@ -1,3 +1,4 @@
+// src/scripts/log-agent/config.ts
 import dotenv from 'dotenv';
 
 // Define LogAgentConfig interface directly in this file to avoid import issues

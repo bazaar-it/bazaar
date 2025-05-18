@@ -1,3 +1,4 @@
+// src/scripts/log-agent/logger-transport.ts
 import Transport from 'winston-transport';
 import axios from 'axios';
 import { LogEntry, LogBatch } from './types.js';
