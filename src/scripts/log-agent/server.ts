@@ -13,7 +13,7 @@ import { LogBatch, LogEntry, QnaRequest, ClearRequest } from './types.js';
 dotenv.config();
 
 // Create Express app
-const app = express();
+export const app = express();
 
 // Setup Prometheus metrics
 const metricsMiddleware = promBundle.default({
@@ -286,10 +286,12 @@ const gracefulShutdown = async () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Start server
-const PORT = config.port;
-app.listen(PORT, () => {
-  console.info(`✅ Log Agent server running on port ${PORT}`);
-  console.info(`📊 Metrics available at http://localhost:${PORT}/metrics`);
-  console.info(`🚦 Health check at http://localhost:${PORT}/health`);
-}); 
+// Start server if not running under Jest
+if (!process.env.JEST_WORKER_ID) {
+  const PORT = config.port;
+  app.listen(PORT, () => {
+    console.info(`✅ Log Agent server running on port ${PORT}`);
+    console.info(`📊 Metrics available at http://localhost:${PORT}/metrics`);
+    console.info(`🚦 Health check at http://localhost:${PORT}/health`);
+  });
+}
