@@ -1,3 +1,4 @@
+// src/scripts/log-agent/services/redis.service.ts
 import { createClient, type RedisClientType } from 'redis';
 import { config, redisKeys, generateRunId } from '../config.js';
 import { LogEntry, Issue, LogBatch } from '../types.js';

@@ -1,3 +1,4 @@
+// src/scripts/log-agent/services/pattern.service.ts
 import { LogEntry, LogPattern, Issue } from '../types.js';
 
 /**

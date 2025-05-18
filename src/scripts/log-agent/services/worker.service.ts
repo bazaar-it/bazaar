@@ -1,3 +1,4 @@
+// src/scripts/log-agent/services/worker.service.ts
 import { Queue, Worker, ConnectionOptions, QueueEvents } from 'bullmq';
 import { config } from '../config.js';
 import { LogBatch, LogEntry, Issue } from '../types.js';
