@@ -1,5 +1,4 @@
 // src/scripts/log-agent/config.ts
-// import { LogAgentConfig } from './types.js'; // Comment out this import
 import dotenv from 'dotenv';
 
 // Define LogAgentConfig interface directly in this file
@@ -80,4 +79,4 @@ export const redisKeys = {
   issues: (runId: string) => `${config.redis.prefix}issues:${runId}`,
   callback: (runId: string) => `${config.redis.prefix}callback:${runId}`,
   latestRun: () => `${config.redis.prefix}latest_run`,
-}; 
+};

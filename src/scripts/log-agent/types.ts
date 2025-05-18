@@ -1,3 +1,4 @@
+// src/scripts/log-agent/types.ts
 /**
  * Core types for the Log Agent service
  */

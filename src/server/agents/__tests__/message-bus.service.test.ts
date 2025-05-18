@@ -1,3 +1,4 @@
+// src/server/agents/__tests__/message-bus.service.test.ts
 import { MessageBus, messageBus } from "../message-bus";
 import { BaseAgent, type AgentMessage } from "../base-agent";
 import { db } from "~/server/db";
