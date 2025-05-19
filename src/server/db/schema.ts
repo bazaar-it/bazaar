@@ -178,6 +178,8 @@ export const customComponentJobs = createTable(
     lastSuccessfulStep: d.varchar('last_successful_step', { length: 50 }),
     nextRetryAt: d.timestamp('next_retry_at', { withTimezone: true }),
     errorContext: d.jsonb('error_context'),
+    checkpointData: d.jsonb('checkpoint_data'),
+    lastStep: d.varchar('last_step', { length: 50 }),
     // A2A protocol support fields
     taskId: d.text('task_id'), // A2A task ID
     internalStatus: d.varchar('internal_status', { length: 50 }), // For internal tracking
