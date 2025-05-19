@@ -6,6 +6,7 @@ import path from "path";
 import { customComponentJobs, db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
+import { saveCheckpoint } from "~/server/services/componentJob.service";
 import { OpenAI } from "openai";
 import { env } from "~/env";
 import logger, { componentLogger } from '~/lib/logger';
@@ -264,6 +265,8 @@ export async function processComponentJob(job: ComponentJob): Promise<{
     await db.update(customComponentJobs)
       .set({ status: "generating_code", updatedAt: new Date() })
       .where(eq(customComponentJobs.id, id));
+
+    await saveCheckpoint(id, { step: "generating_code" }, "generating_code");
     
     componentLogger.info(id, `Status updated to generating_code for job: ${id} [${name}]`);
     
@@ -355,10 +358,12 @@ export async function processComponentJob(job: ComponentJob): Promise<{
       componentId: id,
       duration
     });
-    
-    return { 
-      success: true, 
-      component: success 
+
+    await saveCheckpoint(id, { step: 'code_generated' }, 'code_generated');
+
+    return {
+      success: true,
+      component: success
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -368,6 +373,8 @@ export async function processComponentJob(job: ComponentJob): Promise<{
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined
     });
+
+    await saveCheckpoint(id, { step: 'error', error: errorMessage }, 'error');
     
     // Critical fix: Update the database status to 'failed' so it doesn't stay in 'queued'
     await handleComponentGenerationError(id, 

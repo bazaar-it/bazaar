@@ -156,7 +156,7 @@ export async function processUserMessage(
         const streamStartTime = Date.now();
         const llm = new LLMService(openaiClient);
         const stream = await llm.streamChat(apiMessages);
-        emitter.next({ type: EventType.PROGRESS, message: "llm_stream_started" });
+        emitter.next({ type: EventType.PROGRESS, message: "llm_stream_started", stage: "llm" });
         
         chatLogger.streamLog(assistantMessageId, `Stream created`, {
             duration: Date.now() - streamStartTime
@@ -417,7 +417,7 @@ export async function processUserMessage(
                     patches: response.patches,
                     success: true
                 });
-                emitter.next({ type: EventType.PROGRESS, message: `tool_${accumulatedToolCall.function.name}_done` });
+                emitter.next({ type: EventType.PROGRESS, message: `tool_${accumulatedToolCall.function.name}_done`, stage: "tool" });
                 
                 // Update the message content to include the tool result
                 await db.update(messages)
@@ -470,7 +470,7 @@ export async function processUserMessage(
             toolCallsCount: metrics.toolCallsCompleted
         });
 
-        emitter.next({ type: EventType.PROGRESS, message: "stream_complete" });
+        emitter.next({ type: EventType.PROGRESS, message: "stream_complete", stage: "done" });
 
         emitter.next({
             type: EventType.DONE,
