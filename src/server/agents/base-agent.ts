@@ -26,6 +26,7 @@ import { TaskManager } from '../services/a2a/taskManager.service';
 import { a2aLogger } from '~/lib/logger'; 
 import { OpenAI } from 'openai';
 import { messageBus } from './message-bus';
+import { lifecycleManager } from '../services/a2a/lifecycleManager.service';
 
 export enum AgentLifecycleState {
   Initializing = 'initializing',
@@ -66,6 +67,8 @@ export abstract class BaseAgent {
   protected modelName: string = 'gpt-4o-mini';
   protected temperature: number = 0.7;
   protected lifecycleState: AgentLifecycleState = AgentLifecycleState.Initializing;
+  protected heartbeatIntervalMs = 10000;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
 
   /**
    * Central MessageBus accessor for all agents.  Having a getter avoids each
@@ -116,22 +119,44 @@ export abstract class BaseAgent {
 
   async init(): Promise<void> {
     this.lifecycleState = AgentLifecycleState.Ready;
+    lifecycleManager.updateState(this.name, this.lifecycleState);
+    lifecycleManager.recordHeartbeat(this.name);
+    this.startHeartbeat();
   }
 
   async start(): Promise<void> {
     this.lifecycleState = AgentLifecycleState.Processing;
+    lifecycleManager.updateState(this.name, this.lifecycleState);
   }
 
   async stop(): Promise<void> {
     this.lifecycleState = AgentLifecycleState.Stopping;
+    lifecycleManager.updateState(this.name, this.lifecycleState);
+    this.stopHeartbeat();
   }
 
   async destroy(): Promise<void> {
     this.lifecycleState = AgentLifecycleState.Stopping;
+    lifecycleManager.updateState(this.name, this.lifecycleState);
+    this.stopHeartbeat();
   }
 
   getStatus(): AgentLifecycleState {
     return this.lifecycleState;
+  }
+
+  protected startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      lifecycleManager.recordHeartbeat(this.name);
+    }, this.heartbeatIntervalMs);
+  }
+
+  protected stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
   
   /**

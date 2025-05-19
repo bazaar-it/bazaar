@@ -1,5 +1,6 @@
-import { BaseAgent } from "~/server/agents/base-agent";
+import { BaseAgent, type AgentLifecycleState } from "~/server/agents/base-agent";
 import type { AgentCard } from "~/types/a2a";
+import { lifecycleManager } from "./lifecycleManager.service";
 
 /**
  * AgentRegistry service
@@ -25,6 +26,7 @@ export class AgentRegistry {
    */
   public registerAgent(agent: BaseAgent): void {
     this.agents.set(agent.name.toLowerCase(), agent);
+    lifecycleManager.registerAgent(agent);
     console.log(`Registered agent: ${agent.name}`);
   }
   
@@ -59,6 +61,10 @@ export class AgentRegistry {
    */
   public getAllAgentCards(): AgentCard[] {
     return this.getAllAgents().map(agent => agent.getAgentCard());
+  }
+
+  public getAgentStatuses(): { name: string; state: AgentLifecycleState; lastHeartbeat: number }[] {
+    return lifecycleManager.getAgentStatuses();
   }
 }
 
