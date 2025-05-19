@@ -196,36 +196,60 @@ if (isServer) {
   // Simple console logger for client-side
   logger = createLogger({
     level: 'info',
-    format: consoleFormat,
+    format: fileFormat,
     transports: [
       new transports.Console({
-        format: consoleFormat
-      })
-    ]
+        format: consoleFormat,
+      }),
+    ],
   });
 
   // Create a separate A2A logger
   a2aLogger = createLogger({
     level: 'info',
-    format: consoleFormat,
+    format: fileFormat,
     defaultMeta: { a2a: true },
     transports: [
       new transports.Console({
-        format: consoleFormat
-      })
-    ]
+        format: consoleFormat,
+      }),
+    ],
   });
 
   // Create a separate components logger
   componentsLogger = createLogger({
     level: 'info',
-    format: consoleFormat,
+    format: fileFormat,
     defaultMeta: {},
     transports: [
       new transports.Console({
-        format: consoleFormat
-      })
-    ]
+        format: consoleFormat,
+      }),
+    ],
+  });
+
+  const clientRunId = process.env.NEXT_PUBLIC_LOG_RUN_ID || generateRunId();
+  const clientAgentUrl =
+    process.env.NEXT_PUBLIC_LOG_AGENT_URL ||
+    process.env.LOG_AGENT_URL ||
+    `http://localhost:${logAgentConfig.port}`;
+
+  addLogAgentTransport(logger, {
+    agentUrl: clientAgentUrl,
+    source: 'main-app',
+    runId: clientRunId,
+  });
+
+  addLogAgentTransport(a2aLogger, {
+    agentUrl: clientAgentUrl,
+    source: 'a2a-system',
+    runId: clientRunId,
+  });
+
+  addLogAgentTransport(componentsLogger, {
+    agentUrl: clientAgentUrl,
+    source: 'components-worker',
+    runId: clientRunId,
   });
 }
 
