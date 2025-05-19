@@ -88,6 +88,13 @@ export const a2aRouter = createTRPCRouter({
         });
       }
     }),
+
+  /**
+   * Get agent lifecycle statuses
+   */
+  getAgentStatuses: publicProcedure.query(() => {
+    return agentRegistry.getAgentStatuses();
+  }),
   
   /**
    * Get detailed information about a specific agent
