@@ -151,10 +151,11 @@ describe("MessageBus Service", () => {
       const messageToNonExistentAgent = { ...testMessage, recipient: "NonExistentAgent" };
       await busInstance.publish(messageToNonExistentAgent);
       expect(mockDbUpdate).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({ 
-        status: "failed", 
+      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({
+        status: "failed",
         payload: expect.objectContaining({ error: "Recipient not found: NonExistentAgent" })
       }));
+      expect(busInstance.getDeadLetterQueue()).toContainEqual(expect.objectContaining({ id: messageToNonExistentAgent.id }));
     });
 
     it("should mark message as 'failed' if agent processing throws an error", async () => {
@@ -162,10 +163,11 @@ describe("MessageBus Service", () => {
       agentB.processMessageMock.mockRejectedValueOnce(processingError);
       await busInstance.publish(testMessage);
       expect(mockDbUpdate).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({ 
-        status: "failed", 
+      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({
+        status: "failed",
         payload: expect.objectContaining({ error: processingError.toString() })
       }));
+      expect(busInstance.getDeadLetterQueue()).toContainEqual(expect.objectContaining({ id: testMessage.id }));
     });
 
     it("should notify direct agent subscribers", async () => {
@@ -173,6 +175,22 @@ describe("MessageBus Service", () => {
       busInstance.subscribeToAgentMessages("AgentB", subscriberMock);
       await busInstance.publish(testMessage);
       expect(subscriberMock).toHaveBeenCalledWith(testMessage);
+    });
+  });
+
+  describe("Dead Letter Queue", () => {
+    it("should retry messages in the DLQ", async () => {
+      const messageToMissing = { ...testMessage, recipient: "MissingAgent" };
+      await busInstance.publish(messageToMissing);
+      expect(busInstance.getDeadLetterQueue()).toHaveLength(1);
+
+      const newAgent = new MockBusAgent("MissingAgent");
+      busInstance.registerAgent(newAgent);
+
+      await busInstance.retryDeadLetterQueue();
+
+      expect(newAgent.processMessageMock).toHaveBeenCalledWith(messageToMissing);
+      expect(busInstance.getDeadLetterQueue()).toHaveLength(0);
     });
   });
 
