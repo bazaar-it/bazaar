@@ -175,6 +175,9 @@ export const customComponentJobs = createTable(
     outputUrl: d.text(), // URL to the compiled JS hosted on R2
     errorMessage: d.text(), // Error message if compilation failed
     retryCount: d.integer().default(0).notNull(), // Number of retry attempts
+    lastSuccessfulStep: d.varchar('last_successful_step', { length: 50 }),
+    nextRetryAt: d.timestamp('next_retry_at', { withTimezone: true }),
+    errorContext: d.jsonb('error_context'),
     // A2A protocol support fields
     taskId: d.text('task_id'), // A2A task ID
     internalStatus: d.varchar('internal_status', { length: 50 }), // For internal tracking
@@ -371,8 +374,15 @@ export const agentMessagesIndexes = {
 
 // Add history field to customComponentJobs to support A2A protocol task history
 export const customComponentJobsUpdate = sql`
-  ALTER TABLE "bazaar-vid_custom_component_job" 
+  ALTER TABLE "bazaar-vid_custom_component_job"
   ADD COLUMN IF NOT EXISTS "history" JSONB
+`;
+
+export const customComponentJobsRecoveryUpdate = sql`
+  ALTER TABLE "bazaar-vid_custom_component_job"
+  ADD COLUMN IF NOT EXISTS "last_successful_step" varchar(50),
+  ADD COLUMN IF NOT EXISTS "next_retry_at" timestamp with time zone,
+  ADD COLUMN IF NOT EXISTS "error_context" jsonb
 `;
 
 // --- Component Test Cases table ---

@@ -8,12 +8,17 @@ import { messages, patches } from "~/server/db/schema";
 import { SYSTEM_PROMPT, MAX_CONTEXT_MESSAGES } from "~/server/constants/chat";
 import { CHAT_TOOLS } from "~/server/lib/openai/tools";
 import { handleScenePlan } from "./scenePlanner.service";
-import { generateComponent } from "./componentGenerator.service";
+import {
+    handleApplyJsonPatch,
+    handleGenerateComponent,
+    handlePlanScenes,
+} from "./toolExecution.service";
 import { type InputProps } from "~/types/input-props";
 import { type JsonPatch } from "~/types/json-patch";
 import { type StreamEventType, StreamEventType as EventType, type ToolCallAccumulator } from "~/types/chat";
 import { eq, desc } from "drizzle-orm";
 import { eventBufferService } from "~/server/services/eventBuffer.service";
+import { LLMService } from "./llm.service";
 import { randomUUID } from "crypto";
 import logger, { chatLogger } from "~/lib/logger";
 
@@ -149,12 +154,9 @@ export async function processUserMessage(
         
         // Create the streaming request
         const streamStartTime = Date.now();
-        const stream = await openaiClient.chat.completions.create({
-            model: "o4-mini", // or other OpenAI model that supports function calling
-            messages: apiMessages,
-            stream: true,
-            tools: CHAT_TOOLS,
-        });
+        const llm = new LLMService(openaiClient);
+        const stream = await llm.streamChat(apiMessages);
+        emitter.next({ type: EventType.PROGRESS, message: "llm_stream_started" });
         
         chatLogger.streamLog(assistantMessageId, `Stream created`, {
             duration: Date.now() - streamStartTime
@@ -415,6 +417,7 @@ export async function processUserMessage(
                     patches: response.patches,
                     success: true
                 });
+                emitter.next({ type: EventType.PROGRESS, message: `tool_${accumulatedToolCall.function.name}_done` });
                 
                 // Update the message content to include the tool result
                 await db.update(messages)
@@ -466,7 +469,9 @@ export async function processUserMessage(
             contentLength: streamedContent.length,
             toolCallsCount: metrics.toolCallsCompleted
         });
-        
+
+        emitter.next({ type: EventType.PROGRESS, message: "stream_complete" });
+
         emitter.next({
             type: EventType.DONE,
         });
@@ -520,183 +525,6 @@ export async function processUserMessage(
 }
 
 /**
- * Handles the applyJsonPatch tool call
- * 
- * @param projectId - ID of the project
- * @param operations - JSON patch operations to apply
- * @param explanation - Optional explanation
- * @returns Response message and patches
- */
-export async function handleApplyJsonPatch(
-    projectId: string,
-    operations: Operation[],
-    explanation?: string
-): Promise<ToolCallResponse> {
-    const messageId = 'apply-json-patch'; // Add a default messageId
-    
-    if (!operations || !Array.isArray(operations) || operations.length === 0) {
-        throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Invalid or empty patch operations",
-        });
-    }
-    
-    chatLogger.tool(messageId, "applyJsonPatch", `Applying ${operations.length} JSON patch operations to project ${projectId}`);
-    
-    // Insert the patch into the database
-    // Operations are type-safe as they match the JsonPatch type expected by the database
-    await db.insert(patches).values({
-        projectId,
-        patch: operations as JsonPatch,
-    });
-    
-    return {
-        message: explanation || `Applied ${operations.length} patch operations to your video.`,
-        patches: operations
-    };
-}
-
-/**
- * Handles the generateRemotionComponent tool call
- * 
- * @param projectId - ID of the project
- * @param userId - ID of the user
- * @param effectDescription - Description of the desired effect
- * @param assistantMessageId - ID of the assistant message
- * @returns Response message
- */
-export async function handleGenerateComponent(
-    projectId: string,
-    userId: string,
-    effectDescription: string,
-    assistantMessageId: string
-): Promise<ToolCallResponse> {
-    const startTime = Date.now();
-    const messageId = assistantMessageId || 'generate-component'; // Use the provided assistantMessageId
-    
-    if (!effectDescription || typeof effectDescription !== "string") {
-        throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Missing or invalid effect description",
-        });
-    }
-    
-    chatLogger.tool(messageId, "generateRemotionComponent", `Generating component for project ${projectId} with description: ${effectDescription}`);
-    
-    // Create a temporary scene ID for this component
-    const tempSceneId = randomUUID();
-    
-    // Create AnimationDesignBrief parameters
-    const briefParams = {
-        projectId,
-        sceneId: tempSceneId,
-        scenePurpose: effectDescription,
-        sceneElementsDescription: effectDescription,
-        desiredDurationInFrames: 6 * 30, // 6 seconds at 30fps
-        dimensions: { width: 1920, height: 1080 } // Default HD dimensions
-    };
-    
-    // Generate animation design brief using the animation designer service
-    const { brief, briefId } = await import("~/server/services/animationDesigner.service")
-        .then(module => module.generateAnimationDesignBrief(briefParams));
-    
-    // Call the component generator with the design brief
-    const { jobId, effect } = await generateComponent(
-        projectId,
-        brief, // Now passing proper AnimationDesignBrief object
-        assistantMessageId,
-        6, // Default 6 seconds
-        30, // Default 30fps
-        tempSceneId, // Using our temporary scene ID for linking
-        userId,
-        briefId // Include the brief ID for reference
-    );
-    const duration = Date.now() - startTime;
-    
-    chatLogger.tool(messageId, "generateRemotionComponent", `Generated component ${effect} (jobId: ${jobId}) in ${duration}ms`);
-    
-    return {
-        message: `I'm generating a custom "${effect}" component based on your description. This might take a minute. You'll be able to add it to your timeline once it's ready.`
-    };
-}
-
-/**
- * Handles the planVideoScenes tool call
- * 
- * @param projectId - ID of the project
- * @param userId - ID of the user
- * @param scenePlan - The scene plan object
- * @param assistantMessageId - ID of the assistant message
- * @param emitter - Event emitter for streaming updates
- * @returns Response message and patches
- */
-export async function handlePlanScenes(
-    projectId: string,
-    userId: string,
-    scenePlan: any,
-    assistantMessageId: string,
-    emitter: Subject<any>
-): Promise<ToolCallResponse> {
-    const startTime = Date.now();
-    const messageId = assistantMessageId || 'plan-scenes'; // Use the provided assistantMessageId
-    
-    if (!scenePlan || !scenePlan.scenes || !Array.isArray(scenePlan.scenes)) {
-        throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Invalid scene plan format",
-        });
-    }
-    
-    chatLogger.tool(messageId, "planVideoScenes", `Planning video with ${scenePlan.scenes.length} scenes for project ${projectId}`);
-    
-    // Additional validation logging for scene plan
-    try {
-        // Validate scene structure
-        for (let i = 0; i < scenePlan.scenes.length; i++) {
-            const scene = scenePlan.scenes[i];
-            if (!scene.id) {
-                chatLogger.tool(messageId, "planVideoScenes", `Scene at index ${i} is missing an ID`);
-            }
-            if (!scene.description) {
-                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} is missing a description`);
-            }
-            if (typeof scene.durationInSeconds !== 'number') {
-                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} has invalid duration: ${scene.durationInSeconds}`);
-            }
-            if (!scene.effectType) {
-                chatLogger.tool(messageId, "planVideoScenes", `Scene ${scene.id || i} is missing an effect type`);
-            }
-        }
-    } catch (validationError) {
-        chatLogger.error(messageId, `Error validating scene plan`, {
-            error: validationError
-        });
-    }
-    
-    // Process the scene plan using the scene planner service
-    const result = await handleScenePlan(
-        projectId,
-        userId,
-        scenePlan,
-        assistantMessageId,
-        db,
-        emitter
-    );
-    const duration = Date.now() - startTime;
-    
-    chatLogger.tool(messageId, "planVideoScenes", `Scene planning completed in ${duration}ms with ${result.patches?.length || 0} patches`);
-    
-    return result;
-}
-
-/**
- * Handles reconnection for a client that lost connection during streaming
- * 
- * @param clientId - Identifier for the client
- * @param messageId - ID of the message being streamed
- * @param lastEventId - Last event ID the client received
- * @param emitter - Event emitter to send missed events to
- * @returns True if reconnection was successful, false otherwise
  */
 export async function handleClientReconnection(
     clientId: string,

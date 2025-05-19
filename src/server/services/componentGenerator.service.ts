@@ -532,10 +532,14 @@ export async function generateComponent(
             updatedAt: new Date(),
         })
         .returning();
-    
+
     if (!jobRecord) {
         throw new Error("Failed to create component job record");
     }
+
+    await db.update(customComponentJobs)
+        .set({ lastSuccessfulStep: "queued_for_generation" })
+        .where(eq(customComponentJobs.id, jobRecord.id));
     
     const jobId = jobRecord.id;
     
@@ -628,4 +632,19 @@ function sanitizeComponentName(name: string): string {
     }
     
     return sanitized;
-} 
+}
+
+export async function recordJobStep(
+    jobId: string,
+    step: string,
+    dbInstance: DB = db,
+    errorContext?: Record<string, any>
+): Promise<void> {
+    await dbInstance.update(customComponentJobs)
+        .set({
+            lastSuccessfulStep: step,
+            ...(errorContext ? { errorContext } : {}),
+            updatedAt: new Date(),
+        })
+        .where(eq(customComponentJobs.id, jobId));
+}

@@ -115,6 +115,7 @@ export enum StreamEventType {
   TOOL_RESULT = "toolResult",
   ERROR = "error",
   DONE = "done",
+  PROGRESS = "progress",
   RECONNECTED = "reconnected", // New event type for reconnection
 }
 
@@ -131,6 +132,7 @@ export type StreamEvent =
   | { type: "finalized"; status: "success" | "error" | "building" | "pending"; jobId?: string | null; eventId?: string }
   | { type: "scenePlan"; plan: any; status: "planning_complete"; eventId?: string }
   | { type: "sceneStatus"; sceneId: string; sceneIndex: number; status: "pending" | "building" | "success" | "error"; jobId?: string; error?: string; eventId?: string }
+  | { type: "progress"; message: string; eventId?: string }
   | { type: "reconnected"; lastEventId?: string; missedEvents: number; eventId?: string };
 
 /**
