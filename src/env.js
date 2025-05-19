@@ -66,6 +66,8 @@ export const env = createEnv({
    */
   client: {
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_LOG_AGENT_URL: z.string().url().optional().default('http://localhost:3002'),
+    NEXT_PUBLIC_LOG_RUN_ID: z.string().optional(),
   },
 
   /**
@@ -97,6 +99,8 @@ export const env = createEnv({
     USE_MESSAGE_BUS: process.env.USE_MESSAGE_BUS,
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
     LOG_AGENT_URL: process.env.LOG_AGENT_URL,
+    NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
+    NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

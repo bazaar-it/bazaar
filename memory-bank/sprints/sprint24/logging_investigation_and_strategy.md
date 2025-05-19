@@ -204,8 +204,35 @@ Based on initial observation of the system running via `scripts/startup-with-a2a
     *   Symptoms: `ScenePlannerAgent` status in `[ROUTE_DEBUG]` logs flipping between `FOUND ✅` and `MISSING ❌`.
     *   Impact: Could indicate instability in agent registration or be an artifact of HMR re-initializations.
 
-## 6. Proposed Logging Strategy Enhancements (To be populated)
+## 6. Proposed Logging Strategy Enhancements
 
-- (Example) Granular log levels for A2A components.
-- (Example) Structured logging for easier querying in the Log Agent.
-- (Example) Review log retention policies.
+- Use environment variables (`LOG_DIR`, `ERROR_LOG_DIR`, `COMBINED_LOG_DIR`, `A2A_LOG_DIR`) to control log locations.
+- In development, point these variables to directories under `/tmp` (as done by `scripts/startup-with-a2a.sh`) to avoid HMR restarts.
+- In production, configure them to persistent locations such as `/var/log/bazaar-vid`.
+- Reduce default A2A verbosity by setting `A2A_LOG_LEVEL=info` and elevate to `debug` only when troubleshooting.
+- Ensure all loggers send structured JSON to the Log Agent so there is one aggregation point.
+- Configure each logger with `format.json()` and attach the Log Agent transport:
+
+```ts
+const baseLogger = createLogger({
+  level: 'info',
+  format: format.combine(format.timestamp(), format.json()),
+  transports: [new transports.Console({ format: consoleFormat })],
+});
+
+addLogAgentTransport(baseLogger, {
+  agentUrl: 'http://localhost:3002',
+  source: 'main-app',
+});
+```
+- Rotate file logs daily and retain at most 14 days of history to keep storage manageable.
+- Use the Log Agent API (`/raw`, `/issues`, `/qna`) as the single source of truth when investigating problems.
+- Start new sessions with `logger.logAgent.startNewRun()` whenever beginning a fresh debugging cycle.
+
+## 7. Recommended Iterative Workflow
+
+1. Start the system using `scripts/startup-with-a2a.sh` which launches the Log Agent and Next.js server with the tmp log directories.
+2. Exercise the feature or agent under investigation.
+3. Query the Log Agent (`http://localhost:3002/raw?runId=latest`) or run `log_query` to inspect recent logs.
+4. Make code adjustments based on insights and restart the run using `logger.logAgent.startNewRun()`.
+5. Repeat the cycle until issues are resolved, then archive or export logs from the Log Agent if needed for long-term reference.

@@ -66,5 +66,7 @@ As of the sprint initiation, we've identified the following status for the A2A s
 | Date | Update |
 |------|--------|
 | *Sprint Start* | Identified key issues and established sprint goals |
+| 2025-05-19 | Reviewed existing logs and added unified logging strategy guidance |
+| 2025-05-20 | Updated all Winston loggers to emit JSON and route to the Log Agent |
 
 This document will be updated throughout the sprint to track progress and adjust priorities as needed.
