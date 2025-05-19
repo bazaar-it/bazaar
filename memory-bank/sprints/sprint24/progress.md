@@ -66,5 +66,7 @@ As of the sprint initiation, we've identified the following status for the A2A s
 | Date | Update |
 |------|--------|
 | *Sprint Start* | Identified key issues and established sprint goals |
+| 2025-05-19 | Initial test run executed: 32 suites failing, 13 passing |
+| 2025-05-19 | Added EventBufferService and A2A utils tests, 15 suites passing |
 
 This document will be updated throughout the sprint to track progress and adjust priorities as needed.
