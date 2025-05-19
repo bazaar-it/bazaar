@@ -78,6 +78,25 @@ We've made significant progress on the BAZAAR-260 ticket to improve the testing 
 - Most A2A integration tests
 - Most agent-related tests
 
+### Latest Test Run (2025-05-19)
+
+Running `npm test` on a clean checkout yielded the following results:
+
+- **Test Suites**: 45 total, 13 passed, 32 failed
+- **Tests**: 167 total, 105 passed, 62 failed
+
+The majority of failures come from `jest is not defined` errors in agent tests
+and database connection issues in E2E tests. Passing suites include the simple
+app tests and basic integration tests for API routes and Drizzle utilities.
+
+### Test Run After Adding New Unit Tests (2025-05-19)
+
+Two new unit test suites were added for the `EventBufferService` and A2A
+utility functions. Running `npm test` again shows a slight improvement:
+
+- **Test Suites**: 47 total, 15 passed, 32 failed
+- **Tests**: 172 total, 110 passed, 62 failed
+
 ## Root Causes Identified
 
 1. **Module Resolution Issues**: ESM/CommonJS conflicts

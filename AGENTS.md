@@ -192,9 +192,8 @@ npm exec remotion studio
 
 ## PR Guidelines
 
-1. Keep PRs atomic - one feature/migration/test per PR
-2. Always update documentation alongside code changes
-3. Include test coverage for new features
-4. Validate all inputs and ensure type safety
-5. Remove any unused code
-6. Add path comments to new files
+1. Always update documentation alongside code changes
+2. Include test coverage for new features
+3. Validate all inputs and ensure type safety
+4. Remove any unused code
+5. Add path comments to new files
