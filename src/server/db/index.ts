@@ -5,27 +5,59 @@ import { neon, neonConfig } from "@neondatabase/serverless";
 import { env } from "~/env";
 import * as schema from "./schema";
 
-// Setup and export the database connection
-export const db = (() => {
+// Recommended by Neon for Drizzle to cache connection details.
+neonConfig.fetchConnectionCache = true;
+
+// Augment the NodeJS global type for HMR-proofing in development
+declare global {
+  // eslint-disable-next-line no-var
+  var __drizzleNeonClient__: ReturnType<typeof drizzleNeon<typeof schema>> | undefined;
+}
+
+const createDbConnection = () => {
+  // console.log("Creating new Neon database connection instance"); 
+  const sql = neon(env.DATABASE_URL, {
+    fetchOptions: {
+      keepalive: true,
+      timeout: 10000, // 10 seconds
+    },
+  });
+  return drizzleNeon(sql, { schema });
+};
+
+const createDummyDbConnection = () => {
+  // console.warn("Falling back to dummy Neon database connection instance"); 
+  const dummySql = neon("postgresql://user:password@localhost:5432/dummy");
+  return drizzleNeon(dummySql, { schema });
+};
+
+let dbConnectionInstance: ReturnType<typeof drizzleNeon<typeof schema>>;
+
+if (process.env.NODE_ENV === "production") {
   try {
-    console.log("Initializing Neon database connection");
-    
-    // Use custom fetch options directly in the neon connection
-    const sql = neon(env.DATABASE_URL, { 
-      fetchOptions: { 
-        keepalive: true,
-        timeout: 10000 // 10 seconds
-      }
-    });
-    
-    return drizzleNeon(sql, { schema });
+    console.log("Initializing Neon database connection for PRODUCTION");
+    dbConnectionInstance = createDbConnection();
   } catch (error) {
-    console.error("Failed to initialize database connection:", error);
-    // Return a dummy DB instance that will throw clear errors
-    // This prevents app from crashing on startup, but will throw proper errors when used
-    return drizzleNeon(neon("postgresql://user:password@localhost:5432/dummy"), { schema });
+    console.error("Failed to initialize database connection for PRODUCTION:", error);
+    dbConnectionInstance = createDummyDbConnection();
   }
-})();
+} else {
+  // Development: cache the connection on the global object to reuse across HMR reloads.
+  if (!global.__drizzleNeonClient__) {
+    console.log("Initializing Neon database connection for DEVELOPMENT (new global instance)");
+    try {
+      global.__drizzleNeonClient__ = createDbConnection();
+    } catch (error) {
+      console.error("Failed to initialize globally cached database connection for DEVELOPMENT:", error);
+      global.__drizzleNeonClient__ = createDummyDbConnection();
+    }
+  } else {
+    console.log("Reusing existing Neon database connection for DEVELOPMENT from global cache");
+  }
+  dbConnectionInstance = global.__drizzleNeonClient__;
+}
+
+export const db = dbConnectionInstance;
 
 /**
  * Execute a database operation with retry logic for transient connection issues

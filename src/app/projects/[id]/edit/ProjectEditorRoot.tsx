@@ -83,7 +83,17 @@ export default function ProjectEditorRoot({ projectId, initialProps, initialProj
     },
     onError: (error: unknown) => {
       console.error("Failed to rename project:", error);
-      // Could add a toast notification here in the future
+      
+      // Check if this is the "duplicate title" error
+      if (error instanceof Error && error.message.includes("A project with this title already exists")) {
+        // Show a user-friendly error message
+        alert("Error: A project with this title already exists. Please choose a different title.");
+        // Reset title to original value
+        setTitle(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
+      } else {
+        // Generic error handling
+        alert(`Error renaming project: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   });
   

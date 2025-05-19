@@ -1,0 +1,35 @@
+{
+  "success": false,
+  "results": [
+    {
+      "agent": "CoordinatorAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T13:52:44.049Z"
+    },
+    {
+      "agent": "BuilderAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T13:52:44.620Z"
+    },
+    {
+      "agent": "UIAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T13:52:44.906Z"
+    },
+    {
+      "agent": "ErrorFixerAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T13:52:45.698Z"
+    },
+    {
+      "agent": "R2StorageAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T13:52:46.173Z"
+    }
+  ]
+}

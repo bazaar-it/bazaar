@@ -45,6 +45,15 @@ export default function ChatPanel({ projectId }: { projectId: string }) {
     },
     onError: (error) => {
       console.error("Failed to rename project:", error);
+      
+      // Check for duplicate title error
+      if (error instanceof Error && error.message.includes("A project with this title already exists")) {
+        // Show a user-friendly error message
+        alert("Error: A project with this title already exists. Please choose a different title.");
+      } else {
+        // Generic error handling for other errors
+        alert(`Error renaming project: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   });
   

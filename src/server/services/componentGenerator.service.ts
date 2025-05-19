@@ -512,64 +512,72 @@ export async function generateComponent(
 
     const enhancedDescription = enhancedDescriptionLines.join('\n');
 
-    // Generate unique ID for this job
-    const jobId = uuidv4();
+    // Create the component job record
+    const [jobRecord] = await db.insert(customComponentJobs)
+        .values({
+            projectId,
+            effect: componentName,
+            status: "queued_for_generation", // Explicitly set to queued_for_generation for CodeGenWorker
+            metadata: {
+                durationInFrames: actualDurationInFrames,
+                fps: actualFps,
+                width: actualWidth,
+                height: actualHeight,
+                complexity: estimatedComplexity,
+                sceneId: sceneId || undefined,
+                userId: userId || undefined,
+                animationDesignBriefId: animationDesignBriefId || undefined
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        })
+        .returning();
     
-    // Add the job to the database
-    const jobData = {
-        prompt: enhancedDescription, 
-        componentName,
-        durationInFrames: actualDurationInFrames,
-        fps: actualFps,
-        width: actualWidth, 
-        height: actualHeight, 
-        projectId,
-        sceneId: brief.sceneId, // Use sceneId from brief
-        animationDesignBriefId: animationDesignBriefId, // Store brief ID
-        // If we have a userId, include it for analytics/tracking
-        userData: userId ? { userId } : undefined
-    };
-
-    console.log(`[ComponentGenerator] Job ${jobId} - Incoming brief/prompt for LLM:`, JSON.stringify(jobData.prompt, null, 2));
-
-    // Insert the job record
-    const [job] = await db.insert(customComponentJobs).values({
-        id: jobId,
-        projectId: projectId,
-        effect: componentName,
-        statusMessageId: assistantMessageId,
-        status: "queued_for_generation",
-        metadata: jobData
-    }).returning();
-
-    console.log(`Created component generation job: ${jobId} for ${componentName} with status 'queued_for_generation'`);
-
-    // Start generating the code (don't await - this happens asynchronously)
-    // This will update the job status when complete
-    processComponentJob({
-        id: jobId,
-        name: componentName,
-        prompt: enhancedDescription,
-        // Convert brief to string if it exists to match the expected types
-        variation: animationDesignBriefId ? JSON.stringify(brief) : undefined 
-    })
-        .catch(error => {
-            console.error(`Error generating component code for job ${jobId}:`, error);
+    if (!jobRecord) {
+        throw new Error("Failed to create component job record");
+    }
+    
+    const jobId = jobRecord.id;
+    
+    console.log(`[ComponentGenerator] Created job ${jobId} with status 'queued_for_generation' for component: ${componentName}`);
+    
+    try {
+        // Start the job processing asynchronously so we can return quickly
+        // Don't await this to avoid blocking the response
+        void processComponentJob({
+            id: jobId,
+            name: componentName,
+            prompt: enhancedDescription,
+            variation: animationDesignBriefId ? JSON.stringify(brief) : undefined
         });
-
-    // Return immediately with the job ID and other metadata
-    // This allows the chat experience to continue while generation happens in background
-    return {
-        jobId,
-        effect: componentName,
-        componentMetadata: {
-            durationInFrames: actualDurationInFrames,
-            fps: actualFps,
-            width: actualWidth,
-            height: actualHeight,
-            complexity: estimatedComplexity
-        }
-    };
+        
+        // Return the result
+        return {
+            jobId,
+            effect: componentName,
+            componentMetadata: {
+                durationInFrames: actualDurationInFrames,
+                fps: actualFps,
+                width: actualWidth,
+                height: actualHeight,
+                complexity: estimatedComplexity
+            }
+        };
+    } catch (error) {
+        // Log error but don't throw - the job is queued and will be processed by workers
+        console.error(`Error starting component job processing: ${error instanceof Error ? error.message : String(error)}`);
+        return {
+            jobId,
+            effect: componentName,
+            componentMetadata: {
+                durationInFrames: actualDurationInFrames,
+                fps: actualFps,
+                width: actualWidth,
+                height: actualHeight,
+                complexity: estimatedComplexity
+            }
+        };
+    }
 }
 
 /**

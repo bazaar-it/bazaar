@@ -489,3 +489,237 @@ export class MetricsService {
       .sort((a, b) => b.count - a.count);
   }
 }
+
+/**
+ * Evaluation metrics service for LLM outputs
+ * Used to evaluate the quality and correctness of LLM-generated content
+ */
+
+// Types for evaluation criteria
+export interface EvaluationCriteria {
+  requiredElements?: string[];
+  requiredProperties?: string[];
+  requiredFeatures?: string[];
+  expectedValues?: Record<string, string | string[]>;
+  codeQuality?: boolean;
+}
+
+// Types for evaluation results
+export interface EvaluationResult {
+  score: number;
+  missingElements: string[];
+  missingProperties: string[];
+  missingFeatures: string[];
+  incorrectValues: Array<{key: string, expected: string | string[], actual: string}>;
+  codeQualityIssues?: string[];
+  details: string;
+}
+
+/**
+ * Evaluates an LLM response against provided criteria
+ * @param response The text response from the LLM
+ * @param criteria Evaluation criteria to check against
+ * @returns Evaluation results with score and details
+ */
+export function evaluateResponse(response: string, criteria: EvaluationCriteria): EvaluationResult {
+  const result: EvaluationResult = {
+    score: 0,
+    missingElements: [],
+    missingProperties: [],
+    missingFeatures: [],
+    incorrectValues: [],
+    codeQualityIssues: [],
+    details: '',
+  };
+  
+  let totalPoints = 0;
+  let earnedPoints = 0;
+  
+  // Check for required elements
+  if (criteria.requiredElements && criteria.requiredElements.length > 0) {
+    totalPoints += criteria.requiredElements.length;
+    
+    for (const element of criteria.requiredElements) {
+      if (response.includes(element)) {
+        earnedPoints++;
+      } else {
+        result.missingElements.push(element);
+      }
+    }
+  }
+  
+  // Check for required properties
+  if (criteria.requiredProperties && criteria.requiredProperties.length > 0) {
+    totalPoints += criteria.requiredProperties.length;
+    
+    for (const prop of criteria.requiredProperties) {
+      if (response.includes(prop)) {
+        earnedPoints++;
+      } else {
+        result.missingProperties.push(prop);
+      }
+    }
+  }
+  
+  // Check for required features
+  if (criteria.requiredFeatures && criteria.requiredFeatures.length > 0) {
+    totalPoints += criteria.requiredFeatures.length;
+    
+    for (const feature of criteria.requiredFeatures) {
+      // Features may be described in various ways, so we do a fuzzy check
+      const featureWords = feature.toLowerCase().split(/\s+/);
+      const featurePresent = featureWords.every(word => 
+        response.toLowerCase().includes(word)
+      );
+      
+      if (featurePresent) {
+        earnedPoints++;
+      } else {
+        result.missingFeatures.push(feature);
+      }
+    }
+  }
+  
+  // Check for expected values
+  if (criteria.expectedValues) {
+    const expectedKeys = Object.keys(criteria.expectedValues);
+    totalPoints += expectedKeys.length;
+    
+    for (const key of expectedKeys) {
+      const expectedValue = criteria.expectedValues[key];
+      
+      if (Array.isArray(expectedValue)) {
+        // If we expect any of several values
+        const anyValuePresent = expectedValue.some(val => 
+          response.toLowerCase().includes(val.toLowerCase())
+        );
+        
+        if (anyValuePresent) {
+          earnedPoints++;
+        } else {
+          result.incorrectValues.push({
+            key,
+            expected: expectedValue,
+            actual: 'Not found'
+          });
+        }
+      } else {
+        // Single expected value
+        if (response.toLowerCase().includes(expectedValue.toLowerCase())) {
+          earnedPoints++;
+        } else {
+          result.incorrectValues.push({
+            key,
+            expected: expectedValue,
+            actual: 'Not found'
+          });
+        }
+      }
+    }
+  }
+  
+  // Code quality check (basic)
+  if (criteria.codeQuality) {
+    totalPoints += 5; // 5 possible points for code quality
+    
+    // Check for syntax errors (very basic check)
+    if (!response.includes('undefined') && !response.includes('NaN')) {
+      earnedPoints++;
+    } else {
+      result.codeQualityIssues?.push('Contains undefined or NaN');
+    }
+    
+    // Check for comments
+    if (response.includes('//') || response.includes('/*')) {
+      earnedPoints++;
+    } else {
+      result.codeQualityIssues?.push('Missing comments');
+    }
+    
+    // Check for proper indentation (basic heuristic)
+    if (response.includes('\n  ') || response.includes('\n    ')) {
+      earnedPoints++;
+    } else {
+      result.codeQualityIssues?.push('Improper indentation');
+    }
+    
+    // Check for error handling
+    if (response.includes('try') && response.includes('catch')) {
+      earnedPoints++;
+    } else {
+      result.codeQualityIssues?.push('Missing error handling');
+    }
+    
+    // Check for TypeScript types
+    if (response.includes(': ') && (response.includes('interface') || response.includes('type '))) {
+      earnedPoints++;
+    } else {
+      result.codeQualityIssues?.push('Missing TypeScript types');
+    }
+  }
+  
+  // Calculate final score (normalized to 0-1)
+  result.score = totalPoints > 0 ? earnedPoints / totalPoints : 0;
+  
+  // Generate details
+  result.details = `Evaluation Score: ${result.score.toFixed(2)} (${earnedPoints}/${totalPoints} points)
+Missing Elements: ${result.missingElements.length ? result.missingElements.join(', ') : 'None'}
+Missing Properties: ${result.missingProperties.length ? result.missingProperties.join(', ') : 'None'}
+Missing Features: ${result.missingFeatures.length ? result.missingFeatures.join(', ') : 'None'}
+Incorrect Values: ${result.incorrectValues.length ? result.incorrectValues.map(v => `${v.key}: expected ${v.expected}, not found`).join(', ') : 'None'}
+${criteria.codeQuality ? `Code Quality Issues: ${result.codeQualityIssues?.length ? result.codeQualityIssues.join(', ') : 'None'}` : ''}`;
+  
+  return result;
+}
+
+/**
+ * Evaluates a generated component against specific Remotion requirements
+ * @param componentCode The generated component code
+ * @returns Evaluation results specific to Remotion components
+ */
+export function evaluateRemotionComponent(componentCode: string): EvaluationResult {
+  return evaluateResponse(componentCode, {
+    requiredElements: [
+      'export', 
+      'React', 
+      'Composition', 
+      'useCurrentFrame', 
+      'return'
+    ],
+    requiredProperties: [
+      'width', 
+      'height', 
+      'fps', 
+      'durationInFrames'
+    ],
+    codeQuality: true
+  });
+}
+
+/**
+ * Evaluates an A2A agent response against expected patterns
+ * @param agentResponse The response from the agent
+ * @param expectedActions Expected actions the agent should take
+ * @returns Evaluation results specific to agent responses
+ */
+export function evaluateAgentResponse(agentResponse: string, expectedActions: string[]): EvaluationResult {
+  return evaluateResponse(agentResponse, {
+    requiredElements: expectedActions,
+    requiredFeatures: ['reasoning', 'plan'],
+    codeQuality: false
+  });
+}
+
+/**
+ * Evaluates scene planner output against scene requirements
+ * @param scenePlan The generated scene plan
+ * @param requiredSceneElements Elements that should be present in the scene
+ * @returns Evaluation results for the scene plan
+ */
+export function evaluateScenePlan(scenePlan: string, requiredSceneElements: string[]): EvaluationResult {
+  return evaluateResponse(scenePlan, {
+    requiredElements: requiredSceneElements,
+    requiredFeatures: ['composition', 'animation', 'timing'],
+    codeQuality: false
+  });
+}

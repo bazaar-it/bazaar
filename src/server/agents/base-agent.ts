@@ -25,6 +25,7 @@ import {
 import { TaskManager } from '../services/a2a/taskManager.service'; 
 import { a2aLogger } from '~/lib/logger'; 
 import { OpenAI } from 'openai';
+import { messageBus } from './message-bus';
 
 /**
  * Structure for messages exchanged between agents
@@ -63,9 +64,7 @@ export abstract class BaseAgent {
    * code.
    */
   protected get bus() {
-    // Lazy-load to break circular-import issues.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("./message-bus").messageBus as typeof import("./message-bus").messageBus;
+    return messageBus;
   }
   
   constructor(name: string, taskManager: TaskManager, description?: string, useOpenAI: boolean = false) {
@@ -76,28 +75,28 @@ export abstract class BaseAgent {
     const logContext = { agentName: this.name, module: "agent_constructor" };
 
     if (useOpenAI) {
-      // Use null for taskId in system/initialization logs
-      a2aLogger.info(null, `Agent ${this.name} is configured to use OpenAI. Checking API Key...`, logContext);
+      // Use 'agent_lifecycle' for taskId in system/initialization logs
+      a2aLogger.info("agent_lifecycle", `Agent ${this.name} is configured to use OpenAI. Checking API Key...`, logContext);
       if (process.env.OPENAI_API_KEY) {
         try {
           this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
           });
-          a2aLogger.info(null, `Agent ${this.name}: Successfully initialized OpenAI client with model ${this.modelName}.`, logContext);
+          a2aLogger.info("agent_lifecycle", `Agent ${this.name}: Successfully initialized OpenAI client with model ${this.modelName}.`, logContext);
         } catch (error) {
           const err = error as any;
-          a2aLogger.error(null, `Agent ${this.name}: Error initializing OpenAI client. It will be disabled. Error: ${err?.message || 'Unknown OpenAI init error'}`, { ...logContext, errorDetails: JSON.stringify(err) });
+          a2aLogger.error("agent_lifecycle", `Agent ${this.name}: Error initializing OpenAI client. It will be disabled. Error: ${err?.message || 'Unknown OpenAI init error'}`, { ...logContext, errorDetails: JSON.stringify(err) });
           this.openai = null;
         }
       } else {
-        a2aLogger.warn(null, `Agent ${this.name}: OpenAI usage was requested, but OPENAI_API_KEY is not set. OpenAI features will be disabled.`, logContext);
+        a2aLogger.warn("agent_lifecycle", `Agent ${this.name}: OpenAI usage was requested, but OPENAI_API_KEY is not set. OpenAI features will be disabled.`, logContext);
         this.openai = null;
       }
     } else {
-      a2aLogger.info(null, `Agent ${this.name} initialized without OpenAI integration.`, logContext);
+      a2aLogger.info("agent_lifecycle", `Agent ${this.name} initialized without OpenAI integration.`, logContext);
     }
     // Log agent construction after OpenAI init attempt.
-    a2aLogger.info(null, `Agent ${this.name} constructed. OpenAI initialized: ${!!this.openai}`, { ...logContext, openAIInitialized: !!this.openai });
+    a2aLogger.info("agent_lifecycle", `Agent ${this.name} constructed. OpenAI initialized: ${!!this.openai}`, { ...logContext, openAIInitialized: !!this.openai });
   }
   
   /**

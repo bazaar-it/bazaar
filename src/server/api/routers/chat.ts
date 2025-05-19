@@ -719,6 +719,20 @@ export type SendMessageResult = {
  * is updated to use the streaming API.
  */
 export async function processUserMessageInProject(ctx: any, projectId: string, message: string): Promise<SendMessageResult> {
+    // Set up logging to track the flow of the message through the system
+    const processingId = `msg_${Date.now()}`;
+    const logger = {
+        info: (step: string, details?: Record<string, any>) => {
+            console.log(`[ProcessMessage:${processingId}:${step}]`, details || '');
+        },
+        error: (step: string, error: unknown) => {
+            console.error(`[ProcessMessage:${processingId}:${step}] Error:`, 
+                error instanceof Error ? error.message : String(error));
+        }
+    };
+    
+    logger.info('started', { projectId, messageLength: message.length });
+    
     try {
         // Check project access
         const [project] = await ctx.db
@@ -727,12 +741,16 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
             .where(eq(projects.id, projectId));
 
         if (!project) {
+            logger.error('project_check', new Error('Project not found'));
             throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
         }
 
         if (project.userId !== ctx.session.user.id) {
+            logger.error('access_check', new Error('User does not have access to project'));
             throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this project" });
         }
+        
+        logger.info('access_verified');
 
         // Check if this is the first message in the project
         const existingMessages = await ctx.db
@@ -756,87 +774,98 @@ export async function processUserMessageInProject(ctx: any, projectId: string, m
             message.toLowerCase().includes("make a video");
 
         // Call OpenAI with tools for function calling
-        const llmResp = await openai.chat.completions.create({
-            model: "o4-mini",
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },
-            ],
-            tools: [
-                {
-                    type: "function",
-                    function: {
-                        name: "planVideoScenes",
-                        description: "Analyze user intent to plan multiple scenes with appropriate durations. Use this for any request that describes a video the user wants to create, especially initial prompts from new projects.",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                intent: {
-                                    type: "string",
-                                    description: "The high-level purpose or goal of the video"
-                                },
-                                reasoning: {
-                                    type: "string",
-                                    description: "Explanation of why these scenes were chosen"
-                                },
-                                fps: {
-                                    type: "number",
-                                    description: "Frames per second for the video, typically 30"
-                                },
-                                scenes: {
-                                    type: "array",
-                                    description: "Detailed breakdown of each scene with effects",
-                                    items: {
-                                        type: "object",
-                                        properties: {
-                                            id: {
-                                                type: "string",
-                                                description: "Unique identifier for this scene"
+        logger.info('calling_llm');
+        
+        // Properly initialize llmResp with type
+        let llmResp: any = null;
+        try {
+            llmResp = await openai.chat.completions.create({
+                model: "o4-mini",
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user", content: JSON.stringify({ currentProps: project.props, request: message }) },
+                ],
+                tools: [
+                    {
+                        type: "function",
+                        function: {
+                            name: "planVideoScenes",
+                            description: "Analyze user intent to plan multiple scenes with appropriate durations. Use this for any request that describes a video the user wants to create, especially initial prompts from new projects.",
+                            parameters: {
+                                type: "object",
+                                properties: {
+                                    intent: {
+                                        type: "string",
+                                        description: "The high-level purpose or goal of the video"
+                                    },
+                                    reasoning: {
+                                        type: "string",
+                                        description: "Explanation of why these scenes were chosen"
+                                    },
+                                    fps: {
+                                        type: "number",
+                                        description: "Frames per second for the video, typically 30"
+                                    },
+                                    scenes: {
+                                        type: "array",
+                                        description: "Detailed breakdown of each scene with effects",
+                                        items: {
+                                            type: "object",
+                                            properties: {
+                                                id: {
+                                                    type: "string",
+                                                    description: "Unique identifier for this scene"
+                                                },
+                                                description: {
+                                                    type: "string",
+                                                    description: "What should appear in this scene"
+                                                },
+                                                durationInSeconds: {
+                                                    type: "number",
+                                                    description: "How long this scene should last"
+                                                },
+                                                effectType: {
+                                                    type: "string",
+                                                    description: "Visual effect to use: text, image, background-color, custom, etc."
+                                                }
                                             },
-                                            description: {
-                                                type: "string",
-                                                description: "What should appear in this scene"
-                                            },
-                                            durationInSeconds: {
-                                                type: "number",
-                                                description: "How long this scene should last"
-                                            },
-                                            effectType: {
-                                                type: "string",
-                                                description: "Visual effect to use: text, image, background-color, custom, etc."
-                                            }
-                                        },
-                                        required: ["description", "durationInSeconds", "effectType"]
+                                            required: ["description", "durationInSeconds", "effectType"]
+                                        }
                                     }
-                                }
+                                },
+                                required: ["scenes", "intent"]
+                            }
+                        }
+                    },
+                    {
+                        type: "function",
+                        function: {
+                            name: "generateRemotionComponent",
+                            description: "Request the generation of a new custom Remotion component",
+                            parameters: {
+                                type: "object",
+                                properties: {
+                                    effectDescription: {
+                                        type: "string",
+                                        description: "A detailed description of the visual effect needed",
+                                    },
+                                },
+                                required: ["effectDescription"],
                             },
-                            required: ["scenes", "intent"]
                         }
                     }
-                },
-                {
-                    type: "function",
-                    function: {
-                        name: "generateRemotionComponent",
-                        description: "Request the generation of a new custom Remotion component",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                effectDescription: {
-                                    type: "string",
-                                    description: "A detailed description of the visual effect needed",
-                                },
-                            },
-                            required: ["effectDescription"],
-                        },
-                    },
-                },
-            ],
-            // Force scene planning tool for first-time messages or video requests
-            tool_choice: shouldForcePlanningTool 
-                ? { type: "function", function: { name: "planVideoScenes" } } 
-                : "auto",
-        });
+                ],
+                tool_choice: shouldForcePlanningTool 
+                    ? { type: "function", function: { name: "planVideoScenes" } } 
+                    : "auto"
+            });
+        } catch (llmError) {
+            logger.error('llm_call', llmError);
+            throw new TRPCError({ 
+                code: "INTERNAL_SERVER_ERROR", 
+                message: `Failed to call LLM: ${llmError instanceof Error ? llmError.message : String(llmError)}` 
+            });
+        }
 
         const msgResp = llmResp.choices[0]?.message;
         if (!msgResp) {
@@ -988,7 +1017,7 @@ Your component is being compiled and will be available soon.`;
         
         return { userMessageId: userMessage.id };
     } catch (error) {
-        console.error("processUserMessageSynchronously error:", error);
+        console.error("processUserMessageInProject error:", error);
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({ 
             code: "INTERNAL_SERVER_ERROR", 

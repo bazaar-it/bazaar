@@ -35,6 +35,10 @@ declare module 'winston' {
     adb: (planId: StringOrNull, sceneId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
     component: (planId: StringOrNull, sceneId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
     db: (planId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    
+    // ChatLogger extensions
+    streamLog: (messageId: StringOrNull, message: string, meta?: Record<string, any>) => Logger;
+    tool: (messageId: StringOrNull, toolName: string, message: string, meta?: Record<string, any>) => Logger;
   }
 
   // We don't need to redefine standard methods, but we do need to support null taskId
@@ -226,31 +230,33 @@ if (isServer) {
 }
 
 // Function to initialize the A2A file transport if requested
-export function initializeA2AFileTransport(): void {
-  // Only initialize on server, and prevent duplicate initialization
-  if (!isServer || a2aFileTransportInitialized) {
-    return;
-  }
-
-  // Set a2a log directory from env var or default to /tmp/a2a-logs
-  const a2aLogDir = process.env.A2A_LOG_DIR ?? '/tmp/a2a-logs';
-  
-  console.log(`Initializing A2A logger with directory: ${a2aLogDir}`);
-  
-  // Ensure log directory exists
-  try {
-    if (!fs.existsSync(a2aLogDir)) {
-      fs.mkdirSync(a2aLogDir, { recursive: true });
-      console.log(`Created A2A log directory: ${a2aLogDir}`);
-    }
-  } catch (err) {
-    console.error(`Failed to create log directory ${a2aLogDir}`, err);
+export const initializeA2AFileTransport = (): void => {
+  if (a2aFileTransportInitialized) {
+    return; // Already initialized, do nothing
   }
   
-  // Add DailyRotateFile transport for A2A specific logs if not added yet
+  // Only initialize on server
+  if (!isServer) return;
+  
+  // Check if we're in test mode - use tmp directory to avoid HMR issues
+  const isTestMode = process.env.A2A_TEST_MODE === 'true';
+  
+  // Get A2A logs directory - use tmp directory if in test mode
+  const a2aLogsDir = isTestMode
+    ? path.join(process.cwd(), 'tmp', 'a2a-test-logs', 'a2a')
+    : (process.env.A2A_LOG_DIR || path.join(process.cwd(), 'logs', 'a2a'));
+  
+  // Ensure directory exists
+  if (!fs.existsSync(a2aLogsDir)) {
+    fs.mkdirSync(a2aLogsDir, { recursive: true });
+    console.log(`Created A2A log directory: ${a2aLogsDir}`);
+  }
+  
+  // Add file transport to the logger
   a2aLogger.add(
     new transports.DailyRotateFile({
-      dirname: a2aLogDir,
+      level: process.env.A2A_LOG_LEVEL || 'debug',
+      dirname: a2aLogsDir,
       filename: 'a2a-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',
@@ -259,10 +265,11 @@ export function initializeA2AFileTransport(): void {
     })
   );
   
-  // Mark as initialized to prevent duplicate transports
   a2aFileTransportInitialized = true;
-  console.log(`Added A2A file transport (writing to ${a2aLogDir}) `);
-}
+  
+  a2aLogger.info('system', `A2A File transport initialized in ${isTestMode ? 'TEST' : 'NORMAL'} mode`);
+  console.log(`A2A File transport initialized in ${isTestMode ? 'TEST' : 'NORMAL'} mode with logs at: ${a2aLogsDir}`);
+};
 
 // Allow TaskProcessor to explicitly check if the file transport is initialized
 export function isA2AFileTransportInitialized(): boolean {
@@ -321,6 +328,32 @@ a2aLogger.sseSubscription = (taskId: string | null, message: string, meta: Recor
 
 // Create specialized loggers for different parts of the application
 const chatLogger = logger.child({ module: 'chat' });
+
+// Add chat logger methods
+chatLogger.start = (messageId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedMessageId = messageId || 'unknown-message';
+  logger.debug(normalizedMessageId, `[CHAT:START][MSG:${normalizedMessageId}] ${message}`, { ...meta, chat: true });
+  return chatLogger;
+};
+
+chatLogger.streamLog = (messageId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedMessageId = messageId || 'unknown-message';
+  logger.debug(normalizedMessageId, `[CHAT:STREAM][MSG:${normalizedMessageId}] ${message}`, { ...meta, chat: true });
+  return chatLogger;
+};
+
+chatLogger.tool = (messageId: StringOrNull, toolName: string, message: string, meta: Record<string, any> = {}) => {
+  const normalizedMessageId = messageId || 'unknown-message';
+  logger.debug(normalizedMessageId, `[CHAT:TOOL:${toolName}][MSG:${normalizedMessageId}] ${message}`, { ...meta, chat: true, tool: toolName });
+  return chatLogger;
+};
+
+chatLogger.complete = (messageId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedMessageId = messageId || 'unknown-message';
+  logger.info(normalizedMessageId, `[CHAT:COMPLETE][MSG:${normalizedMessageId}] ${message}`, { ...meta, chat: true });
+  return chatLogger;
+};
+
 const authLogger = logger.child({ module: 'auth' });
 const pageLogger = logger.child({ module: 'page' });
 const apiLogger = logger.child({ module: 'api' });

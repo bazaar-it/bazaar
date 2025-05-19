@@ -369,6 +369,12 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
    - [ ] Add component testing environment in the UI
    - [ ] Implement component marketplace for sharing
 
+## Sprint 24: Stabilize A2A System & Enhance Observability
+
+### HIGH Priority - To Do
+- [ ] S24-1.1: Investigate/Resolve TaskProcessor Churn (`src/server/services/a2a/taskProcessor.service.ts`)
+- [ ] S24-1.2: Centralize/Optimize A2A Logger Config (`src/lib/logger.ts`)
+
 ## Custom Component Pipeline Testing
 
 - [x] Implement integration tests for custom component JSON patch operations

@@ -153,6 +153,8 @@ export interface SceneAnalysis {
   visualStyle: string;
   complexity: number;
   suggestedComponentName: string;
+  isFirstScene?: boolean;
+  isLastScene?: boolean;
 }
 
 /**

@@ -156,7 +156,7 @@ export async function processUserMessage(
             tools: CHAT_TOOLS,
         });
         
-        chatLogger.stream(assistantMessageId, `Stream created`, {
+        chatLogger.streamLog(assistantMessageId, `Stream created`, {
             duration: Date.now() - streamStartTime
         });
         
@@ -167,7 +167,7 @@ export async function processUserMessage(
         const accumulatedToolCalls: Record<number, ToolCallAccumulator> = {};
         
         // Process the stream
-        chatLogger.stream(assistantMessageId, `Starting to process stream chunks`);
+        chatLogger.streamLog(assistantMessageId, `Starting to process stream chunks`);
         for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta;
             
@@ -246,7 +246,7 @@ export async function processUserMessage(
                 
                 // Log every 50 chars to avoid excessive logging
                 if (streamedContent.length % 50 === 0) {
-                    chatLogger.stream(assistantMessageId, `Received content`, {
+                    chatLogger.streamLog(assistantMessageId, `Received content`, {
                         contentLength: streamedContent.length
                     });
                 }
@@ -263,7 +263,7 @@ export async function processUserMessage(
             
             if (finishReason === "tool_calls") {
                 // The model has indicated tool calls are ready for execution
-                chatLogger.stream(assistantMessageId, `Stream finished with reason`, {
+                chatLogger.streamLog(assistantMessageId, `Stream finished with reason`, {
                     reason: finishReason
                 });
                 emitter.next({
@@ -286,7 +286,7 @@ export async function processUserMessage(
                     .where(eq(messages.id, assistantMessageId));
             }
             else if (finishReason === "stop") {
-                chatLogger.stream(assistantMessageId, `Stream finished with reason`, {
+                chatLogger.streamLog(assistantMessageId, `Stream finished with reason`, {
                     reason: finishReason
                 });
                 emitter.next({
@@ -303,10 +303,10 @@ export async function processUserMessage(
                     metrics.streamEnd = Date.now();
                     metrics.totalDuration = metrics.streamEnd - metrics.streamStart;
                     
-                    chatLogger.stream(assistantMessageId, `Stream completed in`, {
+                    chatLogger.streamLog(assistantMessageId, `Stream completed in`, {
                         duration: metrics.totalDuration
                     });
-                    chatLogger.stream(assistantMessageId, `Content chunks`, {
+                    chatLogger.streamLog(assistantMessageId, `Content chunks`, {
                         contentLength: metrics.contentChunksReceived
                     });
                     
@@ -483,10 +483,10 @@ export async function processUserMessage(
             metrics.streamEnd = Date.now();
             metrics.totalDuration = metrics.streamEnd - metrics.streamStart;
             
-            chatLogger.stream(assistantMessageId, `Stream processing failed after`, {
+            chatLogger.streamLog(assistantMessageId, `Stream processing failed after`, {
                 duration: metrics.totalDuration
             });
-            chatLogger.stream(assistantMessageId, `Partial metrics`, {
+            chatLogger.streamLog(assistantMessageId, `Partial metrics`, {
                 contentChunks: metrics.contentChunksReceived,
                 toolCallFragments: metrics.toolCallFragmentsReceived,
                 toolCallsCompleted: metrics.toolCallsCompleted,

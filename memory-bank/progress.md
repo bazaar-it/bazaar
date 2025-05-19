@@ -3039,3 +3039,85 @@ The service is complete with a Redis backend, background processing using BullMQ
 - Requires Redis to be running
 - OpenAI API key needed for deep analysis features
 - Type definitions for some external libraries may need to be installed
+
+## Project Progress
+
+### Current Status (2025-05-19)
+
+#### What Works
+- Title generation service is functioning correctly
+- Workers (BuildWorker and CodeGenWorker) are running but idle
+- Chat interface and message storage in the database
+- Basic project structure and routing 
+- Scene analysis for content complexity and visual elements
+
+#### What's Broken
+- Main video generation pipeline has a fault in scene analyzer error handling
+- Component jobs aren't being generated or queued properly
+- Workers are not finding jobs to process due to pipeline breakdown
+
+#### What's Left to Build
+- Enhanced error handling in scene analyzer and throughout pipeline
+- Improved diagnostic logging for component generation
+- Database integrity validation to ensure proper job creation
+- Worker diagnostics to better understand polling behavior
+
+## Known Issues
+- Scene analyzer encounters an error after successfully analyzing scene content
+- Component generation pipeline breaks at some point after scene analysis
+- Workers are backing off due to not finding any jobs to process
+- The error with UUID `6b10a846-cc92-4a50-8d86-e6c6e6abefbc` needs investigation
+
+## Next Steps
+1. Implement fixes described in `fixes/page-functionality-fix.md`
+2. Test each phase of the pipeline to ensure correct operation
+3. Monitor logs to ensure workers find and process jobs
+4. Retest the full flow from user message to final video generation
+
+## Recent Improvements
+- Identified the breakpoint in the video generation pipeline
+- Documented current status and fix strategy
+- Analyzed worker behavior to confirm they're running correctly
+- Isolated the issue to the post-analysis phase of scene generation
+
+## Recent Fixes and Improvements
+
+### Project Renaming Error Fix - Added Error Handling
+- Fixed issue with project renaming where users would receive a cryptic "TRPCClientError: A project with this title already exists" error
+- Added proper error handling and user-friendly alerts in ProjectEditorRoot.tsx and ChatPanel.tsx
+- Now when attempting to rename a project to a name that already exists, users see a clear error message and the original title is preserved
+
+## System Status
+
+### Normal System (Default)
+- Accessed via `npm run dev`
+- Main project editor: src/app/projects/[id]/edit/page.tsx
+- Uses the standard workflow without agent-to-agent (A2A) architecture
+
+### A2A System (Experimental)
+- Accessed via `scripts/startup-with-a2a.sh`
+- Evaluation dashboard: src/app/test/evaluation-dashboard/page.tsx
+- Uses the agent-to-agent architecture for more complex processing
+
+## 2024-05-23: Chat Logging System Fix
+
+Fixed an issue where the chat streaming was breaking due to missing methods on the chatLogger object. The error was:
+```
+TypeError: _lib_logger__WEBPACK_IMPORTED_MODULE_11__.chatLogger.start is not a function
+```
+
+The fix involved:
+1. Adding the missing methods to the chatLogger: `start`, `streamLog` (renamed from stream), `tool`, and `complete`
+2. Updating the interface in the Winston module declaration to include these methods
+3. Updating references in the chatOrchestration service to use the new `streamLog` method
+
+This resolved the issue with chat functionality being broken when trying to process streaming responses from the LLM.
+
+## 2024-05-22: Project Rename Error Fix
+
+Fixed an issue where users couldn't rename projects when the new title already existed:
+
+1. Added error handling in ProjectEditorRoot.tsx and ChatPanel.tsx to catch TRPC errors for duplicate project names
+2. Added user-friendly error alerts
+3. Restored original title value when error occurs
+4. Error is now properly communicated to the user instead of failing silently

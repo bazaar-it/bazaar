@@ -1,0 +1,69 @@
+--- A2A Testing Started at 2025-05-19T08:26:55.491Z ---
+2025-05-19T08:26:55.491Z - Starting A2A agent verification
+2025-05-19T08:26:55.934Z - Error listing agents: agentResult.result.data.map is not a function
+2025-05-19T08:26:55.934Z - Using predefined agent list: CoordinatorAgent, BuilderAgent, UIAgent, ErrorFixerAgent, R2StorageAgent
+2025-05-19T08:26:55.934Z - Will test 5 agents: CoordinatorAgent, BuilderAgent, UIAgent, ErrorFixerAgent, R2StorageAgent
+2025-05-19T08:26:55.934Z - 
+=== Testing CoordinatorAgent ===
+2025-05-19T08:26:55.934Z - Sending to CoordinatorAgent: "Plan a video about space exploration"
+2025-05-19T08:26:56.255Z - Error from API: {"json":{"message":"Agent CoordinatorAgent not found. Available agents: ","code":-32004,"data":{"code":"NOT_FOUND","httpStatus":404,"stack":"TRPCError: Agent CoordinatorAgent not found. Available agents: \n    at eval (webpack-internal:///(rsc)/./src/server/api/routers/a2a-test.ts:48:19)\n    at resolveMiddleware (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:113:36)\n    at callRecursive (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:154:30)\n    at Object.next (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:160:24)\n    at inputValidatorMiddleware (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/middleware.mjs:66:21)\n    at async callRecursive (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:154:24)\n    at async eval (webpack-internal:///(rsc)/./src/server/api/trpc.ts:93:20)\n    at async callRecursive (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:154:24)\n    at async procedure (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/procedureBuilder.mjs:187:24)\n    at async eval (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/http/resolveResponse.mjs:262:30)\n    at async resolveResponse (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/unstable-core-do-not-import/http/resolveResponse.mjs:295:37)\n    at async fetchRequestHandler (webpack-internal:///(rsc)/./node_modules/@trpc/server/dist/adapters/fetch/fetchRequestHandler.mjs:41:12)\n    at async AppRouteRouteModule.do (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:26:34112)\n    at async AppRouteRouteModule.handle (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/compiled/next-server/app-route.runtime.dev.js:26:41338)\n    at async doRender (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:1513:42)\n    at async DevServer.renderToResponseWithComponentsImpl (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:1915:28)\n    at async DevServer.renderPageComponent (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:2403:24)\n    at async DevServer.renderToResponseImpl (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:2440:32)\n    at async DevServer.pipeImpl (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:1007:25)\n    at async NextNodeServer.handleCatchallRenderRequest (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/next-server.js:305:17)\n    at async DevServer.handleRequestImpl (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/base-server.js:899:17)\n    at async /Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/dev/next-dev-server.js:371:20\n    at async Span.traceAsyncFn (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/trace/trace.js:157:20)\n    at async DevServer.handleRequest (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/dev/next-dev-server.js:368:24)\n    at async invokeRender (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/lib/router-server.js:237:21)\n    at async handleRequest (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/lib/router-server.js:428:24)\n    at async requestHandlerImpl (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/lib/router-server.js:452:13)\n    at async Server.requestListener (/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/node_modules/next/dist/server/lib/start-server.js:158:13)","path":"a2aTest.pingAgent","zodError":null}}}
+2025-05-19T08:26:56.256Z - 
+=== Testing BuilderAgent ===
+2025-05-19T08:26:56.256Z - Sending to BuilderAgent: "Build component for space animation"
+2025-05-19T08:26:57.422Z - Error testing BuilderAgent: Unexpected token < in JSON at position 0
+2025-05-19T08:26:57.423Z - 
+=== Testing UIAgent ===
+2025-05-19T08:26:57.423Z - Sending to UIAgent: "Update interface with new component"
+2025-05-19T08:26:58.022Z - Error testing UIAgent: Unexpected token < in JSON at position 0
+2025-05-19T08:26:58.022Z - 
+=== Testing ErrorFixerAgent ===
+2025-05-19T08:26:58.022Z - Sending to ErrorFixerAgent: "Fix errors in component code"
+2025-05-19T08:26:58.434Z - Error testing ErrorFixerAgent: Unexpected token < in JSON at position 0
+2025-05-19T08:26:58.435Z - 
+=== Testing R2StorageAgent ===
+2025-05-19T08:26:58.435Z - Sending to R2StorageAgent: "Store video assets in R2 bucket"
+2025-05-19T08:26:58.866Z - Error testing R2StorageAgent: Unexpected token < in JSON at position 0
+2025-05-19T08:26:58.866Z - 
+=== Test Summary ===
+2025-05-19T08:26:58.866Z - ❌ CoordinatorAgent: error
+2025-05-19T08:26:58.866Z - ❌ BuilderAgent: error
+2025-05-19T08:26:58.866Z - ❌ UIAgent: error
+2025-05-19T08:26:58.866Z - ❌ ErrorFixerAgent: error
+2025-05-19T08:26:58.867Z - ❌ R2StorageAgent: error
+2025-05-19T08:26:58.867Z - A2A verification FAILED: 5 agents tested
+2025-05-19T08:26:58.867Z - A2A verification complete
+{
+  "success": false,
+  "results": [
+    {
+      "agent": "CoordinatorAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T08:26:56.256Z"
+    },
+    {
+      "agent": "BuilderAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T08:26:57.423Z"
+    },
+    {
+      "agent": "UIAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T08:26:58.022Z"
+    },
+    {
+      "agent": "ErrorFixerAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T08:26:58.435Z"
+    },
+    {
+      "agent": "R2StorageAgent",
+      "status": "error",
+      "success": false,
+      "timestamp": "2025-05-19T08:26:58.866Z"
+    }
+  ]
+}

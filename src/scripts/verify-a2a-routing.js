@@ -1,228 +1,330 @@
 // src/scripts/verify-a2a-routing.js
-// A standalone script to verify agent message routing without environment dependencies
+// Real A2A system test implementation that interacts with the actual A2A endpoints
 
-import { randomUUID } from 'crypto';
+// ES Module version of the verification script
+import { default as nodeFetch } from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Set up logging directory
-const logDir = '/tmp/a2a-logs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+// Get current file directory in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configuration - Read from environment variables or use default
+const API_PORT = process.env.PORT || process.env.NEXT_PUBLIC_PORT || '3000';
+const API_HOST = process.env.API_HOST || 'localhost';
+const API_BASE = `http://${API_HOST}:${API_PORT}/api/trpc`;
+
+console.log(`Using API base URL: ${API_BASE}`);
+// You can override this by setting environment variables:
+// PORT=4000 node src/scripts/verify-a2a-routing.js
+
+// Use tmp directory for logs to avoid HMR issues
+const LOG_DIR = path.join(__dirname, '../../tmp/a2a-test-logs');
+
+// Ensure log directory exists
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// Create a test ID for logging
-const TEST_ID = randomUUID().substring(0, 8);
-const logPrefix = `[A2A-TEST-${TEST_ID}]`;
+// Agents to test and their test messages
+// These can be adjusted based on your actual agent registry
+const AGENTS = [
+  'CoordinatorAgent',
+  'BuilderAgent',
+  'UIAgent',
+  'ErrorFixerAgent',
+  'R2StorageAgent'
+];
 
-// Simple logging function
-function log(message, data = null) {
-  const timestamp = new Date().toISOString();
-  const formattedMessage = `${timestamp} ${logPrefix} ${message}`;
-  console.log(formattedMessage, data ? JSON.stringify(data) : '');
-  
-  try {
-    const logFile = path.join(logDir, `a2a-routing-test-${new Date().toISOString().split('T')[0]}.log`);
-    fs.appendFileSync(logFile, formattedMessage + (data ? ` ${JSON.stringify(data)}` : '') + '\n');
-  } catch (err) {
-    console.error('Error writing to log file:', err);
-  }
-}
-
-// --- Mock implementation of agent system ---
-
-// MockBaseAgent - simplified version of BaseAgent
-class MockBaseAgent {
-  constructor(name) {
-    this.name = name;
-  }
-  
-  getName() {
-    return this.name;
-  }
-  
-  async processMessage(message) {
-    log(`Agent ${this.name} received message: ${message.type}`);
-    return null; // Default: no response
-  }
-}
-
-// MockScenePlannerAgent - responds to CREATE_SCENE_PLAN_REQUEST
-class MockScenePlannerAgent extends MockBaseAgent {
-  constructor() {
-    super('ScenePlannerAgent');
-  }
-  
-  async processMessage(message) {
-    log(`ScenePlannerAgent processing message: ${message.type}`);
-    
-    if (message.type === 'CREATE_SCENE_PLAN_REQUEST') {
-      log('ScenePlannerAgent generating scene plan response');
-      return {
-        id: `response-${randomUUID()}`,
-        type: 'SCENE_PLAN_RESPONSE',
-        sender: this.name,
-        recipient: message.sender,
-        taskId: message.taskId,
-        payload: {
-          scenePlans: {
-            intent: 'Test scene plan for routing verification',
-            scenes: [
-              { id: 'scene-1', type: 'custom', description: 'Test scene 1', duration: 5000 },
-              { id: 'scene-2', type: 'custom', description: 'Test scene 2', duration: 7000 }
-            ]
-          }
-        }
-      };
-    }
-    
-    return await super.processMessage(message);
-  }
-}
-
-// Mock agent registry
-const mockAgentRegistry = {
-  'ScenePlannerAgent': new MockScenePlannerAgent(),
-  'CoordinatorAgent': new MockBaseAgent('CoordinatorAgent'),
-  'BuilderAgent': new MockBaseAgent('BuilderAgent')
+// Test messages for each agent
+const TEST_MESSAGES = {
+  'CoordinatorAgent': 'Plan a video about space exploration',
+  'BuilderAgent': 'Build component for space animation',
+  'UIAgent': 'Update interface with new component',
+  'ErrorFixerAgent': 'Fix errors in component code',
+  'R2StorageAgent': 'Store video assets in R2 bucket',
+  // Add fallback for any agent not specifically listed
+  'default': 'Hello, this is a test message from the A2A verification script'
 };
 
-// Mock TaskProcessor that can route messages
-class MockTaskProcessor {
-  constructor() {
-    this.id = `task-processor-${randomUUID().substring(0, 8)}`;
-    this.agents = Object.values(mockAgentRegistry);
+// Create a log file for the test
+const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+const logFile = path.join(LOG_DIR, `a2a-test-${timestamp}.log`);
+fs.writeFileSync(logFile, `--- A2A Testing Started at ${new Date().toISOString()} ---\n`);
+
+/**
+ * Log helper - writes to console and log file
+ * @param {string} message - The message to log
+ * @param {any} [data] - Optional data to include in log file (but not console)
+ */
+const log = (message, data = null) => {
+  console.log(message);
+  let logMessage = `${new Date().toISOString()} - ${message}`;
+  
+  // Add data as JSON if provided
+  if (data) {
+    try {
+      logMessage += `\n${JSON.stringify(data, null, 2)}`;
+    } catch (err) {
+      logMessage += `\n[Error serializing data: ${err.message}]`;
+    }
   }
   
-  async routeMessage(message) {
-    const targetAgentName = message.recipient;
-    log(`Routing message to: ${targetAgentName}`, {
-      messageType: message.type,
-      sender: message.sender,
-      taskId: message.taskId
-    });
-    
-    // First try global registry (recommended approach)
-    const agent = mockAgentRegistry[targetAgentName];
-    
-    if (!agent) {
-      log(`❌ AGENT NOT FOUND: ${targetAgentName}`);
-      return null;
-    }
-    
-    try {
-      log(`✓ Agent found: ${targetAgentName}, sending message`);
-      return await agent.processMessage(message);
-    } catch (error) {
-      log(`❌ ERROR processing message: ${error.message}`);
-      return null;
-    }
-  }
-}
+  fs.appendFileSync(logFile, logMessage + '\n');
+};
 
-// --- Test Script Execution ---
-
-log('Starting A2A routing verification test');
-
-async function runTest() {
+/**
+ * Test a specific agent with a sample message
+ * @param {string} agentName - Name of the agent to test
+ * @returns {Promise<{taskId: string, status: string, statusMessage: string}|null>}
+ */
+async function testAgent(agentName) {
   try {
-    // Create the task processor
-    log('Creating mock task processor');
-    const processor = new MockTaskProcessor();
-    log(`Created processor with ID: ${processor.id}`);
-
-    // Log agents in registry
-    log(`Available agents: ${Object.keys(mockAgentRegistry).join(', ')}`);
+    log(`\n=== Testing ${agentName} ===`);
     
-    // Create a test message for the ScenePlannerAgent
-    const testMessage = {
-      id: `test-message-${randomUUID()}`,
-      type: 'CREATE_SCENE_PLAN_REQUEST',
-      sender: 'TestScript',
-      recipient: 'ScenePlannerAgent',
-      taskId: `test-task-${TEST_ID}`,
-      payload: {
-        taskId: `test-task-${TEST_ID}`,
-        prompt: 'Create a test scene plan',
-        message: {
-          createdAt: new Date().toISOString(),
-          id: `message-${randomUUID()}`,
-          parts: [{ 
-            text: 'Create a test scene plan', 
-            type: 'text' 
-          }]
-        }
+    // Use imported fetch function
+    const fetch = nodeFetch;
+    
+    // Prepare the request payload
+    const messageText = TEST_MESSAGES[agentName] || TEST_MESSAGES.default;
+    const payload = {
+      json: {
+        agentName,
+        message: messageText
       }
     };
     
-    log(`Created test message with ID: ${testMessage.id}`, { 
-      messageType: testMessage.type,
-      recipient: testMessage.recipient
+    log(`Sending to ${agentName}: "${messageText}"`);
+    
+    // Send test message to agent
+    const response = await fetch(`${API_BASE}/a2aTest.pingAgent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
     
-    // Test routing via the TaskProcessor
-    log('Attempting to route message to ScenePlannerAgent...');
-    const response = await processor.routeMessage(testMessage);
+    const result = await response.json();
     
-    if (response) {
-      log(`✅ SUCCESS: Received response from ${response.sender}`, {
-        responseType: response.type,
-        responseTo: response.recipient,
-        taskId: response.taskId
-      });
-      
-      if (response.payload && response.payload.scenePlans) {
-        log('Scene plan received:', {
-          intent: response.payload.scenePlans.intent,
-          sceneCount: response.payload.scenePlans.scenes.length
-        });
-      }
-    } else {
-      log('❌ FAILURE: No response received');
+    // Handle error response from API
+    if (result.error) {
+      log(`Error from API: ${result.error.message || JSON.stringify(result.error)}`);
+      return null;
     }
     
-    return {
-      success: !!response,
-      processor: {
-        id: processor.id,
-        agentCount: processor.agents.length
-      },
-      message: {
-        id: testMessage.id,
-        type: testMessage.type,
-        recipient: testMessage.recipient
-      },
-      response: response ? {
-        id: response.id,
-        type: response.type,
-        sender: response.sender,
-        hasScenePlans: !!(response.payload && response.payload.scenePlans),
-        scenesCount: response.payload?.scenePlans?.scenes?.length || 0
-      } : null
+    // Extract task ID from response
+    const taskId = result.result?.data?.taskId;
+    if (!taskId) {
+      log(`Error: No taskId returned from API response`, result);
+      return null;
+    }
+    
+    log(`Task created: ${taskId}`);
+    
+    // Poll for task status
+    let status = 'submitted';
+    let statusMessage = '';
+    let attempts = 0;
+    let artifacts = [];
+    
+    // Poll for up to 30 seconds
+    while (['submitted', 'working'].includes(status) && attempts < 30) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      try {
+        const statusResponse = await fetch(
+          `${API_BASE}/a2aTest.getTaskStatus?input=${encodeURIComponent(JSON.stringify({ taskId }))}`,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+        
+        const statusResult = await statusResponse.json();
+        
+        // Check for API errors
+        if (statusResult.error) {
+          log(`Error checking status: ${statusResult.error.message || JSON.stringify(statusResult.error)}`);
+          attempts++;
+          continue;
+        }
+        
+        // Extract status data
+        const data = statusResult.result?.data;
+        if (data) {
+          const newStatus = data.status;
+          let newMessage = '';
+          
+          // Extract message text depending on message format
+          if (data.message?.parts && data.message.parts.length > 0) {
+            newMessage = data.message.parts[0].text || '';
+          } else if (data.message?.text) {
+            newMessage = data.message.text;
+          } else if (typeof data.message === 'string') {
+            newMessage = data.message;
+          }
+          
+          // Track artifacts if present
+          if (data.artifacts && data.artifacts.length > 0) {
+            artifacts = data.artifacts;
+          }
+          
+          // Only log if something changed
+          if (status !== newStatus || statusMessage !== newMessage) {
+            status = newStatus;
+            statusMessage = newMessage;
+            log(`Status: ${status} - ${statusMessage || 'No message'}`);
+            
+            // Log artifacts if they exist
+            if (artifacts.length > 0) {
+              log(`Artifacts received: ${artifacts.length}`, artifacts);
+            }
+          }
+        }
+      } catch (error) {
+        log(`Error polling status: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      attempts++;
+    }
+    
+    if (attempts >= 30 && ['submitted', 'working'].includes(status)) {
+      log(`Warning: Test timeout for ${agentName} after 30 seconds`);  
+    }
+    
+    return { 
+      taskId, 
+      status, 
+      statusMessage,
+      artifacts,
+      success: status === 'completed'
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    log(`❌ ERROR: ${errorMessage}`);
-    
-    return {
-      success: false,
-      error: errorMessage,
-      stack: errorStack
-    };
+    log(`Error testing ${agentName}: ${errorMessage}`);
+    return null;
   }
 }
 
-// Run the test
-runTest()
+// Check if a specific agent was requested as command line arg
+const requestedAgent = process.argv[2];
+
+/**
+ * Main test function to verify all A2A agents
+ * @returns {Promise<{success: boolean, results: Array}>}
+ */
+async function runTests() {
+  log('Starting A2A agent verification');
+  const fetch = nodeFetch;
+  const results = [];
+  let availableAgents = [];
+  
+  // Try to list available agents first
+  try {
+    const agentResponse = await fetch(`${API_BASE}/a2aTest.listAgents`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const agentResult = await agentResponse.json();
+    if (agentResult.result && agentResult.result.data) {
+      availableAgents = agentResult.result.data.map(a => a.name);
+      log(`Available agents from API: ${availableAgents.join(', ')}`);
+      
+      // Optional: update AGENTS array with actual available agents
+      if (availableAgents.length > 0 && !requestedAgent) {
+        log('Using agents returned from API for testing');
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log(`Error listing agents: ${errorMessage}`);
+  }
+  
+  // Determine which agents to test
+  let agentsToTest = [];
+  
+  if (requestedAgent) {
+    // If a specific agent was requested, prioritize testing that one
+    agentsToTest = [requestedAgent];
+    log(`Testing requested agent: ${requestedAgent}`);
+  } else {
+    // If API returned agents, use those that match our test config
+    if (availableAgents.length > 0) {
+      agentsToTest = AGENTS.filter(agent => availableAgents.includes(agent));
+      log(`Testing ${agentsToTest.length} agents from predefined list`);
+    } else {
+      // Fallback to our predefined list
+      agentsToTest = AGENTS;
+      log(`Using predefined agent list: ${AGENTS.join(', ')}`);
+    }
+  }
+  
+  if (agentsToTest.length === 0) {
+    log(`Error: No agents to test`);
+    return { success: false, results: [] };
+  }
+  
+  // Test each agent
+  log(`Will test ${agentsToTest.length} agents: ${agentsToTest.join(', ')}`);
+  
+  let allSuccess = true;
+  
+  for (const agent of agentsToTest) {
+    const result = await testAgent(agent);
+    
+    if (result) {
+      results.push({ 
+        agent, 
+        ...result,
+        timestamp: new Date().toISOString()
+      });
+      
+      log(`${agent} test complete. Final status: ${result.status}`);
+      
+      // Track overall success
+      if (result.status !== 'completed') {
+        allSuccess = false;
+      }
+    } else {
+      results.push({ 
+        agent, 
+        status: 'error',
+        success: false,
+        timestamp: new Date().toISOString() 
+      });
+      allSuccess = false;
+    }
+  }
+  
+  // Summarize results
+  log('\n=== Test Summary ===');
+  results.forEach(result => {
+    const icon = result.success ? '✅' : '❌';
+    log(`${icon} ${result.agent}: ${result.status || 'error'}`);
+  });
+  
+  log(`A2A verification ${allSuccess ? 'PASSED' : 'FAILED'}: ${results.length} agents tested`);
+  
+  return {
+    success: allSuccess,
+    results
+  };
+}
+
+// Execute main function
+runTests()
   .then(result => {
-    log('TEST COMPLETE:', result);
+    log('A2A verification complete', result);
     
     if (result.success) {
-      console.log('\n✅ TEST PASSED: Agent routing is working correctly!');
+      console.log('\n✅ A2A TEST PASSED: All agents responded successfully!');
     } else {
-      console.log('\n❌ TEST FAILED: Agent routing is not working correctly.');
+      console.log('\n❌ A2A TEST FAILED: Some agents failed to respond correctly.');
     }
+    
+    // Write results to a JSON file for reference
+    const resultsPath = path.join(LOG_DIR, `a2a-test-results-${timestamp}.json`);
+    fs.writeFileSync(resultsPath, JSON.stringify(result, null, 2));
+    console.log(`\nTest results saved to ${resultsPath}`);
+    console.log(`Log file: ${logFile}`);
     
     // Exit after a delay to allow logs to flush
     setTimeout(() => process.exit(result.success ? 0 : 1), 500);
