@@ -18,6 +18,8 @@ export class MessageBus {
   private agents: Map<string, BaseAgent> = new Map();
   // For direct subscriptions to messages for a specific agent (e.g., for logging or specific flows)
   private agentSubscribers: Map<string, ((message: AgentMessage) => Promise<void>)[]> = new Map();
+  // Dead Letter Queue for messages that repeatedly fail processing
+  private deadLetterQueue: AgentMessage[] = [];
 
   private constructor() {}
 
@@ -37,6 +39,24 @@ export class MessageBus {
       lowercaseName: agentNameLower,
       module: "message_bus_registration"
     });
+  }
+
+  /**
+   * Retrieve the current Dead Letter Queue contents
+   */
+  getDeadLetterQueue(): AgentMessage[] {
+    return this.deadLetterQueue;
+  }
+
+  /**
+   * Attempt to reprocess all messages in the Dead Letter Queue
+   */
+  async retryDeadLetterQueue(): Promise<void> {
+    const messages = [...this.deadLetterQueue];
+    this.deadLetterQueue = [];
+    for (const msg of messages) {
+      await this.publish(msg);
+    }
   }
 
   getAgent(name: string): BaseAgent | undefined {
@@ -106,8 +126,8 @@ export class MessageBus {
           await this.publish(newResponseMessage);
         }
       } catch (error: any) {
-        a2aLogger.error(taskId, `MessageBus: Error processing message by agent.`, { 
-          messageId: message.id, 
+        a2aLogger.error(taskId, `MessageBus: Error processing message by agent.`, {
+          messageId: message.id,
           recipientAgentName: recipientAgent.getName(),
           recipientAgentNameLower,
           errorMessage: error.message,
@@ -117,9 +137,10 @@ export class MessageBus {
         await db.update(agentMessages)
           .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: String(error) } })
           .where(eq(agentMessages.id, message.id));
+        this.deadLetterQueue.push(message);
       }
     } else {
-      a2aLogger.warn(taskId, `MessageBus: No agent registered for recipient.`, { 
+      a2aLogger.warn(taskId, `MessageBus: No agent registered for recipient.`, {
         messageId: message.id, 
         recipient: message.recipient,
         recipientLowercase: recipientAgentNameLower,
@@ -129,6 +150,7 @@ export class MessageBus {
       await db.update(agentMessages)
         .set({ status: "failed", processedAt: new Date(), payload: { ...(message.payload as object), error: `Recipient not found: ${message.recipient}` } })
         .where(eq(agentMessages.id, message.id));
+      this.deadLetterQueue.push(message);
     }
 
     // Notify any direct subscribers for this agent (e.g., for logging or other side effects)
