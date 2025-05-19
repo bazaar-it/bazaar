@@ -1,8 +1,18 @@
 // src/scripts/log-agent/logger-transport.ts
 import Transport from 'winston-transport';
 import axios from 'axios';
-// import { LogEntry, LogBatch } from './types.js'; // Temporarily comment out LogBatch
-import { type LogEntry } from './types.js'; // Keep LogEntry if needed by the class
+
+// Define types locally instead of importing from the problematic types.js
+export interface LogEntry {
+  timestamp: string;
+  level: 'error' | 'warn' | 'info' | 'debug' | 'silly';
+  message: string;
+  source?: string;
+  taskId?: string;
+  agentId?: string;
+  runId: string;
+  metadata?: Record<string, any>;
+}
 
 // Define LogBatch locally for now to remove the import dependency
 interface TempLogBatch {
