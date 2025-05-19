@@ -10,6 +10,7 @@ export class LifecycleManager {
   private static instance: LifecycleManager;
   private agents: Map<string, AgentInfo> = new Map();
   private monitorTimer: NodeJS.Timeout | null = null;
+  private defaultUnresponsiveTimeout = 30000;
 
   private constructor() {}
 
@@ -41,7 +42,17 @@ export class LifecycleManager {
     }
   }
 
-  getAgentStatuses(): { name: string; state: AgentLifecycleState; lastHeartbeat: number }[] {
+  private checkHealth(timeout: number): void {
+    const now = Date.now();
+    for (const [name, info] of this.agents) {
+      if (now - info.lastHeartbeat > timeout && info.state !== AgentLifecycleState.Error) {
+        info.state = AgentLifecycleState.Error;
+      }
+    }
+  }
+
+  getAgentStatuses(timeout: number = this.defaultUnresponsiveTimeout): { name: string; state: AgentLifecycleState; lastHeartbeat: number }[] {
+    this.checkHealth(timeout);
     return Array.from(this.agents.entries()).map(([name, info]) => ({
       name,
       state: info.state,
@@ -52,12 +63,7 @@ export class LifecycleManager {
   startMonitoring(interval = 10000): void {
     if (this.monitorTimer) return;
     this.monitorTimer = setInterval(() => {
-      const now = Date.now();
-      for (const [name, info] of this.agents) {
-        if (now - info.lastHeartbeat > interval * 2 && info.state !== AgentLifecycleState.Error) {
-          info.state = AgentLifecycleState.Error;
-        }
-      }
+      this.checkHealth(interval * 2);
     }, interval);
   }
 

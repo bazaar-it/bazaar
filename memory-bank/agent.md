@@ -90,6 +90,13 @@ The system uses Server-Sent Events (SSE) to provide real-time updates:
 3. Message bus forwards events to SSE manager
 4. Client receives updates and updates UI components accordingly
 
+## Agent Health Monitoring
+
+Agents send periodic heartbeats to the `LifecycleManager`. When a heartbeat is
+missed beyond a configurable threshold, the agent state transitions to `error`.
+You can query `/api/a2a.getAgentStatuses` to see the latest heartbeat time and
+state for each registered agent.
+
 ## Integration with Existing Services
 
 The A2A system integrates with existing Bazaar-Vid services:
