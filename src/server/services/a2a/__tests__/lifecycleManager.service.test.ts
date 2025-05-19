@@ -29,4 +29,14 @@ describe('LifecycleManager', () => {
     agent.stop();
     manager.stopMonitoring();
   });
+
+  it('marks agent as error when heartbeat is missed', async () => {
+    const agent = new MockAgent('Missed', tm);
+    agent.heartbeatIntervalMs = 10000; // large interval so no heartbeat occurs
+    manager.registerAgent(agent);
+    await agent.init();
+    await new Promise(r => setTimeout(r, 20));
+    const status = manager.getAgentStatuses(10)[0];
+    expect(status.state).toBe(AgentLifecycleState.Error);
+  });
 });
