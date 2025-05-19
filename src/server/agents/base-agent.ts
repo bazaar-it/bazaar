@@ -27,6 +27,15 @@ import { a2aLogger } from '~/lib/logger';
 import { OpenAI } from 'openai';
 import { messageBus } from './message-bus';
 
+export enum AgentLifecycleState {
+  Initializing = 'initializing',
+  Ready = 'ready',
+  Processing = 'processing',
+  Idle = 'idle',
+  Stopping = 'stopping',
+  Error = 'error'
+}
+
 /**
  * Structure for messages exchanged between agents
  */
@@ -56,6 +65,7 @@ export abstract class BaseAgent {
   protected openai: OpenAI | null = null;
   protected modelName: string = 'gpt-4o-mini';
   protected temperature: number = 0.7;
+  protected lifecycleState: AgentLifecycleState = AgentLifecycleState.Initializing;
 
   /**
    * Central MessageBus accessor for all agents.  Having a getter avoids each
@@ -96,7 +106,32 @@ export abstract class BaseAgent {
       a2aLogger.info("agent_lifecycle", `Agent ${this.name} initialized without OpenAI integration.`, logContext);
     }
     // Log agent construction after OpenAI init attempt.
-    a2aLogger.info("agent_lifecycle", `Agent ${this.name} constructed. OpenAI initialized: ${!!this.openai}`, { ...logContext, openAIInitialized: !!this.openai });
+    a2aLogger.info(
+      "agent_lifecycle",
+      `Agent ${this.name} constructed. OpenAI initialized: ${!!this.openai}`,
+      { ...logContext, openAIInitialized: !!this.openai }
+    );
+    this.lifecycleState = AgentLifecycleState.Initializing;
+  }
+
+  async init(): Promise<void> {
+    this.lifecycleState = AgentLifecycleState.Ready;
+  }
+
+  async start(): Promise<void> {
+    this.lifecycleState = AgentLifecycleState.Processing;
+  }
+
+  async stop(): Promise<void> {
+    this.lifecycleState = AgentLifecycleState.Stopping;
+  }
+
+  async destroy(): Promise<void> {
+    this.lifecycleState = AgentLifecycleState.Stopping;
+  }
+
+  getStatus(): AgentLifecycleState {
+    return this.lifecycleState;
   }
   
   /**
