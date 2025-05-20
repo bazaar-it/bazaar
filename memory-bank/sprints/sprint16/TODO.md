@@ -1,4 +1,4 @@
-// /memory-bank/sprints/sprint16/TODO.md
+//memory-bank/sprints/sprint16/TODO.md
 
 # Sprint 16 TODO List
 

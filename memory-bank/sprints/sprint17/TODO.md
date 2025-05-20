@@ -1,4 +1,4 @@
-# Sprint 17 TODO: Pipeline Benchmarking Foundation
+//memory-bank/sprints/sprint17/TODO.md
 
 -   [ ] Define JSON schema for Test Scenarios. # Still need formal schema if desired, but format is defined.
 -   [x] Create `/memory-bank/benchmarking/scenarios/` directory.
