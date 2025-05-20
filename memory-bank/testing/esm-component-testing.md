@@ -183,7 +183,11 @@ describe('CustomScene', () => {
 
 ## 5. Running Tests
 
-- Run all tests: `npm test` or `yarn test`
-- Run specific test file: `npm test -- src/server/workers/__tests__/buildCustomComponent.test.ts`
+General test commands are documented in [tests.md](../../tests.md).
 
-Remember to commit this file and update it as testing strategies evolve or new patterns emerge.
+- **Run all tests:** `npm test`
+- **Type check:** `npm run type-check`
+- **Lint:** `npm run lint`
+- **Run specific test file:** `npm test -- src/server/workers/__tests__/buildCustomComponent.test.ts`
+
+Testing output should be captured in [`test-results.md`](./test-results.md) for future reference. Remember to update this guide as strategies evolve.

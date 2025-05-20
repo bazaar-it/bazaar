@@ -101,11 +101,11 @@ We will adopt a multi-layered testing strategy:
 
 ## Implementation Checklist
 
--   [ ] **Build Verification Tests (`src/server/workers/__tests__/`):**
-    -   [ ] Test for valid ESM output from `buildCustomComponent.ts`.
-    -   [ ] Test dynamic `import()` of the built ESM.
-    -   [ ] Assert `module.default` is a function.
-    -   [ ] Verify `react` & `remotion` are external (not bundled).
+-   [x] **Build Verification Tests (`src/server/workers/__tests__/`):**
+    -   [x] Test for valid ESM output from `buildCustomComponent.ts`.
+    -   [x] Test dynamic `import()` of the built ESM.
+    -   [x] Assert `module.default` is a function.
+    -   [x] Verify `react` & `remotion` are external (not bundled).
 -   [ ] **`useRemoteComponent` Tests (`src/hooks/__tests__/`):**
     -   [ ] Mock dynamic `import(url)`.
     -   [ ] Test `<Suspense>` fallback rendering.
@@ -115,10 +115,10 @@ We will adopt a multi-layered testing strategy:
 -   [ ] **`CustomScene` Tests (`src/remotion/components/scenes/__tests__/`):**
     -   [ ] Verify integration with mocked lazy `useRemoteComponent`.
     -   [ ] Test scene-level `<Suspense>` and `<ErrorBoundary>`.
--   [ ] **Documentation (`memory-bank/testing/esm-component-testing.md`):**
-    -   [ ] Document how to run new tests.
-    -   [ ] Document mocking strategies for dynamic `import()`.
-    -   [ ] Document testing patterns for `React.lazy` & `<Suspense>`.
+-   [x] **Documentation (`memory-bank/testing/esm-component-testing.md`):**
+    -   [x] Document how to run new tests.
+    -   [x] Document mocking strategies for dynamic `import()`.
+    -   [x] Document testing patterns for `React.lazy` & `<Suspense>`.
 -   [ ] **Configuration & CI:**
     -   [ ] Update Jest config if necessary (e.g., for ESM, `moduleNameMapper`).
     -   [ ] Integrate new test suites into CI pipeline.
