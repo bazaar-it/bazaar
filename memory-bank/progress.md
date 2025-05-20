@@ -11,6 +11,10 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 21, 2025: ESM Migration Planning Started**
+- Detailed tickets written for Sprint 25 to convert dynamic components to ES modules.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for more.
+
 **May 20, 2025: Database Schema Corrected - Migration `0009` Applied**
 - Successfully resolved a `TRPCClientError` caused by a missing `last_successful_step` column in the `bazaar-vid_custom_component_job` table. Migration `0009_smart_the_twelve.sql` was applied after a workaround for conflicting older migrations (moving them and using temporary empty placeholders).
 - The database schema is now up-to-date with the application code, unblocking features dependent on the new columns.
