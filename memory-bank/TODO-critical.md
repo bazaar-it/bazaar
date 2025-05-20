@@ -1,3 +1,4 @@
+//memory-bank/TODO-critical.md
 ### 2. Fix Component Generation:
 - [x] **Debug Missing TSX Code Error:**
   - [x] Added detailed logging to the build worker to diagnose why it thinks tsxCode is missing

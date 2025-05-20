@@ -1,4 +1,4 @@
-// /memory-bank/sprints/sprint14/progress.md
+//memory-bank/sprints/sprint14/progress.md
 # Sprint 14 Progress Update (as of current session)
 
 ## Overall Goal: GallerySwipe Ad MVP - End-to-End Pipeline Completion

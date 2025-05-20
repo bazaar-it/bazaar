@@ -1,3 +1,4 @@
+//memory-bank/scripts/progress.md
 # Scripts Reorganization Progress
 
 ## Summary of Changes
