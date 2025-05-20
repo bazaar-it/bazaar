@@ -1,5 +1,16 @@
 # Test Results and Findings
 
+## 2025-05-25 ESM Output Verification
+
+### Summary
+The new server-side tests added in Sprint 25 verify that the build pipeline can
+produce valid ESM modules. Dynamic `import()` successfully loads the mocked
+output and confirms the `default` export is a function. External dependencies
+such as `react` and `remotion` are not bundled.
+
+### Outcome
+The ESM verification suite passes locally using `npm test src/server/workers/__tests__/buildComponent.test.ts`.
+
 ## 2025-05-14 Tests for Custom Component Integration
 
 ### Summary

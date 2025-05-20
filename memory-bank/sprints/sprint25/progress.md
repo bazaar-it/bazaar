@@ -8,6 +8,12 @@
     - Created `src/remotion/components/scenes/__tests__/CustomScene.test.tsx` with `it.todo` placeholders for future tests covering loading states, error handling, and refresh mechanisms with React Testing Library.
   - This work establishes the foundational structure for testing the ESM migration as outlined in `BAZAAR-260-testing-verification-updates.md`.
 
+## May 25, 2025
+- **BAZAAR-260: Documentation & Checklist Updates**
+  - Marked build verification tests as complete in `BAZAAR-260-testing-verification-updates.md`.
+  - Expanded `esm-component-testing.md` with explicit commands for running tests, type checking, and linting.
+  - Updated sprint TODO to reflect progress on BAZAAR-260.
+
 ## May 23, 2025
 - **Comprehensive Documentation Update for ESM Migration Tickets:**
   - Completed a thorough review and update of the markdown files for BAZAAR tickets 255, 256, 257, and 258.

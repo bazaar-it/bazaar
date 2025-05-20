@@ -17,6 +17,10 @@ work. When entries grow beyond that, move older sections to
 - This lays the groundwork for comprehensive testing of the ESM migration.
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
 
+**May 25, 2025: BAZAAR-260 Docs Updated**
+- Checklist and testing documentation updated for ESM migration.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md).
+
 **May 21, 2025: ESM Migration Planning Started**
 - Detailed tickets written for Sprint 25 to convert dynamic components to ES modules.
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md) for more.
