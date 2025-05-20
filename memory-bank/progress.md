@@ -11,6 +11,12 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
+- Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
+- Created placeholder client-side test file (`CustomScene.test.tsx`) and noted existing `useRemoteComponent.test.tsx`.
+- This lays the groundwork for comprehensive testing of the ESM migration.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
+
 **May 21, 2025: ESM Migration Planning Started**
 - Detailed tickets written for Sprint 25 to convert dynamic components to ES modules.
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md) for more.
@@ -34,6 +40,7 @@ work. When entries grow beyond that, move older sections to
 - *Details can be found in the relevant sprint log (e.g., [Sprint 24](./sprints/sprint24/progress.md) or `progress-history.md`).*
 
 ## Sprint Progress Index
+- [Sprint 25](./sprints/sprint25/progress.md)
 - [Sprint 24](./sprints/sprint24/progress.md)
 - [Sprint 20](./sprints/sprint20/progress.md)
 - [Sprint 17](./sprints/sprint17/progress.md)
