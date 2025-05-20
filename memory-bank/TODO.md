@@ -1,3 +1,5 @@
+//memory-bank/TODO.md
+This file collects high-level TODO items. Sprint-specific TODOs live in `/memory-bank/sprints/<sprint>/TODO.md`.
 # TODO Items
 
 ## Sprint 8: Comprehensive Test Suite Implementation

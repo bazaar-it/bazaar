@@ -1,4 +1,4 @@
-// /memory-bank/sprints/sprint14/TODO.md
+//memory-bank/sprints/sprint14/TODO.md
 # Sprint 14 - TODO List
 
 ## Testing Infrastructure (Ticket 14.1)

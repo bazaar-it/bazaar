@@ -1,3 +1,32 @@
+//memory-bank/progress.md
+# Project Progress Overview
+
+This file serves as the entry point for progress updates.
+For details on how to maintain these logs see [progress-system.md](./progress-system.md).
+Each sprint keeps its own `progress.md` under `/memory-bank/sprints/<sprint>/`.
+Add short highlights here and detailed notes in the sprint files.
+
+The first **200 lines** of this file should remain a concise summary of recent
+work. When entries grow beyond that, move older sections to
+`./progress-history.md` so the main file stays focused.
+
+## Sprint Progress Index
+- [Sprint 24](./sprints/sprint24/progress.md)
+- [Sprint 20](./sprints/sprint20/progress.md)
+- [Sprint 17](./sprints/sprint17/progress.md)
+- [Sprint 16](./sprints/sprint16/progress.md)
+- [Sprint 14](./sprints/sprint14/progress.md)
+- [Sprint 12](./sprints/sprint12/12-progress.md)
+
+### Other Logs
+- [A2A System](./a2a/progress.md)
+- [Scripts Reorganization](./scripts/progress.md)
+- [Evaluation Framework](./progress/eval-framework-progress.md)
+- [Metrics](./evaluation/progress.md)
+
+---
+
+## Legacy Progress Log
 # Current Progress Status
 
 ## Message Bus Integration (May 18, 2025)

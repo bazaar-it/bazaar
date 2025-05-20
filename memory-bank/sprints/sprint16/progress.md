@@ -1,4 +1,4 @@
-// /memory-bank/sprints/sprint16/progress.md
+//memory-bank/sprints/sprint16/progress.md
 
 # Sprint 16 Progress Log
 
