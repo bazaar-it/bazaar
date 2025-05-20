@@ -17,7 +17,9 @@ import { SimpleColoredShape } from './SimpleColoredShape';
 
 // Common interface for all scene components
 export interface SceneProps {
+  id: string; // Standard Remotion prop
   data: Record<string, unknown>;
+  defaultProps: unknown; // Standard Remotion prop, often specific to the composition
   children?: ReactNode | ReactNode[];
 }
 

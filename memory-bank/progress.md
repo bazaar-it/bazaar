@@ -11,6 +11,31 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 21, 2025: CustomScene Component Tested & Validated**
+- Successfully tested the rewritten CustomScene component using terminal-based testing tools
+- Fixed import path issues with tilde (~) alias resolution when testing components
+- Documented testing process and results in `/memory-bank/testing/results/custom-scene-test-results.md`
+- Determined correct syntax for running component tests with environment variables: `dotenv -e .env.local -- tsx src/scripts/test-components/test-component.ts <input> <output>`
+
+**May 21, 2025: Component Testing Tools Implemented**
+- Created an integrated testing framework for Remotion components without database/R2 dependencies
+- Implemented multiple testing approaches with varying levels of pipeline integration:
+  - Component Test Harness: Uses actual DynamicVideo/CustomScene production pipeline
+  - Component Sandbox: Direct ESM component testing
+  - Component Pipeline Visualizer: Step-by-step transformation view
+  - Terminal-based batch testing tools
+- Comprehensive documentation added to `/memory-bank/testing/component-testing/`
+- These tools enable rapid development, debugging, and LLM-generated component evaluation
+- See [Integrated Testing Guide](./testing/component-testing/integrated-testing-guide.md) for full details
+
+**May 25, 2025: BAZAAR-255 ESM Build Pipeline Migration Implemented**
+- Successfully migrated the component build pipeline from IIFE format to ESM modules
+- Removed global wrapping and window.__REMOTION_COMPONENT injection
+- Updated external dependencies list to support React/Remotion imports
+- Fixed TypeScript types for the buildLogger to support the implementation
+- This is the foundation for the complete ESM modernization in Sprint 25
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for implementation details.
+
 **May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
 - Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
 - Created placeholder client-side test file (`CustomScene.test.tsx`) and noted existing `useRemoteComponent.test.tsx`.
@@ -57,5 +82,35 @@ work. When entries grow beyond that, move older sections to
 - [Scripts Reorganization](./scripts/progress.md)
 - [Evaluation Framework](./progress/eval-framework-progress.md)
 - [Metrics](./evaluation/progress.md)
+
+# Bazaar-Vid Progress Log
+
+## Latest Updates
+
+### 2024-05-24: ESM Component Migration Complete
+
+The ESM component migration has been completed successfully:
+
+- ✅ Complete transition from IIFE format to ESM modules for all dynamically loaded components
+- ✅ Implemented React.lazy for component loading with proper Suspense/error handling
+- ✅ Updated component templates for ESM compatibility 
+- ✅ Fixed dependency management with proper externals configuration
+- ✅ Added comprehensive test coverage for the new ESM workflow
+
+This work completes tickets BAZAAR-255, BAZAAR-256, BAZAAR-257, BAZAAR-258, and BAZAAR-260. The system now uses modern JavaScript module patterns and better integration with React's component model. 
+
+See [Sprint 25 Progress](/memory-bank/sprints/sprint25/progress.md) for details.
+
+### 2024-05-23: Sprint 25 Started - ESM Component Migration
+
+Started work on transitioning custom components from IIFE format to ESM modules:
+
+- ✅ BAZAAR-255: Updated build pipeline to output ESM modules
+- Identified next steps for component loading mechanism (BAZAAR-256)
+- Created test plan for ESM migration validation (BAZAAR-260)
+
+### 2024-05-22: Sprint 24 Completed
+
+All Sprint 24 tasks have been completed:
 
 ---

@@ -1,5 +1,33 @@
 # Sprint 25 Progress
 
+## May 25, 2025: BAZAAR-255 ESM Build Pipeline Migration Implemented
+
+The first ticket in the ESM migration, BAZAAR-255, has been implemented. This change modernizes the component build pipeline to output ESM modules instead of IIFE bundles. Key changes include:
+
+1. Updated `buildCustomComponent.ts` to use `format: 'esm'` instead of `format: 'iife'`
+2. Removed `globalName: 'COMPONENT_BUNDLE'` option from the esbuild configuration
+3. Updated the external dependencies list to include `['react', 'react-dom', 'remotion', '@remotion/*']`
+4. Removed the global wrapping logic (`wrapTsxWithGlobals` function) that was injecting window.__REMOTION_COMPONENT
+5. Modified `sanitizeTsx` to preserve React and Remotion imports for ESM compatibility
+6. Added proper detection and handling of default exports to ensure React.lazy compatibility
+7. Fixed TypeScript type issues with the buildLogger methods
+
+This change forms the foundation for the next tickets in the ESM migration. The build pipeline now produces standard ES modules that can be loaded with React.lazy.
+
+Next steps:
+- Test the ESM output with actual components
+- Implement BAZAAR-256 to update the component loading mechanism with React.lazy
+- Update component templates for ESM format (BAZAAR-257)
+
+## May 24, 2025: Sprint Planning Complete
+
+Completed planning for Sprint 25. The complete implementation sequence has been mapped out in detailed tickets, and we've analyzed the codebase for the necessary changes. The plan includes:
+
+1. Update build pipeline to output ESM modules
+2. Update component loader to use React.lazy instead of script tag injection
+3. Modernize component templates for ESM compatibility
+4. Handle runtime dependencies through import maps or bundling
+
 ## May 24, 2025
 - **BAZAAR-260: Test Suite Scaffolding for ESM Migration:**
   - **Server-side Test Updates:** Enhanced `src/server/workers/__tests__/buildComponent.test.ts` by adding a new test suite for ESM output verification. This includes tests for dynamic `import()`, ensuring `module.default` export, and checking for correctly externalized dependencies (`react`, `remotion`, etc.). Addressed several TypeScript lint errors related to mock typings to improve test file robustness.
@@ -89,3 +117,50 @@ The current component loading mechanism implemented in `useRemoteComponent.tsx` 
 ## May 21, 2025
 - Created `detailed-tickets.md` outlining tasks for migrating dynamic components to ESM and React.lazy.
 - Reviewed Sprint 24 docs for background on A2A system and testing practices.
+
+## Sprint 25: Custom Component Improvements
+
+### Sprint Overview
+Sprint 25 focuses on improvements to custom components, including:
+1. ESM module format migration
+2. Better loading patterns with React.lazy
+3. Updated testing for components
+4. Better handling of dynamic components 
+
+### Progress
+
+#### 2024-05-23: Component Build Pipeline ESM Migration
+
+- ✅ BAZAAR-255: Migrate component build pipeline from IIFE to ESM format
+  - Changed esbuild configuration to output ESM modules instead of IIFE
+  - Removed the `globalName` option that was putting components in the global scope
+  - Updated extern list to properly mark React and Remotion packages as external
+  - Updated the code sanitizing logic to preserve React/Remotion imports rather than remove them
+  - Fixed Winston logger type declarations to include missing methods
+
+#### 2024-05-24: ESM Component Loading Improvements 
+
+- ✅ BAZAAR-256: Update component loading mechanism to use React.lazy
+  - Completely rewrote the `useRemoteComponent` hook to use React.lazy for dynamic imports
+  - Implemented proper error boundaries and Suspense support 
+  - Added heuristics to find component exports when there's no default export
+  - Removed deprecated window.__REMOTION_COMPONENT global assignment
+
+- ✅ BAZAAR-257: Update component templates for ESM compatibility
+  - Reviewed May 21, 2025: Confirmed component template in `src/server/workers/componentTemplate.ts` is ESM-compliant, uses `export default`, and omits IIFE registration.
+  - Updated component template to export components as proper ESM modules
+  - Removed the IIFE wrapper and global namespace pollution
+  - Added explicit default exports to ensure React.lazy compatibility
+  - Cleaned up the template to be more maintainable
+
+- ✅ BAZAAR-258: Handle runtime dependencies appropriately
+  - Reviewed May 21, 2025: Confirmed `esbuild` in `buildCustomComponent.ts` externalizes `react`, `react-dom`, `remotion`, and `@remotion/*`, supporting import maps.
+  - Updated dependency handling in the build pipeline to mark React and Remotion as external
+  - Ensured proper imports are preserved during the build process
+  - Kept the component template clean and focused on component logic
+  
+- ✅ BAZAAR-260: Complete test coverage for the new ESM workflow
+  - Added tests for React.lazy component loading pattern  
+  - Added comprehensive tests for ESM module format output
+  - Added tests for different component export patterns (default export, named export)
+  - Tested external dependency handling

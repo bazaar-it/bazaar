@@ -34,18 +34,7 @@ export const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) 
   );
 };
 
-// CRITICAL: Register component for Remotion - DO NOT REMOVE
-(function register() {
-  if (typeof window !== 'undefined') {
-    try {
-      window.__REMOTION_COMPONENT = {{COMPONENT_NAME}};
-      console.log('Successfully registered component: {{COMPONENT_NAME}}');
-    } catch (e) {
-      console.error('Error registering component:', e);
-    }
-  }
-})();
-
+// Export the component as default for ESM compatibility
 export default {{COMPONENT_NAME}};
 
 `;
@@ -86,9 +75,9 @@ export function applyComponentTemplate(
     .replace('{{COMPONENT_IMPLEMENTATION}}', sanitizedImplementation)
     .replace('{{COMPONENT_RENDER}}', render);
     
-  // Verify the result contains the critical window assignment
-  if (!result.includes('window.__REMOTION_COMPONENT =')) {
-    console.error('Warning: Template application did not include window.__REMOTION_COMPONENT assignment');
+  // Verify the result contains the critical default export
+  if (!result.includes('export default')) {
+    console.error('Warning: Template application did not include the default export');
   }
   
   return result;
