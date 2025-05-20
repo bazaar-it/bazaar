@@ -1,4 +1,201 @@
-# Project 2: A2A System Workflow
+# Project 2: A2A System Workflow Documentation
+
+This document provides a comprehensive overview of the workflow for Project 2, which is the Agent-to-Agent (A2A) system approach using message-based architecture and specialized agents.
+
+## Current Workflow
+
+### From User Prompt to Final Video: Step-by-Step
+
+1. **Task Creation**
+   - **Entry Point**: `src/app/test/evaluation-dashboard/page.tsx`
+   - **Request Flow**:
+     - User enters a prompt in the test dashboard
+     - UI calls the `a2a.createTask` tRPC mutation from `src/server/api/routers/a2a.ts`
+     - The task is persisted to the database with status "pending"
+
+2. **Task Discovery and Routing**
+   - **Primary Service**: `src/server/services/a2a/taskProcessor.service.ts`
+   - The TaskProcessor:
+     - Polls the database for pending tasks
+     - Routes tasks to the appropriate agent (typically CoordinatorAgent first)
+     - Creates messages in the message bus
+
+3. **Coordinator Agent Processing**
+   - **Agent Implementation**: `src/server/agents/coordinator-agent.ts`
+   - The CoordinatorAgent:
+     - Analyzes the user prompt and task context
+     - Decides which specialized agent should handle the task
+     - Creates and publishes appropriate messages to the message bus
+
+4. **Agent Communication**
+   - **Message Bus**: `src/server/agents/message-bus.ts`
+   - Messages flow through the bus:
+     - Publishers send messages to specific recipients
+     - Subscribers receive messages addressed to them
+     - Status updates and artifacts are attached to tasks
+
+5. **Scene Planning**
+   - When scene planning is needed:
+     - CoordinatorAgent sends a message to ScenePlannerAgent
+     - ScenePlannerAgent (`src/server/agents/scene-planner-agent.ts`) processes the request
+     - Scene plan is generated using LLM
+     - Results are saved to the database and sent back via message bus
+
+6. **Animation Design Brief (ADB) Generation**
+   - For each scene in the plan:
+     - CoordinatorAgent sends a message to ADBAgent
+     - ADBAgent (`src/server/agents/adb-agent.ts`) generates a structured animation brief
+     - Brief is saved to the database and sent back via message bus
+
+7. **Component Generation**
+   - For each animation design brief:
+     - CoordinatorAgent sends a message to BuilderAgent
+     - BuilderAgent (`src/server/agents/builder-agent.ts`) generates component code
+     - If errors occur, ErrorFixerAgent may be invoked
+     - Successful components are stored and registered
+
+8. **Real-time Updates to UI**
+   - **SSE Management**: `src/server/services/a2a/sseManager.service.ts`
+   - Status updates flow to the UI via:
+     - Task status updates (state transitions)
+     - Artifact updates (new components, briefs, etc.)
+     - Agent communication events
+
+9. **Final Video Composition**
+   - Components are made available for preview and rendering
+   - UI can display the timeline and preview the result
+
+## Challenges with Current Workflow
+
+1. **Agent Lifecycle Management**
+   - Instability during initialization and HMR
+   - "Churn" of agent instances
+   - No clear shutdown sequence
+
+2. **Message Routing Reliability**
+   - No guaranteed delivery mechanism
+   - Limited error handling for failed deliveries
+   - No persistent message storage
+
+3. **Task Processor Stability**
+   - Issues with polling mechanism
+   - Singleton pattern implementation problems
+   - Shared state management across HMR cycles
+
+4. **Observability Challenges**
+   - Excessive logging makes diagnosis difficult
+   - Difficult to trace a request through multiple agents
+   - Limited visualization of agent activity
+
+5. **Error Recovery**
+   - Incomplete error propagation
+   - Limited retry capabilities
+   - Task state can become inconsistent
+
+## Idealized A2A Workflow
+
+### Key Improvements
+
+1. **Robust Agent Lifecycle**
+   - Clear states (initializing, ready, processing, idle, stopping, error)
+   - Graceful shutdown procedures
+   - Stable across HMR and deployment
+
+2. **Reliable Message Bus**
+   - Acknowledgment system for critical messages
+   - Dead letter handling for undeliverable messages
+   - Optional persistence for critical message types
+
+3. **Improved Task Management**
+   - Transaction-based task state updates
+   - Robust error propagation
+   - Comprehensive retry strategies
+
+4. **Enhanced Observability**
+   - Structured, categorized logging
+   - Request tracing across agent boundaries
+   - Visual representation of agent communication
+
+### Idealized Flow Diagram
+
+```
+User Request → Task Creation Service → Task Event → Task Processor →
+                                                      │
+                                                      ↓
+                                              Coordinator Agent
+                                                      │
+                     ┌───────────────┬───────────────┼───────────────┬───────────────┐
+                     ↓               ↓               ↓               ↓               ↓
+              Scene Planner      ADB Agent       Builder Agent   Error Fixer     R2 Storage
+                Agent                                Agent          Agent          Agent
+                     │               │               │               │               │
+                     └───────┬───────┴───────┬───────┴───────┬───────┘               │
+                             │               │               │                       │
+                             ↓               ↓               ↓                       ↓
+                     Scene Plan Event    ADB Event    Component Event         Storage Event
+                             │               │               │                       │
+                             └───────┬───────┴───────┬───────┘                       │
+                                     │               │                               │
+                                     └───────┬───────┴───────────────────────────────┘
+                                             │
+                                             ↓
+                                      Task Update Service
+                                             │
+                                             ↓
+                                      SSE Manager Service
+                                             │
+                                             ↓
+                                        User Interface
+```
+
+## Implementation Steps Toward Idealized Workflow
+
+1. **Stabilize Agent Lifecycle**
+   - Implement proper singleton pattern
+   - Add heartbeat mechanism
+   - Create controlled shutdown sequence
+
+2. **Enhance Message Bus**
+   - Add message acknowledgments
+   - Implement dead letter queue
+   - Consider optional persistence
+
+3. **Improve Task Processor**
+   - Refine polling strategy
+   - Add transaction support
+   - Enhance error handling
+
+4. **Boost Observability**
+   - Standardize logging format
+   - Implement request tracing
+   - Create agent activity visualization
+
+5. **Refine Error Handling**
+   - Implement consistent error patterns
+   - Add retry capabilities with backoff
+   - Provide detailed error context
+
+## Comparison with Standard Workflow
+
+While both the idealized standard workflow and A2A system incorporate event-driven patterns, key differences remain:
+
+1. **Architecture Style**
+   - Standard: Service-oriented with event communication
+   - A2A: Agent-oriented with messaging infrastructure
+
+2. **Processing Model**
+   - Standard: Primarily synchronous with asynchronous elements
+   - A2A: Fully asynchronous, distributed processing
+
+3. **Decision Making**
+   - Standard: Centralized decision logic in orchestration service
+   - A2A: Distributed intelligence across specialized agents
+
+4. **Complexity vs. Flexibility**
+   - Standard: Lower complexity, more predictable flow
+   - A2A: Higher complexity but more flexible and extensible
+
+The A2A system represents a more sophisticated approach suitable for complex video generation tasks that benefit from specialized agent knowledge and parallel processing.
 
 ## Current Status
 

@@ -1,143 +1,149 @@
-# Project 1: Standard Functionality Workflow
+Project 1 – Standard Workflow: Best-of-Both-Worlds Edition
 
-## Current Status
+This document fuses the two “Standard Workflow” write-ups into a single, streamlined reference. It keeps every useful detail, removes duplication, and highlights the forward path toward an event-driven, job-based architecture.
 
-Project 1 represents the standard functionality path in Bazaar-Vid, centered around `src/app/projects/[id]/edit/page.tsx`. This workflow uses direct service calls to process user prompts, generate components, and update the project state.
+⸻
 
-### End-to-End Pipeline: From Prompt to Video
+1. Purpose & Scope
+	•	Project 1 is Bazaar-Vid’s traditional, direct-service workflow that powers the /projects/[id]/edit experience.
+	•	This document covers:
+	•	The current end-to-end pipeline (prompt → video preview)
+	•	Key files & services and how they interact
+	•	Pain points that limit reliability and velocity
+	•	An idealized architecture that blends event-driven patterns with today’s simpler sync flow
+	•	Migration steps to get there without a big-bang rewrite
+	•	A quick contrast with the A2A agent system to clarify boundaries
 
-When a user submits a prompt in the standard functionality path, the following sequence occurs:
+⸻
 
-1. **User Input**
-   - User navigates to `/projects/[id]/edit` where `ProjectEditorRoot` is rendered
-   - User enters a prompt in the chat interface (in `ChatPanel.tsx`)
-   - Chat message is sent to the tRPC router via `chat.sendMessage` procedure
+2. Current End-to-End Pipeline
 
-2. **Message Processing**
-   - `src/server/api/routers/chat.ts` receives the message
-   - Creates database entries for the user message and a pending assistant response
-   - Calls `processUserMessage` in `chatOrchestration.service.ts`
+#	Stage	What Happens	Primary Code Paths
+1	User Input	User types a prompt in ChatPanel inside /projects/[id]/edit	src/app/projects/[id]/edit/panels/ChatPanel.tsx
+2	Send Message	tRPC mutation chat.sendMessage persists the user line & a blank assistant stub	src/server/api/routers/chat.ts
+3	LLM Orchestration	processUserMessage() builds context, streams to OpenAI (function calling on)	chatOrchestration.service.ts
+4	Stream Handling	Incoming chunks can be plain text or function/tool calls	same file
+5	Tool Execution	Three core tools executed as they appear: • applyJsonPatch (project props) • generateRemotionComponent (custom TSX) • planVideoScenes	toolExecution.service.ts + dedicated services
+6	Component Generation	- Create job → generate code → build TSX → write to DB/storage	componentGenerator.service.tsworkers/generateComponentCode.tsworkers/buildCustomComponent.ts
+7	Scene Planning	Natural-language scene plan → structured DB rows → timeline update	scenePlanner.service.ts
+8	Real-time UI Updates	SSE pushes: LLM deltas, tool status, job progress	chatOrchestration.service.ts (SSE emitter)
+9	Preview & Editing	PreviewPanel renders components; TimelinePanel shows sequence; user tweaks	panels under src/app/.../panels
+10	Render Export	Remotion render invoked when user requests final video	same page flow
 
-3. **LLM Processing**
-   - `chatOrchestration.service.ts` establishes a connection to OpenAI
-   - Retrieves conversation context from the database
-   - Adds current project properties as context
-   - Streams request to OpenAI with function calling enabled
-   - Processes the streaming response (content and tool calls)
+Key Assumptions
+	1.	Single-user, single-project active at a time
+	2.	Mostly synchronous service chaining
+	3.	Direct calls yield tight coupling
+	4.	OpenAI availability is assumed
+	5.	Limited mid-stream error recovery
 
-4. **Tool Execution**
-   - As tool calls are received from the LLM, they are accumulated and executed
-   - Three main tools are available:
-     - `applyJsonPatch`: Updates project properties
-     - `generateRemotionComponent`: Creates custom components
-     - `planVideoScenes`: Plans and creates scenes for the video
-   - For component generation, calls `handleGenerateComponent` which invokes `componentGenerator.service.ts`
+⸻
 
-5. **Component Generation**
-   - `componentGenerator.service.ts` creates a component job in the database
-   - Processes the effect description through LLM
-   - Generates component code
-   - `buildCustomComponent.ts` handles the actual code generation
-   - Generated code is validated, fixed if needed, and stored
+3. Problems We Feel Today
 
-6. **Scene Planning**
-   - `scenePlanner.service.ts` processes scene descriptions
-   - Converts user intentions into structured scene data
-   - Updates project timeline with new scenes
+Category	Pain
+Monolithic Orchestration	chatOrchestration.service.ts does everything—hard to test or evolve
+Tight Coupling	Service A calls service B calls service C. One change ripples everywhere
+Sequential Bottlenecks	Long component builds block further LLM streaming
+Poor Recovery	If a build fails mid-stream, chat hangs and UI gets half-baked state
+Observability Gaps	Logs are inconsistent; tracing a single prompt end-to-end is tough
 
-7. **Preview & Rendering**
-   - Components are made available in the `PreviewPanel.tsx`
-   - `TimelinePanel.tsx` shows the structured timeline 
-   - User can preview the animation in the browser
-   - Can export final video through Remotion's render functionality
 
-8. **Database Updates**
-   - Throughout the process, database is updated via Drizzle ORM
-   - Messages, components, and project properties are stored 
-   - SSE (Server-Sent Events) keep the UI updated in real-time
+⸻
 
-### Key Files in the Standard Workflow
+4. Ideal “Best-of-Both” Architecture
 
-```
+We don’t need a full A2A agent swarm for simple chat→video flows, but we do want event-driven decoupling, job tracking, and better tracing.
+
+graph TD
+  A(User Prompt) -->|MessageEvent| B(LLM Service)
+  B -- ToolCallEvent --> C{Event Router}
+
+  C -->|applyJsonPatch| D(JSON-Patch Svc)
+  C -->|generateRemotionComponent| E(Component Svc)
+  C -->|planVideoScenes| F(Scene Planner)
+  C -->|other| G(Other Tools)
+
+  D -->|StateUpdateEvent| H(UI Update)
+  E -->|ComponentBuiltEvent| H
+  F -->|ScenePlanEvent| H
+  G -->|ResultEvent| H
+  H --> I(Browser UI)
+
+Guiding Principles
+	1.	Lightweight Event Bus
+– In-process (Node EventEmitter or tiny Pub/Sub) first → Kafka/Redis later
+	2.	Job-Based Long Tasks
+– Component build & render become jobs with status rows, retries, checkpoints
+	3.	Slim, Focused Services
+– Split orchestration: LLM-only, Tool Executor, Component Builder, Scene Planner
+	4.	Stateless Workers
+– Workers pull jobs; state lives in DB + object storage
+	5.	Uniform Error Strategy
+– Every event carries contextId + attempt + error fields; callers decide retry/backoff
+	6.	First-Class Observability
+– Winston + pino + next-gen Log Agent feed; traceId propagated in headers/events
+
+⸻
+
+5. Migration Roadmap
+
+Phase	What We Do	Impact
+0 (Prep)	Add traceId, jobId, runId columns & middleware	Instant better logs
+1	Extract LLM Service: isolate OpenAI streaming + error handling	Safer, testable
+2	Introduce Event Bus wrapper (tiny) + event schemas (zod)	Begin decoupling
+3	Convert Component Build to BuildJob rows + worker loop	Retry, resumable
+4	Emit events for JSONPatch & ScenePlan; UI subscribes	Real-time, stateless
+5	Remove direct service calls ⇒ event-driven across the board	Loose coupling
+6	Layer in metrics & tracing (OTel exporter → Grafana)	Observability complete
+
+Each phase is backwards-compatible; we gate new paths behind feature flags until stable.
+
+⸻
+
+6. File & Directory Reference (Post-Refactor Target)
+
 src/
 ├── app/
-│   └── projects/
-│       └── [id]/
-│           └── edit/
-│               ├── page.tsx                         # Entry point
-│               ├── ProjectEditorRoot.tsx            # Main container
-│               └── panels/
-│                   ├── ChatPanel.tsx                # User prompt input
-│                   ├── PreviewPanel.tsx             # Video preview
-│                   └── TimelinePanel.tsx            # Timeline editor
-├── server/
-│   ├── api/
-│   │   └── routers/
-│   │       ├── chat.ts                             # tRPC chat procedures
-│   │       └── customComponent.ts                  # tRPC component procedures
-│   ├── services/
-│   │   ├── chatOrchestration.service.ts            # Main chat flow controller
-│   │   ├── componentGenerator.service.ts           # Custom component generation
-│   │   └── scenePlanner.service.ts                 # Scene planning logic
+│   └── projects/[id]/edit/              # unchanged UI
+├── events/                              # new
+│   ├── bus.ts                           # tiny pub/sub abstraction
+│   └── schemas/
+│       └── *.ts                         # zod-typed event payloads
+├── jobs/
+│   ├── models/                          # drizzle table defs
 │   └── workers/
-│       ├── buildCustomComponent.ts                 # Component build pipeline
-│       └── generateComponentCode.ts                # Component code generation
-└── trpc/
-    └── trpc.ts                                     # tRPC configuration
-```
+│       ├── componentBuilder.worker.ts
+│       └── renderVideo.worker.ts
+├── services/
+│   ├── llm.service.ts                   # OpenAI wrapper
+│   ├── toolExecutor.service.ts          # routes events → tools
+│   ├── jsonPatch.service.ts
+│   ├── scenePlanner.service.ts
+│   └── component.service.ts
+└── utils/
+    └── tracing.ts                       # traceId helpers
 
-## Current Assumptions
 
-1. **Single User Flow**: The current design assumes a single user per project.
-2. **Synchronous Processing**: Component generation is mostly synchronous within a single request-response cycle.
-3. **Direct Service Communication**: Services call each other directly, creating tight coupling.
-4. **Client-Server Boundary**: Clear separation between client and server code, with tRPC as the communication layer.
-5. **Component Persistence**: Generated components are stored in the database and can be reused.
-6. **OpenAI Availability**: The system assumes OpenAI API is always available and responsive.
-7. **Error Recovery**: Limited mechanisms for recovering from errors in the middle of processing.
+⸻
 
-## Ideal Simplified Architecture
+7. Comparing to the A2A Agent System
 
-If the standard project were redesigned for simplicity, it could look like:
+Dimension	Standard (Event-Driven)	A2A (Autonomous Agents)
+Granularity	Service-level	Micro-agent-level
+Decision Logic	Single LLM decides, calls typed tools	Multiple agents decide, chain, debate
+Complexity	Moderate	High
+Best Use	Chat-driven video creation	Multi-step supplier onboarding, crawling, enrichment
 
-### Architecture Principles
+In short, Project 1 should stay opinionated and simple; we just need events + jobs for robustness—not the full agent zoo.
 
-1. **Event-Driven Design**: Replace direct service calls with event emission and subscription.
-2. **Clear Boundaries**: Establish clear boundaries between UI, business logic, and data access.
-3. **Stateless Services**: Make services stateless where possible to improve scalability.
-4. **Consistent Error Handling**: Implement a consistent error handling strategy across the system.
-5. **Modular Components**: Design each part of the system to be independently testable and replaceable.
+⸻
 
-### Simplified Design
+8. Take-Aways & Next Actions
+	1.	Start with traceId & job tables – zero-risk, immediate insight.
+	2.	Carve out llm.service.ts – removes 300+ LOC monolith bloat.
+	3.	Prototype event bus inside the same process; no infra ticket needed.
+	4.	Move Component Build → BuildJob worker – biggest real-world win (retry, progress).
+	5.	Review UI listeners – flip SSE source from “chat orchestration” to “event bus.”
 
-```
-User Input → Event Bus → LLM Processing → Event Bus → Component Generation → Event Bus → UI Updates
-```
-
-### Key Improvements
-
-1. **Event-Based Communication**:
-   - Introduce a lightweight event bus for all internal communication
-   - Decouple service dependencies, allowing independent scaling and testing
-
-2. **Separated Responsibilities**:
-   - Split the monolithic `chatOrchestration.service.ts` into focused services
-   - Create dedicated handlers for each tool type
-
-3. **Progressive Loading**:
-   - Support partial state updates throughout the process
-   - Allow users to see intermediate results and make corrections
-
-4. **Improved Error Recovery**:
-   - Store intermediate state at key points
-   - Allow resuming from partial failures
-
-5. **Consistent Interfaces**:
-   - Standardize service interfaces
-   - Use common patterns for success/failure responses
-
-6. **Observability**:
-   - Add comprehensive logging and tracing throughout the pipeline
-   - Implement better metrics for performance monitoring
-
-This simplified architecture would maintain the same user-facing functionality while making the system more robust, testable, and maintainable. 
+Once these are done, we’ll have the resilience, observability, and modularity we’ve wanted—without jumping straight to the full A2A paradigm.
