@@ -4,6 +4,9 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { Composition, getInputProps } from 'remotion';
 import { Player } from '@remotion/player';
+import { enableFetchMocks } from 'jest-fetch-mock';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // Import React first so it's available in the mock scope
 const mockReact = jest;

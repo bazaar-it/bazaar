@@ -240,6 +240,16 @@ describe("CoordinatorAgent", () => {
     // REMOVED Spies on BaseAgent methods as jest.mock should handle this
   });
 
+  // Add an afterEach hook to clean up any potential resources or mocks
+  afterEach(() => {
+    // This is where we would add cleanup logic if needed for this specific test file.
+    // For tests interacting with a database, this would typically involve rolling back a transaction.
+    // For tests with event listeners or timers, this would involve disposing of them.
+    jest.clearAllMocks(); // Clear mock usage data after each test
+    // If using fake timers: jest.useRealTimers();
+    // If using database transactions: rollback transaction
+  });
+
   describe("processMessage - CREATE_COMPONENT_REQUEST", () => {
     const incomingMessage: AgentMessage = {
       id: crypto.randomUUID(),

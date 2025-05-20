@@ -18,64 +18,104 @@ export default async function NewProjectPage() {
   }
 
   let newProject;
-  
-  try {
-    // Get a list of all "New Project" projects with their numbers
-    const userProjects = await db
-      .select({ title: projects.title })
-      .from(projects)
-      .where(
-        and(
-          eq(projects.userId, session.user.id),
-          like(projects.title, 'New Project%')
-        )
-      );
-    
-    // Find the highest number used in "New Project X" titles
-    let highestNumber = 0;
-    for (const project of userProjects) {
-      const match = project.title.match(/^New Project (\d+)$/);
-      if (match && match[1]) {
-        const num = parseInt(match[1], 10);
-        if (!isNaN(num) && num > highestNumber) {
-          highestNumber = num;
+  let attempts = 0;
+  const MAX_ATTEMPTS = 5; // Prevent infinite loops
+
+  while (!newProject && attempts < MAX_ATTEMPTS) {
+    attempts++;
+    try {
+      // Get a list of all "New Project" projects with their numbers
+      const userProjects = await db
+        .select({ title: projects.title })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.userId, session.user.id),
+            like(projects.title, 'New Project%')
+          )
+        );
+      
+      // Find the highest number used in "New Project X" titles
+      let highestNumber = 0;
+      for (const project of userProjects) {
+        const match = project.title.match(/^New Project (\d+)$/);
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > highestNumber) {
+            highestNumber = num;
+          }
         }
       }
-    }
-    
-    // Generate a unique title with the next available number
-    const nextNumber = highestNumber + 1;
-    const title = userProjects.length === 0 ? "New Project" : `New Project ${nextNumber}`;
+      
+      // Generate a unique title with the next available number, adjusted for retries
+      const nextNumberBasedOnAttempts = highestNumber + attempts;
+      
+      let titleToInsert = userProjects.length === 0 && highestNumber === 0 && attempts === 1
+                          ? "New Project"
+                          : `New Project ${nextNumberBasedOnAttempts}`;
 
-    const [insertedProject] = await db
-      .insert(projects)
-      .values({
-        userId: session.user.id,
-        title: title,
-        props: {
-          meta: {
-            duration: 10,
-            title: title,
-            backgroundColor: "#111",
+      // If the generated title is "New Project", explicitly check if it already exists.
+      // If it does, force a numbered title to avoid collision if numbering should have started.
+      if (titleToInsert === "New Project") {
+        const existingBaseNewProject = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(eq(projects.userId, session.user.id), eq(projects.title, "New Project")))
+          .limit(1);
+        
+        if (existingBaseNewProject.length > 0) {
+          // "New Project" exists, and we might be in a situation where it's the only one
+          // or highestNumber was 0. Force numbering based on attempts.
+          titleToInsert = `New Project ${nextNumberBasedOnAttempts}`;
+        }
+      }
+
+      const [insertedProjectAttempt] = await db
+        .insert(projects)
+        .values({
+          userId: session.user.id,
+          title: titleToInsert,
+          props: {
+            meta: {
+              duration: 10,
+              title: titleToInsert, // Ensure this uses the title being inserted
+              backgroundColor: "#111",
+            },
+            scenes: [],
           },
-          scenes: [],
-        },
-      })
-      .returning();
-    
-    newProject = insertedProject;
-  } catch (error) {
-    console.error("Failed to create new project:", error);
-    // Redirect to the projects page on error
-    redirect("/projects");
+        })
+        .returning();
+      
+      newProject = insertedProjectAttempt; // Success!
+
+    } catch (error: any) {
+      // Check for PostgreSQL unique violation error (SQLSTATE 23505)
+      if (error.code === '23505' || (error.message && (error.message.includes('violates unique constraint') || error.message.includes('duplicate key value')))) {
+        console.warn(`Attempt ${attempts}: Failed to create project with title '${error.values?.title || 'unknown'}'. Retrying. Error: ${error.message}`);
+        if (attempts >= MAX_ATTEMPTS) {
+          console.error("Max attempts reached. Failed to create new project.");
+          // Optionally, redirect to a specific error page or add a query param
+          redirect("/projects?error=creation_failed_max_attempts");
+          return null; // Exit loop and function
+        }
+        // Loop will continue for another attempt
+      } else {
+        // For other, unexpected errors, log and redirect
+        console.error("Failed to create new project (non-unique constraint error):", error);
+        redirect("/projects?error=unknown_creation_failure");
+        return null; // Exit loop and function
+      }
+    }
   }
 
   if (newProject?.id) {
     // Redirect to the new project's edit page - moved outside try/catch
     redirect(`/projects/${newProject.id}/edit`);
   } else {
-    // Fallback to projects page if something went wrong
-    redirect("/projects");
+    // Fallback to projects page if something went wrong (e.g., max attempts reached without success)
+    // This path should ideally be covered by the redirect within the catch block for MAX_ATTEMPTS
+    console.error("Failed to create new project after multiple attempts or unexpected issue.");
+    redirect("/projects?error=fallback_creation_failure");
   }
 
   // This should never be reached due to the redirects above,

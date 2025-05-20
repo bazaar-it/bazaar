@@ -14,19 +14,24 @@ console.log('DATABASE_URL in test scope:', process.env.DATABASE_URL);
 // S3 mock
 jest.mock('@aws-sdk/client-s3', () => {
   return {
-    S3Client: jest.fn().mockImplementation(() => ({
-      send: jest.fn().mockImplementation((command: any) => { // Explicitly type command as any
-        if (command.constructor.name === 'PutObjectCommand') {
-          // Simulate successful upload for PutObjectCommand
-          return Promise.resolve({
-            ETag: `"mock-etag-${randomUUID()}"`,
-            VersionId: 'mock-version-id',
-          });
-        }
-        // Handle other S3 commands if necessary, or return a generic success
-        return Promise.resolve({});
-      }),
-    })),
+    S3Client: jest.fn().mockImplementation(() => {
+      // Import dependency needed within the mock factory
+      const { randomUUID } = require('crypto');
+
+      return {
+        send: jest.fn().mockImplementation((command: any) => { // Explicitly type command as any
+          if (command.constructor.name === 'PutObjectCommand') {
+            // Simulate successful upload for PutObjectCommand
+            return Promise.resolve({
+              ETag: `"mock-etag-${randomUUID()}"`,
+              VersionId: 'mock-version-id',
+            });
+          }
+          // Handle other S3 commands if necessary, or return a generic success
+          return Promise.resolve({});
+        }),
+      };
+    }),
     PutObjectCommand: jest.fn().mockImplementation((params: any) => { // Explicitly type params as any
       return {
         constructor: { name: 'PutObjectCommand' },

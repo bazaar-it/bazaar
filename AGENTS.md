@@ -1,6 +1,6 @@
 # Bazaar-Vid: Agent Guide
 
-This document provides guidance for AI assistants like Codex when working with the Bazaar-Vid codebase.
+This document provides comprehensive guidance for AI assistants like Codex when working with the Bazaar-Vid codebase. It outlines not just what to do, but how to work effectively with this specific project structure.
 
 ## Project Overview
 
@@ -10,7 +10,7 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
 |-------|------------|
 | Framework | Next 15 (App Router) with TypeScript |
 | Styling | Tailwind + shadcn/ui |
-| Database | Postgres (Neon ) |
+| Database | Postgres (Neon) |
 | ORM | Drizzle (`drizzle-orm`, `drizzle-kit`) |
 | Auth | Auth.js v5 + Drizzle adapter |
 | API | tRPC v11 (HTTP + WS links) |
@@ -20,6 +20,166 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
 | LLM | OpenAI API with GPT-4o-mini model |
 | Agent System | Google's Agent-to-Agent (A2A) protocol implementation |
 
+## Key Architecture Components
+
+The codebase has two parallel architectures:
+
+1. **Standard Functionality (Main Production):** 
+   - Entry: `src/app/projects/[id]/edit/page.tsx`
+   - Pattern: Direct service calls
+   - Key Files: `src/server/api/routers/chat.ts`, `chatOrchestration.service.ts`
+
+2. **Agent-to-Agent (A2A) System (Experimental):**
+   - Entry: `src/app/test/evaluation-dashboard/page.tsx`
+   - Pattern: Message bus with pub/sub
+   - Key Files: `message-bus.ts`, `taskProcessor.service.ts`, `taskManager.service.ts`
+
+## Documentation Structure and Sprint Workflow
+
+### Memory Bank Organization
+
+All documentation lives in the `/memory-bank` folder:
+
+```
+/memory-bank/
+  progress.md             # Project-wide progress overview
+  TODO.md                 # Project-wide pending tasks
+  /api-docs/              # API endpoint documentation
+  /testing/               # Testing strategies and results
+  /a2a/                   # A2A protocol documentation
+  /remotion/              # Remotion component docs
+  /sprints/               # Sprint-specific documentation
+    /sprint24/            # Current sprint
+      overview.md         # Sprint goals and architecture
+      progress.md         # Sprint-specific progress tracking
+      TODO.md             # Sprint-specific tasks
+      tickets.md          # Specific tickets/issues to address
+```
+
+memory-bank/progress-system.md
+"//memory-bank/progress-system.md
+# Progress & TODO Guidelines
+
+This document explains how progress updates and TODO lists are organized.
+
+## Progress Logs
+
+- **Main log**: `/memory-bank/progress.md` contains brief highlights and an index
+  of sprint progress files.
+- **Sprint logs**: Each sprint keeps a detailed progress file under
+  `/memory-bank/sprints/<sprint>/progress.md`.
+- **Special topics**: Additional progress files such as
+  `/memory-bank/a2a/progress.md` or `/memory-bank/scripts/progress.md` are linked
+  from the main log.
+
+When adding new progress notes:
+1. Update the relevant sprint's `progress.md` with detailed information.
+2. Add a short summary to `/memory-bank/progress.md` if it is a major update.
+
+## TODO Lists
+
+- **Main TODO**: `/memory-bank/TODO.md` gathers outstanding tasks.
+- **Sprint TODOs**: Each sprint may include a `TODO.md` for sprint‑specific
+  tasks.
+- **High priority**: `/memory-bank/TODO-critical.md` tracks urgent issues.
+
+Keep these documents up to date and reference them from Pull Requests so the team
+has a single source of truth for work status.
+
+## Log Retention Policy
+
+The first 200 lines of `/memory-bank/progress.md` should always contain the most
+important recent updates. Older entries should be moved to
+`/memory-bank/progress-history.md` rather than deleted. This keeps the main log
+focused while preserving a complete history.
+"
+
+### Sprint-Based Workflow
+
+When working on tasks, ALWAYS:
+
+1. **Start by reviewing the current sprint documentation:**
+   - First check `/memory-bank/sprints/[current-sprint]/overview.md` for high-level context
+   - Review `/memory-bank/sprints/[current-sprint]/progress.md` for recent developments
+   - Consult `/memory-bank/sprints/[current-sprint]/TODO.md` for pending tasks
+
+2. **Document your work in the sprint-specific files:**
+   - Update `progress.md` with completed items and findings
+   - Update `TODO.md` with new or refined tasks
+   - Create detailed implementation notes or research in new files within the sprint folder
+
+3. **Only update project-wide files when appropriate:**
+   - For significant milestones: update `/memory-bank/progress.md`
+   - For new major tasks: update `/memory-bank/TODO.md`
+   - Only after completing sprint tasks that impact project-wide status
+
+4. **Create specialized documentation when needed:**
+   - API endpoints → `/memory-bank/api-docs/api-[router]-[procedure].md`
+   - Testing approaches → `/memory-bank/testing/[feature]-testing.md`
+   - Architectural decisions → `/memory-bank/[system]-architecture.md`
+
+## Work Patterns for Complex Tasks
+
+### Documentation-First Approach
+
+When tackling complex tasks:
+
+1. **Create a research document** in the current sprint folder
+2. **Outline the approach** with potential solutions
+3. **Document findings** and experiments
+4. **Reference external documentation** with links
+5. **Update the sprint progress** file with key decisions
+
+### Implementation Guidance
+
+1. **Create a task checklist** in the sprint folder for multi-step implementations
+2. **Document progress incrementally** as you work
+3. **Include architectural diagrams** when appropriate
+4. **Link to commit hashes** for significant changes
+5. **Document troubleshooting** steps and solutions
+
+## Project Startup Modes and Logging
+
+The application can be started in two distinct modes, each with a different focus and logging behavior:
+
+### 1. Project 1 Mode (Standard Application)
+
+**Startup Command:** `npm run dev`
+
+**Purpose:** Focus on the main application (Project 1) without A2A agent distractions
+
+**Logging Behavior:**
+- Main application logs are displayed in the console
+- A2A agent logs at `info` and `debug` levels are **suppressed** in the console
+- Only critical errors from A2A agents (at `error` level) are shown
+- All logs are still sent to log files and the Log Agent service
+
+**When to Use:** For most development tasks focused on the user interface, chat functionality, or standard features that don't involve the Agent-to-Agent system
+
+### 2. Project 2 Mode (A2A Development)
+
+**Startup Command:** `scripts/startup-with-a2a.sh`
+
+**Purpose:** Focus on Agent-to-Agent (A2A) functionality (Project 2) with detailed agent logging
+
+**Logging Behavior:**
+- All logs, including detailed A2A agent logs, are displayed in the console
+- Agent initialization messages, lifecycle events, and agent-to-agent messages are visible
+- The script sets `LOGGING_MODE=a2a` environment variable to enable verbose A2A logging
+- A2A logs are stored in an external directory to prevent triggering HMR
+
+**When to Use:** When developing, debugging, or testing the A2A system, agent interactions, or components that rely on the agent pipeline
+
+### Technical Implementation
+
+The logging separation is controlled by the `LOGGING_MODE` environment variable in `src/lib/logger.ts`. When the application starts:
+
+1. The logger checks if `LOGGING_MODE === 'a2a'` 
+2. If true (Project 2 mode), the a2aLogger's console transport level is set to `'info'` or the specified LOG_LEVEL
+3. If false (Project 1 mode), the a2aLogger's console transport level is set to `'error'`, suppressing info and debug logs
+
+This separation keeps the console clean and focused on the relevant logs for each development context.
+
 ## Key Principles
 
 1. **Preview is props-driven only.** `@remotion/player` lives in a single `"use client"` island, fed by `inputProps` JSON.
@@ -28,7 +188,8 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
 4. **One DB client.** Import `db` from '~/server/db' (Drizzle). No direct `pg` or Prisma.
 5. **Type safety end-to-end.** Schema lives in `db/schema.ts` + shared `InputProps` Zod types.
 6. **Keep it tiny.** Prefer explicit SQL to heavy abstractions; avoid unnecessary dependencies.
-8. **Rigorous validation.** Always validate external inputs with Zod schemas before processing.
+7. **Rigorous validation.** Always validate external inputs with Zod schemas before processing.
+8. **Path comments.** First line in every file should be a comment with its relative path.
 
 ## Directory Structure
 
@@ -40,6 +201,8 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
   /projects/[id]/
       edit/                 // Editor UI with panels and timeline
       page.tsx              // Project view
+  /test/
+      evaluation-dashboard/ // A2A system testing UI
 /server/
   /api/
       /routers/
@@ -60,6 +223,8 @@ Bazaar-Vid is an AI-powered video creation platform leveraging Remotion and Next
           taskManager.service.ts // Task management
           sseManager.service.ts  // SSE real-time updates
           agentRegistry.service.ts // Agent registry
+          taskProcessor.service.ts // Task polling and processing
+
 /components/
   client/                   // All "use client" components
       Timeline/             // Timeline UI components
@@ -101,6 +266,43 @@ The Agent-to-Agent (A2A) system implements Google's A2A protocol to enable auton
    - CoordinatorAgent delegates to specialized agents
    - SSE provides real-time updates to frontend
 
+4. **Current Focus (Sprint 24)**:
+   - Stabilizing agent lifecycle
+   - Improving logging and observability
+   - Enhancing test coverage
+   - Building diagnostic tools
+
+## Testing Framework
+
+When working on tests:
+
+1. **Review existing test methodologies:**
+   - Check `/memory-bank/testing/` for test strategies
+   - Review current sprint test improvements
+
+2. **Jest ESM Configuration:**
+   - Project uses ESM modules
+   - Config in `jest.config.cjs` with `extensionsToTreatAsEsm`
+   - See `/memory-bank/testing/jest_esm_nextjs_setup.md` for details
+
+3. **Test Categories:**
+   - Unit tests for services and utilities
+   - Integration tests for agent communication
+   - End-to-end tests for component generation
+   - UI component tests
+
+4. **Running Tests:**
+   ```bash
+   # Run all tests
+   npm test
+   
+   # Run specific test
+   npm test -- -t "test name"
+   
+   # Run with coverage
+   npm test -- --coverage
+   ```
+
 ## Development Guidelines
 
 1. **File Structure**:
@@ -127,34 +329,17 @@ The Agent-to-Agent (A2A) system implements Google's A2A protocol to enable auton
 
 5. **API Communication**:
    - Use tRPC exclusively for internal API communication
-   - All database operations MUST use Drizzle ORM
+   - All database operations MUST use Drizzle ORM from `~/server/db` 
    - Do not generate or execute raw SQL strings
 
-6. **Testing**:
-   - Run `npm test && npm lint && npm type-check` before proposing changes
-   - Update tests when modifying functionality
+6. **UI Treatment**:
+   - Use ShadCN library components for feedback, errors, and success messages
+   - Avoid toast notifications
+   - Create consistent UI patterns for similar interactions
 
-## MCP Tool Usage
+## Commands and Tools
 
-| Tool | Purpose |
-|------|---------|  
-| log_query | Ask questions about current logs via Log Agent |
-| log_clear | Flush logs & start fresh run |
-| log_issues | List deduped issues for a run |
-
-## Documentation
-
-For detailed documentation, refer to the `/memory-bank` folder, which contains comprehensive guides on all aspects of the project:
-
-- `/memory-bank/agent.md`: A2A system documentation
-- `/memory-bank/a2a/`: Detailed A2A implementation docs
-- `/memory-bank/api-docs/`: API endpoints documentation
-- `/memory-bank/sprints/`: Sprint planning and progress
-- `/memory-bank/remotion/`: Remotion component documentation
-
-## Commands
-
-### Development:
+### Development Workflow:
 ```bash
 # Standard development server
 npm run dev
@@ -165,6 +350,9 @@ npm run dev:a2a
 # Run startup script with A2A
 ./scripts/startup-with-a2a.sh
 
+
+
+review the tests.md - file for how to do testing . and couemtn the testng in  memory-bank/testing folder
 # Run tests
 npm test
 
@@ -175,20 +363,63 @@ npm run type-check
 npm run lint
 ```
 
-### Database:
+### Database Operations:
 ```bash
 # Generate migrations
 npm run db:generate
 
 # Apply migrations
 npm run db:push
+
+# Database exploration tools (outputs to /analysis)
+node src/scripts/db-tools/explore-db.js
+node src/scripts/db-tools/list-projects.js
+node src/scripts/db-tools/get-project-components.js [projectId]
 ```
 
-### Remotion:
+### Remotion Development:
 ```bash
 # Start Remotion studio
 npm exec remotion studio
+
+# Test component rendering
+node src/scripts/check-component.ts [componentId]
 ```
+
+### Debug Tools:
+```bash
+# MCP Log Tools
+log_query "search through logs"
+log_clear
+log_issues
+
+# A2A Diagnostic Tools
+http://localhost:3000/test/evaluation-dashboard
+```
+
+## Documentation Requirements
+
+When completing tasks, you MUST:
+
+1. **Document process and progress:**
+   - Create a new file in `/memory-bank/sprints/[current-sprint]/` if needed
+   - Update sprint progress.md with what you've accomplished
+   - Document any key findings or important patterns discovered
+
+2. **For significant architectural changes:**
+   - Create diagrams explaining the new structure
+   - Document reasoning behind major decisions
+   - Explain how the change impacts existing systems
+
+3. **For API endpoints:**
+   - Create a doc in `/memory-bank/api-docs/`
+   - Include input/output types and examples
+   - Document authentication requirements and error handling
+
+4. **For component/UI improvements:**
+   - Document the component hierarchy
+   - Explain state management
+   - Include screenshots or diagrams if helpful
 
 ## PR Guidelines
 
@@ -197,3 +428,4 @@ npm exec remotion studio
 3. Validate all inputs and ensure type safety
 4. Remove any unused code
 5. Add path comments to new files
+6. Reference sprint tasks in commit messages

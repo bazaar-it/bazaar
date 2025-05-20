@@ -103,34 +103,55 @@ export const chatRouter = createTRPCRouter({
             }
 
             // 1. Auth Check
-            const project = await ctx.db.query.projects.findFirst({
-                columns: { id: true, userId: true },
-                where: and(eq(projects.id, projectId), eq(projects.userId, session.user.id))
-            });
-            if (!project) throw new TRPCError({ code: "FORBIDDEN" });
+            let project;
+            try {
+              project = await ctx.db.query.projects.findFirst({
+                  columns: { id: true, userId: true },
+                  where: and(eq(projects.id, projectId), eq(projects.userId, session.user.id))
+              });
+            } catch (error) {
+              console.error(`[initiateChat] DB error during project auth check for projectId: ${projectId}:`, error);
+              throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database error during project verification." });
+            }
+            if (!project) {
+              console.warn(`[initiateChat] Forbidden attempt for projectId: ${projectId} by user: ${session.user.id}`);
+              throw new TRPCError({ code: "FORBIDDEN", message: "Project not found or access denied." });
+            }
 
-            // 2. Insert User Message
             const userMessageId = randomUUID();
-            await ctx.db.insert(messages).values({
-                id: userMessageId,
-                projectId,
-                content: message,
-                role: "user",
-                createdAt: new Date(),
-            });
+            try {
+              // 2. Insert User Message
+              await ctx.db.insert(messages).values({
+                  id: userMessageId,
+                  projectId,
+                  content: message,
+                  role: "user",
+                  createdAt: new Date(),
+              });
+            } catch (error) {
+              console.error(`[initiateChat] Failed to insert user message for projectId: ${projectId}, userMessageId: ${userMessageId}:`, error);
+              throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to save your message." });
+            }
 
-            // 3. Create Assistant Placeholder
             const assistantMessageId = randomUUID();
-            await ctx.db.insert(messages).values({
-                id: assistantMessageId,
-                projectId,
-                content: "...", // Minimal initial content
-                role: "assistant",
-                kind: "status",
-                status: "pending",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            });
+            try {
+              // 3. Create Assistant Placeholder
+              await ctx.db.insert(messages).values({
+                  id: assistantMessageId,
+                  projectId,
+                  content: "...", // Minimal initial content
+                  role: "assistant",
+                  kind: "status",
+                  status: "pending",
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+              });
+            } catch (error) {
+              console.error(`[initiateChat] Failed to insert assistant placeholder message for projectId: ${projectId}, assistantMessageId: ${assistantMessageId}:`, error);
+              // Attempt to clean up user message if assistant placeholder fails?
+              // For now, just error out.
+              throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to prepare assistant response." });
+            }
 
             console.log(`Initiated chat for AsstMsgID: ${assistantMessageId} (UserMsgID: ${userMessageId})`);
             return { assistantMessageId, userMessageId };

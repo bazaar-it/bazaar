@@ -4,9 +4,10 @@ import { BaseAgent, type AgentMessage } from "../base-agent";
 import { db } from "~/server/db";
 import { agentMessages } from "~/server/db/schema";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
-import type { SSEEvent } from "~/types/a2a";
+import type { SSEEvent } from "~/server/services/a2a/sseManager.service";
 import crypto from "crypto";
 import { Subject } from "rxjs";
+import { SSEEventType } from "~/server/services/a2a/sseManager.service";
 
 // Mock BaseAgent for MessageBus tests
 class MockBusAgent extends BaseAgent {
@@ -31,25 +32,36 @@ class MockBusAgent extends BaseAgent {
   }
 }
 
-// Mock db calls
-const mockDbInsertReturning = jest.fn();
-const mockDbValues = jest.fn().mockReturnValue({ returning: mockDbInsertReturning });
-const mockDbInsert = jest.fn().mockReturnValue({ values: mockDbValues });
+// Mock db calls - Declare using let outside and assign inside the mock factory
+// let mockDbInsertReturning: jest.Mock;
+// let mockDbValues: jest.Mock;
+// let mockDbInsert: jest.Mock;
 
-const mockDbWhere = jest.fn();
-const mockDbSet = jest.fn().mockReturnValue({ where: mockDbWhere });
-const mockDbUpdate = jest.fn().mockReturnValue({ set: mockDbSet });
+// let mockDbWhere: jest.Mock;
+// let mockDbSet: jest.Mock;
+// let mockDbUpdate: jest.Mock;
 
-jest.mock("~/server/db", () => ({
-  db: {
-    insert: mockDbInsert,
-    update: mockDbUpdate,
-    query: { 
-      // customComponentJobs: { findFirst: jest.fn() }, // Add if needed
+jest.mock("~/server/db", () => {
+  // Move declarations and initializations inside the factory
+  const mockDbInsertReturning = jest.fn();
+  const mockDbValues = jest.fn().mockReturnValue({ returning: mockDbInsertReturning });
+  const mockDbInsert = jest.fn().mockReturnValue({ values: mockDbValues });
+
+  const mockDbWhere = jest.fn();
+  const mockDbSet = jest.fn().mockReturnValue({ where: mockDbWhere });
+  const mockDbUpdate = jest.fn().mockReturnValue({ set: mockDbSet });
+
+  return {
+    db: {
+      insert: mockDbInsert,
+      update: mockDbUpdate,
+      query: {
+        // customComponentJobs: { findFirst: jest.fn() }, // Add if needed
+      },
     },
-  },
-  agentMessages: {}, 
-}));
+    agentMessages: {}, // Keep simplified table mock for schema checks
+  };
+});
 
 const mockCreateTaskStream = jest.fn(() => new Subject<SSEEvent>());
 jest.mock("~/server/services/a2a/taskManager.service", () => ({
@@ -63,13 +75,23 @@ describe("MessageBus Service", () => {
   let agentA: MockBusAgent;
   let agentB: MockBusAgent;
 
+  // Declare testMessage in a higher scope
+  const testMessage: AgentMessage = {
+    id: crypto.randomUUID(),
+    type: "TEST_MESSAGE",
+    payload: { data: "test_payload" },
+    sender: "AgentA",
+    recipient: "AgentB",
+    correlationId: undefined,
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     busInstance = messageBus; // Use the actual singleton instance
     // Manually clear the internal state of the singleton for test isolation
     (busInstance as any).agents.clear();
     (busInstance as any).agentSubscribers.clear();
-    
+
     agentA = new MockBusAgent("AgentA");
     agentB = new MockBusAgent("AgentB");
 
@@ -83,19 +105,13 @@ describe("MessageBus Service", () => {
   });
 
   describe("publish", () => {
-    const testMessage: AgentMessage = {
-      id: crypto.randomUUID(),
-      type: "TEST_MESSAGE",
-      payload: { data: "test_payload" },
-      sender: "AgentA",
-      recipient: "AgentB",
-      correlationId: undefined,
-    };
-
     it("should log the message to the database with status 'pending'", async () => {
       await busInstance.publish(testMessage);
-      expect(mockDbInsert).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbValues).toHaveBeenCalledWith(expect.objectContaining({
+      // Access mocks through the db object
+      expect(db.insert).toHaveBeenCalledWith(agentMessages);
+      // Access values mock through the result of db.insert
+      const valuesMock = (db.insert(agentMessages) as any).values as jest.Mock;
+      expect(valuesMock).toHaveBeenCalledWith(expect.objectContaining({
         id: testMessage.id,
         sender: "AgentA",
         recipient: "AgentB",
@@ -113,35 +129,39 @@ describe("MessageBus Service", () => {
     it("should mark the message as 'processed' after successful processing", async () => {
       agentB.processMessageMock.mockResolvedValueOnce(null);
       await busInstance.publish(testMessage);
-      expect(mockDbUpdate).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbSet).toHaveBeenCalledWith({ status: "processed", processedAt: expect.any(Date) });
-      expect(mockDbWhere).toHaveBeenCalledWith(expect.objectContaining({ id: testMessage.id })); 
+      // Access mocks through the db object
+      expect(db.update).toHaveBeenCalledWith(agentMessages);
+      // Access set and where mocks through the result of db.update
+      const setMock = (db.update(agentMessages) as any).set as jest.Mock;
+      expect(setMock).toHaveBeenCalledWith({ status: "processed", processedAt: expect.any(Date) });
+      const whereMock = (setMock(expect.anything()) as any).where as jest.Mock;
+      expect(whereMock).toHaveBeenCalledWith(expect.objectContaining({ id: testMessage.id }));
     });
 
     it("should publish a response message if the recipient agent returns one", async () => {
       const responsePayload = { result: "agentB_processed" };
       const responseFromB: AgentMessage = {
-        id: "response-id-from-b", 
+        id: "response-id-from-b",
         type: "TEST_RESPONSE",
         payload: responsePayload,
         sender: "AgentB",
-        recipient: "AgentA", 
+        recipient: "AgentA",
       };
       agentB.processMessageMock.mockResolvedValueOnce(responseFromB);
-      
+
       const publishSpy = jest.spyOn(busInstance, 'publish');
-      
+
       await busInstance.publish(testMessage);
 
-      expect(publishSpy).toHaveBeenCalledTimes(2); 
-      expect(publishSpy).toHaveBeenNthCalledWith(2, 
+      expect(publishSpy).toHaveBeenCalledTimes(2);
+      expect(publishSpy).toHaveBeenNthCalledWith(2,
         expect.objectContaining({
           type: "TEST_RESPONSE",
           payload: responsePayload,
           sender: "AgentB",
           recipient: "AgentA",
-          correlationId: testMessage.id, 
-          id: expect.not.stringMatching(testMessage.id) 
+          correlationId: testMessage.id,
+          id: expect.not.stringMatching(testMessage.id)
         })
       );
       publishSpy.mockRestore();
@@ -150,8 +170,10 @@ describe("MessageBus Service", () => {
     it("should mark message as 'failed' if recipient agent is not found", async () => {
       const messageToNonExistentAgent = { ...testMessage, recipient: "NonExistentAgent" };
       await busInstance.publish(messageToNonExistentAgent);
-      expect(mockDbUpdate).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({
+      // Access mocks through the db object
+      expect(db.update).toHaveBeenCalledWith(agentMessages);
+      const setMock = (db.update(agentMessages) as any).set as jest.Mock;
+      expect(setMock).toHaveBeenCalledWith(expect.objectContaining({
         status: "failed",
         payload: expect.objectContaining({ error: "Recipient not found: NonExistentAgent" })
       }));
@@ -162,8 +184,10 @@ describe("MessageBus Service", () => {
       const processingError = new Error("Agent B failed");
       agentB.processMessageMock.mockRejectedValueOnce(processingError);
       await busInstance.publish(testMessage);
-      expect(mockDbUpdate).toHaveBeenCalledWith(agentMessages);
-      expect(mockDbSet).toHaveBeenCalledWith(expect.objectContaining({
+      // Access mocks through the db object
+      expect(db.update).toHaveBeenCalledWith(agentMessages);
+      const setMock = (db.update(agentMessages) as any).set as jest.Mock;
+      expect(setMock).toHaveBeenCalledWith(expect.objectContaining({
         status: "failed",
         payload: expect.objectContaining({ error: processingError.toString() })
       }));
@@ -187,9 +211,18 @@ describe("MessageBus Service", () => {
       const newAgent = new MockBusAgent("MissingAgent");
       busInstance.registerAgent(newAgent);
 
+      // Mock the update call during retry
+      const setMock = ((db.update(agentMessages) as any).set as jest.Mock);
+      setMock.mockImplementationOnce(() => ({ where: jest.fn() })); // Mock the chained where
+
       await busInstance.retryDeadLetterQueue();
 
       expect(newAgent.processMessageMock).toHaveBeenCalledWith(messageToMissing);
+      // Check the database update call during retry
+      expect(db.update).toHaveBeenCalledWith(agentMessages);
+      expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ status: "pending" }));
+      expect((setMock(expect.anything()) as any).where).toHaveBeenCalledWith(expect.objectContaining({ id: messageToMissing.id }));
+
       expect(busInstance.getDeadLetterQueue()).toHaveLength(0);
     });
   });
@@ -206,10 +239,18 @@ describe("MessageBus Service", () => {
       const mockStreamSubject = new Subject<SSEEvent>();
       const nextSpy = jest.spyOn(mockStreamSubject, 'next');
       mockCreateTaskStream.mockReturnValueOnce(mockStreamSubject);
-      
-      const testEvent: SSEEvent = { id: "event1", event: "status", data: JSON.stringify({ state: "working" }) };
+
+      // Create a TaskStatusUpdateEvent conforming to the SSEEvent type
+      const testEvent: SSEEvent = {
+        type: SSEEventType.TaskStatusUpdate, // Use the correct event type enum
+        timestamp: new Date().toISOString(), // Provide a timestamp
+        data: { // Provide the data object in the expected structure
+          task_id: taskId,
+          state: "working", // Use the TaskState enum value
+        }
+      };
       busInstance.emitToTaskStream(taskId, testEvent);
-      
+
       expect(mockCreateTaskStream).toHaveBeenCalledWith(taskId);
       expect(nextSpy).toHaveBeenCalledWith(testEvent);
     });
@@ -221,7 +262,7 @@ describe("MessageBus Service", () => {
       busInstance.subscribeToAgentMessages("AgentA", subscriberMock);
       busInstance.cleanup();
       const consoleSpy = jest.spyOn(console, 'log');
-      busInstance.cleanup(); 
+      busInstance.cleanup();
       expect(consoleSpy).toHaveBeenCalledWith("MessageBus: Cleaned up direct agent message subscribers.");
       consoleSpy.mockRestore();
     });

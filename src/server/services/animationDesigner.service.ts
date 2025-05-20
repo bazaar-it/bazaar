@@ -12,7 +12,7 @@ import { db } from '~/server/db';
 import { animationDesignBriefs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
-import logger, { animationDesignerLogger } from '~/lib/logger';
+import logger, { animationDesignerLogger, logAnimationStart, logAnimationValidation, logAnimationComplete } from '~/lib/logger';
 
 // Define the OpenAI function schema directly rather than converting from Zod
 // This ensures we have a proper schema that OpenAI can understand
@@ -518,7 +518,7 @@ export async function generateAnimationDesignBrief(
   
   const sceneId = ensureValidUuid(inputSceneId);
   
-  animationDesignerLogger.start(sceneId, "Starting Animation Design Brief generation", {
+  logAnimationStart(animationDesignerLogger, sceneId, "Starting Animation Design Brief generation", {
     projectId,
     durationInFrames: desiredDurationInFrames,
     dimensions
@@ -572,7 +572,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
     const llmStartTime = Date.now();
     const response = await openai.chat.completions.create({
       model: llmConfig.model, // Use configured model
-      temperature: llmConfig.temperature, // Use configured temp (optional)
+      temperature: 1, // Only temp=1 supported with o4-mini (overriding llmConfig)
       messages: messagesForLLM,
       tools: [{
         type: "function",
@@ -667,7 +667,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
       }
 
       // Validate and clean before returning
-      animationDesignerLogger.validation(sceneId, "Validating Animation Design Brief schema");
+      logAnimationValidation(animationDesignerLogger, sceneId, "Validating Animation Design Brief schema");
       
       // Fix UUIDs in the brief
       const cleanedBrief = fixUuidsInObject(generatedBrief, sceneId);
@@ -725,7 +725,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
       );
       
       const totalDuration = Date.now() - startTime;
-      animationDesignerLogger.complete(sceneId, `Animation Design Brief generated successfully in ${totalDuration}ms`, {
+      logAnimationComplete(animationDesignerLogger, sceneId, `Animation Design Brief generated successfully in ${totalDuration}ms`, {
         duration: totalDuration,
         briefId,
         elementsCount: validBrief.elements?.length

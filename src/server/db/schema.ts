@@ -7,6 +7,7 @@ import { type AdapterAccount } from "@auth/core/adapters";
 import { type InputProps } from "~/types/input-props";
 import { type JsonPatch } from "~/types/json-patch";
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
+import { type InferSelectModel } from "drizzle-orm";
 
 // Import the InputProps type for the projects table
 
@@ -117,7 +118,7 @@ export const patches = createTable(
   (t) => [index("patch_project_idx").on(t.projectId)],
 );
 
-export const patchesRelations = relations(patches, ({ one }) => ({ // Added patchesRelations
+export const patchesRelations = relations(patches, ({ one }) => ({
   project: one(projects, { fields: [patches.projectId], references: [projects.id] }),
 }));
 
@@ -478,3 +479,9 @@ export const componentEvaluationMetrics = createTable(
 export const componentEvaluationMetricsRelations = relations(componentEvaluationMetrics, ({ one }) => ({
   testCase: one(componentTestCases, { fields: [componentEvaluationMetrics.testCaseId], references: [componentTestCases.id] }),
 }));
+
+// Export inferred type for customComponentJobs table
+export type ComponentJob = InferSelectModel<typeof customComponentJobs>;
+
+// Define and export TaskStatus type
+export type TaskStatus = "pending" | "building" | "success" | "error";

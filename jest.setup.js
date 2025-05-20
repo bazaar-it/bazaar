@@ -1,23 +1,23 @@
 // jest.setup.js
 // This file is run after the test environment is set up but before any tests run
 
-// Import test libraries - using ES module import
-import '@testing-library/jest-dom';
+// Import test libraries - using CommonJS require
+require('@testing-library/jest-dom');
 
-// Mock problematic ESM modules
-jest.mock('~/env', () => ({
-  env: {
-    OPENAI_API_KEY: 'test-openai-key',
-    DATABASE_URL: 'test-db-url',
-    R2_ACCESS_KEY_ID: 'test-r2-key',
-    R2_SECRET_ACCESS_KEY: 'test-r2-secret',
-    R2_BUCKET_NAME: 'test-bucket',
-    R2_PUBLIC_URL: 'https://test-bucket.example.com',
-    R2_ENDPOINT: 'https://test-endpoint.com',
-    NODE_ENV: 'test'
-    // Add any other environment variables needed by tests
-  }
-}), { virtual: true });
+// Remove problematic ESM modules mock
+// jest.mock('~/env', () => ({
+//   env: {
+//     OPENAI_API_KEY: 'test-openai-key',
+//     DATABASE_URL: 'test-db-url',
+//     R2_ACCESS_KEY_ID: 'test-r2-key',
+//     R2_SECRET_ACCESS_KEY: 'test-r2-secret',
+//     R2_BUCKET_NAME: 'test-bucket',
+//     R2_PUBLIC_URL: 'https://test-bucket.example.com',
+//     R2_ENDPOINT: 'https://test-endpoint.com',
+//     NODE_ENV: 'test'
+//     // Add any other environment variables needed by tests
+//   }
+// }), { virtual: true });
 
 /* 
 // Mock the @t3-oss/env-nextjs module

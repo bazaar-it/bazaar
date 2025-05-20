@@ -39,6 +39,7 @@ const mockCreateSimpleFileArtifactBase = jest.fn((id, url, mimeType, description
 
 jest.mock("../base-agent", () => {
   const originalBaseAgent = jest.requireActual("../base-agent").BaseAgent;
+  const { randomUUID } = require('crypto');
   return {
     BaseAgent: jest.fn().mockImplementation((name, description) => {
       const agent = new originalBaseAgent(name, description);
@@ -56,7 +57,7 @@ jest.mock("../base-agent", () => {
 // Refined DB mock for more specific checks
 const mockDbUpdateSet = jest.fn().mockReturnThis();
 const mockDbUpdateWhere = jest.fn().mockResolvedValue([{}]); // Default success for where
-const mockDbUpdateDirect = jest.fn(() => ({ set: mockDbUpdateSet, where: mockDbUpdateWhere }));
+const mockDbUpdateDirect = jest.fn();
 const mockDbFindFirst = jest.fn(); // For findFirst calls
 
 jest.mock("~/server/db", () => ({

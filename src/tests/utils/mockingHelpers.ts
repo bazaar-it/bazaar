@@ -39,7 +39,7 @@ export function createOpenAIMock() {
  * Create a mock for the Drizzle ORM database
  * Makes it easier to mock database operations
  */
-export function createDrizzleMock() {
+export function createDrizzleMock(jest: any) {
   const mockDbInsert = jest.fn();
   const mockDbUpdate = jest.fn();
   const mockDbQuery = jest.fn();

@@ -5,7 +5,7 @@ module.exports = {
   presets: [
     // Allow importing ESM modules from node_modules
     ["@babel/preset-env", { 
-      "modules": "auto",
+      "modules": "commonjs",
       "targets": { "node": "current" }
     }],
     "@babel/preset-react",
@@ -15,8 +15,12 @@ module.exports = {
     "@babel/plugin-transform-runtime",
     // Support dynamic imports
     "@babel/plugin-syntax-dynamic-import",
-    // Uncomment this when testing code that imports CJS modules from ESM
-    // or when you encounter "Cannot use import statement outside a module" errors
-    "babel-plugin-transform-import-meta"
-  ]
+    // Transform import.meta for better ESM compatibility
+    "babel-plugin-transform-import-meta",
+    // Add class properties support (using transform instead of proposal)
+    ["@babel/plugin-transform-class-properties", { "loose": true }],
+    // Add private methods support (using transform instead of proposal)
+    ["@babel/plugin-transform-private-methods", { "loose": true }]
+  ],
+  // Removed explicit ignore pattern to let Jest's transformIgnorePatterns control node_modules transformation
 };

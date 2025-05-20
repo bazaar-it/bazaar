@@ -23,7 +23,7 @@ import {
   mapA2AToInternalState
 } from "~/types/a2a";
 import { TaskManager } from '../services/a2a/taskManager.service'; 
-import { a2aLogger } from '~/lib/logger'; 
+import { a2aLogger, logAgentSend, logAgentProcess } from '~/lib/logger'; 
 import { OpenAI } from 'openai';
 import { messageBus } from './message-bus';
 import { lifecycleManager } from '../services/a2a/lifecycleManager.service';
@@ -65,7 +65,7 @@ export abstract class BaseAgent {
   protected taskManager: TaskManager;
   protected openai: OpenAI | null = null;
   protected modelName: string = 'gpt-4o-mini';
-  protected temperature: number = 0.7;
+  protected temperature: number = 1; // Only temp=1 supported with o4-mini
   protected lifecycleState: AgentLifecycleState = AgentLifecycleState.Initializing;
   protected heartbeatIntervalMs = 10000;
   private heartbeatTimer: NodeJS.Timeout | null = null;
@@ -183,7 +183,7 @@ export abstract class BaseAgent {
       correlationId,
       timestamp: new Date().toISOString()
     };
-    a2aLogger.agentSend(this.name, payload.taskId || "N/A", recipient, type, { messageId: newMessage.id, payload, correlationId, context: "internal_message" });
+    logAgentSend(a2aLogger, this.name, payload.taskId || "N/A", recipient, type, { messageId: newMessage.id, payload, correlationId, context: "internal_message" });
     return newMessage;
   }
   
@@ -207,7 +207,7 @@ export abstract class BaseAgent {
     };
     
     const newMessage = this.createMessage(type, payload, recipient, correlationId);
-    a2aLogger.agentSend(this.name, taskId, recipient, type, { messageId: newMessage.id, context: "a2a_message" });
+    logAgentSend(a2aLogger, this.name, taskId, recipient, type, { messageId: newMessage.id, context: "a2a_message" });
     return newMessage;
   }
   
@@ -263,7 +263,7 @@ export abstract class BaseAgent {
     internalStatus?: ComponentJobStatus | null
   ): Promise<void> {
     try {
-      a2aLogger.agentProcess(this.name, taskId, "updateTaskState", `Updating task to state: ${state}, internalStatus: ${internalStatus}`);
+      logAgentProcess(a2aLogger, this.name, taskId, "updateTaskState", `Updating task to state: ${state}, internalStatus: ${internalStatus}`);
 
       let finalMessage: Message;
 
@@ -311,7 +311,7 @@ export abstract class BaseAgent {
     artifact: Artifact
   ): Promise<void> {
     try {
-      a2aLogger.agentProcess(this.name, taskId, "addTaskArtifact", `Adding artifact: ${artifact.id}`);
+      logAgentProcess(a2aLogger, this.name, taskId, "addTaskArtifact", `Adding artifact: ${artifact.id}`);
       await this.taskManager.addTaskArtifact(taskId, artifact);
     } catch (error: any) {
       a2aLogger.error(this.name, `Failed to add task artifact: ${error.message}`, error, { taskId, artifactId: artifact.id });
@@ -392,7 +392,7 @@ export abstract class BaseAgent {
   protected async generateStructuredResponse<T>(
     prompt: string,
     systemPrompt: string,
-    temperature: number = 0
+    temperature: number = 1 // Only temp=1 supported with o4-mini
   ): Promise<T | null> {
     if (!this.openai) {
       a2aLogger.error("llm_error", `${this.name}: Attempted to use LLM without OpenAI initialization`);

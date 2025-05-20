@@ -5,34 +5,43 @@ import { BaseAgent, type AgentMessage } from '../base-agent';
 import { taskManager } from '~/server/services/a2a/taskManager.service';
 import type { Message, Artifact, TaskState, AgentSkill, ComponentJobStatus } from '~/types/a2a';
 import { createTextMessage, createFileArtifact } from '~/types/a2a';
-import * as R2Service from '~/server/services/r2.service'; // Import actual module
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { r2 as mockR2Client } from '~/server/lib/r2'; // Corrected path to the mock R2 client
+import { Subject } from 'rxjs';
 
 // Mock the actual r2 object from '~/server/lib/r2'
 // This mock will be used by the R2StorageAgent when it imports '~/server/lib/r2'
+// Use explicit typing for the mock return value
 jest.mock('~/server/lib/r2', () => ({
   __esModule: true, // This is important for modules with default exports or mixed exports
   r2: {
-    send: jest.fn(), // Mock the 'send' method of the r2 object
-  },
+    send: jest.fn() as jest.MockedFunction<typeof import('~/server/lib/r2').r2.send>, // Mock the 'send' method of the r2 object
+  } as typeof import('~/server/lib/r2').r2,
 }));
 
 // Mock R2Service functions
 jest.mock("~/server/services/r2.service", () => ({
-  verifyR2Component: jest.fn<(url: string) => Promise<boolean>>(),
-  uploadToR2: jest.fn(), // Assuming this might be used if direct upload was part of R2StorageAgent
+  verifyR2Component: jest.fn<(url: string) => Promise<boolean>>(), // Explicit return type
+  uploadToR2: jest.fn(), // Mock function with implicit return type
 }));
 
 // Mock TaskManager
 jest.mock("~/server/services/a2a/taskManager.service", () => ({
   taskManager: {
-    updateTaskState: jest.fn(),
-    addTaskArtifact: jest.fn(),
-  },
+    updateTaskStatus: jest.fn() as jest.MockedFunction<typeof taskManager.updateTaskStatus>,
+    addTaskArtifact: jest.fn() as jest.MockedFunction<typeof taskManager.addTaskArtifact>,
+    onNewTaskCreated: jest.fn() as jest.MockedFunction<typeof taskManager.onNewTaskCreated>,
+    createTask: jest.fn() as jest.MockedFunction<typeof taskManager.createTask>,
+    getTaskById: jest.fn() as jest.MockedFunction<typeof taskManager.getTaskById>,
+    getTaskStatus: jest.fn() as jest.MockedFunction<typeof taskManager.getTaskStatus>,
+    cancelTask: jest.fn() as jest.MockedFunction<typeof taskManager.cancelTask>,
+    submitTaskInput: jest.fn() as jest.MockedFunction<typeof taskManager.submitTaskInput>,
+    subscribeToTaskUpdates: jest.fn() as jest.MockedFunction<typeof taskManager.subscribeToTaskUpdates>,
+    createTaskStream: jest.fn() as jest.MockedFunction<typeof taskManager.createTaskStream>,
+  } as any,
 }));
 
 // Mock BaseAgent methods
@@ -110,17 +119,22 @@ describe("R2StorageAgent", () => {
     jest.spyOn(BaseAgent.prototype, 'createA2AMessage').mockImplementation(mockCreateA2AMessageBase);
   });
 
-  const createStoreRequestMessage = (artifact?: Artifact): AgentMessage => ({
-    id: crypto.randomUUID(),
-    type: "STORE_COMPONENT_REQUEST",
-    payload: {
-      taskId: mockTaskId,
-      componentJobId: mockTaskId, // for consistency if older code uses this
-      artifacts: artifact ? [artifact] : [],
-    },
-    sender: "CoordinatorAgent",
-    recipient: "R2StorageAgent",
-  });
+  const createStoreRequestMessage = (artifact?: Artifact): AgentMessage => {
+    // Define url here if needed by createFileArtifact, otherwise pass directly
+    const artifactUrl = artifact?.url; // Or however url is derived
+    
+    return ({
+      id: crypto.randomUUID(),
+      type: "STORE_COMPONENT_REQUEST",
+      payload: {
+        taskId: mockTaskId,
+        componentJobId: mockTaskId, // for consistency if older code uses this
+        artifacts: artifact ? [artifact] : [],
+      },
+      sender: "CoordinatorAgent",
+      recipient: "R2StorageAgent",
+    });
+  };
 
   describe("processMessage - STORE_COMPONENT_REQUEST", () => {
     it("should verify component in R2 and send COMPONENT_STORED_SUCCESS if valid", async () => {
@@ -152,40 +166,42 @@ describe("R2StorageAgent", () => {
       const incomingMessageNoArtifact = createStoreRequestMessage(undefined);
       const responseNoArtifact = await r2StorageAgent.processMessage(incomingMessageNoArtifact);
       
-      expect(responseNoArtifact).toBeDefined(); // Ensure response is not null
-      expect(responseNoArtifact!.type).toBe("COMPONENT_PROCESS_ERROR");
-      
-      const payloadNoArtifact = responseNoArtifact!.payload;
-      expect(payloadNoArtifact).toBeDefined();
-      const messagePayloadNoArtifact = payloadNoArtifact.message;
-      expect(messagePayloadNoArtifact).toBeDefined();
-      // Assuming messagePayloadNoArtifact is of type Message, .parts is non-optional array
-      expect(messagePayloadNoArtifact.parts.length).toBeGreaterThan(0);
-
-      const firstPartNoArtifact = messagePayloadNoArtifact.parts[0] as { type?: string, text?: string };
-      expect(firstPartNoArtifact.text).toBeDefined();
-      if(typeof firstPartNoArtifact.text === 'string') {
-          expect(firstPartNoArtifact.text).toContain("Missing component artifact or artifact URL");
+      expect(responseNoArtifact).toBeDefined();
+      if (responseNoArtifact) {
+          expect(responseNoArtifact.type).toBe("COMPONENT_PROCESS_ERROR");
+          expect(responseNoArtifact.payload).toBeDefined();
+          if (responseNoArtifact.payload) {
+              expect(responseNoArtifact.payload.message).toBeDefined();
+              if (responseNoArtifact.payload.message) {
+                  expect(responseNoArtifact.payload.message.parts.length).toBeGreaterThan(0);
+                  const firstPartNoArtifact = responseNoArtifact.payload.message.parts[0] as { type?: string, text?: string };
+                  expect(firstPartNoArtifact.text).toBeDefined();
+                  if(typeof firstPartNoArtifact.text === 'string') {
+                      expect(firstPartNoArtifact.text).toContain("Missing component artifact or artifact URL");
+                  }
+              }
+          }
       }
 
       const artifactNoUrl = { ...mockArtifact, url: undefined };
       const incomingMessageNoUrl = createStoreRequestMessage(artifactNoUrl as Artifact);
       const responseNoUrl = await r2StorageAgent.processMessage(incomingMessageNoUrl);
       
-      expect(responseNoUrl).toBeDefined(); // Ensure response is not null
-      expect(responseNoUrl!.type).toBe("COMPONENT_PROCESS_ERROR");
-      
-      const payloadNoUrl = responseNoUrl!.payload;
-      expect(payloadNoUrl).toBeDefined();
-      const messagePayloadNoUrl = payloadNoUrl.message;
-      expect(messagePayloadNoUrl).toBeDefined();
-      // Assuming messagePayloadNoUrl is of type Message, .parts is non-optional array
-      expect(messagePayloadNoUrl.parts.length).toBeGreaterThan(0);
-
-      const firstPartNoUrl = messagePayloadNoUrl.parts[0] as { type?: string, text?: string };
-      expect(firstPartNoUrl.text).toBeDefined();
-      if(typeof firstPartNoUrl.text === 'string') {
-          expect(firstPartNoUrl.text).toContain("Missing component artifact or artifact URL");
+      expect(responseNoUrl).toBeDefined();
+      if (responseNoUrl) {
+          expect(responseNoUrl.type).toBe("COMPONENT_PROCESS_ERROR");
+          expect(responseNoUrl.payload).toBeDefined();
+          if (responseNoUrl.payload) {
+              expect(responseNoUrl.payload.message).toBeDefined();
+              if (responseNoUrl.payload.message) {
+                  expect(responseNoUrl.payload.message.parts.length).toBeGreaterThan(0);
+                  const firstPartNoUrl = responseNoUrl.payload.message.parts[0] as { type?: string, text?: string };
+                  expect(firstPartNoUrl?.text).toBeDefined();
+                  if(typeof firstPartNoUrl?.text === 'string') {
+                      expect(firstPartNoUrl.text).toContain("Missing component artifact or artifact URL");
+                  }
+              }
+          }
       }
     });
   });

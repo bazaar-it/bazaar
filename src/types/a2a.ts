@@ -90,6 +90,11 @@ export const requiresUserInput = (state: TaskState): boolean => {
 export type PartType = 'text' | 'file' | 'data';
 
 /**
+ * Defines the allowed input modes for agents and skills.
+ */
+export type AgentInputMode = 'text' | 'file' | 'data';
+
+/**
  * Base interface for message parts
  */
 export interface Part {
@@ -292,8 +297,8 @@ export interface AgentSkill {
     input: { message: Message }; 
     output?: { message?: Message; artifacts?: Artifact[] }; // Output is optional
   }> | null;
-  inputModes?: Array<'text' | 'file' | 'data'> | null;
-  outputModes?: Array<'text' | 'file' | 'data'> | null;
+  inputModes?: AgentInputMode[] | null;
+  outputModes?: AgentInputMode[] | null;
   inputSchema?: Record<string, any> | null; 
   outputSchema?: Record<string, any> | null; 
 }
@@ -326,8 +331,8 @@ export interface AgentCard {
   documentationUrl?: string | null;
   capabilities: AgentCapabilities;
   authentication?: any | null; // More specific types can be used (e.g., OAuth, APIKey)
-  defaultInputModes?: Array<'text' | 'file' | 'data'> | null;
-  defaultOutputModes?: Array<'text' | 'file' | 'data'> | null;
+  defaultInputModes?: AgentInputMode[] | null;
+  defaultOutputModes?: AgentInputMode[] | null;
   skills: AgentSkill[]; // Skills array is not optional in the spec
 }
 

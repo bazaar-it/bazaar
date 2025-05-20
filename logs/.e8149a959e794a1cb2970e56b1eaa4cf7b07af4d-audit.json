@@ -64,6 +64,11 @@
             "date": 1747639250689,
             "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-19.log",
             "hash": "b7cce6135e43e0a2c75cb9aa3eecd7e4dddacd92e2b37262eae70bc8f8917543"
+        },
+        {
+            "date": 1747725611273,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-20.log",
+            "hash": "848891d820dbac94746f8017cb4bcda0a41a20e25ce100c9f7a7ac85fe3198f6"
         }
     ],
     "hashType": "sha256"

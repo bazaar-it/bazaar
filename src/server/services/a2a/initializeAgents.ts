@@ -32,7 +32,7 @@ export function registerAgent(agent: BaseAgent): void {
   }
   
   agentRegistry[agentName] = agent;
-  console.log(`Registered agent: ${agentName}`);
+  a2aLogger.info("agent_registry", `Registered agent: ${agentName}`);
 
   // Also register with the central MessageBus so publish/subscribe works.
   try {

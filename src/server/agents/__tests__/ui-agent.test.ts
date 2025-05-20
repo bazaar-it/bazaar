@@ -22,6 +22,11 @@ jest.mock("~/server/services/a2a/taskManager.service", () => ({
 const mockLogAgentMessage = jest.fn();
 
 jest.mock("../base-agent", () => {
+  // Import dependencies needed within the mock factory
+  const { randomUUID } = require("crypto"); // Use require for Node.js built-ins if needed, or import uuid/v4 directly
+  // For uuid, a direct import is often cleaner
+  const { randomUUID: uuidRandomUUID } = require('uuid');
+
   const originalBaseAgent = jest.requireActual("../base-agent").BaseAgent;
   return {
     BaseAgent: jest.fn().mockImplementation((name, description) => {
@@ -29,7 +34,7 @@ jest.mock("../base-agent", () => {
       agent.logAgentMessage = mockLogAgentMessage;
       // UIAgent doesn't typically send messages, so createA2AMessage mock might not be strictly needed for its own actions
       agent.createA2AMessage = jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => ({
-        id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: name, recipient, correlationId
+        id: uuidRandomUUID(), type, payload: { taskId, message, artifacts }, sender: name, recipient, correlationId
       }));
       return agent;
     }),

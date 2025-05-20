@@ -376,6 +376,11 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
 ### HIGH Priority - To Do
 - [ ] S24-1.1: Investigate/Resolve TaskProcessor Churn (`src/server/services/a2a/taskProcessor.service.ts`)
 - [ ] S24-1.2: Centralize/Optimize A2A Logger Config (`src/lib/logger.ts`)
+- [ ] **Investigate Cross-Project Logging:**
+  - [ ] Confirm if the specific UUID/"Fixed debug message" errors from `chatOrchestration.service.ts` are the ones appearing with Project 2 context in the Log Agent.
+  - [ ] If so, the issue is very subtle within `chatLogger`'s handling or Winston/LogAgent interaction.
+  - [ ] If not, and other logs show Project 2 context, trace how Project 1 actions might indirectly trigger Project 2 (A2A) operations and their (correct) logging.
+  - [ ] Obtain an example raw log entry from the Log Agent demonstrating the issue.
 
 ## Custom Component Pipeline Testing
 

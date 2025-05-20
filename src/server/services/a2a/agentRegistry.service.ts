@@ -1,6 +1,7 @@
 import { BaseAgent, type AgentLifecycleState } from "~/server/agents/base-agent";
-import type { AgentCard } from "~/types/a2a";
+import type { AgentCard, AgentInputMode, AgentSkill } from "~/types/a2a";
 import { lifecycleManager } from "./lifecycleManager.service";
+import { a2aLogger } from "~/lib/logger";
 
 /**
  * AgentRegistry service
@@ -25,9 +26,9 @@ export class AgentRegistry {
    * Register an agent with the registry
    */
   public registerAgent(agent: BaseAgent): void {
-    this.agents.set(agent.name.toLowerCase(), agent);
+    this.agents.set(agent.getName().toLowerCase(), agent);
     lifecycleManager.registerAgent(agent);
-    console.log(`Registered agent: ${agent.name}`);
+    a2aLogger.info("agent_registry", `Registered agent: ${agent.getName()}`);
   }
   
   /**
@@ -52,15 +53,30 @@ export class AgentRegistry {
     if (!agent) {
       return undefined;
     }
-    
-    return agent.getAgentCard();
+    const cardFromAgent = agent.getAgentCard();
+    // Cast to ensure compatibility with the stricter AgentCard interface.
+    // TODO: Ensure BaseAgent.getAgentCard() returns types fully compliant with AgentCard.
+    return {
+      ...cardFromAgent,
+      defaultInputModes: cardFromAgent.defaultInputModes as AgentInputMode[] | null,
+      defaultOutputModes: cardFromAgent.defaultOutputModes as AgentInputMode[] | null,
+    };
   }
-  
+
   /**
    * Get all agent cards for discovery
    */
   public getAllAgentCards(): AgentCard[] {
-    return this.getAllAgents().map(agent => agent.getAgentCard());
+    return this.getAllAgents().map(agent => {
+      const cardFromAgent = agent.getAgentCard();
+      // Cast to ensure compatibility with the stricter AgentCard interface.
+      // TODO: Ensure BaseAgent.getAgentCard() returns types fully compliant with AgentCard.
+      return {
+        ...cardFromAgent,
+        defaultInputModes: cardFromAgent.defaultInputModes as AgentInputMode[] | null,
+        defaultOutputModes: cardFromAgent.defaultOutputModes as AgentInputMode[] | null,
+      };
+    });
   }
 
   public getAgentStatuses(): { name: string; state: AgentLifecycleState; lastHeartbeat: number }[] {
@@ -80,7 +96,7 @@ const agentRegistryGlobal: Record<string, BaseAgent> = {};
 export function registerAgentGlobal(agent: BaseAgent): void {
   const agentName = agent.getName();
   agentRegistryGlobal[agentName] = agent;
-  console.log(`Registered agent: ${agentName}`);
+  a2aLogger.info("agent_registry", `Registered agent: ${agentName}`);
 }
 
 /**
@@ -96,5 +112,3 @@ export function getAgentGlobal(agentName: string): BaseAgent | undefined {
 export function getAllAgentsGlobal(): BaseAgent[] {
   return Object.values(agentRegistryGlobal);
 }
-
-// ... rest of existing code ... 

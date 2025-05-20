@@ -12,45 +12,50 @@ import { eq } from 'drizzle-orm';
 // Mock S3 operations to avoid actual R2 uploads
 jest.mock('@aws-sdk/client-s3', () => {
   return {
-    S3Client: jest.fn().mockImplementation(() => ({
-      send: jest.fn().mockImplementation((command: any) => {
-        if (command.constructor.name === 'PutObjectCommand') {
-          // Store the uploaded content for verification
-          const key = command.input.Key;
-          const body = command.input.Body;
-          
-          // Save content for later verification
-          mockUploadedContent[key] = body;
-          
-          // Simulate successful upload for PutObjectCommand
-          return Promise.resolve({
-            ETag: `"mock-etag-${uuidv4()}"`,
-            $metadata: { httpStatusCode: 200 }
-          });
-        }
-        
-        if (command.constructor.name === 'HeadObjectCommand') {
-          const key = command.input.Key;
-          // Only return success if we have content for this key
-          if (mockUploadedContent[key]) {
-            // Simulate HeadObject for R2 verification
+    S3Client: jest.fn().mockImplementation(() => {
+      // Import dependencies needed within the mock factory
+      const { v4: uuidv4 } = require('uuid');
+
+      return {
+        send: jest.fn().mockImplementation((command: any) => {
+          if (command.constructor.name === 'PutObjectCommand') {
+            // Store the uploaded content for verification
+            const key = command.input.Key;
+            const body = command.input.Body;
+            
+            // Save content for later verification
+            mockUploadedContent[key] = body;
+            
+            // Simulate successful upload for PutObjectCommand
             return Promise.resolve({
-              ContentLength: mockUploadedContent[key].length,
-              ContentType: 'application/javascript',
+              ETag: `"mock-etag-${uuidv4()}"`,
               $metadata: { httpStatusCode: 200 }
             });
-          } else {
-            // Simulate not found
-            return Promise.reject(new Error('NotFound'));
           }
-        }
-        
-        // Handle other S3 commands if necessary
-        return Promise.resolve({
-          $metadata: { httpStatusCode: 200 }
-        });
-      }),
-    })),
+          
+          if (command.constructor.name === 'HeadObjectCommand') {
+            const key = command.input.Key;
+            // Only return success if we have content for this key
+            if (mockUploadedContent[key]) {
+              // Simulate HeadObject for R2 verification
+              return Promise.resolve({
+                ContentLength: mockUploadedContent[key].length,
+                ContentType: 'application/javascript',
+                $metadata: { httpStatusCode: 200 }
+              });
+            } else {
+              // Simulate not found
+              return Promise.reject(new Error('NotFound'));
+            }
+          }
+          
+          // Handle other S3 commands if necessary
+          return Promise.resolve({
+            $metadata: { httpStatusCode: 200 }
+          });
+        }),
+      };
+    }),
     PutObjectCommand: jest.fn().mockImplementation((params) => {
       return {
         constructor: { name: 'PutObjectCommand' },

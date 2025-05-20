@@ -1,7 +1,7 @@
 // /Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/server/services/__tests__/animationDesigner.service.test.ts
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { animationDesignBriefs } from '~/server/db/schema';
-import type { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';
+import { type AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';
 import { 
   createDrizzleMock, 
   createOpenAIToolCallResponse
@@ -14,16 +14,16 @@ const {
   mockDbUpdate, 
   mockDbQuery, 
   mockDbSelect 
-} = createDrizzleMock();
+} = createDrizzleMock(jest);
 
 // Define types for the mock return values to avoid type errors
 type DbRowResult = { id: string };
 type DbUpdateResult = { affected: number };
-type OpenAIResponse = ReturnType<typeof createOpenAIToolCallResponse>;
+// type OpenAIResponse = ReturnType<typeof createOpenAIToolCallResponse>; // This type is not used, commenting out.
 type OpenAIError = Error;
 
 // Global variable to hold the OpenAI mock for use in tests
-let mockOpenAICreate: jest.Mock;
+let mockOpenAICreate: jest.Mock<(...args: any[]) => Promise<import('openai/resources').ChatCompletion>>;
 
 // Setup mock function before importing modules that use it
 mockOpenAICreate = jest.fn();

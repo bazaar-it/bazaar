@@ -1,32 +1,56 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { db, customComponentJobs } from '~/server/db';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { generateComponentCode, processComponentJob } from '../generateComponentCode';
+import { ComponentJob, TaskStatus } from '~/server/db/schema';
 
 // Mock the buildCustomComponent module
-vi.mock('../buildCustomComponent', () => ({
-  buildCustomComponent: vi.fn().mockResolvedValue(true),
+jest.mock('../buildCustomComponent', () => ({
+  buildCustomComponent: jest.fn().mockResolvedValue(true as any),
 }));
 
 // Mock the database
-vi.mock('~/server/db', () => ({
+jest.mock('~/server/db', () => ({
   db: {
     query: {
       customComponentJobs: {
-        findFirst: vi.fn(),
+        findFirst: jest.fn<() => Promise<ComponentJob | undefined>>().mockResolvedValue({
+          id: 'test-job-id',
+          projectId: 'test-project-id',
+          status: 'pending' as TaskStatus,
+          metadata: { prompt: 'Test component prompt' },
+          effect: 'test-effect',
+          props: {},
+          componentName: null,
+          generatedCode: null,
+          compiledPath: null,
+          errorLogs: null,
+          retryCount: 0,
+          taskId: null,
+          animationDesignBrief: null,
+          currentStep: null,
+          history: null,
+          sseEnabled: null,
+          createdAt: new Date(),
+          updatedAt: null,
+          original_tsx_code: null,
+          last_fix_attempt: null,
+          fix_issues: null,
+          taskState: 'submitted' as TaskStatus,
+        } as any),
       },
     },
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ id: 'test-job-id' }]),
+    update: jest.fn().mockReturnValue({
+      set: jest.fn().mockReturnValue({
+        where: jest.fn().mockResolvedValue([{ id: 'test-job-id' }] as any),
       }),
     }),
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue([{ id: 'test-job-id' }]),
+    insert: jest.fn().mockReturnValue({
+      values: jest.fn().mockResolvedValue([{ id: 'test-job-id' }] as any),
     }),
   },
-  customComponentJobs: { id: 'id' },
+  customComponentJobs: {} as typeof customComponentJobs,
 }));
 
 // Import the mocked module to get access to the mock function
@@ -34,7 +58,7 @@ import * as buildCustomComponentModule from '../buildCustomComponent';
 
 describe('Component Generation and Build Flow', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
     
     // Setup mock job data
     (db.query.customComponentJobs.findFirst as any).mockResolvedValue({
@@ -45,17 +69,17 @@ describe('Component Generation and Build Flow', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
   });
 
   it('should directly trigger buildCustomComponent after updating the database', async () => {
     // Mock the OpenAI completion response for component generation
-    vi.mock('openai', () => ({
+    jest.mock('openai', () => ({
       default: class OpenAI {
         constructor() {}
         chat = {
           completions: {
-            create: vi.fn().mockResolvedValue({
+            create: jest.fn().mockResolvedValue({
               choices: [
                 {
                   message: {
@@ -74,14 +98,14 @@ describe('Component Generation and Build Flow', () => {
                   },
                 },
               ],
-            }),
+            } as any),
           },
         };
       },
     }));
 
     // Process a component job
-    await processComponentJob('test-job-id');
+    await processComponentJob('test-job-id' as any);
 
     // Verify that the database was updated with TSX code
     expect(db.update).toHaveBeenCalled();
@@ -96,19 +120,19 @@ describe('Component Generation and Build Flow', () => {
 
   it('should handle errors during the TSX code generation process', async () => {
     // Mock the OpenAI API to throw an error
-    vi.mock('openai', () => ({
+    jest.mock('openai', () => ({
       default: class OpenAI {
         constructor() {}
         chat = {
           completions: {
-            create: vi.fn().mockRejectedValue(new Error('OpenAI API error')),
+            create: jest.fn().mockRejectedValue(new Error('OpenAI API error') as any),
           },
         };
       },
     }));
 
     // Process a component job
-    await processComponentJob('test-job-id');
+    await processComponentJob('test-job-id' as any);
 
     // Verify that the database was updated with error status
     expect(db.update).toHaveBeenCalled();
@@ -120,12 +144,12 @@ describe('Component Generation and Build Flow', () => {
 
   it('should not trigger build if database update fails', async () => {
     // Mock the OpenAI completion response
-    vi.mock('openai', () => ({
+    jest.mock('openai', () => ({
       default: class OpenAI {
         constructor() {}
         chat = {
           completions: {
-            create: vi.fn().mockResolvedValue({
+            create: jest.fn().mockResolvedValue({
               choices: [
                 {
                   message: {
@@ -144,7 +168,7 @@ describe('Component Generation and Build Flow', () => {
                   },
                 },
               ],
-            }),
+            } as any),
           },
         };
       },
@@ -152,13 +176,13 @@ describe('Component Generation and Build Flow', () => {
 
     // Mock database update to fail
     (db.update as any).mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockRejectedValue(new Error('Database error')),
+      set: jest.fn().mockReturnValue({
+        where: jest.fn().mockRejectedValue(new Error('Database error') as any),
       }),
     });
 
     // Process a component job
-    await processComponentJob('test-job-id');
+    await processComponentJob('test-job-id' as any);
 
     // Wait for the dynamic import promise to resolve
     await new Promise(resolve => setTimeout(resolve, 0));

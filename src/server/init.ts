@@ -2,6 +2,7 @@
 import { startBuildWorker } from './cron/buildWorker';
 import { startCodeGenWorker, stopCodeGenWorker } from './cron/codeGenWorker';
 import { TaskProcessor } from '~/server/services/a2a/taskProcessor.service';
+import { a2aLogger } from '~/lib/logger';
 
 // Create a global object for truly persisting state across HMR cycles
 declare global {
@@ -58,12 +59,13 @@ export function initializeServer() {
   }
   
   // Start A2A task processor
-  if (TaskProcessor.getInstance()) {
-    TaskProcessor.getInstance().startPolling();
-    workerCleanupFunctions.push(() => TaskProcessor.getInstance().shutdown());
-    console.log('🤖 Started A2A task processor service');
+  const taskProcessor = TaskProcessor.getInstance();
+  if (taskProcessor) {
+    taskProcessor.startPolling();
+    workerCleanupFunctions.push(() => taskProcessor.shutdown());
+    a2aLogger.info("lifecycle", '🤖 Started A2A task processor service');
   } else {
-    console.log('ℹ️ A2A task processor is not available or disabled');
+    a2aLogger.warn('lifecycle', 'ℹ️ A2A task processor is not available or disabled');
   }
 
   // Mark as initialized in the global state

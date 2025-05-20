@@ -17,6 +17,9 @@ export COMBINED_LOG_DIR=/tmp/combined-logs
 export TASK_PROCESSOR_STARTUP_DELAY=10000
 export TASK_PROCESSOR_HEARTBEAT_INTERVAL=5000
 
+# Set logging mode for A2A development to show detailed agent logs in console
+export LOGGING_MODE=a2a
+
 # export OPENAI_API_KEY=${OPENAI_API_KEY:-} # Rely on .env.local
 # export DEFAULT_ADB_MODEL=${DEFAULT_ADB_MODEL:-o4-mini} # Rely on .env.local
 

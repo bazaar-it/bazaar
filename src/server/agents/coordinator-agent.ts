@@ -16,7 +16,7 @@ import type {
 } from "../../types/a2a";
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema"; 
 import { createTextMessage } from "../../types/a2a"; 
-import { a2aLogger } from "~/lib/logger";
+import { a2aLogger, logAgentProcess, logAgentSend } from "~/lib/logger";
 import { env } from "~/env";
 
 // Define Agent Names used by CoordinatorAgent
@@ -128,7 +128,7 @@ Respond with JSON in this format:
           });
           
           const videoTaskId = videoTask.id;
-          a2aLogger.agentProcess(this.name, videoTaskId, type, `Task ${videoTaskId} created by TaskManager.`);
+          logAgentProcess(a2aLogger, this.name, videoTaskId, type, `Task ${videoTaskId} created by TaskManager.`);
           
           await this.logAgentMessage(message, true);
           
@@ -149,7 +149,7 @@ Respond with JSON in this format:
           
           const taskStateUpdateMessage = this.createSimpleTextMessage(`${routingReason}. Forwarding to ${targetAgent}.`);
           
-          a2aLogger.agentProcess(this.name, videoTaskId, type, `Routing to ${targetAgent} for video task. Reason: ${routingReason}`);
+          logAgentProcess(a2aLogger, this.name, videoTaskId, type, `Routing to ${targetAgent} for video task. Reason: ${routingReason}`);
           const existingTask = await this.taskManager.getTaskById(videoTaskId); 
           if (!existingTask) {
             console.warn(`CoordinatorAgent: Task ${videoTaskId} not found when trying to update state for ${targetAgent} routing. State not updated.`);
@@ -168,7 +168,7 @@ Respond with JSON in this format:
             );
           }
           
-          a2aLogger.agentProcess(this.name, videoTaskId, type, `Task state updated to working, creating follow-up for ${targetAgent}.`);
+          logAgentProcess(a2aLogger, this.name, videoTaskId, type, `Task state updated to working, creating follow-up for ${targetAgent}.`);
           
           // Create message to send to ScenePlannerAgent
           const scenePlannerMessage: AgentMessage = {
@@ -247,7 +247,7 @@ Respond with JSON in this format:
           
         case "CREATE_COMPONENT_REQUEST":
           const { animationDesignBrief, projectId: componentProjectId } = payload;
-          a2aLogger.agentProcess(this.name, taskId || "N/A", type, "Processing CREATE_COMPONENT_REQUEST", { projectId: componentProjectId, animationDesignBrief });
+          logAgentProcess(a2aLogger, this.name, taskId || "N/A", type, "Processing CREATE_COMPONENT_REQUEST", { projectId: componentProjectId, animationDesignBrief });
           
           const task = await this.taskManager.createTask(componentProjectId, {
             effect: animationDesignBrief.sceneName || "Custom Component",
@@ -255,7 +255,7 @@ Respond with JSON in this format:
             message: createTextMessage(`Initial task for: ${animationDesignBrief.sceneName}`)
           });
           const newTaskId = task.id;
-          a2aLogger.agentProcess(this.name, newTaskId, type, `Task ${newTaskId} created by TaskManager.`);
+          logAgentProcess(a2aLogger, this.name, newTaskId, type, `Task ${newTaskId} created by TaskManager.`);
           
           await this.logAgentMessage(message, true);
           
@@ -276,7 +276,7 @@ Respond with JSON in this format:
           
           const componentTaskStateUpdateMessage = this.createSimpleTextMessage(`${componentRoutingReason}. Forwarding to BuilderAgent.`);
 
-          a2aLogger.agentProcess(this.name, newTaskId, type, `Routing to BuilderAgent for component generation. Reason: ${componentRoutingReason}`);
+          logAgentProcess(a2aLogger, this.name, newTaskId, type, `Routing to BuilderAgent for component generation. Reason: ${componentRoutingReason}`);
           const existingComponentTask = await this.taskManager.getTaskById(newTaskId); 
           if (!existingComponentTask) {
             console.warn(`CoordinatorAgent: Task ${newTaskId} not found when trying to update state for BuilderAgent routing. State not updated.`);
@@ -295,7 +295,7 @@ Respond with JSON in this format:
             );
           }
           
-          a2aLogger.agentProcess(this.name, newTaskId, type, "Task state updated to working, creating follow-up for BuilderAgent.");
+          logAgentProcess(a2aLogger, this.name, newTaskId, type, "Task state updated to working, creating follow-up for BuilderAgent.");
           
           const generateComponentResponse = this.createA2AMessage(
             "GENERATE_COMPONENT_REQUEST",
@@ -321,7 +321,7 @@ Respond with JSON in this format:
             return null;
           }
           
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing SCENE_PLAN_CREATED from ScenePlannerAgent", { 
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing SCENE_PLAN_CREATED from ScenePlannerAgent", { 
             scenePlans: payload.scenePlans ? `Received scene plan with ${payload.scenePlans.scenes?.length || 0} scenes` : 'No scene plans in payload',
             correlationId
           });
@@ -372,7 +372,7 @@ Respond with JSON in this format:
             return null;
           }
           
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing SCENE_PLAN_SUCCESS. Adding artifacts.", { payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing SCENE_PLAN_SUCCESS. Adding artifacts.", { payload });
           
           const scenePlanSuccessArtifacts = payload.artifacts as Artifact[] | undefined;
           if (scenePlanSuccessArtifacts && scenePlanSuccessArtifacts.length > 0) {
@@ -403,7 +403,7 @@ Respond with JSON in this format:
           }
           
           const scenePlanErrorMessage = payload.error || "Unknown error occurred during scene planning";
-          a2aLogger.agentProcess(this.name, taskId, type, `Processing scene planning error: ${scenePlanErrorMessage}. Updating task to failed.`, { errorPayload: payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, `Processing scene planning error: ${scenePlanErrorMessage}. Updating task to failed.`, { errorPayload: payload });
           
           const enhancedScenePlanErrorDescription = await this.analyzeError(type, scenePlanErrorMessage);
           const scenePlanUserFriendlyMessage = enhancedScenePlanErrorDescription || scenePlanErrorMessage;
@@ -431,7 +431,7 @@ Respond with JSON in this format:
           }
           
           const errorMessage = payload.error || "Unknown error occurred during component processing";
-          a2aLogger.agentProcess(this.name, taskId, type, `Processing error: ${errorMessage}. Updating task to failed.`, { errorPayload: payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, `Processing error: ${errorMessage}. Updating task to failed.`, { errorPayload: payload });
           
           const enhancedErrorDescription = await this.analyzeError(type, errorMessage);
           const userFriendlyMessage = enhancedErrorDescription || errorMessage;
@@ -457,7 +457,7 @@ Respond with JSON in this format:
             await this.logAgentMessage(message);
             return null;
           }
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing COMPONENT_BUILD_SUCCESS. Forwarding to R2StorageAgent.", { payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing COMPONENT_BUILD_SUCCESS. Forwarding to R2StorageAgent.", { payload });
           
           const successMessage = await this.generateSuccessMessage("COMPONENT_BUILD_SUCCESS");
           if (successMessage) {
@@ -490,7 +490,7 @@ Respond with JSON in this format:
             return null;
           }
           const artifactsToNotify = payload.artifacts as Artifact[] | undefined;
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing COMPONENT_STORED_SUCCESS. Updating task to completed.", { artifactsToNotify });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing COMPONENT_STORED_SUCCESS. Updating task to completed.", { artifactsToNotify });
           
           const completionSummary = await this.generateSuccessMessage("COMPONENT_STORED_SUCCESS");
           await this.updateTaskState(taskId, 'completed', 
@@ -523,7 +523,7 @@ Respond with JSON in this format:
           const csfErrorDetails = payload.error?.details;
           const csfUserFriendlyError = `Error storing component: ${csfErrorMessage}`;
 
-          a2aLogger.agentProcess(this.name, taskId, type, `Processing ${type}: ${csfUserFriendlyError}. Updating task to failed.`, { errorPayload: payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, `Processing ${type}: ${csfUserFriendlyError}. Updating task to failed.`, { errorPayload: payload });
 
           await this.updateTaskState(
             taskId,
@@ -569,7 +569,7 @@ Respond with JSON in this format:
           }
 
           const task = taskData as CustomComponentJobTask;
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing COMPONENT_GENERATION_FAILED after fetching task data", { payload, taskStatus: task.taskState });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing COMPONENT_GENERATION_FAILED after fetching task data", { payload, taskStatus: task.taskState });
 
           const { error: rawError, animationDesignBrief: adbFromPayload } = payload as { error: AgentErrorPayload, animationDesignBrief?: AnimationDesignBrief }; 
           
@@ -583,7 +583,7 @@ Respond with JSON in this format:
             effectiveAdb 
           );
 
-          a2aLogger.agentProcess(this.name, taskId, type, "LLM decision for failed component", { decision });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "LLM decision for failed component", { decision });
 
           if (decision.decision === "ForwardToAgent" && decision.targetAgent && decision.action) {
             await this.updateTaskState(
@@ -622,7 +622,7 @@ Respond with JSON in this format:
             return null;
           }
           
-          a2aLogger.agentProcess(this.name, taskId, type, "Processing REQUEST_TASK_EXECUTION", { payload });
+          logAgentProcess(a2aLogger, this.name, taskId, type, "Processing REQUEST_TASK_EXECUTION", { payload });
           
           // Extract the necessary information from the payload
           const reqTaskPrompt = payload.prompt;
@@ -682,7 +682,7 @@ Respond with JSON in this format:
             'video_generation_started' as ComponentJobStatus
           );
           
-          a2aLogger.agentProcess(this.name, taskId, type, `Routing to ${reqTaskTargetAgent}. Reason: ${reqTaskRoutingReason}`);
+          logAgentProcess(a2aLogger, this.name, taskId, type, `Routing to ${reqTaskTargetAgent}. Reason: ${reqTaskRoutingReason}`);
           
           // Log the message receipt for visualization
           await this.logAgentMessage(message, true);

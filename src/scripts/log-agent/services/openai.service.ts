@@ -89,7 +89,7 @@ export class OpenAIService {
           { role: 'system', content: prompt },
           { role: 'user', content: userMessage },
         ],
-        temperature: 0.3,
+        temperature: 1, // Only temp=1 supported with o4-mini
         max_tokens: Math.min(config.openai.maxTokens, 4096), // Respect configured max tokens but cap at 4096
       });
       

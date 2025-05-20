@@ -64,6 +64,13 @@
       "when": 1747392228867,
       "tag": "0008_minor_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1747730777696,
+      "tag": "0009_smart_the_twelve",
+      "breakpoints": true
     }
   ]
 }

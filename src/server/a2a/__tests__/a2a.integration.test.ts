@@ -141,78 +141,96 @@ const mockADBAgentProcessMessage = jest.fn();       // Added mock for ADBAgent
 const mockR2StorageAgentProcessMessage = jest.fn(); // Added mock for R2StorageAgent
 const mockUIAgentProcessMessage = jest.fn();        // Added mock for UIAgent
 
-jest.mock("../../agents/coordinator-agent", () => ({
-  CoordinatorAgent: jest.fn().mockImplementation(() => ({
-    name: "CoordinatorAgent",
-    processMessage: mockCoordinatorProcessMessage,
-    logAgentMessage: jest.fn(), 
-    updateTaskState: jest.fn(),
-    addTaskArtifact: jest.fn(),
-    createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
-      ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "CoordinatorAgent", recipient, correlationId })),
-    createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
-    getAgentCard: jest.fn().mockReturnValue({ name: "CoordinatorAgent", skills: [] }),
-  }))
-}));
+jest.mock("../../agents/coordinator-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
+    CoordinatorAgent: jest.fn().mockImplementation(() => ({
+      name: "CoordinatorAgent",
+      processMessage: mockCoordinatorProcessMessage,
+      logAgentMessage: jest.fn(), 
+      updateTaskState: jest.fn(),
+      addTaskArtifact: jest.fn(),
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "CoordinatorAgent", recipient, correlationId })),
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
+      getAgentCard: jest.fn().mockReturnValue({ name: "CoordinatorAgent", skills: [] }),
+    }))
+  };
+});
 
-jest.mock("../../agents/builder-agent", () => ({
-  BuilderAgent: jest.fn().mockImplementation(() => ({
-    name: "BuilderAgent",
-    processMessage: mockBuilderProcessMessage,
-    logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
-    createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
-      ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "BuilderAgent", recipient, correlationId })),
-    createMessage: jest.fn().mockImplementation((type, payload, recipient, correlationId) => 
-      ({ id: crypto.randomUUID(), type, payload, sender: "BuilderAgent", recipient, correlationId })),
-    createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
-    createSimpleFileArtifact: jest.fn().mockImplementation((id,url,mimeType,desc) => createFileArtifact(id,url,mimeType,desc)),
-    getAgentCard: jest.fn().mockReturnValue({ name: "BuilderAgent", skills: [] }),
-  }))
-}));
+jest.mock("../../agents/builder-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
+    BuilderAgent: jest.fn().mockImplementation(() => ({
+      name: "BuilderAgent",
+      processMessage: mockBuilderProcessMessage,
+      logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "BuilderAgent", recipient, correlationId })),
+      createMessage: jest.fn().mockImplementation((type, payload, recipient, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload, sender: "BuilderAgent", recipient, correlationId })),
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
+      createSimpleFileArtifact: jest.fn().mockImplementation((id,url,mimeType,desc) => createFileArtifact(id,url,mimeType,desc)),
+      getAgentCard: jest.fn().mockReturnValue({ name: "BuilderAgent", skills: [] }),
+    }))
+  };
+});
 
-jest.mock("../../agents/error-fixer-agent", () => ({
-  ErrorFixerAgent: jest.fn().mockImplementation(() => ({
-    name: "ErrorFixerAgent",
-    processMessage: mockErrorFixerProcessMessage,
-    logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(),
-    createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
-      ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "ErrorFixerAgent", recipient, correlationId })),
-    createMessage: jest.fn().mockImplementation((type, payload, recipient, correlationId) => 
-      ({ id: crypto.randomUUID(), type, payload, sender: "ErrorFixerAgent", recipient, correlationId })),
-    createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
-    getAgentCard: jest.fn().mockReturnValue({ name: "ErrorFixerAgent", skills: [] }),
-  }))
-}));
+jest.mock("../../agents/error-fixer-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
+    ErrorFixerAgent: jest.fn().mockImplementation(() => ({
+      name: "ErrorFixerAgent",
+      processMessage: mockErrorFixerProcessMessage,
+      logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(),
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "ErrorFixerAgent", recipient, correlationId })),
+      createMessage: jest.fn().mockImplementation((type, payload, recipient, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload, sender: "ErrorFixerAgent", recipient, correlationId })),
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)),
+      getAgentCard: jest.fn().mockReturnValue({ name: "ErrorFixerAgent", skills: [] }),
+    }))
+  };
+});
 
-jest.mock("../../agents/adb-agent", () => ({
+jest.mock("../../agents/adb-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
     ADBAgent: jest.fn().mockImplementation(() => ({
-        name: "ADBAgent", processMessage: mockADBAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
-        createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
-          ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "ADBAgent", recipient, correlationId })),
-        createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
-        getAgentCard: jest.fn().mockReturnValue({ name: "ADBAgent", skills:[] })
+      name: "ADBAgent", processMessage: mockADBAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+        ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "ADBAgent", recipient, correlationId })),
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
+      getAgentCard: jest.fn().mockReturnValue({ name: "ADBAgent", skills:[] })
     }))
-}));
+  };
+});
 
-jest.mock("../../agents/r2-storage-agent", () => ({
+jest.mock("../../agents/r2-storage-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
     R2StorageAgent: jest.fn().mockImplementation(() => ({
-        name: "R2StorageAgent", processMessage: mockR2StorageAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
-        createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+      name: "R2StorageAgent", processMessage: mockR2StorageAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
         ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "R2StorageAgent", recipient, correlationId })),
-        createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
-        getAgentCard: jest.fn().mockReturnValue({ name: "R2StorageAgent", skills:[] })
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
+      getAgentCard: jest.fn().mockReturnValue({ name: "R2StorageAgent", skills:[] })
     }))
-}));
+  };
+});
 
-jest.mock("../../agents/ui-agent", () => ({
+jest.mock("../../agents/ui-agent", () => {
+  const { randomUUID } = require('crypto');
+  return {
     UIAgent: jest.fn().mockImplementation(() => ({
-        name: "UIAgent", processMessage: mockUIAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
-        createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
+      name: "UIAgent", processMessage: mockUIAgentProcessMessage, logAgentMessage: jest.fn(), updateTaskState: jest.fn(), addTaskArtifact: jest.fn(), 
+      createA2AMessage: jest.fn().mockImplementation((type, taskId, recipient, message, artifacts, correlationId) => 
         ({ id: crypto.randomUUID(), type, payload: { taskId, message, artifacts }, sender: "UIAgent", recipient, correlationId })),
-        createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
-        getAgentCard: jest.fn().mockReturnValue({ name: "UIAgent", skills:[] })
+      createSimpleTextMessage: jest.fn().mockImplementation((text) => createTextMessage(text)), 
+      getAgentCard: jest.fn().mockReturnValue({ name: "UIAgent", skills:[] })
     }))
-}));
+  };
+});
 
 describe("A2A System Integration Tests", () => {
     let bus: MessageBus;
@@ -383,7 +401,7 @@ describe("A2A System Integration Tests", () => {
 
             await new Promise(resolve => setTimeout(resolve, 50)); 
             const workingMessage = createTextMessage("Task processing started");
-            await taskManager.updateTaskStatus(taskId, 'working', 'generating', workingMessage);
+            await taskManager.updateTaskStatus(taskId, 'working', workingMessage, []);
             
             await new Promise(resolve => setTimeout(resolve, 50));
             const mockArtifact: Artifact = { id: "artifact-sse-1", type: "file", mimeType: "image/png", url: "/image.png", createdAt: new Date().toISOString(), name: "image.png" };
@@ -391,7 +409,7 @@ describe("A2A System Integration Tests", () => {
 
             await new Promise(resolve => setTimeout(resolve, 50));
             const completedMessage = createTextMessage("Task completed via SSE");
-            await taskManager.updateTaskStatus(taskId, 'completed', 'complete', completedMessage);
+            await taskManager.updateTaskStatus(taskId, 'completed', completedMessage, []);
 
             const events = await eventPromise;
 
@@ -578,12 +596,12 @@ describe("A2A System Integration Tests", () => {
             (generateAnimationDesignBrief as jest.Mock).mockResolvedValueOnce({ brief: generatedBrief, briefId: "adb-ff-id" });
             mockADBAgentProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "GENERATE_DESIGN_BRIEF_REQUEST"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'pending', createTextMessage("ADB: Generating"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("ADB: Generating"), []);
                     const adbArtifact = createFileArtifact("adb-id", "", "application/json", "ADB data", `adb-${fullFlowTaskId}.json`); // Pass name to createFileArtifact
                     // Simulate adding data to artifact if needed, though ADBgent passes `brief` in payload to Coordinator
                     (adbArtifact as any).data = generatedBrief; 
                     await taskManager.addTaskArtifact(fullFlowTaskId, adbArtifact);
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', 'pending', createTextMessage("ADB: Generated"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', createTextMessage("ADB: Generated"), []);
                     return { id: crypto.randomUUID(), type: "CREATE_COMPONENT_REQUEST", 
                              payload: { taskId: fullFlowTaskId, animationDesignBrief: generatedBrief, projectId: initialProjectId, componentJobId: fullFlowTaskId }, 
                              sender: "ADBAgent", recipient: "CoordinatorAgent", correlationId: msg.id };
@@ -593,7 +611,7 @@ describe("A2A System Integration Tests", () => {
             
             mockCoordinatorProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "CREATE_COMPONENT_REQUEST"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'pending', createTextMessage("Coordinator: Processing ADB"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("Coordinator: Processing ADB"), []);
                     return { id: crypto.randomUUID(), type: "BUILD_COMPONENT_REQUEST", 
                              payload: { taskId: fullFlowTaskId, animationDesignBrief: msg.payload.animationDesignBrief, projectId: msg.payload.projectId }, 
                              sender: "CoordinatorAgent", recipient: "BuilderAgent", correlationId: msg.id };
@@ -609,11 +627,11 @@ describe("A2A System Integration Tests", () => {
 
             mockBuilderProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "BUILD_COMPONENT_REQUEST"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'generating', createTextMessage("Builder: Generating code"));
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'building', createTextMessage("Builder: Building code"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("Builder: Generating code"), []);
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("Builder: Building code"), []);
                     const artifact = createFileArtifact(fullFlowTaskId + "-bundle.js", builtComponentUrl, "application/javascript", "Built component");
                     await taskManager.addTaskArtifact(fullFlowTaskId, artifact);
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'built', createTextMessage("Builder: Build success"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("Builder: Build success"), []);
                     return { id: crypto.randomUUID(), type: "COMPONENT_BUILD_SUCCESS", 
                              payload: { taskId: fullFlowTaskId, artifacts: [artifact] }, 
                              sender: "BuilderAgent", recipient: "CoordinatorAgent", correlationId: msg.id };
@@ -623,7 +641,7 @@ describe("A2A System Integration Tests", () => {
 
             mockCoordinatorProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "COMPONENT_BUILD_SUCCESS"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'built', createTextMessage("Coordinator: Build successful, storing..."));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("Coordinator: Build successful, storing..."), []);
                     return { id: crypto.randomUUID(), type: "STORE_COMPONENT_REQUEST", 
                              payload: { taskId: fullFlowTaskId, artifacts: msg.payload.artifacts }, 
                              sender: "CoordinatorAgent", recipient: "R2StorageAgent", correlationId: msg.id };
@@ -634,10 +652,10 @@ describe("A2A System Integration Tests", () => {
             mockVerifyR2Component.mockResolvedValueOnce(true);
             mockR2StorageAgentProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "STORE_COMPONENT_REQUEST"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', 'building', createTextMessage("R2: Verifying component"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'working', createTextMessage("R2: Verifying component"), []);
                     const storedArtifact = msg.payload.artifacts[0];
                     await taskManager.addTaskArtifact(fullFlowTaskId, storedArtifact); 
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', 'complete', createTextMessage("R2: Component Stored and Verified"));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', createTextMessage("R2: Component Stored and Verified"), []);
 
                     return { id: crypto.randomUUID(), type: "COMPONENT_STORED_SUCCESS", 
                              payload: { taskId: fullFlowTaskId, artifacts: msg.payload.artifacts }, 
@@ -648,7 +666,7 @@ describe("A2A System Integration Tests", () => {
 
             mockCoordinatorProcessMessage.mockImplementationOnce(async (msg: ConcreteAgentMessage) => {
                 if(msg.type === "COMPONENT_STORED_SUCCESS"){
-                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', 'complete', createTextMessage("Coordinator: Storage successful, task complete."));
+                    await taskManager.updateTaskStatus(fullFlowTaskId, 'completed', createTextMessage("Coordinator: Storage successful, task complete."), []);
                     return { id: crypto.randomUUID(), type: "TASK_COMPLETED_NOTIFICATION", 
                              payload: { taskId: fullFlowTaskId, artifacts: msg.payload.artifacts }, 
                              sender: "CoordinatorAgent", recipient: "UIAgent", correlationId: msg.id };
