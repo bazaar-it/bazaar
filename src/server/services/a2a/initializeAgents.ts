@@ -10,6 +10,7 @@ import { initializeA2AFileTransport, a2aLogger } from "~/lib/logger";
 import { type TaskManager } from "./taskManager.service";
 import { env } from "~/env";
 import { messageBus } from "~/server/agents/message-bus";
+import { lifecycleManager } from "./lifecycleManager.service";
 
 // Registry of agents for lookup by name 
 // This replaces the import from agentRegistry.service to avoid conflict
@@ -36,6 +37,8 @@ export function registerAgent(agent: BaseAgent): void {
   // Also register with the central MessageBus so publish/subscribe works.
   try {
     messageBus.registerAgent(agent);
+    // Register with lifecycle manager
+    lifecycleManager.registerAgent(agent);
   } catch (err) {
     // In case an agent is registered twice with the bus, ignore.
   }
@@ -56,12 +59,12 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
   
   // Check if agents have already been initialized to prevent duplication
   if (agentsInitialized) {
-    a2aLogger.info("system", "Agents already initialized, returning existing registry", { module: "agent_init"});
+    a2aLogger.info("agent_lifecycle", "Agents already initialized, returning existing registry", { module: "agent_init"});
     // Return existing agents from registry
     return Object.values(agentRegistry);
   }
   
-  a2aLogger.info("system", "Initializing A2A Agents - first time initialization", { module: "agent_init"});
+  a2aLogger.info("agent_lifecycle", "Initializing A2A Agents - first time initialization", { module: "agent_init"});
   
   try {
     // Create agent instances with the right constructor signatures
@@ -70,7 +73,7 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     try {
       const coordinatorAgent = new CoordinatorAgent(taskManager);
       agents.push(coordinatorAgent);
-      a2aLogger.info("system", `Created CoordinatorAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created CoordinatorAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -83,7 +86,7 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     try {
       const scenePlannerAgent = new ScenePlannerAgent(taskManager);
       agents.push(scenePlannerAgent);
-      a2aLogger.info("system", `Created ScenePlannerAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created ScenePlannerAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -94,12 +97,12 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     }
     
     try {
-      a2aLogger.info("system", `Attempting to create BuilderAgent with modelName=${env.DEFAULT_ADB_MODEL || 'gpt-4'}`, { module: "agent_creation"});
-      a2aLogger.info("system", `OPENAI_API_KEY available: ${Boolean(process.env.OPENAI_API_KEY)}`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Attempting to create BuilderAgent with modelName=${env.DEFAULT_ADB_MODEL || 'gpt-4'}`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `OPENAI_API_KEY available: ${Boolean(process.env.OPENAI_API_KEY)}`, { module: "agent_creation"});
       
       const builderAgent = new BuilderAgent({ modelName: env.DEFAULT_ADB_MODEL || 'gpt-4' }, taskManager);
       agents.push(builderAgent);
-      a2aLogger.info("system", `Created BuilderAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created BuilderAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -112,7 +115,7 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     try {
       const uiAgent = new UIAgent(taskManager);
       agents.push(uiAgent);
-      a2aLogger.info("system", `Created UIAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created UIAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -125,7 +128,7 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     try {
       const errorFixerAgent = new ErrorFixerAgent({ modelName: env.DEFAULT_ADB_MODEL || 'gpt-4' }, taskManager);
       agents.push(errorFixerAgent);
-      a2aLogger.info("system", `Created ErrorFixerAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created ErrorFixerAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -138,7 +141,7 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
     try {
       const r2StorageAgent = new R2StorageAgent(taskManager);
       agents.push(r2StorageAgent);
-      a2aLogger.info("system", `Created R2StorageAgent successfully`, { module: "agent_creation"});
+      a2aLogger.info("agent_lifecycle", `Created R2StorageAgent successfully`, { module: "agent_creation"});
     } catch (error) {
       const err = error as any;
       a2aLogger.error(
@@ -158,15 +161,27 @@ export function initializeAgents(taskManager: TaskManager): BaseAgent[] {
       // Mark initialization as complete
       agentsInitialized = true;
       
+      // Initialize each agent's lifecycle
+      Promise.all(agents.map(agent => agent.init()))
+        .then(() => {
+          a2aLogger.info("agent_lifecycle", "All agents initialized and ready", { module: "agent_initialization_complete" });
+        })
+        .catch(err => {
+          a2aLogger.error("agent_lifecycle", `Error in agent initialization: ${err.message}`, { module: "agent_initialization_error" });
+        });
+      
+      // Start lifecycle monitoring
+      lifecycleManager.startMonitoring();
+      
       // Log the initialized agents
-      a2aLogger.info("system", `Successfully initialized ${agents.length} agents: ${agents.map(a => a.getName()).join(', ')}`, { module: "agent_initialization_complete"});
+      a2aLogger.info("agent_lifecycle", `Successfully initialized ${agents.length} agents: ${agents.map(a => a.getName()).join(', ')}`, { module: "agent_initialization_complete"});
     } else {
-      a2aLogger.error("system", "No agents could be initialized successfully", { module: "agent_initialization_failed"});
+      a2aLogger.error("agent_lifecycle", "No agents could be initialized successfully", { module: "agent_initialization_failed"});
     }
     
     return agents;
   } catch (error) {
-    a2aLogger.error("agent_init_error", `Error initializing agents: ${error instanceof Error ? error.message : String(error)}`);
+    a2aLogger.error("agent_lifecycle", `Error initializing agents: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
 }
