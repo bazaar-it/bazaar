@@ -23,7 +23,6 @@
     "dev:no-restart": "WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true next dev",
     "dev:stable": "NEXT_MANUAL_SIG_HANDLE=true next dev",
     "dev:task-processor": "dotenv -e .env.local -- tsx --require tsconfig-paths/register src/scripts/run-task-processor.ts",
-    "dev:task-processor-patched": "dotenv -e .env.local -- tsx --require tsconfig-paths/register src/server/services/a2a/taskProcessorPatch.ts",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "fresh": "rm -rf .next node_modules package-lock.json && npm cache clean && npm install",

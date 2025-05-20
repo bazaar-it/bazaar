@@ -46,5 +46,5 @@ echo "Starting TaskProcessor..."
 # Change to project root
 cd "$PROJECT_ROOT"
 
-# Use the patched npm script to run the task processor
-npm run dev:task-processor-patched
+# Use the standard npm script to run the task processor
+npm run dev:task-processor

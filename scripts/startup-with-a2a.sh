@@ -84,7 +84,7 @@ fi
 
 # --- TaskProcessor Start ---
 echo "Starting TaskProcessor in background... (will use .env.local)"
-npm run dev:task-processor-patched &
+npm run dev:task-processor &
 TASK_PROCESSOR_PID=$!
 
 # --- Next.js Start ---
