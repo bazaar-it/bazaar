@@ -7,11 +7,12 @@ import os from "os";
 import { measureDuration, recordMetric } from "~/lib/metrics";
 import path from "path";
 import { mkdir, writeFile, readFile, rm } from "fs/promises";
+import { pathToFileURL } from "url";
 import { env } from "~/env";
 import * as fs from "fs";
 import { updateComponentStatus } from "~/server/services/componentGenerator.service";
 import logger, { buildLogger } from '~/lib/logger';
-import { repairComponentSyntax, ensureRemotionComponentAssignment } from "./repairComponentSyntax";
+import { repairComponentSyntax } from "./repairComponentSyntax";
 
 // Dynamically import esbuild to prevent bundling issues
 let esbuild: typeof import('esbuild') | null = null;
@@ -236,33 +237,6 @@ async function processJob(jobId: string): Promise<void> {
       
       buildLogger.upload(jobId, "Uploading to R2...");
 
-      // Verify the component has the required window.__REMOTION_COMPONENT assignment
-      const componentNameMatch = jsCode.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-      if (componentNameMatch && componentNameMatch[1]) {
-        const componentName = componentNameMatch[1];
-        
-        // Check if the window.__REMOTION_COMPONENT assignment is present
-        if (!jsCode.includes('window.__REMOTION_COMPONENT')) {
-          buildLogger.warn(jobId, `Component bundle missing window.__REMOTION_COMPONENT assignment, adding it for ${componentName}`, { 
-            type: "COMPONENT_FIX" 
-          });
-          
-          // Add the assignment
-          const { code, added } = ensureRemotionComponentAssignment(jsCode, componentName);
-          if (added) {
-            // Use the fixed code for upload
-            jsCode = code;
-            buildLogger.compile(jobId, `Added window.__REMOTION_COMPONENT assignment for ${componentName}`);
-          }
-        } else {
-          buildLogger.compile(jobId, `Component already has window.__REMOTION_COMPONENT assignment`);
-        }
-      } else {
-        buildLogger.warn(jobId, "Could not determine component name to verify window.__REMOTION_COMPONENT assignment", { 
-          type: "COMPONENT_NAME_DETECTION" 
-        });
-      }
-
       // Upload to R2
       const key = `custom-components/${jobId}.js`;
       await s3.send(
@@ -371,14 +345,14 @@ async function compileWithEsbuild(tsxCode: string, jobId: string = "unknown"): P
       },
       bundle: true, // Bundle dependencies
       write: false, // We want the output as a string, not written to disk
-      format: 'iife', // Immediately Invoked Function Expression, suitable for browser
+      format: 'esm', // Build as ESM for dynamic import
       platform: 'browser',
       target: 'es2020', // Modern JS target
       minify: true, // Minify the output
       loader: { '.tsx': 'tsx' },
       jsxFactory: 'React.createElement',
       jsxFragment: 'React.Fragment',
-      external: ['react', 'remotion'], // Mark as externals since provided globally
+      external: ['react', 'react-dom', 'remotion', '@remotion/*'],
       logLevel: 'warning',
     });
 
@@ -395,6 +369,24 @@ async function compileWithEsbuild(tsxCode: string, jobId: string = "unknown"): P
       const compiledJs = result.outputFiles[0].text;
       buildLogger.info(jobId, "[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
       buildLogger.debug(jobId, "[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) }); // Optional: log snippet
+
+      // Validate the compiled module is valid ESM with a default export.
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          const tempPath = path.join(os.tmpdir(), `esm-check-${jobId}-${Date.now()}.mjs`);
+          await fs.promises.writeFile(tempPath, compiledJs);
+          const mod = await import(pathToFileURL(tempPath).href);
+          await fs.promises.rm(tempPath, { force: true });
+          if (!mod || typeof mod.default !== 'function') {
+            throw new Error('ESM module does not export a default function');
+          }
+          buildLogger.debug(jobId, '[ESBUILD] ESM validation succeeded');
+        } catch (e) {
+          buildLogger.error(jobId, '[ESBUILD] ESM validation failed', { error: e instanceof Error ? e.message : String(e) });
+          throw e;
+        }
+      }
+
       return compiledJs;
     } else {
       throw new Error("esbuild compilation did not produce output files.");
@@ -452,31 +444,21 @@ if (typeof Component !== 'undefined') {
 }
 
 /**
- * Sanitize TSX code by removing unsafe imports and handling React/Remotion imports
- * 
- * 1. Removes all unsafe imports (non-React, non-Remotion)
- * 2. Removes all React and Remotion imports (since we're adding globals)
- * 3. Preserves the component code itself
+ * Sanitize TSX code by removing duplicate exports and stray declarations.
+ *
+ * This previously stripped all import statements and React globals because the
+ * build pipeline relied on global variables.  With the ESM migration we keep
+ * the original imports so the compiled module can resolve React and Remotion at
+ * runtime.
  */
 function sanitizeTsx(tsxCode: string): string {
   // First, remove duplicate default exports
   let sanitizedCode = removeDuplicateDefaultExports(tsxCode);
-  
-  // Check for and remove duplicate React declarations
-  const reactDeclarationRegex = /const\s+React\s*=\s*(window\.React|require\(['"]react['"]\)|import\s+.*\s+from\s+['"]react['"])/g;
-  const reactMatches = Array.from(sanitizedCode.matchAll(reactDeclarationRegex));
-  
-  if (reactMatches.length > 0) {
-    logger.debug(`Found ${reactMatches.length} React declarations, removing them to prevent duplicates:`, { 
-      matches: reactMatches.map((match, i) => {
-        const lineNumber = sanitizedCode.substring(0, match.index || 0).split('\n').length;
-        return `[${i}] Line ~${lineNumber}: ${match[0]}`;
-      })
-    });
-  }
-  
-  // Remove React declarations
-  sanitizedCode = sanitizedCode.replace(reactDeclarationRegex, '// React is provided globally');
+
+  // Remove duplicate "const React = ..." declarations that may appear in LLM
+  // output. We no longer inject React globally, so we simply drop these lines.
+  const reactDeclarationRegex = /const\s+React\s*=.*?;\n?/g;
+  sanitizedCode = sanitizedCode.replace(reactDeclarationRegex, '');
   
   // SPECIFIC FIX for </AbsoluteFill>; pattern from LLM
   const faultySemicolonPattern = /<\/AbsoluteFill>\s*;/g;
@@ -485,17 +467,8 @@ function sanitizeTsx(tsxCode: string): string {
     sanitizedCode = sanitizedCode.replace(faultySemicolonPattern, '</AbsoluteFill>');
   }
   
-  // Split by lines
-  const lines = sanitizedCode.split('\n');
-  
-  // Filter out all import statements - we'll handle React and Remotion via globals
-  const codeWithoutImports = lines.filter(line => {
-    const trimmedLine = line.trim();
-    // Skip any import statements 
-    return !trimmedLine.startsWith('import ');
-  });
-  
-  return codeWithoutImports.join('\n');
+  // No longer strip import statements; return the cleaned code as-is
+  return sanitizedCode;
 }
 
 /**
@@ -780,7 +753,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     
     // 2. Preprocess the TSX code
     buildLogger.compile(jobId, "Preprocessing TSX code...");
-    const processedTsxCode = wrapTsxWithGlobals(job.tsxCode);
+    const processedTsxCode = sanitizeTsx(job.tsxCode);
     buildLogger.compile(jobId, `Preprocessing complete, processed code length: ${processedTsxCode.length}`);
 
     // 3. Compile with esbuild using stdin
@@ -808,18 +781,17 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         throw new Error("Failed to load esbuild");
       }
       
-      const outputPath = path.join(tmpDir, "bundle.js"); // Corrected output path
-      // Configure esbuild
+      const outputPath = path.join(tmpDir, "bundle.js");
+      // Configure esbuild for ESM output
       const result = await esbuild.build({
-        // --- UPDATED to use stdin instead of entryPoints ---
         stdin: {
           contents: processedTsxCode,
-          resolveDir: process.cwd(), // For resolving potential relative paths if needed
+          resolveDir: process.cwd(),
           loader: 'tsx',
         },
         bundle: true,
         outfile: outputPath,
-        format: 'iife', // IMPORTANT: Use IIFE format for browser execution
+        format: 'esm',
         target: 'es2020',
         platform: 'browser',
         minify: true,
@@ -834,7 +806,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         },
         jsxFactory: 'React.createElement',
         jsxFragment: 'React.Fragment',
-        external: ['react', 'remotion'], // Mark as externals since provided globally
+        external: ['react', 'react-dom', 'remotion', '@remotion/*'],
         logLevel: 'warning',
       });
       
@@ -937,35 +909,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     const publicPath = `custom-components/${jobId}.js`;
     
     try {
-      // Verify the component has the required window.__REMOTION_COMPONENT assignment
-      const bundleContentStr = bundleContent.toString();
-      const componentNameMatch = bundleContentStr.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-      let finalBundleContent = bundleContent;
-      
-      if (componentNameMatch && componentNameMatch[1]) {
-        const componentName = componentNameMatch[1];
-        
-        // Check if the window.__REMOTION_COMPONENT assignment is present
-        if (!bundleContentStr.includes('window.__REMOTION_COMPONENT')) {
-          buildLogger.warn(jobId, `Component bundle missing window.__REMOTION_COMPONENT assignment, adding it for ${componentName}`, { 
-            type: "COMPONENT_FIX" 
-          });
-          
-          // Add the assignment
-          const { code, added } = ensureRemotionComponentAssignment(bundleContentStr, componentName);
-          if (added) {
-            // Use the fixed code for upload
-            finalBundleContent = Buffer.from(code, 'utf-8');
-            buildLogger.compile(jobId, `Added window.__REMOTION_COMPONENT assignment for ${componentName}`);
-          }
-        } else {
-          buildLogger.compile(jobId, `Component already has window.__REMOTION_COMPONENT assignment`);
-        }
-      } else {
-        buildLogger.warn(jobId, "Could not determine component name to verify window.__REMOTION_COMPONENT assignment", { 
-          type: "COMPONENT_NAME_DETECTION" 
-        });
-      }
+      const finalBundleContent = bundleContent;
       
       // Upload to R2
       const result = await r2.send(

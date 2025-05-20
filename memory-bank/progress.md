@@ -11,6 +11,10 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 26, 2025: BAZAAR-255 Build Pipeline Migrated to ESM**
+- Migrated `buildCustomComponent.ts` to output ES modules and validate them via dynamic `import()`.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for full notes.
+
 **May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
 - Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
 - Created placeholder client-side test file (`CustomScene.test.tsx`) and noted existing `useRemoteComponent.test.tsx`.

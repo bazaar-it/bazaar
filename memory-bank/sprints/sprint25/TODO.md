@@ -1,5 +1,5 @@
 //memory-bank/sprints/sprint25/TODO.md
-- [ ] Implement BAZAAR-255 ESM build pipeline
+- [x] Implement BAZAAR-255 ESM build pipeline
 - [ ] Update loaders per BAZAAR-256
 - [ ] Adjust generation templates (BAZAAR-257)
 - [ ] Decide on import map vs bundling for runtime deps (BAZAAR-258)

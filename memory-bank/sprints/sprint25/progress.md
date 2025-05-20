@@ -80,6 +80,13 @@ The current component loading mechanism implemented in `useRemoteComponent.tsx` 
 
 **Overall Blocker:** The critical path is: Implement BAZAAR-255 (ESM builds) → Implement BAZAAR-256 (React.lazy in `useRemoteComponent`) → Refactor `CustomScene` for Suspense.
 
+## May 26, 2025
+- **Implemented BAZAAR-255 Build Pipeline Migration:**
+  - Updated `buildCustomComponent.ts` to compile components as ESM modules using esbuild.
+  - Removed legacy global registration logic and added runtime validation via dynamic `import()`.
+  - Adjusted sanitization to preserve import statements.
+  - Tests updated to reflect new configuration.
+
 ## May 21, 2025
 - Created `detailed-tickets.md` outlining tasks for migrating dynamic components to ESM and React.lazy.
 - Reviewed Sprint 24 docs for background on A2A system and testing practices.
