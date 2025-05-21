@@ -35,6 +35,11 @@ work. When entries grow beyond that, move older sections to
 - Fixed TypeScript types for the buildLogger to support the implementation
 - This is the foundation for the complete ESM modernization in Sprint 25
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md) for implementation details.
+**May 26, 2025: BAZAAR-262 Performance Benchmark Script**
+- Added benchmark test comparing React.lazy import with script tag injection.
+- Logs load times and memory usage.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
+
 
 **May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
 - Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
