@@ -110,6 +110,8 @@ The ESM component migration has been completed successfully:
 This work completes tickets BAZAAR-255, BAZAAR-256, BAZAAR-257, BAZAAR-258, and BAZAAR-260. The system now uses modern JavaScript module patterns and better integration with React's component model. 
 
 See [Sprint 25 Progress](/memory-bank/sprints/sprint25/progress.md) for details.
+### 2025-05-26: Documentation for ESM Components Updated
+- Added new developer guide and updated integration docs. See [Sprint 25 Progress](./sprints/sprint25/progress.md).
 
 ### 2024-05-23: Sprint 25 Started - ESM Component Migration
 

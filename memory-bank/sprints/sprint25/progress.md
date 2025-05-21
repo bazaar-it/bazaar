@@ -169,6 +169,11 @@ Sprint 25 focuses on improvements to custom components, including:
   - Added comprehensive tests for ESM module format output
   - Added tests for different component export patterns (default export, named export)
   - Tested external dependency handling
+
+## May 26, 2025: BAZAAR-261 Documentation Updates
+- Created `esm-component-development.md` as a developer guide for writing ESM-compatible components.
+- Updated `custom-components-guide.md` to remove legacy global usage and show the new ESM pattern.
+- Updated API documentation (`custom-components-integration.md`) with details on React.lazy loading of ESM modules.
 ## May 26, 2025: BAZAAR-263 Shared Module System Implemented
 - Added a lightweight registry under `src/shared/modules`.
 - Modules can be registered and retrieved by name with version tracking.

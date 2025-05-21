@@ -1,3 +1,4 @@
+<!-- path: memory-bank/api-docs/custom-components-integration.md -->
 # Custom Components Integration
 
 ## Overview
@@ -77,6 +78,10 @@ const patch: Operation[] = [
   }
 ];
 ```
+
+### ESM Component Loading
+Custom components are now uploaded as ES modules. When a user inserts a component,
+`React.lazy` dynamically imports the module from `data.src` and renders the default export.
 
 ## Technical Details
 
