@@ -19,7 +19,7 @@ interface {{COMPONENT_NAME}}Props {
 /**
  * {{COMPONENT_NAME}} - Custom Remotion component
  */
-export const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) => {
+const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) => {
   // These hooks are imported above - DO NOT DECLARE THEM AGAIN
   const frame = useCurrentFrame();
   const { width, height, fps, durationInFrames } = useVideoConfig();
@@ -74,11 +74,38 @@ export function applyComponentTemplate(
     .replace(/{{COMPONENT_NAME}}/g, componentName)
     .replace('{{COMPONENT_IMPLEMENTATION}}', sanitizedImplementation)
     .replace('{{COMPONENT_RENDER}}', render);
-    
+  
   // Verify the result contains the critical default export
   if (!result.includes('export default')) {
     console.error('Warning: Template application did not include the default export');
   }
-  
+
   return result;
+}
+
+/**
+ * Validate that generated component code follows the expected template
+ */
+export function validateComponentTemplate(code: string): boolean {
+  // Must contain a default export
+  if (!code.includes('export default')) {
+    console.error('Component missing default export');
+    return false;
+  }
+
+  // Require basic React and Remotion imports
+  const hasReact = /import\s+React\s+from\s+["']react["']/.test(code);
+  const hasRemotion = /from\s+["']remotion["']/.test(code);
+  if (!hasReact || !hasRemotion) {
+    console.error('Component missing required imports');
+    return false;
+  }
+
+  // Should not reference old global registration
+  if (code.includes('window.__REMOTION_COMPONENT')) {
+    console.error('Component should not use window.__REMOTION_COMPONENT');
+    return false;
+  }
+
+  return true;
 }

@@ -121,6 +121,16 @@ The current component loading mechanism implemented in `useRemoteComponent.tsx` 
 
 ## May 21, 2025
 - Created `detailed-tickets.md` outlining tasks for migrating dynamic components to ESM and React.lazy.
+  - Reviewed Sprint 24 docs for background on A2A system and testing practices.
+
+## May 25, 2025
+- **BAZAAR-257: Update Component Generation Templates**
+  - Simplified `componentTemplate.ts` to export components as ESM modules without
+    the old `window.__REMOTION_COMPONENT` registration.
+  - Added `validateComponentTemplate` and corresponding unit tests to enforce the
+    new structure.
+  - Introduced `RUNTIME_DEPENDENCIES` constant and updated `componentGenerator.service.ts`
+    to include runtime dependency versions in job metadata.
 - Reviewed Sprint 24 docs for background on A2A system and testing practices.
 
 ## Sprint 25: Custom Component Improvements

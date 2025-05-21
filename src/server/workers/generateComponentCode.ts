@@ -10,7 +10,7 @@ import { saveCheckpoint } from "~/server/services/componentJob.service";
 import { OpenAI } from "openai";
 import { env } from "~/env";
 import logger, { componentLogger } from '~/lib/logger';
-import { COMPONENT_TEMPLATE, applyComponentTemplate } from "./componentTemplate";
+import { COMPONENT_TEMPLATE, applyComponentTemplate, validateComponentTemplate } from "./componentTemplate";
 import { repairComponentSyntax } from './repairComponentSyntax';
 import { preprocessTsx } from '../utils/tsxPreprocessor';
 import type { ComponentJob } from '~/types/chat';
@@ -636,6 +636,10 @@ For animation:
       args.componentImplementation || '',
       args.componentRender || '<div>Empty component</div>'
     );
+
+    if (!validateComponentTemplate(componentCode)) {
+      componentLogger.warn(jobId, 'Generated component failed template validation');
+    }
 
     // Log the raw assembled component code BEFORE validation
     componentLogger.info(jobId, `Raw assembled component code for "${sanitizedComponentName}" (length: ${componentCode.length}):\n${componentCode.substring(0, 2000)}${componentCode.length > 2000 ? '... (truncated)' : ''}`);

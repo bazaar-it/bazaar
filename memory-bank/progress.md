@@ -11,6 +11,14 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 25, 2025: BAZAAR-257 Templates Updated**
+- `componentTemplate.ts` now exports components via `export default` and drops
+  the global registration IIFE.
+- Added validation and tests to enforce this new pattern.
+- `componentGenerator.service.ts` now includes `RUNTIME_DEPENDENCIES` metadata
+  for generated components.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
+
 **May 21, 2025: CustomScene Component Tested & Validated**
 - Successfully tested the rewritten CustomScene component using terminal-based testing tools
 - Fixed import path issues with tilde (~) alias resolution when testing components
