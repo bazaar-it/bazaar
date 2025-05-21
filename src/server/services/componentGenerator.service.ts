@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { processComponentJob } from "~/server/workers/generateComponentCode";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
+import { RUNTIME_DEPENDENCIES, type RuntimeDependencies } from "~/server/constants/runtime-dependencies";
 
 // Type for the database instance
 type DB = typeof db;
@@ -18,6 +19,7 @@ interface ComponentMetadata {
     width?: number;
     height?: number;
     complexity?: number;
+    dependencies: RuntimeDependencies;
 }
 
 /**
@@ -564,7 +566,8 @@ export async function generateComponent(
                 fps: actualFps,
                 width: actualWidth,
                 height: actualHeight,
-                complexity: estimatedComplexity
+                complexity: estimatedComplexity,
+                dependencies: RUNTIME_DEPENDENCIES
             }
         };
     } catch (error) {
@@ -578,7 +581,8 @@ export async function generateComponent(
                 fps: actualFps,
                 width: actualWidth,
                 height: actualHeight,
-                complexity: estimatedComplexity
+                complexity: estimatedComplexity,
+                dependencies: RUNTIME_DEPENDENCIES
             }
         };
     }

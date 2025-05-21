@@ -11,6 +11,14 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 25, 2025: BAZAAR-257 Templates Updated**
+- `componentTemplate.ts` now exports components via `export default` and drops
+  the global registration IIFE.
+- Added validation and tests to enforce this new pattern.
+- `componentGenerator.service.ts` now includes `RUNTIME_DEPENDENCIES` metadata
+  for generated components.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
+
 **May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
 - Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
 - Created placeholder client-side test file (`CustomScene.test.tsx`) and noted existing `useRemoteComponent.test.tsx`.
