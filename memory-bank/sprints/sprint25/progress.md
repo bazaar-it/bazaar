@@ -1,4 +1,9 @@
 # Sprint 25 Progress
+## May 26, 2025: BAZAAR-262 Performance Benchmark Script
+- Created `componentLoad.test.ts` comparing dynamic ESM import with script tag loading.
+- Records load time and heap usage for each approach.
+- Documented details in `BAZAAR-262-performance-testing.md`.
+
 
 ## May 25, 2025: BAZAAR-255 ESM Build Pipeline Migration Implemented
 
@@ -169,3 +174,7 @@ Sprint 25 focuses on improvements to custom components, including:
 - Created `esm-component-development.md` as a developer guide for writing ESM-compatible components.
 - Updated `custom-components-guide.md` to remove legacy global usage and show the new ESM pattern.
 - Updated API documentation (`custom-components-integration.md`) with details on React.lazy loading of ESM modules.
+## May 26, 2025: BAZAAR-263 Shared Module System Implemented
+- Added a lightweight registry under `src/shared/modules`.
+- Modules can be registered and retrieved by name with version tracking.
+- Documented usage in `BAZAAR-263-shared-modules.md`.

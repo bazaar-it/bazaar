@@ -45,11 +45,11 @@
   - [x] Update API documentation to reflect new component loading pattern
 
 - [ ] BAZAAR-262: Performance testing for ESM components
-  - [ ] Measure component load time before and after ESM migration
-  - [ ] Track memory usage with new component loading approach
-  - [ ] Benchmark React.lazy vs script tag approach
+  - [x] Measure component load time before and after ESM migration
+  - [x] Track memory usage with new component loading approach
+  - [x] Benchmark React.lazy vs script tag approach
 
-- [ ] BAZAAR-263: Implement shared module system
-  - [ ] Create a system for shared utilities across components
-  - [ ] Implement version management for shared modules
-  - [ ] Add documentation for using shared modules
+- [x] BAZAAR-263: Implement shared module system
+  - [x] Create a system for shared utilities across components
+  - [x] Implement version management for shared modules
+  - [x] Add documentation for using shared modules

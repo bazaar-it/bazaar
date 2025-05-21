@@ -35,6 +35,11 @@ work. When entries grow beyond that, move older sections to
 - Fixed TypeScript types for the buildLogger to support the implementation
 - This is the foundation for the complete ESM modernization in Sprint 25
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md) for implementation details.
+**May 26, 2025: BAZAAR-262 Performance Benchmark Script**
+- Added benchmark test comparing React.lazy import with script tag injection.
+- Logs load times and memory usage.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
+
 
 **May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
 - Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
@@ -45,6 +50,11 @@ work. When entries grow beyond that, move older sections to
 **May 25, 2025: BAZAAR-260 Docs Updated**
 - Checklist and testing documentation updated for ESM migration.
 - See [Sprint 25 Progress](./sprints/sprint25/progress.md).
+
+**May 26, 2025: BAZAAR-263 Shared Module System Implemented**
+- Introduced a shared module registry to allow utilities to be reused across custom components.
+- Version information is tracked for each shared module.
+- Documented usage in `memory-bank/sprints/sprint25/BAZAAR-263-shared-modules.md`.
 
 **May 21, 2025: ESM Migration Planning Started**
 - Detailed tickets written for Sprint 25 to convert dynamic components to ES modules.
