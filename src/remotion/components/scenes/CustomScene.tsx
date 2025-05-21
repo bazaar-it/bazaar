@@ -180,7 +180,7 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
     }
   }, [componentId, fetchAdbData, refreshKey, error]); // Added error to prevent re-fetch loops on error
 
-  console.log(`[CustomScene RENDER] componentId: ${componentId}, id: ${id}, loading: ${loading}, error: ${JSON.stringify(error)}, adbData: ${adbData ? adbData.id : 'null'}, fetchedMetadata: ${fetchedMetadata ? fetchedMetadata.componentName : 'null'}, refreshKey: ${refreshKey}`);
+  console.log(`[CustomScene RENDER] componentId: ${componentId}, loading: ${loading}, error: ${JSON.stringify(error)}, adbData: ${adbData ? adbData.id : 'null'}, fetchedMetadata: ${fetchedMetadata ? fetchedMetadata.componentName : 'null'}, refreshKey: ${refreshKey}`);
 
   const handleRetry = () => {
     console.log('[CustomScene] Retry button clicked. Clearing error and re-triggering fetch via refreshKey.');

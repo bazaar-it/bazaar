@@ -86,6 +86,21 @@ work. When entries grow beyond that, move older sections to
 - The A2A system, including ScenePlannerAgent, now operates reliably.
 - *Details can be found in the relevant sprint log (e.g., [Sprint 24](./sprints/sprint24/progress.md) or `progress-history.md`).*
 
+## Progress Logs
+
+- **Main log**: `/memory-bank/progress.md` contains brief highlights and an index
+  of sprint progress files.
+- **Sprint logs**: Each sprint keeps a detailed progress file under
+  `/memory-bank/sprints/<sprint>/progress.md`.
+- **Special topics**: Additional progress files such as
+  `/memory-bank/a2a/progress.md` or `/memory-bank/scripts/progress.md` are linked
+  from the main log.
+
+### Recent Updates (Top 200 lines - older entries to progress-history.md)
+
+*   **Component Test Harness**: Integrated Sucrase for in-browser TSX to JS transpilation in `src/app/test/component-harness/page.tsx`. This should resolve dynamic loading issues and `useContext` errors. Added `inputProps` handling to `RemotionPreview` and `<Player>`.
+*   **DB Analysis Toolkit**: Completed and debugged. Details in `memory-bank/db-analysis-toolkit.md` and `memory-bank/database-tools.md`.
+
 ## Sprint Progress Index
 - [Sprint 25](./sprints/sprint25/progress.md)
 - [Sprint 24](./sprints/sprint24/progress.md)

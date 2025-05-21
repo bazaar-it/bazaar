@@ -489,3 +489,18 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
 - [ ] Add component categories for better organization
 - [ ] Implement batch operations for multiple components
 - [ ] Add version history for components
+
+# Main TODO List
+
+## Critical (See `/memory-bank/TODO-critical.md`)
+
+## High Priority
+
+*   **Component Test Harness (`src/app/test/component-harness/page.tsx`)**:
+    *   [ ] Verify successful dynamic loading and rendering of Remotion components after Sucrase integration.
+    *   [ ] Thoroughly test `inputProps` functionality.
+    *   [ ] Confirm resolution of "Cannot read properties of null (reading 'useContext')" error.
+    *   [ ] Review and potentially enhance error display/feedback (consider ShadCN components if UI becomes complex).
+    *   [ ] **Test component harness if testing is the next step.**
+*   **TypeScript Conversion**: Convert verification scripts (mentioned in pipeline reliability) to TypeScript.
+{{ ... }}
