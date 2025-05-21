@@ -72,4 +72,4 @@ This document explains how to refactor Bazaar‑Vid to follow the official Remot
 
 ## Summary
 
-Migrating to ESM modules aligns Bazaar‑Vid with Remotion’s recommended workflow. Components become standard JavaScript modules that can be lazily imported both in the browser and on the server, eliminating brittle global assignments and enabling better integration with the Player.
+Migrating to ESM modules aligns Bazaar‑Vid with Remotion’s recommended workflow. Components become standard JavaScript modules that can be lazily imported both in the browser and on the server, eliminating brittle global assignments and enabling better integration with the Player. For step‑by‑step authoring instructions see [Developer Guide: Creating ESM-Compatible Components](./esm-component-development.md).

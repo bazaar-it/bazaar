@@ -40,9 +40,9 @@
   - [ ] Implement server-side component validation
   - [ ] Create rendering safeguards
 
-- [ ] BAZAAR-261: Update documentation for ESM components
-  - [ ] Add developer guide for creating ESM-compatible components
-  - [ ] Update API documentation to reflect new component loading pattern
+- [x] BAZAAR-261: Update documentation for ESM components
+  - [x] Add developer guide for creating ESM-compatible components
+  - [x] Update API documentation to reflect new component loading pattern
 
 - [ ] BAZAAR-262: Performance testing for ESM components
   - [ ] Measure component load time before and after ESM migration
