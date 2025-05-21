@@ -15,6 +15,11 @@ type StringOrNull = string | null;
 // Extend the Winston Logger type with custom A2A methods
 declare module 'winston' {
   interface Logger {
+    // Add buildLogger method signatures
+    start(jobId: string, message: string, meta?: Record<string, any>): Logger;
+    compile(jobId: string, message: string, meta?: Record<string, any>): Logger;
+    upload(jobId: string, message: string, meta?: Record<string, any>): Logger;
+    complete(jobId: string, message: string, meta?: Record<string, any>): Logger;
   }
 }
 
@@ -356,6 +361,38 @@ buildLogger.info = (messageOrInfo: string | object, ...args: any[]): Logger => {
   const fullMessage = `[BUILD:INFO][JOB:${jobId}] ${msg}`;
   const { jobId: _jId, ...metaForOrigCall } = meta;
   const finalMetaForOrigCall = { ...metaForOrigCall, taskId: jobId, build: true };
+  origBuildInfo(fullMessage, finalMetaForOrigCall);
+  return buildLogger;
+};
+
+// Add buildLogger.start method
+buildLogger.start = (jobId: string, message: string, meta: Record<string, any> = {}): Logger => {
+  const fullMessage = `[BUILD:START][JOB:${jobId}] ${message}`;
+  const finalMetaForOrigCall = { ...meta, taskId: jobId, build: true };
+  origBuildInfo(fullMessage, finalMetaForOrigCall);
+  return buildLogger;
+};
+
+// Add buildLogger.compile method
+buildLogger.compile = (jobId: string, message: string, meta: Record<string, any> = {}): Logger => {
+  const fullMessage = `[BUILD:COMPILE][JOB:${jobId}] ${message}`;
+  const finalMetaForOrigCall = { ...meta, taskId: jobId, build: true };
+  origBuildInfo(fullMessage, finalMetaForOrigCall);
+  return buildLogger;
+};
+
+// Add buildLogger.upload method
+buildLogger.upload = (jobId: string, message: string, meta: Record<string, any> = {}): Logger => {
+  const fullMessage = `[BUILD:UPLOAD][JOB:${jobId}] ${message}`;
+  const finalMetaForOrigCall = { ...meta, taskId: jobId, build: true };
+  origBuildInfo(fullMessage, finalMetaForOrigCall);
+  return buildLogger;
+};
+
+// Add buildLogger.complete method
+buildLogger.complete = (jobId: string, message: string, meta: Record<string, any> = {}): Logger => {
+  const fullMessage = `[BUILD:COMPLETE][JOB:${jobId}] ${message}`;
+  const finalMetaForOrigCall = { ...meta, taskId: jobId, build: true };
   origBuildInfo(fullMessage, finalMetaForOrigCall);
   return buildLogger;
 };

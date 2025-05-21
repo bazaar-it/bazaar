@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 
 // Get directory name in ESM
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Get the project root (2 levels up from the current directory)
+const projectRoot = path.resolve(__dirname, '../../');
 
 /**
  * @param {import('@remotion/cli').WebpackOverrideFn}
@@ -24,6 +26,11 @@ export const webpackOverride = (currentConfiguration) => {
     ...withTailwind,
     resolve: {
       ...withTailwind.resolve,
+      // Add alias for tilde (~) paths to match tsconfig.json
+      alias: {
+        ...withTailwind.resolve?.alias,
+        '~': path.resolve(projectRoot, 'src'),
+      },
       fallback: {
         ...withTailwind.resolve?.fallback,
         // Add crypto polyfill support (for UUID generation)

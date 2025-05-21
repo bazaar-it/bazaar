@@ -347,68 +347,90 @@ function fixSyntaxIssues(code: string): string {
 /**
  * Compile TSX code using esbuild
  */
-async function compileWithEsbuild(tsxCode: string, jobId: string = "unknown"): Promise<string> {
+async function compileWithEsbuild(
+  tsxCode: string, 
+  jobId: string = "unknown", 
+  options: { outputFile?: string } = {}
+): Promise<string> {
   if (!esbuild) {
     throw new Error("esbuild is not loaded. Cannot compile.");
   }
 
-  // Apply comprehensive fixes for common syntax issues before compilation
+  // Apply syntax fixes before compilation
   const fixedTsxCode = fixSyntaxIssues(tsxCode);
   
   try {
     // Log the first few lines around line 45 to debug the issue
-    const lines = fixedTsxCode.split('\n');
-    const startLine = Math.max(0, 44 - 5);
-    const endLine = Math.min(lines.length, 45 + 5);
-    const debugLines = lines.slice(startLine, endLine).join('\n');
-    buildLogger.debug(jobId, "[ESBUILD] Code around line 45 (before compilation):", { debugLines });
+    // const lines = fixedTsxCode.split('\n');
+    // const startLine = Math.max(0, 44 - 5);
+    // const endLine = Math.min(lines.length, 45 + 5);
+    // const debugLines = lines.slice(startLine, endLine).join('\n');
+    // buildLogger.debug(jobId, "[ESBUILD] Code around line 45 (before compilation):", { debugLines });
     
-    const result = await esbuild.build({
+    // Common build options
+    const buildOptions: import('esbuild').BuildOptions = {
       stdin: {
         contents: fixedTsxCode,
         resolveDir: process.cwd(), // Important for resolving any potential relative paths if ever used
         loader: 'tsx',
       },
       bundle: true, // Bundle dependencies
-      write: false, // We want the output as a string, not written to disk
-      format: 'iife', // Immediately Invoked Function Expression, suitable for browser
+      format: 'esm', // Changed from 'iife' to 'esm' for standard ES modules
       platform: 'browser',
       target: 'es2020', // Modern JS target
       minify: true, // Minify the output
       loader: { '.tsx': 'tsx' },
       jsxFactory: 'React.createElement',
       jsxFragment: 'React.Fragment',
-      external: ['react', 'remotion'], // Mark as externals since provided globally
+      external: ['react', 'react-dom', 'remotion', '@remotion/*'], // External dependencies that should not be bundled
       logLevel: 'warning',
-    });
+    };
 
-    if (result.errors.length > 0) {
-      buildLogger.error(jobId, "[ESBUILD] Build failed with errors:", { errors: JSON.stringify(result.errors, null, 2) });
-      // Potentially throw an error or handle as a failed build
-      // For now, logging and attempting to proceed if output exists
-    }
-    if (result.warnings.length > 0) {
-      buildLogger.warn(jobId, "[ESBUILD] Build completed with warnings:", { warnings: JSON.stringify(result.warnings, null, 2) });
-    }
+    let compiledJs: string;
 
-    if (result.outputFiles && result.outputFiles.length > 0 && result.outputFiles[0]) {
-      const compiledJs = result.outputFiles[0].text;
-      buildLogger.info(jobId, "[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
-      buildLogger.debug(jobId, "[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) }); // Optional: log snippet
-      return compiledJs;
+    if (options.outputFile) {
+      buildOptions.outfile = options.outputFile;
+      const result = await esbuild.build(buildOptions);
+      if (result.errors.length > 0) {
+        buildLogger.error(jobId, "[ESBUILD] Build failed with errors (output to file):", { errors: JSON.stringify(result.errors, null, 2) });
+      }
+      if (result.warnings.length > 0) {
+        buildLogger.warn(jobId, "[ESBUILD] Build completed with warnings (output to file):", { warnings: JSON.stringify(result.warnings, null, 2) });
+      }
+      // Read the generated file and return its content
+      compiledJs = fs.readFileSync(options.outputFile, 'utf8');
     } else {
-      throw new Error("esbuild compilation did not produce output files.");
+      buildOptions.write = false;
+      const result = await esbuild.build(buildOptions);
+      if (result.errors.length > 0) {
+        buildLogger.error(jobId, "[ESBUILD] Build failed with errors (string output):", { errors: JSON.stringify(result.errors, null, 2) });
+      }
+      if (result.warnings.length > 0) {
+        buildLogger.warn(jobId, "[ESBUILD] Build completed with warnings (string output):", { warnings: JSON.stringify(result.warnings, null, 2) });
+      }
+      if (result.outputFiles && result.outputFiles.length > 0 && result.outputFiles[0]) {
+        compiledJs = result.outputFiles[0].text;
+      } else {
+        throw new Error("esbuild compilation did not produce output files (string output).");
+      }
     }
+
+    buildLogger.info(jobId, "[ESBUILD] Compilation successful", { outputSize: compiledJs.length });
+    buildLogger.debug(jobId, "[ESBUILD] Compiled JS snippet", { snippet: compiledJs.substring(0, 500) });
+    return compiledJs;
+
   } catch (error) {
     buildLogger.error(jobId, "[ESBUILD] Error during esbuild compilation:", { error: error instanceof Error ? error.message : String(error) });
     
     // If we still get the unterminated regex error, try the fallback compiler
+    // Note: compileWithFallback itself calls sanitizeTsx, so fixedTsxCode is not directly passed here.
+    // It passes the original tsxCode to compileWithFallback.
     if (error instanceof Error && error.message.includes('Unterminated regular expression')) {
       buildLogger.warn(jobId, "[ESBUILD] Unterminated regular expression error persists, trying fallback compiler");
-      return compileWithFallback(tsxCode, jobId);
+      return compileWithFallback(tsxCode, jobId); // Pass original tsxCode to fallback
     }
     
-    throw error; // Re-throw to be caught by processJob
+    throw error; // Re-throw to be caught by processJob or buildCustomComponent
   }
 }
 
@@ -433,50 +455,53 @@ async function compileWithFallback(tsxCode: string, jobId: string = "unknown"): 
   code = code.replace(/interface\s+[^{]+{[^}]*}/g, '');
   code = code.replace(/type\s+[^=]+=\s*[^;]+;/g, '');
   
-  // Add our wrapper
+  // Add ESM export wrapper
   code = `
 // Fallback compiled version
 ${code}
 
-// Export any component that exists in the code
-if (typeof Component !== 'undefined') {
-  window.__REMOTION_COMPONENT = Component;
-} else if (typeof Default !== 'undefined') {
-  window.__REMOTION_COMPONENT = Default;
-} else if (typeof default_1 !== 'undefined') {
-  window.__REMOTION_COMPONENT = default_1;
-}
+// Ensure default export for React.lazy compatibility
+export default ${detectExportedComponentName(code) || 'Component'};
   `;
   
   return code;
 }
 
 /**
+ * Helper function to detect the component name from code
+ */
+function detectExportedComponentName(code: string): string | null {
+  // Check for export default ComponentName
+  const defaultExport = code.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/);
+  if (defaultExport && defaultExport[1]) {
+    return defaultExport[1];
+  }
+  
+  // Check for export default function ComponentName
+  const defaultFunctionExport = code.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
+  if (defaultFunctionExport && defaultFunctionExport[1]) {
+    return defaultFunctionExport[1];
+  }
+  
+  // Check for const/function ComponentName declarations that might be exported
+  const componentDefinition = code.match(/(?:const|function)\s+([A-Za-z0-9_]+)\s*(?:=|:|\()/);
+  if (componentDefinition && componentDefinition[1]) {
+    return componentDefinition[1];
+  }
+  
+  return null;
+}
+
+/**
  * Sanitize TSX code by removing unsafe imports and handling React/Remotion imports
  * 
  * 1. Removes all unsafe imports (non-React, non-Remotion)
- * 2. Removes all React and Remotion imports (since we're adding globals)
+ * 2. Preserves React and Remotion imports for ESM compatibility
  * 3. Preserves the component code itself
  */
-function sanitizeTsx(tsxCode: string): string {
+export function sanitizeTsx(tsxCode: string): string {
   // First, remove duplicate default exports
   let sanitizedCode = removeDuplicateDefaultExports(tsxCode);
-  
-  // Check for and remove duplicate React declarations
-  const reactDeclarationRegex = /const\s+React\s*=\s*(window\.React|require\(['"]react['"]\)|import\s+.*\s+from\s+['"]react['"])/g;
-  const reactMatches = Array.from(sanitizedCode.matchAll(reactDeclarationRegex));
-  
-  if (reactMatches.length > 0) {
-    logger.debug(`Found ${reactMatches.length} React declarations, removing them to prevent duplicates:`, { 
-      matches: reactMatches.map((match, i) => {
-        const lineNumber = sanitizedCode.substring(0, match.index || 0).split('\n').length;
-        return `[${i}] Line ~${lineNumber}: ${match[0]}`;
-      })
-    });
-  }
-  
-  // Remove React declarations
-  sanitizedCode = sanitizedCode.replace(reactDeclarationRegex, '// React is provided globally');
   
   // SPECIFIC FIX for </AbsoluteFill>; pattern from LLM
   const faultySemicolonPattern = /<\/AbsoluteFill>\s*;/g;
@@ -488,14 +513,35 @@ function sanitizeTsx(tsxCode: string): string {
   // Split by lines
   const lines = sanitizedCode.split('\n');
   
-  // Filter out all import statements - we'll handle React and Remotion via globals
-  const codeWithoutImports = lines.filter(line => {
+  // Keep React and Remotion imports, filter out other imports
+  const codeWithAllowedImports = lines.filter(line => {
     const trimmedLine = line.trim();
-    // Skip any import statements 
-    return !trimmedLine.startsWith('import ');
+    // Skip any import statements except React and Remotion
+    if (trimmedLine.startsWith('import ')) {
+      return (
+        trimmedLine.includes(' from "react"') || 
+        trimmedLine.includes(" from 'react'") ||
+        trimmedLine.includes(' from "remotion"') || 
+        trimmedLine.includes(" from 'remotion'") ||
+        trimmedLine.includes(' from "@remotion/') ||
+        trimmedLine.includes(" from '@remotion/")
+      );
+    }
+    return true;
   });
   
-  return codeWithoutImports.join('\n');
+  // Ensure the code has a default export
+  const code = codeWithAllowedImports.join('\n');
+  
+  // If no default export is found, try to add one
+  if (!code.includes('export default')) {
+    const componentName = detectExportedComponentName(code);
+    if (componentName) {
+      return `${code}\n\n// Adding default export for ESM compatibility\nexport default ${componentName};\n`;
+    }
+  }
+  
+  return code;
 }
 
 /**
@@ -548,164 +594,6 @@ function removeDuplicateDefaultExports(code: string): string {
   
   // If there's only one or zero export default, return the original code
   return code;
-}
-
-/**
- * Wrap TSX code with global React and Remotion references
- * and register the component for use with the useRemoteComponent hook.
- * 
- * The application expects the component to be assigned to window.__REMOTION_COMPONENT.
- */
-function wrapTsxWithGlobals(tsxCode: string): string {
-  // Remove the "use client" directive - it's not needed/valid in the browser script
-  let cleanedCode = tsxCode.replace(/^\s*["']use client["'];?\s*/m, '// "use client" directive removed for browser compatibility\n');
-  
-  // Remove any existing React declarations to prevent duplicates
-  cleanedCode = cleanedCode.replace(/const\s+React\s*=\s*.*?;/g, '// React is provided globally');
-  
-  // Try to extract component names from the code with improved patterns
-  
-  // 1. Look for function declarations
-  const funcComponents = cleanedCode.match(/function\s+([A-Za-z0-9_]+)\s*\(/g) || [];
-  
-  // 2. Look for const/let component declarations
-  const constComponents = cleanedCode.match(/const\s+([A-Za-z0-9_]+)\s*=\s*(\(\s*\)\s*=>|\(\s*props\s*\)\s*=>|\(\s*\{\s*[^}]*\}\s*\)\s*=>)/g) || [];
-  
-  // 3. Look for default exports
-  const defaultExport = cleanedCode.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/);
-  
-  // 4. Look for named exports
-  const namedExports = cleanedCode.match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/g) || [];
-  
-  // Determine the best component name to use
-  let componentName = 'CustomComponent';
-  
-  // 1. Try 'export default function FunctionName ...'
-  const defaultFunctionExport = cleanedCode.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
-  if (defaultFunctionExport && defaultFunctionExport[1]) {
-    componentName = defaultFunctionExport[1];
-    logger.debug(`Found default export function: ${componentName}`);
-  } 
-  // 2. Else, try 'export default VariableNameOrClassName;' (could be a variable, class, or other identifier)
-  else {
-    const defaultIdentifierExport = cleanedCode.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;/);
-    if (defaultIdentifierExport && defaultIdentifierExport[1]) {
-      componentName = defaultIdentifierExport[1];
-      logger.debug(`Found default export identifier (variable/class): ${componentName}`);
-    }
-    // 3. Else, try named exports (e.g., 'export function FunctionName', 'export const VariableName')
-    else if (namedExports.length > 0 && namedExports[0]) {
-      const match = namedExports[0].match(/export\s+(?:const|let|var|function)\s+([A-Za-z0-9_]+)/);
-      if (match && match[1]) {
-        componentName = match[1];
-        logger.debug(`Using named export component: ${componentName}`);
-      }
-    } 
-    // 4. Else, try regular function declarations (e.g., 'function FunctionName')
-    else if (funcComponents.length > 0 && funcComponents[0]) {
-      const match = funcComponents[0].match(/function\s+([A-Za-z0-9_]+)/);
-      if (match && match[1]) {
-        componentName = match[1];
-        logger.debug(`Using function component: ${componentName}`);
-      }
-    } 
-    // 5. Else, try regular const declarations (e.g., 'const VariableName = ...')
-    else if (constComponents.length > 0 && constComponents[0]) {
-      const match = constComponents[0].match(/const\s+([A-Za-z0-9_]+)/);
-      if (match && match[1]) {
-        componentName = match[1];
-        logger.debug(`Using const component: ${componentName}`);
-      }
-    } else {
-      logger.debug(`No specific component name pattern matched, using default: ${componentName}`);
-    }
-  }
-  
-  // Check for export patterns and modify if needed
-  let modifiedCode = cleanedCode;
-  
-  // Check for export { X as Y } pattern
-  const exportPattern = /export\s*\{\s*([A-Za-z0-9_]+)(?:\s+as\s+([A-Za-z0-9_]+))?\s*\}/;
-  const exportMatch = modifiedCode.match(exportPattern);
-  
-  if (exportMatch) {
-    // We have a named export, modify it to also assign to window.__REMOTION_COMPONENT
-    const exportSource = exportMatch[1];
-    const exportTarget = exportMatch[2] || exportSource;
-    
-    // Replace the export with export + window assignment
-    modifiedCode = modifiedCode.replace(
-      exportPattern,
-      `export { ${exportSource} as ${exportTarget} };\n// Also assign to window.__REMOTION_COMPONENT\nwindow.__REMOTION_COMPONENT = ${exportSource};`
-    );
-    
-    logger.debug(`Modified named export to also assign to window.__REMOTION_COMPONENT: ${exportSource} as ${exportTarget}`);
-  }
-  
-  // List of potential component names to try (with default as fallback)
-  const componentNames = [
-    componentName,
-    // Common names used by LLMs
-    'MyComponent',
-    'AnimatedComponent',
-    'FuturisticComponent', 
-    'MainComponent',
-    'Component',
-    // Fallbacks
-    'default_1',
-    'CustomComponent'
-  ];
-  
-  // Generate component registration with fallbacks using IIFE for reliable execution
-  return `
-// Access React from global scope - DO NOT DECLARE React AGAIN INSIDE COMPONENT
-const React = window.React || globalThis.React;
-
-// Access Remotion APIs safely without destructuring
-const AbsoluteFill = window.Remotion?.AbsoluteFill;
-const useCurrentFrame = window.Remotion?.useCurrentFrame;
-const useVideoConfig = window.Remotion?.useVideoConfig;
-const spring = window.Remotion?.spring;
-const interpolate = window.Remotion?.interpolate;
-const Sequence = window.Remotion?.Sequence;
-const Audio = window.Remotion?.Audio;
-const Img = window.Remotion?.Img;
-const staticFile = window.Remotion?.staticFile;
-const Series = window.Remotion?.Series;
-const interpolateColors = window.Remotion?.interpolateColors;
-const OffthreadVideo = window.Remotion?.OffthreadVideo;
-const Easing = window.Remotion?.Easing;
-
-// Original component code (with React global references)
-${modifiedCode}
-
-// Use an IIFE to ensure reliable component registration in browser context
-(function() {
-  try {
-    // Clear any existing component registration
-    if (window.__REMOTION_COMPONENT) {
-      delete window.__REMOTION_COMPONENT;
-    }
-    
-    // Try each potential component name in order, starting with the best guess
-    if (typeof ${componentNames[0]} !== 'undefined') {
-        window.__REMOTION_COMPONENT = ${componentNames[0]};
-        console.log('Component registered as window.__REMOTION_COMPONENT: ${componentNames[0]}');
-      }
-    ${componentNames.slice(1).map(name => `
-    else if (typeof ${name} !== 'undefined') {
-        window.__REMOTION_COMPONENT = ${name};
-        console.log('Component registered as window.__REMOTION_COMPONENT: ${name}');
-      }
-    `).join('')}
-    else {
-      console.error('Remotion component could not be found by name or default export. Component may not render.');
-    }
-  } catch (e) {
-    console.error('Error registering Remotion component:', e);
-  }
-})();
-  `;
 }
 
 export async function buildCustomComponent(jobId: string, forceRebuild = false): Promise<boolean> {
@@ -773,19 +661,14 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     await mkdir(tmpDir, { recursive: true });
     buildLogger.start(jobId, `Created temporary directory ${tmpDir}`, { type: "FILES" });
     
-    // --- REMOVED writing raw TSX to component.tsx ---
-    // const componentFilePath = path.join(tmpDir, "component.tsx");
-    // await writeFile(componentFilePath, job.tsxCode);
-    // buildLogger.start(jobId, `Wrote TSX file to ${componentFilePath}`, { type: "FILES" });
-    
-    // 2. Preprocess the TSX code
-    buildLogger.compile(jobId, "Preprocessing TSX code...");
-    const processedTsxCode = wrapTsxWithGlobals(job.tsxCode);
+    // 2. Process the TSX code to ensure ESM compatibility
+    buildLogger.compile(jobId, "Preprocessing TSX code for ESM...");
+    const processedTsxCode = sanitizeTsx(job.tsxCode);
     buildLogger.compile(jobId, `Preprocessing complete, processed code length: ${processedTsxCode.length}`);
 
     // 3. Compile with esbuild using stdin
     const compileStartTime = Date.now();
-    buildLogger.compile(jobId, "Starting esbuild compilation...");
+    buildLogger.compile(jobId, "Starting esbuild compilation with ESM format...");
     
     // Define a type for the compilation result
     type CompilationResult = { 
@@ -809,41 +692,11 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
       }
       
       const outputPath = path.join(tmpDir, "bundle.js"); // Corrected output path
-      // Configure esbuild
-      const result = await esbuild.build({
-        // --- UPDATED to use stdin instead of entryPoints ---
-        stdin: {
-          contents: processedTsxCode,
-          resolveDir: process.cwd(), // For resolving potential relative paths if needed
-          loader: 'tsx',
-        },
-        bundle: true,
-        outfile: outputPath,
-        format: 'iife', // IMPORTANT: Use IIFE format for browser execution
-        target: 'es2020',
-        platform: 'browser',
-        minify: true,
-        loader: {
-          '.tsx': 'tsx',
-          '.ts': 'ts',
-          '.js': 'js',
-          '.jsx': 'jsx',
-        },
-        define: {
-          'process.env.NODE_ENV': '"production"',
-        },
-        jsxFactory: 'React.createElement',
-        jsxFragment: 'React.Fragment',
-        external: ['react', 'remotion'], // Mark as externals since provided globally
-        logLevel: 'warning',
-      });
-      
-      // Check for warnings
-      if (result.warnings && result.warnings.length > 0) {
-        buildLogger.warn(jobId, "Compilation warnings", { warnings: result.warnings, type: "COMPILE:WARN" });
-      }
+      // Use the unified compileWithEsbuild function, ensuring it writes to outputPath
+      const jsCode = await compileWithEsbuild(processedTsxCode, jobId, { outputFile: outputPath });
       
       // Output final result
+      // The file is already written by compileWithEsbuild when outputFile is set
       const fileSize = fs.statSync(outputPath).size;
       buildLogger.compile(jobId, `Bundle size: ${Math.round(fileSize / 1024)}KB`, { type: "COMPILE:SUCCESS" });
       
@@ -914,7 +767,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
 
     // 3. Upload the bundle to R2
     const r2StartTime = Date.now();
-    buildLogger.upload(jobId, "Uploading bundle to R2...");
+    buildLogger.upload(jobId, "Uploading ESM bundle to R2...");
     
     // Configure R2 client
     const r2 = new S3Client({
@@ -937,34 +790,13 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
     const publicPath = `custom-components/${jobId}.js`;
     
     try {
-      // Verify the component has the required window.__REMOTION_COMPONENT assignment
+      // Verify the ESM bundle has a default export
       const bundleContentStr = bundleContent.toString();
-      const componentNameMatch = bundleContentStr.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-      let finalBundleContent = bundleContent;
-      
-      if (componentNameMatch && componentNameMatch[1]) {
-        const componentName = componentNameMatch[1];
-        
-        // Check if the window.__REMOTION_COMPONENT assignment is present
-        if (!bundleContentStr.includes('window.__REMOTION_COMPONENT')) {
-          buildLogger.warn(jobId, `Component bundle missing window.__REMOTION_COMPONENT assignment, adding it for ${componentName}`, { 
-            type: "COMPONENT_FIX" 
-          });
-          
-          // Add the assignment
-          const { code, added } = ensureRemotionComponentAssignment(bundleContentStr, componentName);
-          if (added) {
-            // Use the fixed code for upload
-            finalBundleContent = Buffer.from(code, 'utf-8');
-            buildLogger.compile(jobId, `Added window.__REMOTION_COMPONENT assignment for ${componentName}`);
-          }
-        } else {
-          buildLogger.compile(jobId, `Component already has window.__REMOTION_COMPONENT assignment`);
-        }
-      } else {
-        buildLogger.warn(jobId, "Could not determine component name to verify window.__REMOTION_COMPONENT assignment", { 
-          type: "COMPONENT_NAME_DETECTION" 
+      if (!bundleContentStr.includes('export default')) {
+        buildLogger.warn(jobId, "ESM bundle doesn't contain a default export, which is required for React.lazy", { 
+          type: "ESM_VALIDATION" 
         });
+        // We could add a default export here, but it's better to ensure the component code already has one
       }
       
       // Upload to R2
@@ -972,7 +804,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         new PutObjectCommand({
           Bucket: env.R2_BUCKET_NAME,
           Key: publicPath,
-          Body: finalBundleContent,
+          Body: bundleContent,
           ContentType: 'application/javascript',
         })
       );
@@ -980,7 +812,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
       const r2Duration = Date.now() - r2StartTime;
       buildLogger.upload(jobId, `R2 upload successful in ${r2Duration}ms`, { 
         ETag: result.ETag, 
-        size: finalBundleContent.length 
+        size: bundleContent.length 
       });
       
       // NEW: Verify file exists in R2 before updating database

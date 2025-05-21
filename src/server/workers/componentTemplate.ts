@@ -34,6 +34,7 @@ const {{COMPONENT_NAME}}: React.FC<{{COMPONENT_NAME}}Props> = ({ data }) => {
   );
 };
 
+// Export the component as default for ESM compatibility
 export default {{COMPONENT_NAME}};
 
 `;
@@ -73,10 +74,10 @@ export function applyComponentTemplate(
     .replace(/{{COMPONENT_NAME}}/g, componentName)
     .replace('{{COMPONENT_IMPLEMENTATION}}', sanitizedImplementation)
     .replace('{{COMPONENT_RENDER}}', render);
-
-  // Verify the result contains a default export
+  
+  // Verify the result contains the critical default export
   if (!result.includes('export default')) {
-    console.error('Warning: Template application did not include export default statement');
+    console.error('Warning: Template application did not include the default export');
   }
 
   return result;

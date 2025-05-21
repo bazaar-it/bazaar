@@ -1,6 +1,18 @@
 //memory-bank/sprints/sprint25/BAZAAR-255-ESM-build-pipeline.md
 # BAZAAR-255: Migrate Build Pipeline to ESM Format
 
+## Status: Completed (May 25, 2025)
+
+This ticket has been successfully implemented. The component build pipeline now produces ESM modules instead of IIFE bundles. Key changes include:
+
+1. Updated `buildCustomComponent.ts` to use `format: 'esm'` instead of `format: 'iife'`
+2. Removed `globalName: 'COMPONENT_BUNDLE'` option from the esbuild configuration
+3. Updated the external dependencies list to include `['react', 'react-dom', 'remotion', '@remotion/*']`
+4. Removed the global wrapping logic (`wrapTsxWithGlobals` function) that was injecting window.__REMOTION_COMPONENT
+5. Modified `sanitizeTsx` to preserve React and Remotion imports for ESM compatibility
+6. Added proper detection and handling of default exports to ensure React.lazy compatibility
+7. Fixed TypeScript type issues with the buildLogger methods
+
 ## Current Implementation
 
 ### Build Process Overview
