@@ -1,0 +1,24 @@
+{
+  "projectId": "test-project-1",
+  "components": [
+    {
+      "name": "CounterComponent",
+      "prompt": "Create a simple counting animation that displays a number increasing from 0 to 100 over the duration. The number should be centered, with a colorful background that changes from blue to purple as the counter increases. Add a nice easing effect to the count increase."
+    },
+    {
+      "name": "ColorfulText",
+      "prompt": "Create a text reveal animation that types out the phrase 'Welcome to Bazaar-Vid' one character at a time, with each character appearing in a different color from a gradient palette. The text should be centered on screen."
+    },
+    {
+      "name": "LogoSpin",
+      "prompt": "Create a component that shows a spinning logo. Use a circle as a placeholder for the logo. The logo should start small, grow to full size while spinning, and then shrink again before repeating. Use smooth easing for all animations.",
+      "animationBrief": {
+        "duration": 180,
+        "colors": {
+          "primary": "#0062ff",
+          "secondary": "#e84393"
+        }
+      }
+    }
+  ]
+} 

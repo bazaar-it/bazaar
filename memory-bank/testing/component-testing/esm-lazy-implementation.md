@@ -4,12 +4,15 @@ This document outlines the implementation of ESM modules and lazy loading for th
 
 ## Implementation Overview
 
-The component harness now implements a proper ESM + lazy loading pattern that:
+The component harness now fully implements the Sprint 25 ESM + lazy loading approach:
 
 1. Creates an import map in the document head to resolve bare module specifiers
 2. Dynamically imports components as ES modules
-3. Handles both components with and without default exports
+3. Handles both components with and without default exports (auto-exports if needed)
 4. Properly cleans up resources when components are reloaded or unmounted
+5. Integrates with the shared module registry system (BAZAAR-263)
+6. Uses consistent versioning from RUNTIME_DEPENDENCIES
+7. Implements proper error boundaries for component failures
 
 ## Key Details
 
@@ -18,90 +21,155 @@ The component harness now implements a proper ESM + lazy loading pattern that:
 ```javascript
 importMapScript.textContent = JSON.stringify({
   imports: {
-    'react': 'https://esm.sh/react@18.2.0',
-    'react-dom': 'https://esm.sh/react-dom@18.2.0',
-    'react/jsx-runtime': 'https://esm.sh/react@18.2.0/jsx-runtime',
-    'remotion': 'https://esm.sh/remotion@4.0.290',
-    '@remotion/player': 'https://esm.sh/@remotion/player@4.0.290',
-    'remotion/': 'https://esm.sh/remotion@4.0.290/'
+    'react': `https://esm.sh/react@${RUNTIME_DEPENDENCIES.react}`,
+    'react-dom': `https://esm.sh/react-dom@${RUNTIME_DEPENDENCIES.reactDom}`,
+    'react/jsx-runtime': `https://esm.sh/react@${RUNTIME_DEPENDENCIES.react}/jsx-runtime`,
+    'remotion': `https://esm.sh/remotion@${RUNTIME_DEPENDENCIES.remotion}`,
+    '@remotion/player': `https://esm.sh/@remotion/player@${RUNTIME_DEPENDENCIES.remotion}`,
+    'remotion/': `https://esm.sh/remotion@${RUNTIME_DEPENDENCIES.remotion}/`
   }
 });
 ```
 
-This allows the ESM modules to resolve bare imports like `import { AbsoluteFill } from 'remotion'` without bundling.
+This allows the ESM modules to resolve bare imports like `import { AbsoluteFill } from 'remotion'` without bundling, using the exact same dependency versions as the rest of the application.
 
-### Dynamic ESM Loading
+### Client-Side TSX Transpilation
 
-The implementation uses dynamic imports with the `import()` function:
+The harness now uses Sucrase to perform client-side TSX transpilation:
 
 ```javascript
-// Import the module dynamically
-const module = await import(/* webpackIgnore: true */ url);
+const { code: transformedCode } = transform(tsxCode, {
+  transforms: ['typescript', 'jsx'],
+  jsxRuntime: 'classic',
+  production: false,
+});
+```
 
-// Check if there's a default export which should be our component
-if (module.default) {
-  setCurrentComponent(() => module.default);
-} else {
-  // If no default export, look for any exported component
-  const exportedKeys = Object.keys(module);
-  if (exportedKeys.length > 0) {
-    // Try to find a component in exports
-    for (const key of exportedKeys) {
-      if (typeof module[key] === 'function') {
-        setCurrentComponent(() => module[key]);
-        break;
-      }
-    }
+This eliminates the server-side API dependency and allows for faster iteration.
+
+### Ensuring Default Exports
+
+To align with Sprint 25's requirement for default exports, the harness automatically ensures components have proper default exports:
+
+```javascript
+// Function to ensure the code has a default export
+const ensureDefaultExport = (code: string): string => {
+  // If the code already has a default export, return it unchanged
+  if (/export\s+default\s+/.test(code)) {
+    return code;
   }
+  
+  // Try to find a component to export as default
+  const componentNameMatch = code.match(/function\s+([A-Za-z0-9_]+)\s*\(/);
+  // ...more matching logic...
+  
+  // Add default export if not already present
+  return `${code}\n\nexport default ${componentName};`;
+};
+```
+
+### ESM-Compliant Dynamic Loading
+
+The component loading now follows the ESM pattern required by Sprint 25:
+
+```javascript
+// Function to create and load a dynamic component using the ESM pattern
+function createDynamicComponent(jsCode: string, blobUrl: string): Promise<any> {
+  return import(/* webpackIgnore: true */ blobUrl)
+    .catch(err => {
+      console.error('Error importing dynamic component:', err);
+      throw new Error(`Failed to load component: ${err.message}`);
+    });
 }
 ```
 
-### Creating a Wrapper Component for Player
+### Shared Module Registry Integration
 
-To properly use the dynamically loaded component with Remotion Player, we create a wrapper component:
-
-```javascript
-// Create a wrapper component that will be passed to Player
-const Wrapper = currentComponent ? () => {
-  const Comp = currentComponent;
-  return <Comp />;
-} : null;
-
-// Then use it in the Player
-<Player
-  component={Wrapper}
-  durationInFrames={videoConfig.meta.duration}
-  fps={videoConfig.meta.fps}
-  compositionWidth={videoConfig.meta.width}
-  compositionHeight={videoConfig.meta.height}
-  // ...other props
-/>
-```
-
-This wrapper approach ensures that:
-1. The component is properly initialized within the Remotion context
-2. React hooks like `useCurrentFrame()` work correctly
-3. The Player's context is properly passed down to the component
-
-### Resource Management
-
-The implementation properly manages blob URLs to prevent memory leaks:
+The harness integrates with Sprint 25's shared module registry (BAZAAR-263):
 
 ```javascript
-// Clean up old blob URLs when component unmounts or when new ones are created
-useEffect(() => {
-  return () => {
-    if (componentUrl) {
-      URL.revokeObjectURL(componentUrl);
+// Register utilities for components to use
+function registerSharedUtilities() {
+  // Example shared utilities that components can use
+  sharedModuleRegistry.register('animation-utils', '1.0.0', {
+    easeInOut: (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
+    spring: (frame: number, config = { damping: 10, stiffness: 100 }) => {
+      // ...implementation...
     }
-  };
-}, []);
-
-// In the compile function
-if (componentUrl) {
-  URL.revokeObjectURL(componentUrl);
-  setComponentUrl(null);
+  });
+  
+  // Register version info
+  setModuleVersion({ 
+    name: 'animation-utils', 
+    version: '1.0.0',
+    description: 'Animation utility functions for Remotion components'
+  });
 }
+```
+
+Components can access these shared utilities through the registry:
+
+```javascript
+// In component code:
+const animUtils = window.sharedModuleRegistry?.get('animation-utils');
+const scale = animUtils?.spring(frame, { damping: 15, stiffness: 150 });
+```
+
+### Error Handling with Boundaries
+
+The implementation includes comprehensive error handling with React Error Boundaries:
+
+```javascript
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <Suspense fallback={<div>Loading component via Suspense...</div>}>
+    <RemotionPreview
+      componentModule={componentModule}
+      /* other props */
+    />
+  </Suspense>
+</ErrorBoundary>
+```
+
+The `ErrorFallback` component provides detailed error information:
+
+```javascript
+function ErrorFallback({ error }: { error: Error }) {
+  return (
+    <div className="p-4 text-red-500 bg-red-50 rounded-md border border-red-200">
+      <h3 className="font-bold mb-2">Error Loading Component</h3>
+      <p className="mb-2">{error.message}</p>
+      <pre className="text-xs bg-red-100 p-2 rounded">
+        {error.stack}
+      </pre>
+    </div>
+  );
+}
+```
+
+### Props Management
+
+The harness provides a UI for editing component props as JSON:
+
+```javascript
+const [inputProps, setInputProps] = useState<Record<string, unknown>>({
+  // Default or example props
+  text: 'Hello from ComponentTestHarness!',
+  value: 123,
+});
+```
+
+And passes these props to the dynamically loaded component:
+
+```javascript
+// Create a component that will be used as the container
+const RemotionComp = React.useMemo(() => {
+  // Get the default export or first export that's a function
+  const Component = componentModule.default || 
+    Object.values(componentModule).find(exp => typeof exp === 'function');
+  
+  // Pass inputProps to the dynamically loaded component
+  return () => <Component {...inputProps} />;
+}, [componentModule, inputProps]);
 ```
 
 ## Sprint 25 Alignment
@@ -110,31 +178,92 @@ This implementation aligns with the Sprint 25 tickets:
 
 ### BAZAAR-255: ESM Build Pipeline
 
-The component harness uses the API endpoint at `/api/test/compile-component` to transpile the TSX code to JavaScript and leverages ES modules for runtime execution, satisfying the need for an ESM build pipeline.
+The component harness now uses Sucrase for client-side TSX transpilation, generating ESM-compatible code that's loaded through dynamic imports.
 
 ### BAZAAR-256: ESM Component Loading
 
-The implementation handles dynamic loading of ES modules through:
+The implementation handles dynamic loading of ES modules by:
 - Creating blob URLs for the compiled JavaScript
 - Using dynamic `import()` to load the modules
-- Handling both default and named exports
+- Ensuring components have proper default exports
+- Using React Suspense for loading states
 
 ### BAZAAR-258: Runtime Dependency Management
 
 The import map approach provides runtime dependency management by:
 - Resolving bare module specifiers without bundling
-- Ensuring consistent versions of dependencies
+- Using the exact same dependency versions as the main application (from RUNTIME_DEPENDENCIES)
 - Supporting isolated testing of components without bundling the entire application
+
+### BAZAAR-263: Shared Module System
+
+The harness now integrates with the shared module registry:
+- Registers example shared utilities that components can use
+- Provides access to shared modules through the registry
+- Demonstrates the proper pattern for version tracking
+- Shows how components can safely access and use shared utilities
 
 ## Version Consistency
 
-To ensure consistent behavior, the implementation uses the same version of Remotion (4.0.290) across all imports, preventing version conflicts that could cause unexpected issues.
+To ensure consistent behavior, the implementation uses dependency versions from the RUNTIME_DEPENDENCIES constant:
 
-## Error Handling
+```typescript
+// In runtime-dependencies.ts
+export const RUNTIME_DEPENDENCIES: RuntimeDependencies = {
+  react: pkg.dependencies['react'],
+  reactDom: pkg.dependencies['react-dom'],
+  remotion: pkg.dependencies['remotion']
+};
+```
 
-The implementation includes comprehensive error handling for:
-- Compilation errors from the API
-- Import errors when loading the ES module
-- Missing exports in the compiled component
+This ensures that all parts of the application use the same versions.
 
-This ensures developers get clear feedback when issues occur. 
+## Usage Example
+
+Developers can now write components that:
+1. Use Remotion hooks like `useCurrentFrame`
+2. Accept and utilize input props
+3. Access shared utilities from the registry
+4. Export as default exports (or have exports automatically added)
+
+Example component:
+
+```jsx
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import React from "react";
+
+// Access animation utilities from the shared registry
+const animUtils = window.sharedModuleRegistry?.get('animation-utils');
+
+export default function MyComponent({ text = "Hello Remotion", value = 100 }) {
+  const frame = useCurrentFrame();
+  
+  // Use the spring function from animation utils if available
+  const scale = animUtils?.spring 
+    ? animUtils.spring(frame, { damping: 15, stiffness: 150 }) 
+    : Math.min(1, frame / 30);
+  
+  return (
+    <AbsoluteFill style={{ backgroundColor: "white" }}>
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "center", 
+        alignItems: "center", 
+        height: "100%",
+        flexDirection: "column" 
+      }}>
+        <h1 style={{ 
+          fontSize: 60, 
+          color: "blue",
+          transform: `scale(${scale})`,
+        }}>
+          {text}
+        </h1>
+        <p style={{ fontSize: 30, color: "gray" }}>
+          Value: {value}, Frame: {frame}
+        </p>
+      </div>
+    </AbsoluteFill>
+  );
+}
+``` 

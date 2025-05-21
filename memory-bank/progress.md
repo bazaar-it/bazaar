@@ -98,7 +98,7 @@ work. When entries grow beyond that, move older sections to
 
 ### Recent Updates (Top 200 lines - older entries to progress-history.md)
 
-*   **Component Test Harness**: Integrated Sucrase for in-browser TSX to JS transpilation in `src/app/test/component-harness/page.tsx`. This should resolve dynamic loading issues and `useContext` errors. Added `inputProps` handling to `RemotionPreview` and `<Player>`.
+*   **Component Test Harness:** Integrated Sucrase for in-browser TSX to JS transpilation in `src/app/test/component-harness/page.tsx`. This should resolve dynamic loading issues and `useContext` errors. Added `inputProps` handling to `RemotionPreview` and `<Player>`.
 *   **DB Analysis Toolkit**: Completed and debugged. Details in `memory-bank/db-analysis-toolkit.md` and `memory-bank/database-tools.md`.
 
 ## Sprint Progress Index
@@ -124,11 +124,11 @@ work. When entries grow beyond that, move older sections to
 
 The ESM component migration has been completed successfully:
 
-- ✅ Complete transition from IIFE format to ESM modules for all dynamically loaded components
-- ✅ Implemented React.lazy for component loading with proper Suspense/error handling
-- ✅ Updated component templates for ESM compatibility 
-- ✅ Fixed dependency management with proper externals configuration
-- ✅ Added comprehensive test coverage for the new ESM workflow
+- Complete transition from IIFE format to ESM modules for all dynamically loaded components
+- Implemented React.lazy for component loading with proper Suspense/error handling
+- Updated component templates for ESM compatibility 
+- Fixed dependency management with proper externals configuration
+- Added comprehensive test coverage for the new ESM workflow
 
 This work completes tickets BAZAAR-255, BAZAAR-256, BAZAAR-257, BAZAAR-258, and BAZAAR-260. The system now uses modern JavaScript module patterns and better integration with React's component model. 
 
@@ -140,7 +140,7 @@ See [Sprint 25 Progress](/memory-bank/sprints/sprint25/progress.md) for details.
 
 Started work on transitioning custom components from IIFE format to ESM modules:
 
-- ✅ BAZAAR-255: Updated build pipeline to output ESM modules
+- BAZAAR-255: Updated build pipeline to output ESM modules
 - Identified next steps for component loading mechanism (BAZAAR-256)
 - Created test plan for ESM migration validation (BAZAAR-260)
 
@@ -149,3 +149,48 @@ Started work on transitioning custom components from IIFE format to ESM modules:
 All Sprint 24 tasks have been completed:
 
 ---
+
+### Latest Updates - 2024-07-30
+
+- **Component Harness:** Resolved 'Duplicate export of default' error (and associated infinite loop) in `src/app/test/component-harness/page.tsx`. The issue was caused by a redundant `export default MyComponent;` being added to the Sucrase-transformed code, which already included a default export. The fix ensures only a single default export is present in the code used for the dynamic import via Blob URL.
+
+- **Component Harness:** Fixed another issue with Remotion component rendering in `src/app/test/component-harness/page.tsx`. We were incorrectly using the `component` prop instead of `lazyComponent` on the Remotion Player component. These are mutually exclusive props, where `component` expects a pre-loaded React component, while `lazyComponent` expects a function returning a dynamic `import()` promise, which is what our ESM-based approach requires.
+
+# Progress Log
+
+## Recent Updates
+
+### Sprint 26: Video Generation Feature (Current)
+We've implemented a new prompt-based video generation flow that allows users to create videos directly from text prompts. Key components:
+
+- **StoryboardViewer**: Displays JSON storyboard with scenes, style and assets
+- **Code Editor**: Monaco editor for customizing generated components
+- **RemotionLoader**: Dynamic compilation and preview of generated code
+- **Integrated Flow**: From prompt to JSON storyboard to code to player
+
+The feature combines LLM-based code generation with Remotion for powerful, customizable video creation.
+
+[Full Sprint 26 progress details](/memory-bank/sprints/sprint26/progress.md)
+
+### Sprint 25: Component Pipeline Improvements
+Improved the component generation pipeline with:
+
+- Better error handling 
+- Fixed component loading issues
+- Enhanced sandbox environment
+- Added component metadata viewing
+
+### Sprint 24: Evaluation Dashboard
+Added evaluation dashboard to:
+
+- View test results for components
+- Run component tests and see results
+- Compare component performance
+
+## Sprint Index
+
+- [Sprint 26: Video Generation Feature](/memory-bank/sprints/sprint26/progress.md)
+- [Sprint 25: Component Pipeline Improvements](/memory-bank/sprints/sprint25/progress.md)
+- [Sprint 24: Evaluation Dashboard](/memory-bank/sprints/sprint24/progress.md)
+- [Sprint 23: Enhanced Component Testing](/memory-bank/sprints/sprint23/progress.md)
+- [Sprint 22: Component Fix Automation](/memory-bank/sprints/sprint22/progress.md)

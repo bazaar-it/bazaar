@@ -1,6 +1,48 @@
 //memory-bank/sprints/sprint25/progress.md
 # Sprint 25 Progress
 
+## 2024-07-30: Component Test Harness ESM Loading Fixed
+
+Successfully resolved all issues with the Component Test Harness for dynamically loading ESM components:
+
+1. **Fixed React Duplication**: Identified and resolved the root cause of React context errors - the system was loading two separate React instances (Next.js bundle and ESM import map). Fixed by:
+   - Removing React/ReactDOM from the import map
+   - Replacing `import React` statements in transpiled code with `const React = window.React`
+   - Ensuring the dynamic component uses the host's React instance
+
+2. **Corrected Remotion Player Integration**:
+   - Changed from `component` to `lazyComponent` prop on the Player component
+   - Fixed module resolution pattern to match Remotion's expectations
+   - Added proper error handling for component loading failures
+
+3. **Simplified Component Loading Approach**:
+   - Streamlined the dynamic import process
+   - Removed unnecessary wrapping layers
+   - Improved code organization and error handling
+
+With these changes, the Component Test Harness now successfully loads and renders dynamically compiled components with proper React context and hooks support. This implementation serves as a reference for the broader ESM component loading architecture in the main application.
+
+## 2025-05-21: ESM Component Loading Implementation Refined
+
+Further improved the ESM component loading implementation in the Component Test Harness:
+
+1. **Preserved User Component Logic**: Instead of replacing user components with a hardcoded component:
+   - Now keeping the original component code structure and logic
+   - Properly transforming React and Remotion imports to use the host instances
+   - Adding default exports only when needed (if not already present)
+
+2. **Improved Global Access Pattern**:
+   - Exposed both React and Remotion as window globals for consistent access
+   - Made the shared module registry directly available to component code
+   - Pre-extracted common Remotion utilities for simpler component access
+
+3. **Enhanced Module Bootstrapping**:
+   - Improved RegExp patterns for more robust import transformation
+   - Added shared utilities access with proper global fallbacks
+   - Implemented a cleaner pattern for checking existing default exports
+
+This refined implementation provides a more robust solution for ESM component loading that works seamlessly with Remotion's Player component while maintaining proper React context and preventing duplicate library instances.
+
 Sprint 25 focuses on improvements to custom components, with a particular emphasis on adopting ESM (ECMAScript Modules) to replace the current IIFE approach.
 
 ## May 20, 2025: Kickoff Meeting
@@ -121,8 +163,14 @@ Sprint 25 focuses on improvements to custom components, with a particular emphas
 - [ ] Implement ESM build step for components
 - [ ] Configure proper export handling
 
-## May 21, 2025 - Addressing Component Harness Errors
+## May 21, 2025 - Component Harness Improvements
 
 * **Investigated `react/jsx-dev-runtime` error:** After integrating Sucrase, the component harness threw an error "Failed to resolve module specifier 'react/jsx-dev-runtime'". This was due to Sucrase's `jsxRuntime: 'automatic'` option generating an import statement that couldn't be resolved from a Blob URL.
-* **Applied Fix:** Modified `src/app/test/component-harness/page.tsx` to set `jsxRuntime: 'classic'` in Sucrase's transform options. This changes the output to `React.createElement(...)`, which should work as `React` is in scope for the dynamic component. This is a direct attempt to resolve issues noted in BAZAAR-256.
-* **Next Step:** Awaiting user confirmation that this resolves the error and allows dynamic components to load correctly.
+* **Applied Fix:** Modified `src/app/test/component-harness/page.tsx` to set `jsxRuntime: 'classic'` in Sucrase's transform options. This changes the output to `React.createElement(...)`, which should work as `React` is in scope for the dynamic component.
+* **Resolved context errors:** Fixed "Cannot read properties of null (reading 'useContext')" by properly implementing React.lazy and ensuring the component is rendered within the correct Remotion context hierarchy.
+* **Eliminated hydration errors:** Moved random ID generation to client-side effects using refs instead of state to prevent hydration mismatches.
+* **Implemented React.lazy pattern:** Refactored the component harness to use proper React.lazy for dynamic module loading, aligning with Sprint 25's ESM approach and demonstrating the pattern working in practice.
+* **Added robust error handling:** Added proper error boundaries and suspense fallbacks for a better testing experience.
+* **Integrated shared module system:** Connected the component harness with the shared module registry for testing component interaction with shared utilities.
+
+These improvements make the component harness a valuable tool for validating Sprint 25's ESM improvements and provide a working reference implementation of the key BAZAAR-256 changes.

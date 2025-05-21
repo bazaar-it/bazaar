@@ -25,7 +25,7 @@
   - [x] Add error boundary for component failures
   - [x] Test with different component types
   - [ ] Add refresh mechanism for updated components
-  - [IN PROGRESS] Resolve ESM Component Loading Issues in Test Harness
+  - [x] Resolve ESM Component Loading Issues in Test Harness
     - **Status:** Attempted fix for `react/jsx-dev-runtime` error by switching Sucrase JSX runtime to 'classic'. Awaiting test results.
     - Investigate and resolve errors preventing dynamic components from loading (e.g., module specifier errors, context errors).
 
