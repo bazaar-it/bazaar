@@ -1,6 +1,7 @@
 // src/server/api/root.ts
 import { projectRouter } from "~/server/api/routers/project";
 import { chatRouter } from "~/server/api/routers/chat";
+import { chatStreamRouter } from "~/server/api/routers/chatStream";
 import { renderRouter } from "~/server/api/routers/render";
 import { customComponentRouter } from "./routers/customComponent";
 import { customComponentFixRouter } from "./routers/customComponentFix";
@@ -23,6 +24,7 @@ import "~/server/init";
 export const appRouter = createTRPCRouter({
   project: projectRouter,
   chat: chatRouter,
+  chatStream: chatStreamRouter,
   render: renderRouter,
   customComponent: customComponentRouter,
   customComponentFix: customComponentFixRouter,
