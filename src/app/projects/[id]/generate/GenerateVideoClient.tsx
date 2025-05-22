@@ -1,14 +1,18 @@
 "use client";
 // src/app/projects/[id]/generate/GenerateVideoClient.tsx
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import * as RemotionLib from 'remotion';
+import { sharedModuleRegistry } from '~/shared/modules/registry';
+import { transform } from 'sucrase';
+import { setModuleVersion } from '~/shared/modules/versions';
 import { PromptOrchestrator } from './agents';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import PromptForm from './components/PromptForm';
 import GenerationProgress from './components/GenerationProgress';
 import StoryboardViewer from './components/StoryboardViewer';
-import RemotionLoader from './components/RemotionLoader';
+import RemotionPreview from './components/RemotionPreview';
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "~/components/ui/card";
 import type { Storyboard, GenerationState, Scene } from './types/storyboard';
@@ -16,6 +20,28 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 // Monaco editor for code editing with proper typing - dynamically imported
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
+
+// Register utilities for dynamically loaded components
+function registerSharedUtilities() {
+  sharedModuleRegistry.register('animation-utils', '1.0.0', {
+    easeInOut: (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
+    spring: (frame: number, config = { damping: 10, stiffness: 100 }) => {
+      const { damping, stiffness } = config;
+      return 1 - Math.exp(-damping * frame) * Math.cos(Math.sqrt(stiffness) * frame);
+    },
+  });
+
+  setModuleVersion({
+    name: 'animation-utils',
+    version: '1.0.0',
+    description: 'Animation utility functions for Remotion components',
+  });
+}
+
+function createBlobUrl(code: string): string {
+  const blob = new Blob([code], { type: 'application/javascript' });
+  return URL.createObjectURL(blob);
+}
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -49,6 +75,8 @@ export function GenerateVideoClient({ projectId }: GenerateVideoClientProps) {
   const [currentComponentCode, setCurrentComponentCode] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
   const [compiledCode, setCompiledCode] = useState<string | null>(null);
+  const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
+  const [componentUrl, setComponentUrl] = useState<string | null>(null);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState<string>(`initial-${Date.now()}`);
   const [activeTab, setActiveTab] = useState<string>('storyboard');
@@ -87,6 +115,27 @@ export function GenerateVideoClient({ projectId }: GenerateVideoClientProps) {
       unsubscribe();
     };
   }, [projectId]);
+
+  // Register shared utilities once on mount
+  useEffect(() => {
+    registerSharedUtilities();
+  }, []);
+
+  // Expose host dependencies for dynamically loaded components
+  useEffect(() => {
+    (window as any).React = React;
+    (window as any).Remotion = RemotionLib;
+    (window as any).sharedModuleRegistry = sharedModuleRegistry;
+  }, []);
+
+  // Clean up previously created blob URLs
+  useEffect(() => {
+    return () => {
+      if (componentUrl) {
+        URL.revokeObjectURL(componentUrl);
+      }
+    };
+  }, [componentUrl]);
   
   // Generate a placeholder component for a scene
   const generatePlaceholderCode = (scene: Scene, storyboard: Storyboard) => {
@@ -167,25 +216,88 @@ export default function ${scene.template || 'CustomScene'}(props) {
   const compileComponent = useCallback(async () => {
     setIsCompiling(true);
     setComponentError(null);
-    
+    setComponentImporter(null);
     try {
-      // Simple validation to check for React and Remotion imports
-      if (!currentComponentCode.includes('import React') || !currentComponentCode.includes('import { AbsoluteFill')) {
-        throw new Error('Component code must include the necessary React and Remotion imports');
+      const { code: raw } = transform(currentComponentCode, {
+        transforms: ['typescript', 'jsx'],
+        jsxRuntime: 'classic',
+        production: false,
+      });
+
+      const componentMatch =
+        raw.match(/export\s+default\s+function\s+(\w+)/) ||
+        raw.match(/function\s+(\w+)\s*\()/ ||
+        raw.match(/const\s+(\w+)\s*=/) || ['','MyComponent'];
+      const componentName = componentMatch[1];
+
+      const remotionImportRegex = /import\s+{([^}]+)}\s+from\s+['"](remotion|'remotion')['"](;?)/g;
+      const reactImportRegex = /import\s+React.*?from\s+['"](react|'react')['"](;?)/g;
+
+      const remotionImports: string[] = [];
+      let match: RegExpExecArray | null;
+      while ((match = remotionImportRegex.exec(raw)) !== null) {
+        if (match[1]) {
+          remotionImports.push(...match[1].split(',').map(s => s.trim()));
+        }
       }
-      
-      // In a real implementation, we would call an API to compile the component
-      // For this demo, we'll just set the compiled code directly
-      setCompiledCode(currentComponentCode);
-      
-      // Generate a new refresh token to force player re-mount
+
+      let processedCode = raw.replace(reactImportRegex, '// React import removed');
+      processedCode = processedCode.replace(remotionImportRegex, (m, imports) => `// Remotion imports: ${imports}`);
+
+      const hasAnimUtils = /const\s+animUtils/.test(processedCode);
+      const hasDefaultExport = /export\s+default/.test(processedCode);
+
+      const blobContent = `
+// ESM Module for Remotion Component
+const React = window.React;
+const {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  Sequence,
+  Audio,
+  Video,
+  Img,
+  Series,
+  spring,
+  interpolate,
+  useRef,
+  useState,
+  useEffect
+} = window.Remotion;
+const sharedModuleRegistry = window.sharedModuleRegistry || {};
+${!hasAnimUtils ? "const animUtils = sharedModuleRegistry.get ? sharedModuleRegistry.get('animation-utils') : undefined;" : '// animUtils is defined in user code'}
+const _useRemotion = () => {
+  const frame = useCurrentFrame();
+  const config = useVideoConfig();
+  return { frame, config };
+};
+${processedCode}
+${!hasDefaultExport ? `export default ${componentName};` : ''}
+`;
+
+      setCompiledCode(blobContent);
+      if (componentUrl) {
+        URL.revokeObjectURL(componentUrl);
+      }
+      const url = createBlobUrl(blobContent);
+      setComponentUrl(url);
+
+      const importer = () =>
+        import(/* webpackIgnore: true */ url).then(mod => {
+          const def = mod?.default;
+          if (typeof def === 'function') return mod;
+          throw new Error('Dynamic component loaded, but default export is missing');
+        });
+      setComponentImporter(() => importer);
+
       setRefreshToken(`refresh-${Date.now()}`);
     } catch (error) {
       setComponentError(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setIsCompiling(false);
     }
-  }, [currentComponentCode]);
+  }, [currentComponentCode, componentUrl]);
   
   // Calculate props for the Remotion player based on the selected scene
   const playerProps = useMemo(() => {
@@ -279,18 +391,21 @@ export default function ${scene.template || 'CustomScene'}(props) {
             
             <TabsContent value="preview" className="border rounded-md p-4 min-h-[500px]">
               <div className="bg-gray-800 rounded-lg overflow-hidden h-full min-h-[400px]">
-                {compiledCode && playerProps ? (
+                {componentImporter && playerProps ? (
                   <ErrorBoundary FallbackComponent={ErrorFallback}>
-                    <RemotionLoader
-                      componentCode={compiledCode}
-                      storyboard={playerProps}
+                    <RemotionPreview
+                      lazyComponent={componentImporter}
+                      durationInFrames={playerProps.durationInFrames}
+                      fps={playerProps.fps}
+                      width={playerProps.width}
+                      height={playerProps.height}
                       inputProps={playerProps.inputProps}
-                      key={refreshToken} // Force re-mount when code changes
+                      refreshToken={refreshToken}
                     />
                   </ErrorBoundary>
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-400">
-                    {selectedScene 
+                    {selectedScene
                       ? 'Compile your component code to preview it here'
                       : 'Select a scene from the storyboard to preview it'}
                   </div>

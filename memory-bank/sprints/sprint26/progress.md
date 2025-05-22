@@ -26,6 +26,9 @@
     - AIStyleAgent: Creates consistent visual style for the video
     - AIAssetAgent: Identifies assets needed for the video
     - AICodeGenerator: Generates code for video scenes
+- ✅ Added in-browser compilation using Sucrase and dynamic Remotion preview
+  - Components compile to ESM modules with React/Remotion globals
+  - RemotionPreview loads compiled scenes via React.lazy
 - ✅ Implemented asset management utilities
   - Added AssetAgentAdapter with pluggable StorageAdapter
   - Created LocalDiskAdapter for development usage
@@ -45,7 +48,6 @@ Each agent uses the OpenAI API to leverage AI capabilities for their specialized
 
 ### Next Steps
 
-- Implement the actual component code compilation and rendering
 - Add a preview player to visualize the generated video
 - Create a saving mechanism to persist storyboards
 - Add the ability to edit generated storyboards
