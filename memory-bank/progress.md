@@ -11,6 +11,10 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
+**May 27, 2025: Asset Management Utilities Added**
+- Implemented `AssetAgentAdapter` and `LocalDiskAdapter` for handling uploaded and external assets.
+- Enables basic cataloging of images, audio and video for generated storyboards.
+
 **May 25, 2025: BAZAAR-257 Templates Updated**
 - `componentTemplate.ts` now exports components via `export default` and drops
   the global registration IIFE.
