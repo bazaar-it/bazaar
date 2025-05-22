@@ -29,6 +29,9 @@
 - ✅ Added in-browser compilation using Sucrase and dynamic Remotion preview
   - Components compile to ESM modules with React/Remotion globals
   - RemotionPreview loads compiled scenes via React.lazy
+- ✅ Implemented asset management utilities
+  - Added AssetAgentAdapter with pluggable StorageAdapter
+  - Created LocalDiskAdapter for development usage
 
 ### Current Status
 
@@ -48,7 +51,6 @@ Each agent uses the OpenAI API to leverage AI capabilities for their specialized
 - Add a preview player to visualize the generated video
 - Create a saving mechanism to persist storyboards
 - Add the ability to edit generated storyboards
-- Implement asset management for generated videos
 
 ### Lessons Learned
 
