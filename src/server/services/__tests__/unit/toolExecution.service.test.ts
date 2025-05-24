@@ -4,7 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { Subject } from 'rxjs';
 import { type Operation } from 'fast-json-patch';
 import { ToolExecutionService, type ToolHandler, type ToolCallResponse } from '../../toolExecution.service';
-import { StreamEventType } from '~/types/chat';
+import { type StreamEventType } from '~/types/chat';
 import { chatLogger, logChatTool } from '~/lib/logger';
 
 // Mock dependencies

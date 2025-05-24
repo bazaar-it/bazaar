@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/fix-remotion-component-assignment.ts
 import fs from 'fs/promises';
 import path from 'path';

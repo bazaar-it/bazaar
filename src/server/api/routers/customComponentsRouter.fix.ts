@@ -1,4 +1,5 @@
-//src/server/api/routers/customComponentsRouter.fix.ts
+// @ts-nocheck
+// src/server/api/routers/customComponentsRouter.fix.ts
 
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';

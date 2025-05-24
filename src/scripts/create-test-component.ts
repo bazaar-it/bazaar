@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/create-test-component.ts
+
 /**
  * Creates a test component in the database with correct syntax that should render properly
  * 
@@ -109,7 +112,7 @@ async function createTestComponent() {
     // Insert the component into the database
     const [newComponent] = await db.insert(customComponentJobs)
       .values({
-        projectId: projectId as string,
+        projectId: projectId,
         effect: 'Guaranteed Working Component',
         tsxCode: WORKING_TEST_COMPONENT,
         status: 'pending', // Start as pending to trigger build

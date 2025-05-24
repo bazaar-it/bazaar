@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { JsonRpcRequest, JsonRpcErrorResponse, JsonRpcSuccessResponse } from "~/types/a2a";
 

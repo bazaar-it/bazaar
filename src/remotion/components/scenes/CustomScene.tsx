@@ -52,7 +52,7 @@ export interface CustomSceneProps extends SceneProps {
  * @returns Rendered custom component
  */
 export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
-  const componentId = data.componentId as string;
+  const componentId = data.componentId;
   const externalRefreshToken = data.refreshToken; 
   
   console.log(`[CustomScene] Mounting/rendering with componentId: ${componentId}, refreshToken: ${externalRefreshToken}`);
@@ -285,8 +285,8 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
           </div>
         }>
           <RemoteComponent
-            componentName={componentToRender!}
-            scriptSrc={scriptSrcToUse!}
+            componentName={componentToRender}
+            scriptSrc={scriptSrcToUse}
             componentProps={{ 
               ...(data.componentProps || {}),
               ...{

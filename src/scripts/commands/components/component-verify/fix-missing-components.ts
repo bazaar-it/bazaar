@@ -93,7 +93,7 @@ interface FixReport {
  */
 async function checkComponentExistsInR2(componentId: string): Promise<boolean> {
   try {
-    const key: string = `custom-components/${componentId}.js`;
+    const key = `custom-components/${componentId}.js`;
     const command: HeadObjectCommand = new HeadObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
@@ -120,7 +120,7 @@ async function checkComponentExistsInR2(componentId: string): Promise<boolean> {
  */
 async function uploadComponentToR2(componentId: string, componentCode: string): Promise<FixResult> {
   try {
-    const key: string = `custom-components/${componentId}.js`;
+    const key = `custom-components/${componentId}.js`;
     const command: PutObjectCommand = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
@@ -131,8 +131,8 @@ async function uploadComponentToR2(componentId: string, componentCode: string): 
     await r2.send(command);
     
     // Update the component URL in the database
-    const publicUrl: string = `${R2_PUBLIC_URL}/${key}`;
-    const updateQuery: string = `
+    const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+    const updateQuery = `
       UPDATE "bazaar-vid_custom_component_job"
       SET "outputUrl" = $2,
           "updatedAt" = NOW()
@@ -162,7 +162,7 @@ async function uploadComponentToR2(componentId: string, componentCode: string): 
  */
 async function updateComponentStatus(componentId: string, status: string, errorMessage: string | null = null): Promise<boolean> {
   try {
-    const updateQuery: string = `
+    const updateQuery = `
       UPDATE "bazaar-vid_custom_component_job"
       SET status = $2,
           "errorMessage" = $3,
@@ -242,7 +242,7 @@ window.__REMOTION_COMPONENT = FallbackComponent;
  */
 async function findMissingComponents(): Promise<Array<Component>> {
   try {
-    const query: string = `
+    const query = `
       SELECT id, effect, status, "tsxCode", "outputUrl", "updatedAt"
       FROM "bazaar-vid_custom_component_job"
       WHERE status = 'complete'

@@ -537,7 +537,7 @@ export const chatRouter = createTRPCRouter({
             
             // Get the current project properties to find the scene
             const projectProps = project.props as any;
-            if (!projectProps || !projectProps.scenes) {
+            if (!projectProps?.scenes) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
                     message: "Invalid project structure",

@@ -39,7 +39,7 @@ export class R2StorageAgent extends BaseAgent {
         case "STORE_COMPONENT_REQUEST":
           const builtArtifact = payload.artifacts?.[0] as Artifact | undefined;
           
-          if (!builtArtifact || !builtArtifact.url) {
+          if (!builtArtifact?.url) {
             const errorMsg = "Missing component artifact or artifact URL in STORE_COMPONENT_REQUEST.";
             console.error(`R2StorageAgent Error: ${errorMsg}`, payload);
             await this.updateTaskState(taskId, 'failed', this.createSimpleTextMessage(errorMsg), undefined, 'failed');

@@ -1,4 +1,4 @@
-import { BaseAgent, type AgentLifecycleState } from "~/server/agents/base-agent";
+import { type BaseAgent, type AgentLifecycleState } from "~/server/agents/base-agent";
 import type { AgentCard, AgentInputMode, AgentSkill } from "~/types/a2a";
 import { lifecycleManager } from "./lifecycleManager.service";
 import { a2aLogger } from "~/lib/logger";
@@ -10,7 +10,7 @@ import { a2aLogger } from "~/lib/logger";
  */
 export class AgentRegistry {
   private static instance: AgentRegistry;
-  private agents: Map<string, BaseAgent> = new Map();
+  private agents = new Map<string, BaseAgent>();
   
   /**
    * Get the singleton instance

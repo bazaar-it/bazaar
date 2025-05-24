@@ -2,7 +2,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { LLMService, type StreamOptions } from '../llm/LLMService';
 import type { OpenAI } from 'openai';
-import { Stream } from 'openai/streaming';
+import { type Stream } from 'openai/streaming';
 import { CHAT_TOOLS } from '~/server/lib/openai/tools';
 
 // Mock the OpenAI SDK

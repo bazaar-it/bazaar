@@ -320,7 +320,7 @@ function fixUuidsInObject(obj: any, sceneId: string): any {
   
   if (typeof obj === 'string') {
     // Check if this is a property that should be a UUID
-    if (obj.match(/id$/i) && !isValidUuid(obj)) {
+    if ((/id$/i.exec(obj)) && !isValidUuid(obj)) {
       return randomUUID(); // Use standardized UUID generation
     }
     return obj;
@@ -371,7 +371,7 @@ function createFallbackBrief(
     };
     
     // Attempt to reuse color palette if it exists and has all required fields
-    if (partialBrief.colorPalette && partialBrief.colorPalette.background) {
+    if (partialBrief.colorPalette?.background) {
       conservativeBrief.colorPalette = {
         ...emptyBrief.colorPalette,
         ...partialBrief.colorPalette
@@ -382,7 +382,7 @@ function createFallbackBrief(
     if (Array.isArray(partialBrief.elements) && partialBrief.elements.length > 0) {
       // Filter elements to keep only those with required fields
       const validElements = partialBrief.elements
-        .filter((el: any) => el && el.elementId && el.elementType)
+        .filter((el: any) => el?.elementId && el.elementType)
         .map((el: any) => {
           // Create a basic element with required fields
           const validElement: any = {
@@ -632,7 +632,7 @@ Please design a complete Animation Design Brief with appropriate elements and an
           el.animations && el.animations.length > 0
         );
         
-        if (firstElementWithAnimations && firstElementWithAnimations.animations) {
+        if (firstElementWithAnimations?.animations) {
           animationDesignerLogger.data(sceneId, "First element animations structure", {
             animationsCount: firstElementWithAnimations.animations.length,
             firstAnimation: JSON.stringify(firstElementWithAnimations.animations[0])

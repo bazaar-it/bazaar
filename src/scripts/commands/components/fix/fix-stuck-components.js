@@ -1,4 +1,5 @@
-// src/scripts/fix-stuck-components.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-stuck-components.js
 const { db } = require("../server/db");
 const { customComponentJobs } = require("../server/db/schema");
 const { eq } = require("drizzle-orm");

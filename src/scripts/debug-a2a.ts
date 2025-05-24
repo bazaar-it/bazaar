@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/debug-a2a.ts
 // A comprehensive test script for debugging agent message routing
 

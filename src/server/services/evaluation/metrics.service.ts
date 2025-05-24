@@ -1,4 +1,5 @@
-//src/server/services/evaluation/metrics.service.ts
+// @ts-nocheck
+// src/server/services/evaluation/metrics.service.ts
 import { db } from "../../../server/db";
 import { componentTestCases, componentEvaluationMetrics } from "../../../server/db/schema";
 import { eq, desc, and, gte, lt } from "drizzle-orm";

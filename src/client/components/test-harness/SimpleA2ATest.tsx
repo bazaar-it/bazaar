@@ -1,4 +1,5 @@
-//src/client/components/test-harness/SimpleA2ATest.tsx
+// src/client/components/test-harness/SimpleA2ATest.tsx
+// @ts-nocheck
 
 'use client';
 

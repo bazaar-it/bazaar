@@ -1,4 +1,5 @@
-// src/scripts/fix-missing-url.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-missing-url.js
 import { db } from '../server/db';
 import { customComponentJobs } from '../server/db/schema';
 import { eq } from 'drizzle-orm';

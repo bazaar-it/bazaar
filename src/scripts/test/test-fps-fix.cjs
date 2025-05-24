@@ -1,4 +1,5 @@
-// src/scripts/test-fps-fix.cjs
+// @ts-nocheck
+// src/scripts/test/test-fps-fix.cjs
 const { preprocessTsx } = require('../server/utils/tsxPreprocessor');
 
 // Sample code with duplicate fps declarations

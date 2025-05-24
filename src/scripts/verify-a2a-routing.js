@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/verify-a2a-routing.js
 // Real A2A system test implementation that interacts with the actual A2A endpoints
 

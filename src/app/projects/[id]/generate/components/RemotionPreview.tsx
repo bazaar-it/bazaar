@@ -1,6 +1,8 @@
+// src/app/projects/[id]/generate/components/RemotionPreview.tsx
+
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, Suspense } from 'react';
 import { Player } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -46,24 +48,31 @@ export default function RemotionPreview({
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
-      <Player
-        lazyComponent={lazyComponent}
-        inputProps={inputProps}
-        durationInFrames={durationInFrames}
-        compositionWidth={width}
-        compositionHeight={height}
-        fps={fps}
-        style={{
-          width: '100%',
-          height: '100%',
-        }}
-        controls
-        showVolumeControls
-        doubleClickToFullscreen
-        clickToPlay
-        key={refreshToken} // Force remount when refreshToken changes
-        acknowledgeRemotionLicense
-      />
+      <Suspense fallback={
+        <div className="flex h-full w-full items-center justify-center text-gray-400">
+          Loading component...
+        </div>
+      }>
+        <Player
+          lazyComponent={lazyComponent}
+          inputProps={inputProps}
+          durationInFrames={durationInFrames}
+          compositionWidth={width}
+          compositionHeight={height}
+          fps={fps}
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+          controls
+          showVolumeControls
+          doubleClickToFullscreen
+          clickToPlay
+          loop={true}
+          key={refreshToken} // Force remount when refreshToken changes
+          acknowledgeRemotionLicense
+        />
+      </Suspense>
     </ErrorBoundary>
   );
 } 

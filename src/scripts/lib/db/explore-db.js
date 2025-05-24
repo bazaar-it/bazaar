@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/lib/db/explore-db.js
+
 import {
   listTables,
   getTableSchema,

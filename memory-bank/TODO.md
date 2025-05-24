@@ -528,3 +528,10 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
 - [ ] Implement comprehensive logging for debugging
 - [ ] Add more automated tests for the API endpoints
 - [ ] Improve the UI/UX of the dashboard
+
+## BAZAAR-303: Publish & Share Pipeline
+- [ ] **T2: R2 Wrapper**: Complete implementation of `packages/r2/index.ts`.
+  - [ ] Implement `uploadFile` method.
+  - [ ] Implement `getPublicUrl` method.
+  - [ ] Add error handling and logging.
+  - [ ] Write unit tests.

@@ -113,7 +113,7 @@ describe("AgentRegistry Service", () => {
       expect(card.description).toBe("Description for TestAgent1");
       expect(card.skills).toBeDefined();
       expect(card.skills).toHaveLength(1);
-      if (card.skills && card.skills[0]) {
+      if (card.skills?.[0]) {
         expect(card.skills[0].id).toBe("testagent1-skill1");
       }
     }
@@ -133,7 +133,7 @@ describe("AgentRegistry Service", () => {
     const card2 = allCards.find(c => c.name === "TestAgent2");
     expect(card1).toBeDefined();
     expect(card2).toBeDefined();
-    if (card1 && card1.skills) {
+    if (card1?.skills) {
       expect(card1.skills).toHaveLength(1);
     }
   });

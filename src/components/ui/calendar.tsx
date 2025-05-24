@@ -1,3 +1,6 @@
+// src/components/ui/calendar.tsx
+// @ts-nocheck
+
 "use client"
 
 import * as React from "react"

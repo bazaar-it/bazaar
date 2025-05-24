@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { jest } from "@jest/globals";
-import { BaseAgent, type AgentMessage } from '../base-agent'; 
+import { type BaseAgent, type AgentMessage } from '../base-agent'; 
 // Ensure Part is aliased as MessagePart and all are type-only imports
 import { createTextMessage, type Message, type Part as MessagePart, type Task, type TaskState, type TextPart, type Artifact, type ComponentJobStatus } from "~/types/a2a"; 
 import crypto from "crypto";
@@ -36,9 +36,9 @@ jest.mock('../base-agent', () => {
     name: string,
     taskManager: any, // Consider using a more specific mock type for taskManager
     description?: string,
-    useOpenAI: boolean = false
+    useOpenAI = false
   ): BaseAgent => {
-    const instance: Partial<BaseAgent> & { [key: string]: any } = {
+    const instance: Partial<BaseAgent> & Record<string, any> = {
       name: name,
       taskManager: taskManager,
       description: description || `${name} Agent`,
@@ -132,7 +132,7 @@ const flexibleCreateA2AMessage = (
 };
 
 // Helper for default logAgentMessage mock (newly defined or renamed)
-const flexibleLogAgentMessage = async (message: AgentMessage, success: boolean = true): Promise<void> => {
+const flexibleLogAgentMessage = async (message: AgentMessage, success = true): Promise<void> => {
   // Basic mock implementation - can be enhanced if specific logging side effects are needed for tests
   // console.log(`Mocked logAgentMessage: ${success ? 'SUCCESS' : 'FAIL'} - ${message.type}`);
   return Promise.resolve();
@@ -154,7 +154,7 @@ const flexibleUpdateTaskState = async (
 export const flexibleGenerateStructuredResponse = async <T>(
   prompt: string,
   systemPrompt: string,
-  temperature: number = 0
+  temperature = 0
 ): Promise<T | null> => {
   // Default behavior: return a simple object or null based on some condition
   // This is a placeholder; real logic would be more sophisticated.
@@ -200,7 +200,7 @@ describe("CoordinatorAgent", () => {
   const mockVideoTaskId = "video-task-id-001";
 
   // Default LLM response for routing/decision making by CoordinatorAgent
-  let llmDecision: any = { nextStepAgent: "BuilderAgent", reason: "Ready to build" }; 
+  const llmDecision: any = { nextStepAgent: "BuilderAgent", reason: "Ready to build" }; 
 
   let defaultMockTask: Task;
 

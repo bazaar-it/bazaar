@@ -1,9 +1,0 @@
-{
-  "timestamp": "2025-05-13T16:35:15.334Z",
-  "componentId": "cbeecf69-71ed-44f2-9e3b-d551fd8fe506",
-  "componentName": "Canary1747154106725",
-  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/cbeecf69-71ed-44f2-9e3b-d551fd8fe506.js",
-  "apiEndpoint": "http://localhost:3000/api/components/cbeecf69-71ed-44f2-9e3b-d551fd8fe506",
-  "success": false,
-  "errorMessage": "An unexpected error occurred during rendering test.\nDetails: {}"
-}

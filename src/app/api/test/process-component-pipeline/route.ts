@@ -1,5 +1,5 @@
 //src/app/api/test/process-component-pipeline/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import * as esbuild from 'esbuild';
 import { sanitizeTsx } from '~/server/workers/buildCustomComponent';
 

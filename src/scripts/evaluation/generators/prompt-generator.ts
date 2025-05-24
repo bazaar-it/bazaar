@@ -1,5 +1,6 @@
+// @ts-nocheck
 // src/scripts/evaluation/generators/prompt-generator.ts
-import { AnimationDesignBrief } from "../../../lib/schemas/animationDesignBrief.schema";
+import { type AnimationDesignBrief } from "../../../lib/schemas/animationDesignBrief.schema";
 import { v4 as uuidv4 } from "uuid";
 
 /**

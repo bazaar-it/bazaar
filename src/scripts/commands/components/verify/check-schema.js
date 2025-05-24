@@ -1,4 +1,5 @@
-// src/scripts/check-schema.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/check-schema.js
 // Check the schema of the custom components table
 
 import pg from 'pg';

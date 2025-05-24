@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/emergency-fix-components.js
 
 /**

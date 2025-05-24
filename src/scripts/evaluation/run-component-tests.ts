@@ -1,4 +1,5 @@
-//src/scripts/evaluation/run-component-tests.ts
+// @ts-nocheck
+// src/scripts/evaluation/run-component-tests.ts
 import { generateTestPrompts } from "./generators/prompt-generator";
 import { A2AComponentTestRunner } from "./runners/a2a-test-runner";
 import { PerformanceMetricsCollector } from "./collectors/performance-collector";

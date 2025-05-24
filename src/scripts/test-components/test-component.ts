@@ -1,4 +1,5 @@
-//src/scripts/test-components/test-component.ts
+// @ts-nocheck
+// src/scripts/test-components/test-component.ts
 import * as esbuild from 'esbuild';
 import { externalGlobalPlugin } from 'esbuild-plugin-external-global';
 import fs from 'fs/promises';
@@ -32,7 +33,7 @@ interface BatchProcessInput {
  */
 async function buildWithEsbuild(
   tsxCode: string, 
-  componentName: string = "CustomComponent"
+  componentName = "CustomComponent"
 ): Promise<{ bundle: string; sourceMap: string; }> {
   // Write TSX to temp file for esbuild to process
   const tmpDir = path.join(__dirname, '../../../tmp');

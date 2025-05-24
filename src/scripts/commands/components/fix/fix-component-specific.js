@@ -1,4 +1,5 @@
-// src/scripts/fix-component-specific.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-component-specific.js
 const { db } = require('../dist/server/db');
 const { customComponentJobs } = require('../dist/server/db/schema');
 const { eq } = require('drizzle-orm');

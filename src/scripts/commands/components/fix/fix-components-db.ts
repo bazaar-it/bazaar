@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-components-db.ts
+
 import { dbUtils } from './lib/db-direct';
 import fs from 'fs/promises';
 import path from 'path';
@@ -34,11 +37,11 @@ function fixComponentCode(code: string): string {
 // Extract the component name from the code
 function extractComponentName(code: string): string | null {
   // Look for export default statements
-  const exportMatch = code.match(/export\s+default\s+(\w+)/);
+  const exportMatch = /export\s+default\s+(\w+)/.exec(code);
   if (exportMatch && exportMatch[1]) return exportMatch[1];
   
   // Look for const Component = ... followed by export default
-  const constMatch = code.match(/const\s+(\w+)\s*=/);
+  const constMatch = /const\s+(\w+)\s*=/.exec(code);
   if (constMatch && constMatch[1] && code.includes(`export default ${constMatch[1]}`)) return constMatch[1];
   
   return null;

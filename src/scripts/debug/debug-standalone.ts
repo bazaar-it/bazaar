@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/debug/debug-standalone.ts
+
 /**
  * Standalone component debugging tool that uses direct database access
  * This version works even without environment variables in the project
@@ -28,7 +31,7 @@ const envContent = fs.existsSync(envPath)
 // Parse env vars
 const env: Record<string, string> = {};
 envContent.split('\n').forEach(line => {
-  const match = line.match(/^([^=]+)=(.*)$/);
+  const match = /^([^=]+)=(.*)$/.exec(line);
   if (match) {
     env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
   }

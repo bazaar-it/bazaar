@@ -12,6 +12,7 @@ import { a2aRouter } from "~/server/api/routers/a2a";
 import { a2aTestRouter } from "~/server/api/routers/a2a-test";
 import { evaluationRouter } from "~/server/api/routers/evaluation";
 import { debugRouter } from "~/server/api/routers/debug";
+import { generationRouter } from "~/server/api/routers/generation";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -35,6 +36,7 @@ export const appRouter = createTRPCRouter({
   a2aTest: a2aTestRouter,
   evaluation: evaluationRouter,
   debug: debugRouter,
+  generation: generationRouter,
 });
 
 // export type definition of API

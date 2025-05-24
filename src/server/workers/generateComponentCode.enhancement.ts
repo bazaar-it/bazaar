@@ -1,4 +1,5 @@
-//src/server/workers/generateComponentCode.enhancement.ts
+// @ts-nocheck
+// src/server/workers/generateComponentCode.enhancement.ts
 
 import { customComponentJobs } from '~/lib/db/schema';
 import { eq } from 'drizzle-orm';

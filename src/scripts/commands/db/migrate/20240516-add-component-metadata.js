@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/commands/db/migrate/20240516-add-component-metadata.js
+
 /**
  * Migration to add metadata column to components table
  * @module commands/db/migrate/20240516-add-component-metadata

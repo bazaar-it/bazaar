@@ -121,7 +121,7 @@ export function createZodMock<T>() {
  */
 export function getTypedMockCall<T>(
   mockFn: jest.Mock, 
-  callIndex: number = 0
+  callIndex = 0
 ): T[] {
   return mockFn.mock.calls[callIndex] as T[];
 }

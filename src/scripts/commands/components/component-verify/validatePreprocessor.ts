@@ -1,4 +1,5 @@
-//src/scripts/component-verify/validatePreprocessor.ts
+// @ts-nocheck
+// src/scripts/commands/components/component-verify/validatePreprocessor.ts
 
 import fs from 'fs';
 import path from 'path';

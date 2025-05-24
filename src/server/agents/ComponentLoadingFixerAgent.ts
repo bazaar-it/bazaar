@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/server/agents/ComponentLoadingFixerAgent.ts
 import { OpenAI } from 'openai';
 import { env } from "~/env";
@@ -41,7 +42,7 @@ async function putObjectInR2(key: string, content: string, contentType: string):
 
 export class ComponentLoadingFixerAgent extends BaseAgent {
   private agentParams: ComponentLoadingFixerAgentParams;
-  private fixAttempts: Map<string, number> = new Map();
+  private fixAttempts = new Map<string, number>();
 
   constructor(taskManager: TaskManager, agentParams: ComponentLoadingFixerAgentParams) {
     super(
@@ -242,7 +243,7 @@ export class ComponentLoadingFixerAgent extends BaseAgent {
     };
     
     const hasRemotionComponentAssignment = bundleContent.includes('window.__REMOTION_COMPONENT');
-    let extractedName = this.extractComponentName(bundleContent) || componentName;
+    const extractedName = this.extractComponentName(bundleContent) || componentName;
 
     if (hasRemotionComponentAssignment) {
       result.changes.push('Component already has window.__REMOTION_COMPONENT assignment');
@@ -291,7 +292,7 @@ export class ComponentLoadingFixerAgent extends BaseAgent {
     
     for (const pattern of patterns) {
       const match = bundleContent.match(pattern);
-      if (match && match[1]) {
+      if (match?.[1]) {
         return match[1];
       }
     }

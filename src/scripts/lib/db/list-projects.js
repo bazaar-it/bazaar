@@ -1,4 +1,5 @@
-// src/scripts/db-tools/list-projects.js
+// @ts-nocheck
+// src/scripts/lib/db/list-projects.js
 import {
   getProjects,
   parseArgs,

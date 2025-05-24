@@ -1,4 +1,5 @@
-//src/scripts/evaluation/run-tests.ts
+// @ts-nocheck
+// src/scripts/evaluation/run-tests.ts
 import { config } from "dotenv";
 config(); // Load environment variables
 

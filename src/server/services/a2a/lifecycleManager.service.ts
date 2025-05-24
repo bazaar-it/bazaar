@@ -8,7 +8,7 @@ interface AgentInfo {
 
 export class LifecycleManager {
   private static instance: LifecycleManager;
-  private agents: Map<string, AgentInfo> = new Map();
+  private agents = new Map<string, AgentInfo>();
   private monitorTimer: NodeJS.Timeout | null = null;
   private defaultUnresponsiveTimeout = 30000;
 

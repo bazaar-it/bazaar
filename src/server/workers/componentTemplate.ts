@@ -49,8 +49,8 @@ export default {{COMPONENT_NAME}};
  */
 export function applyComponentTemplate(
   componentName: string,
-  implementation: string = '',
-  render: string = '<div>Empty component</div>'
+  implementation = '',
+  render = '<div>Empty component</div>'
 ): string {
   console.log(`Applying template for component: ${componentName}`);
   

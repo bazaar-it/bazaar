@@ -1,7 +1,7 @@
 // src/types/chat.ts
 import type { Operation } from "fast-json-patch";
 import type { InferSelectModel } from "drizzle-orm";
-import { messages } from "~/server/db/schema";
+import { type messages } from "~/server/db/schema";
 
 /**
  * Represent the status of a scene during generation

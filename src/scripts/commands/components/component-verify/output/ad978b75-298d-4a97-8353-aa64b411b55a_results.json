@@ -1,9 +1,0 @@
-{
-  "timestamp": "2025-05-13T14:12:26.716Z",
-  "componentId": "ad978b75-298d-4a97-8353-aa64b411b55a",
-  "componentName": "Canary1747145526849",
-  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/ad978b75-298d-4a97-8353-aa64b411b55a.js",
-  "apiEndpoint": "http://localhost:3000/api/components/ad978b75-298d-4a97-8353-aa64b411b55a",
-  "success": false,
-  "errorMessage": "Error testing component rendering: Waiting for selector `#remotion-player h1` failed: Waiting failed: 10000ms exceeded"
-}

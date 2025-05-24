@@ -103,6 +103,7 @@ export const projects = createTable(
 export const projectsRelations = relations(projects, ({ many }) => ({ // Added projectsRelations
   patches: many(patches),
   messages: many(messages), // Add relation to messages
+  scenes: many(scenes), // Add relation to scenes
 }));
 
 // --- Patches table ---
@@ -156,6 +157,36 @@ export const messages = createTable(
 
 export const messagesRelations = relations(messages, ({ one }) => ({
   project: one(projects, { fields: [messages.projectId], references: [projects.id] }),
+}));
+
+// --- Scenes table ---
+// Stores individual scene code and props for projects
+export const scenes = createTable(
+  "scene",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    order: d.integer().notNull().default(0),
+    name: d.varchar({ length: 255 }).default("Scene").notNull(),
+    tsxCode: d.text().notNull(),
+    props: d.jsonb(), // Scene-specific props for animation parameters
+    // Publishing columns for BAZAAR-303
+    publishedUrl: d.text(), // Public URL to the published bundle
+    publishedHash: d.text(), // SHA-256 hash of the published bundle
+    publishedAt: d.timestamp({ withTimezone: true }), // When the scene was published
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+  }),
+  (t) => [
+    index("scene_project_idx").on(t.projectId),
+    index("scene_order_idx").on(t.projectId, t.order),
+    // Index for published scenes lookup
+    index("scene_publish_idx").on(t.projectId, t.publishedHash),
+  ],
+);
+
+export const scenesRelations = relations(scenes, ({ one }) => ({
+  project: one(projects, { fields: [scenes.projectId], references: [projects.id] }),
 }));
 
 // --- Custom Component Jobs table ---
@@ -482,6 +513,9 @@ export const componentEvaluationMetricsRelations = relations(componentEvaluation
 
 // Export inferred type for customComponentJobs table
 export type ComponentJob = InferSelectModel<typeof customComponentJobs>;
+
+// Export inferred type for scenes table
+export type Scene = InferSelectModel<typeof scenes>;
 
 // Define and export TaskStatus type
 export type TaskStatus = "pending" | "building" | "success" | "error";

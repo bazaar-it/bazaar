@@ -145,7 +145,7 @@ export class CodeQualityMetricsCollector {
     
     lines.forEach((line) => {
       if (line.match(variableDefRegex)) {
-        const match = line.match(/(const|let|var|function|class)\s+([a-zA-Z0-9_]+)/);
+        const match = /(const|let|var|function|class)\s+([a-zA-Z0-9_]+)/.exec(line);
         if (match && match[2]) {
           definedVars.add(match[2]);
         }
@@ -259,12 +259,12 @@ export class CodeQualityMetricsCollector {
     
     // Check for deprecated API usage
     const deprecatedApiRegex = /useCurrentFrame\(\)/;
-    if (deprecatedApiRegex.test(code)) {
+    if (code.includes('useCurrentFrame()')) {
       issues.deprecatedApiUsage = true;
       
       // Find the line numbers
       lines.forEach((line, index) => {
-        if (deprecatedApiRegex.test(line)) {
+        if (line.includes('useCurrentFrame()')) {
           issues.issueLines.push({
             line: index + 1,
             issue: 'Deprecated API usage',

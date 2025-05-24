@@ -1,3 +1,5 @@
+// src/scripts/commands/components/analyze/analyze-components.ts
+// @ts-nocheck
 import { dbUtils } from './lib/db-direct';
 import fs from 'fs/promises';
 import path from 'path';

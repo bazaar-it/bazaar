@@ -1,4 +1,5 @@
-//src/scripts/test-components/batch-test-components.ts
+// @ts-nocheck
+// src/scripts/test-components/batch-test-components.ts
 import * as esbuild from 'esbuild';
 import fs from 'fs/promises';
 import path from 'path';

@@ -11,7 +11,7 @@ export async function GET() {
     const agents = Object.keys(agentRegistry);
     
     // Check if ScenePlannerAgent exists and get its info
-    let scenePlannerAgent = agentRegistry["ScenePlannerAgent"];
+    let scenePlannerAgent = agentRegistry.ScenePlannerAgent;
     
     // Check for global instance marker
     const globalInstanceExists = !!(globalThis as any).__SCENE_PLANNER_AGENT_INSTANCE;

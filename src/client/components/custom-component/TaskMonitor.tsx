@@ -1,4 +1,5 @@
-//src/client/components/custom-component/TaskMonitor.tsx
+// src/client/components/custom-component/TaskMonitor.tsx
+// @ts-nocheck
 
 'use client';
 

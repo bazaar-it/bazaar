@@ -1,216 +1,165 @@
-import { v4 as uuidv4 } from 'uuid';
-import type { Storyboard, GenerationState, Scene, VideoStyle, Asset } from '../types/storyboard';
-import type { SceneAgent, StyleAgent, AssetAgent, CodeGenerator } from './interfaces';
-import { AISceneAgent } from './sceneAgent';
-import { AIStyleAgent } from './styleAgent';
-import { AIAssetAgent } from './assetAgent';
-import { AICodeGenerator } from './codeGenerator';
+// src/app/projects/[id]/generate/agents/promptOrchestrator.ts
+import { AISceneAgent, AIStyleAgent, AIAssetAgent, AICodeGenerator } from './index';
+import type { Storyboard, GenerationState } from '../types/storyboard';
 
-interface OrchestrationOptions {
-  maxScenes?: number;
-  fps?: number;
-  width?: number;
-  height?: number;
+export interface GenerationCallbacks {
+  onStateChange: (state: GenerationState) => void;
+  onStoryboardUpdate: (storyboard: Storyboard) => void;
+  onComponentGenerated: (sceneId: string, code: string) => void;
 }
 
 export class PromptOrchestrator {
-  private projectId: string;
-  private storyboard: Storyboard | null = null;
-  private sceneAgent: SceneAgent;
-  private styleAgent: StyleAgent;
-  private assetAgent: AssetAgent;
-  private codeGenerator: CodeGenerator;
-  private generationState: GenerationState;
+  private sceneAgent: AISceneAgent;
+  private styleAgent: AIStyleAgent;
+  private assetAgent: AIAssetAgent;
+  private codeGenerator: AICodeGenerator;
   
-  // Event handlers
-  private onUpdateCallbacks: ((state: GenerationState) => void)[] = [];
-  
-  constructor(projectId: string, apiKey?: string) {
-    this.projectId = projectId;
-    
-    // Initialize real agent implementations
-    this.sceneAgent = new AISceneAgent(apiKey);
-    this.styleAgent = new AIStyleAgent(apiKey);
-    this.assetAgent = new AIAssetAgent(apiKey);
-    this.codeGenerator = new AICodeGenerator(apiKey);
-    
-    // Initialize generation state
-    this.generationState = {
-      stage: 'idle',
-      progress: 0,
-      message: 'Ready to generate video',
-    };
+  constructor() {
+    this.sceneAgent = new AISceneAgent();
+    this.styleAgent = new AIStyleAgent();
+    this.assetAgent = new AIAssetAgent();
+    this.codeGenerator = new AICodeGenerator();
   }
   
   /**
-   * Register a callback to be called when generation state updates
+   * Generate a storyboard with fallback data
+   * The React component will replace this with actual LLM-generated data
    */
-  public onUpdate(callback: (state: GenerationState) => void): () => void {
-    this.onUpdateCallbacks.push(callback);
-    return () => {
-      this.onUpdateCallbacks = this.onUpdateCallbacks.filter(cb => cb !== callback);
-    };
-  }
-  
-  /**
-   * Update the generation state and notify all listeners
-   */
-  private updateState(partialState: Partial<GenerationState>): void {
-    this.generationState = { ...this.generationState, ...partialState };
-    
-    // Notify all listeners
-    for (const callback of this.onUpdateCallbacks) {
-      callback(this.generationState);
-    }
-  }
-  
-  /**
-   * Start the video generation process based on a user prompt
-   */
-  public async generateVideo(
-    userPrompt: string, 
-    additionalInstructions?: string,
-    options: OrchestrationOptions = {}
+  async generateFallbackStoryboard(
+    userPrompt: string,
+    callbacks: GenerationCallbacks,
+    maxScenes = 5
   ): Promise<Storyboard> {
+    const storyboard: Storyboard = {
+      id: `storyboard-${Date.now()}`,
+      title: 'Generated Video',
+      fps: 30,
+      width: 1280,
+      height: 720,
+      duration: 0,
+      scenes: [],
+      assets: [],
+      style: undefined,
+      metadata: {
+        prompt: userPrompt,
+        generatedAt: new Date().toISOString()
+      }
+    };
+    
     try {
-      // Reset any previous state
-      this.updateState({
-        stage: 'analyzing',
-        progress: 0,
-        message: 'Analyzing your prompt...',
-        error: undefined,
-        storyboard: undefined
-      });
-      
-      // Initialize empty storyboard
-      const storyboardId = uuidv4();
-      this.storyboard = {
-        id: storyboardId,
-        projectId: this.projectId,
-        title: 'Generated Video',
-        fps: options.fps || 30,
-        width: options.width || 1920,
-        height: options.height || 1080,
-        durationInFrames: 0, // Will be calculated later
-        scenes: [],
-        metadata: {
-          userPrompt,
-          generatedAt: new Date().toISOString(),
-          version: '1.0'
-        }
-      };
-      
-      // 1. Plan scenes with the SceneAgent
-      this.updateState({ 
-        stage: 'planning', 
+      // Stage 1: Scene Planning (fallback)
+      callbacks.onStateChange({
+        stage: 'planning',
         progress: 10,
-        message: 'Planning video scenes...'
+        message: 'Planning video scenes...',
+        storyboard
       });
       
-      const scenes = await this.sceneAgent.planScenes(
-        userPrompt, 
-        additionalInstructions, 
-        options.maxScenes || 5
-      );
+      const scenes = await this.sceneAgent.planScenes(userPrompt, undefined, maxScenes);
+      storyboard.scenes = scenes;
+      storyboard.duration = scenes.reduce((total: number, scene: any) => total + scene.duration, 0);
       
-      this.storyboard.scenes = scenes;
-      this.updateState({ 
+      callbacks.onStoryboardUpdate(storyboard);
+      
+      // Stage 2: Style Generation (fallback)
+      callbacks.onStateChange({
+        stage: 'styling',
         progress: 30,
-        message: `Planned ${scenes.length} scenes for your video`
+        message: 'Generating visual style...',
+        storyboard
       });
       
-      // 2. Generate style with the StyleAgent
-      this.updateState({ 
-        stage: 'styling', 
-        progress: 40,
-        message: 'Creating visual style...'
-      });
+      const style = await this.styleAgent.generateStyle(userPrompt);
+      storyboard.style = style;
+      callbacks.onStoryboardUpdate(storyboard);
       
-      const style = await this.styleAgent.generateStyle(
-        userPrompt, 
-        additionalInstructions
-      );
-      
-      this.storyboard.style = style;
-      this.updateState({ 
+      // Stage 3: Asset Identification (fallback)
+      callbacks.onStateChange({
+        stage: 'assets',
         progress: 50,
-        message: 'Visual style defined'
+        message: 'Identifying required assets...',
+        storyboard
       });
       
-      // 3. Identify assets with the AssetAgent
-      this.updateState({ 
-        stage: 'assets', 
-        progress: 60,
-        message: 'Identifying required assets...'
-      });
+      const assets = await this.assetAgent.identifyAssets(storyboard);
+      storyboard.assets = assets;
+      callbacks.onStoryboardUpdate(storyboard);
       
-      const assets = await this.assetAgent.identifyAssets(
-        this.storyboard
-      );
-      
-      this.storyboard.assets = assets;
-      this.updateState({ 
+      // Stage 4: Component Generation (fallback)
+      callbacks.onStateChange({
+        stage: 'components',
         progress: 70,
-        message: `Identified ${assets.length} required assets`
+        message: 'Generating component code...',
+        storyboard
       });
       
-      // 4. Generate component code for each scene
-      this.updateState({ 
-        stage: 'components', 
-        progress: 80,
-        message: 'Building scene components...'
-      });
+      // Generate fallback code for each scene
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        if (!scene) continue;
+        
+        const fallbackCode = this.generateFallbackComponent(scene.name, scene.template || 'ContentScene');
+        callbacks.onComponentGenerated(scene.id || `scene-${i}`, fallbackCode);
+        
+        // Update progress
+        const progress = 70 + (i + 1) / scenes.length * 20;
+        callbacks.onStateChange({
+          stage: 'components',
+          progress,
+          message: `Generated component for ${scene.name}...`,
+          storyboard
+        });
+      }
       
-      await this.codeGenerator.generateSceneComponents(
-        this.storyboard,
-        (completedScenes: number) => {
-          const totalScenes = this.storyboard?.scenes.length || 1;
-          const componentProgress = (completedScenes / totalScenes) * 20; // 20% of total progress
-          this.updateState({
-            progress: 70 + componentProgress,
-            message: `Built ${completedScenes}/${totalScenes} components`
-          });
-        }
-      );
-      
-      // 5. Calculate total duration
-      const totalDuration = this.storyboard.scenes.reduce(
-        (total, scene) => Math.max(total, scene.start + scene.duration),
-        0
-      );
-      this.storyboard.durationInFrames = totalDuration;
-      
-      // 6. Finalize
-      this.updateState({ 
-        stage: 'complete', 
+      // Stage 5: Complete
+      callbacks.onStateChange({
+        stage: 'complete',
         progress: 100,
-        message: 'Your video is ready to preview!',
-        storyboard: this.storyboard
+        message: 'Video generation complete!',
+        storyboard
       });
       
-      return this.storyboard;
+      return storyboard;
+      
     } catch (error) {
       console.error('Error in video generation:', error);
-      this.updateState({ 
-        stage: 'error', 
+      
+      callbacks.onStateChange({
+        stage: 'error',
         progress: 0,
-        error: error instanceof Error ? error.message : 'Unknown error in video generation'
+        message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        storyboard,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
-      throw error;
+      
+      return storyboard;
     }
   }
   
   /**
-   * Get the current generation state
+   * Generate a fallback component for a scene using Sprint 25/26 ESM patterns
    */
-  public getState(): GenerationState {
-    return this.generationState;
-  }
+  private generateFallbackComponent(sceneName: string, template: string): string {
+    return `const { useCurrentFrame, useVideoConfig, AbsoluteFill } = window.Remotion;
+
+export default function ${template}() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
   
-  /**
-   * Get the current storyboard (if available)
-   */
-  public getStoryboard(): Storyboard | null {
-    return this.storyboard;
+  return (
+    <AbsoluteFill style={{ 
+      backgroundColor: '#FFFFFF',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#1F2937',
+      fontFamily: 'Inter'
+    }}>
+      <h1 style={{ fontSize: 48 }}>
+        ${sceneName}
+      </h1>
+    </AbsoluteFill>
+  );
+}`;
   }
 } 

@@ -22,7 +22,7 @@ import {
   createStructuredAgentMessage,
   mapA2AToInternalState
 } from "~/types/a2a";
-import { TaskManager } from '../services/a2a/taskManager.service'; 
+import { type TaskManager } from '../services/a2a/taskManager.service'; 
 import { a2aLogger, logAgentSend, logAgentProcess } from '~/lib/logger'; 
 import { OpenAI } from 'openai';
 import { messageBus } from './message-bus';
@@ -64,8 +64,8 @@ export abstract class BaseAgent {
   protected description: string;
   protected taskManager: TaskManager;
   protected openai: OpenAI | null = null;
-  protected modelName: string = 'gpt-4o-mini';
-  protected temperature: number = 1; // Only temp=1 supported with o4-mini
+  protected modelName = 'gpt-4o-mini';
+  protected temperature = 1; // Only temp=1 supported with o4-mini
   protected lifecycleState: AgentLifecycleState = AgentLifecycleState.Initializing;
   protected heartbeatIntervalMs = 10000;
   private heartbeatTimer: NodeJS.Timeout | null = null;
@@ -80,7 +80,7 @@ export abstract class BaseAgent {
     return messageBus;
   }
   
-  constructor(name: string, taskManager: TaskManager, description?: string, useOpenAI: boolean = false) {
+  constructor(name: string, taskManager: TaskManager, description?: string, useOpenAI = false) {
     this.name = name;
     this.taskManager = taskManager;
     this.description = description || `${name} Agent`;
@@ -224,7 +224,7 @@ export abstract class BaseAgent {
   createSimpleFileArtifact(
     id: string,
     url: string,
-    mimeType: string = "application/javascript",
+    mimeType = "application/javascript",
     description?: string
   ): Artifact {
     return createFileArtifact(id, url, mimeType, description);
@@ -233,7 +233,7 @@ export abstract class BaseAgent {
   /**
    * Log an agent message
    */
-  async logAgentMessage(message: AgentMessage, success: boolean = true): Promise<void> {
+  async logAgentMessage(message: AgentMessage, success = true): Promise<void> {
     const { type, payload, sender, recipient, id, correlationId } = message;
     const taskId = payload.taskId || payload.componentJobId;
     
@@ -392,7 +392,7 @@ export abstract class BaseAgent {
   protected async generateStructuredResponse<T>(
     prompt: string,
     systemPrompt: string,
-    temperature: number = 1 // Only temp=1 supported with o4-mini
+    temperature = 1 // Only temp=1 supported with o4-mini
   ): Promise<T | null> {
     if (!this.openai) {
       a2aLogger.error("llm_error", `${this.name}: Attempted to use LLM without OpenAI initialization`);

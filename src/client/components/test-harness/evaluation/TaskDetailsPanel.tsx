@@ -189,7 +189,7 @@ export function TaskDetailsPanel({
               } else if (relevantTransitions.length > 0) {
                 // For other agents, associate based on timing if they have transitions
                 const lastTransition = relevantTransitions[relevantTransitions.length - 1];
-                if (lastTransition && lastTransition.timestamp) {
+                if (lastTransition?.timestamp) {
                   const lastTransitionTime = new Date(lastTransition.timestamp);
                   
                   // Find artifacts created around the same time

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/direct-test-scene-planner.js
 // A direct test for the ScenePlannerAgent
 

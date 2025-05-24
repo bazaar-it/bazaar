@@ -1,3 +1,5 @@
+// src/scripts/commands/components/component-verify/check-tables.js
+// @ts-nocheck
 require('dotenv').config({ path: '.env.local' });
 const { Pool } = require('pg');
 

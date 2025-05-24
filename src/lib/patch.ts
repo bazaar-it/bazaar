@@ -33,9 +33,9 @@ export function replace<K extends keyof Scene>(
  * Convenience function to create a new scene with default values
  */
 export function createDefaultScene(
-  type: string = "text",
-  start: number = 0, 
-  duration: number = 60
+  type = "text",
+  start = 0, 
+  duration = 60
 ): Scene {
   return {
     id: nanoid(),

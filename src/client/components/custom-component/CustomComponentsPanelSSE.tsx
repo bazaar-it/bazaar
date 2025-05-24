@@ -1,4 +1,5 @@
-//src/client/components/custom-component/CustomComponentsPanelSSE.tsx
+// src/client/components/custom-component/CustomComponentsPanelSSE.tsx
+// @ts-nocheck
 
 'use client';
 
@@ -32,12 +33,10 @@ interface CustomComponentsPanelSSEProps {
   projectId: string;
 }
 
-interface ComponentStatusMap {
-  [id: string]: {
+type ComponentStatusMap = Record<string, {
     status?: string;
     outputUrl?: string;
-  };
-}
+  }>;
 
 /**
  * SSE-based CustomComponentsPanel

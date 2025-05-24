@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import axios, { AxiosError } from 'axios';
-import puppeteer, { Browser, Page, ConsoleMessage } from 'puppeteer';
+import puppeteer, { type Browser, type Page, type ConsoleMessage } from 'puppeteer';
 import { Pool, type QueryResult } from 'pg';
 
 // Environment variables
@@ -115,13 +115,13 @@ export async function generateCanaryComponent(): Promise<CanaryComponent> {
     }
     
     const componentCode: string = fs.readFileSync(canaryPath, 'utf8');
-    const componentName: string = 'CanaryTestComponent';
+    const componentName = 'CanaryTestComponent';
     
     console.log(`✅ Generated canary component: ${componentName}`);
     
     // Create a renamed version with timestamp for uniqueness
     const timestamp: number = Date.now();
-    const uniqueComponentName: string = `Canary${timestamp}`;
+    const uniqueComponentName = `Canary${timestamp}`;
     const uniqueComponentCode: string = componentCode.replace(/CanaryTestComponent/g, uniqueComponentName);
     
     // Write to output dir for debugging
@@ -149,12 +149,12 @@ export async function storeComponentInDatabase(componentCode: string): Promise<s
   
   try {
     const componentId: string = uuidv4();
-    const effectName: string = `CanaryTest_${Date.now()}`;
-    const projectId: string = '00000000-0000-0000-0000-000000000000'; // Placeholder project ID for testing
+    const effectName = `CanaryTest_${Date.now()}`;
+    const projectId = '00000000-0000-0000-0000-000000000000'; // Placeholder project ID for testing
     
     // Insert the component into the database
     // Using the exact table name from the screenshot
-    const query: string = `
+    const query = `
       INSERT INTO "bazaar-vid_custom_component_job" (
         id, 
         "projectId",
@@ -215,7 +215,7 @@ export async function compileAndUploadComponent(componentId: string, componentCo
     // Upload to R2
     console.log(`📤 Uploading to R2: ${componentId}`);
     
-    const key: string = `custom-components/${componentId}.js`;
+    const key = `custom-components/${componentId}.js`;
     const command: PutObjectCommand = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
@@ -241,7 +241,7 @@ export async function compileAndUploadComponent(componentId: string, componentCo
     }
     
     // Update component status in database
-    const updateQuery: string = `
+    const updateQuery = `
       UPDATE "bazaar-vid_custom_component_job"
       SET status = 'complete', 
           "outputUrl" = $2,
@@ -250,7 +250,7 @@ export async function compileAndUploadComponent(componentId: string, componentCo
       RETURNING id
     `;
     
-    const publicUrl: string = `${R2_PUBLIC_URL}/${key}`;
+    const publicUrl = `${R2_PUBLIC_URL}/${key}`;
     const updateResult: QueryResult = await pool.query(updateQuery, [componentId, publicUrl]);
     
     if (updateResult.rows.length === 0) {
@@ -285,7 +285,7 @@ export async function testApiEndpoint(componentId: string): Promise<ApiTestResul
   console.log('\n🟢 STEP 4: Testing API endpoint');
   
   try {
-    const url: string = `${API_URL}/api/components/${componentId}`;
+    const url = `${API_URL}/api/components/${componentId}`;
     console.log(`🌐 Requesting: ${url}`);
     
     const response = await axios.get(url);
@@ -302,7 +302,7 @@ export async function testApiEndpoint(componentId: string): Promise<ApiTestResul
       data: response.data
     };
   } catch (error) {
-    let errorMessage: string = 'Unknown error testing API endpoint';
+    let errorMessage = 'Unknown error testing API endpoint';
     let errorDetails: any = {};
 
     if (axios.isAxiosError(error)) {
@@ -509,7 +509,7 @@ export async function testComponentRendering(componentId: string, publicUrl: str
             console.error(chalk.red('DETECTED FALLBACK ERROR COMPONENT IN API RESPONSE'));
             
             // Extract error details if available
-            const errorMatch = text.match(/Error details: (.+?)(?:\n|$)/);
+            const errorMatch = /Error details: (.+?)(?:\n|$)/.exec(text);
             if (errorMatch && errorMatch[1]) {
               console.error(chalk.red(`Error details: ${errorMatch[1]}`));
             }

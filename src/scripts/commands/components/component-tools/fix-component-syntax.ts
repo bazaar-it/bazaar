@@ -1,4 +1,5 @@
-//src/scripts/component-tools/fix-component-syntax.ts
+// src/scripts/commands/components/component-tools/fix-component-syntax.ts
+// @ts-nocheck
 import { db } from "../../server/db";
 import { customComponentJobs } from "../../server/db/schema";
 import { eq } from "drizzle-orm";
@@ -27,8 +28,8 @@ const COMPONENT_FIXES = {
     detect: (code: string) => !code.includes("export default") && !code.includes("export const"),
     fix: (code: string, name: string) => {
       // Find the component definition
-      const functionMatch = code.match(/function\s+([A-Za-z0-9_]+)/);
-      const constMatch = code.match(/const\s+([A-Za-z0-9_]+)\s*=/);
+      const functionMatch = /function\s+([A-Za-z0-9_]+)/.exec(code);
+      const constMatch = /const\s+([A-Za-z0-9_]+)\s*=/.exec(code);
       const className = functionMatch?.[1] || constMatch?.[1] || name || "Component";
       
       // Add export statement

@@ -62,11 +62,11 @@ export class TaskProcessor {
   private pollInterval: number = DEFAULT_POLL_INTERVAL;
   private pollTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
-  private isPolling: boolean = false;
-  private enableLogging: boolean = true;
-  private isShuttingDown: boolean = false;
+  private isPolling = false;
+  private enableLogging = true;
+  private isShuttingDown = false;
   private registeredAgents: BaseAgent[] = [];
-  private isCoreInitialized: boolean = false;
+  private isCoreInitialized = false;
   private instanceId: string = uuidv4();
   private startupDelayTimer: NodeJS.Timeout | null = null;
   private startupTimestamp: number = Date.now();
@@ -86,11 +86,11 @@ export class TaskProcessor {
     if (!globalThis.__TASK_PROCESSOR_INSTANCE__) {
       a2aLogger.info('system', "Creating new TaskProcessor singleton instance.");
       globalThis.__TASK_PROCESSOR_INSTANCE__ = new TaskProcessor();
-      globalThis.__TASK_PROCESSOR_INSTANCE__!._trueCoreInitialize();
+      globalThis.__TASK_PROCESSOR_INSTANCE__._trueCoreInitialize();
     } else {
       a2aLogger.debug('system', "Returning existing TaskProcessor singleton instance.");
     }
-    return globalThis.__TASK_PROCESSOR_INSTANCE__!;
+    return globalThis.__TASK_PROCESSOR_INSTANCE__;
   }
 
   /**
@@ -115,7 +115,7 @@ export class TaskProcessor {
       // Log agent registry details
       const globalAgentNames = Object.keys(agentRegistry);
       console.log(`[ROUTE_DEBUG] TaskProcessor (${this.instanceId}): Global registry agents: ${globalAgentNames.join(', ')}`);
-      console.log(`[ROUTE_DEBUG] ScenePlannerAgent status: ${agentRegistry['ScenePlannerAgent'] ? 'FOUND ✅' : 'MISSING ❌'}`);
+      console.log(`[ROUTE_DEBUG] ScenePlannerAgent status: ${agentRegistry.ScenePlannerAgent ? 'FOUND ✅' : 'MISSING ❌'}`);
       
       a2aLogger.info('system', `TaskProcessor (${this.instanceId}) registered ${this.registeredAgents.length} agents:`, {
         agentNames: this.registeredAgents.map(agent => agent.getName())
@@ -186,7 +186,7 @@ export class TaskProcessor {
    * @param enablePolling Whether to start polling immediately if not already polling.
    * @returns The TaskProcessor instance.
    */
-  public initializePolling(enablePolling: boolean = true): TaskProcessor {
+  public initializePolling(enablePolling = true): TaskProcessor {
     a2aLogger.info('system', `TaskProcessor (${this.instanceId}) public initializePolling() called. Enable Polling: ${enablePolling}`);
     
     if (!this.isCoreInitialized) {
@@ -380,7 +380,7 @@ export class TaskProcessor {
     if (env.USE_MESSAGE_BUS) {
       try {
         // Lazy import to break circular dependencies.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const { messageBus } = require("~/server/agents/message-bus");
         await messageBus.publish(message);
       } catch (err) {
@@ -408,13 +408,13 @@ export class TaskProcessor {
     
     // CRITICAL: Specifically check for ScenePlannerAgent
     if (targetAgentName === 'ScenePlannerAgent') {
-      const scenePlannerFound = !!agentRegistry['ScenePlannerAgent'];
+      const scenePlannerFound = !!agentRegistry.ScenePlannerAgent;
       console.log(`[SUPER_ROUTE_DEBUG] Specific check for ScenePlannerAgent: ${scenePlannerFound ? 'FOUND' : 'NOT FOUND'} in global registry`);
       
       if (scenePlannerFound) {
         // Safely access properties with null checks
-        const scenePlannerAgent = agentRegistry['ScenePlannerAgent'];
-        if (scenePlannerAgent && scenePlannerAgent.constructor) {
+        const scenePlannerAgent = agentRegistry.ScenePlannerAgent;
+        if (scenePlannerAgent?.constructor) {
           console.log(`[SUPER_ROUTE_DEBUG] ScenePlannerAgent instance type: ${scenePlannerAgent.constructor.name}`);
           console.log(`[SUPER_ROUTE_DEBUG] ScenePlannerAgent instance methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(scenePlannerAgent)).join(', ')}`);
         } else {

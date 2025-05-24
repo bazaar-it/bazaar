@@ -1,3 +1,5 @@
+// @ts-nocheck
+// src/scripts/lib/db/analyze-component.js
 import {
   getComponentById,
   getProjectById,

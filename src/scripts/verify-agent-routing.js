@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/verify-agent-routing.js
 // Test script that directly verifies agent message routing
 

@@ -28,7 +28,9 @@
     /* Path Aliases */
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": ["./src/*"],
+      "@bundler/*": ["./packages/bundler/*"],
+      "@r2/*": ["./packages/r2/*"]
     },
     
     /* Testing */
@@ -45,5 +47,13 @@
     "remotion/webpack-override.mjs"
 
   ],
-  "exclude": ["node_modules", "remotion.config.ts"]
+  "exclude": [
+    "node_modules", 
+    "remotion.config.ts", 
+    "src/tests", 
+    "**/__tests__/**", 
+    "src/server/workers",
+    "src/scripts/log-agent/dist",
+    "src/scripts"
+  ]
 }

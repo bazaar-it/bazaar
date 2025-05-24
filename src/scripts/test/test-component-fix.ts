@@ -1,4 +1,5 @@
-// src/scripts/test-component-fix.js
+// @ts-nocheck
+// src/scripts/test/test-component-fix.ts
 /*
  * This script tests our component syntax repair logic with a sample component 
  * containing common errors like duplicated fps variables

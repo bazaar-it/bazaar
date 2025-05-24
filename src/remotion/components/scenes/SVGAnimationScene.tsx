@@ -82,7 +82,7 @@ export const SVGAnimationScene: React.FC<SVGAnimationSceneProps> = ({ data, chil
   
   // Parse data with safe type casting
   const svgData: SVGAnimationSceneData = {
-    icon: typeof data.icon === 'string' && Object.keys(svgIcons).includes(data.icon as string) 
+    icon: typeof data.icon === 'string' && Object.keys(svgIcons).includes(data.icon) 
       ? data.icon as keyof typeof svgIcons 
       : 'circle',
     color: typeof data.color === 'string' ? data.color : '#FFFFFF',

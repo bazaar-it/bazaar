@@ -4,8 +4,8 @@ import { AbsoluteFill, Sequence, interpolate, useCurrentFrame, useVideoConfig } 
 import { TitleCard } from '../components/TitleCard';
 import { ImageSlide } from '../components/ImageSlide';
 import { loadFont, fontFamily } from "@remotion/google-fonts/Inter";
-import { DemoTimelineProps } from '../../types/remotion-constants';
-import { z } from 'zod';
+import { type DemoTimelineProps } from '../../types/remotion-constants';
+import { type z } from 'zod';
 
 // Load Inter font
 loadFont();

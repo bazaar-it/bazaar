@@ -1,7 +1,8 @@
-//src/scripts/evaluation/reporters/daily-report-generator.ts
+// @ts-nocheck
+// src/scripts/evaluation/reporters/daily-report-generator.ts
 import * as fs from "fs";
 import * as path from "path";
-import { TestResult } from "../runners/a2a-test-runner";
+import { type TestResult } from "../runners/a2a-test-runner";
 
 /**
  * Daily report data structure

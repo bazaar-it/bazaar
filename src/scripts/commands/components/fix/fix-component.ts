@@ -53,7 +53,7 @@ async function fixComponent(componentId: string, shouldApply: boolean) {
   }
   
   // Analyze and fix the code
-  let tsxCode = component.tsxCode;
+  const tsxCode = component.tsxCode;
   const fixes = [];
   let fixedCode = tsxCode;
   
@@ -82,7 +82,7 @@ async function fixComponent(componentId: string, shouldApply: boolean) {
   // Fix 3: Ensure window.__REMOTION_COMPONENT assignment exists
   if (!fixedCode.includes('window.__REMOTION_COMPONENT')) {
     // Extract the component name by looking for const/function declarations
-    let componentName = extractComponentName(fixedCode);
+    const componentName = extractComponentName(fixedCode);
     
     if (componentName) {
       // Add IIFE at the end of the file to register the component
@@ -165,31 +165,31 @@ function extractComponentName(code: string): string | null {
   // Try to find component definition patterns
   
   // Pattern 1: const ComponentName = (props) => { ... }
-  const constMatch = code.match(/const\s+([A-Z][A-Za-z0-9_]*)\s*=/);
+  const constMatch = /const\s+([A-Z][A-Za-z0-9_]*)\s*=/.exec(code);
   if (constMatch && constMatch[1]) {
     return constMatch[1];
   }
   
   // Pattern 2: function ComponentName(props) { ... }
-  const funcMatch = code.match(/function\s+([A-Z][A-Za-z0-9_]*)\s*\(/);
+  const funcMatch = /function\s+([A-Z][A-Za-z0-9_]*)\s*\(/.exec(code);
   if (funcMatch && funcMatch[1]) {
     return funcMatch[1];
   }
   
   // Pattern 3: class ComponentName extends React.Component { ... }
-  const classMatch = code.match(/class\s+([A-Z][A-Za-z0-9_]*)\s+extends/);
+  const classMatch = /class\s+([A-Z][A-Za-z0-9_]*)\s+extends/.exec(code);
   if (classMatch && classMatch[1]) {
     return classMatch[1];
   }
   
   // Pattern 4: export { ComponentName as X }
-  const exportMatch = code.match(/export\s*{\s*([A-Z][A-Za-z0-9_]*)\s+as/);
+  const exportMatch = /export\s*{\s*([A-Z][A-Za-z0-9_]*)\s+as/.exec(code);
   if (exportMatch && exportMatch[1]) {
     return exportMatch[1];
   }
   
   // Pattern 5: export default X
-  const defaultMatch = code.match(/export\s+default\s+([A-Z][A-Za-z0-9_]*)/);
+  const defaultMatch = /export\s+default\s+([A-Z][A-Za-z0-9_]*)/.exec(code);
   if (defaultMatch && defaultMatch[1]) {
     return defaultMatch[1];
   }

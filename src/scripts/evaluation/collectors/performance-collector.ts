@@ -43,7 +43,7 @@ export interface MetricsCollectionOptions {
  */
 export class PerformanceMetricsCollector {
   private testCaseId: string;
-  private events: Map<PipelineEvent, number> = new Map();
+  private events = new Map<PipelineEvent, number>();
   private stateTransitions: Array<{ state: string; timestamp: number }> = [];
   private metadata: Record<string, any> = {};
   private logger: Console;

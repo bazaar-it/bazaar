@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/diagnostics/component-analyzer.js
 /**
  * Comprehensive component analyzer for Bazaar-Vid

@@ -78,7 +78,7 @@ export function TaskTimeline({ transitions = [], agentRoles = {} }: TaskTimeline
                     <span className="font-semibold text-sm">
                       {agentName.replace('Agent', '')}
                     </span>
-                    <span className="text-xs">{(agentRoles && agentRoles[agentName]) || 'Agent'}</span>
+                    <span className="text-xs">{(agentRoles?.[agentName]) || 'Agent'}</span>
                   </div>
                   
                   {/* Status indicator */}

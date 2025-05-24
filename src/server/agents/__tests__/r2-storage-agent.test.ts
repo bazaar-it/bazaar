@@ -138,7 +138,7 @@ describe("R2StorageAgent", () => {
 
   describe("processMessage - STORE_COMPONENT_REQUEST", () => {
     it("should verify component in R2 and send COMPONENT_STORED_SUCCESS if valid", async () => {
-      (R2Service.verifyR2Component as jest.MockedFunction<typeof R2Service.verifyR2Component>).mockResolvedValueOnce(true);
+      (R2Service.verifyR2Component).mockResolvedValueOnce(true);
       const incomingMessage = createStoreRequestMessage(mockArtifact);
       const response = await r2StorageAgent.processMessage(incomingMessage);
 
@@ -152,7 +152,7 @@ describe("R2StorageAgent", () => {
     });
 
     it("should send R2_STORAGE_ERROR if R2 verification fails", async () => {
-      (R2Service.verifyR2Component as jest.MockedFunction<typeof R2Service.verifyR2Component>).mockResolvedValueOnce(false);
+      (R2Service.verifyR2Component).mockResolvedValueOnce(false);
       const incomingMessage = createStoreRequestMessage(mockArtifact);
       const response = await r2StorageAgent.processMessage(incomingMessage);
 

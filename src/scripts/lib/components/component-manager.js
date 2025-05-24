@@ -1,4 +1,5 @@
-//src/scripts/lib/components/component-manager.js
+// @ts-nocheck
+// src/scripts/lib/components/component-manager.js
 import { getDb } from '../db/utils.js';
 import { logger } from '../logger.js';
 

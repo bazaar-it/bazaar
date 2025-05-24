@@ -1,9 +1,0 @@
-{
-  "timestamp": "2025-05-13T16:46:30.360Z",
-  "componentId": "bebab5b2-8862-46bb-b1c9-5e31848d1599",
-  "componentName": "Canary1747154782138",
-  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/bebab5b2-8862-46bb-b1c9-5e31848d1599.js",
-  "apiEndpoint": "http://localhost:3000/api/components/bebab5b2-8862-46bb-b1c9-5e31848d1599",
-  "success": false,
-  "errorMessage": "An unexpected error occurred during rendering test.\nDetails: {}"
-}

@@ -92,7 +92,7 @@ jest.mock('fs/promises', () => ({
 }));
 
 jest.mock('fs', () => {
-  const actualFs = jest.requireActual('fs') as Record<string, unknown>; 
+  const actualFs = jest.requireActual('fs'); 
   return {
     ...actualFs,
     statSync: jest.fn().mockReturnValue({ size: 1000 }),

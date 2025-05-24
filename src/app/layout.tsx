@@ -3,6 +3,8 @@ import "~/index.css";
 import { TRPCReactProvider } from "~/trpc/react";
 import { ThemeProvider } from "~/components/theme-provider";
 import { SessionProvider } from "next-auth/react";
+import { GlobalDependencyProvider } from "~/components/GlobalDependencyProvider";
+import { Toaster } from "sonner";
 
 export default function RootLayout({
   children,
@@ -15,10 +17,13 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TRPCReactProvider>
             <SessionProvider>
-              {children}
+              <GlobalDependencyProvider>
+                {children}
+              </GlobalDependencyProvider>
             </SessionProvider>
           </TRPCReactProvider>
         </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );

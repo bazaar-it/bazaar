@@ -172,11 +172,11 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
       case TimelineItemType.AUDIO:
         return `Audio ${item.id}`;
       case TimelineItemType.TEXT:
-        return `Text: ${(item as TextItem).content.substring(0, 20) || ''}`;
+        return `Text: ${(item).content.substring(0, 20) || ''}`;
       case TimelineItemType.IMAGE:
         return `Image ${item.id}`;
       case TimelineItemType.CUSTOM:
-        return (item as CustomItem).name || `Custom ${item.id}`;
+        return (item).name || `Custom ${item.id}`;
       default:
         // Use type assertion to help TypeScript understand this is still a valid object
         return `Unknown ${(item as {id: number}).id}`;

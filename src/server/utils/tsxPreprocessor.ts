@@ -42,7 +42,7 @@ export function isErrorFixableByPreprocessor(error: Error, tsxCode: string): boo
  */
 export function preprocessTsx(
   tsxCode: string, 
-  componentName: string = 'Component'
+  componentName = 'Component'
 ): {
   code: string;
   issues: string[];
@@ -408,9 +408,9 @@ function convertImportToGlobals(code: string): { code: string; issues: string[];
   if (remotionMatches && remotionMatches.length > 0) {
     // Extract the imported items from within the curly braces
     const importListPattern = /import\s+{([^}]*)}\s+from\s+['"]remotion['"](?:;)?/;
-    const importListMatch = result.match(importListPattern);
+    const importListMatch = importListPattern.exec(result);
     
-    if (importListMatch && importListMatch[1]) {
+    if (importListMatch?.[1]) {
       const imports = importListMatch[1].split(',').map(s => s.trim());
       
       if (imports.length > 0) {
@@ -431,7 +431,7 @@ function convertImportToGlobals(code: string): { code: string; issues: string[];
   if (otherMatches && otherMatches.length > 0) {
     for (const match of otherMatches) {
       // Extract the module path
-      const modulePathMatch = match.match(/from\s+['"]([^'"]+)['"]/);
+      const modulePathMatch = /from\s+['"]([^'"]+)['"]/.exec(match);
       const modulePath = modulePathMatch ? modulePathMatch[1] : 'unknown';
       
       result = result.replace(
@@ -501,11 +501,11 @@ function fixCommonVariableReferences(code: string): { code: string; issues: stri
   // Pattern 3: Replace reference to undefined 'frame' with useCurrentFrame()
   if ((/frame(?![A-Za-z0-9_])[^=]*/).test(result) && !(/const\s+frame\s*=/).test(result)) {
     // Frame is referenced but not declared - check if useCurrentFrame is used
-    if ((/useCurrentFrame/).test(result)) {
+    if (result.includes('useCurrentFrame')) {
       // Add frame declaration if missing
       if (!(/const\s+frame\s*=\s*useCurrentFrame\(\)/).test(result)) {
         // Find a good insertion point - after imports or at the top of the component function
-        const componentFnMatch = result.match(/(?:const|function)\s+(\w+)\s*(?:=|\()/); 
+        const componentFnMatch = /(?:const|function)\s+(\w+)\s*(?:=|\()/.exec(result); 
         if (componentFnMatch) {
           const insertPos = result.indexOf(componentFnMatch[0]);
           result = result.slice(0, insertPos) + 
@@ -612,8 +612,8 @@ function validateBasicSyntax(code: string): void {
       } else if (Object.values(pairs).includes(char)) {
         // Closing brace/bracket/parenthesis
         const last = stack.pop();
-        if (!last || pairs[last as keyof typeof pairs] !== char) {
-          throw new Error(`Mismatched braces at position ${i}: expected ${last ? pairs[last as keyof typeof pairs] : 'nothing'}, found ${char}`);
+        if (!last || pairs[last] !== char) {
+          throw new Error(`Mismatched braces at position ${i}: expected ${last ? pairs[last] : 'nothing'}, found ${char}`);
         }
       }
     }

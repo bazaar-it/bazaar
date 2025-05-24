@@ -1,9 +1,9 @@
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { db, customComponentJobs } from '~/server/db';
+import { db, type customComponentJobs } from '~/server/db';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { generateComponentCode, processComponentJob } from '../generateComponentCode';
-import { ComponentJob, TaskStatus } from '~/server/db/schema';
+import { type ComponentJob, type TaskStatus } from '~/server/db/schema';
 import path from 'path';
 import fs from 'fs/promises';
 import os from 'os';
@@ -405,8 +405,7 @@ describe('Component Build Flow - ESM Integration', () => {
     const buildSets = db.db.update().set.mock.calls;
     expect(buildSets.some(call => 
       call[0].status === 'complete' && 
-      call[0].outputUrl && 
-      call[0].outputUrl.includes('lazy-test-job-id.js')
+      call[0].outputUrl?.includes('lazy-test-job-id.js')
     )).toBe(true);
   });
 

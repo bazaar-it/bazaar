@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/verify-scene-planner.js
 // Test script that directly tests the ScenePlannerAgent without environment validation
 

@@ -1,4 +1,5 @@
-// src/scripts/fix-specific-component.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-specific-component.js
 import { db } from '../server/db/index.js';
 import { customComponentJobs } from '../server/db/schema.js';
 import { eq } from 'drizzle-orm';

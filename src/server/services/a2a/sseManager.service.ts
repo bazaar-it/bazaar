@@ -8,7 +8,7 @@
  * @see https://github.com/google/A2A/blob/main/docs/streaming.md
  */
 
-import { Subject, Observable, Subscription } from 'rxjs';
+import { Subject, type Observable, Subscription } from 'rxjs';
 import type { TaskState, Message, Artifact } from '~/types/a2a';
 
 /**
@@ -111,10 +111,10 @@ export class SSEManagerService {
   private static instance: SSEManagerService;
   
   // Active client connections
-  private clients: Map<string, ClientConnection> = new Map();
+  private clients = new Map<string, ClientConnection>();
   
   // Task subscribers - maps task IDs to client IDs
-  private taskSubscriptions: Map<string, Set<string>> = new Map();
+  private taskSubscriptions = new Map<string, Set<string>>();
   
   // Heartbeat interval in ms (30 seconds)
   private readonly HEARTBEAT_INTERVAL = 30000;

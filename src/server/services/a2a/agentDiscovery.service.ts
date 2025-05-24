@@ -46,7 +46,7 @@ export interface AgentDirectoryResponse {
  */
 export class AgentDiscoveryService {
   private static instance: AgentDiscoveryService;
-  private agents: Map<string, AgentCard> = new Map();
+  private agents = new Map<string, AgentCard>();
   
   private constructor() {
     // Initialize with our default agents

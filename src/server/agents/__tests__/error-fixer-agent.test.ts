@@ -130,7 +130,7 @@ describe("ErrorFixerAgent", () => {
       expect(messagePayload?.parts).toBeDefined();
       expect(messagePayload?.parts.length).toBeGreaterThan(0);
 
-      if (messagePayload && messagePayload.parts && messagePayload.parts.length > 0) {
+      if (messagePayload?.parts && messagePayload.parts.length > 0) {
         const firstPart = messagePayload.parts[0] as { type?: string, text?: string };
         expect(firstPart).toBeDefined();
         expect(firstPart.type).toBe('text');
@@ -152,7 +152,7 @@ describe("ErrorFixerAgent", () => {
       const response1 = await errorFixer.processMessage(incomingMessageAttempt1);
       const messagePayload1 = response1?.payload.message;
       expect(messagePayload1?.parts?.length).toBeGreaterThan(0);
-      if (messagePayload1 && messagePayload1.parts && messagePayload1.parts.length > 0) {
+      if (messagePayload1?.parts && messagePayload1.parts.length > 0) {
         const textPart1 = messagePayload1.parts[0] as { type?: string, text?: string };
         expect(textPart1?.text).toBeDefined();
         if (typeof textPart1?.text === 'string') {
@@ -166,7 +166,7 @@ describe("ErrorFixerAgent", () => {
       const response2 = await errorFixer.processMessage(incomingMessageAttempt2);
       const messagePayload2 = response2?.payload.message;
       expect(messagePayload2?.parts?.length).toBeGreaterThan(0);
-      if (messagePayload2 && messagePayload2.parts && messagePayload2.parts.length > 0) {
+      if (messagePayload2?.parts && messagePayload2.parts.length > 0) {
         const textPart2 = messagePayload2.parts[0] as { type?: string, text?: string };
         expect(textPart2?.text).toBeDefined();
         if (typeof textPart2?.text === 'string') {
@@ -185,7 +185,7 @@ describe("ErrorFixerAgent", () => {
       expect(response?.recipient).toBe("CoordinatorAgent");
       const messagePayload = response?.payload.message;
       expect(messagePayload?.parts?.length).toBeGreaterThan(0);
-      if (messagePayload && messagePayload.parts && messagePayload.parts.length > 0) {
+      if (messagePayload?.parts && messagePayload.parts.length > 0) {
         const textPart = messagePayload.parts[0] as { type?: string, text?: string };
         expect(textPart?.text).toBeDefined();
         if (typeof textPart?.text === 'string') {
@@ -203,7 +203,7 @@ describe("ErrorFixerAgent", () => {
       expect(response?.recipient).toBe("CoordinatorAgent");
       const messagePayload = response?.payload.message;
       expect(messagePayload?.parts?.length).toBeGreaterThan(0);
-      if (messagePayload && messagePayload.parts && messagePayload.parts.length > 0) {
+      if (messagePayload?.parts && messagePayload.parts.length > 0) {
         const textPart = messagePayload.parts[0] as { type?: string, text?: string };
         expect(textPart?.text).toBeDefined();
         if (typeof textPart?.text === 'string') {

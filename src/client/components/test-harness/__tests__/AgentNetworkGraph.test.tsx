@@ -39,7 +39,7 @@ describe('AgentNetworkGraph SSE updates', () => {
   it('updates agent status to working on task status update', async () => {
     render(<AgentNetworkGraph taskId="task-1" />);
 
-    const builderCard = screen.getByText('BuilderAgent').parentElement!.parentElement as HTMLElement;
+    const builderCard = screen.getByText('BuilderAgent').parentElement!.parentElement!;
     expect(within(builderCard).getByText('Idle')).toBeInTheDocument();
 
     act(() => {
@@ -50,14 +50,14 @@ describe('AgentNetworkGraph SSE updates', () => {
     });
 
     await within(builderCard).findByText('Working');
-    const indicator = builderCard.querySelector('div.rounded-full') as HTMLElement;
+    const indicator = builderCard.querySelector('div.rounded-full')!;
     expect(indicator.className).toContain('bg-yellow-500');
   });
 
   it('updates agent status to completed', async () => {
     render(<AgentNetworkGraph taskId="task-1" />);
 
-    const builderCard = screen.getByText('BuilderAgent').parentElement!.parentElement as HTMLElement;
+    const builderCard = screen.getByText('BuilderAgent').parentElement!.parentElement!;
 
     act(() => {
       sseHandlers.onTaskStatusUpdate({
@@ -67,7 +67,7 @@ describe('AgentNetworkGraph SSE updates', () => {
     });
 
     await within(builderCard).findByText('Completed');
-    const indicator = builderCard.querySelector('div.rounded-full') as HTMLElement;
+    const indicator = builderCard.querySelector('div.rounded-full')!;
     expect(indicator.className).toContain('bg-green-500');
   });
 });

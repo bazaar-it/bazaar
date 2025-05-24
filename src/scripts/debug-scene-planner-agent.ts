@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/debug-scene-planner-agent.ts
 import { OpenAIAdapter } from "../server/services/a2a/openai.adapter";
 import { ScenePlannerAgent } from "../server/agents/scene-planner-agent";

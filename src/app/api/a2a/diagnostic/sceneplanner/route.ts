@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
   try {
     // Get the agent from multiple registries to track down registration issues
-    const scenePlannerFromRegistry = agentRegistry["ScenePlannerAgent"];
+    const scenePlannerFromRegistry = agentRegistry.ScenePlannerAgent;
     const scenePlannerFromBus = messageBus.getAgent?.("ScenePlannerAgent");
     
     // Get from processor - this is the most authoritative source in old arch
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
       const errorMessage = "ScenePlannerAgent not found in any registry";
       a2aLogger.error(taskId, errorMessage, {
         module: "api_diagnostic", 
-        globalRegistry: !!agentRegistry["ScenePlannerAgent"],
+        globalRegistry: !!agentRegistry.ScenePlannerAgent,
         messageBus: !!scenePlannerFromBus,
         processor: !!scenePlannerFromProcessor,
         registryKeys: Object.keys(agentRegistry), 
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
         registries: {
           globalRegistry: Object.keys(agentRegistry),
           processorAgentCount: registeredAgents.length,
-          messageBusAgents: Array.from(messageBus["agents"]?.keys() || [])
+          messageBusAgents: Array.from(messageBus.agents?.keys() || [])
         }
       }, { status: 404 });
     }
@@ -99,8 +99,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       agentName,
-      modelName: (scenePlannerAgent as any).modelName || "unknown",
-      temperature: (scenePlannerAgent as any).temperature || 0,
+      modelName: (scenePlannerAgent).modelName || "unknown",
+      temperature: (scenePlannerAgent).temperature || 0,
       response: response ? {
         id: response.id,
         type: response.type,

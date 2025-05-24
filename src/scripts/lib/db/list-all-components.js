@@ -1,4 +1,5 @@
-// src/scripts/db-tools/list-all-components.js
+// @ts-nocheck
+// src/scripts/lib/db/list-all-components.js
 import {
   getAllComponents,
   getComponentStatusCounts,

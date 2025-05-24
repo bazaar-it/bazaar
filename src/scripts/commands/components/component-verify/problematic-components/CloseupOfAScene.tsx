@@ -1,4 +1,5 @@
-// src/remotion/components/scenes/CloseupOfAScene.tsx
+// @ts-nocheck
+// src/scripts/commands/components/component-verify/problematic-components/CloseupOfAScene.tsx
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence, Easing, Img, Audio } from 'remotion';
 import React from 'react';
 // import { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';

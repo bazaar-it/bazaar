@@ -90,6 +90,9 @@ interface VideoState {
   // Clear optimistic messages (e.g., when switching projects)
   clearOptimisticMessages: (projectId: string) => void;
   
+  // Clear all data for a specific project (useful when switching projects)
+  clearProject: (projectId: string) => void;
+  
   // Force refresh of preview components by generating a new refresh token
   forceRefresh: (projectId: string) => void;
 }
@@ -121,18 +124,29 @@ export const useVideoState = create<VideoState>((set, get) => ({
   },
 
   setProject: (projectId, initialProps) => 
-    set((state) => ({
-      currentProjectId: projectId,
-      projects: {
-        ...state.projects,
-        [projectId]: {
-          ...(state.projects[projectId] || {}),
-          props: initialProps,
-          chatHistory: state.projects[projectId]?.chatHistory || getDefaultChatHistory(),
-          dbMessagesLoaded: state.projects[projectId]?.dbMessagesLoaded ?? false,
-        }
+    set((state) => {
+      const isProjectSwitch = state.currentProjectId && state.currentProjectId !== projectId;
+      
+      // If switching to a different project, clear old chat history to avoid contamination
+      if (isProjectSwitch) {
+        console.log(`[VideoState] Switching from project ${state.currentProjectId} to ${projectId}, clearing chat history`);
       }
-    })),
+      
+      return {
+        currentProjectId: projectId,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...(state.projects[projectId] || {}),
+            props: initialProps,
+            // Clear chat history on project switch, otherwise preserve
+            chatHistory: isProjectSwitch ? getDefaultChatHistory() : (state.projects[projectId]?.chatHistory || getDefaultChatHistory()),
+            dbMessagesLoaded: isProjectSwitch ? false : (state.projects[projectId]?.dbMessagesLoaded ?? false),
+            activeStreamingMessageId: isProjectSwitch ? null : state.projects[projectId]?.activeStreamingMessageId,
+          }
+        }
+      };
+    }),
 
   applyPatch: (projectId, patch) =>
     set((state) => {
@@ -386,7 +400,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
       });
       
       // Combine messages: Start with all synced DB messages
-      let combinedHistory = [...syncedMessages];
+      const combinedHistory = [...syncedMessages];
       
       // Then add any unsynced client messages (optimistic ones) 
       unsyncedClientMessages.forEach(clientMsg => {
@@ -430,6 +444,28 @@ export const useVideoState = create<VideoState>((set, get) => ({
             chatHistory: []
           }
         }
+      };
+    }),
+    
+  // Clear all data for a specific project (useful when switching projects)
+  clearProject: (projectId) =>
+    set((state) => {
+      // Skip if project doesn't exist
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            chatHistory: [],
+            dbMessagesLoaded: false,
+            activeStreamingMessageId: null,
+            refreshToken: undefined
+          }
+        },
+        currentProjectId: null
       };
     }),
     

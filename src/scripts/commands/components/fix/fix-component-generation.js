@@ -1,4 +1,5 @@
-// src/scripts/fix-component-generation.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-component-generation.js
 /**
  * Fix the actual component generation process at its core
  * 

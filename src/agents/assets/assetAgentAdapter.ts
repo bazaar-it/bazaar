@@ -1,7 +1,7 @@
 // src/agents/assets/assetAgentAdapter.ts
 
 import { randomUUID } from 'crypto';
-import { StorageAdapter, StorageLocation } from './storageAdapter';
+import { type StorageAdapter, type StorageLocation } from './storageAdapter';
 import { logger } from '~/lib/logger';
 
 /** The storyboard schema's Asset shape */
@@ -101,7 +101,7 @@ async function toStoryboardAsset(loc: StorageLocation): Promise<StoryboardAsset>
 
 interface MediaMeta { width?: number; height?: number; duration?: number }
 async function probeMedia(url: string): Promise<MediaMeta> {
-  if (url.match(/\.(png|jpe?g|gif|webp)$/i)) {
+  if (/\.(png|jpe?g|gif|webp)$/i.exec(url)) {
     const buffer = await fetch(url).then(r => r.arrayBuffer()).catch(() => null);
     if (!buffer) return {};
     const sharpMod = await import('sharp');

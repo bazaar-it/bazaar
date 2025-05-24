@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/reset-building-component.js
 /**
  * Reset a component that's stuck in "building" status

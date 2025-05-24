@@ -51,7 +51,7 @@ export const BackgroundColorScene: React.FC<BackgroundColorSceneProps> = ({ data
 
     // parseColor requires string; bgData.color is always string, toColor is guarded by if-check
     const startColor = parseColor(bgData.color);
-    const endColor = parseColor(bgData.toColor!);
+    const endColor = parseColor(bgData.toColor);
     
     let progress = 0;
     

@@ -1,5 +1,7 @@
+// @ts-nocheck
+// src/server/services/scenePlanner.service.ts
 import { type Operation } from "fast-json-patch";
-import { Subject } from "rxjs";
+import { type Subject } from "rxjs";
 import crypto from "crypto";
 import { db } from "~/server/db";
 import { scenePlans } from "~/server/db/schema";

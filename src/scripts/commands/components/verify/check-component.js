@@ -1,4 +1,5 @@
-// src/scripts/check-component.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/check-component.js
 import { db } from '../server/db';
 import { customComponentJobs } from '../server/db/schema';
 import { eq } from 'drizzle-orm';

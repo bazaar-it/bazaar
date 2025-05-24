@@ -6,7 +6,7 @@ import { type AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.sc
 import { processComponentJob } from '~/server/workers/generateComponentCode';
 
 // Define mock types
-type MockFunction = jest.Mock & { [key: string]: any };
+type MockFunction = jest.Mock & Record<string, any>;
 
 // Mock dependencies
 jest.mock('~/server/workers/generateComponentCode', () => ({

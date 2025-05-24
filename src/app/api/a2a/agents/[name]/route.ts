@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { agentRegistry } from "~/server/services/a2a/agentRegistry.service";
 
 /**

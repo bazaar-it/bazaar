@@ -13,12 +13,12 @@ jest.mock("~/server/db", () => {
   // Define mocks for chained methods
   const mockDbReturning = jest.fn();
   // Loosen type for mockDbValues to avoid complex type mismatches
-  const mockDbValues = jest.fn().mockReturnValue({ returning: mockDbReturning }) as jest.Mock<any>;
+  const mockDbValues = jest.fn().mockReturnValue({ returning: mockDbReturning });
 
   // Mock .where() after .set()
   const mockDbWhere = jest.fn();
   // Loosen type for mockDbSet to avoid complex type mismatches
-  const mockDbSet = jest.fn().mockReturnValue({ where: mockDbWhere }) as jest.Mock<any>;
+  const mockDbSet = jest.fn().mockReturnValue({ where: mockDbWhere });
 
   // Define mocks for base insert and update
   // Use arrow functions and loosen types
@@ -225,7 +225,7 @@ describe("TaskManager Service", () => {
         // Include taskState in the expectation to match the likely update structure
         taskState: expect.objectContaining({ // Loosely type taskState expectation
             artifacts: expect.arrayContaining([newArtifact]), // Check artifacts within taskState
-        }) as any, // Use any to bypass strict type check here if necessary
+        }), // Use any to bypass strict type check here if necessary
       }));
       expect(mockUpdateCallback).toHaveBeenCalledWith({ type: 'artifact', artifact: newArtifact });
     });

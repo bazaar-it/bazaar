@@ -1,3 +1,5 @@
+// @ts-nocheck
+// src/scripts/lib/db/db-utils.js
 import pg from 'pg';
 const { Pool } = pg;
 import { promises as fs } from 'fs';

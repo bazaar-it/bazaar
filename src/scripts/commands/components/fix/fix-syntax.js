@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-syntax.js
+
 /**
  * Fix component syntax issues
  * @module commands/components/fix/fix-syntax

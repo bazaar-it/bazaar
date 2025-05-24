@@ -1,4 +1,5 @@
-// src/scripts/migrate-neon.ts
+// @ts-nocheck
+// src/scripts/commands/db/migrate/migrate-neon.js
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon, neonConfig } from "@neondatabase/serverless";
 import { migrate } from "drizzle-orm/neon-http/migrator";

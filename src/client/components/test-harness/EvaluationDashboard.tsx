@@ -233,7 +233,7 @@ export function EvaluationDashboard() {
                       <TaskTimeline 
                         transitions={typeof selectedTask.stateTransitions === 'string' 
                           ? JSON.parse(selectedTask.stateTransitions) as StateTransition[] 
-                          : selectedTask.stateTransitions as StateTransition[] || []} 
+                          : selectedTask.stateTransitions! || []} 
                         agentRoles={A2A_AGENT_ROLES}
                         selectedTaskId={selectedTask.taskId}
                       />
@@ -281,10 +281,10 @@ export function EvaluationDashboard() {
                       <ChatPanel 
                         stateTransitions={typeof selectedTask.stateTransitions === 'string'
                           ? JSON.parse(selectedTask.stateTransitions) as StateTransition[]
-                          : selectedTask.stateTransitions as StateTransition[] || []}
+                          : selectedTask.stateTransitions! || []}
                         artifacts={typeof selectedTask.artifacts === 'string'
                           ? JSON.parse(selectedTask.artifacts) as Artifact[]
-                          : selectedTask.artifacts as Artifact[] || []}
+                          : selectedTask.artifacts! || []}
                         selectedTaskId={selectedTask.taskId}
                       />
                     ) : (

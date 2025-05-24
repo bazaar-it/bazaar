@@ -1,4 +1,5 @@
-// src/scripts/component-tools/esm-compat.js
+// src/scripts/commands/components/component-tools/esm-compat.js
+// @ts-nocheck
 // Helper module for ESM/CommonJS compatibility
 
 /**

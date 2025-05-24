@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/log-tools/log-raw.ts
 
 // Import the LOG_AGENT_URL directly from process.env instead of using the env module

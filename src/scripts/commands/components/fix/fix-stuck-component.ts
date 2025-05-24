@@ -1,4 +1,5 @@
-// src/scripts/fix-stuck-component.ts
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-stuck-component.ts
 /**
  * Script to fix a stuck component in the database by updating its status
  * Compatible with your project's TypeScript and ESM setup

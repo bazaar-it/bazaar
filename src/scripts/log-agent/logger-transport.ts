@@ -110,7 +110,7 @@ export class LogAgentTransport extends Transport {
     // Create log entry
     const logEntry: LogEntry = {
       timestamp: timestamp || new Date().toISOString(),
-      level: level as any,
+      level: level,
       message,
       source: this.source,
       runId: this.runId,

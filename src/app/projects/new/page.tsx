@@ -38,8 +38,8 @@ export default async function NewProjectPage() {
       // Find the highest number used in "New Project X" titles
       let highestNumber = 0;
       for (const project of userProjects) {
-        const match = project.title.match(/^New Project (\d+)$/);
-        if (match && match[1]) {
+        const match = /^New Project (\d+)$/.exec(project.title);
+        if (match?.[1]) {
           const num = parseInt(match[1], 10);
           if (!isNaN(num) && num > highestNumber) {
             highestNumber = num;

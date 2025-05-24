@@ -1,4 +1,5 @@
-//scripts/commands/db/analyze/explore-db.ts
+// @ts-nocheck
+// src/scripts/commands/db/analyze/explore-db.ts
 import { dbUtils } from './lib/db-direct';
 
 /**

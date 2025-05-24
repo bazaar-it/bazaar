@@ -48,8 +48,8 @@ export async function generateComponent(
     projectId: string,
     brief: AnimationDesignBrief,
     assistantMessageId: string,
-    durationInSeconds: number = 6,
-    fps: number = 30,
+    durationInSeconds = 6,
+    fps = 30,
     sceneId?: string,
     userId?: string,
     animationDesignBriefId?: string
@@ -83,7 +83,7 @@ export async function generateComponent(
     const actualHeight = brief.dimensions.height;
     
     // Construct Enhanced LLM Prompt from AnimationDesignBrief
-    let enhancedDescriptionLines: string[] = [];
+    const enhancedDescriptionLines: string[] = [];
 
     // --- Role and High-Level Instructions ---
     enhancedDescriptionLines.push(`### ROLE: You are an Expert Remotion Developer and Senior React Engineer specializing in syntax-perfect TypeScript/JSX.`);
@@ -437,7 +437,7 @@ export async function generateComponent(
                                 // without assuming properties exist
                                 const springConfigObj = 'springConfig' in prop ? (prop as any).springConfig : null;
                                 const springConfig = springConfigObj ? 
-                                  `{damping: ${(springConfigObj as any).damping || 10}, stiffness: ${(springConfigObj as any).stiffness || 100}, mass: ${(springConfigObj as any).mass || 1}}` :
+                                  `{damping: ${(springConfigObj).damping || 10}, stiffness: ${(springConfigObj).stiffness || 100}, mass: ${(springConfigObj).mass || 1}}` :
                                   '{damping: 10, stiffness: 100, mass: 1}';
                                   
                                 implementationHint = `const ${prop.property.replace('.', '')}Value = spring({ 

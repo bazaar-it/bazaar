@@ -253,7 +253,7 @@ export default function PreviewPanel({
   useEffect(() => {
     // Custom hook already triggers re-rendering of the Remotion Player
     // Ensure store's refreshToken updates are reflected in our local state
-    const currentRefreshToken = currentProps?.refreshToken as string | undefined;
+    const currentRefreshToken = currentProps?.refreshToken;
     
     if (currentRefreshToken && currentRefreshToken !== storeRefreshToken) {
       console.log(`[PreviewPanel] Store refreshToken changed: ${storeRefreshToken} -> ${currentRefreshToken}`);

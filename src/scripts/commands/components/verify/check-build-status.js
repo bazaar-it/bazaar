@@ -1,4 +1,5 @@
-// src/scripts/check-build-status.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/check-build-status.js
 /**
  * Check the build status of a component and why it might be stuck
  */

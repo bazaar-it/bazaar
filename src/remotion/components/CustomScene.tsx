@@ -30,7 +30,7 @@ interface SceneProps {
  * This component fetches ADB data itself rather than receiving it via props.
  */
 export const AdbFetchingCustomScene: React.FC<SceneProps> = ({ data }) => {
-  const componentId = data.componentId as string;
+  const componentId = data.componentId!;
   const refreshToken = data.refreshToken; // Extract refreshToken from props
   
   console.log('[AdbFetchingCustomScene] Mounting/rendering with componentId:', componentId, 'refreshToken:', refreshToken);

@@ -418,7 +418,7 @@ export default function CustomComponentsPanel({ projectId }: CustomComponentsPan
   }, [applyFixMutation, confirmFixMutation, refetch, setFeedback]);
 
   const handleRemoveFromVideo = useCallback(async (component: any) => {
-    if (!component || !component.id) {
+    if (!component?.id) {
       console.error("Component data is invalid or missing ID");
       return;
     }

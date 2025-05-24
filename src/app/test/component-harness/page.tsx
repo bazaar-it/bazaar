@@ -241,9 +241,9 @@ export default function ComponentTestHarness() {
       // ----- Minimal component implementation that is guaranteed to work -----
       
       // Find the React component name in the source
-      const componentMatch = raw.match(/export\s+default\s+function\s+(\w+)/)
-        || raw.match(/function\s+(\w+)\s*\(/)
-        || raw.match(/const\s+(\w+)\s*=/)
+      const componentMatch = (/export\s+default\s+function\s+(\w+)/.exec(raw))
+        || (/function\s+(\w+)\s*\(/.exec(raw))
+        || (/const\s+(\w+)\s*=/.exec(raw))
         || ['', 'MyComponent'];
       
       const componentName = componentMatch[1];
@@ -392,14 +392,14 @@ ${!hasDefaultExport ? `export default ${componentName};` : ''}
     
     // Try to find a component function or class to export
     // Look for function declarations or variable declarations with functions/classes
-    const componentNameMatch = code.match(/function\s+([A-Za-z0-9_]+)\s*\(/);
-    const constComponentMatch = code.match(/const\s+([A-Za-z0-9_]+)\s*=/);
+    const componentNameMatch = /function\s+([A-Za-z0-9_]+)\s*\(/.exec(code);
+    const constComponentMatch = /const\s+([A-Za-z0-9_]+)\s*=/.exec(code);
     
     let componentName = '';
     
-    if (componentNameMatch && componentNameMatch[1]) {
+    if (componentNameMatch?.[1]) {
       componentName = componentNameMatch[1];
-    } else if (constComponentMatch && constComponentMatch[1]) {
+    } else if (constComponentMatch?.[1]) {
       componentName = constComponentMatch[1];
     } else {
       // If no obvious component name found, create a wrapper

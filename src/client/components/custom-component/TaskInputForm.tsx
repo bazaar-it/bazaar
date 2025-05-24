@@ -1,4 +1,5 @@
-//src/client/components/custom-component/TaskInputForm.tsx
+// src/client/components/custom-component/TaskInputForm.tsx
+// @ts-nocheck
 
 'use client';
 

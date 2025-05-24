@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import { app } from '../server';
 import type { LogBatch } from '../types';
-import http from 'http';
+import type http from 'http';
 
 // Mock worker service
 jest.mock('../services/worker.service.js', () => ({

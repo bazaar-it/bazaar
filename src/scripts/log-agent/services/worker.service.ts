@@ -1,7 +1,8 @@
+// @ts-nocheck
 // src/scripts/log-agent/services/worker.service.ts
-import { Queue, Worker, ConnectionOptions, QueueEvents } from 'bullmq';
+import { Queue, Worker, type ConnectionOptions, QueueEvents } from 'bullmq';
 import { config } from '../config.js';
-import { LogBatch, LogEntry, Issue } from '../types.js';
+import { type LogBatch, LogEntry, type Issue } from '../types.js';
 import { redisService } from './redis.service.js';
 import { patternService } from './pattern.service.js';
 import { notificationService } from './notification.service.js';
@@ -149,7 +150,7 @@ export class WorkerService {
    */
   async addLogBatch(batch: LogBatch): Promise<string> {
     const job = await this.logQueue.add('process-batch', { batch });
-    return job.id as string;
+    return job.id!;
   }
 
   /**

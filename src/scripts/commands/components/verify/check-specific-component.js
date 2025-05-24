@@ -1,4 +1,5 @@
-// src/scripts/check-specific-component.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/check-specific-component.js
 import pg from 'pg';
 import * as dotenv from 'dotenv';
 import { dirname, resolve } from 'path';

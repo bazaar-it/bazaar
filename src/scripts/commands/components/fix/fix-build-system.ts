@@ -72,9 +72,7 @@ async function fixBuildSystem(shouldApply: boolean) {
   
   // Extract the buildCustomComponent function and place it at the correct level
   // This is a simple regex to extract the function, might need adjustment for complex cases
-  const functionMatch = fixedContent.match(
-    /export\s+async\s+function\s+buildCustomComponent\s*\([\s\S]*?\n\}\s*\n/
-  );
+  const functionMatch = /export\s+async\s+function\s+buildCustomComponent\s*\([\s\S]*?\n\}\s*\n/.exec(fixedContent);
   
   if (!functionMatch) {
     console.log(chalk.red('Could not extract buildCustomComponent function for fixing'));

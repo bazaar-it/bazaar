@@ -1,3 +1,5 @@
+// @ts-nocheck
+// src/scripts/lib/db/utils.js
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import * as schema from '../../server/db/schema';

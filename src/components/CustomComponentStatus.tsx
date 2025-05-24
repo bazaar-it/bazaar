@@ -102,7 +102,7 @@ export function CustomComponentStatus({
 
   // Call the callbacks when the job status changes
   useEffect(() => {
-    if (!job || !job.status) return;
+    if (!job?.status) return;
     
     // Convert null to undefined for the outputUrl parameter
     const outputUrl = job.outputUrl || undefined;
@@ -147,7 +147,7 @@ export function CustomComponentStatus({
     );
   }
   
-  if (!job || !job.status) {
+  if (!job?.status) {
     return (
       <div className="text-red-500">
         <span className="text-xs">❌ Not found</span>

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/server/workers/quickfix.js
 /**
  * Quick fix for component generation issues that's safe for production

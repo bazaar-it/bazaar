@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { taskManager } from "~/server/services/a2a/taskManager.service";
 import type { SSEEvent } from "~/types/a2a";
 import { a2aLogger } from "~/lib/logger";

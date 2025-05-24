@@ -207,7 +207,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     
     // Find the scene index
     const itemToDelete = items.find(item => item.id === id);
-    if (!itemToDelete || !itemToDelete.sceneId) return;
+    if (!itemToDelete?.sceneId) return;
     
     const sceneIndex = inputProps.scenes.findIndex(scene => scene.id === itemToDelete.sceneId);
     
@@ -227,7 +227,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   
   // Handle add new track
   const handleAddTrack = useCallback(() => {
-    if (!inputProps || !inputProps.scenes.length) return;
+    if (!inputProps?.scenes.length) return;
     
     // Find highest track number - avoid using row directly
     const maxTrackIndex = Math.max(...inputProps.scenes.map((scene, index) => {
@@ -377,7 +377,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const handleRegenerateScene = useCallback(() => {
     // Find the selected item
     const selectedItem = items.find(item => item.id === internalSelectedItemId);
-    if (!selectedItem || !selectedItem.sceneId) return;
+    if (!selectedItem?.sceneId) return;
     
     // Set regenerating state to show UI feedback
     setIsRegeneratingScene(true);

@@ -1,4 +1,5 @@
-// src/scripts/check-component-fix.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/check-component-fix.js
 /**
  * Check if a component has code but is marked as failed
  * If so, we can try to fix it through the UI

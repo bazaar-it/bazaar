@@ -19,6 +19,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   if (!projectId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
     notFound();
   }
+  
 
   try {
     const [projectResult, userProjects] = await Promise.all([

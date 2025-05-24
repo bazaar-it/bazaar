@@ -1,5 +1,5 @@
 // src/app/api/components/[componentId]/route.ts
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -17,13 +17,13 @@ function preprocessComponentCode(code: string, componentId: string): string {
   let processedCode = code;
   
   // Fix React imports that might be causing issues
-  if (processedCode.match(/import\s+([a-z])\s+from\s*["']react["']/)) {
+  if (/import\s+([a-z])\s+from\s*["']react["']/.exec(processedCode)) {
     processedCode = processedCode.replace(/import\s+([a-z])\s+from\s*["']react["']/g, 'import React from "react"');
     fixes.push('Fixed single-letter React import');
   }
   
   // Fix namespace imports
-  if (processedCode.match(/import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s*["']react["']/)) {
+  if (/import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s*["']react["']/.exec(processedCode)) {
     processedCode = processedCode.replace(
       /import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s*["']react["']/g, 
       'import React from "react"'
@@ -32,7 +32,7 @@ function preprocessComponentCode(code: string, componentId: string): string {
   }
   
   // Fix naked destructuring imports (import { useState } from 'react')
-  if (processedCode.match(/import\s*\{[^}]*\}\s*from\s*["']react["']/)) {
+  if (/import\s*\{[^}]*\}\s*from\s*["']react["']/.exec(processedCode)) {
     processedCode = processedCode.replace(
       /import\s*\{\s*([^}]*)\s*\}\s*from\s*["']react["']/g,
       'import React, {$1} from "react"'
@@ -103,29 +103,29 @@ function analyzeComponentCode(code: string, componentId: string): { mainComponen
   
   try {
     // Look for default exports (export default X)
-    const defaultExportMatch = code.match(/export\s+default\s+(?:const\s+)?([A-Za-z0-9_$]+)/);
-    if (defaultExportMatch && defaultExportMatch[1]) {
+    const defaultExportMatch = /export\s+default\s+(?:const\s+)?([A-Za-z0-9_$]+)/.exec(code);
+    if (defaultExportMatch?.[1]) {
       result.mainComponent = defaultExportMatch[1];
       return result;
     }
     
     // Look for function declarations with export default (export default function X)
-    const defaultFunctionMatch = code.match(/export\s+default\s+function\s+([A-Za-z0-9_$]+)/);
-    if (defaultFunctionMatch && defaultFunctionMatch[1]) {
+    const defaultFunctionMatch = /export\s+default\s+function\s+([A-Za-z0-9_$]+)/.exec(code);
+    if (defaultFunctionMatch?.[1]) {
       result.mainComponent = defaultFunctionMatch[1];
       return result;
     }
     
     // Look for immediately exported arrow functions (export const X = () => {})
-    const exportedArrowMatch = code.match(/export\s+const\s+([A-Za-z0-9_$]+)\s*=\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>/);
-    if (exportedArrowMatch && exportedArrowMatch[1]) {
+    const exportedArrowMatch = /export\s+const\s+([A-Za-z0-9_$]+)\s*=\s*(?:\([^)]*\)|[A-Za-z0-9_$]+)\s*=>/.exec(code);
+    if (exportedArrowMatch?.[1]) {
       result.mainComponent = exportedArrowMatch[1];
       return result;
     }
     
     // Look for exported function declarations (export function X)
-    const exportedFunctionMatch = code.match(/export\s+function\s+([A-Za-z0-9_$]+)/);
-    if (exportedFunctionMatch && exportedFunctionMatch[1]) {
+    const exportedFunctionMatch = /export\s+function\s+([A-Za-z0-9_$]+)/.exec(code);
+    if (exportedFunctionMatch?.[1]) {
       result.mainComponent = exportedFunctionMatch[1];
       return result;
     }
@@ -135,8 +135,10 @@ function analyzeComponentCode(code: string, componentId: string): { mainComponen
     if (componentMatches.length > 0) {
       // Take the first component match as the main component
       const firstMatch = componentMatches[0];
-      result.mainComponent = firstMatch[1];
-      return result;
+      if (firstMatch?.[1]) {
+        result.mainComponent = firstMatch[1];
+        return result;
+      }
     }
     
   } catch (error) {

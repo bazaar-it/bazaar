@@ -33,7 +33,7 @@ async function fixMissingOutputUrls() {
     if (projectId) {
       query = db.query.customComponentJobs.findMany({
         where: and(
-          eq(customComponentJobs.projectId, projectId as string),
+          eq(customComponentJobs.projectId, projectId),
           or(
             eq(customComponentJobs.status, 'ready'),
             eq(customComponentJobs.status, 'complete')

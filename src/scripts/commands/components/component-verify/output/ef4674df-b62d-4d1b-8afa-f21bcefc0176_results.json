@@ -1,9 +1,0 @@
-{
-  "timestamp": "2025-05-13T14:08:40.831Z",
-  "componentId": "ef4674df-b62d-4d1b-8afa-f21bcefc0176",
-  "componentName": "Canary1747145314777",
-  "publicUrl": "https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/custom-components/ef4674df-b62d-4d1b-8afa-f21bcefc0176.js",
-  "apiEndpoint": "http://localhost:3000/api/components/ef4674df-b62d-4d1b-8afa-f21bcefc0176",
-  "success": false,
-  "errorMessage": "[object Object]"
-}

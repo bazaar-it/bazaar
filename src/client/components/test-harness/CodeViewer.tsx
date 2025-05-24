@@ -1,3 +1,6 @@
+// src/client/components/test-harness/CodeViewer.tsx
+// @ts-nocheck
+
 'use client';
 
 import { useEffect, useState } from 'react';

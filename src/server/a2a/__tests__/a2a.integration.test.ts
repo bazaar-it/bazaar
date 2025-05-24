@@ -1,4 +1,4 @@
-import { MessageBus, messageBus } from "../../agents/message-bus";
+import { type MessageBus, messageBus } from "../../agents/message-bus";
 import { setupAgentSystem } from "../../agents/setup";
 import { TaskManager, taskManager } from "../../services/a2a/taskManager.service";
 import { AgentRegistry, agentRegistry } from "../../services/a2a/agentRegistry.service";
@@ -21,12 +21,12 @@ import { POST as a2aApiHandler } from "~/app/api/a2a/route";
 import { GET as sseStreamHandler } from "~/app/api/a2a/tasks/[taskId]/stream/route";
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
-import { CoordinatorAgent } from "../../agents/coordinator-agent";
-import { BuilderAgent } from "../../agents/builder-agent";
-import { ErrorFixerAgent } from "../../agents/error-fixer-agent";
-import { R2StorageAgent } from "../../agents/r2-storage-agent";
-import { UIAgent } from "../../agents/ui-agent";
-import { ADBAgent } from "../../agents/adb-agent";
+import { type CoordinatorAgent } from "../../agents/coordinator-agent";
+import { type BuilderAgent } from "../../agents/builder-agent";
+import { type ErrorFixerAgent } from "../../agents/error-fixer-agent";
+import { type R2StorageAgent } from "../../agents/r2-storage-agent";
+import { type UIAgent } from "../../agents/ui-agent";
+import { type ADBAgent } from "../../agents/adb-agent";
 import type { AgentMessage as ConcreteAgentMessage } from "../../agents/base-agent";
 import { repairComponentSyntax } from "~/server/workers/repairComponentSyntax";
 
@@ -84,9 +84,9 @@ jest.mock("~/server/db", () => {
 
 function createMockNextRequest(method: string, body?: any, routeParams?: Record<string, string>): NextRequest {
     let urlPath = '/api/a2a';
-    if (routeParams && routeParams.taskId) {
+    if (routeParams?.taskId) {
       urlPath = `/api/a2a/tasks/${routeParams.taskId}/stream`;
-    } else if (routeParams && routeParams.agentName) {
+    } else if (routeParams?.agentName) {
       urlPath = `/api/a2a/agents/${routeParams.agentName}`;
     }
     const url = `http://localhost${urlPath}`;

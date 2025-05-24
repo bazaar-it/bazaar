@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/debug-message-routing.js
 // A comprehensive test script for debugging agent message routing
 

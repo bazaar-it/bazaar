@@ -65,12 +65,12 @@ export function AnimationDesignBriefViewer({ briefArtifact, taskId }: AnimationD
       // Parse the brief content from the artifact
       let content: BriefContent;
       
-      if (briefArtifact && briefArtifact.data) {
+      if (briefArtifact?.data) {
         // If data is already available as an object
         content = typeof briefArtifact.data === 'string'
           ? JSON.parse(briefArtifact.data)
           : briefArtifact.data;
-      } else if (briefArtifact && briefArtifact.url) {
+      } else if (briefArtifact?.url) {
         // We would need to fetch from URL, but for now just show a message
         setError('Brief data is only available via URL. Fetch not implemented in viewer.');
         return;

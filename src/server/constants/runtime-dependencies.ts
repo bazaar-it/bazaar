@@ -8,8 +8,8 @@ export interface RuntimeDependencies {
 }
 
 export const RUNTIME_DEPENDENCIES: RuntimeDependencies = {
-  react: pkg.dependencies['react'],
+  react: pkg.dependencies.react,
   reactDom: pkg.dependencies['react-dom'],
-  remotion: pkg.dependencies['remotion']
+  remotion: pkg.dependencies.remotion
 };
 

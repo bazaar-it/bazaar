@@ -390,7 +390,7 @@ export const createTextMessage = (text: string): Message => {
 export const createFileArtifact = (
   id: string,
   url: string,
-  mimeType: string = 'application/javascript',
+  mimeType = 'application/javascript',
   description?: string,
   name?: string
 ): Artifact => {

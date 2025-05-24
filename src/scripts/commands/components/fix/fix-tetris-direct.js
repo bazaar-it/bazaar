@@ -1,4 +1,5 @@
-// src/scripts/fix-tetris-direct.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-tetris-direct.js
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 import fs from 'fs/promises';

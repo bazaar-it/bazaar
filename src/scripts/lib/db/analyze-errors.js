@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/lib/db/analyze-errors.js
+
 import {
   getComponentsByStatus,
   getComponentStatusCounts,

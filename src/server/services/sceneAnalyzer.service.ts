@@ -83,7 +83,7 @@ export function getSceneDetails(scene: any) {
 export function analyzeSceneDescription(
   description: string,
   durationInSeconds: number,
-  fps: number = 30
+  fps = 30
 ) {
   const loggingId = 'analyze-' + description.substring(0, 10).replace(/\s+/g, '-').toLowerCase();
   
@@ -258,7 +258,7 @@ export function analyzeSceneContent(
         }
         
         // Generate a component name suggestion based on content
-        let suggestedComponentName = generateComponentName(safeDescription, scenePosition);
+        const suggestedComponentName = generateComponentName(safeDescription, scenePosition);
         
         // Determine required elements based on keywords found
         const requiredElements: string[] = [];

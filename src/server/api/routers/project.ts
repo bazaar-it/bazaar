@@ -95,8 +95,8 @@ export const projectRouter = createTRPCRouter({
           // Find the highest number used in "Untitled Video X" titles
           let highestNumber = 0;
           for (const project of userProjects) {
-            const match = project.title.match(/^Untitled Video (\d+)$/);
-            if (match && match[1]) {
+            const match = /^Untitled Video (\d+)$/.exec(project.title);
+            if (match?.[1]) {
               const num = parseInt(match[1], 10);
               if (!isNaN(num) && num > highestNumber) {
                 highestNumber = num;

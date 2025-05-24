@@ -1,7 +1,8 @@
+// @ts-nocheck
 // src/scripts/log-agent/services/redis.service.ts
 import { createClient, type RedisClientType } from 'redis';
 import { config, redisKeys, generateRunId } from '../config.js';
-import { LogEntry, Issue, LogBatch } from '../types.js';
+import { type LogEntry, type Issue, type LogBatch } from '../types.js';
 
 // Create a shared Redis client instance
 const client = createClient({

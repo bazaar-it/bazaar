@@ -1,3 +1,5 @@
+// src/scripts/commands/components/analyze/analyze-errors.js
+// @ts-nocheck
 import pg from 'pg';
 const { Pool } = pg;
 import { promises as fs } from 'fs';

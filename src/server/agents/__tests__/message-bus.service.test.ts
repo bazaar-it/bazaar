@@ -1,9 +1,9 @@
 // src/server/agents/__tests__/message-bus.service.test.ts
-import { MessageBus, messageBus } from "../message-bus";
+import { type MessageBus, messageBus } from "../message-bus";
 import { BaseAgent, type AgentMessage } from "../base-agent";
 import { db } from "~/server/db";
 import { agentMessages } from "~/server/db/schema";
-import { taskManager } from "~/server/services/a2a/taskManager.service";
+import { type taskManager } from "~/server/services/a2a/taskManager.service";
 import type { SSEEvent } from "~/server/services/a2a/sseManager.service";
 import crypto from "crypto";
 import { Subject } from "rxjs";
@@ -134,7 +134,7 @@ describe("MessageBus Service", () => {
       // Access set and where mocks through the result of db.update
       const setMock = (db.update(agentMessages) as any).set as jest.Mock;
       expect(setMock).toHaveBeenCalledWith({ status: "processed", processedAt: expect.any(Date) });
-      const whereMock = (setMock(expect.anything()) as any).where as jest.Mock;
+      const whereMock = (setMock(expect.anything())).where as jest.Mock;
       expect(whereMock).toHaveBeenCalledWith(expect.objectContaining({ id: testMessage.id }));
     });
 
@@ -221,7 +221,7 @@ describe("MessageBus Service", () => {
       // Check the database update call during retry
       expect(db.update).toHaveBeenCalledWith(agentMessages);
       expect(setMock).toHaveBeenCalledWith(expect.objectContaining({ status: "pending" }));
-      expect((setMock(expect.anything()) as any).where).toHaveBeenCalledWith(expect.objectContaining({ id: messageToMissing.id }));
+      expect((setMock(expect.anything())).where).toHaveBeenCalledWith(expect.objectContaining({ id: messageToMissing.id }));
 
       expect(busInstance.getDeadLetterQueue()).toHaveLength(0);
     });

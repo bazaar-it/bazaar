@@ -1,5 +1,5 @@
 // src/lib/logger.ts
-import { createLogger, format, transports, Logger } from 'winston';
+import { createLogger, format, transports, type Logger } from 'winston';
 import 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';

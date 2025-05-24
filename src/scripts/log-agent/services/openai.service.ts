@@ -2,7 +2,7 @@
 import OpenAI from 'openai';
 import CircuitBreaker from 'opossum';
 import { config } from '../config.js';
-import { LogEntry, QnaRequest, QnaResponse } from '../types.js';
+import { type LogEntry, type QnaRequest, type QnaResponse } from '../types.js';
 
 // Create OpenAI client
 const openai = new OpenAI({

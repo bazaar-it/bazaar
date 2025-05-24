@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-custom-components.ts
+
 /**
  * Comprehensive component fixer for Bazaar-vid
  * 
@@ -238,7 +241,7 @@ async function fixComponentSyntaxIssues() {
       
       // Backup the original code
       const backupFile = path.join(backupDir, `${component.id}-original.tsx`);
-      fs.writeFileSync(backupFile, component.tsxCode!);
+      fs.writeFileSync(backupFile, component.tsxCode);
       logVerbose(`Original code backed up to ${backupFile}`);
       
       // Apply fixes

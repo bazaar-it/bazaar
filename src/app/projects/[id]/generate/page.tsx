@@ -1,13 +1,16 @@
+//src/app/projects/[id]/generate/page.tsx
 import { redirect, notFound } from "next/navigation";
 import { auth } from "~/server/auth";
 import { getUserProjects } from "~/server/queries/getUserProjects";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
-import { GenerateVideoClient } from "./GenerateVideoClient";
+import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
 
-export default async function GeneratePage({ params }: { params: { id: string } }) {
+export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { id: projectId } = params;
+  console.log('GeneratePage accessed with projectId:', projectId);
   const session = await auth();
 
   if (!session?.user) {
@@ -40,7 +43,7 @@ export default async function GeneratePage({ params }: { params: { id: string } 
     }
 
     return (
-      <GenerateVideoClient
+      <GenerateWorkspaceRoot
         projectId={projectId}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={projectResult.props}

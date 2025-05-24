@@ -12,7 +12,7 @@ import {
   type Message,
   type Artifact,
 } from "~/types/a2a";
-import { TaskManager } from "~/server/services/a2a/taskManager.service";
+import { type TaskManager } from "~/server/services/a2a/taskManager.service";
 import { handleScenePlan } from "~/server/services/scenePlanner.service";
 import { analyzeSceneContent } from "../services/sceneAnalyzer.service";
 import { db } from "~/server/db";
@@ -40,7 +40,7 @@ interface EnhancedScenePlan {
 
 // In–memory cache flag so we can easily see if the agent is rebuilt at runtime
 // (handy while developing with hot‑reload)
-// eslint-disable-next-line no-var
+ 
 declare global {
   var __SCENE_PLANNER_AGENT_CONSTRUCTED: string | undefined;
 }

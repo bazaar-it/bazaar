@@ -237,8 +237,8 @@ async function processJob(jobId: string): Promise<void> {
       buildLogger.upload(jobId, "Uploading to R2...");
 
       // Verify the component has the required window.__REMOTION_COMPONENT assignment
-      const componentNameMatch = jsCode.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-      if (componentNameMatch && componentNameMatch[1]) {
+      const componentNameMatch = /export\s+default\s+(?:function\s+)?(\w+)/.exec(jsCode);
+      if (componentNameMatch?.[1]) {
         const componentName = componentNameMatch[1];
         
         // Check if the window.__REMOTION_COMPONENT assignment is present
@@ -349,7 +349,7 @@ function fixSyntaxIssues(code: string): string {
  */
 async function compileWithEsbuild(
   tsxCode: string, 
-  jobId: string = "unknown", 
+  jobId = "unknown", 
   options: { outputFile?: string } = {}
 ): Promise<string> {
   if (!esbuild) {
@@ -438,7 +438,7 @@ async function compileWithEsbuild(
  * Fallback compilation method that uses simple transforms
  * This is used when esbuild is not available or fails
  */
-async function compileWithFallback(tsxCode: string, jobId: string = "unknown"): Promise<string> {
+async function compileWithFallback(tsxCode: string, jobId = "unknown"): Promise<string> {
   buildLogger.info(jobId, "Using simplified fallback compilation method");
   
   // Perform some basic transformations:
@@ -472,20 +472,20 @@ export default ${detectExportedComponentName(code) || 'Component'};
  */
 function detectExportedComponentName(code: string): string | null {
   // Check for export default ComponentName
-  const defaultExport = code.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/);
-  if (defaultExport && defaultExport[1]) {
+  const defaultExport = /export\s+default\s+([A-Za-z0-9_]+)\s*;?/.exec(code);
+  if (defaultExport?.[1]) {
     return defaultExport[1];
   }
   
   // Check for export default function ComponentName
-  const defaultFunctionExport = code.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/);
-  if (defaultFunctionExport && defaultFunctionExport[1]) {
+  const defaultFunctionExport = /export\s+default\s+function\s+([A-Za-z0-9_]+)/.exec(code);
+  if (defaultFunctionExport?.[1]) {
     return defaultFunctionExport[1];
   }
   
   // Check for const/function ComponentName declarations that might be exported
-  const componentDefinition = code.match(/(?:const|function)\s+([A-Za-z0-9_]+)\s*(?:=|:|\()/);
-  if (componentDefinition && componentDefinition[1]) {
+  const componentDefinition = /(?:const|function)\s+([A-Za-z0-9_]+)\s*(?:=|:|\()/.exec(code);
+  if (componentDefinition?.[1]) {
     return componentDefinition[1];
   }
   
@@ -567,7 +567,7 @@ function removeDuplicateDefaultExports(code: string): string {
     // Keep only the first export default statement
     const firstMatch = matches[0];
     // TypeScript safety check
-    if (!firstMatch || !firstMatch.index) {
+    if (!firstMatch?.index) {
       logger.warn("Warning: Expected to find matches but firstMatch is undefined or has no index");
       return code;
     }
@@ -714,7 +714,7 @@ export async function buildCustomComponent(jobId: string, forceRebuild = false):
         errorDetails = error.message;
         
         // Parse the esbuild error message to extract location info
-        const locationMatch = error.message.match(/([^:]+):(\d+):(\d+):/);
+        const locationMatch = /([^:]+):(\d+):(\d+):/.exec(error.message);
         if (locationMatch) {
           const [_, file, lineStr, column] = locationMatch;
           buildLogger.error(jobId, error.message, { type: "COMPILE:ERROR", location: `${file}:${lineStr}:${column}` });

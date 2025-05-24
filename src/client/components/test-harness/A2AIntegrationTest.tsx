@@ -249,7 +249,7 @@ export function A2AIntegrationTest() {
   // Task creation and refresh functions
   const createTask = api.a2a.createTask.useMutation({
     onSuccess: async (data) => {
-      if (!data || !data.id) {
+      if (!data?.id) {
         console.error('Invalid task creation response:', data);
         return;
       }
@@ -499,10 +499,10 @@ export function A2AIntegrationTest() {
         if (taskStatus.state === 'failed') {
           // Attempt to extract error from a DataPart if it matches TaskStatusUpdatePayload structure or a known error structure
           const dataPart = taskStatus.message.parts.find(p => p.type === 'data') as DataPart | undefined;
-          if (dataPart && dataPart.data) {
-            const payloadFromDataPart = dataPart.data as any;
+          if (dataPart?.data) {
+            const payloadFromDataPart = dataPart.data;
             if (payloadFromDataPart.error && typeof payloadFromDataPart.error.message === 'string') {
-              const errorObj = payloadFromDataPart.error as any; // Explicitly cast to any here
+              const errorObj = payloadFromDataPart.error; // Explicitly cast to any here
               errorForStatus = errorObj.message; 
 
               finalErrorStage = errorObj.stage || payloadFromDataPart.agent || agentForStatus || 'unknown';

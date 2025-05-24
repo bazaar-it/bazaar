@@ -125,7 +125,7 @@ describe("ADBAgent", () => {
       expect(messagePayload).toBeDefined();
       expect(messagePayload?.parts).toBeDefined();
       expect(messagePayload?.parts.length).toBeGreaterThan(0);
-      if (messagePayload && messagePayload.parts && messagePayload.parts.length > 0) {
+      if (messagePayload?.parts && messagePayload.parts.length > 0) {
         const firstPart = messagePayload.parts[0] as { type?: string, text?: string };
         expect(firstPart).toBeDefined();
         expect(firstPart.type).toBe('text');
@@ -155,7 +155,7 @@ describe("ADBAgent", () => {
       expect(errorMessagePayload?.parts).toBeDefined();
       expect(errorMessagePayload?.parts.length).toBeGreaterThan(0);
 
-      if (errorMessagePayload && errorMessagePayload.parts && errorMessagePayload.parts.length > 0) {
+      if (errorMessagePayload?.parts && errorMessagePayload.parts.length > 0) {
         const firstErrorPart = errorMessagePayload.parts[0] as { type?: string, text?: string };
         expect(firstErrorPart).toBeDefined();
         expect(firstErrorPart.type).toBe('text');

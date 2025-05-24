@@ -12,25 +12,32 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 interface PromptFormProps {
   projectId: string;
   onSubmit: (prompt: string, additionalInstructions?: string) => void;
+  onSubmitSingleScene: (prompt: string) => void;
   isGenerating: boolean;
 }
 
-export default function PromptForm({ projectId, onSubmit, isGenerating }: PromptFormProps) {
+export default function PromptForm({ projectId, onSubmit, onSubmitSingleScene, isGenerating }: PromptFormProps) {
   const [prompt, setPrompt] = useState("");
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [mode, setMode] = useState<"basic" | "advanced">("basic");
+  const [generationMode, setGenerationMode] = useState<"single" | "multi">("single");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) return;
-    onSubmit(prompt, additionalInstructions.trim() || undefined);
+    
+    if (generationMode === "single") {
+      onSubmitSingleScene(prompt);
+    } else {
+      onSubmit(prompt, additionalInstructions.trim() || undefined);
+    }
   };
 
   const examplePrompts = [
-    "Create a 30-second product intro for a new smart watch",
-    "Make an animated logo reveal for a tech startup",
-    "Create a fun social media promo for a summer sale",
-    "Design an explainer video for a mobile app",
+    "A bubble expanding and exploding with particles",
+    "Logo reveal with smooth fade-in animation", 
+    "Rotating geometric shapes with color transitions",
+    "Text sliding in from the left with bounce effect",
   ];
 
   return (
@@ -40,6 +47,26 @@ export default function PromptForm({ projectId, onSubmit, isGenerating }: Prompt
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Generation Mode</Label>
+            <Tabs value={generationMode} onValueChange={(value) => setGenerationMode(value as "single" | "multi")}>
+              <TabsList className="w-full">
+                <TabsTrigger value="single" className="flex-1">
+                  <div className="text-center">
+                    <div className="font-medium">Single Scene</div>
+                    <div className="text-xs text-muted-foreground">Fast, focused animation</div>
+                  </div>
+                </TabsTrigger>
+                <TabsTrigger value="multi" className="flex-1">
+                  <div className="text-center">
+                    <div className="font-medium">Multi-Scene Video</div>
+                    <div className="text-xs text-muted-foreground">Complete storyboard</div>
+                  </div>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          
           <Tabs value={mode} onValueChange={(value) => setMode(value as "basic" | "advanced")}>
             <TabsList className="mb-4 w-full">
               <TabsTrigger value="basic" className="flex-1">Basic</TabsTrigger>
@@ -114,7 +141,8 @@ export default function PromptForm({ projectId, onSubmit, isGenerating }: Prompt
         
         <CardFooter className="flex justify-between">
           <div className="text-sm text-gray-500">
-            {!isGenerating && "AI will create scenes and components based on your prompt"}
+            {!isGenerating && generationMode === "single" && "AI will create one perfect animated scene"}
+            {!isGenerating && generationMode === "multi" && "AI will create scenes and components based on your prompt"}
             {isGenerating && "Generating your video..."}
           </div>
           
@@ -122,7 +150,7 @@ export default function PromptForm({ projectId, onSubmit, isGenerating }: Prompt
             type="submit" 
             disabled={!prompt.trim() || isGenerating}
           >
-            {isGenerating ? "Generating..." : "Generate Video"}
+            {isGenerating ? "Generating..." : generationMode === "single" ? "Generate Scene" : "Generate Video"}
           </Button>
         </CardFooter>
       </form>

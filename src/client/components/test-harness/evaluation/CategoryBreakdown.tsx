@@ -54,7 +54,7 @@ export function CategoryBreakdown({
 
   // Sort categories by success rate (highest first)
   const sortedCategories = Object.entries(categoryMetrics.successRateByCategory)
-    .sort(([, rateA], [, rateB]) => (rateB as number) - (rateA as number));
+    .sort(([, rateA], [, rateB]) => (rateB) - (rateA));
 
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -74,7 +74,7 @@ export function CategoryBreakdown({
                 <BarChart
                   data={Object.entries(categoryMetrics.successRateByCategory).map(([category, rate]) => ({
                     category,
-                    successRate: Math.round((rate as number) * 100),
+                    successRate: Math.round((rate) * 100),
                     testCount: categoryMetrics.categoryDetails[category]?.count || 0
                   }))}
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
@@ -126,7 +126,7 @@ export function CategoryBreakdown({
                           variant={successRate >= 0.8 ? "default" : successRate >= 0.5 ? "secondary" : "destructive"} 
                           className={`w-20 ${successRate >= 0.8 ? 'bg-green-500' : successRate >= 0.5 ? 'bg-yellow-500' : ''}`}
                         >
-                          {(successRate as number * 100).toFixed(1)}%
+                          {(successRate * 100).toFixed(1)}%
                         </Badge>
                       </td>
                       <td className="p-2 text-center">

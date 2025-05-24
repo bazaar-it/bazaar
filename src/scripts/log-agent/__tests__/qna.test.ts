@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll, jest, beforeEach } from '@jest/globals';
 import { app } from '../server';
 import type { LogEntry } from '../types';
-import http from 'http';
+import type http from 'http';
 
 const mockGetLogs = jest.fn();
 const mockAnalyzeLogs = jest.fn();

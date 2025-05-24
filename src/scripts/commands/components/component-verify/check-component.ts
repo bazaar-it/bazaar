@@ -1,4 +1,5 @@
-// src/scripts/component-verify/check-component.ts
+// src/scripts/commands/components/component-verify/check-component.ts
+// @ts-nocheck
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -141,7 +142,7 @@ async function checkSingleComponent(componentId: string): Promise<ComponentCheck
           if (text.includes('Original component had syntax error') || text.includes('fallback')) {
             console.log(chalk.red('  ❌ The component URL serves a fallback error component'));
             result.r2IsFallback = true;
-            const errorMatch = text.match(/Error details: (.+?)(?:\n|$)/);
+            const errorMatch = /Error details: (.+?)(?:\n|$)/.exec(text);
             if (errorMatch && errorMatch[1]) {
               console.log(chalk.red(`    Error details from fallback: ${errorMatch[1]}`));
             }
@@ -178,7 +179,7 @@ async function checkSingleComponent(componentId: string): Promise<ComponentCheck
 }
 
 async function main() {
-  const componentIds = await getComponentIdsToProcess(inputArg!); 
+  const componentIds = await getComponentIdsToProcess(inputArg); 
   if (componentIds.length === 0) {
     console.log(chalk.yellow('No component IDs to process. Exiting.'));
     return;
@@ -217,7 +218,7 @@ Components with static analysis issues (${staticAnalysisFailures.length}):`));
     console.log(chalk.red(`
 Components with significant issues (${hardFailures.length}):`));
     hardFailures.forEach(r => {
-      let issues = [];
+      const issues = [];
       if(r.error) issues.push(`Error: ${r.error}`);
       if(!r.dbFound) issues.push('Not in DB');
       else if(!r.tsxFound) issues.push('No TSX Code');

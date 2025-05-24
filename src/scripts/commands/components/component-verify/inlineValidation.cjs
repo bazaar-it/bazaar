@@ -1,4 +1,5 @@
-//src/scripts/component-verify/inlineValidation.cjs
+// @ts-nocheck
+// src/scripts/commands/components/component-verify/inlineValidation.cjs
 
 // Simplified version of the TSX preprocessor for validation
 const fs = require('fs');

@@ -213,7 +213,7 @@ export const useTimelineDragAndDrop = ({
     const { getCurrentProps, applyPatch } = videoState;
     const currentProps = getCurrentProps();
     
-    if (!currentProps || !currentProps.scenes || currentProps.scenes.length < 2) return;
+    if (!currentProps?.scenes || currentProps.scenes.length < 2) return;
     
     const scenes = [...currentProps.scenes];
     let hasChanges = false;

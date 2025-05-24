@@ -180,7 +180,7 @@ export const videoRouter = createTRPCRouter({
       
       // 4. Create the patch
       const newSceneId = crypto.randomUUID();
-      let insertPosition = input.insertPosition ?? project.props.meta.duration;
+      const insertPosition = input.insertPosition ?? project.props.meta.duration;
       
       // Patch to insert the component
       const patch: Operation[] = [

@@ -1,5 +1,5 @@
 //src/pages/api/debug/test-scene-planner-direct.ts
-import { NextApiRequest, NextApiResponse } from 'next';
+import { type NextApiRequest, type NextApiResponse } from 'next';
 import { randomUUID } from 'crypto';
 import { a2aLogger } from '~/lib/logger';
 import { messageBus } from '~/server/agents/message-bus';

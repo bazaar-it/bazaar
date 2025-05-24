@@ -1,5 +1,5 @@
 // src/server/services/a2a/initializeAgents.ts
-import { BaseAgent } from "~/server/agents/base-agent";
+import { type BaseAgent } from "~/server/agents/base-agent";
 import { CoordinatorAgent } from "~/server/agents/coordinator-agent";
 import { ScenePlannerAgent } from "~/server/agents/scene-planner-agent";
 import { BuilderAgent } from "~/server/agents/builder-agent";

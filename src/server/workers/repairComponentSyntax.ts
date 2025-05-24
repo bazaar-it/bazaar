@@ -49,7 +49,7 @@ export function repairComponentSyntax(tsxCode: string): {
     }
     
     // Fix the SVG string
-    const svgMatch = fixedCode.match(/const\s+svgCode\s*=\s*["'](.*)["']/);
+    const svgMatch = /const\s+svgCode\s*=\s*["'](.*)["']/.exec(fixedCode);
     if (svgMatch && svgMatch[0]) {
       const originalSvgCode = svgMatch[0];
       const fixedSvgCode = originalSvgCode.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -229,8 +229,8 @@ export function repairComponentSyntax(tsxCode: string): {
   
   // For components with existing exports, extract the component name and check for Remotion assignment
   if (hasExistingExport) {
-    const exportMatch = fixedCode.match(/export\s+default\s+(?:function\s+)?(\w+)/);
-    if (exportMatch && exportMatch[1]) {
+    const exportMatch = /export\s+default\s+(?:function\s+)?(\w+)/.exec(fixedCode);
+    if (exportMatch?.[1]) {
       const componentName = exportMatch[1];
       // Ensure the Remotion component assignment is present
       const remotionAssignment = ensureRemotionComponentAssignment(fixedCode, componentName);

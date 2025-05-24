@@ -2,7 +2,8 @@
 
 > **Purpose**: This README provides an overview of the Bazaar-Vid platform, its components, and development guidelines.
 
-> **Documentation**: For detailed documentation, refer to the `/memory-bank` folder, which contains comprehensive documentation on all aspects of the project.
+> **Documentation**: For detailed documentation, refer to the `/memory-bank` folder, which contains comprehensive documentation on all aspects of the project. See also:
+> - [Prompt Flow Architecture](docs/prompt-flow.md) - Scene-first generation and edit loop system
 
 ---
 

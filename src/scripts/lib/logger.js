@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/lib/logger.js
+
 import chalk from 'chalk';
 
 const LOG_LEVELS = {

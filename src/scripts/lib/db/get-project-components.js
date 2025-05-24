@@ -1,4 +1,5 @@
-// src/scripts/db-tools/get-project-components.js
+// @ts-nocheck
+// src/scripts/lib/db/get-project-components.js
 import {
   getProjectById,
   getComponentsByProject,

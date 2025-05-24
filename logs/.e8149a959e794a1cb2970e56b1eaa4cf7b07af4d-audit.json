@@ -6,26 +6,6 @@
     "auditLog": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/.e8149a959e794a1cb2970e56b1eaa4cf7b07af4d-audit.json",
     "files": [
         {
-            "date": 1746712495467,
-            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-08.log",
-            "hash": "e701f4356e7184d301b0c09ff9d8d8a8f3adac5cd8f6cc62c986f3c530d6a4cf"
-        },
-        {
-            "date": 1746767191263,
-            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-09.log",
-            "hash": "25ee2afcf42eaa09fb61c4d57471d4d857002fefff1ee35ae0eee2541a0343d3"
-        },
-        {
-            "date": 1746844450867,
-            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-10.log",
-            "hash": "9218c1242dd427ffc19bf8def8046cd76f92919a5855c073253fca214bdfc1bd"
-        },
-        {
-            "date": 1746896400301,
-            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-11.log",
-            "hash": "2c3b59d2fb46e2db2be0a9803cbee34d764b56ac6bc85fec12d9bace8b8c3629"
-        },
-        {
             "date": 1747021655085,
             "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-12.log",
             "hash": "49dd38222fbdf124a4236982b019f8ab488bf2c39c7f8e5949d721e065e75d9e"
@@ -74,6 +54,21 @@
             "date": 1747762597358,
             "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-21.log",
             "hash": "e28c1c044b02d48876f32f59f8ba77281e88660221050e44ed8f40356db058ed"
+        },
+        {
+            "date": 1747942425248,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-23.log",
+            "hash": "3a114744cf8abfdc31249b457e5520305889a5ed8bbc75fbfbffbed3025aa7e3"
+        },
+        {
+            "date": 1748080159556,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-24.log",
+            "hash": "0cbf4161637664a54fe53b765c9eb922a76c923596e71f62add16dbf99dddf3e"
+        },
+        {
+            "date": 1748112320158,
+            "name": "/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/logs/error-2025-05-25.log",
+            "hash": "51e8275070ad71ac039cefeba39be109be982d6d708f42d112387e08b12cbd3d"
         }
     ],
     "hashType": "sha256"

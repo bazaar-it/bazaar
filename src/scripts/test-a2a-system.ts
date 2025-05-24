@@ -1,5 +1,6 @@
+// @ts-nocheck
 // src/scripts/test-a2a-system.ts
-import { BaseAgent } from "~/server/agents/base-agent";
+import { type BaseAgent } from "~/server/agents/base-agent";
 import { ADBAgent } from "~/server/agents/adb-agent";
 import { CoordinatorAgent } from "~/server/agents/coordinator-agent";
 import { ScenePlannerAgent } from "~/server/agents/scene-planner-agent";

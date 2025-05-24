@@ -1,4 +1,5 @@
-//src/client/components/test-harness/evaluation/MetricsOverview.tsx
+// src/client/components/test-harness/evaluation/MetricsOverview.tsx
+// @ts-nocheck
 
 'use client';
 

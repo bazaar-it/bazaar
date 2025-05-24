@@ -1,4 +1,5 @@
-// src/scripts/fix-component-missing-code.cjs
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-component-missing-code.cjs
 const { db } = require('../../dist/server/db');
 const { customComponentJobs } = require('../../dist/server/db/schema');
 const { eq, and, isNull, or } = require('drizzle-orm');

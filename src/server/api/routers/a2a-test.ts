@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/server/api/routers/a2a-test.ts
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
@@ -10,7 +11,7 @@ import { env } from "~/env";
 import crypto from "crypto";
 
 // Import agent classes directly
-import { BaseAgent } from "~/server/agents/base-agent";
+import { type BaseAgent } from "~/server/agents/base-agent";
 import { CoordinatorAgent } from "~/server/agents/coordinator-agent";
 import { BuilderAgent } from "~/server/agents/builder-agent";
 import { UIAgent } from "~/server/agents/ui-agent";

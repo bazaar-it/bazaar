@@ -189,9 +189,9 @@ function extractScenePlanningInfo(
   let status: 'planning' | 'partial' | 'complete' = 'planning';
 
   // Check for explicit scene count (as in original function)
-  const sceneCountMatch = lowerMessage.match(/i've planned your video with (\d+) scenes/i) ?? 
-                        lowerMessage.match(/planned (\d+) scenes for you/i);
-  if (sceneCountMatch && sceneCountMatch[1] && !isNaN(Number(sceneCountMatch[1]))) {
+  const sceneCountMatch = (/i've planned your video with (\d+) scenes/i.exec(lowerMessage)) ?? 
+                        (/planned (\d+) scenes for you/i.exec(lowerMessage));
+  if (sceneCountMatch?.[1] && !isNaN(Number(sceneCountMatch[1]))) {
     sceneCount = parseInt(sceneCountMatch[1], 10);
   }
 
@@ -338,7 +338,7 @@ export default function ScenePlanningHistoryPanel() {
     console.error("TimelineContext not found. ScenePlanningHistoryPanel might not function correctly.");
     return <div>Timeline context not available</div>;
   }
-  const { updateFromScenePlan } = timelineContext!;
+  const { updateFromScenePlan } = timelineContext;
 
   const { getCurrentProps, applyPatch } = useVideoState();
   const currentProps = getCurrentProps();
@@ -380,7 +380,7 @@ export default function ScenePlanningHistoryPanel() {
         if (!briefsByScene[brief.sceneId]) {
           briefsByScene[brief.sceneId] = [];
         }
-        (briefsByScene[brief.sceneId] as AnimationDesignBrief[]).push(brief);
+        (briefsByScene[brief.sceneId]!).push(brief);
       }
       setBriefsBySceneId(briefsByScene);
     }
@@ -530,7 +530,7 @@ export default function ScenePlanningHistoryPanel() {
   useEffect(() => {
     if (planningHistory.length > 0) {
       const firstPlan = planningHistory[0];
-      if (firstPlan && firstPlan.id) {
+      if (firstPlan?.id) {
         setExpandedPlans(prev => ({
           ...prev,
           [firstPlan.id]: true
@@ -779,7 +779,7 @@ export default function ScenePlanningHistoryPanel() {
               const actualScenes = partialPlanInfo?.scenes || [];
 
               if (hasSceneCount) {
-                const displayScenes = Array.from({ length: partialPlanInfo!.sceneCount! }, (_, i) => {
+                const displayScenes = Array.from({ length: partialPlanInfo.sceneCount! }, (_, i) => {
                   const existingScene = actualScenes[i];
                   return {
                     key: `placeholder-scene-${i}`,
@@ -793,7 +793,7 @@ export default function ScenePlanningHistoryPanel() {
                 return (
                   <>
                     <p className="text-sm text-gray-800 mb-2">
-                      Planning {partialPlanInfo!.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo!.sceneCount} details received):
+                      Planning {partialPlanInfo.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo.sceneCount} details received):
                     </p>
                     <ul className="space-y-2 text-sm bg-background/50 p-3 rounded-md max-h-60 overflow-y-auto">
                       {displayScenes.map((scene) => (
@@ -895,7 +895,7 @@ export default function ScenePlanningHistoryPanel() {
               const actualScenes = partialPlanInfo?.scenes || [];
 
               if (hasSceneCount) {
-                const displayScenes = Array.from({ length: partialPlanInfo!.sceneCount! }, (_, i) => {
+                const displayScenes = Array.from({ length: partialPlanInfo.sceneCount! }, (_, i) => {
                   const existingScene = actualScenes[i];
                   return {
                     key: `placeholder-scene-${i}`,
@@ -908,7 +908,7 @@ export default function ScenePlanningHistoryPanel() {
 
                 return (
                   <>
-                    <p className="text-sm text-blue-700">Planning {partialPlanInfo!.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo!.sceneCount} details received):</p>
+                    <p className="text-sm text-blue-700">Planning {partialPlanInfo.sceneCount} scenes ({actualScenes.length}/{partialPlanInfo.sceneCount} details received):</p>
                     <div className="space-y-2">
                       {displayScenes.map((scene) => (
                         <div key={scene.key} className={`text-sm ${scene.isPlaceholder ? 'opacity-70' : ''}`}>
@@ -1234,7 +1234,7 @@ const renderBriefDetails = (brief: AnimationDesignBrief, currentJobMap: Record<s
         </div>
       )}
       
-      {brief.componentJobId && currentJobMap && currentJobMap[brief.id] && (
+      {brief.componentJobId && currentJobMap?.[brief.id] && (
         <div>
           <h5 className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
             <CodeIcon className="h-3.5 w-3.5 text-gray-500" />

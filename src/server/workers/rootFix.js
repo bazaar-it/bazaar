@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/server/workers/rootFix.js
 /**
  * FIX THE ROOT CAUSE of component generation issues

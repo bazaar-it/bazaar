@@ -1,6 +1,6 @@
 //src/types/global.d.ts
-import React from 'react';
-import * as Remotion from 'remotion';
+import type React from 'react';
+import type * as Remotion from 'remotion';
 
 declare global {
   interface Window {

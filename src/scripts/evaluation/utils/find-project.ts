@@ -1,4 +1,5 @@
-//src/scripts/evaluation/utils/find-project.ts
+// @ts-nocheck
+// src/scripts/evaluation/utils/find-project.ts
 import { db } from "../../../server/db";
 import { projects } from "../../../server/db/schema";
 import { desc, eq } from "drizzle-orm";

@@ -21,8 +21,46 @@ export interface Scene {
   name: string;
   template?: string;
   duration: number; // Duration in frames
-  props?: Record<string, any>;
-  metadata?: Record<string, any>;
+  start?: number; // Start time in frames
+  props?: SceneProps;
+  metadata?: SceneMetadata;
+}
+
+// Enhanced scene props supporting both legacy and animation-focused props
+export interface SceneProps {
+  // Legacy props (for backward compatibility)
+  title?: string;
+  text?: string;
+  items?: string[];
+  imageUrl?: string;
+  
+  // Animation-focused props
+  animationType?: 'expand' | 'rotate' | 'fade' | 'slide' | 'bounce' | 'explode' | 'reveal' | 'none';
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  scale?: number;
+  timing?: 'fast' | 'medium' | 'slow';
+  direction?: 'left' | 'right' | 'top' | 'bottom' | 'clockwise' | 'counterclockwise';
+  
+  // Template-specific props
+  logoText?: string;
+  duration?: number;
+  distance?: number;
+  rotationDegrees?: number;
+  bounceHeight?: number;
+  explosionFrame?: number;
+  
+  // Generic animation props
+  [key: string]: any;
+}
+
+export interface SceneMetadata {
+  description?: string;
+  prompt?: string;
+  visualConcept?: string;
+  version?: number; // For migration tracking
+  [key: string]: any;
 }
 
 export interface Asset {
@@ -51,8 +89,11 @@ export interface Style {
   [key: string]: any;
 }
 
+// Alias for backward compatibility
+export type VideoStyle = Style;
+
 export interface GenerationState {
-  stage: 'idle' | 'analyzing' | 'planning' | 'generating' | 'complete' | 'error';
+  stage: 'idle' | 'analyzing' | 'planning' | 'styling' | 'assets' | 'components' | 'generating' | 'complete' | 'error';
   progress: number;
   message: string;
   storyboard?: Storyboard;

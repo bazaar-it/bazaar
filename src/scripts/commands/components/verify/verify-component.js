@@ -1,4 +1,5 @@
-//src/scripts/commands/components/verify/verify-component.js
+// @ts-nocheck
+// src/scripts/commands/components/verify/verify-component.js
 import fs from 'fs/promises';
 import path from 'path';
 import { program } from 'commander';

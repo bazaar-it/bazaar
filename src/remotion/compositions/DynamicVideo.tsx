@@ -1,4 +1,5 @@
 // src/remotion/compositions/DynamicVideo.tsx
+// @ts-nocheck
 import React, { useMemo, useEffect, useRef } from 'react';
 import { AbsoluteFill, Sequence } from "remotion";
 

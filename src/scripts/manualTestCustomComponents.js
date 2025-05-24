@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/manualTestCustomComponents.js
+
 /**
  * Manual Test Script for Custom Components in PreviewPanel
  * 

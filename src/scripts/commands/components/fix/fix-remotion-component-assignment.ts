@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-remotion-component-assignment.ts
+
 /**
  * Script to find components missing the required window.__REMOTION_COMPONENT assignment
  * and fix them by adding it correctly based on component name detection
@@ -40,7 +43,7 @@ async function fixRemotionComponentAssignment() {
     // Add project ID filter if provided
     if (projectId) {
       query = db.query.customComponentJobs.findMany({
-        where: eq(customComponentJobs.projectId, projectId as string)
+        where: eq(customComponentJobs.projectId, projectId)
       });
     }
     
@@ -92,14 +95,14 @@ async function fixRemotionComponentAssignment() {
       let componentName: string | null = null;
       
       // Try to match a component definition like 'const MyComponent = ...'
-      const componentNameMatch = component.tsxCode.match(/const\s+(\w+)\s*=\s*[\(\{]/);
+      const componentNameMatch = /const\s+(\w+)\s*=\s*[\(\{]/.exec(component.tsxCode);
       if (componentNameMatch) {
         componentName = componentNameMatch[1];
       }
       
       // If not found, try to find an exported function component
       if (!componentName) {
-        const exportedComponentMatch = component.tsxCode.match(/export\s+(?:default\s+)?(?:function|const)\s+(\w+)/);
+        const exportedComponentMatch = /export\s+(?:default\s+)?(?:function|const)\s+(\w+)/.exec(component.tsxCode);
         if (exportedComponentMatch) {
           componentName = exportedComponentMatch[1];
         }

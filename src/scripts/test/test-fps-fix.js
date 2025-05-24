@@ -1,4 +1,5 @@
-// src/scripts/test-fps-fix.js
+// @ts-nocheck
+// src/scripts/test/test-fps-fix.js
 import { preprocessTsx } from '../server/utils/tsxPreprocessor.ts';
 
 

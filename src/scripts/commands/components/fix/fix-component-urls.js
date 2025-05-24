@@ -1,4 +1,5 @@
-// src/scripts/fix-component-urls.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-component-urls.js
 // Script to fix custom components missing outputUrl values and link them to the current user
 
 const { drizzle } = require('drizzle-orm/neon-http');

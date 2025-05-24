@@ -23,7 +23,8 @@ interface ComponentJob {
 }
 
 export default function TimelinePanel() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
   const router = useRouter();
   const pathname = usePathname();
   const { getCurrentProps, applyPatch } = useVideoState();
@@ -31,6 +32,14 @@ export default function TimelinePanel() {
   const { selectedSceneId, setSelectedSceneId } = useSelectedScene();
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const [sceneStatuses, setSceneStatuses] = useState<Record<string, TimelineItemStatus>>({});
+
+  // Add a check for id before proceeding
+  if (!id) {
+    // Optionally, render a loading state or return null if id is critical
+    // For now, just log and prevent further execution if id is missing
+    console.error("TimelinePanel: Project ID is missing.");
+    return null; 
+  }
   
   // Since we don't have real-time job data yet, we'll check for timing issues only
   // We can implement a real API once it's available
@@ -171,7 +180,7 @@ export default function TimelinePanel() {
   
   // Handle repositioning all scenes when needed (e.g., after drag operations that might cause overlaps)
   const repositionScenes = useCallback(() => {
-    if (!inputProps || !inputProps.scenes.length) return;
+    if (!inputProps?.scenes.length) return;
     
     // Create a sorted copy of scenes by start frame
     const sortedScenes = [...inputProps.scenes].sort((a, b) => a.start - b.start);
@@ -212,7 +221,7 @@ export default function TimelinePanel() {
     const item = timelineItems.find(item => item.id === itemId);
     
     // Update the selected scene in context
-    if (item && item.sceneId) {
+    if (item?.sceneId) {
       setSelectedSceneId(item.sceneId);
       
       // Update URL with scene ID for deep linking

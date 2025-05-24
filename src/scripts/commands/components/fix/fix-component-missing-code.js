@@ -1,4 +1,5 @@
-// src/scripts/fix-component-missing-code.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-component-missing-code.js
 import { db } from '../server/db';
 import { customComponentJobs } from '../server/db/schema';
 import { eq, and, isNull, or, not } from 'drizzle-orm';

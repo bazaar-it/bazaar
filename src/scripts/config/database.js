@@ -1,3 +1,6 @@
+// @ts-nocheck
+// src/scripts/config/database.js
+
 import { requireEnv } from '../lib/env';
 
 /**

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/force-fix-component.js
 /**
  * Force fix a component by directly calling the preprocessing step

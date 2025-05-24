@@ -347,7 +347,7 @@ export const a2aRouter = createTRPCRouter({
           return []; // No jobs found for this taskId, so no briefs
         }
 
-        const componentJobIds = jobs.map(job => job.id).filter(id => id !== null) as string[];
+        const componentJobIds = jobs.map(job => job.id).filter(id => id !== null);
 
         if (componentJobIds.length === 0) {
           return []; // No valid componentJobIds found

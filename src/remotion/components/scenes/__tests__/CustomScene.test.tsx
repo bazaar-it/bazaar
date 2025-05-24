@@ -16,7 +16,7 @@ jest.mock('~/hooks/useRemoteComponent', () => ({
       componentProps,
       rest
     });
-    if (scriptSrc && brief && brief.id) { 
+    if (scriptSrc && brief?.id) { 
       return <div data-testid="mock-remote-component-rendered">Remote Component for {databaseId} with brief {brief.id}</div>;
     }
     return <div>MockedNamedRemoteComponent: Waiting for valid props (scriptSrc, brief with id)</div>;
@@ -160,7 +160,7 @@ describe('CustomScene', () => {
     );
     (MockedNamedRemoteComponent as jest.Mock).mockImplementation(({ scriptSrc, brief, databaseId, componentProps }) => {
       console.log('[Success Test - MockedNamedRemoteComponent] Props:', { scriptSrc, brief, databaseId, componentProps });
-      if (scriptSrc && brief && brief.id) {
+      if (scriptSrc && brief?.id) {
         return <MockLoadedUserComponent {...componentProps} brief={brief} />;
       }
       return <div>MockedNamedRemoteComponent: Missing props for success</div>;

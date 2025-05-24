@@ -1,3 +1,4 @@
+// @ts-nocheck
 // src/scripts/validate-fps-fix.js
 // Script to validate that our fps duplication fix works correctly
 

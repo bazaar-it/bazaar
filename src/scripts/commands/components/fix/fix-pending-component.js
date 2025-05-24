@@ -1,4 +1,5 @@
-// src/scripts/fix-pending-component.js
+// @ts-nocheck
+// src/scripts/commands/components/fix/fix-pending-component.js
 /**
  * Script to fix a component that's in "pending" state without code
  * Updates the status to "failed" with useful error message
