@@ -6,6 +6,7 @@ import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
+import { analytics } from '~/lib/analytics';
 
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -41,6 +42,9 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         </div>
       );
     }
+
+    // Track project opening analytics
+    analytics.projectOpened(projectId);
 
     return (
       <GenerateWorkspaceRoot

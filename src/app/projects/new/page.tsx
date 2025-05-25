@@ -4,6 +4,7 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq, and, like } from "drizzle-orm";
+import { analytics } from '~/lib/analytics';
 
 /**
  * Special route that automatically creates a new project and redirects to it
@@ -88,12 +89,19 @@ export default async function NewProjectPage() {
       
       newProject = insertedProjectAttempt; // Success!
 
+      // Track project creation analytics
+      if (newProject) {
+        analytics.projectCreated(newProject.id);
+      }
+
     } catch (error: any) {
       // Check for PostgreSQL unique violation error (SQLSTATE 23505)
       if (error.code === '23505' || (error.message && (error.message.includes('violates unique constraint') || error.message.includes('duplicate key value')))) {
         console.warn(`Attempt ${attempts}: Failed to create project with title '${error.values?.title || 'unknown'}'. Retrying. Error: ${error.message}`);
         if (attempts >= MAX_ATTEMPTS) {
           console.error("Max attempts reached. Failed to create new project.");
+          // Track error analytics
+          analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Max attempts reached', '/projects/new');
           // Optionally, redirect to a specific error page or add a query param
           redirect("/projects?error=creation_failed_max_attempts");
           return null; // Exit loop and function
@@ -102,6 +110,8 @@ export default async function NewProjectPage() {
       } else {
         // For other, unexpected errors, log and redirect
         console.error("Failed to create new project (non-unique constraint error):", error);
+        // Track error analytics
+        analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Unknown error', '/projects/new');
         redirect("/projects?error=unknown_creation_failure");
         return null; // Exit loop and function
       }
@@ -115,6 +125,8 @@ export default async function NewProjectPage() {
     // Fallback to projects page if something went wrong (e.g., max attempts reached without success)
     // This path should ideally be covered by the redirect within the catch block for MAX_ATTEMPTS
     console.error("Failed to create new project after multiple attempts or unexpected issue.");
+    // Track error analytics
+    analytics.errorOccurred('project_creation_failed', 'Fallback creation failure', '/projects/new');
     redirect("/projects?error=fallback_creation_failure");
   }
 

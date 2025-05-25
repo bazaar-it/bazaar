@@ -67,45 +67,51 @@ yarn-error.log*
 !.env.example          # keep the example stub in the repo
 
 # =============================================================================
-# PRODUCTION EXCLUSIONS - Development artifacts not needed in production
+# PRODUCTION EXCLUSIONS - Only excluded when creating production branch
+# These files exist in development but are excluded from main/production
 # =============================================================================
 
-# Memory bank - development documentation only
-/memory-bank/
+# NOTE: These are commented out for development branch
+# Uncomment these when creating production branch
 
-# Development logs
-/logs/
-/tmp/
-*.log
+# Development documentation (keep in development, exclude from production)
+# /memory-bank/
 
-# Development scripts (keep essential ones)
-/scripts/
-!/scripts/setup-env.sh
-!/scripts/start-database.sh
+# Development logs (keep in development, exclude from production)  
+# /logs/
+# /tmp/
+# *.log
 
-# Analysis outputs
-/analysis/
+# Development scripts (keep in development, exclude from production)
+# /scripts/*
+# !/scripts/setup-env.sh
 
-# Test results and fixtures
-/test-results*
-/tests/performance/fixtures/
+# Analysis outputs (keep in development, exclude from production)
+# /analysis/
 
-# A2A system (separate project, not needed in production)
-/src/server/a2a/
-/src/agents/
-/src/scripts/a2a-test/
-/src/scripts/log-agent/
-/src/scripts/log-tools/
+# Test results and fixtures (keep in development, exclude from production)
+# /test-results*
+# /tests/performance/fixtures/
 
-# Development-only API routes
-/src/app/api/a2a/
-/src/app/api/debug/
-/src/app/api/test/
-/src/app/api/test-component/
+# A2A system (separate project, keep in development, exclude from production)
+# /src/server/a2a/
+# /src/agents/
+# /src/scripts/a2a-test/
+# /src/scripts/log-agent/
+# /src/scripts/log-tools/
 
-# Development test pages
-/src/app/test/
-/src/app/remotion-demo/
+# Development-only API routes (keep in development, exclude from production)
+# /src/app/api/a2a/
+# /src/app/api/debug/
+# /src/app/api/test/
+# /src/app/api/test-component/
+
+# Development test pages (keep in development, exclude from production)
+# /src/app/test/
+# /src/app/remotion-demo/
+
+# Legacy edit system (keep in development for reference, exclude from production)
+# /src/app/projects/[id]/edit/
 
 # Temporary files and backups
 *.bak
