@@ -935,10 +935,12 @@ ${existingCode}
 
 CRITICAL RULES:
 1. Use standard Remotion imports: import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+1.5 NEVER use other imports (e.g. from other libraries), or logos or images. everything has to be created by you.
 2. Apply the requested change while maintaining all existing functionality
 3. Preserve all existing animations and structure
 4. Return only the modified component code, no explanations
-5. Ensure export default function ComponentName() format`
+5. Ensure export default function ComponentName() format
+6. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`
           : `You are a Remotion animation specialist. Create visually engaging animated components using standard Remotion imports.
 
 REQUIRED FORMAT:
@@ -959,7 +961,11 @@ export default function ComponentName() {
 
 ANIMATION GUIDELINES:
 - Use interpolate for smooth transitions: interpolate(frame, [0, 30], [startValue, endValue])
-- NEVER use identical input ranges: interpolate(frame, [45, 45], ...) ❌
+- CRITICAL: inputRange and outputRange MUST have the same length
+  ✅ CORRECT: interpolate(frame, [0, 30], [0, 1]) - 2 inputs, 2 outputs
+  ✅ CORRECT: interpolate(frame, [0, 15, 30], [1, 1.2, 1]) - 3 inputs, 3 outputs  
+  ❌ WRONG: interpolate(frame, [0, 30], [1, 1.2, 1]) - 2 inputs, 3 outputs = ERROR
+- For bounce effects, use 3 keyframes: interpolate(frame, [0, 15, 30], [1, 1.2, 1])
 - Use spring for natural motion: spring({ frame, fps, config: { damping: 10, stiffness: 100 } })
 - Create visual effects with scaling, rotation, opacity, position changes
 - Focus on creating smooth, visually engaging animations
@@ -969,7 +975,8 @@ CRITICAL RULES:
 1. Use standard Remotion imports only
 2. Export default function ComponentName() format required
 3. Return only the component code, no explanations
-4. Create engaging animations that bring concepts to life`;
+4. Create engaging animations that bring concepts to life
+5. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`;
         
         const userPrompt = isEditMode 
           ? `Apply this change to the component: "${editInstruction}"\n\nKeep all existing animations and structure intact. Only modify what's specifically requested.`
