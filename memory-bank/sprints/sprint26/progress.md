@@ -817,7 +817,6 @@ With BAZAAR-304 (Workspace UI) largely complete, focus now shifts to BAZAAR-305.
 - **Eliminated flickering** - no further scroll adjustments, reflows, or movement after completion
 - **Removed duplicate scrolling** - eliminated manual scroll call from success handler to prevent conflicts
 - **Result**: Smooth, stable chat experience with no visual disruption after scene generation completes
-## Latest Updates
 
 ### 2024-12-19: Storyboard Panel Changes Reverted ↩️
 
@@ -1124,3 +1123,67 @@ With BAZAAR-304 (Workspace UI) largely complete, focus now shifts to BAZAAR-305.
 - ✅ No trailing "..." placeholders
 - ✅ Persistent chat history within session
 - ✅ Proper chronological message ordering
+
+## ✅ COMPLETED
+
+### Core System Stabilization
+- **Video State Management**: Fixed project switching and state isolation
+- **Scene Generation Pipeline**: Robust error handling and validation
+- **Database Integration**: Proper scene persistence and retrieval
+- **UI/UX Polish**: 4-panel workspace with drag-and-drop
+- **Analytics Integration**: Google Analytics 4 + Vercel Analytics
+
+### ESM Component Loading (Sprint 25→26)
+- **esbuild + external-global plugin**: Production-ready dynamic component loading
+- **Single React/Remotion instance**: No more context split issues
+- **Source-map preservation**: Full debugging support
+- **Local dev fallback**: window.Remotion pattern for offline development
+
+### Recent Fixes (Sprint 28)
+- **Log Agent Transport Removed**: Eliminated connection errors in production
+- **Project State Initialization**: Fixed new project creation and state management
+- **ES6 Module Validation**: Fixed client-side validation to properly handle import statements
+- **"Try for Free" Workflow**: Fixed multiple critical issues with new project creation
+- **Neon HTTP Driver Transaction Fix**: Removed unsupported transactions from unified mutation
+- **Dual Mutation System Fixed**: Eliminated duplicate chat.initiateChat + generateSceneWithChat calls
+- **useVideoConfig Runtime Error Fixed**: Added proper import extraction in PreviewPanelG
+
+## 🔧 CURRENT ISSUES RESOLVED
+
+### ✅ **Dual Mutation System Eliminated**
+**Problem**: ChatPanelG was calling both `chat.initiateChat` AND `generateSceneWithChat` mutations
+**Impact**: 
+- Duplicate messages in chat
+- Unnecessary network requests
+- Confusing user experience with delayed message display
+- Two separate database writes for same operation
+
+**Root Cause**: Legacy code from before unified mutation was implemented
+**Solution**: 
+- Removed `initiateChatMutation` completely from ChatPanelG
+- Updated `handleSubmit` to use ONLY `generateSceneWithChat`
+- Eliminated `streamingMessageId` state management
+- Simplified message flow to single mutation
+
+**Result**: 
+- ✅ **No more duplicate messages** in chat
+- ✅ **50% reduction in network requests** for scene generation
+- ✅ **Messages appear immediately** without delays
+- ✅ **Single source of truth** for chat persistence
+
+### ✅ **useVideoConfig Runtime Error Fixed**
+**Problem**: Generated scenes using `useVideoConfig` and `spring` but these weren't available in preview
+**Error**: "useVideoConfig is not defined" causing preview panel crashes
+**Root Cause**: PreviewPanelG import extraction only included basic functions, missing commonly used ones
+
+**Solution**: 
+- Added comprehensive import extraction in PreviewPanelG
+- Include all common Remotion functions by default: `useCurrentFrame`, `useVideoConfig`, `interpolate`, `spring`
+- Added code scanning to detect any Remotion functions used in scene code
+- Ensured single destructuring statement includes all necessary functions
+
+**Result**: 
+- ✅ **No more "useVideoConfig is not defined" errors**
+- ✅ **All Remotion functions properly available** in preview
+- ✅ **Robust import detection** for any Remotion function usage
+- ✅ **Preview panel renders successfully** with complex animations

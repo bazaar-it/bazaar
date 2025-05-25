@@ -46,55 +46,54 @@ export type DbMessage = {
   kind?: 'text' | 'tool_result' | 'error' | 'status';
 }
 
+// Define ProjectState interface
+interface ProjectState {
+  props: InputProps;
+  chatHistory: ChatMessage[];
+  dbMessagesLoaded: boolean;
+  activeStreamingMessageId?: string | null;
+  refreshToken?: string;
+}
+
 interface VideoState {
-  // Store data per project ID
-  projects: Record<string, {
-    props: InputProps;
-    chatHistory: ChatMessage[];
-    // Track if we've loaded the full database messages
-    dbMessagesLoaded: boolean;
-    // Store active streaming messages
-    activeStreamingMessageId?: string | null;
-    // Store refresh token for forcing remounts
-    refreshToken?: string;
-  }>;
   currentProjectId: string | null;
+  projects: Record<string, ProjectState>;
+  chatHistory: Record<string, ChatMessage[]>;
+  refreshTokens: Record<string, number>;
   
-  // Get current project's inputProps
+  // OPTIMIZATION #5: Scene selection state
+  selectedScenes: Record<string, string | null>;
+  
+  // Actions
+  setProject: (projectId: string, initialProps: InputProps) => void;
+  replace: (projectId: string, newProps: InputProps) => void;
   getCurrentProps: () => InputProps | null;
   
-  // Get current project's chat history (for optimistic updates)
+  // Chat management
+  addUserMessage: (projectId: string, content: string) => void;
+  addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
+  updateMessage: (projectId: string, messageId: string, updates: Partial<ChatMessage>) => void;
+  
+  // Legacy methods (for backward compatibility)
   getChatHistory: () => ChatMessage[];
-  
-  // Set the current project ID and its initial props
-  setProject: (projectId: string, initialProps: InputProps) => void;
-  
-  // Apply a patch to the current project
   applyPatch: (projectId: string, patch: Operation[]) => void;
-  
-  // Replace props for a specific project
-  replace: (projectId: string, next: InputProps) => void;
-  
-  // Add a temporary optimistic message to the chat history
   addMessage: (projectId: string, message: string, isUser: boolean) => void;
-  
-  // Add an assistant message with an ID from the server (for streaming)
-  addAssistantMessage: (projectId: string, messageId: string, initialContent?: string) => void;
-  
-  // Update a message with new content or status information (for streaming)
-  updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
-  
-  // Sync with database messages (replaces optimistic ones when db data arrives)
   syncDbMessages: (projectId: string, dbMessages: DbMessage[]) => void;
-  
-  // Clear optimistic messages (e.g., when switching projects)
   clearOptimisticMessages: (projectId: string) => void;
-  
-  // Clear all data for a specific project (useful when switching projects)
   clearProject: (projectId: string) => void;
   
   // Force refresh of preview components by generating a new refresh token
   forceRefresh: (projectId: string) => void;
+  
+  // OPTIMIZATION #2: Add/update individual scenes without full refetch
+  addScene: (projectId: string, scene: any) => void;
+  updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
+  
+  // OPTIMIZATION #5: Unified scene selection
+  selectScene: (projectId: string, sceneId: string | null) => void;
+  
+  // Get selected scene
+  getSelectedScene: (projectId: string) => InputProps['scenes'][number] | null;
 }
 
 // Default welcome message
@@ -110,6 +109,9 @@ const getDefaultChatHistory = (): ChatMessage[] => [
 export const useVideoState = create<VideoState>((set, get) => ({
   projects: {},
   currentProjectId: null,
+  chatHistory: {},
+  refreshTokens: {},
+  selectedScenes: {},
 
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
@@ -137,12 +139,14 @@ export const useVideoState = create<VideoState>((set, get) => ({
         projects: {
           ...state.projects,
           [projectId]: {
-            ...(state.projects[projectId] || {}),
+            // Always use the provided initialProps - don't preserve old props
             props: initialProps,
             // Clear chat history on project switch, otherwise preserve
             chatHistory: isProjectSwitch ? getDefaultChatHistory() : (state.projects[projectId]?.chatHistory || getDefaultChatHistory()),
             dbMessagesLoaded: isProjectSwitch ? false : (state.projects[projectId]?.dbMessagesLoaded ?? false),
             activeStreamingMessageId: isProjectSwitch ? null : state.projects[projectId]?.activeStreamingMessageId,
+            // Clear refresh token on project switch to force fresh renders
+            refreshToken: isProjectSwitch ? undefined : state.projects[projectId]?.refreshToken,
           }
         }
       };
@@ -488,5 +492,131 @@ export const useVideoState = create<VideoState>((set, get) => ({
           }
         }
       };
-    })
+    }),
+    
+  // OPTIMIZATION #2: Add/update individual scenes without full refetch
+  addScene: (projectId: string, scene: any) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      const newScenes = [...project.props.scenes, {
+        id: scene.id,
+        type: 'custom' as const,
+        start: project.props.scenes.length * 150,
+        duration: 150,
+        data: {
+          code: scene.tsxCode,
+          name: scene.name || 'Generated Scene',
+          componentId: scene.id,
+          props: scene.props || {}
+        }
+      }];
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: newScenes.length * 150
+              },
+              scenes: newScenes
+            }
+          }
+        }
+      };
+    }),
+    
+  updateScene: (projectId: string, sceneId: string, updatedScene: any) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      const sceneIndex = project.props.scenes.findIndex((s: any) => s.id === sceneId);
+      if (sceneIndex === -1) return state;
+      
+      const updatedScenes = [...project.props.scenes];
+      const existingScene = updatedScenes[sceneIndex];
+      
+      updatedScenes[sceneIndex] = {
+        ...existingScene,
+        id: existingScene?.id || sceneId,
+        type: existingScene?.type || 'custom',
+        start: existingScene?.start || 0,
+        duration: existingScene?.duration || 150,
+        data: {
+          ...existingScene?.data,
+          code: updatedScene.tsxCode,
+          name: updatedScene.name || existingScene?.data?.name || 'Scene',
+          props: updatedScene.props || {}
+        }
+      };
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              scenes: updatedScenes
+            }
+          }
+        }
+      };
+    }),
+    
+  // OPTIMIZATION #5: Unified scene selection
+  selectScene: (projectId: string, sceneId: string | null) =>
+    set((state) => ({
+      ...state,
+      selectedScenes: {
+        ...state.selectedScenes,
+        [projectId]: sceneId
+      }
+    })),
+    
+  // Get selected scene
+  getSelectedScene: (projectId: string) => {
+    const state = get();
+    const selectedSceneId = state.selectedScenes?.[projectId];
+    if (!selectedSceneId) return null;
+    
+    const project = state.projects[projectId];
+    if (!project) return null;
+    
+    return project.props.scenes.find((s: any) => s.id === selectedSceneId) || null;
+  },
+  
+  // Implement missing addUserMessage method
+  addUserMessage: (projectId: string, content: string) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      const newMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        message: content,
+        isUser: true,
+        timestamp: Date.now(),
+        status: 'success'
+      };
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            chatHistory: [...project.chatHistory, newMessage]
+          }
+        }
+      };
+    }),
 })); 

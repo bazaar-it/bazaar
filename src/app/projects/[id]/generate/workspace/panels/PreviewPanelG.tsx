@@ -72,7 +72,7 @@ export function PreviewPanelG({
       const sceneImports: string[] = [];
       const sceneComponents: string[] = [];
       const totalDuration = validScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-      const allImports = new Set(['Series', 'AbsoluteFill', 'Loop']); // Always need these for the composition
+      const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring']); // Include all common Remotion functions
 
       validScenes.forEach((scene, index) => {
         const sceneCode = (scene.data as any).code;
@@ -95,6 +95,14 @@ export function PreviewPanelG({
               }
             });
           }
+          
+          // Also scan the code for any Remotion functions that might be used without explicit imports
+          const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
+          remotionFunctions.forEach(func => {
+            if (sceneCode.includes(func)) {
+              allImports.add(func);
+            }
+          });
 
           // Clean the scene code: remove imports and export default
           let cleanSceneCode = sceneCode

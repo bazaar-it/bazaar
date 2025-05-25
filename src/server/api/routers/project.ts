@@ -4,7 +4,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches, scenePlans } from "~/server/db/schema";
 import { eq, desc, like, count, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { DEFAULT_PROJECT_PROPS } from "~/types/remotion-constants";
+import { createDefaultProjectProps } from "~/types/remotion-constants";
 import { processUserMessageInProject } from "./chat";
 import { jsonPatchSchema, type JsonPatch } from "~/types/json-patch";
 import { applyPatch } from "fast-json-patch";
@@ -116,7 +116,7 @@ export const projectRouter = createTRPCRouter({
           .values({
             userId: ctx.session?.user?.id || 'system',
             title,
-            props: DEFAULT_PROJECT_PROPS,
+            props: createDefaultProjectProps(),
           })
           .returning());
 

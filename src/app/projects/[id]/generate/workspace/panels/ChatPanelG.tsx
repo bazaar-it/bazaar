@@ -40,7 +40,6 @@ export function ChatPanelG({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
@@ -57,27 +56,6 @@ export function ChatPanelG({
   // Database message fetching (V1 logic)
   const { data: dbMessages, isLoading: isLoadingMessages, refetch: refetchMessages } = 
     api.chat.getMessages.useQuery({ projectId });
-  
-  // Chat initiation mutation (V1 logic)
-  const initiateChatMutation = api.chat.initiateChat.useMutation({
-    onSuccess: (result: any) => {
-      console.log('[ChatPanelG] Chat initiated successfully:', result);
-      
-      // Store the streaming message ID for updates
-      if (result.assistantMessageId) {
-        setStreamingMessageId(result.assistantMessageId);
-        
-        // Add the assistant message to video state for streaming updates
-        const { addAssistantMessage } = useVideoState.getState();
-        addAssistantMessage(projectId, result.assistantMessageId, 'Generating scene...');
-      }
-    },
-    onError: (error: any) => {
-      console.error('[ChatPanelG] Chat initiation failed:', error);
-      setIsGenerating(false);
-      toast.error(`Chat initiation failed: ${error.message}`);
-    }
-  });
   
   // Auto-scroll function (V2 improvement)
   const scrollToBottom = useCallback(() => {
@@ -115,89 +93,28 @@ export function ChatPanelG({
     return title.length > 40 ? title.substring(0, 37) + '...' : title;
   }, []);
   
-  // Scene generation mutation with enhanced logic from V1
-  const generateSceneCodeMutation = api.generation.generateSceneCode.useMutation({
+  // OPTIMIZATION #1: Use unified scene generation with chat persistence
+  const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
     onSuccess: (result: any) => {
-      console.log("✅ Scene generation completed:", result);
+      console.log("✅ Unified scene generation completed:", result);
       setIsGenerating(false);
       setGenerationComplete(true);
       
-      // SINGLE CALLBACK: Notify parent component about the generated scene (for both new and edit)
-      if (onSceneGenerated) {
-        console.log('[ChatPanelG] Calling onSceneGenerated callback for scene:', result.sceneId, 'isEdit:', result.isEdit);
-        onSceneGenerated(result.sceneId, result.code);
+      // OPTIMIZATION #2: Add scene directly to video state instead of full refetch
+      if (onSceneGenerated && result.scene) {
+        console.log('[ChatPanelG] Calling onSceneGenerated callback for scene:', result.scene.id);
+        onSceneGenerated(result.scene.id, result.scene.tsxCode);
       }
       
-      // Update the streaming assistant message with the result (V1 logic)
-      if (streamingMessageId) {
-        const { updateMessage } = useVideoState.getState();
-        
-        // Create a more descriptive and human response (V1 logic)
-        let assistantMessage: string;
-        
-        if (result.isEdit) {
-          assistantMessage = `I've updated your scene! ✨ 
-
-Here's what I modified:
-• Applied your changes to the ${selectedScene?.data?.name || 'selected scene'}
-• Regenerated the animation code with your requested adjustments
-• The scene is now ready for preview
-
-${result.insight?.patternHint ? `The scene features ${result.insight.patternHint} animation patterns` : ''}${result.styleHint ? ` with ${result.styleHint.toLowerCase()}` : ''}.`;
-        } else {
-          const sceneType = result.insight?.patternHint || 'custom';
-          const duration = result.insight?.requestedDurationSec || 5;
-          
-          assistantMessage = `Perfect! I've created your new scene 🎬
-
-**Scene Details:**
-• **Type**: ${sceneType.charAt(0).toUpperCase() + sceneType.slice(1)} animation
-• **Duration**: ~${duration} seconds (${duration * 30} frames)
-• **Style**: ${result.styleHint || 'Modern animation design'}
-
-The scene is now visible in all panels - you can preview it, edit the code, or select it from the storyboard. Feel free to ask for any adjustments!`;
-        }
-        
-        updateMessage(projectId, streamingMessageId, {
-          content: assistantMessage,
-          status: 'success'
-        });
-        
-        setStreamingMessageId(null);
-      }
-      
-      // Refetch messages to show any server-side stored messages (V1 logic)
+      // Refetch messages to show the assistant response
       setTimeout(() => {
         void refetchMessages();
       }, 100);
     },
     onError: (error: any) => {
-      console.error("❌ Scene generation failed:", error);
+      console.error("❌ Unified scene generation failed:", error);
       setIsGenerating(false);
       toast.error(`Scene generation failed: ${error.message}`);
-      
-      // Update the streaming assistant message with error (V1 logic)
-      if (streamingMessageId) {
-        const { updateMessage } = useVideoState.getState();
-        
-        const errorMessage = `I encountered an issue creating your scene. ❌
-
-**Error**: ${error.message}
-
-**What you can try:**
-• Simplify your prompt and try again
-• Check if you're editing a specific scene or creating a new one
-• Try describing the animation differently
-
-I'm here to help - just send another message and I'll try again!`;
-        
-        updateMessage(projectId, streamingMessageId, {
-          content: errorMessage,
-          status: 'error'
-        });
-        
-        setStreamingMessageId(null);
-      }
       
       void refetchMessages();
     }
@@ -235,31 +152,34 @@ I'm here to help - just send another message and I'll try again!`;
     // If no scenes exist, it can't be an edit
     if (scenes.length === 0) return false;
     
+    // If no scene is selected, don't auto-tag as edit
+    if (!selectedScene?.id) return false;
+    
     // Split by spaces and filter out empty strings
     const words = trimmed.split(/\s+/).filter(word => word.length > 0);
     
-    // AGGRESSIVE EDIT DETECTION: If we have scenes and message is short, assume it's an edit
-    if (scenes.length > 0) {
-      // Very short messages (1-3 words) are almost always edits
-      if (words.length <= 3) return true;
-      
-      // Medium messages (4-8 words) are likely edits if they contain edit indicators
-      if (words.length <= 8) {
-        const editIndicators = ['make', 'change', 'set', 'turn', 'add', 'remove', 'fix', 'update', 'modify', 'adjust', 'improve', 'move', 'put', 'place', 'show', 'hide', 'bigger', 'smaller', 'faster', 'slower', 'color', 'position', 'size'];
-        const hasEditIndicator = editIndicators.some(indicator => trimmed.toLowerCase().includes(indicator));
-        if (hasEditIndicator) return true;
-      }
-      
-      // Longer messages (9-15 words) need strong edit verbs to be considered edits
-      if (words.length <= 15) {
-        const strongEditVerbs = ['change', 'make', 'set', 'turn', 'modify', 'update', 'fix', 'adjust', 'improve'];
-        const hasStrongEditVerb = strongEditVerbs.some(verb => trimmed.toLowerCase().includes(verb));
-        if (hasStrongEditVerb) return true;
-      }
+    // LESS AGGRESSIVE EDIT DETECTION: Only treat as edit if there are clear edit indicators
+    
+    // Very short messages (1-2 words) with clear edit verbs
+    if (words.length <= 2) {
+      const shortEditVerbs = ['red', 'blue', 'green', 'bigger', 'smaller', 'faster', 'slower'];
+      const hasShortEditVerb = shortEditVerbs.some(verb => trimmed.toLowerCase().includes(verb));
+      return hasShortEditVerb;
     }
     
-    return false;
-  }, [scenes]);
+    // Medium messages (3-6 words) need edit indicators
+    if (words.length <= 6) {
+      const editIndicators = ['make', 'change', 'set', 'turn', 'fix', 'update', 'modify', 'adjust'];
+      const hasEditIndicator = editIndicators.some(indicator => trimmed.toLowerCase().includes(indicator));
+      return hasEditIndicator;
+    }
+    
+    // Longer messages (7+ words) need strong edit verbs at the beginning
+    const strongEditVerbs = ['change', 'make', 'set', 'turn', 'modify', 'update', 'fix', 'adjust'];
+    const startsWithEditVerb = strongEditVerbs.some(verb => trimmed.toLowerCase().startsWith(verb));
+    
+    return startsWithEditVerb;
+  }, [scenes, selectedScene]);
 
   // Helper function to auto-tag messages with @scene(id) when appropriate (V1 logic)
   const autoTagMessage = useCallback((msg: string): string => {
@@ -372,14 +292,7 @@ I'm here to help - just send another message and I'll try again!`;
     setMessage("");
     setCurrentPrompt(trimmedMessage); // V2 improvement
     
-    // Use the proper chat initiation flow for message persistence (V1 logic)
-    initiateChatMutation.mutate({
-      projectId,
-      message: processedMessage,
-      sceneId: selectedScene?.id || null,
-    });
-    
-    // Generate the scene directly as well (V1 logic)
+    // Use ONLY the unified mutation (OPTIMIZATION #1)
     try {
       const isEditOperation = processedMessage.startsWith('@scene(') || 
                              (selectedScene && isLikelyEdit(trimmedMessage));
@@ -388,9 +301,9 @@ I'm here to help - just send another message and I'll try again!`;
       console.log('[ChatPanelG] Scene ID to pass:', isEditOperation ? selectedScene?.id : undefined);
       console.log('[ChatPanelG] Auto-tagged message:', processedMessage);
       
-      const result = await generateSceneCodeMutation.mutateAsync({
+      const result = await generateSceneWithChatMutation.mutateAsync({
         projectId,
-        userPrompt: processedMessage,
+        userMessage: processedMessage,
         sceneId: isEditOperation ? selectedScene?.id : undefined,
       });
       

@@ -294,13 +294,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       
       return {
         meta: {
-          title: `Video Project ${new Date().toLocaleDateString()}`,
+          // Preserve the original project title from initialProps instead of generating new ones
+          title: initialProps?.meta?.title || 'New Project',
           duration: scenes.length * 150,
-          backgroundColor: '#000000'
+          backgroundColor: initialProps?.meta?.backgroundColor || '#000000'
         },
         scenes
       };
-    }, []);
+    }, [initialProps]);
     
     // Helper function to validate scene code before adding to video state
     const validateSceneCode = useCallback(async (code: string): Promise<{ isValid: boolean; errors: string[] }> => {
@@ -339,12 +340,47 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           }
         }
         
-        // 5. Try basic compilation test (lightweight)
+        // 5. Basic syntax validation for ES6 modules (without Function constructor)
         try {
-          // Simple syntax check - ensure it's valid JavaScript/TypeScript
-          new Function(code.replace(/export\s+default\s+/, 'return '));
+          // Check for basic syntax issues without trying to execute the code
+          // This is a lightweight check for obvious syntax errors
+          
+          // Check for unmatched brackets/braces
+          const openBraces = (code.match(/\{/g) || []).length;
+          const closeBraces = (code.match(/\}/g) || []).length;
+          if (openBraces !== closeBraces) {
+            errors.push('Unmatched braces detected');
+          }
+          
+          const openParens = (code.match(/\(/g) || []).length;
+          const closeParens = (code.match(/\)/g) || []).length;
+          if (openParens !== closeParens) {
+            errors.push('Unmatched parentheses detected');
+          }
+          
+          const openBrackets = (code.match(/\[/g) || []).length;
+          const closeBrackets = (code.match(/\]/g) || []).length;
+          if (openBrackets !== closeBrackets) {
+            errors.push('Unmatched brackets detected');
+          }
+          
+          // Check for unterminated strings (basic check)
+          const singleQuotes = (code.match(/'/g) || []).length;
+          const doubleQuotes = (code.match(/"/g) || []).length;
+          const backticks = (code.match(/`/g) || []).length;
+          
+          if (singleQuotes % 2 !== 0) {
+            errors.push('Unterminated single quote string detected');
+          }
+          if (doubleQuotes % 2 !== 0) {
+            errors.push('Unterminated double quote string detected');
+          }
+          if (backticks % 2 !== 0) {
+            errors.push('Unterminated template literal detected');
+          }
+          
         } catch (syntaxError) {
-          errors.push(`Syntax error: ${syntaxError instanceof Error ? syntaxError.message : 'Invalid syntax'}`);
+          errors.push(`Basic syntax validation failed: ${syntaxError instanceof Error ? syntaxError.message : 'Invalid syntax'}`);
         }
         
         return { isValid: errors.length === 0, errors };
@@ -445,22 +481,15 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         // Mark this project as initialization attempted
         initializationAttemptedRef.current.add(projectId);
         
-        const currentProps = getCurrentProps();
-        
-        // If we already have data in video state, don't overwrite it
-        if (currentProps && currentProps.scenes && currentProps.scenes.length > 0) {
-          console.log('[WorkspaceContentAreaG] Video state already has scenes, skipping database fetch');
-          return;
-        }
-        
-        console.log('[WorkspaceContentAreaG] Loading existing project scenes from database');
+        console.log('[WorkspaceContentAreaG] Initializing project:', projectId);
+        console.log('[WorkspaceContentAreaG] Initial props:', initialProps);
         
         try {
-          // Fetch existing scenes from database
+          // Always fetch from database first to check if there are existing scenes
           const result = await getProjectScenesQuery.refetch();
           
           if (result.data && result.data.length > 0) {
-            console.log('[WorkspaceContentAreaG] Found existing scenes:', result.data.length);
+            console.log('[WorkspaceContentAreaG] Found existing scenes in database:', result.data.length);
             
             // Convert and set in video state
             const props = convertDbScenesToInputProps(result.data);
@@ -468,25 +497,29 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             
             console.log('[WorkspaceContentAreaG] Initialized video state with existing scenes');
           } else {
-            console.log('[WorkspaceContentAreaG] No existing scenes found, using initial props');
+            console.log('[WorkspaceContentAreaG] No existing scenes found in database, using initial props');
             
-            // Use initial props if no database scenes
+            // Use initial props for new projects (this ensures empty scenes array for new projects)
             if (initialProps) {
               replace(projectId, initialProps);
+              console.log('[WorkspaceContentAreaG] Initialized video state with initial props:', initialProps);
+            } else {
+              console.warn('[WorkspaceContentAreaG] No initial props provided for new project');
             }
           }
         } catch (error) {
-          console.error('[WorkspaceContentAreaG] Error loading existing scenes:', error);
+          console.error('[WorkspaceContentAreaG] Error loading project data:', error);
           
           // Fallback to initial props
           if (initialProps) {
             replace(projectId, initialProps);
+            console.log('[WorkspaceContentAreaG] Fallback: Initialized video state with initial props');
           }
         }
       };
       
       void initializeProject();
-    }, [projectId]);
+    }, [projectId, initialProps, getProjectScenesQuery, convertDbScenesToInputProps, replace]);
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);

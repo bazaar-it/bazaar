@@ -26,7 +26,19 @@ export const defaultDemoProps: z.infer<typeof DemoTimelineProps> = {
   imageUrl: "/demo.jpg",
 };
 
-// Default initial props for new projects
+// Function to generate default project props with unique scene IDs
+export function createDefaultProjectProps(): InputProps {
+  return {
+    meta: { 
+      duration: 10, // Start with empty duration for new projects
+      title: "New Project",
+      backgroundColor: "#111"
+    },
+    scenes: [], // Start with empty scenes array for new projects
+  };
+}
+
+// Legacy constant for backward compatibility - but should not be used for new projects
 export const DEFAULT_PROJECT_PROPS: InputProps = {
   meta: { 
     duration: 150, 

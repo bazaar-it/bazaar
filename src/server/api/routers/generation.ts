@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { projects, scenes, scenePlans } from "~/server/db/schema";
+import { projects, scenes, scenePlans, messages } from "~/server/db/schema";
 import { openai } from "~/server/lib/openai";
 import { generateObject } from "ai";
 
@@ -741,52 +741,60 @@ export default function ${scene.template}() {
       }
     }),
 
-  // NEW: Scene-first generation with prompt analysis and template snippets
-  generateSceneCode: protectedProcedure
+  // NEW: Unified scene generation with chat persistence (OPTIMIZATION #1)
+  generateSceneWithChat: protectedProcedure
     .input(z.object({
       projectId: z.string().uuid(),
-      userPrompt: z.string(),
+      userMessage: z.string(),
       sceneId: z.string().optional(), // For editing existing scenes
-      sceneName: z.string().default("Scene"),
-      sceneOrder: z.number().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { projectId, userPrompt, sceneId, sceneName } = input;
+      const { projectId, userMessage, sceneId } = input;
       
-      // Declare variables outside try block for catch block access
-      let isEditMode = false;
-      let editSceneId: string | undefined;
-      let editInstruction: string = userPrompt;
+      let assistantMessageRow: any = null;
       
       try {
-        // Step 1: Check for @scene(id) edit pattern (V1 logic)
-        const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(userPrompt);
-        let existingCode: string | undefined;
+        // Step 1: Parse edit pattern and determine operation type
+        const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(userMessage);
+        const isEditMode = !!editMatch;
+        const editSceneId = editMatch?.[1];
+        const editInstruction = editMatch?.[2] || userMessage;
         
-        if (editMatch) {
-          isEditMode = true;
-          editSceneId = editMatch[1]!;
-          editInstruction = editMatch[2]!;
-          
-          // Fetch existing scene code
+        // Step 2: Create user message in DB
+        const [userMessageRow] = await db.insert(messages).values({
+          projectId,
+          content: userMessage,
+          role: 'user',
+          status: 'success'
+        }).returning();
+        
+        // Step 3: Create placeholder assistant message
+        [assistantMessageRow] = await db.insert(messages).values({
+          projectId,
+          content: 'Generating scene...',
+          role: 'assistant',
+          status: 'pending'
+        }).returning();
+        
+        // Step 4: Generate scene code using existing logic
+        const targetSceneId = isEditMode ? editSceneId : sceneId;
+        const promptToUse = isEditMode ? editInstruction : userMessage;
+        
+        // Generate scene code directly (reuse existing generateSceneCode logic)
+        let existingCode: string | undefined;
+        if (isEditMode && editSceneId) {
           const existingScene = await db.query.scenes.findFirst({
             where: and(eq(scenes.id, editSceneId), eq(scenes.projectId, projectId)),
           });
-          
           if (!existingScene) {
             throw new Error(`Scene with ID ${editSceneId} not found`);
           }
-          
           existingCode = existingScene.tsxCode;
         }
         
-        // Step 2: Build enhanced prompts for better code generation (V1 logic)
-        let systemPrompt: string;
-        let userMessage: string;
-        
-        if (isEditMode) {
-          // Enhanced edit mode prompting (V1 logic)
-          systemPrompt = `You are editing an existing Remotion component. Apply ONLY the requested change while preserving the existing structure and functionality.
+        // Build LLM prompts
+        const systemPrompt = isEditMode 
+          ? `You are editing an existing Remotion component. Apply ONLY the requested change while preserving the existing structure and functionality.
 
 EXISTING COMPONENT CODE:
 \`\`\`tsx
@@ -798,16 +806,8 @@ CRITICAL RULES:
 2. Apply the requested change while maintaining all existing functionality
 3. Preserve all existing animations and structure
 4. Return only the modified component code, no explanations
-5. Ensure export default function ComponentName() format
-
-Apply the requested change while maintaining all existing functionality. Return only the modified component code, no explanations.`;
-
-          userMessage = `Apply this change to the component: "${editInstruction}"
-
-Keep all existing animations and structure intact. Only modify what's specifically requested.`;
-        } else {
-          // Enhanced new scene prompting (V1 logic)
-          systemPrompt = `You are a Remotion animation specialist. Create visually engaging animated components using standard Remotion imports.
+5. Ensure export default function ComponentName() format`
+          : `You are a Remotion animation specialist. Create visually engaging animated components using standard Remotion imports.
 
 REQUIRED FORMAT:
 \`\`\`tsx
@@ -837,59 +837,47 @@ CRITICAL RULES:
 1. Use standard Remotion imports only
 2. Export default function ComponentName() format required
 3. Return only the component code, no explanations
-4. Create engaging animations that bring concepts to life
-
-Return only the component code, no explanations.`;
-
-          userMessage = `Create an animated component for: "${userPrompt}"
-
-Focus on creating smooth, visually engaging animations that bring the concept to life. Make it dynamic and interesting to watch.`;
-        }
-
-        // Step 3: Generate component code with enhanced error handling (V1 logic)
+4. Create engaging animations that bring concepts to life`;
+        
+        const userPrompt = isEditMode 
+          ? `Apply this change to the component: "${editInstruction}"\n\nKeep all existing animations and structure intact. Only modify what's specifically requested.`
+          : `Create an animated component for: "${userMessage}"\n\nFocus on creating smooth, visually engaging animations that bring the concept to life. Make it dynamic and interesting to watch.`;
+        
+        // Call LLM
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage }
+            { role: 'user', content: userPrompt }
           ],
           temperature: 0.7,
         });
-
+        
         const content = response.choices[0]?.message?.content;
         if (!content) {
           throw new Error('No response from OpenAI');
         }
-
-        // Step 4: Extract and clean code with enhanced validation (V1 + V2 logic)
+        
+        // Extract and clean code
         const codeMatch = /```(?:tsx?|javascript|jsx?)?\n([\s\S]*?)\n```/.exec(content);
         let generatedCode = codeMatch?.[1] ?? content;
-
-        // Enhanced code cleanup (V1 + V2 logic)
-        // Remove forbidden imports and replace with standard imports
+        
+        // Enhanced code cleanup
         if (/import\s+React/.test(generatedCode)) {
-          console.warn('⚠️ Generated code contains forbidden React import, fixing...');
           generatedCode = generatedCode.replace(/import\s+React[^;]*;?\s*/g, '');
         }
         
-        // Ensure standard Remotion imports (V2 improvement)
         if (!/import\s+.*from\s+['"]remotion['"]/.test(generatedCode)) {
-          console.warn('⚠️ Generated code missing standard Remotion import, adding...');
           const importStatement = "import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';\n\n";
           generatedCode = importStatement + generatedCode;
         }
         
-        // Remove window.Remotion patterns in favor of standard imports (V2 improvement)
         if (/window\.Remotion/.test(generatedCode)) {
-          console.warn('⚠️ Generated code contains window.Remotion pattern, fixing...');
           generatedCode = generatedCode.replace(/const\s*{\s*[^}]*}\s*=\s*window\.Remotion;\s*/g, '');
         }
-
-        // Ensure proper export default function (V1 + V2 logic)
+        
+        // Ensure proper export default function
         if (!/export\s+default\s+function/.test(generatedCode)) {
-          console.warn('⚠️ Generated code missing export default, fixing...');
-          
-          // Check for arrow function syntax
           const arrowFunctionMatch = /const\s+(\w+)\s*=\s*\(([^)]*)\)\s*=>\s*\{/;
           const match = arrowFunctionMatch.exec(generatedCode);
           
@@ -907,7 +895,6 @@ Focus on creating smooth, visually engaging animations that bring the concept to
             if (funcMatch) {
               generatedCode = generatedCode.replace(functionMatch, 'export default function $1(');
             } else {
-              // Enhanced fallback with proper imports (V1 + V2 logic)
               generatedCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function GeneratedComponent() {
@@ -931,120 +918,77 @@ export default function GeneratedComponent() {
             }
           }
         }
-
-        // Ensure proper code ending
+        
         if (!generatedCode.trim().endsWith('}')) {
           generatedCode = generatedCode.trim() + '\n}';
         }
-
-        // Step 5: Enhanced validation before database save (V1 logic)
-        console.log('[generateSceneCode] Validating generated code before database save...');
-        const validation = await validateGeneratedCode(generatedCode.trim());
         
+        // Validate generated code
+        const validation = await validateGeneratedCode(generatedCode.trim());
         if (!validation.isValid) {
-          console.error('[generateSceneCode] ❌ Code validation failed:', validation.errors);
           throw new Error(`Generated code validation failed: ${validation.errors.join(', ')}`);
         }
         
-        console.log('[generateSceneCode] ✅ Code validation passed, proceeding with database save');
-
-        // Step 6: Persist to database with enhanced metadata (V1 logic)
+        // Upsert scene
         const sceneDataToSave = {
-          name: sceneName,
+          name: isEditMode ? `Edited Scene` : `Generated Scene`,
           order: 0,
           tsxCode: generatedCode.trim(),
           props: {
-            userPrompt: isEditMode ? editInstruction : userPrompt,
+            userPrompt: isEditMode ? editInstruction : userMessage,
             isEdit: isEditMode,
             validationPassed: true,
             generatedAt: new Date().toISOString(),
             model: 'gpt-4o-mini',
           },
         };
-
+        
         const persistedSceneId = await upsertScene(
           projectId,
-          isEditMode ? editSceneId : sceneId,
+          isEditMode ? editSceneId : targetSceneId,
           sceneDataToSave
         );
-
-        console.log('[generateSceneCode] ✅ Scene persisted to database with ID:', persistedSceneId);
-
+        
+        // Fetch the complete scene object for client
+        const [completeScene] = await db.select().from(scenes).where(eq(scenes.id, persistedSceneId));
+        
+        // Step 5: Update assistant message with success
+        const assistantContent = `Scene ${isEditMode ? 'updated' : 'generated'}: ${promptToUse.slice(0, 50)}${promptToUse.length > 50 ? '...' : ''} ✅`;
+        
+        await db.update(messages)
+          .set({
+            content: assistantContent,
+            status: 'success',
+            updatedAt: new Date()
+          })
+          .where(eq(messages.id, assistantMessageRow.id));
+        
         return {
-          code: generatedCode.trim(),
-          sceneId: persistedSceneId,
-          insight: { specificity: 'high' as const },
-          isEdit: isEditMode,
-          validationResult: validation,
-        };
-      } catch (error) {
-        console.error('Error generating scene code:', error);
-        
-        // Enhanced fallback with proper imports (V1 + V2 logic)
-        const fallbackCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
-
-export default function ErrorFallbackScene() {
-  const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
-  const opacity = interpolate(frame, [0, 30], [0, 1]);
-  
-  return (
-    <AbsoluteFill style={{
-      backgroundColor: '#1a1a1a',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      opacity
-    }}>
-      <div style={{ 
-        color: '#fff', 
-        fontSize: Math.min(width / 20, 48),
-        textAlign: 'center',
-        padding: '20px'
-      }}>
-        Scene Generation Error
-        <div style={{ fontSize: '0.6em', opacity: 0.7, marginTop: '10px' }}>
-          Please try a different prompt
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-}`;
-
-        // Validate fallback code (should always pass)
-        const fallbackValidation = await validateGeneratedCode(fallbackCode);
-        
-        // Save fallback scene with enhanced error metadata (V1 logic)
-        const fallbackSceneData = {
-          name: `${sceneName} (Error Fallback)`,
-          order: 0,
-          tsxCode: fallbackCode,
-          props: {
-            userPrompt: isEditMode ? editInstruction : userPrompt,
-            isEdit: isEditMode,
-            isErrorFallback: true,
-            originalError: error instanceof Error ? error.message : String(error),
-            validationPassed: fallbackValidation.isValid,
-            generatedAt: new Date().toISOString(),
-            model: 'gpt-4o-mini-fallback',
+          scene: completeScene,
+          assistantMessage: {
+            id: assistantMessageRow.id,
+            content: assistantContent,
+            status: 'success'
           },
+          isEdit: isEditMode
         };
-
-        const fallbackSceneId = await upsertScene(
-          projectId,
-          isEditMode ? editSceneId : sceneId,
-          fallbackSceneData
-        );
-
-        return {
-          code: fallbackCode,
-          sceneId: fallbackSceneId,
-          insight: { specificity: 'low' as const },
-          isEdit: isEditMode,
-          isErrorFallback: true,
-          validationResult: fallbackValidation,
-          originalError: error instanceof Error ? error.message : String(error),
-        };
+        
+      } catch (error) {
+        console.error('[generateSceneWithChat] Error:', error);
+        
+        // Update assistant message with error if it was created
+        if (assistantMessageRow?.id) {
+          await db.update(messages)
+            .set({
+              content: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              status: 'error',
+              updatedAt: new Date()
+            })
+            .where(eq(messages.id, assistantMessageRow.id))
+            .catch(console.error); // Don't throw on cleanup errors
+        }
+        
+        throw error;
       }
     }),
 

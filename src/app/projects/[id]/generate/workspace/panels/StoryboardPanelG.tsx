@@ -55,7 +55,7 @@ export function StoryboardPanelG({
   // Debug: Track when scenes change
   useEffect(() => {
     console.log('[StoryboardPanelG] Scenes updated - count:', scenes.length);
-    console.log('[StoryboardPanelG] Scene IDs:', scenes.map(s => s.id));
+    console.log('[StoryboardPanelG] Scene IDs:', scenes.map((s: any) => s.id));
   }, [scenes]);
 
   // Force refresh when projectId changes
@@ -65,22 +65,23 @@ export function StoryboardPanelG({
     forceRefresh(projectId);
   }, [projectId]);
 
-  // Generate scene code mutation
-  const generateSceneCodeMutation = api.generation.generateSceneCode.useMutation({
-    onSuccess: (result) => {
+  // Generate scene code mutation - Updated to use new unified API
+  const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
+    onSuccess: (result: any) => {
       console.log("✅ Scene generation completed:", result);
       setIsGenerating(false);
       setNewScenePrompt("");
       toast.success("Scene generated successfully!");
       
-      // Note: Video state update is handled by ChatPanelG to prevent race conditions
+      // Note: Video state update is handled by the unified mutation
       // The scene will appear here automatically when video state refreshes
       
       // Auto-select the new scene if it was created via the "Add Scene" button
-      // (Only if this was a direct creation from StoryboardPanelG, not from ChatPanelG)
-      setCurrentSelectedSceneId(result.sceneId);
+      if (result.scene?.id) {
+        setCurrentSelectedSceneId(result.scene.id);
+      }
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("❌ Scene generation failed:", error);
       setIsGenerating(false);
       toast.error(`Scene generation failed: ${error.message}`);
@@ -97,14 +98,14 @@ export function StoryboardPanelG({
     setIsGenerating(true);
     
     try {
-      await generateSceneCodeMutation.mutateAsync({
+      await generateSceneWithChatMutation.mutateAsync({
         projectId,
-        userPrompt: newScenePrompt.trim(),
+        userMessage: newScenePrompt.trim(),
       });
     } catch (error) {
       console.error("Failed to add scene:", error);
     }
-  }, [newScenePrompt, projectId, generateSceneCodeMutation]);
+  }, [newScenePrompt, projectId, generateSceneWithChatMutation]);
 
   // Handle scene deletion (soft delete by hiding)
   const handleDeleteScene = useCallback((sceneId: string) => {
@@ -136,9 +137,9 @@ export function StoryboardPanelG({
         <Button
           size="sm"
           onClick={() => setIsGenerating(true)}
-          disabled={generateSceneCodeMutation.isPending}
+          disabled={generateSceneWithChatMutation.isPending}
         >
-          {generateSceneCodeMutation.isPending ? (
+          {generateSceneWithChatMutation.isPending ? (
             <Loader2Icon className="w-4 h-4 animate-spin mr-1" />
           ) : (
             <PlusIcon className="w-4 h-4 mr-1" />
@@ -155,16 +156,16 @@ export function StoryboardPanelG({
               value={newScenePrompt}
               onChange={(e) => setNewScenePrompt(e.target.value)}
               placeholder="Describe the new scene..."
-              disabled={generateSceneCodeMutation.isPending}
+              disabled={generateSceneWithChatMutation.isPending}
               autoFocus
             />
             <div className="flex space-x-2">
               <Button
                 size="sm"
                 onClick={handleAddScene}
-                disabled={generateSceneCodeMutation.isPending || !newScenePrompt.trim()}
+                disabled={generateSceneWithChatMutation.isPending || !newScenePrompt.trim()}
               >
-                {generateSceneCodeMutation.isPending ? (
+                {generateSceneWithChatMutation.isPending ? (
                   <Loader2Icon className="w-4 h-4 animate-spin mr-1" />
                 ) : (
                   <PlusIcon className="w-4 h-4 mr-1" />
@@ -178,7 +179,7 @@ export function StoryboardPanelG({
                   setIsGenerating(false);
                   setNewScenePrompt("");
                 }}
-                disabled={generateSceneCodeMutation.isPending}
+                disabled={generateSceneWithChatMutation.isPending}
               >
                 Cancel
               </Button>
@@ -199,9 +200,9 @@ export function StoryboardPanelG({
         ) : (
           <div className="p-4 space-y-2">
             {/* Deduplicate scenes by ID to prevent React key errors */}
-            {scenes.reduce((uniqueScenes: Scene[], scene, index) => {
+            {scenes.reduce((uniqueScenes: Scene[], scene: any, index: number) => {
               // Check if we already have a scene with this ID
-              const existingIndex = uniqueScenes.findIndex(s => s.id === scene.id);
+              const existingIndex = uniqueScenes.findIndex((s: any) => s.id === scene.id);
               if (existingIndex >= 0) {
                 // Replace with the newer scene (last occurrence wins)
                 uniqueScenes[existingIndex] = scene;
@@ -210,7 +211,7 @@ export function StoryboardPanelG({
                 uniqueScenes.push(scene);
               }
               return uniqueScenes;
-            }, []).map((scene, index) => (
+            }, []).map((scene: any, index: number) => (
               <div
                 key={`scene-${scene.id}-${index}`} // More robust key to prevent duplicates
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -232,7 +233,7 @@ export function StoryboardPanelG({
                       <div className="font-medium text-sm">{getSceneName(scene)}</div>
                       <div className="text-xs text-gray-500">
                         Scene {index + 1} • {formatDuration(scene.duration)}
-                        {scenes.filter(s => s.id === scene.id).length > 1 && (
+                        {scenes.filter((s: any) => s.id === scene.id).length > 1 && (
                           <span className="ml-1 text-red-500">(duplicate ID)</span>
                         )}
                       </div>

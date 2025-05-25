@@ -5,10 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import { env } from '~/env';
 
-// Imports from the Log Agent scripts - extensionless for Next.js bundler resolution
-import { addLogAgentTransport } from '~/scripts/log-agent/integration'; 
-import { generateRunId, config as logAgentConfig } from '~/scripts/log-agent/config';
-
 // Fix for function parameters that allow null taskId
 type StringOrNull = string | null;
 
@@ -180,31 +176,6 @@ if (isServer) {
   
   console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
 
-  // Only add Log Agent Transport in development
-  if (!isServerlessProduction) {
-    try {
-      const currentRunId = process.env.LOG_RUN_ID || generateRunId();
-      const agentUrl = process.env.LOG_AGENT_URL || `http://localhost:${logAgentConfig.port}`;
-
-      console.log(`Integrating Log Agent Transport with runId: ${currentRunId} to URL: ${agentUrl}`);
-
-      addLogAgentTransport(logger, {
-        agentUrl: agentUrl,
-        source: 'main-app',
-        runId: currentRunId,
-      });
-
-      addLogAgentTransport(componentsLogger, {
-        agentUrl: agentUrl,
-        source: 'components-worker',
-        runId: currentRunId,
-      });
-      
-      console.log('Log Agent Transport integrated with server-side loggers.');
-    } catch (error) {
-      console.warn('[LOGGER] Could not initialize Log Agent Transport:', error);
-    }
-  }
 } else {
   // Simple console logger for client-side
   logger = createLogger({
@@ -241,36 +212,6 @@ if (isServer) {
     ],
   });
 
-  // Only add Log Agent Transport in development
-  if (!isServerlessProduction) {
-    try {
-      const clientRunId = process.env.NEXT_PUBLIC_LOG_RUN_ID || generateRunId();
-      const clientAgentUrl =
-        process.env.NEXT_PUBLIC_LOG_AGENT_URL ||
-        process.env.LOG_AGENT_URL ||
-        `http://localhost:${logAgentConfig.port}`;
-
-      addLogAgentTransport(logger, {
-        agentUrl: clientAgentUrl,
-        source: 'main-app',
-        runId: clientRunId,
-      });
-
-      addLogAgentTransport(a2aLogger, {
-        agentUrl: clientAgentUrl,
-        source: 'a2a-system',
-        runId: clientRunId,
-      });
-
-      addLogAgentTransport(componentsLogger, {
-        agentUrl: clientAgentUrl,
-        source: 'components-worker',
-        runId: clientRunId,
-      });
-    } catch (error) {
-      console.warn('[LOGGER] Could not initialize Log Agent Transport:', error);
-    }
-  }
 }
 
 // Function to initialize the A2A file transport if requested
@@ -534,15 +475,6 @@ if (a2aConsoleTransport) {
 } else {
   console.log('[DEBUG_LOGGER] Could not find a2aLogger console transport to configure!');
 }
-
-// Add the Log Agent Transport to a2aLogger
-const logAgentUrl = process.env.LOG_AGENT_URL || `http://localhost:${logAgentConfig.port}`;
-const logRunId = process.env.LOG_RUN_ID || generateRunId();
-addLogAgentTransport(a2aLogger, {
-  agentUrl: logAgentUrl,
-  source: 'a2a-system',
-  runId: logRunId,
-});
 
 // Other child loggers
 const authLogger = logger.child({ module: 'auth' });
