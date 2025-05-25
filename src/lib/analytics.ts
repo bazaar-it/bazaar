@@ -10,7 +10,7 @@ declare global {
 }
 
 // Google Analytics 4 Configuration
-export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 // Initialize Google Analytics
 export const initGA = () => {
@@ -51,14 +51,14 @@ export const trackEvent = (eventName: string, parameters?: Record<string, any>) 
 // User Journey Events
 export const analytics = {
   // Authentication Events
-  userSignUp: (method: 'google' | 'email') => {
+  userSignUp: (method: 'google' | 'github') => {
     trackEvent('sign_up', {
       method,
       timestamp: new Date().toISOString(),
     });
   },
 
-  userLogin: (method: 'google' | 'email') => {
+  userLogin: (method: 'google' | 'github') => {
     trackEvent('login', {
       method,
       timestamp: new Date().toISOString(),
@@ -155,7 +155,7 @@ export const analytics = {
     });
   },
 
-  // Reddit Referral Tracking
+  // Reddit Referral Tracking - CRITICAL FOR LAUNCH
   redditReferral: (subreddit?: string, post?: string) => {
     trackEvent('reddit_referral', {
       subreddit,
@@ -163,9 +163,25 @@ export const analytics = {
       timestamp: new Date().toISOString(),
     });
   },
+
+  // Beta Launch Events
+  betaUserSignup: (source: string) => {
+    trackEvent('beta_user_signup', {
+      source,
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  firstSceneGenerated: (projectId: string, timeToFirstScene: number) => {
+    trackEvent('first_scene_generated', {
+      project_id: projectId,
+      time_to_first_scene_ms: timeToFirstScene,
+      timestamp: new Date().toISOString(),
+    });
+  },
 };
 
-// Reddit Referral Detection
+// Reddit Referral Detection - CRITICAL FOR LAUNCH
 export const detectRedditReferral = () => {
   if (typeof window === 'undefined') return;
 
@@ -178,6 +194,12 @@ export const detectRedditReferral = () => {
     const subreddit = subredditMatch ? subredditMatch[1] : undefined;
     
     analytics.redditReferral(subreddit);
+    
+    // Store for later attribution
+    sessionStorage.setItem('referral_source', 'reddit');
+    if (subreddit) {
+      sessionStorage.setItem('referral_subreddit', subreddit);
+    }
   }
 
   // Check for UTM parameters (for Reddit campaigns)
@@ -186,6 +208,14 @@ export const detectRedditReferral = () => {
       urlParams.get('utm_campaign') || undefined,
       urlParams.get('utm_content') || undefined
     );
+    
+    sessionStorage.setItem('referral_source', 'reddit');
+  }
+
+  // Check for direct Reddit parameter
+  if (urlParams.get('ref') === 'reddit') {
+    analytics.redditReferral();
+    sessionStorage.setItem('referral_source', 'reddit');
   }
 };
 

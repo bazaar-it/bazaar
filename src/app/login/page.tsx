@@ -2,15 +2,42 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { analytics } from "~/lib/analytics";
 
 export default function LoginPage() {
+  const handleGitHubLogin = () => {
+    // Track OAuth login attempt
+    analytics.userLogin('github');
+    
+    // Check if user came from Reddit
+    const referralSource = sessionStorage.getItem('referral_source');
+    if (referralSource === 'reddit') {
+      analytics.betaUserSignup('reddit');
+    }
+    
+    signIn("github", { callbackUrl: "/dashboard" });
+  };
+
+  const handleGoogleLogin = () => {
+    // Track OAuth login attempt
+    analytics.userLogin('google');
+    
+    // Check if user came from Reddit
+    const referralSource = sessionStorage.getItem('referral_source');
+    if (referralSource === 'reddit') {
+      analytics.betaUserSignup('reddit');
+    }
+    
+    signIn("google", { callbackUrl: "/dashboard" });
+  };
+
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
       <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Sign in to Bazaar</h1>
 
       <div className="flex flex-col gap-4">
         <button
-          onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+          onClick={handleGitHubLogin}
           className="flex w-full items-center justify-center gap-3 rounded-md bg-gray-900 py-2 px-4 text-white hover:bg-gray-700 transition"
         >
           <span className="flex items-center justify-center w-5 h-5">
@@ -20,7 +47,7 @@ export default function LoginPage() {
         </button>
 
         <button
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+          onClick={handleGoogleLogin}
           className="flex w-full items-center justify-center gap-3 rounded-md bg-blue-600 py-2 px-4 text-white hover:bg-blue-500 transition"
         >
           <span className="flex items-center justify-center w-5 h-5">
