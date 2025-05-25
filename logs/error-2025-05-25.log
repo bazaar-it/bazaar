@@ -1,3 +1,66 @@
 {"error":{"name":"NeonDbError","sourceError":{"cause":{"code":"ECONNRESET","errno":-54,"syscall":"read"}}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-24T19:25:13.372Z","worker":"BuildWorker"}
 {"error":{"name":"NeonDbError","sourceError":{"cause":{"code":"ECONNRESET","errno":-54,"syscall":"read"}}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-24T19:40:32.145Z","worker":"CodeGenWorker"}
 {"error":{"name":"NeonDbError","sourceError":{"cause":{"code":"ECONNRESET","errno":-54,"syscall":"read"}}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-24T19:40:32.149Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:15:13.504Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:15:17.645Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:15:27.940Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:15:27.942Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:15:29.341Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:15:29.342Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:15:46.113Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:15:47.657Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:15:49.319Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:15:49.321Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:16:28.154Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:16:59.580Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:16:59.582Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:17:08.096Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:17:28.170Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:21:43.945Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:21:43.947Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:21:46.447Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:21:46.447Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:21:46.447Z","worker":"BuildWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:21:47.226Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:26:07.775Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:26:07.778Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:26:07.778Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:26:40.093Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:29:48.904Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:29:48.905Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:29:48.906Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:32:42.329Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:32:42.329Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:32:42.329Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:32:43.142Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:36:36.881Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:36:36.882Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:36:36.884Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:41:08.801Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:41:08.804Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:41:08.804Z","worker":"CodeGenWorker"}
+{"level":"error","message":"system","module":"a2a","timestamp":"2025-05-25T10:41:09.644Z"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T10:45:31.766Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T10:45:31.767Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T10:45:31.767Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:00:11.739Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:00:12.241Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:00:12.242Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:00:18.246Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:00:18.247Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:00:18.248Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:00:47.791Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:00:47.792Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:00:47.792Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:01:30.228Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:01:30.230Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:01:30.231Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:02:55.975Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:02:55.976Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:02:55.977Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:11:49.109Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:11:49.109Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:11:49.109Z","worker":"BuildWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for 'queued_for_generation' jobs:","timestamp":"2025-05-25T11:13:50.789Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error in code generation worker loop:","timestamp":"2025-05-25T11:13:50.791Z","worker":"CodeGenWorker"}
+{"error":{"name":"NeonDbError","sourceError":{}},"level":"error","message":"Error checking for pending jobs:","timestamp":"2025-05-25T11:19:49.326Z","worker":"BuildWorker"}

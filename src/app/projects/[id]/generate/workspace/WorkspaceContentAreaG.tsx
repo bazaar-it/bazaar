@@ -12,22 +12,22 @@ import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 import { ChatPanelG } from './panels/ChatPanelG';
 import { PreviewPanelG } from './panels/PreviewPanelG';
-import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import { CodePanelG } from './panels/CodePanelG';
+import { StoryboardPanelG } from './panels/StoryboardPanelG';
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
   chat: ChatPanelG,
   preview: PreviewPanelG,
-  storyboard: StoryboardPanelG,
   code: CodePanelG,
+  storyboard: StoryboardPanelG,
 };
 
 const PANEL_LABELS_G = {
   chat: 'Chat',
-  preview: 'Preview',
-  storyboard: 'Storyboard',
+  preview: 'Video Player',
   code: 'Code',
+  storyboard: 'Storyboard',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -74,6 +74,7 @@ function SortablePanelG({ id, children, style, className, onRemove }: {
   
   const isCodePanel = id === 'code';
   const isPreviewPanel = id === 'preview';
+  const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
   
   const handlePreviewRefresh = () => {
@@ -163,7 +164,7 @@ function DropZoneG({
     },
     { 
       type: 'preview', 
-      label: 'Preview', 
+      label: 'Video Player', 
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="5 3 19 12 5 21 5 3"/>
@@ -539,14 +540,22 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               <PreviewPanelG projectId={projectId} initial={initialProps} />
             </div>
           );
-        case 'storyboard':
-          return <StoryboardPanelG projectId={projectId} selectedSceneId={selectedSceneId} onSceneSelect={setSelectedSceneId} />;
         case 'code':
-          return <CodePanelG projectId={projectId} selectedSceneId={selectedSceneId} />;
+          return <CodePanelG 
+            projectId={projectId} 
+            selectedSceneId={selectedSceneId} 
+            onClose={() => removePanel(panel.id)}
+          />;
+        case 'storyboard':
+          return <StoryboardPanelG 
+            projectId={projectId} 
+            selectedSceneId={selectedSceneId} 
+            onSceneSelect={setSelectedSceneId}
+          />;
         default:
           return null;
       }
-    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated]);
+    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel]);
 
     // Render empty state if no panels are open
     if (openPanels.length === 0) {

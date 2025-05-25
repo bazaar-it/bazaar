@@ -7,95 +7,24 @@ import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
 import LoginPage from "./login/page";
 
-// Custom hook for typewriter effect
-const useTypewriterPrompt = (
-  staticPrefix: string, 
-  prompts: string[], 
-  typeSpeed = 50, 
-  deleteSpeed = 30, 
-  pauseTime = 2000
-): string => {
-  const [currentText, setCurrentText] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    // If we're in the pause state
-    if (isPaused) {
-      timer = setTimeout(() => {
-        setIsPaused(false);
-        setIsDeleting(true);
-      }, pauseTime);
-      return () => clearTimeout(timer);
-    }
-
-    const currentPrompt = prompts[promptIndex] ?? '';
-    
-    // Handle deletion
-    if (isDeleting) {
-      timer = setTimeout(() => {
-        setCurrentText(prev => prev.substring(0, prev.length - 1));
-        if (currentText === '') {
-          setIsDeleting(false);
-          setPromptIndex((promptIndex + 1) % prompts.length);
-        }
-      }, deleteSpeed);
-    } 
-    // Handle typing
-    else {
-      if (currentText === currentPrompt) {
-        setIsPaused(true);
-      } else {
-        timer = setTimeout(() => {
-          setCurrentText(currentPrompt.substring(0, currentText.length + 1));
-        }, typeSpeed);
-      }
-    }
-    
-    return () => clearTimeout(timer);
-  }, [currentText, isDeleting, promptIndex, isPaused, prompts, typeSpeed, deleteSpeed, pauseTime]);
-  
-  return staticPrefix + currentText;
-};
 
 export default function HomePage() {
   const { data: session, status } = useSession();
-  const [prompt, setPrompt] = useState("");
   const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const router = useRouter();
   const createProject = api.project.create.useMutation();
   
-  // Example prompts for rotation
-  const examplePrompts = [
-    "a scene where bold white text saying 'Launch Day' pulses over a shifting pink-to-purple gradient with sparkles trailing off",
-    "a scene with a dark terminal-style background and green monospaced code being typed out line-by-line, Matrix-style",
-    "a product feature appearing one by one in 3D-style cards that fade in and float upward with a spring motion",
-    "a scene that zooms into a phone screen while a hand scrolls through an app, with UI elements bouncing softly",
-    "a typewriter-style text effect introducing 'Introducing FlowSync', with a glitch transition revealing the app logo",
-    "a looping animation of fireworks exploding in sync with sound pulses on a midnight blue background",
-    "a scene where 3 floating avatars rotate in 3D space while chat bubbles fade in above them",
-    "a kinetic typography scene where the phrase 'Speed. Style. Simplicity.' slams onto the screen in sync with bass hits",
-    "a scene with a sunrise horizon behind mountains, as the product name rises with the sun using smooth motion blur"
-  ];
-  
-  // Rotating placeholder using the typewriter effect
-  const placeholderText = useTypewriterPrompt("Create ", examplePrompts);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
+
+  const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
-      // Create project with initial prompt as message
-      const project = await createProject.mutateAsync({
-        initialMessage: prompt,
-      });
+      // Create a new project and redirect to generator
+      const project = await createProject.mutateAsync({});
       if (project?.projectId) {
-        router.push(`/projects/${project.projectId}/edit`);
+        router.push(`/projects/${project.projectId}/generate`);
       }
     } else {
       setShowLogin(true);
@@ -136,42 +65,27 @@ export default function HomePage() {
     {
       id: "cost",
       question: "How much does it cost?",
-      answer: "During beta, it's completely free."
+      answer: "Bazaar is free with unlimited use during the beta testing period."
     },
     {
       id: "how-it-works",
       question: "How does it work?",
-      answer: "Write a description of each scene you want to make and press \"Create.\" We'll generate the code. You can then refine every scene in the editor using natural language."
-    },
-    {
-      id: "save",
-      question: "How do I save it?",
-      answer: "We haven't implemented that yet — but it's coming soon. For now, we recommend screen recording. Your scenes will be saved to your account and rendering/exporting will be available in the next few days. Make sure you're signed up for updates to know when it goes live."
-    },
-    {
-      id: "mobile",
-      question: "Can I make it in a mobile-friendly format?",
-      answer: "Yes, just prompt the box to make it vertical, square, horizontal—whatever you want."
-    },
-    {
-      id: "figma",
-      question: "Can I import my Figma file?",
-      answer: "That feature is coming soon. Enter your email below to get notified."
-    },
-    {
-      id: "contact",
-      question: "How can I contact you?",
-      answer: "Email us at hello@bazaar.it."
+      answer: "You type a single scene description, and we turn it into a motion graphic video in about 7 seconds.\n\nBehind the scenes, we use AI to generate React code based on your prompt, and then render it using Remotion. The more descriptive you are, the better the results — so don't hold back. Mention colors, fonts, sizes, layout, movement, and any other visual details you imagine.\n\nPut simply: clear input = great output.\nVague input? Not so much."
     },
     {
       id: "what-is",
-      question: "WTF is Bazaar?",
-      answer: "Bazaar is a fine-tuned LLM for converting text descriptions into motion graphic videos."
+      question: "What is Bazaar?",
+      answer: "Our long term vision for Bazaar is to build a tool that turns code into content and enables storytelling at scale.\n\nNo timelines. No editing. Just emotional, accurate, and visually captivating video - for every feature, in every language, tailored to every customer."
     },
     {
-      id: "music",
-      question: "Can I add music?",
-      answer: "That feature is coming soon."
+      id: "beta-features",
+      question: "What features are in Beta V1?",
+      answer: "Beta V1 is our very first release — a primitive but promising text-to-motion generator.\n\nFrom a single text prompt, you can generate short, animated scenes. You can iterate on each either by describing the change you want to make or by opening the code panel, editing it and clicking 'Run'.\n\nVideo downloads aren't supported yet, so you'll need to screen record your masterpiece for now.\n\nYour scenes are saved to your account, but you won't be able to view or manage them just yet — that feature's coming soon."
+    },
+    {
+      id: "new-features",
+      question: "What new features are you working on?",
+      answer: "While we have an ambitious vision for fully automated video generation, our AI isn't there yet — so we're building the foundation in the meantime.\n\nRight now, we're working on a fully featured editor where you can create multi-scene videos from a single prompt, add music, and save your work properly. You'll be able to stitch scenes together, fine-tune timing, and build more complete product demos.\n\nBehind the scenes, we're training our AI to go from a single prompt to an entire software demo — but we've still got a lot of work to get there."
     }
   ];
 
@@ -217,29 +131,21 @@ export default function HomePage() {
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
         <div className="mb-16 w-full text-center">
           <h1 className="text-6xl font-extrabold mb-6">Motion Graphics, Made Simple</h1>
-          <p className="text-xl text-gray-600">Create stunning motion graphic scenes from a simple prompt</p>
+          <p className="text-xl text-gray-600">Bazaar is an AI-powered video generator that turns descriptions into animated motion graphics — in seconds.</p>
         </div>
         
-        <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto" autoComplete="off">
-          <div className="relative">
-            <textarea
-              placeholder={placeholderText}
-              aria-label="Video idea prompt"
-              value={prompt}
-              onChange={e => setPrompt(e.target.value)}
-              className="w-full px-6 py-6 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-black text-black min-h-[180px] resize-none pb-20"
-              disabled={createProject.isPending}
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="absolute bottom-5 right-5 bg-black text-white px-6 py-3 rounded-md font-semibold hover:bg-gray-800 transition"
-              disabled={createProject.isPending || !prompt.trim()}
-            >
-              {createProject.isPending ? "Creating..." : "Create"}
-            </button>
-          </div>
-        </form>
+        <div className="w-full text-center">
+          <button
+            onClick={handleTryForFree}
+            disabled={createProject.isPending}
+            className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
+          >
+            {createProject.isPending ? "Creating..." : "Try for Free"}
+          </button>
+          <p className="text-center text-gray-500 text-sm mt-3">
+            No credit card required • Start creating in seconds
+          </p>
+        </div>
         
         {/* Example videos section */}
         <section className="mt-20 w-full">
@@ -393,10 +299,14 @@ export default function HomePage() {
                 </button>
                 <div 
                   className={`px-6 overflow-hidden transition-all duration-300 ease-in-out ${
-                    expandedFaq === faq.id ? 'max-h-60 py-4' : 'max-h-0 py-0'
+                    expandedFaq === faq.id ? 'max-h-96 py-4' : 'max-h-0 py-0'
                   }`}
                 >
-                  <p className="text-gray-600">{faq.answer}</p>
+                  <div className="text-gray-600 space-y-3">
+                    {faq.answer.split('\n\n').map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from "next/navigation";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
+import { api } from "~/trpc/react";
 import type { PanelTypeG } from './WorkspaceContentAreaG';
 import { Button } from "~/components/ui/button";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "~/components/ui/tooltip";
@@ -12,7 +13,7 @@ import {
   Code2Icon, 
   ChevronLeftIcon, 
   ChevronRightIcon, 
-  PlusIcon, 
+  PlusIcon,
   ListIcon,
 } from "~/components/ui/icons";
 
@@ -37,11 +38,11 @@ interface WorkspacePanelG {
   href: string;
 }
 
-// Workspace panels for BAZAAR-304: Chat, Preview, Storyboard, Code
+// Workspace panels for BAZAAR-304: Chat, Preview, Code (Storyboard commented out)
 const navItems: WorkspacePanelG[] = [
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
-  { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
+  // { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
@@ -54,6 +55,30 @@ export function GenerateSidebar({
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Setup mutation for creating a new project (for collapsed button)
+  const utils = api.useUtils();
+  const createProject = api.project.create.useMutation({
+    onSuccess: async (data) => {
+      try {
+        // Invalidate the projects list query to refetch it
+        await utils.project.list.invalidate();
+        
+        // Redirect to the generate page for the new project
+        router.push(`/projects/${data.projectId}/generate`);
+      } catch (error) {
+        console.error("Error after project creation:", error);
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to create project:", error);
+    },
+  });
+
+  const handleCreateProject = () => {
+    if (createProject.isPending) return;
+    createProject.mutate();
+  };
   
   // Toggle the sidebar collapsed state
   const toggleCollapse = useCallback(() => {
@@ -140,7 +165,25 @@ export function GenerateSidebar({
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-                  onClick={() => router.push('/projects/new')}
+                  onClick={() => {
+                    // Create project and redirect to /generate
+                    const createProject = async () => {
+                      try {
+                        const response = await fetch('/api/trpc/project.create', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({}),
+                        });
+                        const data = await response.json();
+                        if (data.result?.data?.projectId) {
+                          router.push(`/projects/${data.result.data.projectId}/generate`);
+                        }
+                      } catch (error) {
+                        console.error('Failed to create project:', error);
+                      }
+                    };
+                    createProject();
+                  }}
                 >
                   <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </Button>

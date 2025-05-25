@@ -109,8 +109,8 @@ export default async function NewProjectPage() {
   }
 
   if (newProject?.id) {
-    // Redirect to the new project's edit page - moved outside try/catch
-    redirect(`/projects/${newProject.id}/edit`);
+    // Redirect to the new project's generate page
+    redirect(`/projects/${newProject.id}/generate`);
   } else {
     // Fallback to projects page if something went wrong (e.g., max attempts reached without success)
     // This path should ideally be covered by the redirect within the catch block for MAX_ATTEMPTS

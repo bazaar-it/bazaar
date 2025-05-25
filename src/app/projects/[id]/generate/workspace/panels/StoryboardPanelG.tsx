@@ -24,7 +24,7 @@ interface Scene {
 export function StoryboardPanelG({ 
   projectId, 
   selectedSceneId, 
-  onSceneSelect 
+  onSceneSelect
 }: { 
   projectId: string;
   selectedSceneId?: string | null;
@@ -131,27 +131,32 @@ export function StoryboardPanelG({
   return (
     <div className="h-full flex flex-col bg-white">
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Storyboard</h2>
-          <Button
-            size="sm"
-            onClick={() => setIsGenerating(!isGenerating)}
-            disabled={isGenerating}
-          >
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <h2 className="text-lg font-semibold">Storyboard</h2>
+        <Button
+          size="sm"
+          onClick={() => setIsGenerating(true)}
+          disabled={generateSceneCodeMutation.isPending}
+        >
+          {generateSceneCodeMutation.isPending ? (
+            <Loader2Icon className="w-4 h-4 animate-spin mr-1" />
+          ) : (
             <PlusIcon className="w-4 h-4 mr-1" />
-            Add Scene
-          </Button>
-        </div>
+          )}
+          Add Scene
+        </Button>
+      </div>
 
-        {/* Add scene form */}
-        {isGenerating && (
+      {/* Add scene form - shown when triggered */}
+      {isGenerating && (
+        <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-gray-50">
           <div className="space-y-2">
             <Input
               value={newScenePrompt}
               onChange={(e) => setNewScenePrompt(e.target.value)}
               placeholder="Describe the new scene..."
               disabled={generateSceneCodeMutation.isPending}
+              autoFocus
             />
             <div className="flex space-x-2">
               <Button
@@ -179,8 +184,8 @@ export function StoryboardPanelG({
               </Button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Scene List */}
       <div className="flex-1 overflow-y-auto">

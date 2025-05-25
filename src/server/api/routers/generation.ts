@@ -122,11 +122,13 @@ async function upsertScene(
   }
 ) {
   if (sceneId) {
-    // Update existing scene
+    // Update existing scene - preserve the original name
     await db.update(scenes)
       .set({
-        ...sceneData,
+        tsxCode: sceneData.tsxCode,
+        props: sceneData.props,
         updatedAt: new Date(),
+        // Note: Intentionally NOT updating name to preserve original scene name
       })
       .where(and(eq(scenes.id, sceneId), eq(scenes.projectId, projectId)));
     return sceneId;
@@ -149,6 +151,40 @@ async function upsertScene(
     
     return newScene!.id;
   }
+}
+
+// Helper function to generate unique component names
+function generateUniqueComponentName(userPrompt: string, existingNames: Set<string>): string {
+  // Extract meaningful words from the prompt
+  const words = userPrompt
+    .replace(/@scene\([^)]+\)\s*/, '') // Remove scene tags
+    .split(/\s+/)
+    .filter(word => word.length > 2)
+    .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'she', 'use', 'way', 'many', 'then', 'them', 'well', 'were', 'make', 'create', 'add', 'show', 'with', 'that', 'this', 'have', 'will', 'want', 'need'].includes(word.toLowerCase()))
+    .slice(0, 3)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+
+  // Generate base name
+  let baseName = words.length > 0 ? words.join('') : 'Scene';
+  if (!baseName.endsWith('Scene')) {
+    baseName += 'Scene';
+  }
+
+  // Sanitize to ensure valid JavaScript identifier
+  baseName = baseName.replace(/[^a-zA-Z0-9]/g, '');
+  if (!/^[a-zA-Z]/.test(baseName)) {
+    baseName = 'Scene' + baseName;
+  }
+
+  // Ensure uniqueness
+  let uniqueName = baseName;
+  let counter = 1;
+  while (existingNames.has(uniqueName)) {
+    uniqueName = `${baseName}${counter}`;
+    counter++;
+  }
+
+  return uniqueName;
 }
 
 export const generationRouter = createTRPCRouter({
@@ -677,13 +713,14 @@ export default function ${scene.template}() {
         let editSceneId: string | undefined;
         let editInstruction: string = userPrompt;
         let existingCode: string | undefined;
+        let existingSceneName: string | undefined;
         
         if (editMatch) {
           isEditMode = true;
           editSceneId = editMatch[1]!;
           editInstruction = editMatch[2]!;
           
-          // Fetch existing scene code
+          // Fetch existing scene code and name
           const existingScene = await db.query.scenes.findFirst({
             where: and(eq(scenes.id, editSceneId), eq(scenes.projectId, projectId)),
           });
@@ -693,8 +730,31 @@ export default function ${scene.template}() {
           }
           
           existingCode = existingScene.tsxCode;
+          existingSceneName = existingScene.name; // Preserve the original scene name
         }
-        
+
+        // Step 1.5: Fetch existing component names to ensure uniqueness
+        const existingScenes = await db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+          columns: { tsxCode: true },
+        });
+
+        const existingComponentNames = new Set<string>();
+        existingScenes.forEach(scene => {
+          if (scene.tsxCode) {
+            // Extract component name from existing code
+            const componentNameMatch = scene.tsxCode.match(/export\s+default\s+function\s+(\w+)/);
+            if (componentNameMatch?.[1]) {
+              existingComponentNames.add(componentNameMatch[1]);
+            }
+          }
+        });
+
+        // Generate unique component name for new scenes
+        const uniqueComponentName = isEditMode 
+          ? null // Keep existing name for edits
+          : generateUniqueComponentName(userPrompt, existingComponentNames);
+
         // Step 2: Build simple, clean prompt for LLM
         let systemPrompt: string;
         let userMessage: string;
@@ -719,7 +779,7 @@ REQUIRED FORMAT:
 \`\`\`tsx
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 
-export default function ComponentName() {
+export default function ${uniqueComponentName}() {
   const frame = useCurrentFrame();
   // Create smooth animations using interpolate, spring, etc.
   
@@ -731,6 +791,8 @@ export default function ComponentName() {
 }
 \`\`\`
 
+IMPORTANT: The component MUST be named exactly "${uniqueComponentName}" to avoid naming conflicts.
+
 ANIMATION GUIDELINES:
 - Use interpolate for smooth transitions: interpolate(frame, [0, 30], [startValue, endValue])
 - NEVER use identical input ranges: interpolate(frame, [45, 45], ...) ❌
@@ -739,7 +801,7 @@ ANIMATION GUIDELINES:
 
 Return only the component code, no explanations.`;
 
-          userMessage = `Create an animated component for: "${userPrompt}"
+          userMessage = `Create an animated component named "${uniqueComponentName}" for: "${userPrompt}"
 
 Focus on creating smooth, visually engaging animations that bring the concept to life.`;
         }
@@ -773,9 +835,10 @@ Focus on creating smooth, visually engaging animations that bring the concept to
           if (match) {
             generatedCode = generatedCode.replace(functionMatch, 'export default function $1(');
           } else {
-            generatedCode = `import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+            const fallbackName = uniqueComponentName || 'GeneratedComponent';
+            generatedCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 
-export default function GeneratedComponent() {
+export default function ${fallbackName}() {
   const frame = useCurrentFrame();
   const opacity = interpolate(frame, [0, 30], [0, 1]);
   
@@ -796,9 +859,20 @@ export default function GeneratedComponent() {
           }
         }
 
+        // Ensure the component name is correct for new scenes
+        if (!isEditMode && uniqueComponentName) {
+          // Replace any component name with our unique one
+          const componentNameRegex = /export\s+default\s+function\s+(\w+)/;
+          const currentMatch = generatedCode.match(componentNameRegex);
+          if (currentMatch && currentMatch[1] !== uniqueComponentName) {
+            console.log(`🔄 Replacing component name "${currentMatch[1]}" with unique name "${uniqueComponentName}"`);
+            generatedCode = generatedCode.replace(componentNameRegex, `export default function ${uniqueComponentName}`);
+          }
+        }
+
         // Step 5: Persist to database
         const sceneDataToSave = {
-          name: sceneName,
+          name: isEditMode ? existingSceneName! : (uniqueComponentName || sceneName), // Preserve original name for edits
           order: 0,
           tsxCode: generatedCode.trim(),
           props: {
@@ -822,10 +896,28 @@ export default function GeneratedComponent() {
       } catch (error) {
         console.error('Error generating scene code:', error);
         
+        // Generate a unique fallback name
+        const existingScenes = await db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+          columns: { tsxCode: true },
+        });
+
+        const existingComponentNames = new Set<string>();
+        existingScenes.forEach(scene => {
+          if (scene.tsxCode) {
+            const componentNameMatch = scene.tsxCode.match(/export\s+default\s+function\s+(\w+)/);
+            if (componentNameMatch?.[1]) {
+              existingComponentNames.add(componentNameMatch[1]);
+            }
+          }
+        });
+
+        const fallbackComponentName = generateUniqueComponentName('Error Scene', existingComponentNames);
+        
         // Return simple fallback
         const fallbackCode = `import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
 
-export default function Scene() {
+export default function ${fallbackComponentName}() {
   const frame = useCurrentFrame();
   const opacity = interpolate(frame, [0, 30], [0, 1]);
   

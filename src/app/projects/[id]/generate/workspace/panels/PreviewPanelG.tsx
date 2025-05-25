@@ -293,28 +293,16 @@ export default function FallbackComposition() {
   }, [scenes]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 relative overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">Preview</h2>
-        <div className="flex items-center space-x-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={`text-gray-600 hover:text-gray-900 ${isCompiling ? 'animate-spin text-blue-600' : ''}`}
-            onClick={handleRefresh}
-            title="Refresh preview"
-            disabled={isCompiling || !scenes.length}
-          >
-            <RefreshCwIcon className="h-4 w-4" />
-          </Button>
-          
-          <div className="text-xs text-gray-500">
-            Scenes: {scenes.length}
-          </div>
-        </div>
-      </div>
+    <div className="h-full flex flex-col bg-white relative overflow-hidden">
+      {/* Hidden refresh button that the upper header can trigger */}
+      <button 
+        id="refresh-preview-button-g"
+        onClick={handleRefresh}
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
       
-      <div className="relative flex-grow bg-gray-900">
+      <div className="relative flex-grow bg-white">
         {componentImporter && playerProps ? (
           <ErrorBoundary FallbackComponent={ErrorFallback}>
             <RemotionPreview

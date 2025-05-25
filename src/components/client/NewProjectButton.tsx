@@ -37,7 +37,7 @@ export function NewProjectButton({
         await utils.project.list.invalidate();
         
         // Redirect to the editor page for the new project
-        router.push(`/projects/${data.projectId}/edit`);
+        router.push(`/projects/${data.projectId}/generate`);
       } catch (error) {
         console.error("Error after project creation:", error);
         setIsRedirecting(false);

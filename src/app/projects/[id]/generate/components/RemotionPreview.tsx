@@ -63,12 +63,14 @@ export default function RemotionPreview({
           style={{
             width: '100%',
             height: '100%',
+            backgroundColor: 'white',
           }}
           controls
           showVolumeControls
           doubleClickToFullscreen
           clickToPlay
           loop={true}
+          autoPlay={true}
           key={refreshToken} // Force remount when refreshToken changes
           acknowledgeRemotionLicense
         />

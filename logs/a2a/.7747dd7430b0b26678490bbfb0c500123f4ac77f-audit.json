@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/jackos15/bazaar-vid-backup/bazaar-vid/logs/a2a/.7747dd7430b0b26678490bbfb0c500123f4ac77f-audit.json",
+    "files": [
+        {
+            "date": 1748136124425,
+            "name": "/Users/jackos15/bazaar-vid-backup/bazaar-vid/logs/a2a/a2a-2025-05-25.log",
+            "hash": "54bd5ac3adc352ea8aabb89f11c6d029e2c012985cba47c930fb5515bb53cdcf"
+        }
+    ],
+    "hashType": "sha256"
+}

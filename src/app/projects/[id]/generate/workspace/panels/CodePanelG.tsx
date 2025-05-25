@@ -5,6 +5,7 @@ import Editor from '@monaco-editor/react';
 import { useVideoState } from '~/stores/videoState';
 import { Button } from '~/components/ui/button';
 import { toast } from 'sonner';
+import { PlayIcon, XIcon } from 'lucide-react';
 import * as Sucrase from 'sucrase';
 
 interface Scene {
@@ -40,10 +41,12 @@ function createBlobUrl(code: string): string {
 
 export function CodePanelG({ 
   projectId,
-  selectedSceneId 
+  selectedSceneId,
+  onClose
 }: { 
   projectId: string;
   selectedSceneId?: string | null;
+  onClose?: () => void;
 }) {
   const { getCurrentProps, replace } = useVideoState();
   const [localCode, setLocalCode] = useState<string>("");
@@ -67,11 +70,6 @@ export function CodePanelG({
       setLocalCode("");
     }
   }, [selectedScene?.id, selectedScene?.data?.code]);
-
-  // Helper function to get scene name for display
-  const getSceneName = (scene: Scene) => {
-    return (scene.data?.name as string) || (scene.props?.name as string) || scene.type || `Scene ${scene.id}`;
-  };
 
   // Compile and update the scene code
   const handleCompile = useCallback(async () => {
@@ -130,12 +128,30 @@ export function CodePanelG({
 
   if (!selectedScene) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50/30">
-        <div className="text-center p-8 max-w-md bg-white/95 rounded-[15px] shadow-lg border border-gray-100">
-          <h3 className="text-lg font-semibold mb-2">No Scene Selected</h3>
-          <p className="text-sm text-gray-600">
-            Select a scene from the storyboard or create a new scene to edit its code.
-          </p>
+      <div className="flex flex-col h-full bg-white">
+        {/* Header matching other panels exactly */}
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
+          <span className="font-medium text-sm">Code Editor</span>
+          <div className="flex items-center gap-1">
+            {onClose && (
+              <button 
+                onClick={onClose} 
+                className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+                aria-label="Close Code Editor panel"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="flex items-center justify-center h-full bg-gray-50/30">
+          <div className="text-center p-8 max-w-md bg-white/95 rounded-[15px] shadow-lg border border-gray-100">
+            <h3 className="text-lg font-semibold mb-2">No Scene Selected</h3>
+            <p className="text-sm text-gray-600">
+              Select a scene from the storyboard or create a new scene to edit its code.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -143,61 +159,83 @@ export function CodePanelG({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Code Editor</h2>
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-600">
-            {getSceneName(selectedScene)}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Header matching other panels exactly */}
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
+        <span className="font-medium text-sm">Code Editor</span>
+        <div className="flex items-center gap-1">
           <Button 
             onClick={handleCompile}
             disabled={isCompiling || !localCode.trim()}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
           >
-            {isCompiling ? 'Compiling...' : 'Compile & Update'}
+            <PlayIcon className="h-3 w-3" />
+            {isCompiling ? 'Running...' : 'Run'}
           </Button>
+          {onClose && (
+            <button 
+              onClick={onClose} 
+              className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+              aria-label="Close Code Editor panel"
+            >
+              <XIcon className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Monaco Editor */}
-      <div className="flex-1 p-4">
-        <div className="h-full border border-gray-200 rounded-lg overflow-hidden">
-          <Editor
-            height="100%"
-            defaultLanguage="typescript"
-            value={localCode}
-            onChange={handleCodeChange}
-            theme="vs-light"
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbers: 'on',
-              wordWrap: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 2,
-              insertSpaces: true,
-              formatOnPaste: true,
-              formatOnType: true,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Footer with helpful info */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <div className="text-xs text-gray-600">
-          <p className="mb-1">
-            <strong>Tips:</strong> Use <code>const {"{ AbsoluteFill, useCurrentFrame }"} = window.Remotion;</code> for imports
-          </p>
-          <p>
-            Always include <code>export default function ComponentName(props) {"{ ... }"}</code>
-          </p>
-        </div>
+      {/* Monaco Editor - direct integration without extra padding/borders */}
+      <div className="flex-1 overflow-hidden">
+        <Editor
+          height="100%"
+          defaultLanguage="typescript"
+          value={localCode}
+          onChange={handleCodeChange}
+          theme="vs-light"
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            lineNumbers: 'on',
+            lineNumbersMinChars: 3,
+            glyphMargin: false,
+            folding: false,
+            lineDecorationsWidth: 10,
+            lineHeight: 20,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            tabSize: 2,
+            insertSpaces: true,
+            formatOnPaste: true,
+            formatOnType: true,
+            scrollbar: {
+              vertical: 'auto',
+              horizontal: 'auto',
+              verticalScrollbarSize: 12,
+              horizontalScrollbarSize: 12,
+            },
+            overviewRulerLanes: 0,
+            hideCursorInOverviewRuler: true,
+            overviewRulerBorder: false,
+            renderLineHighlight: 'line',
+            codeLens: false,
+            contextmenu: false,
+            quickSuggestions: false,
+            suggestOnTriggerCharacters: false,
+            acceptSuggestionOnEnter: 'off',
+            tabCompletion: 'off',
+            wordBasedSuggestions: 'off',
+            parameterHints: { enabled: false },
+            hover: { enabled: false },
+            links: false,
+            colorDecorators: false,
+            stickyScroll: { enabled: false },
+            smoothScrolling: false,
+            find: {
+              addExtraSpaceOnTop: false,
+            },
+          }}
+        />
       </div>
     </div>
   );
