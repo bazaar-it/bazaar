@@ -27,6 +27,27 @@ interface Scene {
   metadata?: any;
 }
 
+// Optimistic message type for immediate UI updates
+interface OptimisticMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  createdAt: Date;
+  status?: 'pending' | 'success' | 'error';
+  isOptimistic: true;
+}
+
+// Database message type
+interface DbMessage {
+  id: string;
+  projectId: string;
+  content: string;
+  role: 'user' | 'assistant';
+  createdAt: Date;
+  status?: string | null; // Match database schema - can be null
+  isOptimistic?: false;
+}
+
 export function ChatPanelG({ 
   projectId,
   selectedSceneId,
@@ -40,6 +61,7 @@ export function ChatPanelG({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
@@ -57,6 +79,75 @@ export function ChatPanelG({
   const { data: dbMessages, isLoading: isLoadingMessages, refetch: refetchMessages } = 
     api.chat.getMessages.useQuery({ projectId });
   
+  // Helper function to add optimistic user message
+  const addOptimisticUserMessage = useCallback((content: string) => {
+    const optimisticMessage: OptimisticMessage = {
+      id: `optimistic-${Date.now()}-${Math.random()}`,
+      content,
+      role: 'user',
+      createdAt: new Date(),
+      status: 'success',
+      isOptimistic: true,
+    };
+    
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    return optimisticMessage.id;
+  }, []);
+
+  // Helper function to add optimistic assistant message
+  const addOptimisticAssistantMessage = useCallback((content: string = 'Generating scene...') => {
+    const optimisticMessage: OptimisticMessage = {
+      id: `optimistic-assistant-${Date.now()}-${Math.random()}`,
+      content,
+      role: 'assistant',
+      createdAt: new Date(),
+      status: 'pending',
+      isOptimistic: true,
+    };
+    
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    return optimisticMessage.id;
+  }, []);
+
+  // Helper function to update optimistic message
+  const updateOptimisticMessage = useCallback((id: string, updates: Partial<OptimisticMessage>) => {
+    setOptimisticMessages(prev => 
+      prev.map(msg => 
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
+    );
+  }, []);
+
+  // Helper function to remove optimistic message
+  const removeOptimisticMessage = useCallback((id: string) => {
+    setOptimisticMessages(prev => prev.filter(msg => msg.id !== id));
+  }, []);
+
+  // Helper function to clear all optimistic messages (when real messages arrive)
+  const clearOptimisticMessages = useCallback(() => {
+    setOptimisticMessages([]);
+  }, []);
+
+  // Combine database messages with optimistic messages for display
+  const allMessages = useMemo(() => {
+    // Filter and type-guard database messages to ensure they have valid roles
+    const validDbMessages = (dbMessages || [])
+      .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+      .map(msg => ({ 
+        ...msg, 
+        isOptimistic: false as const,
+        role: msg.role as 'user' | 'assistant' // Type assertion since we filtered above
+      }));
+    
+    const combined: (DbMessage | OptimisticMessage)[] = [
+      ...validDbMessages,
+      ...optimisticMessages
+    ];
+    
+    // Sort by creation time
+    return combined.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [dbMessages, optimisticMessages]);
+
   // Auto-scroll function (V2 improvement)
   const scrollToBottom = useCallback(() => {
     if (chatContainerRef.current) {
@@ -115,6 +206,33 @@ export function ChatPanelG({
       console.error("❌ Unified scene generation failed:", error);
       setIsGenerating(false);
       toast.error(`Scene generation failed: ${error.message}`);
+      
+      void refetchMessages();
+    }
+  });
+
+  // Scene removal mutation
+  const removeSceneMutation = api.generation.removeScene.useMutation({
+    onSuccess: (result: any) => {
+      console.log("✅ Scene removal completed:", result);
+      setIsGenerating(false);
+      setGenerationComplete(true);
+      
+      // Trigger video state refresh to remove the scene from UI
+      if (onSceneGenerated) {
+        console.log('[ChatPanelG] Calling onSceneGenerated callback to refresh after removal');
+        onSceneGenerated('', ''); // Empty values to trigger refresh
+      }
+      
+      // Refetch messages to show the assistant response
+      setTimeout(() => {
+        void refetchMessages();
+      }, 100);
+    },
+    onError: (error: any) => {
+      console.error("❌ Scene removal failed:", error);
+      setIsGenerating(false);
+      toast.error(`Scene removal failed: ${error.message}`);
       
       void refetchMessages();
     }
@@ -181,12 +299,53 @@ export function ChatPanelG({
     return startsWithEditVerb;
   }, [scenes, selectedScene]);
 
+  // Helper function to detect scene removal commands
+  const isRemovalCommand = useCallback((msg: string): { isRemoval: boolean; sceneNumber?: number; sceneId?: string } => {
+    const trimmed = msg.trim().toLowerCase();
+    
+    // Check for removal patterns
+    const removalPatterns = [
+      /(?:remove|delete|del)\s+scene\s+(\d+)/i,
+      /scene\s+(\d+)\s+(?:remove|delete|del)/i,
+      /(?:remove|delete|del)\s+(\d+)/i,
+    ];
+    
+    for (const pattern of removalPatterns) {
+      const match = pattern.exec(trimmed);
+      if (match?.[1]) {
+        const sceneNumber = parseInt(match[1], 10);
+        const targetScene = getSceneByNumber(sceneNumber);
+        if (targetScene) {
+          return { isRemoval: true, sceneNumber, sceneId: targetScene.id };
+        }
+      }
+    }
+    
+    return { isRemoval: false };
+  }, [getSceneByNumber]);
+
+  // Helper function to convert scene IDs to user-friendly numbers in display messages
+  const convertSceneIdToNumber = useCallback((msg: string): string => {
+    // Replace @scene(uuid) with @scene(number) for display
+    return msg.replace(/@scene\(([^)]+)\)/g, (match, sceneId) => {
+      const sceneNumber = getSceneNumber(sceneId);
+      return sceneNumber ? `@scene(${sceneNumber})` : match;
+    });
+  }, [getSceneNumber]);
+
   // Helper function to auto-tag messages with @scene(id) when appropriate (V1 logic)
   const autoTagMessage = useCallback((msg: string): string => {
     // If already tagged, return as-is
     if (msg.startsWith('@scene(')) return msg;
     
-    // STEP 1: Check for scene number syntax (@scene(1), @scene(2), etc.)
+    // STEP 1: Check for scene removal commands
+    const removalCheck = isRemovalCommand(msg);
+    if (removalCheck.isRemoval && removalCheck.sceneId) {
+      console.log(`[ChatPanelG] Detected removal command for scene ${removalCheck.sceneNumber} (${removalCheck.sceneId})`);
+      return `@scene(${removalCheck.sceneId}) ${msg}`;
+    }
+    
+    // STEP 2: Check for scene number syntax (@scene(1), @scene(2), etc.)
     const sceneNumberMatch = /\bscene\s+(\d+)\b/i.exec(msg);
     if (sceneNumberMatch && sceneNumberMatch[1]) {
       const sceneNumber = parseInt(sceneNumberMatch[1], 10);
@@ -200,7 +359,7 @@ export function ChatPanelG({
       }
     }
     
-    // STEP 2: Auto-detect edit commands for the selected scene
+    // STEP 3: Auto-detect edit commands for the selected scene
     if (!selectedScene?.id) return msg;
     
     const sceneId = selectedScene.id;
@@ -214,7 +373,7 @@ export function ChatPanelG({
     }
     
     return msg;
-  }, [selectedScene, isLikelyEdit, getSceneByNumber, getSceneNumber, scenes]);
+  }, [selectedScene, isLikelyEdit, isRemovalCommand, getSceneByNumber, getSceneNumber, scenes]);
 
   // Generate project name from first message (V1 logic)
   const generateNameFromPrompt = useCallback((prompt: string): string => {
@@ -229,7 +388,7 @@ export function ChatPanelG({
     return name || 'New Video Project';
   }, []);
 
-  // Handle form submission (V1 logic with V2 improvements)
+  // Handle form submission (V1 logic with V2 improvements + OPTIMISTIC UI)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isGenerating) return;
@@ -277,9 +436,6 @@ export function ChatPanelG({
       isFirstMessageRef.current = false;
     }
     
-    setIsGenerating(true);
-    setGenerationComplete(false); // V2 improvement
-    
     // Auto-tag the message if it's an edit command and a scene is selected (V1 logic)
     const processedMessage = autoTagMessage(trimmedMessage);
     
@@ -288,9 +444,69 @@ export function ChatPanelG({
     console.log('Selected scene:', selectedScene?.id);
     console.log('Is likely edit:', isLikelyEdit(trimmedMessage));
     
+    // OPTIMISTIC UI: Immediately add user message to chat
+    const displayMessage = convertSceneIdToNumber(processedMessage);
+    const optimisticUserMessageId = addOptimisticUserMessage(displayMessage);
+    
     // Clear the input immediately for better UX
     setMessage("");
-    setCurrentPrompt(trimmedMessage); // V2 improvement
+    setCurrentPrompt(trimmedMessage);
+    setIsGenerating(true);
+    setGenerationComplete(false);
+    
+    // OPTIMISTIC UI: Add assistant loading message
+    const optimisticAssistantMessageId = addOptimisticAssistantMessage('Generating scene...');
+    
+    // Check if this is a scene removal command
+    const removalCheck = isRemovalCommand(trimmedMessage);
+    
+    if (removalCheck.isRemoval && removalCheck.sceneId) {
+      console.log(`[ChatPanelG] Processing scene removal for scene ${removalCheck.sceneNumber}`);
+      
+      // Update optimistic assistant message for removal
+      updateOptimisticMessage(optimisticAssistantMessageId, {
+        content: `Removing scene ${removalCheck.sceneNumber}...`,
+      });
+      
+      // Execute scene removal using the tRPC mutation
+      try {
+        const result = await removeSceneMutation.mutateAsync({
+          projectId,
+          sceneId: removalCheck.sceneId,
+        });
+        
+        console.log('Scene removal result:', result);
+        
+        // Update optimistic assistant message with success
+        updateOptimisticMessage(optimisticAssistantMessageId, {
+          content: `Scene ${removalCheck.sceneNumber} removed successfully ✅`,
+          status: 'success',
+        });
+        
+        // Clear optimistic messages after a delay to let real messages load
+        setTimeout(() => {
+          clearOptimisticMessages();
+          void refetchMessages();
+        }, 1000);
+        
+      } catch (error) {
+        console.error('Error during scene removal:', error);
+        
+        // Update optimistic assistant message with error
+        updateOptimisticMessage(optimisticAssistantMessageId, {
+          content: `Failed to remove scene ${removalCheck.sceneNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          status: 'error',
+        });
+        
+        // Clear optimistic messages after a delay
+        setTimeout(() => {
+          clearOptimisticMessages();
+          void refetchMessages();
+        }, 2000);
+      }
+      
+      return; // Exit early for removal commands
+    }
     
     // Use ONLY the unified mutation (OPTIMIZATION #1)
     try {
@@ -303,14 +519,38 @@ export function ChatPanelG({
       
       const result = await generateSceneWithChatMutation.mutateAsync({
         projectId,
-        userMessage: processedMessage,
+        userMessage: processedMessage, // Send UUID version to backend
         sceneId: isEditOperation ? selectedScene?.id : undefined,
       });
       
       console.log('Scene generation result:', result);
       
+      // Update optimistic assistant message with success
+      updateOptimisticMessage(optimisticAssistantMessageId, {
+        content: `Scene ${isEditOperation ? 'updated' : 'generated'} successfully ✅`,
+        status: 'success',
+      });
+      
+      // Clear optimistic messages after a delay to let real messages load
+      setTimeout(() => {
+        clearOptimisticMessages();
+        void refetchMessages();
+      }, 1000);
+      
     } catch (error) {
       console.error('Error during scene generation:', error);
+      
+      // Update optimistic assistant message with error
+      updateOptimisticMessage(optimisticAssistantMessageId, {
+        content: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: 'error',
+      });
+      
+      // Clear optimistic messages after a delay
+      setTimeout(() => {
+        clearOptimisticMessages();
+        void refetchMessages();
+      }, 2000);
     }
 
     // Track chat message analytics
@@ -341,15 +581,15 @@ export function ChatPanelG({
     return `${hours}:${minutes}`;
   };
 
-  // Type guard for database messages (V1 logic)
-  function isDbMessage(msg: any): msg is { id: string; projectId: string; content: string; role: 'user' | 'assistant'; createdAt: Date; status?: string } {
+  // Type guard for any message type (V1 logic + optimistic support)
+  function isValidMessage(msg: any): msg is DbMessage | OptimisticMessage {
     return (
       typeof msg === 'object' && 
       msg !== null && 
       typeof msg.id === 'string' && 
-      typeof msg.projectId === 'string' &&
       typeof msg.content === 'string' && 
-      (msg.role === 'user' || msg.role === 'assistant')
+      (msg.role === 'user' || msg.role === 'assistant') &&
+      msg.createdAt instanceof Date
     );
   }
 
@@ -372,12 +612,13 @@ export function ChatPanelG({
   );
 
   // Status indicator component for tool messages (V1 logic)
-  const getStatusIndicator = (status?: string) => {
+  const getStatusIndicator = (status?: string | null) => {
     if (!status) return null;
     
     switch (status) {
       case "tool_calling":
       case "building":
+      case "pending":
         return <Loader2Icon className="h-4 w-4 animate-spin text-primary mr-2" />;
       case "success":
         return <CheckCircleIcon className="h-4 w-4 text-green-500 mr-2" />;
@@ -388,9 +629,9 @@ export function ChatPanelG({
     }
   };
 
-  const hasDbMessages = dbMessages && dbMessages.length > 0;
-  const isLoading = isLoadingMessages && !hasDbMessages;
-  const showWelcome = !hasDbMessages && !isLoading;
+  const hasMessages = allMessages && allMessages.length > 0;
+  const isLoading = isLoadingMessages && !hasMessages;
+  const showWelcome = !hasMessages && !isLoading;
 
   // Check if we have any existing messages on load (V1 logic)
   useEffect(() => {
@@ -412,14 +653,15 @@ export function ChatPanelG({
           getWelcomeMessage()
         ) : (
           <>
-            {/* Render database messages (V1 logic with V2 styling) */}
-            {hasDbMessages && dbMessages.map((msg) => {
-              if (!isDbMessage(msg)) return null;
+            {/* Render combined messages (database + optimistic) */}
+            {hasMessages && allMessages.map((msg) => {
+              if (!isValidMessage(msg)) return null;
               
               const isUser = msg.role === 'user';
               const isError = msg.status === 'error';
               const isSuccess = msg.status === 'success';
-              const isGenerating = msg.status === 'building' || msg.status === 'tool_calling';
+              const isGenerating = msg.status === 'building' || msg.status === 'tool_calling' || msg.status === 'pending';
+              const isOptimistic = 'isOptimistic' in msg && msg.isOptimistic;
               
               return (
                 <div
@@ -437,7 +679,7 @@ export function ChatPanelG({
                         : isGenerating
                         ? 'bg-blue-50 text-blue-700 border border-blue-200'
                         : 'bg-muted text-muted-foreground border'
-                    }`}
+                    } ${isOptimistic ? 'opacity-90' : ''}`}
                   >
                     <div className="flex items-center">
                       {isGenerating && <Loader2Icon className="h-4 w-4 animate-spin mr-2" />}
@@ -458,32 +700,22 @@ export function ChatPanelG({
                         <span>
                           {msg.status === 'tool_calling' && 'Generating scene...'}
                           {msg.status === 'building' && 'Building component...'}
+                          {msg.status === 'pending' && 'Processing...'}
                           {msg.status === 'success' && 'Completed'}
                           {msg.status === 'error' && 'Error occurred'}
                         </span>
                       </div>
                     )}
                     
-                    <div className="text-[10px] opacity-50 mt-2">
-                      {formatTimestamp(msg.createdAt.getTime())}
+                    <div className="text-[10px] opacity-50 mt-2 flex items-center gap-2">
+                      <span>{formatTimestamp(msg.createdAt.getTime())}</span>
+                      {isOptimistic && <span className="text-blue-500">•</span>}
                     </div>
                   </div>
                 </div>
               );
             })}
           </>
-        )}
-        
-        {/* Show generating indicator (V2 styling) */}
-        {isGenerating && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-[15px] px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200">
-              <div className="flex items-center">
-                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                <span>Generating scene...</span>
-              </div>
-            </div>
-          </div>
         )}
         
         <div ref={messagesEndRef} />

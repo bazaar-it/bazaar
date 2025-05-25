@@ -1147,6 +1147,7 @@ With BAZAAR-304 (Workspace UI) largely complete, focus now shifts to BAZAAR-305.
 - **Neon HTTP Driver Transaction Fix**: Removed unsupported transactions from unified mutation
 - **Dual Mutation System Fixed**: Eliminated duplicate chat.initiateChat + generateSceneWithChat calls
 - **useVideoConfig Runtime Error Fixed**: Added proper import extraction in PreviewPanelG
+- **Scene Duration Issue Fixed**: Added duration column to database and proper parsing from user prompts
 
 ## 🔧 CURRENT ISSUES RESOLVED
 
@@ -1187,3 +1188,27 @@ With BAZAAR-304 (Workspace UI) largely complete, focus now shifts to BAZAAR-305.
 - ✅ **All Remotion functions properly available** in preview
 - ✅ **Robust import detection** for any Remotion function usage
 - ✅ **Preview panel renders successfully** with complex animations
+
+### ✅ **Scene Duration Issue Completely Fixed**
+**Problem**: All scenes were defaulting to 5 seconds regardless of user requests like "make new scene, 2 seconds"
+**Root Cause Analysis**:
+1. **Duration parsing worked correctly** - `parsePromptForDuration()` and `calculateSceneDuration()` functions were working
+2. **Duration not stored in database** - `scenes` table was missing `duration` column
+3. **Frontend hardcoded 5 seconds** - `convertDbScenesToInputProps()` always used `duration: 150` (5s at 30fps)
+
+**Solution Implemented**:
+1. **Added duration column to database**: `ALTER TABLE "bazaar-vid_scene" ADD COLUMN "duration" integer DEFAULT 150 NOT NULL;`
+2. **Updated generateSceneWithChat mutation**: Now parses duration from user prompt and stores in database
+3. **Fixed frontend conversion**: `convertDbScenesToInputProps()` now uses stored duration from database
+4. **Enhanced scene timing**: Scenes now have proper start times based on cumulative durations
+
+**Technical Changes**:
+- `src/server/db/schema.ts`: Added `duration: d.integer().default(150).notNull()` to scenes table
+- `src/server/api/routers/generation.ts`: Added duration parsing and storage in `generateSceneWithChat`
+- `src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx`: Updated to use stored durations
+
+**Result**: 
+- ✅ **User requests like "2 seconds" now work correctly** - scenes are created with requested duration
+- ✅ **Existing scenes default to 5 seconds** - backward compatibility maintained
+- ✅ **Proper scene sequencing** - scenes start at correct times based on previous scene durations
+- ✅ **Database stores duration** - persistent across sessions and project loads

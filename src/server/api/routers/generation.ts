@@ -118,6 +118,7 @@ async function upsertScene(
     name: string;
     order: number;
     tsxCode: string;
+    duration: number;
     props: any;
   }
 ) {
@@ -754,21 +755,146 @@ export default function ${scene.template}() {
       let assistantMessageRow: any = null;
       
       try {
-        // Step 1: Parse edit pattern and determine operation type
+        // Helper function to get scene number by ID
+        const getSceneNumber = async (sceneId: string): Promise<number | null> => {
+          const projectScenes = await db.query.scenes.findMany({
+            where: eq(scenes.projectId, projectId),
+            orderBy: [scenes.order, scenes.createdAt],
+          });
+          const index = projectScenes.findIndex(scene => scene.id === sceneId);
+          return index >= 0 ? index + 1 : null;
+        };
+
+        // Helper function to convert scene IDs to user-friendly numbers in messages
+        const convertSceneIdToNumber = async (msg: string): Promise<string> => {
+          // Replace @scene(uuid) with @scene(number) for display
+          const sceneIdPattern = /@scene\(([^)]+)\)/g;
+          let result = msg;
+          let match;
+          
+          while ((match = sceneIdPattern.exec(msg)) !== null) {
+            const sceneId = match[1];
+            if (sceneId) {
+              const sceneNumber = await getSceneNumber(sceneId);
+              if (sceneNumber) {
+                result = result.replace(match[0], `@scene(${sceneNumber})`);
+              }
+            }
+          }
+          
+          return result;
+        };
+
+        // Helper function to detect scene removal commands
+        const isRemovalCommand = (msg: string): { isRemoval: boolean; sceneId?: string } => {
+          const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(msg);
+          if (!editMatch || !editMatch[1] || !editMatch[2]) return { isRemoval: false };
+          
+          const sceneId = editMatch[1];
+          const instruction = editMatch[2].trim().toLowerCase();
+          
+          const removalPatterns = [
+            /(?:remove|delete|del)/i,
+          ];
+          
+          const isRemoval = removalPatterns.some(pattern => pattern.test(instruction));
+          return { isRemoval, sceneId: isRemoval ? sceneId : undefined };
+        };
+
+        // Step 1: Check if this is a scene removal command
+        const removalCheck = isRemovalCommand(userMessage);
+        
+        if (removalCheck.isRemoval && removalCheck.sceneId) {
+          console.log(`[generateSceneWithChat] Processing scene removal for scene ID: ${removalCheck.sceneId}`);
+          
+          // Get scene number for user-friendly messages
+          const sceneNumber = await getSceneNumber(removalCheck.sceneId);
+          
+          // Create user message with user-friendly display
+          const displayMessage = await convertSceneIdToNumber(userMessage);
+          const userMessageResults = await db.insert(messages).values({
+            projectId,
+            content: displayMessage,
+            role: 'user',
+            status: 'success'
+          }).returning();
+          
+          const userMessageRow = userMessageResults[0];
+          if (!userMessageRow) {
+            throw new Error('Failed to create user message');
+          }
+          
+          try {
+            // Verify the scene exists and belongs to the project
+            const scene = await db.query.scenes.findFirst({
+              where: and(eq(scenes.id, removalCheck.sceneId), eq(scenes.projectId, projectId)),
+            });
+            
+            if (!scene) {
+              throw new Error(`Scene ${sceneNumber || removalCheck.sceneId} not found`);
+            }
+            
+            // Delete the scene (we know sceneId is defined from the if condition)
+            await db.delete(scenes)
+              .where(and(eq(scenes.id, removalCheck.sceneId!), eq(scenes.projectId, projectId)));
+            
+            console.log(`[generateSceneWithChat] Successfully removed scene ${removalCheck.sceneId}`);
+            
+            // Create success assistant message
+            const successAssistantMessages = await db.insert(messages).values({
+              projectId,
+              content: `Scene ${sceneNumber || '?'} removed successfully ✅`,
+              role: 'assistant',
+              status: 'success'
+            }).returning();
+            
+            const successAssistantMessage = successAssistantMessages[0];
+            if (!successAssistantMessage) {
+              throw new Error('Failed to create success message');
+            }
+            
+            return {
+              scene: null, // No scene created for removal
+              assistantMessage: {
+                id: successAssistantMessage.id,
+                content: `Scene ${sceneNumber || '?'} removed successfully ✅`,
+                status: 'success'
+              },
+              isEdit: false,
+              isRemoval: true
+            };
+            
+          } catch (error) {
+            console.error('[generateSceneWithChat] Scene removal error:', error);
+            
+            // Create error assistant message
+            const errorAssistantMessages = await db.insert(messages).values({
+              projectId,
+              content: `Failed to remove scene ${sceneNumber || '?'}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              role: 'assistant',
+              status: 'error'
+            }).returning();
+            
+            throw error;
+          }
+        }
+
+        // Step 2: Parse edit pattern and determine operation type (existing logic)
         const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(userMessage);
         const isEditMode = !!editMatch;
         const editSceneId = editMatch?.[1];
         const editInstruction = editMatch?.[2] || userMessage;
         
-        // Step 2: Create user message in DB
+        // Step 3: Create user message in DB with user-friendly display
+        const displayMessage = await convertSceneIdToNumber(userMessage);
         const [userMessageRow] = await db.insert(messages).values({
           projectId,
-          content: userMessage,
+          content: displayMessage,
           role: 'user',
           status: 'success'
         }).returning();
         
-        // Step 3: Create placeholder assistant message
+        // Step 4: Create placeholder assistant message
         [assistantMessageRow] = await db.insert(messages).values({
           projectId,
           content: 'Generating scene...',
@@ -776,9 +902,15 @@ export default function ${scene.template}() {
           status: 'pending'
         }).returning();
         
-        // Step 4: Generate scene code using existing logic
+        // Step 5: Generate scene code using existing logic
         const targetSceneId = isEditMode ? editSceneId : sceneId;
         const promptToUse = isEditMode ? editInstruction : userMessage;
+        
+        // Parse duration from user prompt
+        const requestedDuration = parsePromptForDuration(userMessage);
+        const sceneDuration = requestedDuration ? Math.round(requestedDuration * 30) : 150; // Convert seconds to frames, default 5s
+        
+        console.log(`[generateSceneWithChat] Parsed duration: ${requestedDuration} seconds = ${sceneDuration} frames`);
         
         // Generate scene code directly (reuse existing generateSceneCode logic)
         let existingCode: string | undefined;
@@ -934,12 +1066,14 @@ export default function GeneratedComponent() {
           name: isEditMode ? `Edited Scene` : `Generated Scene`,
           order: 0,
           tsxCode: generatedCode.trim(),
+          duration: sceneDuration, // Store the parsed duration
           props: {
             userPrompt: isEditMode ? editInstruction : userMessage,
             isEdit: isEditMode,
             validationPassed: true,
             generatedAt: new Date().toISOString(),
             model: 'gpt-4o-mini',
+            requestedDuration: requestedDuration, // Store original requested duration for reference
           },
         };
         
@@ -952,7 +1086,7 @@ export default function GeneratedComponent() {
         // Fetch the complete scene object for client
         const [completeScene] = await db.select().from(scenes).where(eq(scenes.id, persistedSceneId));
         
-        // Step 5: Update assistant message with success
+        // Step 6: Update assistant message with success
         const assistantContent = `Scene ${isEditMode ? 'updated' : 'generated'}: ${promptToUse.slice(0, 50)}${promptToUse.length > 50 ? '...' : ''} ✅`;
         
         await db.update(messages)
@@ -1073,6 +1207,53 @@ export default function GeneratedComponent() {
       } catch (error) {
         console.error('Error getting publish status:', error);
         throw new Error(`Failed to get publish status: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }),
+
+  // Remove scene by ID
+  removeScene: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      sceneId: z.string().uuid(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { projectId, sceneId } = input;
+      const userId = ctx.session.user.id;
+      
+      try {
+        // Verify the project belongs to the user
+        const project = await db.query.projects.findFirst({
+          where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+        });
+        
+        if (!project) {
+          throw new Error('Project not found or access denied');
+        }
+        
+        // Verify the scene exists and belongs to the project
+        const scene = await db.query.scenes.findFirst({
+          where: and(eq(scenes.id, sceneId), eq(scenes.projectId, projectId)),
+        });
+        
+        if (!scene) {
+          throw new Error('Scene not found');
+        }
+        
+        // Delete the scene
+        await db.delete(scenes)
+          .where(and(eq(scenes.id, sceneId), eq(scenes.projectId, projectId)));
+        
+        console.log(`[removeScene] Successfully removed scene ${sceneId} from project ${projectId}`);
+        
+        return {
+          success: true,
+          removedSceneId: sceneId,
+          message: 'Scene removed successfully'
+        };
+        
+      } catch (error) {
+        console.error('[removeScene] Error:', error);
+        throw new Error(`Failed to remove scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
 }); 

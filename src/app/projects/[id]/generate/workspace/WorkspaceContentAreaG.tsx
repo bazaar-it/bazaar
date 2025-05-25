@@ -279,24 +279,30 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Helper function to convert database scenes to InputProps format
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
-      const scenes = dbScenes.map((dbScene, index) => ({
-        id: dbScene.id,
-        type: 'custom' as const,
-        start: index * 150, // Default 5 seconds per scene at 30fps
-        duration: 150,
-        data: {
-          code: dbScene.tsxCode,
-          name: dbScene.name || 'Generated Scene',
-          componentId: dbScene.id, // Use scene ID as component ID for now
-          props: dbScene.props || {}
-        }
-      }));
+      let currentStart = 0;
+      const scenes = dbScenes.map((dbScene, index) => {
+        const sceneDuration = dbScene.duration || 150; // Use stored duration, fallback to 150 frames (5s)
+        const scene = {
+          id: dbScene.id,
+          type: 'custom' as const,
+          start: currentStart,
+          duration: sceneDuration,
+          data: {
+            code: dbScene.tsxCode,
+            name: dbScene.name || 'Generated Scene',
+            componentId: dbScene.id, // Use scene ID as component ID for now
+            props: dbScene.props || {}
+          }
+        };
+        currentStart += sceneDuration; // Update start time for next scene
+        return scene;
+      });
       
       return {
         meta: {
           // Preserve the original project title from initialProps instead of generating new ones
           title: initialProps?.meta?.title || 'New Project',
-          duration: scenes.length * 150,
+          duration: currentStart, // Total duration is sum of all scene durations
           backgroundColor: initialProps?.meta?.backgroundColor || '#000000'
         },
         scenes

@@ -85,6 +85,13 @@
       "when": 1748109509289,
       "tag": "0011_late_purifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1748211244094,
+      "tag": "0012_mute_hellfire_club",
+      "breakpoints": true
     }
   ]
 }
