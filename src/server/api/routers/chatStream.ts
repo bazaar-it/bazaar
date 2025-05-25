@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { db } from '~/server/db';
 import { messages, projects } from '~/server/db/schema';
 import { eq, and } from 'drizzle-orm';
-import logger from '~/lib/logger';
+import logger from '~/lib/simpleLogger';
 
 export enum StreamEventType {
   STATUS = 'status',

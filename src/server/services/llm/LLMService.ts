@@ -1,7 +1,7 @@
 // src/server/services/llm/LLMService.ts
 import type { OpenAI } from 'openai';
 import { CHAT_TOOLS } from '~/server/lib/openai/tools';
-import { chatLogger, logChatTool } from '~/lib/logger';
+import { chatLogger } from '~/lib/simpleLogger';
 
 export interface StreamOptions {
   model?: string;
@@ -55,13 +55,9 @@ export class LLMService {
   parseToolCallArguments(toolCall: { function: { arguments: string } }, messageId: string): any {
     try {
       const args = JSON.parse(toolCall.function.arguments);
-      logChatTool(
-        chatLogger,
-        messageId, 
-        'parseToolCallArguments', 
-        `Parsed args`, 
-        { args: JSON.stringify(args).substring(0, 100) + (JSON.stringify(args).length > 100 ? '...' : '') }
-      );
+      chatLogger.info(`[${messageId}] parseToolCallArguments: Parsed args`, { 
+        args: JSON.stringify(args).substring(0, 100) + (JSON.stringify(args).length > 100 ? '...' : '') 
+      });
       return args;
     } catch (e) {
       const errorMessage = `Failed to parse tool call arguments: ${toolCall.function.arguments.substring(0, 100)}...`;

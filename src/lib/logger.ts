@@ -50,6 +50,25 @@ let a2aFileTransportInitialized = false;
 // Create either a server logger or a console logger
 let logger: Logger;
 
+// Safe directory creation function
+const safeCreateDir = (dir: string): boolean => {
+  if (isServerlessProduction) {
+    console.log(`[LOGGER] Skipping directory creation in serverless environment: ${dir}`);
+    return false;
+  }
+  
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Created log directory: ${dir}`);
+    }
+    return true;
+  } catch (error) {
+    console.warn(`[LOGGER] Could not create directory ${dir}: ${error}. Continuing without file logging.`);
+    return false;
+  }
+};
+
 // Initialize both server-side and client-side loggers
 if (isServer) {
   // Get log directories from environment variables or use defaults
@@ -61,62 +80,81 @@ if (isServer) {
   // Log the directories being used
   console.log(`Logger initialization with: LOG_DIR=${logsDir}, ERROR_DIR=${errorLogsDir}`);
 
-  // Ensure logs directories exist
-  for (const dir of [logsDir, errorLogsDir, combinedLogsDir, componentsLogsDir]) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created log directory: ${dir}`);
+  // Create base transports (always include console)
+  const baseTransports: any[] = [
+    new transports.Console({
+      format: consoleFormat,
+      level: process.env.LOG_LEVEL || 'info'
+    })
+  ];
+
+  // Only add file transports if we can create directories
+  if (!isServerlessProduction) {
+    // Ensure logs directories exist
+    const dirsCreated = [logsDir, errorLogsDir, combinedLogsDir, componentsLogsDir].map(safeCreateDir);
+    
+    // Only add file transports if directories were created successfully
+    if (dirsCreated.some(created => created)) {
+      if (safeCreateDir(logsDir)) {
+        baseTransports.push(
+          new transports.DailyRotateFile({
+            dirname: logsDir,
+            filename: 'components-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '14d',
+            format: fileFormat
+          })
+        );
+      }
+      
+      if (safeCreateDir(errorLogsDir)) {
+        baseTransports.push(
+          new transports.DailyRotateFile({
+            dirname: errorLogsDir,
+            filename: 'error-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '14d',
+            level: 'error',
+            format: fileFormat
+          })
+        );
+      }
+      
+      if (safeCreateDir(combinedLogsDir)) {
+        baseTransports.push(
+          new transports.DailyRotateFile({
+            dirname: combinedLogsDir,
+            filename: 'combined-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '14d',
+            format: fileFormat
+          })
+        );
+      }
     }
   }
 
-  // Create the main logger with file transports
+  // Create the main logger with safe transports
   logger = createLogger({
     level: 'debug',
     format: fileFormat,
     defaultMeta: {},
-    transports: [
-      new transports.Console({
-        format: consoleFormat,
-        level: process.env.LOG_LEVEL || 'info'
-      }),
-      new transports.DailyRotateFile({
-        dirname: logsDir,
-        filename: 'components-%DATE%.log',
-        datePattern: 'YYYY-MM-DD',
-        maxSize: '20m',
-        maxFiles: '14d',
-        format: fileFormat
-      }),
-      new transports.DailyRotateFile({
-        dirname: errorLogsDir,
-        filename: 'error-%DATE%.log',
-        datePattern: 'YYYY-MM-DD',
-        maxSize: '20m',
-        maxFiles: '14d',
-        level: 'error',
-        format: fileFormat
-      }),
-      new transports.DailyRotateFile({
-        dirname: combinedLogsDir,
-        filename: 'combined-%DATE%.log',
-        datePattern: 'YYYY-MM-DD',
-        maxSize: '20m',
-        maxFiles: '14d',
-        format: fileFormat
-      })
-    ]
+    transports: baseTransports
   });
 
-  // Set up components logger
-  const componentsLogger = createLogger({
-    level: 'debug',
-    format: fileFormat,
-    defaultMeta: {},
-    transports: [
-      new transports.Console({
-        format: consoleFormat,
-        level: process.env.LOG_LEVEL || 'info'
-      }),
+  // Set up components logger with safe transports
+  const componentsTransports: any[] = [
+    new transports.Console({
+      format: consoleFormat,
+      level: process.env.LOG_LEVEL || 'info'
+    })
+  ];
+
+  if (!isServerlessProduction && safeCreateDir(componentsLogsDir)) {
+    componentsTransports.push(
       new transports.DailyRotateFile({
         dirname: componentsLogsDir,
         filename: 'components-%DATE%.log',
@@ -125,7 +163,14 @@ if (isServer) {
         maxFiles: '14d',
         format: fileFormat
       })
-    ]
+    );
+  }
+
+  const componentsLogger = createLogger({
+    level: 'debug',
+    format: fileFormat,
+    defaultMeta: {},
+    transports: componentsTransports
   });
 
   // Log the environment variables affecting a2aLogger console level
@@ -135,26 +180,31 @@ if (isServer) {
   
   console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
 
-  const currentRunId = process.env.LOG_RUN_ID || generateRunId();
-  const agentUrl = process.env.LOG_AGENT_URL || `http://localhost:${logAgentConfig.port}`;
+  // Only add Log Agent Transport in development
+  if (!isServerlessProduction) {
+    try {
+      const currentRunId = process.env.LOG_RUN_ID || generateRunId();
+      const agentUrl = process.env.LOG_AGENT_URL || `http://localhost:${logAgentConfig.port}`;
 
-  console.log(`Integrating Log Agent Transport with runId: ${currentRunId} to URL: ${agentUrl}`);
+      console.log(`Integrating Log Agent Transport with runId: ${currentRunId} to URL: ${agentUrl}`);
 
-  addLogAgentTransport(logger, {
-    agentUrl: agentUrl,
-    source: 'main-app',
-    runId: currentRunId,
-  });
+      addLogAgentTransport(logger, {
+        agentUrl: agentUrl,
+        source: 'main-app',
+        runId: currentRunId,
+      });
 
-  // We'll add the Log Agent Transport after creating a2aLogger
-
-  addLogAgentTransport(componentsLogger, {
-    agentUrl: agentUrl,
-    source: 'components-worker',
-    runId: currentRunId,
-  });
-  
-  console.log('Log Agent Transport integrated with server-side loggers.');
+      addLogAgentTransport(componentsLogger, {
+        agentUrl: agentUrl,
+        source: 'components-worker',
+        runId: currentRunId,
+      });
+      
+      console.log('Log Agent Transport integrated with server-side loggers.');
+    } catch (error) {
+      console.warn('[LOGGER] Could not initialize Log Agent Transport:', error);
+    }
+  }
 } else {
   // Simple console logger for client-side
   logger = createLogger({
@@ -191,29 +241,36 @@ if (isServer) {
     ],
   });
 
-  const clientRunId = process.env.NEXT_PUBLIC_LOG_RUN_ID || generateRunId();
-  const clientAgentUrl =
-    process.env.NEXT_PUBLIC_LOG_AGENT_URL ||
-    process.env.LOG_AGENT_URL ||
-    `http://localhost:${logAgentConfig.port}`;
+  // Only add Log Agent Transport in development
+  if (!isServerlessProduction) {
+    try {
+      const clientRunId = process.env.NEXT_PUBLIC_LOG_RUN_ID || generateRunId();
+      const clientAgentUrl =
+        process.env.NEXT_PUBLIC_LOG_AGENT_URL ||
+        process.env.LOG_AGENT_URL ||
+        `http://localhost:${logAgentConfig.port}`;
 
-  addLogAgentTransport(logger, {
-    agentUrl: clientAgentUrl,
-    source: 'main-app',
-    runId: clientRunId,
-  });
+      addLogAgentTransport(logger, {
+        agentUrl: clientAgentUrl,
+        source: 'main-app',
+        runId: clientRunId,
+      });
 
-  addLogAgentTransport(a2aLogger, {
-    agentUrl: clientAgentUrl,
-    source: 'a2a-system',
-    runId: clientRunId,
-  });
+      addLogAgentTransport(a2aLogger, {
+        agentUrl: clientAgentUrl,
+        source: 'a2a-system',
+        runId: clientRunId,
+      });
 
-  addLogAgentTransport(componentsLogger, {
-    agentUrl: clientAgentUrl,
-    source: 'components-worker',
-    runId: clientRunId,
-  });
+      addLogAgentTransport(componentsLogger, {
+        agentUrl: clientAgentUrl,
+        source: 'components-worker',
+        runId: clientRunId,
+      });
+    } catch (error) {
+      console.warn('[LOGGER] Could not initialize Log Agent Transport:', error);
+    }
+  }
 }
 
 // Function to initialize the A2A file transport if requested
