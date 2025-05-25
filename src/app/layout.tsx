@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { Analytics } from '@vercel/analytics/react';
 import { AnalyticsProvider } from '../client/components/AnalyticsProvider';
 import { ErrorBoundary } from '../client/components/ErrorBoundary';
+import { Footer } from "~/components/ui/Footer";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -40,14 +41,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      <body className="min-h-screen bg-background text-foreground antialiased flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TRPCReactProvider>
             <SessionProvider>
               <GlobalDependencyProvider>
                 <AnalyticsProvider>
                   <ErrorBoundary>
-                    {children}
+                    <div className="flex flex-col min-h-screen">
+                      <main className="flex-1">
+                        {children}
+                      </main>
+                      <Footer />
+                    </div>
                   </ErrorBoundary>
                 </AnalyticsProvider>
               </GlobalDependencyProvider>
