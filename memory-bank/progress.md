@@ -11,356 +11,335 @@ work. When entries grow beyond that, move older sections to
 
 ## Recent Highlights
 
-**December 19, 2024: Homepage Hero Section Updated - Subheading & CTA Button ✅**
-- **Updated subheading** from "Create stunning motion graphic scenes from a simple prompt" to "Bazaar is an AI-powered video generator that turns descriptions into animated motion graphics — in seconds."
-- **Improved CTA button sizing** - changed from full-width (`w-full`) to appropriately sized (`inline-block`) with proper padding
-- **Better visual hierarchy** - button now fits content naturally instead of stretching across entire container
-- **Enhanced messaging** - subheading now clearly explains what Bazaar is and emphasizes speed
-- **Technical Implementation**:
-  - Replaced button container from `max-w-md mx-auto` to `text-center` for better alignment
-  - Changed button class from `w-full` to `inline-block` for content-based width
-  - Maintained all existing styling, hover effects, and functionality
-- **Result**: More professional hero section with clearer value proposition and better-proportioned CTA button
+**May 27, 2025: Asset Management Utilities Added**
+- Implemented `AssetAgentAdapter` and `LocalDiskAdapter` for handling uploaded and external assets.
+- Enables basic cataloging of images, audio and video for generated storyboards.
 
-**December 19, 2024: Homepage FAQ Section Updated with New Content ✅**
-- **Completely refreshed FAQ content** with more detailed, informative answers
-- **Updated key questions and answers**:
-  - **Cost**: "Bazaar is free with unlimited use during the beta testing period"
-  - **How it works**: Detailed explanation of 7-second generation process, AI-to-React-to-Remotion pipeline, and importance of descriptive prompts
-  - **What is Bazaar**: Long-term vision for code-to-content tool and storytelling at scale
-  - **Beta V1 features**: Comprehensive overview of current capabilities and limitations
-  - **New features in development**: Multi-scene videos, music, proper saving, and AI training progress
-- **Enhanced FAQ rendering**: Updated to handle multi-paragraph answers with proper spacing
-- **Improved user experience**: Increased max-height from 60 to 96 for longer content, added paragraph spacing
-- **Technical Implementation**:
-  - Replaced 8 old FAQ items with 5 new, more comprehensive ones
-  - Added `split('\n\n')` logic to render multi-paragraph answers properly
-  - Updated FAQ container height and spacing for better readability
-- **Result**: More informative, professional FAQ section that better explains Bazaar's capabilities and vision
+**May 25, 2025: BAZAAR-257 Templates Updated**
+- `componentTemplate.ts` now exports components via `export default` and drops
+  the global registration IIFE.
+- Added validation and tests to enforce this new pattern.
+- `componentGenerator.service.ts` now includes `RUNTIME_DEPENDENCIES` metadata
+  for generated components.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
 
-**December 19, 2024: Homepage Prompt Input Replaced with "Try for Free" CTA ✅**
-- **Replaced complex prompt input form** with simple, prominent "Try for Free" CTA button
-- **Streamlined user journey** - single click to start creating instead of requiring prompt input
-- **Enhanced visual design** with hover effects, scaling animation, and professional styling
-- **Added reassuring copy** - "No credit card required • Start creating in seconds"
-- **Preserved authentication flow** - shows login modal for unauthenticated users
-- **Clean code optimization** - removed unused typewriter effect, example prompts, and related state
-- **Technical Implementation**:
-  - Replaced textarea form with centered CTA button
-  - Updated `handleTryForFree` function to create empty project and route to generator
-  - Removed unused `prompt`, `placeholderText`, `useTypewriterPrompt` hook, and example prompts
-  - Maintained existing project creation and routing logic
-- **Result**: Simplified, conversion-optimized homepage that gets users to the generator faster
+**May 21, 2025: CustomScene Component Tested & Validated**
+- Successfully tested the rewritten CustomScene component using terminal-based testing tools
+- Fixed import path issues with tilde (~) alias resolution when testing components
+- Documented testing process and results in `/memory-bank/testing/results/custom-scene-test-results.md`
+- Determined correct syntax for running component tests with environment variables: `dotenv -e .env.local -- tsx src/scripts/test-components/test-component.ts <input> <output>`
 
-**December 19, 2024: Comprehensive UI/UX Improvements Reapplied ✅**
-- **All major improvements from today's conversation have been successfully reapplied:**
-  - ✅ **Storyboard icon commented out** in sidebar navigation (GenerateSidebar.tsx)
-  - ✅ **Preview panel renamed to "Video Player"** in both PANEL_LABELS_G and quickActions
-  - ✅ **Header consolidation in PreviewPanelG** - single header with hidden refresh button
-  - ✅ **White background** applied to both PreviewPanelG and RemotionPreview components
-  - ✅ **Auto-play functionality** enabled in RemotionPreview with `autoPlay={true}`
-  - ✅ **Chat panel static behavior** - split auto-scroll logic to prevent post-completion scrolling
-  - ✅ **Comprehensive message system** with local state, contextual completion messages, and no duplicates
-  - ✅ **Scene creation vs update logic** properly implemented in backend with name preservation
-  - ✅ **Unique component name generation** to prevent JavaScript identifier conflicts
-  - ✅ **All routing fixed** - homepage, NewProjectButton, and /projects/new route to /generate
-- **Technical Implementation**:
-  - Split auto-scroll into two useEffects: main effect stops when generation completes, completion effect scrolls once
-  - Local message state prevents duplicates and provides immediate user feedback
-  - Backend preserves scene names on updates, generates contextual titles for new scenes
-  - Unique component naming system prevents "Identifier already declared" errors
-- **Result**: Complete, modern video generation workspace with optimal UX and no technical issues
+**May 21, 2025: Component Testing Tools Implemented**
+- Created an integrated testing framework for Remotion components without database/R2 dependencies
+- Implemented multiple testing approaches with varying levels of pipeline integration:
+  - Component Test Harness: Uses actual DynamicVideo/CustomScene production pipeline
+  - Component Sandbox: Direct ESM component testing
+  - Component Pipeline Visualizer: Step-by-step transformation view
+  - Terminal-based batch testing tools
+- Comprehensive documentation added to `/memory-bank/testing/component-testing/`
+- These tools enable rapid development, debugging, and LLM-generated component evaluation
+- See [Integrated Testing Guide](./testing/component-testing/integrated-testing-guide.md) for full details
 
-**December 19, 2024: Chat Panel Static Behavior After Scene Generation Complete ✅**
-- **Prevented post-completion scrolling** - chat panel remains completely static once "Scene generated ✅" message appears
-- **Split auto-scroll logic** into two separate useEffects:
-  - Main effect: Scrolls during message changes and generation (but stops when complete)
-  - Completion effect: Single scroll to show success message, then stops permanently
-- **Eliminated flickering** - no further scroll adjustments, reflows, or movement after completion
-- **Result**: Smooth, stable chat experience with no visual disruption after scene generation completes
+**May 25, 2025: BAZAAR-255 ESM Build Pipeline Migration Implemented**
+- Successfully migrated the component build pipeline from IIFE format to ESM modules
+- Removed global wrapping and window.__REMOTION_COMPONENT injection
+- Updated external dependencies list to support React/Remotion imports
+- Fixed TypeScript types for the buildLogger to support the implementation
+- This is the foundation for the complete ESM modernization in Sprint 25
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for implementation details.
+**May 26, 2025: BAZAAR-262 Performance Benchmark Script**
+- Added benchmark test comparing React.lazy import with script tag injection.
+- Logs load times and memory usage.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
 
-**December 19, 2024: Fixed Homepage Form Routing to Updated UI ✅**
-- **Problem**: Homepage prompt input form was routing users to legacy `/edit` interface instead of updated `/generate` UI
-- **Root Cause**: `handleSubmit` function in homepage was hardcoded to redirect to `/projects/${projectId}/edit`
-- **Solution**: Updated homepage form submission to route to `/generate` endpoint
-- **Technical Changes**:
-  - Modified `src/app/page.tsx` handleSubmit function
-  - Changed redirect from `/projects/${projectId}/edit` to `/projects/${projectId}/generate`
-  - Preserved all existing functionality including project creation with initial message
-- **Result**: Users entering prompts on homepage now access the modern `/generate` workspace with chat panel, video player, and improved UX instead of legacy interface
 
-**December 19, 2024: Fixed New Project Button Routing to Updated UI ✅**
-- **Problem**: ➕ New Project icon in sidebar was routing to legacy `/edit` page instead of updated `/generate` UI
-- **Root Cause**: Multiple routing points were hardcoded to redirect to `/edit` instead of `/generate`
-- **Solution**: Updated all New Project routing to use `/generate` endpoint:
-  - **NewProjectButton Component**: Changed redirect from `/projects/${projectId}/edit` to `/projects/${projectId}/generate`
-  - **GenerateSidebar Collapsed Button**: Reverted to original ➕ icon but updated to use tRPC mutation and route to `/generate`
-  - **Direct Route**: Updated `/projects/new` page redirect from `/edit` to `/generate`
-- **Technical Changes**:
-  - Modified `src/components/client/NewProjectButton.tsx` redirect route
-  - Updated `src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx` collapsed sidebar button to use tRPC API with ➕ icon
-  - Fixed `src/app/projects/new/page.tsx` redirect destination
-- **Result**: All New Project creation flows now correctly route to the updated `/generate` UI with chat panel, video player, and modern workspace interface. Collapsed sidebar maintains original ➕ icon appearance.
+**May 24, 2025: BAZAAR-260 Test Scaffolding for ESM Migration**
+- Updated server-side tests (`buildComponent.test.ts`) for ESM output verification.
+- Created placeholder client-side test file (`CustomScene.test.tsx`) and noted existing `useRemoteComponent.test.tsx`.
+- This lays the groundwork for comprehensive testing of the ESM migration.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for details.
 
-**December 19, 2024: Fixed Scene Creation vs. Update Logic & Preserved Scene Naming ✅**
-- **Problem**: All prompts were being interpreted as scene updates, even when users intended to create new scenes. Scene names were being overwritten on updates.
-- **Root Cause**: Overly aggressive edit detection logic and lack of name preservation in update operations
-- **Solution**: Implemented proper scene creation vs. update decision layer:
-  - **Explicit New Scene Indicators**: "create", "new scene", "generate", "build", "design" → always create new scenes
-  - **Explicit Edit Indicators**: "make it", "change", "modify", "update", "fix", "adjust" → update existing scenes
-  - **Context-Aware Logic**: No selected scene = new scene, short messages with selected scene = edit
-  - **Scene Name Preservation**: Original scene names are preserved on updates, only generated for new scenes
-- **Backend Changes**:
-  - Modified `upsertScene()` to only update `tsxCode` and `props` for existing scenes, preserving `name`
-  - Added `existingSceneName` tracking in edit mode
-  - Updated scene data saving to use preserved names for edits
-- **Frontend Changes**:
-  - Improved `isLikelyEdit()` function with explicit indicators and better logic
-  - Updated completion messages: "Scene generated: [title] ✅" vs "Scene updated ✅"
-  - Removed aggressive edit detection that was causing false positives
-- **Result**: Users can now reliably create new scenes with "create" prompts and edit existing scenes with modification prompts. Scene names remain stable once created.
+**May 25, 2025: BAZAAR-260 Docs Updated**
+- Checklist and testing documentation updated for ESM migration.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md).
 
-**December 19, 2024: Fixed Duplicate Component Name Identifiers ✅**
-- **Problem**: Error "Identifier 'Firework' has already been declared" when creating multiple scenes with similar prompts
-- **Root Cause**: Scene generation was creating components with identical names (e.g., "Firework", "FireworkScene") causing JavaScript identifier conflicts
-- **Solution**: Implemented unique component name generation system:
-  - Added `generateUniqueComponentName()` function that extracts meaningful words from prompts
-  - Fetches existing component names from database to ensure uniqueness
-  - Appends numeric suffixes when needed (e.g., "FireworkScene", "FireworkScene1", "FireworkScene2")
-  - Sanitizes names to ensure valid JavaScript identifiers
-  - Updates LLM prompts to specify exact component name to use
-  - Adds fallback replacement if LLM doesn't follow naming instructions
-- **Technical Implementation**:
-  - Modified `generateSceneCode` endpoint in `src/server/api/routers/generation.ts`
-  - Added database query to fetch existing component names before generation
-  - Enhanced system prompts to include required component name
-  - Added post-processing to ensure generated code uses correct name
-  - Updated error fallback cases to use unique names
-- **Result**: Each generated scene now has a guaranteed unique component name, eliminating JavaScript identifier conflicts
+**May 26, 2025: BAZAAR-263 Shared Module System Implemented**
+- Introduced a shared module registry to allow utilities to be reused across custom components.
+- Version information is tracked for each shared module.
+- Documented usage in `memory-bank/sprints/sprint25/BAZAAR-263-shared-modules.md`.
 
-**December 19, 2024: Scene Generated Message Now Permanently Visible ✅**
-- **Removed auto-hide timeout** for "Scene generated ✅" message - it no longer disappears after 3 seconds
-- **Permanent chat history** - completion messages now remain visible in chat history until next generation starts
-- **Improved user feedback** - users can see a clear record of all successful scene generations
-- **Reset only on new generation** - completion status only resets when starting a new scene generation, not automatically
-- **Result**: Clear, persistent record of scene generation success in chat history for better user experience
+**May 21, 2025: ESM Migration Planning Started**
+- Detailed tickets written for Sprint 25 to convert dynamic components to ES modules.
+- See [Sprint 25 Progress](./sprints/sprint25/progress.md) for more.
 
-**December 19, 2024: Chat Panel UX Improvements - Auto-Scroll & Scene Generation Feedback ✅**
-- **Added auto-scroll functionality** that automatically scrolls to show latest messages when:
-  - New user messages are sent
-  - System status messages appear
-  - Scene generation starts or completes
-  - Database messages are loaded
-- **Improved scene generation feedback** with clear status progression:
-  - "Generating scene..." with loading spinner during generation
-  - "Scene generated ✅" with green checkmark when complete
-  - Completion message shows for 3 seconds then disappears
-- **Enhanced user experience** with smooth scrolling behavior using `scrollTo()` with `behavior: 'smooth'`
-- **Added chat container ref** for precise scroll control and better performance
-- **Result**: Users always see the latest messages and get clear, real-time feedback on scene generation progress
+**May 20, 2025: Database Schema Corrected - Migration `0009` Applied**
+- Successfully resolved a `TRPCClientError` caused by a missing `last_successful_step` column in the `bazaar-vid_custom_component_job` table. Migration `0009_smart_the_twelve.sql` was applied after a workaround for conflicting older migrations (moving them and using temporary empty placeholders).
+- The database schema is now up-to-date with the application code, unblocking features dependent on the new columns.
+- *Details in [Sprint 24 Progress](./sprints/sprint24/progress.md).*
 
-**December 19, 2024: Video Player Background Changed to White ✅**
-- **Updated video player background** from dark gray (`bg-gray-900`) to white (`bg-white`)
-- **Modified RemotionPreview component** to include `backgroundColor: 'white'` in Player style
-- **Updated PreviewPanelG container** to use white background for consistency
-- **Result**: Clean, bright white background for video player that provides better contrast and professional appearance
+**May 18, 2025: Message Bus Integration for A2A System**
+- Implemented a new Message Bus architecture (singleton, feature-flagged with `USE_MESSAGE_BUS`) to significantly improve communication between A2A agents. CoordinatorAgent and UIAgent have been integrated, featuring enhanced error handling and performance monitoring.
+- *Details can be found in the relevant sprint log (e.g., [Sprint 24](./sprints/sprint24/progress.md) or `progress-history.md`).*
 
-**December 19, 2024: Preview Panel Renamed to Video Player with Auto-Play ✅**
-- **Renamed panel title** from "Preview" to "Video Player" in `PANEL_LABELS_G` and `quickActions`
-- **Added auto-play functionality** to Remotion Player component with `autoPlay={true}` prop
-- **Enhanced user experience**: Video now automatically starts playing when:
-  - New scenes are generated
-  - Scenes are updated or modified
-  - Panel is refreshed or recompiled
-- **Maintains existing features**: Loop, controls, volume, click-to-play, and fullscreen functionality preserved
-- **Result**: More intuitive video player behavior that automatically shows generated content without manual play button clicks
+**May 17, 2025: Critical A2A TaskProcessor Stability Resolved**
+- Fixed persistent Next.js HMR-induced restart loops that were destabilizing the TaskProcessor and A2A system. Achieved stability through a multi-pronged approach:
+    - Enhanced Next.js & Webpack configurations (ignore patterns, polling).
+    - Introduced new development scripts (`dev:no-restart`, `dev:stable`, standalone task processor).
+    - Improved TaskProcessor resilience (true singleton, robust shutdown, instance tracking).
+    - Corrected logger configurations (e.g., `buildLogger`, log file locations) to prevent HMR triggers.
+- The A2A system, including ScenePlannerAgent, now operates reliably.
+- *Details can be found in the relevant sprint log (e.g., [Sprint 24](./sprints/sprint24/progress.md) or `progress-history.md`).*
 
-**December 19, 2024: Preview Panel Header Consolidated ✅**
-- **Removed redundant lower header** from `PreviewPanelG.tsx` that was cluttering the UI
-- **Fixed refresh functionality** by adding hidden button with ID `refresh-preview-button-g` that upper header can trigger
-- **Consolidated to single header** - only the upper header (matching other panels) is now visible
-- **Preserved all functionality** - refresh button in upper header now works correctly
-- **Cleaner UI** - Preview panel now has consistent styling with Chat and Code panels
-- **Result**: Single, functional header with working refresh button that matches the design system
+## Progress Logs
 
-**December 19, 2024: Storyboard Icon Hidden from Sidebar ✅**
-- **Commented out storyboard panel** from sidebar navigation in `GenerateSidebar.tsx`
-- **Preserved workspace functionality**: Storyboard panel still works in workspace if added via other means
-- **Easy restoration**: Code is commented out rather than deleted for quick restoration
-- **Sidebar panels**: Now shows only Chat, Preview, and Code icons
-- **Result**: Cleaner sidebar interface while maintaining backend storyboard functionality
+- **Main log**: `/memory-bank/progress.md` contains brief highlights and an index
+  of sprint progress files.
+- **Sprint logs**: Each sprint keeps a detailed progress file under
+  `/memory-bank/sprints/<sprint>/progress.md`.
+- **Special topics**: Additional progress files such as
+  `/memory-bank/a2a/progress.md` or `/memory-bank/scripts/progress.md` are linked
+  from the main log.
 
-**December 19, 2024: Storyboard Panel and Icon Restored ✅**
-- **Restored storyboard panel** to sidebar navigation in `GenerateSidebar.tsx`
-- **Restored storyboard to workspace** by updating `WorkspaceContentAreaG.tsx`:
-  - Added back to `PANEL_COMPONENTS_G` and `PANEL_LABELS_G` objects
-  - Added back to `quickActions` array in drop zone
-  - Added back to `renderPanelContent` switch statement with correct props
-  - Restored `StoryboardPanelG` import and `ListIcon` import
-- **Result**: Storyboard panel is now fully functional and visible in the UI again
-- **Panels available**: Chat, Preview, Storyboard, and Code panels all functional
+### Recent Updates (Top 200 lines - older entries to progress-history.md)
 
-**December 19, 2024: Storyboard Panel and Icon Hidden ✅**
-- **Removed storyboard panel** from sidebar navigation in `GenerateSidebar.tsx`
-- **Removed storyboard from workspace** by updating `WorkspaceContentAreaG.tsx`:
-  - Removed from `PANEL_COMPONENTS_G` and `PANEL_LABELS_G` objects
-  - Removed from `quickActions` array in drop zone
-  - Removed from `renderPanelContent` switch statement
-  - Removed unused `StoryboardPanelG` import and `ListIcon` import
-- **Result**: Storyboard panel is now completely hidden from the UI while preserving all other functionality
-- **Panels available**: Chat, Preview, and Code panels remain fully functional
+*   **Component Test Harness:** Integrated Sucrase for in-browser TSX to JS transpilation in `src/app/test/component-harness/page.tsx`. This should resolve dynamic loading issues and `useContext` errors. Added `inputProps` handling to `RemotionPreview` and `<Player>`.
+*   **Component Harness:** Fixed another issue with Remotion component rendering in `src/app/test/component-harness/page.tsx`. We were incorrectly using the `component` prop instead of `lazyComponent` on the Remotion Player component. These are mutually exclusive props, where `component` expects a pre-loaded React component, while `lazyComponent` expects a function returning a dynamic `import()` promise, which is what our ESM-based approach requires.
+*   **DB Analysis Toolkit**: Completed and debugged. Details in `memory-bank/db-analysis-toolkit.md` and `memory-bank/database-tools.md`.
 
-**December 19, 2024: Storyboard Panel Changes Completely Reverted ↩️**
-- **Full reversion completed** of all storyboard panel modifications after Add Scene button integration failed
-- **WorkspaceContentAreaG.tsx**: Removed all storyboard-specific code including PlusIcon import, StoryboardPanelGHandle type, onAddScene prop, refs, handlers, and debugging code
-- **StoryboardPanelG.tsx**: Reverted from forwardRef back to regular function component, removed useImperativeHandle, restored original internal header with Add Scene button
-- **Current state**: Storyboard panel back to original double-header design with Add Scene button in internal header, no wrapper header integration
-- **TypeScript errors**: Confirmed that existing TS errors are pre-existing configuration issues (JSX config, module resolution, missing dependencies) not related to the reverted changes
-- **Development server**: Confirmed running properly at localhost:3000 despite TS configuration warnings
+## Sprint Progress Index
+- [Sprint 25](./sprints/sprint25/progress.md)
+- [Sprint 24](./sprints/sprint24/progress.md)
+- [Sprint 20](./sprints/sprint20/progress.md)
+- [Sprint 17](./sprints/sprint17/progress.md)
+- [Sprint 16](./sprints/sprint16/progress.md)
+- [Sprint 14](./sprints/sprint14/progress.md)
+- [Sprint 12](./sprints/sprint12/12-progress.md)
 
-**May 25, 2025: Sprint 27 Ticket Planning Complete**
-- Created comprehensive ticket breakdown for next-generation features
-- **BAZAAR-305**: Architecture & State Management Cleanup (12-16h) - Foundation work
-- **BAZAAR-306**: GitHub Integration Foundation (16-20h) - Extract visual DNA from repos
-- **BAZAAR-307**: Image Analysis Foundation (14-18h) - Upload images, generate matching scenes
-- **BAZAAR-308**: Prompt Engineering System (12-16h) - Model switching, animation focus
-- Total estimated effort: 54-70 hours across 3-4 weeks
-- Focus on `/projects/[id]/generate/page.tsx` workspace as main interface
-- Startup approach: Clean foundations first, then ship MVP features fast
+### Other Logs
+- [A2A System](./a2a/progress.md)
+- [Scripts Reorganization](./scripts/progress.md)
+- [Evaluation Framework](./progress/eval-framework-progress.md)
+- [Metrics](./evaluation/progress.md)
 
-**May 25, 2025: Sprint 26 Review & Sprint 27 Planning Complete**
-- Conducted comprehensive review of Sprint 26 actual implementation vs documentation
-- Identified critical gap: backend infrastructure complete but user-facing features missing
-- **What Actually Works**: Component generation (99% success), animation focus, scene-first generation, workspace UI
-- **What's Missing**: "My Projects" dashboard, publish UI frontend, model switching, image analysis, GitHub integration
-- Created strategic documentation for GitHub integration targeting no-code developers
-- Established image analysis strategy for upload → AI vision → matching scenes
-- Documented prompt engineering approach for easy model switching and quality improvement
+# Bazaar-Vid Progress Log
 
-**May 24, 2025: Sprint 26 Completion**
-- BAZAAR-300: ESM component generation patterns ✅ (Fixed LLM prompts, validation)
-- BAZAAR-301: Animation focus improvements ✅ (Better prompts, reduced text-heavy output)
-- BAZAAR-302: Scene-first generation ✅ (Database persistence, edit loop, testing)
-- BAZAAR-304: Workspace UI ✅ (Chat, Preview, Storyboard, Code panels working)
-- BAZAAR-303: Publish pipeline backend ✅ (bundler, R2 client, job queue, database schema, tRPC endpoints)
-- **Gap Identified**: Frontend publish UI missing (no publish buttons, status modals, URL sharing)
+## Latest Updates
 
-**May 20, 2025: Component Generation Pipeline Stabilization**
-- Fixed component registration and loading issues
-- Improved error handling in useRemoteComponent hook
-- Enhanced script cleanup in PreviewPanel
-- Component pipeline now handles 95%+ of generation requests successfully
-- Created comprehensive testing and verification toolkit
+### 2024-05-24: ESM Component Migration Complete
 
-**May 18, 2025: Workspace UI Enhancement (BAZAAR-304)**
-- Implemented 4-panel resizable workspace layout
-- Chat, Preview, Storyboard, and Code panels working seamlessly
-- Added drag-and-drop panel management
-- Improved user experience with collapsible sidebar
-- Enhanced timeline integration with workspace
+The ESM component migration has been completed successfully:
 
-**May 15, 2025: Scene-First Generation (BAZAAR-302)**
-- Implemented @scene(id) edit loop for targeted scene modifications
-- Added database persistence for scene planning history
-- Created comprehensive testing suite (14/14 tests passing)
-- Improved scene generation reliability and user control
+- Complete transition from IIFE format to ESM modules for all dynamically loaded components
+- Implemented React.lazy for component loading with proper Suspense/error handling
+- Updated component templates for ESM compatibility 
+- Fixed dependency management with proper externals configuration
+- Added comprehensive test coverage for the new ESM workflow
 
-**May 12, 2025: Animation Focus Improvements (BAZAAR-301)**
-- Enhanced LLM prompts to prioritize visual animations over text
-- Reduced text-heavy scene generation by 70%
-- Improved animation quality with better easing and motion
-- "Bubbles" prompt now generates actual animated bubbles, not text about bubbles
+This work completes tickets BAZAAR-255, BAZAAR-256, BAZAAR-257, BAZAAR-258, and BAZAAR-260. The system now uses modern JavaScript module patterns and better integration with React's component model. 
 
-**May 10, 2025: Component Generation Patterns (BAZAAR-300)**
-- Fixed ESM component loading and registration issues
-- Improved LLM prompts for consistent component structure
-- Enhanced validation and error handling
-- Achieved 99% component generation success rate
+See [Sprint 25 Progress](/memory-bank/sprints/sprint25/progress.md) for details.
+### 2025-05-26: Documentation for ESM Components Updated
+- Added new developer guide and updated integration docs. See [Sprint 25 Progress](./sprints/sprint25/progress.md).
 
-## Sprint Progress Links
+### 2024-05-23: Sprint 25 Started - ESM Component Migration
 
-- **Sprint 27**: [Planning Complete](./sprints/sprint27/) - Next-gen features foundation
-- **Sprint 26**: [Completed](./sprints/sprint26/progress.md) - Workspace UI and generation improvements
-- **Sprint 25**: [Completed](./sprints/sprint25/) - Component pipeline stabilization
-- **Sprint 24**: [Completed](./sprints/sprint24/) - A2A system and observability
+Started work on transitioning custom components from IIFE format to ESM modules:
 
-## Current Focus Areas
+- BAZAAR-255: Updated build pipeline to output ESM modules
+- Identified next steps for component loading mechanism (BAZAAR-256)
+- Created test plan for ESM migration validation (BAZAAR-260)
 
-### Sprint 27 Priorities (May 25 - June 15, 2025)
+### 2024-05-22: Sprint 24 Completed
 
-1. **Architecture Cleanup (BAZAAR-305)** - Week 1
-   - Fix "My Projects" dashboard and project management
-   - Consolidate state management patterns (Zustand, Context, local state)
-   - Establish clear component boundaries and error handling
-   - Make system "idiot-proof" before adding new features
+All Sprint 24 tasks have been completed:
 
-2. **GitHub Integration (BAZAAR-306)** - Weeks 2-3
-   - OAuth integration for GitHub repositories
-   - Visual DNA extraction from deployed applications
-   - Style-aware prompt generation
-   - Target no-code developers (Lovable, Bolt, Replit users)
+---
 
-3. **Image Analysis (BAZAAR-307)** - Weeks 2-3
-   - Upload images via drag/drop in workspace
-   - AI vision analysis for color, layout, style extraction
-   - Generate matching video scenes from image analysis
-   - Seamless integration with existing chat workflow
+### Latest Updates - 2024-07-30
 
-4. **Prompt Engineering (BAZAAR-308)** - Weeks 2-3
-   - Easy model switching (GPT-4, GPT-4-turbo, o1-mini)
-   - Versioned prompt template system
-   - A/B testing for prompt optimization
-   - Enhanced animation-focused generation
+- **Component Harness:** Resolved 'Duplicate export of default' error (and associated infinite loop) in `src/app/test/component-harness/page.tsx`. The issue was caused by a redundant `export default MyComponent;` being added to the Sucrase-transformed code, which already included a default export. The fix ensures only a single default export is present in the code used for the dynamic import via Blob URL.
 
-### Key Technical Achievements
+- **Component Harness:** Fixed another issue with Remotion component rendering in `src/app/test/component-harness/page.tsx`. We were incorrectly using the `component` prop instead of `lazyComponent` on the Remotion Player component. These are mutually exclusive props, where `component` expects a pre-loaded React component, while `lazyComponent` expects a function returning a dynamic `import()` promise, which is what our ESM-based approach requires.
 
-- **Component Generation**: 99% success rate with ESM patterns
-- **Workspace UI**: 4-panel resizable layout with drag-and-drop
-- **Scene Generation**: @scene(id) edit loop with database persistence
-- **Animation Quality**: Significant improvement in visual vs text content
-- **Backend Infrastructure**: Complete publish pipeline (frontend UI pending)
+# Progress Log
 
-### Architecture Status
+## Current Status (January 24, 2025)
 
-- **State Management**: Zustand for video state, tRPC for API communication
-- **Database**: Drizzle ORM with PostgreSQL, comprehensive schema
-- **File Storage**: R2 integration for components and assets
-- **Authentication**: NextAuth with session management
-- **UI Framework**: Next.js 15 App Router, Tailwind CSS, shadcn/ui
+### ✅ BAZAAR-302 COMPLETED
+**Scene-First Generation MVP** - Fully implemented and tested
+- **Smart Prompt Analysis**: High/low specificity detection with template injection
+- **Edit Loop**: @scene(id) auto-tagging with focused edit prompts  
+- **Database Persistence**: Scenes table with race-safe ordering
+- **Sub-Second Preview**: Blob URL + dynamic import <500ms
+- **Test Coverage**: 14/14 tests passing (10 unit + 4 integration)
+- **Documentation**: Complete architecture guide in `docs/prompt-flow.md`
 
-## Outstanding Issues
+### 🎯 Ready for BAZAAR-303
+**Save/Publish Pipeline** - Next sprint focus
+- Foundation complete with scene-first generation
+- ESM compatibility patterns established
+- Database schema ready for production workflows
 
-### High Priority
-- "My Projects" dashboard missing (users can create but not manage projects)
-- Publish UI frontend not implemented (backend complete)
-- State management fragmentation across components
-- No model switching interface for developers
+## Recent Achievements
 
-### Medium Priority
-- Component generation could be faster (current: ~30-60 seconds)
-- Timeline integration needs refinement
-- Error boundaries and graceful fallbacks needed
-- User onboarding and documentation gaps
+### Sprint 26 Highlights
+- **BAZAAR-300**: Fixed component generation patterns ✅
+- **BAZAAR-301**: Improved animation focus and quality ✅  
+- **BAZAAR-302**: Scene-first generation with edit loop ✅
 
-### Low Priority
-- Performance optimization for large projects
-- Advanced animation templates
-- Component marketplace features
-- Multi-user collaboration features
+### Technical Improvements
+- **Performance**: Sub-second preview feedback
+- **Architecture**: Clean separation of prompt analysis and generation
+- **Testing**: Comprehensive unit and integration test coverage
+- **Documentation**: Complete system architecture documentation
 
-## Next Milestones
+## What Works
 
-- **June 1, 2025**: BAZAAR-305 (Architecture Cleanup) complete
-- **June 8, 2025**: BAZAAR-306/307/308 MVP implementations complete
-- **June 15, 2025**: Sprint 27 integration and polish complete
-- **June 22, 2025**: Sprint 28 planning (advanced features)
+### Core Video Generation
+- **Multi-scene planning**: LLM-driven storyboard creation
+- **Component generation**: OpenAI GPT-4o-mini with ESM compatibility
+- **Real-time preview**: Remotion Player with dynamic imports
+- **Database persistence**: Drizzle ORM with Postgres/Neon
 
-## Links
+### Scene-First Workflow (NEW)
+- **Single scene generation**: Fast, focused component creation
+- **Template system**: Code snippets for common animation patterns
+- **Edit loop**: @scene(id) tagging for targeted modifications
+- **Auto-tagging**: Smart detection of edit commands
 
-- [Sprint 27 Strategic Overview](./sprints/sprint27/sprint27-strategic-overview.md)
-- [Sprint 27 Ticket Overview](./sprints/sprint27/sprint27-ticket-overview.md)
-- [GitHub Integration Strategy](./sprints/sprint27/github-style-bootstrapper/github-integration-strategy.md)
-- [Image Analysis Strategy](./sprints/sprint27/image-vision-integration/image-analysis-integration-strategy.md)
-- [Prompt Engineering Planning](./sprints/sprint27/prompt-engineering-system/planning.md)
-- [TODO Items](./TODO.md)
-- [Critical Issues](./TODO-critical.md)
+### Development Infrastructure
+- **Type safety**: End-to-end TypeScript with Zod validation
+- **Testing**: Jest with comprehensive coverage
+- **Documentation**: Memory bank system with sprint tracking
+- **CI/CD**: Automated testing and deployment
+
+## What's Left to Build
+
+### BAZAAR-303: Save/Publish Pipeline
+- **ESBuild compilation**: Server-side bundling for production
+- **R2 storage**: Cloudflare upload for shareable components
+- **Public URLs**: Component sharing and embedding
+- **Queue system**: Background processing for heavy operations
+
+### Future Enhancements
+- **Toast notifications**: Better user feedback system
+- **Template library**: Expanded animation pattern collection
+- **Collaborative editing**: Multi-user scene editing
+- **Version control**: Scene history and rollback
+
+## Known Issues
+
+### Minor Issues
+- **TypeScript errors**: Some test files need cleanup (non-blocking)
+- **Toast system**: Console-based feedback (needs UI component)
+- **Template patterns**: Limited to 4 basic animations
+
+### Technical Debt
+- **Legacy components**: Old verification scripts need removal
+- **Test infrastructure**: Some mock files have type issues
+- **Documentation**: Some API docs need updates
+
+## Architecture Status
+
+### Database Schema ✅
+- **Projects**: Core project management
+- **Scenes**: New table for scene-first workflow
+- **Components**: Custom component storage
+- **Relations**: Proper foreign keys and indexing
+
+### API Layer ✅
+- **tRPC routers**: Type-safe API with streaming
+- **Generation procedures**: Scene and multi-scene workflows
+- **Authentication**: Auth.js v5 integration
+- **Validation**: Zod schemas for all inputs
+
+### Frontend ✅
+- **Next.js 15**: App router with server components
+- **Remotion Player**: Real-time video preview
+- **Timeline UI**: Interactive editing interface
+- **Component editor**: Monaco with TypeScript support
+
+### Infrastructure ✅
+- **Neon Postgres**: Production database
+- **Cloudflare R2**: Asset storage
+- **OpenAI API**: LLM integration
+- **Vercel deployment**: Production hosting
+
+## Performance Metrics
+
+### Scene Generation
+- **Prompt analysis**: <10ms
+- **Template injection**: <5ms
+- **LLM generation**: 1-3 seconds
+- **Code compilation**: <200ms
+- **Preview render**: <500ms total
+
+### Database Operations
+- **Scene insert**: <50ms
+- **Scene update**: <30ms
+- **Project queries**: <100ms
+- **Bulk operations**: Optimized with indexing
+
+## Next Sprint Planning
+
+### BAZAAR-303 Priorities
+1. **ESBuild integration**: Server-side compilation
+2. **R2 upload pipeline**: Asset storage and CDN
+3. **Public sharing**: Component URLs and embedding
+4. **Queue system**: Background job processing
+
+### Quality Improvements
+1. **Toast notifications**: User feedback system
+2. **Error handling**: Better error boundaries
+3. **Performance**: Further optimization
+4. **Testing**: E2E test coverage
+
+## Links to Detailed Documentation
+
+- **Sprint 26**: [memory-bank/sprints/sprint26/](memory-bank/sprints/sprint26/)
+- **BAZAAR-302**: [memory-bank/sprints/sprint26/BAZAAR-302-COMPLETED.md](memory-bank/sprints/sprint26/BAZAAR-302-COMPLETED.md)
+- **Architecture**: [docs/prompt-flow.md](docs/prompt-flow.md)
+- **TODO**: [memory-bank/TODO.md](memory-bank/TODO.md)
+
+### BAZAAR-303 (Publish & Share Pipeline): Began implementation of the R2 client wrapper (`packages/r2/index.ts`). See [sprint26/progress.md](./sprints/sprint26/progress.md) for details.
+### BAZAAR-303 (Publish & Share Pipeline): Started implementation of the bundler utility (`packages/bundler/index.ts`) using `esbuild`. See [sprint26/progress.md](./sprints/sprint26/progress.md) for details.
+### BAZAAR-303 (Publish & Share Pipeline): Initiated setup of the BullMQ job queue (`src/queues/publish.ts`) for asynchronous publishing tasks. See [sprint26/progress.md](./sprints/sprint26/progress.md) for details.
+### BAZAAR-303 (Publish & Share Pipeline): Refined `packages/r2/index.ts` based on detailed user feedback, improving robustness and R2 compatibility. See [sprint26/progress.md](./sprints/sprint26/progress.md) for details.
+
+### BAZAAR-303 (Publish & Share Pipeline): Fixed critical implementation issues based on detailed code review:
+- Updated R2 client to use proper EndpointV2 format instead of unsupported forcePathStyle
+- Constrained hash deduplication logic to the same project for security
+- Added path aliases for bundler and r2 packages in tsconfig.json
+- Improved Redis URL validation for production environments
+- Created comprehensive publish-flow.md documentation with architecture diagrams
+
+## 🚀 PRODUCTION BUILD FIX (May 25, 2025)
+
+### Fixed Critical Build Failure for Live Deployment
+**Issue**: Production build failing on Vercel with error:
+```
+Module not found: Can't resolve '@fontsource/inter/700.css'
+```
+
+**Root Cause**: `StockGraph.tsx` component was importing `@fontsource/inter/700.css` but the package wasn't installed in dependencies.
+
+**Solution Applied**: ✅
+- Replaced `@fontsource/inter` import with existing `@remotion/google-fonts/Inter` approach
+- Updated all `fontFamily` references to use the Google Fonts `fontFamily` constant
+- Maintained consistency with other components (TitleCard, TextScene, etc.) that already use this pattern
+- No additional dependencies required - `@remotion/google-fonts` already installed
+
+**Files Modified**:
+- `src/remotion/components/StockGraph.tsx` - Fixed font import and usage
+
+**Result**: 🎯
+- Build should now pass on Vercel
+- Font loading consistent across all Remotion components  
+- No breaking changes to existing functionality
+- Ready for live production testing
+
+---
+
+## Recent Updates
+
+### Latest Updates (Session 3 - Jan 25, 2025)

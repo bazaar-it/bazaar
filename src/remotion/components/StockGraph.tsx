@@ -6,7 +6,10 @@ import {
   useVideoConfig,
   spring,
 } from "remotion";
-import "@fontsource/inter/700.css";
+import { loadFont, fontFamily } from "@remotion/google-fonts/Inter";
+
+// Load Inter font
+loadFont();
 
 // Props interface for the StockGraph component
 interface StockGraphProps {
@@ -127,7 +130,7 @@ const Line: React.FC<{
             textAnchor="middle"
             fill="white"
             fontSize="16"
-            fontFamily="Inter, sans-serif"
+            fontFamily={fontFamily}
             fontWeight="bold"
           >
             ${currentPoint.value.toFixed(2)}
@@ -187,7 +190,7 @@ const Grid: React.FC<{
             alignmentBaseline="middle"
             fill="rgba(255, 255, 255, 0.6)"
             fontSize="16"
-            fontFamily="Inter, sans-serif"
+            fontFamily={fontFamily}
           >
             ${price}
           </text>
@@ -240,7 +243,7 @@ const Axis: React.FC<{
           textAnchor="middle"
           fill="rgba(255, 255, 255, 0.6)"
           fontSize="16"
-          fontFamily="Inter, sans-serif"
+          fontFamily={fontFamily}
         >
           {dates[index]}
         </text>
@@ -343,7 +346,7 @@ export const StockGraph: React.FC<StockGraphProps> = ({
             transform: "translateX(-50%)",
             color: "white",
             fontSize: "32px",
-            fontFamily: "Inter, sans-serif",
+            fontFamily: fontFamily,
             fontWeight: 700,
             opacity: fadeIn,
             textAlign: "center",
@@ -396,7 +399,7 @@ export const StockGraph: React.FC<StockGraphProps> = ({
             justifyContent: "center",
             gap: 60,
             opacity: statsOpacity,
-            fontFamily: "Inter, sans-serif",
+            fontFamily: fontFamily,
             zIndex: 10,
           }}
         >

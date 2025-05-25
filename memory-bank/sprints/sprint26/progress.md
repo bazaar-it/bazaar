@@ -794,3 +794,333 @@ With BAZAAR-304 (Workspace UI) largely complete, focus now shifts to BAZAAR-305.
 
 ## Previous Completions
 {{ ... }}
+
+**December 19, 2024: Chat Panel Message Ordering & Contextual System Messages ✅**
+- **Fixed user message rendering delay** - user messages now appear immediately when submitted
+- **Implemented chronological message ordering** - all messages (database + local) sorted by timestamp
+- **Added contextual system messages** - completion messages now show "Scene generated: [prompt summary] ✅"
+- **Eliminated dot placeholders** - no more "..." messages, all status messages are meaningful
+- **Preserved final messages** - completion messages persist between interactions and remain visible
+- **Enhanced message flow**:
+  - User submits → message appears instantly
+  - "Generating scene..." appears with loading spinner
+  - "Scene generated: [context] ✅" appears on completion
+  - Messages remain in chronological chat history
+- **Improved visual feedback** - different colors for generating (blue), success (green), error (red)
+- **Result**: Complete, coherent chat history with immediate feedback and contextual intelligence
+
+**December 19, 2024: Chat Panel Static After Scene Generation Complete ✅**
+- **Prevented post-completion scrolling** - chat panel remains completely static once "Scene generated ✅" message appears
+- **Split auto-scroll logic** into two separate useEffects:
+  - Main effect: Scrolls during message changes and generation (but stops when complete)
+  - Completion effect: Single scroll to show success message, then stops permanently
+- **Eliminated flickering** - no further scroll adjustments, reflows, or movement after completion
+- **Removed duplicate scrolling** - eliminated manual scroll call from success handler to prevent conflicts
+- **Result**: Smooth, stable chat experience with no visual disruption after scene generation completes
+## Latest Updates
+
+### 2024-12-19: Storyboard Panel Changes Reverted ↩️
+
+**Action Taken**: Reverted all modifications made to the storyboard panel implementation.
+
+**Changes Reverted**:
+1. **WorkspaceContentAreaG.tsx**:
+   - Removed `PlusIcon` import
+   - Removed `StoryboardPanelGHandle` import and type
+   - Removed `onAddScene` prop from `SortablePanelG` function signature
+   - Removed storyboard panel ref (`storyboardPanelRef`)
+   - Removed `handleAddScene` callback function
+   - Removed Add Scene button from header
+   - Removed all debugging console logs and indicators
+   - Reverted initial panels state to exclude storyboard by default
+   - Removed ref passing to StoryboardPanelG component
+
+2. **StoryboardPanelG.tsx**:
+   - Reverted from `forwardRef` back to regular function component
+   - Removed `StoryboardPanelGHandle` interface export
+   - Removed `useImperativeHandle` implementation
+   - Restored original header with "Storyboard" title and "Add Scene" button
+   - Removed `forwardRef` and `useImperativeHandle` imports
+
+**Current State**: 
+- Storyboard panel back to original double-header design
+- Add Scene button is in the internal panel header (not the wrapper header)
+- No integration with SortablePanelG header system
+- All debugging code removed
+- System restored to pre-modification state
+
+### 2024-12-19: Chat Panel UI Improvements ✅
+
+**Changes Made**:
+1. **Removed context indicator section** - Hidden the "Editing: Scene name" display above prompt input
+2. **Removed helper text** - Eliminated instructional text below input about creating animations  
+3. **Centered send button** - Added `items-center` to form flex container for vertical alignment
+
+**Files Modified**:
+- `src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx`
+
+**Result**: Cleaner, more focused chat interface with better visual alignment.
+
+### 2024-12-19: Code Editor Panel Refinements ✅
+
+**Final Adjustments Made**:
+1. **Balanced line number padding** - Reduced `lineNumbersMinChars` from 4 to 3 for equal padding on both sides
+2. **Disabled sticky scroll** - Set `stickyScroll: { enabled: false }` to prevent line 3 sticking issues
+3. **Optimized spacing** - Increased `lineDecorationsWidth` to 10 for better visual balance
+4. **Removed problematic CSS** - Eliminated custom CSS that was breaking Monaco Editor
+
+**Technical Details**:
+- Monaco Editor options: `lineNumbersMinChars: 3`, `lineDecorationsWidth: 10`, `stickyScroll: { enabled: false }`
+- Header height: `h-6` for Run button to match other panels
+- Clean integration: No wrapper padding, direct Monaco Editor integration
+
+**Result**: Clean, professional code editor with proper header alignment and no sticky scroll issues.
+
+### 2024-12-19: Code Editor Panel Header Alignment ✅
+
+**Changes Made**:
+1. **Normalized header height** - Reduced Run button from `h-7` to `h-6` to match other panels
+2. **Removed nested padding** - Eliminated `p-4` wrapper around Monaco Editor for cleaner integration
+3. **Optimized line numbers** - Set `lineNumbersMinChars: 3` and `lineDecorationsWidth: 0`
+4. **Flattened structure** - Direct Monaco Editor integration without extra containers
+
+**Files Modified**:
+- `src/app/projects/[id]/generate/workspace/panels/CodePanelG.tsx`
+
+**Result**: Code editor header now properly aligns with other panels, cleaner Monaco Editor integration.
+
+### 2024-12-19: Code Editor Panel UI Overhaul ✅
+
+**Major Changes Implemented**:
+1. **Header redesign** to match Preview panel styling (`px-3 py-2 border-b bg-gray-50`)
+2. **Removed 'Scene' label** from header for cleaner look
+3. **Updated button design**: 
+   - Changed from "Compile & Update" to green Play icon + "Run" text
+   - Reduced size to `h-7` for better proportions
+4. **Added close functionality** with X button in top right
+5. **Removed Tips section** from bottom, expanding code editor space
+6. **Integrated with workspace panel management** for proper close handling
+
+**Files Modified**:
+- `src/app/projects/[id]/generate/workspace/panels/CodePanelG.tsx`
+
+**Result**: Code editor now has consistent styling with other panels and improved UX.
+
+## Current Status
+
+### Active Features
+- ✅ Video generation with multiple scenes
+- ✅ Chat-based scene creation and editing  
+- ✅ Real-time preview with Remotion
+- ✅ Code editor with syntax highlighting
+- ✅ Storyboard panel with scene management
+- ✅ Workspace with draggable/resizable panels
+- ✅ Consistent panel header design across all panels
+
+### Technical Architecture
+- **Frontend**: Next.js 14 with TypeScript
+- **Backend**: tRPC for type-safe APIs
+- **Database**: Neon Postgres with Drizzle ORM
+- **Video**: Remotion for rendering
+- **AI**: Claude 3.5 Sonnet for code generation
+- **UI**: Tailwind CSS with shadcn/ui components
+
+### Recent Focus Areas
+1. **UI/UX Consistency** - Standardizing panel headers and interactions
+2. **Code Editor Integration** - Monaco Editor with proper styling
+3. **Panel Management** - Drag/drop, resize, and close functionality
+4. **Scene Workflow** - Streamlined creation and editing process
+
+## Progress Tracking
+
+## Recent Updates
+
+### Code Editor Panel Redesign (Latest)
+- **Updated CodePanelG component styling** to match Preview panel header design
+- **Removed 'Scene' label** from the code editor header
+- **Changed 'Compile & Update' button** to green Play icon + "Run" text, made smaller to fit in header
+- **Added X close button** to top right of code editor panel
+- **Removed Tips section** from bottom, expanding code editor to use full available space
+- **Updated header styling** to match other panels: `px-3 py-2 border-b bg-gray-50`
+- **Integrated close functionality** with workspace panel management system
+
+### Code Editor Panel Refinements (Latest Update)
+- **Normalized header height** by reducing Run button from `h-7` to `h-6` to match other panel headers
+- **Removed nested panel padding** by eliminating the `p-4` wrapper and border container around Monaco Editor
+- **Flattened structure** for direct Monaco Editor integration without redundant containers
+- **Tightened line number padding** with `lineNumbersMinChars: 3` and `lineDecorationsWidth: 0`
+- **Fixed sticky scroll behavior** by removing extra containers and optimizing Monaco Editor options
+- **Removed rounded borders** from the panel container since SortablePanelG provides the panel styling
+- **Optimized Monaco Editor options** for cleaner, more compact code editing experience
+- **Disabled unnecessary features** like minimap, folding, code lens, and suggestions for focused editing
+
+### Code Editor Sticky Scroll & Spacing Fixes (Latest Update)
+- **Eliminated sticky scroll behavior** by setting `stickyScroll: { enabled: false }` and forcing `position: static` on view elements
+- **Added proper spacing between line numbers and code** with `padding-right: 12px` for line numbers and `padding-left: 8px` for code content
+- **Disabled sticky widgets** and sticky line numbers that were causing lines to stick to the top during scroll
+- **Enhanced line decoration width** from 0 to 8px for better visual separation
+- **Added custom CSS overrides** to ensure Monaco Editor respects spacing and positioning rules
+- **Improved scrollbar styling** by disabling shadows and maintaining consistent sizing
+- **Set static positioning** for all view-related elements to prevent any sticky behavior
+- **Enhanced margin background** to match panel styling with light gray background
+
+### Chat Panel UI Improvements (Latest Update)
+- **Hidden context indicator section** that appeared above the prompt input when a scene was selected (was showing "Editing: Scene name" info)
+- **Removed helper text** below the input box that said "Describe a scene to create your first animation. Once created, short commands will edit existing scenes."
+- **Center-aligned send button** vertically with the input field by adding `items-center` to the form flex container
+- **Simplified chat interface** by removing unnecessary instructional text and status indicators
+- **Cleaner input area** with just the essential input field and send button
+
+### Homepage Transformation (Previous)
+- Removed rainbow-bordered textarea form and replaced with professional hero section
+- Added large headline, subtitle, CTA buttons, and three feature highlight cards
+- Updated Tailwind config with specific primary color palette (50-950 blue shades) and Inter font configuration
+- Added announcement badge above hero section
+- Completely overhauled FAQ section with new content
+- Removed multiple sections (example videos, how it works, templates)
+- Changed CTA buttons to black with white text
+- Updated feature highlights with appropriate icons and descriptions
+
+### Technical Integration
+- Attempted Claude 3.7 Sonnet integration for code generation (files later deleted)
+- Server management on port 3001 due to env requirements
+- Added axios dependency for logger transport
+- Successfully running development server
+
+## Current State
+- Modern landing page with announcement badge, black hero typography, single prominent CTA
+- Three feature cards with appropriate icons, React/Remotion demo, company logos
+- Comprehensive FAQs and strategic CTA placement for conversion optimization
+- Code editor panel with improved UX matching design system
+- Working development environment on Funday branch
+
+# Progress Log
+
+## 2024-12-19 - Chat Panel UX Improvements Phase 7: Dynamic Scene Title Generation
+
+### Fixed Stale Scene Titles in System Messages
+- **Problem**: System messages showed outdated scene titles like "Scene generated: Norwegian flag ✅" even for new prompts
+- **Root Cause**: Completion message was searching through old `localMessages` to find user prompt, often finding stale data
+- **Solution**: Added `currentPrompt` state to track the exact prompt being processed
+
+### Enhanced Scene Title Generation
+- **Improved `summarizePrompt` function**: Better word filtering and capitalization
+- **Meaningful word extraction**: Filters out common action words and stop words
+- **Proper capitalization**: Converts to Title Case for professional appearance
+- **Length limiting**: Prevents overly long titles with 40-character limit
+- **Fallback handling**: Graceful degradation when no meaningful words found
+
+### Technical Implementation
+- Added `currentPrompt` state variable to track active prompt
+- Updated `handleSubmit` to store prompt with `setCurrentPrompt(trimmedMessage)`
+- Modified completion message to use `summarizePrompt(currentPrompt)` instead of searching messages
+- Enhanced word filtering with comprehensive stop word list
+- Added proper Title Case formatting for scene names
+
+### Example Improvements
+**Before**: "Scene generated: Norwegian flag ✅" (stale/cached)
+**After**: 
+- "Scene generated: Rocket Launch Earth ✅"
+- "Scene generated: Mobile Banking Dashboard ✅"
+- "Scene generated: Travel Booking Interface ✅"
+
+### Result
+- ✅ Always shows current prompt-based scene title
+- ✅ No more stale or cached scene references
+- ✅ Professional Title Case formatting
+- ✅ Meaningful word extraction for better titles
+- ✅ Accurate reflection of just-generated content
+
+## 2024-12-19 - Chat Panel UX Improvements Phase 6: Removed Toast Notifications
+
+### Eliminated Bottom-Right Toast Notifications
+- **Removed success toasts**: No more "Scene generated successfully!" or "Scene updated successfully!" notifications
+- **Removed error toasts**: No more "Scene generation failed" or scene selection error notifications
+- **Cleaner user experience**: Chat panel messages now provide all necessary feedback without redundant toasts
+- **Simplified code**: Removed unused `toast` import from "sonner" package
+
+### Rationale
+- Chat panel already provides comprehensive visual feedback with status messages
+- Toast notifications were redundant with the in-chat status updates
+- Reduces visual noise and distractions during scene generation workflow
+- Users get immediate feedback through the chat interface without additional popups
+
+### Technical Changes
+- Removed `toast.success()` call for scene generation/update completion
+- Removed `toast.error()` call for scene generation failures
+- Removed `toast.error()` call for scene selection validation
+- Removed unused `import { toast } from "sonner"`
+- Preserved all validation logic (scene selection check still returns early)
+
+### Result
+- ✅ No more bottom-right corner toast notifications
+- ✅ All feedback now provided through chat interface
+- ✅ Cleaner, less distracting user experience
+- ✅ Maintained all error handling and validation logic
+
+## 2024-12-19 - Chat Panel UX Improvements Phase 5: Clean User Messages & Correct Labels
+
+### Hidden Internal Scene References from User View
+- **Problem**: User messages displayed internal scene references like `@scene(ec1edfa9-92f0-4d12-98b4-d93221b25960) Make it look more like iran`
+- **Solution**: Separated display message from processing message
+  - User sees only their original input: `Make it look more like iran`
+  - Internal scene reference `@scene(id)` used only for backend routing
+  - `trimmedMessage` shown in chat, `processedMessage` sent to API
+
+### Correct System Response Labels
+- **Problem**: System always showed "Scene generated ✅" even when editing existing scenes
+- **Solution**: Dynamic labeling based on operation type
+  - **New scenes**: "Scene generated: [summary] ✅"
+  - **Scene edits**: "Scene updated: [summary] ✅"
+  - Uses `result.isEdit` from backend to determine correct label
+
+### Enhanced Status Messages
+- **Loading states**: Now show "Updating scene..." vs "Generating scene..." based on operation
+- **Completion states**: Correctly labeled as "updated" or "generated"
+- **User experience**: Clear distinction between creating new content vs modifying existing
+
+### Technical Implementation
+- Added `isEditOperation` detection in `handleSubmit`
+- Updated user message storage to use `trimmedMessage` instead of `processedMessage`
+- Modified completion message creation to use dynamic `actionLabel`
+- Preserved all internal routing logic while cleaning user-facing display
+
+### Result
+- ✅ Clean user messages without internal metadata
+- ✅ Accurate system responses ("updated" vs "generated")
+- ✅ Consistent user experience across creation and editing workflows
+- ✅ Maintained all backend functionality and scene routing
+
+## 2024-12-19 - Chat Panel UX Improvements Phase 4: Duplicate Message Fix
+
+### Fixed Duplicate User Messages and Trailing Placeholders
+- **Problem**: User messages were appearing twice and "..." system messages appeared after completion
+- **Root Cause**: Dual message systems - local state + video state + database refetching
+- **Solution**: Simplified to single local message state system
+  - Removed `initiateChatMutation` and `streamingMessageId` logic
+  - Removed all `refetchMessages()` calls that caused database duplicates
+  - Commented out database message fetching entirely
+  - Updated `allMessages` to only use `localMessages`
+  - Removed loading states and welcome message database dependencies
+
+### Current Chat Flow (Fixed)
+1. **User submits**: Message immediately appears in chat
+2. **Generation starts**: "Generating scene..." appears with blue styling
+3. **Generation completes**: Updates to contextual message like "Scene generated: travel booking app ✅"
+4. **No duplicates**: Each message appears exactly once
+5. **No placeholders**: No "..." messages ever shown
+
+### Technical Changes
+- `ChatPanelG.tsx`: Removed dual message system, kept only local state
+- Messages now use `localMessages` state exclusively
+- Eliminated all database message fetching and refetching
+- Removed video state message updates that caused duplicates
+- Simplified message flow to prevent any trailing placeholders
+
+### Result
+- ✅ Clean, immediate user message display
+- ✅ Intelligent contextual completion messages
+- ✅ No duplicate messages
+- ✅ No trailing "..." placeholders
+- ✅ Persistent chat history within session
+- ✅ Proper chronological message ordering
