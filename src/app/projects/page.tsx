@@ -18,25 +18,12 @@ export default async function ProjectsPage() {
 
   const userProjects = await getUserProjects(session.user.id);
 
-  // If there are projects, redirect to the most recently updated one
-  const latestProject = userProjects[0];
-  if (latestProject?.id) {
-    redirect(`/projects/${latestProject.id}/edit`);
+  // If user has no projects, redirect to create a new one
+  if (userProjects.length === 0) {
+    redirect("/projects/new");
   }
 
-  // Otherwise, show the empty state with project creation
-  return (
-    <div className="container mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-8">Welcome to Bazaar-Vid</h1>
-      
-      <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-8">
-        <p>You don't have any projects yet.</p>
-        <p className="mt-2">
-          Click the button below to create your first project.
-        </p>
-      </div>
-      
-      <NewProjectButton />
-    </div>
-  );
+  // Show projects dashboard (this should be implemented properly in the future)
+  // For now, redirect to create new project as the main flow
+  redirect("/projects/new");
 }
