@@ -47,18 +47,13 @@ export const authConfig = {
   }),
   providers: [
     GitHubProvider({
-      // Use validated env if possible, otherwise fallback like before
       clientId: process.env.AUTH_GITHUB_ID || "",
       clientSecret: process.env.AUTH_GITHUB_SECRET || "",
     }),
-    // Only include Google provider if credentials are configured
-    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET && 
-        process.env.AUTH_GOOGLE_ID !== "placeholder-not-configured" ? [
-      GoogleProvider({
-        clientId: process.env.AUTH_GOOGLE_ID,
-        clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      })
-    ] : []),
+    GoogleProvider({
+      clientId: process.env.AUTH_GOOGLE_ID || "",
+      clientSecret: process.env.AUTH_GOOGLE_SECRET || "",
+    }),
   ],
   session: {
     strategy: "jwt",
