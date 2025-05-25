@@ -52,8 +52,6 @@ yarn-error.log*
 .cursor/
 .cursorrules
 
-
-
 # Remotion render outputs only (not source code)
 /remotion/out/
 /remotion/renders/
@@ -63,8 +61,59 @@ yarn-error.log*
 # Local data & caches
 *.sqlite
 
-
 # Environment files
 .env
 .env.*
 !.env.example          # keep the example stub in the repo
+
+# =============================================================================
+# PRODUCTION EXCLUSIONS - Development artifacts not needed in production
+# =============================================================================
+
+# Memory bank - development documentation only
+/memory-bank/
+
+# Development logs
+/logs/
+/tmp/
+*.log
+
+# Development scripts (keep essential ones)
+/scripts/
+!/scripts/setup-env.sh
+!/scripts/start-database.sh
+
+# Analysis outputs
+/analysis/
+
+# Test results and fixtures
+/test-results*
+/tests/performance/fixtures/
+
+# A2A system (separate project, not needed in production)
+/src/server/a2a/
+/src/agents/
+/src/scripts/a2a-test/
+/src/scripts/log-agent/
+/src/scripts/log-tools/
+
+# Development-only API routes
+/src/app/api/a2a/
+/src/app/api/debug/
+/src/app/api/test/
+/src/app/api/test-component/
+
+# Development test pages
+/src/app/test/
+/src/app/remotion-demo/
+
+# Temporary files and backups
+*.bak
+*.backup
+*.tmp
+*_backup.*
+*_stashed_*
+
+# Development database dumps
+*.dump
+*.sql.backup

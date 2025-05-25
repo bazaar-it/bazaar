@@ -759,7 +759,7 @@ export default function ${scene.template}() {
       let editInstruction: string = userPrompt;
       
       try {
-        // Step 1: Check for @scene(id) edit pattern
+        // Step 1: Check for @scene(id) edit pattern (V1 logic)
         const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(userPrompt);
         let existingCode: string | undefined;
         
@@ -780,11 +780,12 @@ export default function ${scene.template}() {
           existingCode = existingScene.tsxCode;
         }
         
-        // Step 2: Build simple, clean prompt for LLM
+        // Step 2: Build enhanced prompts for better code generation (V1 logic)
         let systemPrompt: string;
         let userMessage: string;
         
         if (isEditMode) {
+          // Enhanced edit mode prompting (V1 logic)
           systemPrompt = `You are editing an existing Remotion component. Apply ONLY the requested change while preserving the existing structure and functionality.
 
 EXISTING COMPONENT CODE:
@@ -792,12 +793,20 @@ EXISTING COMPONENT CODE:
 ${existingCode}
 \`\`\`
 
+CRITICAL RULES:
+1. Use standard Remotion imports: import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+2. Apply the requested change while maintaining all existing functionality
+3. Preserve all existing animations and structure
+4. Return only the modified component code, no explanations
+5. Ensure export default function ComponentName() format
+
 Apply the requested change while maintaining all existing functionality. Return only the modified component code, no explanations.`;
 
           userMessage = `Apply this change to the component: "${editInstruction}"
 
 Keep all existing animations and structure intact. Only modify what's specifically requested.`;
         } else {
+          // Enhanced new scene prompting (V1 logic)
           systemPrompt = `You are a Remotion animation specialist. Create visually engaging animated components using standard Remotion imports.
 
 REQUIRED FORMAT:
@@ -821,15 +830,23 @@ ANIMATION GUIDELINES:
 - NEVER use identical input ranges: interpolate(frame, [45, 45], ...) ❌
 - Use spring for natural motion: spring({ frame, fps, config: { damping: 10, stiffness: 100 } })
 - Create visual effects with scaling, rotation, opacity, position changes
+- Focus on creating smooth, visually engaging animations
+- Avoid static content - everything should move or animate
+
+CRITICAL RULES:
+1. Use standard Remotion imports only
+2. Export default function ComponentName() format required
+3. Return only the component code, no explanations
+4. Create engaging animations that bring concepts to life
 
 Return only the component code, no explanations.`;
 
           userMessage = `Create an animated component for: "${userPrompt}"
 
-Focus on creating smooth, visually engaging animations that bring the concept to life.`;
+Focus on creating smooth, visually engaging animations that bring the concept to life. Make it dynamic and interesting to watch.`;
         }
 
-        // Step 3: Generate component code
+        // Step 3: Generate component code with enhanced error handling (V1 logic)
         const response = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
@@ -844,21 +861,54 @@ Focus on creating smooth, visually engaging animations that bring the concept to
           throw new Error('No response from OpenAI');
         }
 
-        // Step 4: Extract and clean code
+        // Step 4: Extract and clean code with enhanced validation (V1 + V2 logic)
         const codeMatch = /```(?:tsx?|javascript|jsx?)?\n([\s\S]*?)\n```/.exec(content);
         let generatedCode = codeMatch?.[1] ?? content;
 
-        // Basic cleanup - ensure proper structure
+        // Enhanced code cleanup (V1 + V2 logic)
+        // Remove forbidden imports and replace with standard imports
+        if (/import\s+React/.test(generatedCode)) {
+          console.warn('⚠️ Generated code contains forbidden React import, fixing...');
+          generatedCode = generatedCode.replace(/import\s+React[^;]*;?\s*/g, '');
+        }
+        
+        // Ensure standard Remotion imports (V2 improvement)
+        if (!/import\s+.*from\s+['"]remotion['"]/.test(generatedCode)) {
+          console.warn('⚠️ Generated code missing standard Remotion import, adding...');
+          const importStatement = "import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';\n\n";
+          generatedCode = importStatement + generatedCode;
+        }
+        
+        // Remove window.Remotion patterns in favor of standard imports (V2 improvement)
+        if (/window\.Remotion/.test(generatedCode)) {
+          console.warn('⚠️ Generated code contains window.Remotion pattern, fixing...');
+          generatedCode = generatedCode.replace(/const\s*{\s*[^}]*}\s*=\s*window\.Remotion;\s*/g, '');
+        }
+
+        // Ensure proper export default function (V1 + V2 logic)
         if (!/export\s+default\s+function/.test(generatedCode)) {
           console.warn('⚠️ Generated code missing export default, fixing...');
           
-          const functionMatch = /function\s+(\w+)\s*\(/;
-          const match = functionMatch.exec(generatedCode);
+          // Check for arrow function syntax
+          const arrowFunctionMatch = /const\s+(\w+)\s*=\s*\(([^)]*)\)\s*=>\s*\{/;
+          const match = arrowFunctionMatch.exec(generatedCode);
           
           if (match) {
-            generatedCode = generatedCode.replace(functionMatch, 'export default function $1(');
+            const [fullMatch, componentName, params] = match;
+            generatedCode = generatedCode.replace(
+              arrowFunctionMatch,
+              `export default function ${componentName}(${params}) {`
+            );
+            generatedCode = generatedCode.replace(/}\s*;?\s*$/, '}');
           } else {
-            generatedCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+            const functionMatch = /function\s+(\w+)\s*\(/;
+            const funcMatch = functionMatch.exec(generatedCode);
+            
+            if (funcMatch) {
+              generatedCode = generatedCode.replace(functionMatch, 'export default function $1(');
+            } else {
+              // Enhanced fallback with proper imports (V1 + V2 logic)
+              generatedCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function GeneratedComponent() {
   const frame = useCurrentFrame();
@@ -878,10 +928,16 @@ export default function GeneratedComponent() {
     </AbsoluteFill>
   );
 }`;
+            }
           }
         }
 
-        // Step 5: Validate generated code BEFORE persisting to database
+        // Ensure proper code ending
+        if (!generatedCode.trim().endsWith('}')) {
+          generatedCode = generatedCode.trim() + '\n}';
+        }
+
+        // Step 5: Enhanced validation before database save (V1 logic)
         console.log('[generateSceneCode] Validating generated code before database save...');
         const validation = await validateGeneratedCode(generatedCode.trim());
         
@@ -892,7 +948,7 @@ export default function GeneratedComponent() {
         
         console.log('[generateSceneCode] ✅ Code validation passed, proceeding with database save');
 
-        // Step 6: Persist to database (only if validation passes)
+        // Step 6: Persist to database with enhanced metadata (V1 logic)
         const sceneDataToSave = {
           name: sceneName,
           order: 0,
@@ -900,7 +956,9 @@ export default function GeneratedComponent() {
           props: {
             userPrompt: isEditMode ? editInstruction : userPrompt,
             isEdit: isEditMode,
-            validationPassed: true, // Mark as validated
+            validationPassed: true,
+            generatedAt: new Date().toISOString(),
+            model: 'gpt-4o-mini',
           },
         };
 
@@ -917,12 +975,12 @@ export default function GeneratedComponent() {
           sceneId: persistedSceneId,
           insight: { specificity: 'high' as const },
           isEdit: isEditMode,
-          validationResult: validation, // Include validation results
+          validationResult: validation,
         };
       } catch (error) {
         console.error('Error generating scene code:', error);
         
-        // Return validated fallback code
+        // Enhanced fallback with proper imports (V1 + V2 logic)
         const fallbackCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function ErrorFallbackScene() {
@@ -956,7 +1014,7 @@ export default function ErrorFallbackScene() {
         // Validate fallback code (should always pass)
         const fallbackValidation = await validateGeneratedCode(fallbackCode);
         
-        // Save fallback scene to database with error metadata
+        // Save fallback scene with enhanced error metadata (V1 logic)
         const fallbackSceneData = {
           name: `${sceneName} (Error Fallback)`,
           order: 0,
@@ -967,6 +1025,8 @@ export default function ErrorFallbackScene() {
             isErrorFallback: true,
             originalError: error instanceof Error ? error.message : String(error),
             validationPassed: fallbackValidation.isValid,
+            generatedAt: new Date().toISOString(),
+            model: 'gpt-4o-mini-fallback',
           },
         };
 

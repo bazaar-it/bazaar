@@ -8,13 +8,20 @@ import { useVideoState } from '~/stores/videoState';
 import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { toast } from 'sonner';
 
 interface Scene {
   id: string;
-  name: string;
-  template?: string;
-  start?: number;
+  type: string;
+  start: number;
   duration: number;
+  data?: {
+    name?: string;
+    code?: string;
+    componentId?: string;
+    props?: any;
+    [key: string]: any;
+  };
   props?: any;
   metadata?: any;
 }
@@ -31,15 +38,8 @@ export function ChatPanelG({
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
-  const [currentPrompt, setCurrentPrompt] = useState<string>(''); // Track the current prompt being processed
-  const [localMessages, setLocalMessages] = useState<Array<{
-    id: string;
-    content: string;
-    role: 'user' | 'assistant';
-    timestamp: number;
-    status?: 'generating' | 'success' | 'error';
-    isLocal?: boolean;
-  }>>([]);
+  const [currentPrompt, setCurrentPrompt] = useState<string>('');
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
@@ -53,13 +53,32 @@ export function ChatPanelG({
   const effectiveSelectedSceneId = selectedSceneId || (scenes.length > 0 ? scenes[scenes.length - 1]?.id : null);
   const selectedScene = effectiveSelectedSceneId ? scenes.find(s => s.id === effectiveSelectedSceneId) : null;
   
-  // Debug logging to trace scene selection issues
-  console.log('[ChatPanelG] selectedSceneId prop:', selectedSceneId);
-  console.log('[ChatPanelG] scenes available:', scenes.map(s => ({ id: s.id, name: s.data?.name || s.type })));
-  console.log('[ChatPanelG] effectiveSelectedSceneId (auto-selected):', effectiveSelectedSceneId);
-  console.log('[ChatPanelG] selectedScene resolved:', selectedScene ? { id: selectedScene.id, name: selectedScene.data?.name || selectedScene.type } : 'none');
+  // Database message fetching (V1 logic)
+  const { data: dbMessages, isLoading: isLoadingMessages, refetch: refetchMessages } = 
+    api.chat.getMessages.useQuery({ projectId });
   
-  // Auto-scroll function
+  // Chat initiation mutation (V1 logic)
+  const initiateChatMutation = api.chat.initiateChat.useMutation({
+    onSuccess: (result: any) => {
+      console.log('[ChatPanelG] Chat initiated successfully:', result);
+      
+      // Store the streaming message ID for updates
+      if (result.assistantMessageId) {
+        setStreamingMessageId(result.assistantMessageId);
+        
+        // Add the assistant message to video state for streaming updates
+        const { addAssistantMessage } = useVideoState.getState();
+        addAssistantMessage(projectId, result.assistantMessageId, 'Generating scene...');
+      }
+    },
+    onError: (error: any) => {
+      console.error('[ChatPanelG] Chat initiation failed:', error);
+      setIsGenerating(false);
+      toast.error(`Chat initiation failed: ${error.message}`);
+    }
+  });
+  
+  // Auto-scroll function (V2 improvement)
   const scrollToBottom = useCallback(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
@@ -69,13 +88,12 @@ export function ChatPanelG({
     }
   }, []);
   
-  // Function to create contextual summary from user prompt
+  // Function to create contextual summary from user prompt (V2 improvement)
   const summarizePrompt = useCallback((prompt: string): string => {
     const cleanPrompt = prompt.replace(/@scene\([^)]+\)\s*/, '').trim();
     
     if (!cleanPrompt) return 'Custom scene';
     
-    // Remove common action words and keep meaningful content
     const words = cleanPrompt.split(/\s+/);
     const meaningfulWords = words.filter(word => {
       const lowerWord = word.toLowerCase();
@@ -85,154 +103,200 @@ export function ChatPanelG({
     });
     
     if (meaningfulWords.length === 0) {
-      // Fallback to first few words if no meaningful words found
       return words.slice(0, 3).join(' ').toLowerCase();
     }
     
-    // Take up to 4 meaningful words and capitalize properly
     const selectedWords = meaningfulWords.slice(0, 4);
     const title = selectedWords.map(word => 
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
     
-    // Limit length to prevent overly long titles
     return title.length > 40 ? title.substring(0, 37) + '...' : title;
   }, []);
   
-  // Scene generation mutation using the BAZAAR-302 approach
+  // Scene generation mutation with enhanced logic from V1
   const generateSceneCodeMutation = api.generation.generateSceneCode.useMutation({
     onSuccess: (result: any) => {
       console.log("✅ Scene generation completed:", result);
       setIsGenerating(false);
       setGenerationComplete(true);
       
-      // Create appropriate completion message based on operation type
-      let completionMessage: string;
-      
-      if (result.isEdit) {
-        // For edits, just show "Scene updated ✅" without changing the title
-        completionMessage = 'Scene updated ✅';
-      } else {
-        // For new scenes, show "Scene generated: [title] ✅"
-        const promptSummary = summarizePrompt(currentPrompt);
-        completionMessage = `Scene generated: ${promptSummary} ✅`;
-      }
-      
-      // Add persistent completion message to local messages
-      setLocalMessages(prev => prev.map(msg => 
-        msg.status === 'generating' 
-          ? { ...msg, content: completionMessage, status: 'success' as const }
-          : msg
-      ));
-      
-      // Auto-scroll is now handled by the dedicated useEffect for completion
-      // (Removed manual scrollToBottom call to prevent duplicate scrolling)
-      
-      // Notify parent component about the generated scene
+      // SINGLE CALLBACK: Notify parent component about the generated scene (for both new and edit)
       if (onSceneGenerated) {
-        console.log('[ChatPanelG] Calling onSceneGenerated callback');
+        console.log('[ChatPanelG] Calling onSceneGenerated callback for scene:', result.sceneId, 'isEdit:', result.isEdit);
         onSceneGenerated(result.sceneId, result.code);
       }
       
-      // Force a refresh of the preview
-      const { forceRefresh } = useVideoState.getState();
-      forceRefresh(projectId);
+      // Update the streaming assistant message with the result (V1 logic)
+      if (streamingMessageId) {
+        const { updateMessage } = useVideoState.getState();
+        
+        // Create a more descriptive and human response (V1 logic)
+        let assistantMessage: string;
+        
+        if (result.isEdit) {
+          assistantMessage = `I've updated your scene! ✨ 
+
+Here's what I modified:
+• Applied your changes to the ${selectedScene?.data?.name || 'selected scene'}
+• Regenerated the animation code with your requested adjustments
+• The scene is now ready for preview
+
+${result.insight?.patternHint ? `The scene features ${result.insight.patternHint} animation patterns` : ''}${result.styleHint ? ` with ${result.styleHint.toLowerCase()}` : ''}.`;
+        } else {
+          const sceneType = result.insight?.patternHint || 'custom';
+          const duration = result.insight?.requestedDurationSec || 5;
+          
+          assistantMessage = `Perfect! I've created your new scene 🎬
+
+**Scene Details:**
+• **Type**: ${sceneType.charAt(0).toUpperCase() + sceneType.slice(1)} animation
+• **Duration**: ~${duration} seconds (${duration * 30} frames)
+• **Style**: ${result.styleHint || 'Modern animation design'}
+
+The scene is now visible in all panels - you can preview it, edit the code, or select it from the storyboard. Feel free to ask for any adjustments!`;
+        }
+        
+        updateMessage(projectId, streamingMessageId, {
+          content: assistantMessage,
+          status: 'success'
+        });
+        
+        setStreamingMessageId(null);
+      }
+      
+      // Refetch messages to show any server-side stored messages (V1 logic)
+      setTimeout(() => {
+        void refetchMessages();
+      }, 100);
     },
     onError: (error: any) => {
       console.error("❌ Scene generation failed:", error);
       setIsGenerating(false);
+      toast.error(`Scene generation failed: ${error.message}`);
       
-      // Update local message with error status
-      setLocalMessages(prev => prev.map(msg => 
-        msg.status === 'generating' 
-          ? { ...msg, content: `Scene generation failed: ${error.message} ❌`, status: 'error' as const }
-          : msg
-      ));
+      // Update the streaming assistant message with error (V1 logic)
+      if (streamingMessageId) {
+        const { updateMessage } = useVideoState.getState();
+        
+        const errorMessage = `I encountered an issue creating your scene. ❌
+
+**Error**: ${error.message}
+
+**What you can try:**
+• Simplify your prompt and try again
+• Check if you're editing a specific scene or creating a new one
+• Try describing the animation differently
+
+I'm here to help - just send another message and I'll try again!`;
+        
+        updateMessage(projectId, streamingMessageId, {
+          content: errorMessage,
+          status: 'error'
+        });
+        
+        setStreamingMessageId(null);
+      }
+      
+      void refetchMessages();
     }
   });
 
-  // Project rename mutation for first message
+  // Project rename mutation for first message (V1 logic)
   const renameMutation = api.project.rename.useMutation({
     onError: (error: any) => {
       console.error("Error renaming project:", error);
     }
   });
 
-  // AI title generation mutation
+  // AI title generation mutation (V1 logic)
   const generateAITitleMutation = api.project.generateAITitle.useMutation();
 
-  // Helper function to detect if a message is likely an edit command
+  // Helper function to get scene by number (1-based indexing) (V1 logic)
+  const getSceneByNumber = useCallback((sceneNumber: number): Scene | null => {
+    if (!scenes || scenes.length === 0) return null;
+    const index = sceneNumber - 1;
+    return scenes[index] || null;
+  }, [scenes]);
+
+  // Helper function to get scene number by ID (V1 logic)
+  const getSceneNumber = useCallback((sceneId: string): number | null => {
+    if (!scenes || scenes.length === 0) return null;
+    const index = scenes.findIndex(scene => scene.id === sceneId);
+    return index >= 0 ? index + 1 : null;
+  }, [scenes]);
+
+  // Helper function to detect if a message is likely an edit command (V1 enhanced logic)
   const isLikelyEdit = useCallback((msg: string): boolean => {
-    const trimmed = msg.trim().toLowerCase();
+    const trimmed = msg.trim();
     if (!trimmed) return false;
     
     // If no scenes exist, it can't be an edit
     if (scenes.length === 0) return false;
     
-    // If no scene is selected, it's likely a new scene request
-    if (!selectedScene) return false;
-    
-    // EXPLICIT NEW SCENE INDICATORS - these always create new scenes
-    const newSceneIndicators = [
-      'create', 'new scene', 'add scene', 'make a scene', 'generate', 
-      'build', 'design', 'show me', 'i want', 'can you create'
-    ];
-    
-    const hasNewSceneIndicator = newSceneIndicators.some(indicator => 
-      trimmed.includes(indicator)
-    );
-    
-    if (hasNewSceneIndicator) {
-      return false; // This is a new scene request
-    }
-    
-    // EXPLICIT EDIT INDICATORS - these modify existing scenes
-    const editIndicators = [
-      'make it', 'change', 'set', 'turn', 'modify', 'update', 'fix', 
-      'adjust', 'improve', 'move', 'put', 'place', 'hide', 'show',
-      'bigger', 'smaller', 'faster', 'slower', 'brighter', 'darker',
-      'add to', 'remove from', 'replace', 'swap'
-    ];
-    
-    const hasEditIndicator = editIndicators.some(indicator => 
-      trimmed.includes(indicator)
-    );
-    
-    if (hasEditIndicator) {
-      return true; // This is an edit request
-    }
-    
-    // For ambiguous cases, use word count and context
+    // Split by spaces and filter out empty strings
     const words = trimmed.split(/\s+/).filter(word => word.length > 0);
     
-    // Very short messages (1-3 words) with a selected scene are likely edits
-    if (words.length <= 3 && selectedScene) {
-      return true;
+    // AGGRESSIVE EDIT DETECTION: If we have scenes and message is short, assume it's an edit
+    if (scenes.length > 0) {
+      // Very short messages (1-3 words) are almost always edits
+      if (words.length <= 3) return true;
+      
+      // Medium messages (4-8 words) are likely edits if they contain edit indicators
+      if (words.length <= 8) {
+        const editIndicators = ['make', 'change', 'set', 'turn', 'add', 'remove', 'fix', 'update', 'modify', 'adjust', 'improve', 'move', 'put', 'place', 'show', 'hide', 'bigger', 'smaller', 'faster', 'slower', 'color', 'position', 'size'];
+        const hasEditIndicator = editIndicators.some(indicator => trimmed.toLowerCase().includes(indicator));
+        if (hasEditIndicator) return true;
+      }
+      
+      // Longer messages (9-15 words) need strong edit verbs to be considered edits
+      if (words.length <= 15) {
+        const strongEditVerbs = ['change', 'make', 'set', 'turn', 'modify', 'update', 'fix', 'adjust', 'improve'];
+        const hasStrongEditVerb = strongEditVerbs.some(verb => trimmed.toLowerCase().includes(verb));
+        if (hasStrongEditVerb) return true;
+      }
     }
     
-    // Default to new scene for longer, descriptive prompts
     return false;
-  }, [scenes, selectedScene]);
+  }, [scenes]);
 
-  // Helper function to auto-tag messages with @scene(id) when appropriate
+  // Helper function to auto-tag messages with @scene(id) when appropriate (V1 logic)
   const autoTagMessage = useCallback((msg: string): string => {
     // If already tagged, return as-is
     if (msg.startsWith('@scene(')) return msg;
     
-    // If no scene available (neither selected nor auto-selected), return as-is
+    // STEP 1: Check for scene number syntax (@scene(1), @scene(2), etc.)
+    const sceneNumberMatch = /\bscene\s+(\d+)\b/i.exec(msg);
+    if (sceneNumberMatch && sceneNumberMatch[1]) {
+      const sceneNumber = parseInt(sceneNumberMatch[1], 10);
+      const targetScene = getSceneByNumber(sceneNumber);
+      if (targetScene) {
+        console.log(`[ChatPanelG] Converting "scene ${sceneNumber}" to @scene(${targetScene.id})`);
+        return `@scene(${targetScene.id}) ${msg}`;
+      } else {
+        console.warn(`[ChatPanelG] Scene ${sceneNumber} not found (only ${scenes.length} scenes available)`);
+        return msg;
+      }
+    }
+    
+    // STEP 2: Auto-detect edit commands for the selected scene
     if (!selectedScene?.id) return msg;
+    
+    const sceneId = selectedScene.id;
     
     // If it's a likely edit command, auto-tag it
     if (isLikelyEdit(msg)) {
-      return `@scene(${selectedScene.id}) ${msg}`;
+      const sceneNumber = getSceneNumber(sceneId);
+      const sceneName = selectedScene.data?.name || `Scene ${sceneNumber || '?'}`;
+      console.log(`[ChatPanelG] Auto-tagging edit command for ${sceneName} (${sceneId})`);
+      return `@scene(${sceneId}) ${msg}`;
     }
     
     return msg;
-  }, [selectedScene, isLikelyEdit]);
+  }, [selectedScene, isLikelyEdit, getSceneByNumber, getSceneNumber, scenes]);
 
-  // Generate project name from first message
+  // Generate project name from first message (V1 logic)
   const generateNameFromPrompt = useCallback((prompt: string): string => {
-    // Simple fallback name generation from prompt
     const cleanPrompt = prompt.replace(/[^\w\s]/g, '').trim();
     const words = cleanPrompt.split(/\s+/).slice(0, 4);
     let name = words.join(' ');
@@ -244,20 +308,21 @@ export function ChatPanelG({
     return name || 'New Video Project';
   }, []);
 
-  // Handle form submission
+  // Handle form submission (V1 logic with V2 improvements)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isGenerating) return;
     
     const trimmedMessage = message.trim();
     
-    // Check if no scene is selected for edit commands
+    // Check if no scene is selected for edit commands (V1 logic)
     if (isLikelyEdit(trimmedMessage) && !selectedScene) {
+      toast.error('Please select a scene to edit first, or create a new scene with a descriptive prompt.');
       return;
     }
     
-    // Generate project name from first message using AI
-    if (isFirstMessageRef.current && localMessages.length === 0) {
+    // Generate project name from first message using AI (V1 logic)
+    if (isFirstMessageRef.current && (!dbMessages || dbMessages.length === 0)) {
       console.log("Generating AI-powered title from first message...");
       
       generateAITitleMutation.mutate(
@@ -292,11 +357,9 @@ export function ChatPanelG({
     }
     
     setIsGenerating(true);
+    setGenerationComplete(false); // V2 improvement
     
-    // Reset completion status only when starting a new generation
-    setGenerationComplete(false);
-    
-    // Auto-tag the message if it's an edit command and a scene is selected
+    // Auto-tag the message if it's an edit command and a scene is selected (V1 logic)
     const processedMessage = autoTagMessage(trimmedMessage);
     
     console.log('Original message:', trimmedMessage);
@@ -306,65 +369,52 @@ export function ChatPanelG({
     
     // Clear the input immediately for better UX
     setMessage("");
+    setCurrentPrompt(trimmedMessage); // V2 improvement
     
-    // Store the current prompt for the completion message
-    setCurrentPrompt(trimmedMessage);
-    
-    // Determine if this is an edit operation for proper labeling
-    const isEditOperation = processedMessage.startsWith('@scene(') || 
-                           (selectedScene && isLikelyEdit(trimmedMessage));
-    
-    // Immediately add user message to local state for instant display
-    const userMessageId = `user-${Date.now()}`;
-    const assistantMessageId = `assistant-${Date.now()}`;
-    
-    setLocalMessages(prev => [
-      ...prev,
-      {
-        id: userMessageId,
-        content: trimmedMessage, // Show only the original message without scene reference
-        role: 'user' as const,
-        timestamp: Date.now(),
-        isLocal: true
-      },
-      {
-        id: assistantMessageId,
-        content: isEditOperation ? 'Updating scene...' : 'Generating scene...',
-        role: 'assistant' as const,
-        timestamp: Date.now(),
-        status: 'generating' as const,
-        isLocal: true
-      }
-    ]);
-    
-    // Use the proper chat initiation flow for message persistence
-    generateSceneCodeMutation.mutate({
+    // Use the proper chat initiation flow for message persistence (V1 logic)
+    initiateChatMutation.mutate({
       projectId,
-      userPrompt: processedMessage,
-      sceneId: selectedScene?.id, // Pass the selected scene ID for edits
+      message: processedMessage,
+      sceneId: selectedScene?.id || null,
     });
+    
+    // Generate the scene directly as well (V1 logic)
+    try {
+      const isEditOperation = processedMessage.startsWith('@scene(') || 
+                             (selectedScene && isLikelyEdit(trimmedMessage));
+      
+      console.log('[ChatPanelG] Operation type:', isEditOperation ? 'EDIT' : 'NEW_SCENE');
+      console.log('[ChatPanelG] Scene ID to pass:', isEditOperation ? selectedScene?.id : undefined);
+      console.log('[ChatPanelG] Auto-tagged message:', processedMessage);
+      
+      const result = await generateSceneCodeMutation.mutateAsync({
+        projectId,
+        userPrompt: processedMessage,
+        sceneId: isEditOperation ? selectedScene?.id : undefined,
+      });
+      
+      console.log('Scene generation result:', result);
+      
+    } catch (error) {
+      console.error('Error during scene generation:', error);
+    }
   };
 
-  // Use only local messages to prevent duplicates
-  const allMessages = useMemo(() => {
-    return localMessages.sort((a, b) => a.timestamp - b.timestamp);
-  }, [localMessages]);
-  
-  // Auto-scroll to bottom when messages change (but stop when generation completes)
+  // Auto-scroll to bottom when messages change (V2 improvement)
   useEffect(() => {
     if (!generationComplete) {
       scrollToBottom();
     }
-  }, [allMessages, scrollToBottom, generationComplete]);
+  }, [dbMessages, scrollToBottom, generationComplete]);
 
-  // Separate effect for completion scroll - only scrolls once when generation completes
+  // Separate effect for completion scroll (V2 improvement)
   useEffect(() => {
     if (generationComplete) {
       scrollToBottom();
     }
   }, [generationComplete, scrollToBottom]);
 
-  // Format timestamp for display
+  // Format timestamp for display (V1 logic)
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp);
     const hours = date.getHours().toString().padStart(2, '0');
@@ -372,7 +422,7 @@ export function ChatPanelG({
     return `${hours}:${minutes}`;
   };
 
-  // Type guard for database messages
+  // Type guard for database messages (V1 logic)
   function isDbMessage(msg: any): msg is { id: string; projectId: string; content: string; role: 'user' | 'assistant'; createdAt: Date; status?: string } {
     return (
       typeof msg === 'object' && 
@@ -384,7 +434,7 @@ export function ChatPanelG({
     );
   }
 
-  // Get welcome message for new projects
+  // Get welcome message for new projects (V1 logic)
   const getWelcomeMessage = () => (
     <div className="text-center py-8">
       <div className="bg-muted/80 rounded-[15px] shadow-sm p-4 mx-auto max-w-md">
@@ -402,7 +452,7 @@ export function ChatPanelG({
     </div>
   );
 
-  // Status indicator component for tool messages
+  // Status indicator component for tool messages (V1 logic)
   const getStatusIndicator = (status?: string) => {
     if (!status) return null;
     
@@ -419,29 +469,38 @@ export function ChatPanelG({
     }
   };
 
-  const showWelcome = localMessages.length === 0;
-  
-  // Check if we have any existing messages on load to determine if this is a new project
+  const hasDbMessages = dbMessages && dbMessages.length > 0;
+  const isLoading = isLoadingMessages && !hasDbMessages;
+  const showWelcome = !hasDbMessages && !isLoading;
+
+  // Check if we have any existing messages on load (V1 logic)
   useEffect(() => {
-    if (localMessages.length > 0) {
+    if (dbMessages && dbMessages.length > 0) {
       isFirstMessageRef.current = false;
     }
-  }, [localMessages]);
+  }, [dbMessages]);
 
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {showWelcome ? (
+        {isLoading ? (
+          <div className="flex justify-center items-center h-10">
+            <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-xs text-muted-foreground">Loading...</span>
+          </div>
+        ) : showWelcome ? (
           getWelcomeMessage()
         ) : (
           <>
-            {/* Render all messages in chronological order */}
-            {allMessages.map((msg) => {
+            {/* Render database messages (V1 logic with V2 styling) */}
+            {hasDbMessages && dbMessages.map((msg) => {
+              if (!isDbMessage(msg)) return null;
+              
               const isUser = msg.role === 'user';
               const isError = msg.status === 'error';
               const isSuccess = msg.status === 'success';
-              const isGenerating = msg.status === 'generating';
+              const isGenerating = msg.status === 'building' || msg.status === 'tool_calling';
               
               return (
                 <div
@@ -467,18 +526,27 @@ export function ChatPanelG({
                       {isError && <XCircleIcon className="h-4 w-4 mr-2" />}
                       
                       <div className="prose prose-sm dark:prose-invert max-w-none">
-                        {isUser || isGenerating || isSuccess || isError ? (
-                          <span>{msg.content}</span>
-                        ) : (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
-                          </ReactMarkdown>
-                        )}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
                       </div>
                     </div>
                     
+                    {/* Show status indicator for assistant messages (V1 logic) */}
+                    {msg.role === 'assistant' && msg.status && (
+                      <div className="flex items-center text-xs mt-2 opacity-70">
+                        {getStatusIndicator(msg.status)}
+                        <span>
+                          {msg.status === 'tool_calling' && 'Generating scene...'}
+                          {msg.status === 'building' && 'Building component...'}
+                          {msg.status === 'success' && 'Completed'}
+                          {msg.status === 'error' && 'Error occurred'}
+                        </span>
+                      </div>
+                    )}
+                    
                     <div className="text-[10px] opacity-50 mt-2">
-                      {formatTimestamp(msg.timestamp)}
+                      {formatTimestamp(msg.createdAt.getTime())}
                     </div>
                   </div>
                 </div>
@@ -487,12 +555,36 @@ export function ChatPanelG({
           </>
         )}
         
+        {/* Show generating indicator (V2 styling) */}
+        {isGenerating && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-[15px] px-4 py-3 bg-blue-50 text-blue-700 border border-blue-200">
+              <div className="flex items-center">
+                <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
+                <span>Generating scene...</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input form */}
       <div className="flex-shrink-0 p-4 border-t border-gray-200">
-        <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+        {/* Context indicator (V1 logic) */}
+        {selectedScene && (
+          <div className="mb-2 text-xs text-muted-foreground bg-primary/10 rounded-md px-2 py-1">
+            <span className="font-medium">
+              {selectedSceneId ? 'Editing:' : 'Auto-selected for editing:'}
+            </span> {(selectedScene as any).data?.name || selectedScene.type || `Scene ${selectedScene.id.slice(0, 8)}`}
+            <span className="ml-2 opacity-70">
+              {selectedSceneId ? '(manually selected)' : '(latest scene, edit commands will modify this)'}
+            </span>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -517,6 +609,14 @@ export function ChatPanelG({
             )}
           </Button>
         </form>
+        
+        {/* Helper text (V1 logic) */}
+        <p className="text-xs text-muted-foreground mt-2">
+          {selectedScene 
+            ? `Edit commands will automatically target the ${selectedSceneId ? 'selected' : 'latest'} scene. Use descriptive prompts for new scenes.`
+            : "Describe a scene to create your first animation. Once created, short commands will edit existing scenes."
+          }
+        </p>
       </div>
     </div>
   );
