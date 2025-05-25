@@ -1,4 +1,7 @@
+"use client";
+
 import type { Metadata } from "next";
+import { useRouter } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Terms of Service | Bazaar-Vid",
@@ -6,28 +9,40 @@ export const metadata: Metadata = {
 };
 
 export default function TermsOfServicePage() {
+  const router = useRouter();
+
   return (
-    <div className="min-h-screen bg-gray-50/30 py-12">
+    <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white/95 rounded-[15px] shadow-lg border border-gray-100 p-8">
-          <h1 className="text-3xl font-bold mb-8">Terms of Service</h1>
+        <div className="bg-white rounded-[15px] shadow-lg border border-gray-100 p-8 relative">
+          {/* Close Button */}
+          <button
+            onClick={() => router.back()}
+            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Close"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <h1 className="text-3xl font-bold mb-8 text-gray-900">Terms of Service</h1>
           <p className="text-sm text-gray-600 mb-8">Last updated: {new Date().toLocaleDateString()}</p>
 
           <div className="space-y-8">
             <section>
-              <h2 className="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">1. Acceptance of Terms</h2>
               <p className="text-gray-700">
-                By accessing and using Bazaar-Vid ("the Service"), you accept and agree to be bound by 
-                the terms and provision of this agreement. If you do not agree to abide by the above, 
-                please do not use this service.
+                By accessing and using Bazaar-Vid ("the Service"), you accept and agree to be bound by the terms and 
+                provision of this agreement. If you do not agree to abide by the above, please do not use this service.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">2. Description of Service</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">2. Description of Service</h2>
               <p className="text-gray-700 mb-4">
-                Bazaar-Vid is an AI-powered video generation platform that allows users to create 
-                videos through text prompts and scene-based editing. The Service includes:
+                Bazaar-Vid is an AI-powered video generation platform that allows users to create videos through text 
+                prompts and scene-based editing. The Service includes:
               </p>
               <ul className="list-disc pl-6 space-y-2 text-gray-700">
                 <li>AI-powered video scene generation</li>
@@ -38,27 +53,19 @@ export default function TermsOfServicePage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">3. User Accounts</h2>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium mb-2">Account Creation</h3>
-                  <p className="text-gray-700">
-                    You must create an account to use our Service. You may sign up using Google OAuth 
-                    or GitHub OAuth. You are responsible for maintaining the confidentiality of your account.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium mb-2">Account Responsibility</h3>
-                  <p className="text-gray-700">
-                    You are responsible for all activities that occur under your account. You must 
-                    notify us immediately of any unauthorized use of your account.
-                  </p>
-                </div>
-              </div>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">3. User Accounts</h2>
+              <p className="text-gray-700 mb-4">
+                You must create an account to use our Service. You may sign up using Google OAuth or GitHub OAuth. 
+                You are responsible for maintaining the confidentiality of your account.
+              </p>
+              <p className="text-gray-700">
+                You are responsible for all activities that occur under your account. You must notify us immediately of any 
+                unauthorized use of your account.
+              </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">4. Acceptable Use</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">4. Acceptable Use</h2>
               <p className="text-gray-700 mb-4">You agree not to use the Service to:</p>
               <ul className="list-disc pl-6 space-y-2 text-gray-700">
                 <li>Create content that is illegal, harmful, or violates any laws</li>
@@ -67,99 +74,78 @@ export default function TermsOfServicePage() {
                 <li>Attempt to reverse engineer or hack the Service</li>
                 <li>Use the Service for commercial purposes without authorization</li>
                 <li>Share your account credentials with others</li>
-                <li>Upload malicious code or attempt to disrupt the Service</li>
               </ul>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">5. Content and Intellectual Property</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">5. Content Ownership</h2>
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-lg font-medium mb-2">Your Content</h3>
+                  <h3 className="text-lg font-medium mb-2 text-gray-800">Your Content</h3>
                   <p className="text-gray-700">
-                    You retain ownership of the content you create using our Service. However, you grant 
-                    us a license to store, process, and display your content as necessary to provide the Service.
+                    You retain ownership of the content you create using our Service. However, you grant us a 
+                    license to store, process, and display your content as necessary to provide the Service.
                   </p>
                 </div>
                 <div>
-                  <h3 className="text-lg font-medium mb-2">Our Service</h3>
+                  <h3 className="text-lg font-medium mb-2 text-gray-800">Generated Content</h3>
                   <p className="text-gray-700">
-                    The Service, including its software, design, and functionality, is owned by us and 
-                    protected by intellectual property laws.
-                  </p>
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium mb-2">AI-Generated Content</h3>
-                  <p className="text-gray-700">
-                    Content generated by our AI tools is provided as-is. You are responsible for ensuring 
-                    that your use of AI-generated content complies with applicable laws and does not 
-                    infringe on third-party rights.
+                    Content generated by our AI systems is provided "as is" and you are responsible for ensuring 
+                    it complies with applicable laws and does not infringe on third-party rights.
                   </p>
                 </div>
               </div>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">6. Service Availability</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">6. Service Availability</h2>
               <p className="text-gray-700">
-                We strive to maintain high availability of our Service, but we do not guarantee 
-                uninterrupted access. The Service may be temporarily unavailable due to maintenance, 
-                updates, or technical issues.
+                We strive to maintain high availability but do not guarantee uninterrupted access to the Service. 
+                We may temporarily suspend the Service for maintenance, updates, or other operational reasons.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">7. Limitation of Liability</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">7. Limitation of Liability</h2>
               <p className="text-gray-700">
-                To the maximum extent permitted by law, we shall not be liable for any indirect, 
-                incidental, special, consequential, or punitive damages, or any loss of profits or 
-                revenues, whether incurred directly or indirectly.
+                The Service is provided "as is" without warranties of any kind. We shall not be liable for any 
+                indirect, incidental, special, or consequential damages arising from your use of the Service.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">8. Privacy</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">8. Privacy</h2>
               <p className="text-gray-700">
                 Your privacy is important to us. Please review our{" "}
                 <a href="/privacy" className="text-blue-600 hover:underline">
                   Privacy Policy
                 </a>
-                , which also governs your use of the Service.
+                {" "}to understand how we collect, use, and protect your information.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">9. Termination</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">9. Termination</h2>
               <p className="text-gray-700">
-                We may terminate or suspend your account and access to the Service at our sole discretion, 
-                without prior notice, for conduct that we believe violates these Terms or is harmful to 
-                other users, us, or third parties.
+                We may terminate or suspend your account at any time for violations of these terms. 
+                You may also delete your account at any time through your account settings.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">10. Changes to Terms</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">10. Changes to Terms</h2>
               <p className="text-gray-700">
-                We reserve the right to modify these Terms at any time. We will notify users of any 
-                material changes. Your continued use of the Service after such modifications constitutes 
-                acceptance of the updated Terms.
+                We reserve the right to modify these terms at any time. We will notify you of any 
+                changes by posting the updated terms on this page.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">11. Governing Law</h2>
-              <p className="text-gray-700">
-                These Terms shall be governed by and construed in accordance with the laws of the 
-                jurisdiction in which our company is incorporated.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold mb-4">12. Contact Information</h2>
+              <h2 className="text-2xl font-semibold mb-4 text-gray-900">11. Contact Information</h2>
               <p className="text-gray-700">
                 If you have any questions about these Terms of Service, please contact us at{" "}
-                <a href="mailto:legal@bazaar.it" className="text-blue-600 hover:underline">
-                  legal@bazaar.it
+                <a href="mailto:jack@bazaar.it" className="text-blue-600 hover:underline">
+                  jack@bazaar.it
                 </a>
               </p>
             </section>

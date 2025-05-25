@@ -26,6 +26,9 @@ declare module 'winston' {
 // Check if we're running on the server or in the browser
 const isServer = typeof window === 'undefined';
 
+// Check if we're in a production serverless environment
+const isServerlessProduction = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NETLIFY;
+
 // Create formatters
 const consoleFormat = format.combine(
   format.colorize(),
@@ -215,25 +218,33 @@ if (isServer) {
 
 // Function to initialize the A2A file transport if requested
 export const initializeA2AFileTransport = (): void => {
-  if (a2aFileTransportInitialized) {
-    return; // Already initialized, do nothing
+  // Skip file transport initialization in serverless production environments
+  if (isServerlessProduction) {
+    console.log('[LOGGER] Skipping A2A file transport initialization in serverless environment');
+    a2aFileTransportInitialized = true;
+    return;
   }
-  
-  // Only initialize on server
-  if (!isServer) return;
-  
-  // Check if we're in test mode - use tmp directory to avoid HMR issues
-  const isTestMode = process.env.A2A_TEST_MODE === 'true';
-  
-  // Get A2A logs directory - use tmp directory if in test mode
-  const a2aLogsDir = isTestMode
+
+  if (a2aFileTransportInitialized) {
+    console.log('[LOGGER] A2A File transport already initialized, skipping...');
+    return;
+  }
+
+  const isTestMode = process.env.NODE_ENV === 'test' || process.env.A2A_TEST_MODE === 'true';
+  const a2aLogsDir = isTestMode 
     ? path.join(process.cwd(), 'tmp', 'a2a-test-logs', 'a2a')
     : (process.env.A2A_LOG_DIR || path.join(process.cwd(), 'logs', 'a2a'));
   
-  // Ensure directory exists
-  if (!fs.existsSync(a2aLogsDir)) {
-    fs.mkdirSync(a2aLogsDir, { recursive: true });
-    console.log(`Created A2A log directory: ${a2aLogsDir}`);
+  // Ensure directory exists - but only in non-serverless environments
+  try {
+    if (!fs.existsSync(a2aLogsDir)) {
+      fs.mkdirSync(a2aLogsDir, { recursive: true });
+      console.log(`Created A2A log directory: ${a2aLogsDir}`);
+    }
+  } catch (error) {
+    console.warn(`[LOGGER] Could not create A2A log directory: ${error}. Continuing without file logging.`);
+    a2aFileTransportInitialized = true;
+    return;
   }
   
   // Add file transport to the logger

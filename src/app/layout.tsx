@@ -41,8 +41,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground antialiased flex flex-col">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <body className="min-h-screen bg-white text-gray-900 antialiased flex flex-col">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TRPCReactProvider>
             <SessionProvider>
               <GlobalDependencyProvider>
