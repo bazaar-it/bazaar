@@ -1,12 +1,6 @@
 "use client";
 
-import type { Metadata } from "next";
 import { useRouter } from "next/navigation";
-
-export const metadata: Metadata = {
-  title: "Privacy Policy | Bazaar-Vid",
-  description: "Privacy Policy for Bazaar-Vid AI Video Generation Platform",
-};
 
 export default function PrivacyPolicyPage() {
   const router = useRouter();

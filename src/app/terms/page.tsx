@@ -1,12 +1,6 @@
 "use client";
 
-import type { Metadata } from "next";
 import { useRouter } from "next/navigation";
-
-export const metadata: Metadata = {
-  title: "Terms of Service | Bazaar-Vid",
-  description: "Terms of Service for Bazaar-Vid AI Video Generation Platform",
-};
 
 export default function TermsOfServicePage() {
   const router = useRouter();
