@@ -67,51 +67,47 @@ yarn-error.log*
 !.env.example          # keep the example stub in the repo
 
 # =============================================================================
-# PRODUCTION EXCLUSIONS - Only excluded when creating production branch
-# These files exist in development but are excluded from main/production
+# PRODUCTION EXCLUSIONS - Development artifacts excluded from production
 # =============================================================================
 
-# NOTE: These are commented out for development branch
-# Uncomment these when creating production branch
-
 # Development documentation (keep in development, exclude from production)
-# /memory-bank/
+/memory-bank/
 
 # Development logs (keep in development, exclude from production)  
-# /logs/
-# /tmp/
-# *.log
+/logs/
+/tmp/
+*.log
 
 # Development scripts (keep in development, exclude from production)
-# /scripts/*
-# !/scripts/setup-env.sh
+/scripts/*
+!/scripts/setup-env.sh
 
 # Analysis outputs (keep in development, exclude from production)
-# /analysis/
+/analysis/
 
 # Test results and fixtures (keep in development, exclude from production)
-# /test-results*
-# /tests/performance/fixtures/
+/test-results*
+/tests/performance/fixtures/
 
 # A2A system (separate project, keep in development, exclude from production)
-# /src/server/a2a/
-# /src/agents/
-# /src/scripts/a2a-test/
-# /src/scripts/log-agent/
-# /src/scripts/log-tools/
+/src/server/a2a/
+/src/agents/
+/src/scripts/a2a-test/
+/src/scripts/log-agent/
+/src/scripts/log-tools/
 
 # Development-only API routes (keep in development, exclude from production)
-# /src/app/api/a2a/
-# /src/app/api/debug/
-# /src/app/api/test/
-# /src/app/api/test-component/
+/src/app/api/a2a/
+/src/app/api/debug/
+/src/app/api/test/
+/src/app/api/test-component/
 
 # Development test pages (keep in development, exclude from production)
-# /src/app/test/
-# /src/app/remotion-demo/
+/src/app/test/
+/src/app/remotion-demo/
 
 # Legacy edit system (keep in development for reference, exclude from production)
-# /src/app/projects/[id]/edit/
+/src/app/projects/[id]/edit/
 
 # Temporary files and backups
 *.bak
