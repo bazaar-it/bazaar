@@ -39,6 +39,7 @@ declare module "next-auth" {
  * @see https://next-auth.js.org/configuration/options
  */
 export const authConfig = {
+  debug: process.env.NODE_ENV === "development",
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
@@ -74,6 +75,14 @@ export const authConfig = {
         id: token.id as string, // Ensure ID from token is put into session user
       },
     }),
+    // Handle account linking for OAuth providers
+    async signIn({ user, account, profile, email, credentials }) {
+      // Allow all OAuth sign-ins
+      if (account?.provider === "google" || account?.provider === "github") {
+        return true;
+      }
+      return true;
+    },
     // Your authorized callback can likely stay here too
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
