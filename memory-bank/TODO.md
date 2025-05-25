@@ -535,3 +535,172 @@ Good, but keep SVGs tiny (<100×100); Remotion rasterizes them.   Large path cou
   - [ ] Implement `getPublicUrl` method.
   - [ ] Add error handling and logging.
   - [ ] Write unit tests.
+
+## Current Sprint: Sprint 27
+- **Detailed TODOs**: [Sprint 27 TODO](./sprints/sprint27/TODO.md)
+
+### BAZAAR-305: Core Features & Quality Enhancement (Sprint 27 Focus)
+- **[My Projects UI]** Design and implement frontend for listing user projects.
+- **[Animation Quality - BAZAAR-301]** Evaluate current animation generation via test prompts; refine LLM system prompts in `generation.ts` if needed.
+- **[Publish & Share - BAZAAR-303]** Continue implementation of publish pipeline, including storyboard scope and UI.
+- **[BAZAAR-302 Wrap-up]** Address any minor pending items (UX, tests, docs).
+
+---
+
+## Backlog / Future Sprints
+
+{{ ... }}
+
+# TODO Items - Sprint 27 Priorities
+
+## CRITICAL USER EXPERIENCE GAPS (P0 - Week 1)
+
+### "My Projects" Dashboard - 8h estimate
+- [ ] **Create main projects listing page**
+  - [ ] Modify `/projects/page.tsx` to show full dashboard instead of redirect
+  - [ ] Create `ProjectGrid.tsx` component for grid layout
+  - [ ] Create `ProjectCard.tsx` with thumbnails, titles, last modified
+  - [ ] Integrate existing `ProjectsPanel.tsx` for full-page use
+  - [ ] Add project search and filtering with `ProjectSearch.tsx`
+
+- [ ] **Project management functionality**
+  - [ ] Implement rename project functionality
+  - [ ] Add delete project with confirmation
+  - [ ] Create duplicate project feature
+  - [ ] Add project thumbnails/previews
+  - [ ] Implement recent projects quick access
+
+### Publish UI Integration - 6h estimate  
+- [ ] **Create publish interface components**
+  - [ ] `PublishButton.tsx` - Trigger publish job in workspace panels
+  - [ ] `PublishStatusModal.tsx` - Progress tracking with polling
+  - [ ] `ShareUrlDialog.tsx` - Copy/open published URLs
+  - [ ] `PublishedIndicator.tsx` - Show published status in scene lists
+
+- [ ] **Integrate into existing workspace**
+  - [ ] Add publish buttons to `StoryboardPanelG.tsx` 
+  - [ ] Add publish button to `CodePanelG.tsx`
+  - [ ] Wire up existing tRPC `publishScene` and `publishStatus` endpoints
+  - [ ] Add published scene indicators to scene lists
+
+## CORE FUNCTIONALITY (P1 - Week 2)
+
+### Model Switching Interface - 4h estimate
+- [ ] **Settings interface for model selection**
+  - [ ] Create `ModelSelector.tsx` dropdown component
+  - [ ] Create `PromptEditor.tsx` for advanced prompt customization  
+  - [ ] Create `ModelSettings.tsx` for per-task model configuration
+  - [ ] Add settings panel to workspace UI
+
+- [ ] **Backend model routing**
+  - [ ] Create `src/server/config/models.ts` for model definitions
+  - [ ] Create `src/server/services/llm/modelRouter.ts` for dynamic selection
+  - [ ] Update generation endpoints to use configurable models
+
+### GitHub Integration MVP - 12h estimate
+- [ ] **GitHub OAuth setup**
+  - [ ] Set up GitHub OAuth application for development
+  - [ ] Create `src/server/services/github/auth.ts` for OAuth flow
+  - [ ] Create `GitHubConnectButton.tsx` for OAuth initiation
+
+- [ ] **Repository integration**
+  - [ ] Create `src/server/services/github/repository.ts` for repo access
+  - [ ] Create `RepositorySelector.tsx` for repo selection UI
+  - [ ] Implement file access and repository browsing
+
+- [ ] **Style extraction**
+  - [ ] Create `src/server/services/github/styleExtractor.ts` for CSS/Tailwind parsing
+  - [ ] Create `src/server/services/style/colorExtractor.ts` for color detection
+  - [ ] Create `StylePreview.tsx` to show extracted branding
+  - [ ] Create `BrandingApplyButton.tsx` to apply to scene generation
+
+## ENHANCED FEATURES (P2 - Week 3-4)
+
+### Image Analysis Integration - 8h estimate
+- [ ] **Image upload interface**
+  - [ ] Add image upload to workspace panels
+  - [ ] Create image preview and management UI
+  - [ ] Integrate with existing R2 storage for image assets
+
+- [ ] **AI vision integration**
+  - [ ] Set up OpenAI Vision API or similar for image analysis
+  - [ ] Create color/style extraction from uploaded images
+  - [ ] Generate scene prompts based on image analysis
+
+### Advanced GitHub Integration - 16h estimate
+- [ ] **Enhanced style extraction**
+  - [ ] Font extraction from deployed applications
+  - [ ] Layout analysis for composition patterns
+  - [ ] Asset extraction (logos, icons, graphics)
+  - [ ] Multi-repository style comparison
+
+- [ ] **Advanced features**
+  - [ ] Deployed app screenshot analysis
+  - [ ] Brand guideline generation from codebase
+  - [ ] Style consistency checking across projects
+
+## TECHNICAL DEBT & IMPROVEMENTS
+
+### Sprint 26 Cleanup
+- [ ] **Documentation accuracy**
+  - [ ] Update all completion status to reflect actual implementation
+  - [ ] Remove overstated completion claims from progress docs
+  - [ ] Add clear distinction between backend and frontend completion
+
+- [ ] **Code organization**
+  - [ ] Clean up unused verification scripts
+  - [ ] Fix TypeScript errors in test files
+  - [ ] Update API documentation for new endpoints
+
+### Performance & Reliability
+- [ ] **GitHub integration optimization**
+  - [ ] Implement caching for GitHub API responses
+  - [ ] Add rate limiting and error handling
+  - [ ] Optimize style extraction performance
+
+- [ ] **Publishing improvements**
+  - [ ] Add retry logic for failed publishes
+  - [ ] Implement publish cancellation
+  - [ ] Add publish analytics and monitoring
+
+## COMPLETED ITEMS (Sprint 26)
+
+### ✅ Core Generation & Workspace
+- [x] BAZAAR-300: Fix component generation patterns (ESM compatibility)
+- [x] BAZAAR-301: Improve animation focus (user-intent matching)
+- [x] BAZAAR-302: Scene-first generation MVP (complete with tests)
+- [x] BAZAAR-304: Workspace UI (full 4-panel workspace functional)
+
+### ✅ Publishing Backend Infrastructure  
+- [x] BAZAAR-303 Backend: Bundler package with esbuild integration
+- [x] BAZAAR-303 Backend: R2 client with Cloudflare integration
+- [x] BAZAAR-303 Backend: BullMQ job queue with full workflow
+- [x] BAZAAR-303 Backend: Database schema with publishing columns
+- [x] BAZAAR-303 Backend: tRPC endpoints for publish operations
+- [x] BAZAAR-303 Backend: Complete documentation in docs/publish-flow.md
+
+## SPRINT 27 SUCCESS CRITERIA
+
+### User Experience Metrics
+- [ ] Users can access and manage all their projects from main dashboard
+- [ ] One-click publish with shareable URLs working end-to-end
+- [ ] GitHub repo connection with basic style extraction functional
+- [ ] Model switching interface allows configuration changes
+
+### Technical Metrics  
+- [ ] "My Projects" dashboard loads in <2s
+- [ ] Publish success rate >95% with proper error handling
+- [ ] GitHub style extraction completes in <30s
+- [ ] Model configuration changes apply in <5s
+
+### Business Impact
+- [ ] Improved user retention through better project management
+- [ ] Increased sharing through published URLs
+- [ ] GitHub integration attracts no-code developer target market
+- [ ] Advanced features serve power users effectively
+
+---
+
+## Previous TODO Items (Pre-Sprint 27)
+
+// ... existing code ...

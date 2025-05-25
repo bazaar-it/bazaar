@@ -14,6 +14,7 @@ import { ChatPanelG } from './panels/ChatPanelG';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
+import { toast } from 'sonner';
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -301,34 +302,133 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       };
     }, []);
     
-    // Callback for handling new scene generation
-    const handleSceneGenerated = useCallback(async (sceneId: string, code: string) => {
-      console.log('[WorkspaceContentAreaG] Scene generated, refreshing project data:', sceneId);
+    // Helper function to validate scene code before adding to video state
+    const validateSceneCode = useCallback(async (code: string): Promise<{ isValid: boolean; errors: string[] }> => {
+      const errors: string[] = [];
       
       try {
-        // Refetch the latest project scenes from database
-        const result = await getProjectScenesQuery.refetch();
-        
-        if (result.data) {
-          console.log('[WorkspaceContentAreaG] Fetched updated scenes:', result.data.length);
-          
-          // Convert database scenes to InputProps format
-          const updatedProps = convertDbScenesToInputProps(result.data);
-          
-          // Update the video state with the fresh data
-          replace(projectId, updatedProps);
-          
-          // Select the newly generated scene
-          setSelectedSceneId(sceneId);
-          
-          console.log('[WorkspaceContentAreaG] Video state updated with new scene count:', updatedProps.scenes.length);
-        } else {
-          console.error('[WorkspaceContentAreaG] Failed to fetch updated scenes');
+        // 1. Basic structure validation
+        if (!code || code.trim().length === 0) {
+          errors.push('Scene code is empty');
+          return { isValid: false, errors };
         }
+        
+        // 2. Check for required export default function
+        if (!/export\s+default\s+function/.test(code)) {
+          errors.push('Missing export default function');
+        }
+        
+        // 3. Check for React/Remotion patterns
+        const hasRemotionPatterns = /import.*from.*['"]remotion['"]/.test(code) || 
+                                   /const\s*{\s*[^}]*}\s*=\s*window\.Remotion/.test(code) ||
+                                   /AbsoluteFill|useCurrentFrame|interpolate/.test(code);
+        if (!hasRemotionPatterns) {
+          errors.push('Missing Remotion patterns');
+        }
+        
+        // 4. Check for dangerous patterns
+        const dangerousPatterns = [
+          { pattern: /while\s*\(\s*true\s*\)/, message: 'Infinite while loop detected' },
+          { pattern: /for\s*\(\s*;\s*;\s*\)/, message: 'Infinite for loop detected' },
+          { pattern: /throw\s+new\s+Error/, message: 'Explicit error throwing detected' }
+        ];
+        
+        for (const { pattern, message } of dangerousPatterns) {
+          if (pattern.test(code)) {
+            errors.push(message);
+          }
+        }
+        
+        // 5. Try basic compilation test (lightweight)
+        try {
+          // Simple syntax check - ensure it's valid JavaScript/TypeScript
+          new Function(code.replace(/export\s+default\s+/, 'return '));
+        } catch (syntaxError) {
+          errors.push(`Syntax error: ${syntaxError instanceof Error ? syntaxError.message : 'Invalid syntax'}`);
+        }
+        
+        return { isValid: errors.length === 0, errors };
+        
       } catch (error) {
-        console.error('[WorkspaceContentAreaG] Error refreshing project data:', error);
+        console.error('Error during scene validation:', error);
+        errors.push(`Validation error: ${error instanceof Error ? error.message : 'Unknown validation error'}`);
+        return { isValid: false, errors };
       }
-    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, replace]);
+    }, []);
+    
+    // Callback for handling new scene generation with validation
+    const handleSceneGenerated = useCallback(async (sceneId: string, code: string) => {
+      console.log('[WorkspaceContentAreaG] Scene generated, validating before state update:', sceneId);
+      
+      try {
+        // STEP 1: Validate the generated code before adding to video state
+        console.log('[WorkspaceContentAreaG] Validating scene code...');
+        const validation = await validateSceneCode(code);
+        
+        if (!validation.isValid) {
+          console.error('[WorkspaceContentAreaG] ❌ Scene validation failed:', validation.errors);
+          toast.error(`Scene validation failed: ${validation.errors.join(', ')}`);
+          
+          // Don't update video state with invalid scenes
+          return;
+        }
+        
+        console.log('[WorkspaceContentAreaG] ✅ Scene validation passed, proceeding with state update');
+        
+        // STEP 2: Create state snapshot for rollback capability
+        const currentProps = getCurrentProps();
+        const stateSnapshot = currentProps ? JSON.parse(JSON.stringify(currentProps)) : null;
+        
+        try {
+          // STEP 3: Refetch the latest project scenes from database
+          const result = await getProjectScenesQuery.refetch();
+          
+          if (result.data) {
+            console.log('[WorkspaceContentAreaG] Fetched updated scenes:', result.data.length);
+            
+            // Convert database scenes to InputProps format
+            const updatedProps = convertDbScenesToInputProps(result.data);
+            
+            // STEP 4: Validate the entire video state before updating
+            const hasValidScenes = updatedProps.scenes.every(scene => {
+              return scene.data?.code && scene.data.code.trim().length > 0;
+            });
+            
+            if (!hasValidScenes) {
+              throw new Error('One or more scenes have invalid code');
+            }
+            
+            // STEP 5: Update the video state with the fresh data
+            replace(projectId, updatedProps);
+            
+            // Select the newly generated scene
+            setSelectedSceneId(sceneId);
+            
+            console.log('[WorkspaceContentAreaG] ✅ Video state updated successfully with scene count:', updatedProps.scenes.length);
+            toast.success('Scene added successfully!');
+            
+          } else {
+            throw new Error('Failed to fetch updated scenes from database');
+          }
+          
+        } catch (stateUpdateError) {
+          console.error('[WorkspaceContentAreaG] ❌ Error updating video state:', stateUpdateError);
+          
+          // STEP 6: Rollback to previous state if update fails
+          if (stateSnapshot) {
+            console.log('[WorkspaceContentAreaG] 🔄 Rolling back to previous state...');
+            replace(projectId, stateSnapshot);
+            toast.error('Scene update failed - rolled back to previous state');
+          } else {
+            toast.error('Scene update failed and no backup state available');
+          }
+        }
+        
+      } catch (error) {
+        console.error('[WorkspaceContentAreaG] ❌ Critical error in scene generation handling:', error);
+        toast.error('Critical error handling scene generation - please refresh the page');
+      }
+    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, replace, getCurrentProps, validateSceneCode]);
     
     // Track if initialization has been attempted for this project
     const initializationAttemptedRef = useRef<Set<string>>(new Set());
