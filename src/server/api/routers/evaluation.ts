@@ -1,10 +1,26 @@
 //src/server/api/routers/evaluation.ts
 
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "../trpc";
 import { MetricsService } from "~/server/services/evaluation/metrics.service";
-import { componentEvaluationMetrics, componentTestCases } from "~/server/db/schema";
+import { componentEvaluationMetrics, componentTestCases } from "~/server/db/schema/evaluation.schema";
 import { and, gte, lt, eq, desc, count, avg, sql } from "drizzle-orm";
+import { openai } from "~/server/lib/openai";
+import { randomUUID } from "crypto";
+
+// Input schemas - moved to top
+const EvalConfigSchema = z.object({
+  model: z.enum(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']),
+  temperature: z.number().min(0).max(2),
+  batchSize: z.number().min(1).max(10),
+  prompt: z.string().min(1),
+  testName: z.string().min(1)
+});
+
+const BatchTestInputSchema = z.object({
+  config: EvalConfigSchema,
+  userId: z.string()
+});
 
 /**
  * tRPC Router for the evaluation metrics
@@ -426,6 +442,194 @@ export const evaluationRouter = createTRPCRouter({
       
       return timeSeriesData;
     }),
+
+  runBatchTest: protectedProcedure
+    .input(BatchTestInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { config, userId } = input;
+      const results = [];
+      
+      for (let i = 0; i < config.batchSize; i++) {
+        const startTime = Date.now();
+        
+        try {
+          // Enhanced system prompt following ESM patterns
+          const systemPrompt = `You are an expert Remotion component generator. Generate a single React component that creates engaging motion graphics.
+
+CRITICAL REQUIREMENTS - ESM COMPATIBILITY:
+1. NEVER use import statements for React or Remotion
+2. ALWAYS destructure from window.Remotion: const { AbsoluteFill, useCurrentFrame } = window.Remotion;
+3. React is available globally as window.React - destructure if needed: const { useState, useEffect } = React;
+4. ALWAYS export default function ComponentName() {}
+
+ANIMATION REQUIREMENTS:
+1. Use frame-based animations, NOT useEffect with timers
+2. Calculate text reveal based on frame: const textIndex = Math.floor(frame / 3);
+3. Use interpolate() for smooth transitions
+4. Avoid infinite loops - base everything on frame number
+
+EXAMPLE PATTERN:
+const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
+
+export default function MyScene() {
+  const frame = useCurrentFrame();
+  
+  // Frame-based text reveal (no useEffect!)
+  const textIndex = Math.floor(frame / 3);
+  const text = "Your text here".slice(0, textIndex);
+  
+  // Frame-based animations
+  const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: 'clamp' });
+  
+  return (
+    <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      <div style={{ opacity }}>
+        {text}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+Generate a component for: ${config.prompt}
+
+Requirements:
+- Black background, white text, 80px font size
+- Rounded text input box with neon purple gradient
+- Text "${config.prompt}" appears letter by letter using FRAME-BASED animation
+- Mouse cursor click animation and zoom effect
+- NO useEffect, NO useState for animations
+- Use React.createElement if you need React elements: React.createElement('div', {style: {...}}, 'content')
+`;
+
+          // Generate code using OpenAI
+          const completion = await openai.chat.completions.create({
+            model: config.model,
+            temperature: config.temperature,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: config.prompt
+              }
+            ]
+          });
+
+          const generatedCode = completion.choices[0]?.message?.content || '';
+          const generationTime = Date.now() - startTime;
+          
+          // Validate the generated code
+          const compilationResult = await validateGeneratedCode(generatedCode);
+          
+          // Calculate quality metrics
+          const qualityMetrics = calculateQualityMetrics(generatedCode, {
+            success: compilationResult.isValid,
+            errors: compilationResult.errors
+          });
+          
+          results.push({
+            id: randomUUID(),
+            testName: config.testName,
+            prompt: config.prompt,
+            model: config.model,
+            temperature: config.temperature,
+            iteration: i + 1,
+            generatedCode,
+            compilationResult: {
+              success: compilationResult.isValid,
+              errors: compilationResult.errors,
+              warnings: []
+            },
+            qualityMetrics,
+            generationTime,
+            timestamp: new Date()
+          });
+          
+        } catch (error) {
+          const generationTime = Date.now() - startTime;
+          
+          results.push({
+            id: randomUUID(),
+            testName: config.testName,
+            prompt: config.prompt,
+            model: config.model,
+            temperature: config.temperature,
+            iteration: i + 1,
+            generatedCode: '',
+            compilationResult: {
+              success: false,
+              errors: [error instanceof Error ? error.message : 'Unknown error'],
+              warnings: []
+            },
+            qualityMetrics: {
+              visualQualityScore: 0,
+              animationComplexity: 0,
+              tailwindUsage: 0,
+              codeQuality: 0,
+              hasExportDefault: false,
+              hasRemotionImports: false,
+              lineCount: 0,
+              compilationSuccess: false
+            },
+            generationTime,
+            timestamp: new Date()
+          });
+        }
+      }
+      
+      return results;
+    }),
+
+  getTestHistory: protectedProcedure
+    .query(async ({ ctx }) => {
+      // This would typically fetch from database
+      // For now, return empty array
+      return [];
+    }),
+
+  exportResults: protectedProcedure
+    .input(z.object({
+      results: z.array(z.any()),
+      format: z.enum(['csv', 'json'])
+    }))
+    .mutation(async ({ input }) => {
+      const { results, format } = input;
+      
+      if (format === 'csv') {
+        const headers = [
+          'Test Name', 'Iteration', 'Model', 'Temperature', 'Prompt',
+          'Compilation Success', 'Generation Time (ms)', 'Visual Quality Score',
+          'Animation Complexity', 'Tailwind Usage (%)', 'Code Quality',
+          'Line Count', 'Timestamp'
+        ];
+        
+        const rows = results.map((result: any) => [
+          result.testName,
+          result.iteration,
+          result.model,
+          result.temperature,
+          `"${result.prompt.replace(/"/g, '""')}"`,
+          result.compilationResult.success,
+          result.generationTime,
+          result.qualityMetrics.visualQualityScore,
+          result.qualityMetrics.animationComplexity,
+          result.qualityMetrics.tailwindUsage,
+          result.qualityMetrics.codeQuality,
+          result.qualityMetrics.lineCount,
+          result.timestamp.toISOString()
+        ]);
+        
+        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+        return { data: csv, filename: `batch-test-results-${Date.now()}.csv` };
+      } else {
+        return { 
+          data: JSON.stringify(results, null, 2), 
+          filename: `batch-test-results-${Date.now()}.json` 
+        };
+      }
+    })
 });
 
 /**
@@ -454,4 +658,119 @@ function calculatePercentile(metrics: any[], field: string, percentile: number):
   
   const index = Math.ceil(validValues.length * percentile) - 1;
   return validValues[index];
+}
+
+// Import the validation function from generation router
+async function validateGeneratedCode(code: string): Promise<{ isValid: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  
+  try {
+    // Basic structure validation
+    if (!code || code.trim().length === 0) {
+      errors.push('Generated code is empty');
+      return { isValid: false, errors };
+    }
+    
+    // Check for required export default function
+    if (!/export\s+default\s+function/.test(code)) {
+      errors.push('Missing export default function');
+    }
+    
+    // Check for basic React/Remotion imports
+    if (!/import.*from\s+['"]react['"]/.test(code) && !/import.*React/.test(code)) {
+      errors.push('Missing React import');
+    }
+    
+    if (!/import.*from\s+['"]remotion['"]/.test(code)) {
+      errors.push('Missing Remotion imports');
+    }
+    
+    // Check for basic syntax issues
+    const openBraces = (code.match(/{/g) || []).length;
+    const closeBraces = (code.match(/}/g) || []).length;
+    if (openBraces !== closeBraces) {
+      errors.push('Mismatched braces');
+    }
+    
+    const openParens = (code.match(/\(/g) || []).length;
+    const closeParens = (code.match(/\)/g) || []).length;
+    if (openParens !== closeParens) {
+      errors.push('Mismatched parentheses');
+    }
+    
+    return { isValid: errors.length === 0, errors };
+  } catch (error) {
+    errors.push(`Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return { isValid: false, errors };
+  }
+}
+
+// Calculate quality metrics
+function calculateQualityMetrics(code: string, compilationResult: { success: boolean; errors: string[] }): {
+  visualQualityScore: number;
+  animationComplexity: number;
+  tailwindUsage: number;
+  codeQuality: number;
+  hasExportDefault: boolean;
+  hasRemotionImports: boolean;
+  lineCount: number;
+  compilationSuccess: boolean;
+} {
+  const lines = code.split('\n');
+  const lineCount = lines.length;
+  
+  // Check for export default
+  const hasExportDefault = /export\s+default\s+function/.test(code);
+  
+  // Check for Remotion imports
+  const hasRemotionImports = /import.*from\s+['"]remotion['"]/.test(code);
+  
+  // Count animation functions (from BazAnimations)
+  const animationFunctions = [
+    'fadeInUp', 'slideInLeft', 'scaleIn', 'bounceIn', 'rotateIn',
+    'fadeOutDown', 'slideOutRight', 'scaleOut', 'rotateOut',
+    'pulseGlow', 'float', 'rotate', 'shake', 'heartbeat',
+    'glassMorphism', 'neumorphism'
+  ];
+  const animationComplexity = animationFunctions.reduce((count, func) => {
+    return count + (code.includes(func) ? 1 : 0);
+  }, 0);
+  
+  // Calculate Tailwind usage (rough estimate)
+  const tailwindClasses = code.match(/className="[^"]*"/g) || [];
+  const totalClasses = tailwindClasses.join(' ').split(' ').length;
+  const tailwindKeywords = ['bg-', 'text-', 'p-', 'm-', 'w-', 'h-', 'flex', 'grid', 'rounded', 'shadow'];
+  const tailwindCount = tailwindKeywords.reduce((count, keyword) => {
+    return count + (code.split(keyword).length - 1);
+  }, 0);
+  const tailwindUsage = totalClasses > 0 ? Math.min(100, (tailwindCount / totalClasses) * 100) : 0;
+  
+  // Code quality score (basic heuristics)
+  let codeQuality = 10;
+  if (!hasExportDefault) codeQuality -= 2;
+  if (!hasRemotionImports) codeQuality -= 2;
+  if (compilationResult.errors.length > 0) codeQuality -= 3;
+  if (lineCount < 10) codeQuality -= 1; // Too simple
+  if (lineCount > 200) codeQuality -= 1; // Too complex
+  codeQuality = Math.max(0, codeQuality);
+  
+  // Visual quality score (based on modern patterns)
+  let visualQualityScore = 5; // Base score
+  if (code.includes('gradient')) visualQualityScore += 1;
+  if (code.includes('shadow')) visualQualityScore += 1;
+  if (code.includes('glassMorphism') || code.includes('neumorphism')) visualQualityScore += 2;
+  if (animationComplexity > 0) visualQualityScore += 1;
+  if (tailwindUsage > 50) visualQualityScore += 1;
+  visualQualityScore = Math.min(10, visualQualityScore);
+  
+  return {
+    visualQualityScore,
+    animationComplexity,
+    tailwindUsage: Math.round(tailwindUsage),
+    codeQuality,
+    hasExportDefault,
+    hasRemotionImports,
+    lineCount,
+    compilationSuccess: compilationResult.success
+  };
 }

@@ -17,6 +17,7 @@ import { DemoTimeline } from "./compositions/DemoTimeline";
 import { DynamicVideo } from "./compositions/DynamicVideo";
 import { inputPropsSchema } from "../types/input-props";
 import type { InputProps } from "../types/input-props";
+import { TailwindTest } from "./components/TailwindTest";
 
 // Sample default props for DynamicVideo
 const defaultDynamicProps: InputProps = {
@@ -103,6 +104,15 @@ export const RemotionRoot: React.FC = () => {
         height={720}
         defaultProps={defaultDynamicProps}
         schema={inputPropsSchema}
+      />
+      <Composition
+        id="TailwindTest"
+        component={TailwindTest}
+        durationInFrames={90}
+        fps={30}
+        width={1280}
+        height={720}
+        defaultProps={{}}
       />
     </>
   );

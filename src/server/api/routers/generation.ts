@@ -941,7 +941,7 @@ CRITICAL RULES:
 4. Return only the modified component code, no explanations
 5. Ensure export default function ComponentName() format
 6. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`
-          : `You are a Remotion animation specialist. Create visually engaging animated components using standard Remotion imports.
+          : `You are a Remotion animation specialist creating visually stunning motion graphics. Create professional, engaging animated components using Tailwind CSS and the BazAnimations library.
 
 REQUIRED FORMAT:
 \`\`\`tsx
@@ -949,38 +949,84 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } fr
 
 export default function ComponentName() {
   const frame = useCurrentFrame();
-  // Create smooth animations using interpolate, spring, etc.
+  const { fadeInUp, scaleIn, pulseGlow, colorPalettes } = window.BazAnimations;
+  
+  // Create smooth animations using interpolate, spring, and BazAnimations
+  const titleAnimation = fadeInUp(frame, 0, 30);
+  const buttonAnimation = scaleIn(frame, 20, 25);
   
   return (
-    <AbsoluteFill>
-      {/* Your animated content */}
+    <AbsoluteFill className="bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      <div className="text-center space-y-8">
+        <h1 
+          className="text-6xl font-bold text-white drop-shadow-lg"
+          style={titleAnimation}
+        >
+          Your Content
+        </h1>
+        <button 
+          className="px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
+          style={buttonAnimation}
+        >
+          Call to Action
+        </button>
+      </div>
     </AbsoluteFill>
   );
 }
 \`\`\`
 
-ANIMATION GUIDELINES:
+TAILWIND CSS GUIDELINES:
+- Use comprehensive Tailwind classes for styling: bg-*, text-*, p-*, m-*, flex, grid, etc.
+- Leverage gradients: bg-gradient-to-r, bg-gradient-to-br, from-*, via-*, to-*
+- Apply modern effects: shadow-*, rounded-*, backdrop-blur-*, drop-shadow-*
+- Use responsive spacing: space-y-*, space-x-*, gap-*
+- Typography: text-*, font-*, leading-*, tracking-*
+- Colors: Use semantic color scales (blue-500, purple-600, etc.)
+
+BAZANIMATIONS LIBRARY:
+Available via window.BazAnimations:
+- Entrance: fadeInUp, slideInLeft, scaleIn, bounceIn
+- Continuous: pulseGlow, float, rotate, gradientShift  
+- Exit: fadeOutDown, scaleOut
+- Layout: glassMorphism, neumorphism, zLayers
+- Colors: colorPalettes (ocean, sunset, forest, midnight)
+- Composition: stagger, sequence, combineStyles
+
+ANIMATION BEST PRACTICES:
 - Use interpolate for smooth transitions: interpolate(frame, [0, 30], [startValue, endValue])
 - CRITICAL: inputRange and outputRange MUST have the same length
   ✅ CORRECT: interpolate(frame, [0, 30], [0, 1]) - 2 inputs, 2 outputs
   ✅ CORRECT: interpolate(frame, [0, 15, 30], [1, 1.2, 1]) - 3 inputs, 3 outputs  
   ❌ WRONG: interpolate(frame, [0, 30], [1, 1.2, 1]) - 2 inputs, 3 outputs = ERROR
-- For bounce effects, use 3 keyframes: interpolate(frame, [0, 15, 30], [1, 1.2, 1])
-- Use spring for natural motion: spring({ frame, fps, config: { damping: 10, stiffness: 100 } })
-- Create visual effects with scaling, rotation, opacity, position changes
-- Focus on creating smooth, visually engaging animations
-- Avoid static content - everything should move or animate
+- Combine BazAnimations with Tailwind for maximum visual impact
+- Layer animations: stagger multiple elements with different delays
+- Use spring for natural, bouncy motion
+- Apply glassMorphism for modern UI elements
+- Leverage colorPalettes for consistent theming
+
+VISUAL QUALITY REQUIREMENTS:
+- Create engaging, professional motion graphics
+- Use modern design patterns (glassmorphism, gradients, shadows)
+- Ensure smooth, natural animations
+- Apply consistent color schemes
+- Add visual hierarchy with typography and spacing
+- Include interactive elements (buttons, cards, etc.)
+- Focus on visual storytelling and brand appeal
 
 CRITICAL RULES:
 1. Use standard Remotion imports only
-2. Export default function ComponentName() format required
-3. Return only the component code, no explanations
-4. Create engaging animations that bring concepts to life
-5. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`;
+2. Access BazAnimations via window.BazAnimations destructuring
+3. Combine Tailwind classes with animation styles
+4. Export default function ComponentName() format required
+5. Return only the component code, no explanations
+6. Create engaging animations that bring concepts to life
+7. ALWAYS ensure interpolate inputRange and outputRange have identical lengths
+8. Use Tailwind for ALL styling - avoid inline styles except for animations`;
         
         const userPrompt = isEditMode 
           ? `Apply this change to the component: "${editInstruction}"\n\nKeep all existing animations and structure intact. Only modify what's specifically requested.`
-          : `Create an animated component for: "${userMessage}"\n\nFocus on creating smooth, visually engaging animations that bring the concept to life. Make it dynamic and interesting to watch.`;
+          : `Create a visually stunning animated component for: "${userMessage}"\n\nUse Tailwind CSS for modern styling and BazAnimations for smooth motion. Focus on creating professional motion graphics that are engaging and visually appealing. Make it dynamic, colorful, and interesting to watch.`;
         
         // Call LLM
         const response = await openai.chat.completions.create({

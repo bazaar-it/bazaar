@@ -1,4 +1,6 @@
 /* src/remotion/style.css */
+@import 'tailwindcss';
+
 /* This is a minimal CSS file for Remotion that includes just the required CSS variables */
 /* Following Remotion's best practices for CSS integration */
 
