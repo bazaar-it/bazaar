@@ -30,3 +30,4 @@
 ### Sprint Management
 - **[CASCADE]** Update `/memory-bank/progress.md` to link to `sprint27/progress.md`.
 - **[CASCADE]** Update `/memory-bank/TODO.md` with high-level BAZAAR-305 tasks for Sprint 27.
+- **[CASCADE]** Verify improved Monaco editor styling in the Generate workspace.

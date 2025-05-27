@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useCallback } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { useMonaco } from '@monaco-editor/react';
+import { useTheme } from '~/components/theme-provider';
 import { useVideoState } from '~/stores/videoState';
 import { Button } from '~/components/ui/button';
 import { toast } from 'sonner';
@@ -51,6 +52,18 @@ export function CodePanelG({
   const { getCurrentProps, replace } = useVideoState();
   const [localCode, setLocalCode] = useState<string>("");
   const [isCompiling, setIsCompiling] = useState(false);
+  const monaco = useMonaco();
+  const { theme } = useTheme();
+
+  // Disable TypeScript semantic diagnostics to remove red underline
+  React.useEffect(() => {
+    if (monaco) {
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSuggestionDiagnostics: true,
+      });
+    }
+  }, [monaco]);
   
   // Get current props and scenes
   const currentProps = getCurrentProps();
@@ -191,7 +204,7 @@ export function CodePanelG({
           defaultLanguage="typescript"
           value={localCode}
           onChange={handleCodeChange}
-          theme="vs-light"
+          theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
           options={{
             minimap: { enabled: false },
             fontSize: 14,
