@@ -100,6 +100,17 @@ Sprint 30 marks a major leap: Bazaar-Vid now uses a Model Context Protocol (MCP)
 - [ ] Add progressive UI updates with SSE events
 - [ ] Implement database schema for scene_specs storage
 
+### 🚨 Critical ESM Violation Fix (Sprint 30)
+**URGENT**: Fixed MCP system generating forbidden imports (`import React`, `import THREE`) that violate ESM component loading rules. Added strict validation and automatic code cleaning to `SceneBuilderService.generateDirectCode()`. All generated code now properly uses `window.Remotion` destructuring pattern.
+
+### Sprint 30: Intelligence-First MCP Architecture ✅
+Successfully transformed from rigid SceneSpec pipeline to intelligence-first approach:
+- **Before**: User → Brain → SceneSpec JSON → Template Generator → Broken Code  
+- **After**: User → Brain Analysis → Enriched Context → Smart Code Generator → Working Code
+- Direct code generation bypasses rigid schema constraints
+- Brain provides strategic guidance instead of rigid specifications
+- Self-correcting architecture with ESM compliance validation
+
 ## 🎯 **CURRENT STATUS: Sprint 28 - Production Ready**
 
 ### ✅ **MAJOR ISSUE RESOLVED: Scene Duration Bug Fixed**

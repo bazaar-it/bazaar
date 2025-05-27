@@ -79,7 +79,7 @@ export function GenerateSidebar({
   const [isDragging, setIsDragging] = useState(false);
   const [projectsExpanded, setProjectsExpanded] = useLocalStorage(
     "bazaar-projects-expanded",
-    true,
+    false, // Default to collapsed
   );
 
   // Setup mutation for creating a new project (for collapsed button)

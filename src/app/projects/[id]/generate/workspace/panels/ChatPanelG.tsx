@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, Mic, StopCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -64,6 +64,8 @@ export function ChatPanelG({
   const [generationComplete, setGenerationComplete] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
@@ -80,6 +82,13 @@ export function ChatPanelG({
   // Database message fetching (V1 logic)
   const { data: dbMessages, isLoading: isLoadingMessages, refetch: refetchMessages } = 
     api.chat.getMessages.useQuery({ projectId });
+    
+  // Voice transcription
+  const transcribe = api.voice.transcribe.useMutation({
+    onSuccess: (data) => {
+      setMessage((prev) => (prev ? `${prev} ${data.text}` : data.text));
+    },
+  });
   
   // Helper function to add optimistic user message
   const addOptimisticUserMessage = useCallback((content: string) => {
@@ -119,6 +128,84 @@ export function ChatPanelG({
       )
     );
   }, []);
+  
+  // Handle voice recording
+  const handleRecord = async () => {
+    if (isRecording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Find supported MIME type for this browser
+      const getMimeType = () => {
+        const types = [
+          'audio/webm',
+          'audio/webm;codecs=opus',
+          'audio/mp4',
+          'audio/ogg;codecs=opus',
+          'audio/wav'
+        ];
+        
+        for (const type of types) {
+          if (MediaRecorder.isTypeSupported(type)) {
+            console.log(`Using supported MIME type: ${type}`);
+            return type;
+          }
+        }
+        
+        // Fallback to default
+        console.warn('No listed MIME type supported, using browser default');
+        return '';
+      };
+      
+      const mimeType = getMimeType();
+      const recorderOptions = mimeType ? { mimeType } : {};
+      
+      // Create recorder with best supported format
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = async () => {
+        // Get the actual MIME type that was used
+        const actualType = recorder.mimeType || 'audio/webm';
+        console.log(`Recording complete with MIME type: ${actualType}`);
+        
+        // Create blob with the recorder's actual MIME type
+        const blob = new Blob(chunks, { type: actualType });
+        
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          toast.info('Transcribing audio...');
+          transcribe.mutate({ 
+            audio: base64, 
+            mimeType: actualType
+          });
+        };
+        reader.readAsDataURL(blob);
+        
+        // Cleanup
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+      };
+      
+      recorderRef.current = recorder;
+      // Set a timeslice to get data more frequently
+      recorder.start(1000);
+      setIsRecording(true);
+      toast.success('Recording started');
+    } catch (err) {
+      console.error('Voice recording failed', err);
+      toast.error('Failed to access microphone');
+    }
+  };
 
   // Helper function to remove optimistic message
   const removeOptimisticMessage = useCallback((id: string) => {
@@ -754,6 +841,20 @@ export function ChatPanelG({
             disabled={isGenerating}
             className="flex-1"
           />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleRecord}
+            disabled={transcribe.isPending || isGenerating}
+            size="sm"
+            className="px-3"
+          >
+            {isRecording ? (
+              <StopCircle className="h-4 w-4" />
+            ) : (
+              <Mic className="h-4 w-4" />
+            )}
+          </Button>
           <Button 
             type="submit" 
             disabled={!message.trim() || isGenerating}

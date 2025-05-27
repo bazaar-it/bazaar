@@ -1612,6 +1612,57 @@ export default function GeneratedComponent() {
             }
           };
         }
+        if (orchestrationResult.toolUsed === 'deleteScene') {
+          const result = orchestrationResult.result as any;
+
+          const targetSceneId = result?.deletedSceneId || sceneId;
+          if (!targetSceneId) {
+            throw new Error('No scene ID provided for deletion');
+          }
+
+          // Verify the scene exists and belongs to the project
+          const scene = await db.query.scenes.findFirst({
+            where: and(eq(scenes.id, targetSceneId), eq(scenes.projectId, projectId)),
+          });
+
+          if (!scene) {
+            await db.update(messages)
+              .set({
+                content: `Scene not found`,
+                status: 'error',
+                updatedAt: new Date(),
+              })
+              .where(eq(messages.id, assistantMessageRow.id));
+
+            throw new Error('Scene not found');
+          }
+
+          await db.delete(scenes)
+            .where(and(eq(scenes.id, targetSceneId), eq(scenes.projectId, projectId)));
+
+          const sceneNumber = await getSceneNumber(targetSceneId);
+          const assistantContent = `Scene ${sceneNumber || '?'} removed successfully ✅`;
+          await db.update(messages)
+            .set({
+              content: assistantContent,
+              status: 'success',
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, assistantMessageRow.id));
+
+          return {
+            scene: null,
+            removedSceneId: targetSceneId,
+            toolUsed: 'deleteScene',
+            mcpGenerated: true,
+            assistantMessage: {
+              id: assistantMessageRow.id,
+              content: assistantContent,
+              status: 'success',
+            },
+          };
+        }
+
 
         // TODO PHASE2: Handle editScene and deleteScene tools
         throw new Error(`Tool ${orchestrationResult.toolUsed} not yet implemented in Phase 2`);

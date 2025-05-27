@@ -1085,3 +1085,39 @@ This approach eliminates the **double translation loss** and **rigid schema pris
 - UI now updates project titles when the LLM renames a project.
 - Scene list reflects friendly scene names provided by the backend.
 This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture. ### New Feature: Voice-to-Text\n- Added voice transcription button using OpenAI Whisper on the generate page.
+
+## Phase 2: Intelligence-First Architecture Implementation ✅
+
+### Critical ESM Violation Fix (Latest)
+
+**Issue**: The MCP system's `generateDirectCode()` method was generating code with forbidden imports:
+- `import React from 'react'` - violates ESM component loading rules
+- `import * as THREE from 'three'` - external library not allowed
+- Missing proper ESM safeguards in the prompt
+
+**Root Cause**: The `SceneBuilderService.generateDirectCode()` method used a simplified prompt that didn't enforce ESM component loading rules from `@esm-component-loading-lessons.md`.
+
+**Fix Applied**:
+1. **Enhanced System Prompt**: Added explicit ESM rules with 🚨 warnings
+2. **Forbidden Import Detection**: Added regex validation for React, THREE.js, GSAP, D3, CSS imports
+3. **Automatic Code Cleaning**: Strips forbidden imports and adds proper `window.Remotion` destructuring
+4. **ESM Validation Logging**: Tracks what violations were detected and cleaned
+5. **ESM-Compliant Fallback**: Ensures even error fallbacks follow ESM rules
+
+**ESM Rules Enforced**:
+```typescript
+// ❌ FORBIDDEN
+import React from 'react';
+import * as THREE from 'three';
+import './styles.css';
+
+// ✅ REQUIRED
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
+```
+
+**Files Modified**:
+- `src/lib/services/sceneBuilder.service.ts` - Added ESM validation and cleaning
+
+This ensures the intelligence-first MCP system generates ESM-compliant code that works with our component loading architecture.
+
+---

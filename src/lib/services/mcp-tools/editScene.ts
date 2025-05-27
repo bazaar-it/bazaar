@@ -1,7 +1,10 @@
+// src/lib/services/mcp-tools/editScene.ts
+
 import { z } from "zod";
 import { BaseMCPTool } from "./base";
 import { sceneBuilderService } from "../sceneBuilder.service";
 import { openai } from "~/server/lib/openai";
+import { compare, type Operation } from "fast-json-patch";
 
 const editSceneInputSchema = z.object({
   sceneId: z.string().describe("ID of scene to edit"),
@@ -15,55 +18,76 @@ const editSceneInputSchema = z.object({
 type EditSceneInput = z.infer<typeof editSceneInputSchema>;
 
 interface EditSceneOutput {
-  sceneCode: string;
-  sceneName: string;
-  duration: number;
+  patch: import("~/types/json-patch").JsonPatch;
   reasoning: string;
-  changes: string[];
   brainContext?: any;
   debug?: any;
 }
 
-export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> {
+export class EditSceneTool extends BaseMCPTool<
+  EditSceneInput,
+  EditSceneOutput
+> {
   name = "editScene";
-  description = "Edit an existing scene based on user request. Uses Brain analysis for strategic code modifications.";
+  description =
+    "Edit an existing scene based on user request. Uses Brain analysis for strategic code modifications.";
   inputSchema = editSceneInputSchema;
   
   protected async execute(input: EditSceneInput): Promise<EditSceneOutput> {
     const { userPrompt, currentScene, sceneId } = input;
-    
+
     try {
       // STEP 1: Generate enriched context for editing
       const brainContext = await this.generateEditContext({
         userPrompt,
         currentScene,
-        sceneId
+        sceneId,
       });
-      
-      // STEP 2: Generate modified React/Remotion code with enriched context
-      const result = await sceneBuilderService.generateDirectCode({
-        userPrompt: `EDIT REQUEST: ${userPrompt}\n\nCURRENT SCENE CONTEXT: ${JSON.stringify(currentScene, null, 2)}`,
+
+      // STEP 2: Generate updated scene spec with enriched context
+      const result = await sceneBuilderService.buildScene({
+        userMessage: `EDIT REQUEST: ${userPrompt}\n\nCURRENT SCENE: ${JSON.stringify(currentScene, null, 2)}`,
+        userContext: input.userContext || {},
+        storyboardSoFar: [currentScene],
         projectId: input.sessionId,
-        brainContext
+        userId: input.userId,
       });
-      
+
+      // Convert fast-json-patch Operations to our JsonPatch format
+      const operations = compare(currentScene, result.sceneSpec);
+      const patch = operations
+        .filter(op => op.op !== '_get')
+        .map(op => {
+          // Create base operation object
+          const patchOp: import("~/types/json-patch").JsonPatchOperation = {
+            path: op.path,
+            op: op.op as 'add' | 'remove' | 'replace' | 'move' | 'copy' | 'test'
+          };
+          
+          // Add value property for operations that support it
+          if (['add', 'replace', 'test'].includes(op.op) && 'value' in op) {
+            patchOp.value = op.value;
+          }
+          
+          // Add from property for operations that support it
+          if (['move', 'copy'].includes(op.op) && 'from' in op) {
+            patchOp.from = op.from;
+          }
+          
+          return patchOp;
+        });
+
       return {
-        sceneCode: result.code,
-        sceneName: result.name,
-        duration: result.duration,
+        patch,
         reasoning: result.reasoning,
-        changes: ["Scene modified with user-requested changes"], // TODO: Implement proper diff detection
         brainContext,
-        debug: result.debug
+        debug: result.debug,
       };
     } catch (error) {
       return {
-        sceneCode: "",
-        sceneName: "",
-        duration: 0,
+        patch: [],
         reasoning: "Failed to edit scene",
-        changes: [],
-        debug: { error: String(error) }
+        debug: { error: String(error) },
       };
     }
   }
@@ -120,10 +144,10 @@ Be specific about what should change while preserving the scene's good qualities
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: contextPrompt },
-          { role: "user", content: input.userPrompt }
+          { role: "user", content: input.userPrompt },
         ],
         temperature: 0.3,
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
       });
 
       const content = response.choices[0]?.message?.content;
@@ -132,27 +156,44 @@ Be specific about what should change while preserving the scene's good qualities
       }
 
       const parsed = JSON.parse(content);
-      
+
       return {
         userIntent: parsed.userIntent || "Modify the existing scene",
         technicalRecommendations: parsed.technicalRecommendations || [],
-        uiLibraryGuidance: parsed.uiLibraryGuidance || "Use appropriate UI components for modifications",
-        animationStrategy: parsed.animationStrategy || "Enhance existing animations",
+        uiLibraryGuidance:
+          parsed.uiLibraryGuidance ||
+          "Use appropriate UI components for modifications",
+        animationStrategy:
+          parsed.animationStrategy || "Enhance existing animations",
         previousContext: parsed.previousContext,
-        focusAreas: parsed.focusAreas || ["User-requested changes", "Visual consistency"]
+        focusAreas: parsed.focusAreas || [
+          "User-requested changes",
+          "Visual consistency",
+        ],
       };
     } catch (error) {
-      console.warn("[EditScene] Failed to generate Brain context, using fallback:", error);
-      
+      console.warn(
+        "[EditScene] Failed to generate Brain context, using fallback:",
+        error,
+      );
+
       return {
         userIntent: "Modify the existing scene based on user request",
-        technicalRecommendations: ["Preserve existing structure", "Apply user-requested changes"],
-        uiLibraryGuidance: "Use appropriate UI components for the modifications",
+        technicalRecommendations: [
+          "Preserve existing structure",
+          "Apply user-requested changes",
+        ],
+        uiLibraryGuidance:
+          "Use appropriate UI components for the modifications",
         animationStrategy: "Enhance or modify existing animations as needed",
-        focusAreas: ["User-requested changes", "Visual consistency", "Smooth transitions"]
+        focusAreas: [
+          "User-requested changes",
+          "Visual consistency",
+          "Smooth transitions",
+        ],
       };
     }
   }
 }
 
-export const editSceneTool = new EditSceneTool(); 
+export const editSceneTool = new EditSceneTool();

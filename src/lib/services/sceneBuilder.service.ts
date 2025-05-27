@@ -505,8 +505,8 @@ Respond with valid JSON only.`;
   }> {
     const { brainContext } = input;
     
-    // Simplified, focused prompt to avoid token limits
-    const systemPrompt = `You are an expert React/Remotion code generator.
+    // CRITICAL: ESM-compliant prompt with strict import rules
+    const systemPrompt = `You are an expert React/Remotion code generator following strict ESM component loading rules.
 
 USER REQUEST: "${input.userPrompt}"
 
@@ -518,22 +518,61 @@ STRATEGIC GUIDANCE:
 - Focus: ${brainContext.focusAreas.join(', ')}
 ` : ''}
 
-REQUIREMENTS:
-- Use: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
-- Export: export default function ComponentName() { ... }
-- Animations: Use interpolate() for smooth transitions
-- Styling: Tailwind classes and inline styles only
-- NO external imports (no GSAP, no CSS files)
+🚨 CRITICAL ESM RULES - NEVER VIOLATE:
+1. NEVER import React: NO "import React from 'react'" - React is globally available
+2. NEVER import external libraries: NO THREE.js, GSAP, D3, etc.
+3. NEVER import CSS files or stylesheets
+4. ONLY use window.Remotion destructuring: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
+
+REQUIRED FORMAT:
+\`\`\`tsx
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
+
+export default function ComponentName() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  // Use interpolate for animations
+  const opacity = interpolate(frame, [0, 30], [0, 1]);
+  
+  return (
+    <AbsoluteFill className="bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      <div style={{ opacity }}>
+        Your content here
+      </div>
+    </AbsoluteFill>
+  );
+}
+\`\`\`
+
+ANIMATION GUIDELINES:
+- Use interpolate() for smooth transitions
+- CRITICAL: inputRange and outputRange MUST have identical lengths
+- Use spring() for natural motion
+- Combine with Tailwind classes for styling
+
+STYLING REQUIREMENTS:
+- Use Tailwind CSS classes extensively
+- Inline styles only for animations
+- Modern gradients, shadows, effects
+- Responsive design patterns
+
+FORBIDDEN IMPORTS:
+❌ import React from 'react'
+❌ import * as THREE from 'three'
+❌ import gsap from 'gsap'
+❌ import './styles.css'
+❌ Any external library imports
 
 RESPONSE FORMAT (JSON):
 {
-  "code": "// Complete working React/Remotion component",
-  "name": "ComponentName",
+  "code": "// Complete working React/Remotion component with proper ESM patterns",
+  "name": "ComponentName", 
   "duration": 180,
   "reasoning": "Brief implementation explanation"
 }
 
-Generate complete, working code that implements the request.`;
+Generate complete, ESM-compliant code that implements the request.`;
 
     try {
       const response = await openai.chat.completions.create({
@@ -543,7 +582,7 @@ Generate complete, working code that implements the request.`;
           { role: "user", content: input.userPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 10000, // Increased token limit
+        max_tokens: 10000,
         response_format: { type: "json_object" },
       });
 
@@ -587,24 +626,68 @@ Generate complete, working code that implements the request.`;
         throw new Error(`Invalid or empty code field: ${parsed.code}`);
       }
       
+      // 🚨 CRITICAL: ESM VALIDATION - Check for forbidden imports
+      let generatedCode = parsed.code;
+      
+      // Check for React imports
+      if (/import\s+React/.test(generatedCode)) {
+        console.error("🚨 ESM VIOLATION: React import detected, removing...");
+        generatedCode = generatedCode.replace(/import\s+React[^;]*;?\s*/g, '');
+      }
+      
+      // Check for THREE.js imports
+      if (/import\s+.*THREE|from\s+['"]three['"]/.test(generatedCode)) {
+        console.error("🚨 ESM VIOLATION: THREE.js import detected, removing...");
+        generatedCode = generatedCode.replace(/import\s+.*from\s+['"]three['"];?\s*/g, '');
+        generatedCode = generatedCode.replace(/import\s+\*\s+as\s+THREE\s+from\s+['"]three['"];?\s*/g, '');
+      }
+      
+      // Check for other forbidden imports
+      const forbiddenImports = ['gsap', 'd3', 'framer-motion', 'lottie'];
+      forbiddenImports.forEach(lib => {
+        const importRegex = new RegExp(`import\\s+.*from\\s+['"]${lib}['"];?\\s*`, 'g');
+        if (importRegex.test(generatedCode)) {
+          console.error(`🚨 ESM VIOLATION: ${lib} import detected, removing...`);
+          generatedCode = generatedCode.replace(importRegex, '');
+        }
+      });
+      
+      // Check for CSS imports
+      if (/import\s+['"][^'"]*\.css['"]/.test(generatedCode)) {
+        console.error("🚨 ESM VIOLATION: CSS import detected, removing...");
+        generatedCode = generatedCode.replace(/import\s+['"][^'"]*\.css['"];?\s*/g, '');
+      }
+      
+      // Ensure proper window.Remotion usage
+      if (!generatedCode.includes('window.Remotion')) {
+        console.warn("Adding missing window.Remotion destructuring...");
+        generatedCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\n${generatedCode}`;
+      }
+      
       const debug = {
         prompt: { system: systemPrompt, user: input.userPrompt },
         response: content,
-        parsed
+        parsed,
+        esmValidation: {
+          hadReactImport: /import\s+React/.test(parsed.code),
+          hadThreeImport: /import\s+.*THREE|from\s+['"]three['"]/.test(parsed.code),
+          hadCssImport: /import\s+['"][^'"]*\.css['"]/.test(parsed.code),
+          cleanedCode: generatedCode !== parsed.code
+        }
       };
 
       return {
-        code: parsed.code,
+        code: generatedCode,
         name: parsed.name || "Generated Scene",
         duration: parsed.duration || 180,
-        reasoning: parsed.reasoning || "Direct code generation",
+        reasoning: parsed.reasoning || "Direct code generation with ESM compliance",
         debug
       };
 
     } catch (error) {
       console.error("SceneBuilder direct code generation error:", error);
       
-      // Enhanced fallback with user prompt context
+      // Enhanced fallback with user prompt context - ESM compliant
       const fallbackCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
 
 export default function GeneratedScene() {
@@ -632,7 +715,7 @@ export default function GeneratedScene() {
         code: fallbackCode,
         name: "Fallback Scene",
         duration: 90,
-        reasoning: "Fallback due to generation error",
+        reasoning: "ESM-compliant fallback due to generation error",
         debug: { error: String(error) }
       };
     }
