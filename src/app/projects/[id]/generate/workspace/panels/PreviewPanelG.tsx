@@ -104,10 +104,11 @@ export function PreviewPanelG({
             }
           });
 
-          // Clean the scene code: remove imports and export default
+          // Clean the scene code: remove imports, window.Remotion destructuring, and export default
           let cleanSceneCode = sceneCode
             .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
             .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
+            .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
             .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
 
           // Error boundary wrapper for each scene

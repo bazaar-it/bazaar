@@ -1,5 +1,8 @@
 import { openai } from "~/server/lib/openai";
-import { sceneTools } from "~/lib/services/mcp-tools/scene-tools";
+import { addSceneTool } from "~/lib/services/mcp-tools/addScene";
+import { editSceneTool } from "~/lib/services/mcp-tools/editScene";
+import { deleteSceneTool } from "~/lib/services/mcp-tools/deleteScene";
+import { askSpecifyTool } from "~/lib/services/mcp-tools/askSpecify";
 import { toolRegistry } from "~/lib/services/mcp-tools/registry";
 import { type MCPResult } from "~/lib/services/mcp-tools/base";
 
@@ -17,6 +20,11 @@ export interface OrchestrationOutput {
   toolUsed?: string;
   reasoning?: string;
   error?: string;
+  debug?: {
+    prompt?: { system: string; user: string };
+    response?: string;
+    parsed?: any;
+  };
 }
 
 /**
@@ -29,9 +37,10 @@ export class BrainOrchestrator {
   private toolsRegistered = false;
   
   constructor() {
-    // Register tools only once to prevent duplicates
+    // Register the new intelligence-first tools
     if (!this.toolsRegistered) {
-      sceneTools.forEach(tool => toolRegistry.register(tool));
+      const newSceneTools = [addSceneTool, editSceneTool, deleteSceneTool, askSpecifyTool];
+      newSceneTools.forEach(tool => toolRegistry.register(tool));
       this.toolsRegistered = true;
     }
   }
@@ -63,12 +72,19 @@ export class BrainOrchestrator {
       // 4. Execute tool
       const result = await tool.run(toolInput);
       
+      // Propagate debug info if present
+      let debug = undefined;
+      if (result.data && typeof result.data === 'object' && 'debug' in result.data) {
+        debug = (result.data as any).debug;
+      }
+      
       return {
         success: result.success,
         result: result.data,
         toolUsed: toolSelection.toolName,
         reasoning: toolSelection.reasoning,
         error: result.error?.message,
+        debug,
       };
       
     } catch (error) {
@@ -191,6 +207,7 @@ Analyze this request and select the appropriate tool. Consider the context and e
       case "addScene":
         return {
           ...baseInput,
+          projectId: input.projectId,
           storyboardSoFar: input.storyboardSoFar || [],
         };
         
@@ -217,6 +234,84 @@ Analyze this request and select the appropriate tool. Consider the context and e
         
       default:
         return baseInput;
+    }
+  }
+
+  /**
+   * Generate enriched context for code generation
+   * Analyzes user intent and provides strategic guidance
+   */
+  private async generateCodeGenerationContext(input: OrchestrationInput): Promise<{
+    userIntent: string;
+    technicalRecommendations: string[];
+    uiLibraryGuidance: string;
+    animationStrategy: string;
+    previousContext?: string;
+    focusAreas: string[];
+  }> {
+    const contextPrompt = `You are an AI Brain analyzing user intent for video code generation.
+
+USER REQUEST: "${input.prompt}"
+
+EXISTING SCENES: ${input.storyboardSoFar?.length || 0} scenes already created
+
+Analyze the user's request and provide strategic guidance for code generation.
+
+RESPONSE FORMAT (JSON):
+{
+  "userIntent": "What the user really wants to achieve",
+  "technicalRecommendations": [
+    "Specific technical approaches to use",
+    "Recommended patterns or libraries"
+  ],
+  "uiLibraryGuidance": "Specific UI library recommendations (e.g., 'Use Flowbite Table component for data display')",
+  "animationStrategy": "Animation approach and timing strategy",
+  "focusAreas": [
+    "Key areas to focus on",
+    "Most important visual elements"
+  ],
+  "previousContext": "Context from existing scenes (if any)"
+}
+
+Provide specific, actionable guidance that will help generate better code.`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: contextPrompt },
+          { role: "user", content: input.prompt }
+        ],
+        temperature: 0.3,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No context response from Brain");
+      }
+
+      const parsed = JSON.parse(content);
+      
+      return {
+        userIntent: parsed.userIntent || "Generate video scene",
+        technicalRecommendations: parsed.technicalRecommendations || [],
+        uiLibraryGuidance: parsed.uiLibraryGuidance || "Use appropriate UI components",
+        animationStrategy: parsed.animationStrategy || "Smooth fade-in animations",
+        previousContext: parsed.previousContext,
+        focusAreas: parsed.focusAreas || ["Visual appeal", "Smooth animations"]
+      };
+    } catch (error) {
+      console.warn("[Brain] Failed to generate context, using fallback:", error);
+      
+      // Fallback context
+      return {
+        userIntent: "Generate video scene based on user request",
+        technicalRecommendations: ["Use modern React patterns", "Implement smooth animations"],
+        uiLibraryGuidance: "Use Flowbite components when appropriate for UI elements",
+        animationStrategy: "Use interpolate() for smooth transitions with proper timing",
+        focusAreas: ["Visual appeal", "User experience", "Smooth animations"]
+      };
     }
   }
 }

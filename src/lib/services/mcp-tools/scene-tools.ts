@@ -2,6 +2,7 @@ import { z } from "zod";
 import { BaseMCPTool, type MCPResult } from "./base";
 import { sceneBuilderService, type SceneBuilderInput } from "../sceneBuilder.service";
 import { type SceneSpec } from "~/lib/types/storyboard";
+import crypto from "crypto";
 
 /**
  * Input schema for addScene tool
@@ -23,6 +24,11 @@ interface AddSceneOutput {
   sceneSpec: SceneSpec;
   reasoning: string;
   sceneId: string;
+  debug: {
+    prompt: { system: string; user: string };
+    response: string;
+    parsed: any;
+  };
 }
 
 /**
@@ -51,6 +57,7 @@ export class AddSceneTool extends BaseMCPTool<any, any> {
       sceneSpec: result.sceneSpec,
       reasoning: result.reasoning,
       sceneId,
+      debug: result.debug,
     };
   }
 }
@@ -76,6 +83,11 @@ interface EditSceneOutput {
   sceneSpec: SceneSpec;
   reasoning: string;
   changes: string[];
+  debug: {
+    prompt: { system: string; user: string };
+    response: string;
+    parsed: any;
+  };
 }
 
 /**
@@ -104,6 +116,7 @@ export class EditSceneTool extends BaseMCPTool<any, any> {
       sceneSpec: result.sceneSpec,
       reasoning: result.reasoning,
       changes: ["Scene regenerated with modifications"], // TODO PHASE2: Implement proper diff detection
+      debug: result.debug,
     };
   }
 }

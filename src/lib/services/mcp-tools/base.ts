@@ -117,6 +117,13 @@ export class MCPToolRegistry {
     return Array.from(this.tools.values());
   }
   
+  /**
+   * Clear all registered tools - useful for testing
+   */
+  clear(): void {
+    this.tools.clear();
+  }
+  
   getToolDefinitions(): Array<{
     name: string;
     description: string;
@@ -125,7 +132,18 @@ export class MCPToolRegistry {
     return this.list().map(tool => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: JSON.parse(JSON.stringify(tool.inputSchema)),
+      inputSchema: {
+        type: 'object',
+        properties: (tool.inputSchema as any)._def?.shape ? 
+          Object.fromEntries(
+            Object.entries((tool.inputSchema as any)._def.shape).map(([key, value]) => [
+              key, 
+              (value as any)._def || value
+            ])
+          ) : {},
+        description: (tool.inputSchema as any)._def?.description,
+        ...((tool.inputSchema as any)._def || {}),
+      },
     }));
   }
 }

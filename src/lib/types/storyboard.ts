@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
  */
 export const ComponentSpec = z.object({
   /** Component library source */
-  lib: z.enum(["flowbite", "custom", "html", "bazaar"]).describe("UI library source"),
+  lib: z.enum(["flowbite", "flowbite-layout", "custom", "html", "bazaar"]).describe("UI library source"),
   
   /** Component name/identifier */
   name: z.string().min(1).describe("Component name (e.g., 'Modal', 'Button', 'TextInput')"),
@@ -17,12 +17,12 @@ export const ComponentSpec = z.object({
   /** Unique identifier for targeting - auto-generated if not provided */
   id: z.string().optional().describe("Unique ID for motion targeting"),
   
-  /** Layout positioning - relative coordinates (0-1) */
+  /** Layout positioning - flexible coordinate system */
   layout: z.object({
-    x: z.number().min(0).max(1).describe("0-1 relative to width").optional(),
-    y: z.number().min(0).max(1).describe("0-1 relative to height").optional(),
-    width: z.number().min(0).max(1).describe("0-1 relative to scene width").optional(),
-    height: z.number().min(0).max(1).describe("0-1 relative to scene height").optional(),
+    x: z.number().min(0).max(10).describe("Relative position (0-1 preferred, up to 10 for edge cases)").optional(),
+    y: z.number().min(0).max(10).describe("Relative position (0-1 preferred, up to 10 for edge cases)").optional(),
+    width: z.number().min(0).max(10).describe("Relative size (0-1 preferred, up to 10 for edge cases)").optional(),
+    height: z.number().min(0).max(10).describe("Relative size (0-1 preferred, up to 10 for edge cases)").optional(),
     zIndex: z.number().optional().describe("Layering order"),
   }).partial().optional(),
   
@@ -100,23 +100,45 @@ export const MotionSpec = z.object({
   /** Target component or element */
   target: z.string().describe("Component ID or CSS selector"),
   
-  /** Animation function - core set only */
+  /** Animation function - expanded set for creative freedom */
   fn: z.enum([
-    // Entrance animations (most common)
-    "fadeIn", "fadeInUp", "slideInLeft", "slideInRight", "scaleIn", "bounceIn",
+    // === ENTRANCE ANIMATIONS ===
+    "fadeIn", "fadeInUp", "fadeInDown", "fadeInLeft", "fadeInRight",
+    "slideInLeft", "slideInRight", "slideInUp", "slideInDown", 
+    "slideInTopLeft", "slideInTopRight", "slideInBottomLeft", "slideInBottomRight",
+    "scaleIn", "scaleInX", "scaleInY", "bounceIn", "bounceInUp", "bounceInDown",
+    "flipInX", "flipInY", "rotateIn", "rotateInUpLeft", "rotateInUpRight",
+    "rollIn", "lightSpeedIn", "jackInTheBox", "backInUp", "backInDown",
     
-    // Exit animations
-    "fadeOut", "slideOutLeft", "slideOutRight", "scaleOut",
+    // === EXIT ANIMATIONS ===
+    "fadeOut", "fadeOutUp", "fadeOutDown", "fadeOutLeft", "fadeOutRight",
+    "slideOutLeft", "slideOutRight", "slideOutUp", "slideOutDown",
+    "scaleOut", "scaleOutX", "scaleOutY", "bounceOut", "bounceOutUp", "bounceOutDown",
+    "flipOutX", "flipOutY", "rotateOut", "rotateOutUpLeft", "rotateOutUpRight",
+    "rollOut", "lightSpeedOut", "backOutUp", "backOutDown",
     
-    // Continuous animations
-    "pulse", "bounce", "shake", "rotate", "float",
+    // === CONTINUOUS/ATTENTION ANIMATIONS ===
+    "pulse", "bounce", "shake", "shakeX", "shakeY", "wobble", "swing",
+    "rotate", "rotateClockwise", "rotateCounterClockwise", "float", "bob",
+    "heartbeat", "flash", "rubberBand", "jello", "tada", "headShake",
     
-    // Camera movements
-    "zoomIn", "zoomOut", "panLeft", "panRight",
+    // === CAMERA/VIEWPORT MOVEMENTS ===
+    "zoomIn", "zoomOut", "zoomInUp", "zoomInDown", "zoomInLeft", "zoomInRight",
+    "zoomOutUp", "zoomOutDown", "zoomOutLeft", "zoomOutRight",
+    "panLeft", "panRight", "panUp", "panDown",
     
-    // Custom (use params.type for specific animations)
+    // === SPECIAL EFFECTS ===
+    "typewriter", "glitch", "neon", "glow", "sparkle", "shimmer",
+    "blur", "focus", "pixelate", "wave", "ripple", "explode", "implode",
+    "shatter", "crumble", "melt", "burn", "freeze", "electric",
+    
+    // === INTERACTION ANIMATIONS ===
+    "click", "hover", "press", "release", "drag", "drop", "swipe",
+    "pinch", "stretch", "squeeze", "morph", "transform",
+    
+    // === CUSTOM (use params.type for specific animations) ===
     "custom"
-  ]).describe("Animation function name"),
+  ]).describe("Animation function name - expanded set for creative motion graphics"),
   
   /** Animation duration in seconds - primary timing control */
   duration: z.number().min(0).default(0.4).describe("Animation duration in seconds"),

@@ -190,6 +190,37 @@ export const scenesRelations = relations(scenes, ({ one }) => ({
   project: one(projects, { fields: [scenes.projectId], references: [projects.id] }),
 }));
 
+// --- Scene Specs table ---
+// Stores SceneSpec JSON for MCP architecture
+export const sceneSpecs = createTable(
+  "scene_specs",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    sceneId: d.varchar({ length: 255 }).notNull(), // Scene identifier from SceneSpec
+    name: d.varchar({ length: 255 }), // Human-readable scene name
+    spec: d.jsonb().notNull(), // Complete SceneSpec JSON
+    version: d.varchar({ length: 10 }).default("1.0").notNull(), // Schema version
+    createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+    createdBy: d.uuid().references(() => users.id),
+  }),
+  (t) => [
+    index("scene_spec_project_idx").on(t.projectId),
+    index("scene_spec_created_at_idx").on(t.createdAt),
+    index("scene_spec_scene_id_idx").on(t.sceneId),
+    // Ensure unique scene_id per project
+    uniqueIndex("scene_spec_unique_scene_id").on(t.projectId, t.sceneId),
+    // Added missing GIN index for JSONB spec column
+    index("scene_spec_spec_gin_idx").using("gin", t.spec),
+  ],
+);
+
+export const sceneSpecsRelations = relations(sceneSpecs, ({ one }) => ({
+  project: one(projects, { fields: [sceneSpecs.projectId], references: [projects.id] }),
+  createdByUser: one(users, { fields: [sceneSpecs.createdBy], references: [users.id] }),
+}));
+
 // --- Custom Component Jobs table ---
 // Stores jobs for generating and compiling custom Remotion components
 export const customComponentJobs = createTable(
@@ -344,8 +375,7 @@ export const animationDesignBriefs = createTable(
       .references(() => customComponentJobs.id), // Optional link to component job
     designBrief: d.jsonb().$type<AnimationDesignBrief>().notNull(), // The structured design brief
     llmModel: d.varchar({ length: 100 }).notNull(), // Model used to generate the brief
-    status: d
-      .varchar({ length: 50 })
+    status: d.varchar({ length: 50 })
       .default("pending")
       .notNull(), // "pending"|"complete"|"error"
     errorMessage: d.text(), // Error message if generation failed

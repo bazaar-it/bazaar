@@ -19,7 +19,7 @@ const createDbConnection = () => {
   const sql = neon(env.DATABASE_URL, {
     fetchOptions: {
       keepalive: true,
-      timeout: 10000, // 10 seconds
+      timeout: 30000, // 30 seconds (increased from 10)
     },
   });
   return drizzleNeon(sql, { schema });
@@ -69,7 +69,7 @@ export const db = dbConnectionInstance;
 export async function executeWithRetry<T>(
   operation: () => Promise<T>,
   maxRetries = 3,
-  initialDelay = 100
+  initialDelay = 200
 ): Promise<T> {
   let lastError: unknown;
   let delay = initialDelay;
@@ -89,9 +89,14 @@ export async function executeWithRetry<T>(
           error.message.includes('socket hang up') ||
           error.message.includes('connection timeout') ||
           error.message.includes('network error') ||
+          error.message.includes('fetch failed') ||
+          error.message.includes('Connect Timeout Error') ||
+          error.message.includes('UND_ERR_CONNECT_TIMEOUT') ||
           // Neon specific errors
           error.message.includes('Error connecting to database') ||
-          error.message.includes('Connection terminated unexpectedly')
+          error.message.includes('Connection terminated unexpectedly') ||
+          error.message.includes('NeonDbError') ||
+          error.message.includes('ConnectTimeoutError')
         );
       
       if (!isTransientError || attempt === maxRetries) {
@@ -103,8 +108,8 @@ export async function executeWithRetry<T>(
         error instanceof Error ? error.message : String(error));
       
       // Exponential backoff with jitter
-      await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 50));
-      delay *= 2; // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 100));
+      delay = Math.min(delay * 2, 5000); // Exponential backoff with max 5s delay
     }
   }
   

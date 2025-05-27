@@ -184,8 +184,8 @@ export function ChatPanelG({
     return title.length > 40 ? title.substring(0, 37) + '...' : title;
   }, []);
   
-  // OPTIMIZATION #1: Use unified scene generation with chat persistence
-  const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
+  // OPTIMIZATION #1: Use MCP scene generation instead of legacy
+  const generateSceneWithChatMutation = api.generation.generateScene.useMutation({
     onSuccess: (result: any) => {
       console.log("✅ Unified scene generation completed:", result);
       setIsGenerating(false);
