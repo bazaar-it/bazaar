@@ -55,3 +55,4 @@ This sprint focuses on the key deliverables for BAZAAR-305, building upon the co
 *   **[CASCADE]** Update main `progress.md` and `TODO.md` to reflect Sprint 27 start.
 *   **[CASCADE/USER]** Plan specific tasks for BAZAAR-303 (Publish & Share) for this sprint.
 *   **[CASCADE/USER]** Review and address any minor outstanding items from BAZAAR-302.
+## [2025-05-27] Sidebar project list added in generate workspace for quick navigation.
