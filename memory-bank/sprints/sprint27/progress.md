@@ -56,3 +56,8 @@ This sprint focuses on the key deliverables for BAZAAR-305, building upon the co
 *   **[CASCADE/USER]** Plan specific tasks for BAZAAR-303 (Publish & Share) for this sprint.
 *   **[CASCADE/USER]** Review and address any minor outstanding items from BAZAAR-302.
 ## [2025-05-27] Sidebar project list added in generate workspace for quick navigation.
+
+## May 29, 2025
+- Implemented improved styling for the Monaco editor in `CodePanelG`.
+- Editor now follows dark/light theme and hides TypeScript semantic warnings,
+  eliminating distracting red underlines during scene editing.

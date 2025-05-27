@@ -1,13 +1,14 @@
 "use client";
 // src/app/projects/[id]/generate/components/PromptForm.tsx
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Textarea } from "~/components/ui/textarea";
-import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Mic, StopCircle } from "lucide-react";
+import { api } from "~/trpc/react";
 
 interface PromptFormProps {
   projectId: string;
@@ -21,6 +22,13 @@ export default function PromptForm({ projectId, onSubmit, onSubmitSingleScene, i
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [mode, setMode] = useState<"basic" | "advanced">("basic");
   const [generationMode, setGenerationMode] = useState<"single" | "multi">("single");
+  const [isRecording, setIsRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const transcribe = api.voice.transcribe.useMutation({
+    onSuccess: (data) => {
+      setPrompt((p) => (p ? `${p} ${data.text}` : data.text));
+    },
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +38,37 @@ export default function PromptForm({ projectId, onSubmit, onSubmitSingleScene, i
       onSubmitSingleScene(prompt);
     } else {
       onSubmit(prompt, additionalInstructions.trim() || undefined);
+    }
+  };
+
+  const handleRecord = async () => {
+    if (isRecording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          transcribe.mutate({ audio: base64, mimeType: blob.type });
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Voice recording failed', err);
     }
   };
 
@@ -145,13 +184,25 @@ export default function PromptForm({ projectId, onSubmit, onSubmitSingleScene, i
             {!isGenerating && generationMode === "multi" && "AI will create scenes and components based on your prompt"}
             {isGenerating && "Generating your video..."}
           </div>
-          
-          <Button 
-            type="submit" 
-            disabled={!prompt.trim() || isGenerating}
-          >
-            {isGenerating ? "Generating..." : generationMode === "single" ? "Generate Scene" : "Generate Video"}
-          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleRecord}
+              disabled={transcribe.isPending}
+            >
+              {isRecording ? <StopCircle className="size-4" /> : <Mic className="size-4" />}
+              {isRecording ? "Stop" : "Record"}
+            </Button>
+            <Button type="submit" disabled={!prompt.trim() || isGenerating}>
+              {isGenerating
+                ? "Generating..."
+                : generationMode === "single"
+                ? "Generate Scene"
+                : "Generate Video"}
+            </Button>
+          </div>
         </CardFooter>
       </form>
     </Card>
