@@ -553,6 +553,7 @@ ANIMATION GUIDELINES:
 
 STYLING REQUIREMENTS:
 - Use Tailwind CSS classes extensively
+- UI: ${brainContext?.uiLibraryGuidance || ''}
 - Inline styles only for animations
 - Modern gradients, shadows, effects
 - Responsive design patterns
