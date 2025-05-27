@@ -48,14 +48,16 @@ interface DbMessage {
   isOptimistic?: false;
 }
 
-export function ChatPanelG({ 
+export function ChatPanelG({
   projectId,
   selectedSceneId,
-  onSceneGenerated
-}: { 
+  onSceneGenerated,
+  onProjectRename,
+}: {
   projectId: string;
   selectedSceneId?: string | null;
   onSceneGenerated?: (sceneId: string, code: string) => void;
+  onProjectRename?: (newTitle: string) => void;
 }) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -240,6 +242,11 @@ export function ChatPanelG({
 
   // Project rename mutation for first message (V1 logic)
   const renameMutation = api.project.rename.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.title) {
+        onProjectRename?.(data.title);
+      }
+    },
     onError: (error: any) => {
       console.error("Error renaming project:", error);
     }

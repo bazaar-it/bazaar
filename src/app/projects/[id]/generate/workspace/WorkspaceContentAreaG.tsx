@@ -43,6 +43,7 @@ interface WorkspaceContentAreaGProps {
   initialProps: InputProps;
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
+  onProjectRename?: (newTitle: string) => void;
 }
 
 export interface WorkspaceContentAreaGHandle {
@@ -254,7 +255,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, initialProps, projects = [] }, ref) => {
+  ({ projectId, initialProps, projects = [], onProjectRename }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -660,10 +661,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       
       switch (panel.type) {
         case 'chat':
-          return <ChatPanelG 
-            projectId={projectId} 
+          return <ChatPanelG
+            projectId={projectId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
+            onProjectRename={onProjectRename}
           />;
         case 'preview':
           return (

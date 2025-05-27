@@ -32,6 +32,11 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+
+  const handleProjectRenamed = useCallback((newTitle: string) => {
+    setTitle(newTitle);
+    setUserProjects((prev) => prev.map(p => p.id === projectId ? { ...p, name: newTitle } : p));
+  }, [projectId]);
   
   // Handle panel add when clicked or dragged from sidebar
   const handleAddPanel = useCallback((panelType: PanelTypeG) => {
@@ -118,11 +123,12 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
           }}
         >
           <div className="h-full flex flex-col overflow-hidden relative">
-            <WorkspaceContentAreaG 
+            <WorkspaceContentAreaG
               ref={workspaceContentAreaRef}
-              projectId={projectId} 
+              projectId={projectId}
               initialProps={initialProps}
-              projects={initialProjects}
+              projects={userProjects}
+              onProjectRename={handleProjectRenamed}
             />
           </div>
         </div>
@@ -131,7 +137,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
-            projects={initialProjects}
+            projects={userProjects}
             currentProjectId={projectId}
             onAddPanel={handleAddPanel}
             isCollapsed={!isSidebarExpanded}

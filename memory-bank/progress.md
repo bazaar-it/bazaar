@@ -304,6 +304,8 @@ Sprint 30 successfully transformed Bazaar-Vid from a monolithic code generation 
 
 **Status**: ✅ **PRODUCTION READY** - All integration points complete, tests passing, build successful
 
+- Sprint 30: UI now reacts to LLM-generated project and scene names.
+
 ---
 
 ## Progress Logs - Integrated voice input via Whisper (sprint30).
