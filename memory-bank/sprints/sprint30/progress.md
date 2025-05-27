@@ -1079,4 +1079,8 @@ Brain Analysis:
 Code Generator: Receives enriched context and generates precise code following Brain's strategy
 ```
 
-This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture. 
+This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture.
+
+### **Recent Fixes**
+- UI now updates project titles when the LLM renames a project.
+- Scene list reflects friendly scene names provided by the backend.
