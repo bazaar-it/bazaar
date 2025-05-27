@@ -1084,3 +1084,4 @@ This approach eliminates the **double translation loss** and **rigid schema pris
 ### **Recent Fixes**
 - UI now updates project titles when the LLM renames a project.
 - Scene list reflects friendly scene names provided by the backend.
+This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture. ### New Feature: Voice-to-Text\n- Added voice transcription button using OpenAI Whisper on the generate page.
