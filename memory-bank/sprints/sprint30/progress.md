@@ -1079,4 +1079,4 @@ Brain Analysis:
 Code Generator: Receives enriched context and generates precise code following Brain's strategy
 ```
 
-This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture. 
+This approach eliminates the **double translation loss** and **rigid schema prison** issues while maintaining the strategic benefits of the MCP architecture. ### New Feature: Voice-to-Text\n- Added voice transcription button using OpenAI Whisper on the generate page.
