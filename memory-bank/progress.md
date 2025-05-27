@@ -306,4 +306,4 @@ Sprint 30 successfully transformed Bazaar-Vid from a monolithic code generation 
 
 ---
 
-## Progress Logs 
+## Progress Logs - Integrated voice input via Whisper (sprint30).
