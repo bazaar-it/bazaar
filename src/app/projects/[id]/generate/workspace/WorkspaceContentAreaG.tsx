@@ -43,6 +43,7 @@ interface WorkspaceContentAreaGProps {
   initialProps: InputProps;
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
+  onProjectTitleUpdate?: (newTitle: string) => void;
 }
 
 export interface WorkspaceContentAreaGHandle {
@@ -254,7 +255,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, initialProps, projects = [] }, ref) => {
+  ({ projectId, initialProps, projects = [], onProjectTitleUpdate }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -263,6 +264,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Scene selection state - shared between Storyboard and Code panels
     const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+    
+    // Reset workspace state when projectId changes (for new projects)
+    useEffect(() => {
+      setSelectedSceneId(null);
+      console.log('[WorkspaceContentAreaG] Reset workspace state for new project:', projectId);
+    }, [projectId]);
     
     // Get video state methods
     const { replace, getCurrentProps } = useVideoState();
@@ -447,7 +454,6 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             setSelectedSceneId(sceneId);
             
             console.log('[WorkspaceContentAreaG] ✅ Video state updated successfully with scene count:', updatedProps.scenes.length);
-            toast.success('Scene added successfully!');
             
           } else {
             throw new Error('Failed to fetch updated scenes from database');
@@ -672,6 +678,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             projectId={projectId} 
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
+            onProjectTitleUpdate={onProjectTitleUpdate}
           />;
         case 'preview':
           return (

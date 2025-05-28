@@ -5,11 +5,12 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, MicIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { analytics } from '~/lib/analytics';
+import { useVoiceToText } from '~/hooks/useVoiceToText';
 
 interface Scene {
   id: string;
@@ -51,11 +52,13 @@ interface DbMessage {
 export function ChatPanelG({ 
   projectId,
   selectedSceneId,
-  onSceneGenerated
+  onSceneGenerated,
+  onProjectTitleUpdate
 }: { 
   projectId: string;
   selectedSceneId?: string | null;
   onSceneGenerated?: (sceneId: string, code: string) => void;
+  onProjectTitleUpdate?: (newTitle: string) => void;
 }) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -65,6 +68,17 @@ export function ChatPanelG({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Voice-to-text functionality
+  const {
+    recordingState,
+    startRecording,
+    stopRecording,
+    transcription,
+    error: voiceError,
+    isSupported: isVoiceSupported,
+  } = useVoiceToText();
   
   // Get video state and current scenes
   const { getCurrentProps } = useVideoState();
@@ -157,7 +171,7 @@ export function ChatPanelG({
       });
     }
   }, []);
-  
+
   // Function to create contextual summary from user prompt (V2 improvement)
   const summarizePrompt = useCallback((prompt: string): string => {
     const cleanPrompt = prompt.replace(/@scene\([^)]+\)\s*/, '').trim();
@@ -184,9 +198,12 @@ export function ChatPanelG({
     return title.length > 40 ? title.substring(0, 37) + '...' : title;
   }, []);
   
+  // Query to get current project details
+  const { data: currentProject, refetch: refetchProject } = api.project.getById.useQuery({ id: projectId });
+
   // OPTIMIZATION #1: Use unified scene generation with chat persistence
   const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
-    onSuccess: (result: any) => {
+    onSuccess: async (result: any) => {
       console.log("✅ Unified scene generation completed:", result);
       setIsGenerating(false);
       setGenerationComplete(true);
@@ -197,16 +214,29 @@ export function ChatPanelG({
         onSceneGenerated(result.scene.id, result.scene.tsxCode);
       }
       
-      // Refetch messages to show the assistant response
-      setTimeout(() => {
-        void refetchMessages();
-      }, 100);
+      // Check if this was the first scene and project title might have been updated
+      if (scenes.length === 0 && onProjectTitleUpdate) {
+        try {
+          // Refetch project to get updated title
+          const updatedProject = await refetchProject();
+          if (updatedProject.data && updatedProject.data.title !== currentProject?.title) {
+            console.log('[ChatPanelG] Project title updated, notifying parent:', updatedProject.data.title);
+            onProjectTitleUpdate(updatedProject.data.title);
+          }
+        } catch (error) {
+          console.error('[ChatPanelG] Failed to check for title update:', error);
+        }
+      }
+      
+      // Don't refetch immediately - let optimistic UI handle the success state
+      // The real messages will be loaded when user sends next message or page refreshes
     },
     onError: (error: any) => {
       console.error("❌ Unified scene generation failed:", error);
       setIsGenerating(false);
       toast.error(`Scene generation failed: ${error.message}`);
       
+      // Only refetch on error to show error message from server
       void refetchMessages();
     }
   });
@@ -224,16 +254,14 @@ export function ChatPanelG({
         onSceneGenerated('', ''); // Empty values to trigger refresh
       }
       
-      // Refetch messages to show the assistant response
-      setTimeout(() => {
-        void refetchMessages();
-      }, 100);
+      // Don't refetch immediately - let optimistic UI handle the success state
     },
     onError: (error: any) => {
       console.error("❌ Scene removal failed:", error);
       setIsGenerating(false);
       toast.error(`Scene removal failed: ${error.message}`);
       
+      // Only refetch on error to show error message from server
       void refetchMessages();
     }
   });
@@ -444,9 +472,8 @@ export function ChatPanelG({
     console.log('Selected scene:', selectedScene?.id);
     console.log('Is likely edit:', isLikelyEdit(trimmedMessage));
     
-    // OPTIMISTIC UI: Immediately add user message to chat
-    const displayMessage = convertSceneIdToNumber(processedMessage);
-    const optimisticUserMessageId = addOptimisticUserMessage(displayMessage);
+    // OPTIMISTIC UI: Immediately add user message to chat (show original input, not processed)
+    const optimisticUserMessageId = addOptimisticUserMessage(trimmedMessage);
     
     // Clear the input immediately for better UX
     setMessage("");
@@ -479,15 +506,11 @@ export function ChatPanelG({
         
         // Update optimistic assistant message with success
         updateOptimisticMessage(optimisticAssistantMessageId, {
-          content: `Scene ${removalCheck.sceneNumber} removed successfully ✅`,
+          content: `Scene ${removalCheck.sceneNumber} removed ✅`,
           status: 'success',
         });
         
-        // Clear optimistic messages after a delay to let real messages load
-        setTimeout(() => {
-          clearOptimisticMessages();
-          void refetchMessages();
-        }, 1000);
+        // Keep optimistic messages - they'll be cleared when user sends next message
         
       } catch (error) {
         console.error('Error during scene removal:', error);
@@ -498,11 +521,7 @@ export function ChatPanelG({
           status: 'error',
         });
         
-        // Clear optimistic messages after a delay
-        setTimeout(() => {
-          clearOptimisticMessages();
-          void refetchMessages();
-        }, 2000);
+        // Keep error message visible - user can see what went wrong
       }
       
       return; // Exit early for removal commands
@@ -525,17 +544,16 @@ export function ChatPanelG({
       
       console.log('Scene generation result:', result);
       
+      // Generate dynamic scene name for optimistic message
+      const dynamicSceneName = summarizePrompt(trimmedMessage);
+      
       // Update optimistic assistant message with success
       updateOptimisticMessage(optimisticAssistantMessageId, {
-        content: `Scene ${isEditOperation ? 'updated' : 'generated'} successfully ✅`,
+        content: `Scene ${isEditOperation ? 'updated' : 'generated'}: ${dynamicSceneName} ✅`,
         status: 'success',
       });
       
-      // Clear optimistic messages after a delay to let real messages load
-      setTimeout(() => {
-        clearOptimisticMessages();
-        void refetchMessages();
-      }, 1000);
+      // Keep optimistic messages - they'll be cleared when user sends next message
       
     } catch (error) {
       console.error('Error during scene generation:', error);
@@ -546,11 +564,7 @@ export function ChatPanelG({
         status: 'error',
       });
       
-      // Clear optimistic messages after a delay
-      setTimeout(() => {
-        clearOptimisticMessages();
-        void refetchMessages();
-      }, 2000);
+      // Keep error message visible - user can see what went wrong
     }
 
     // Track chat message analytics
@@ -595,43 +609,126 @@ export function ChatPanelG({
 
   // Get welcome message for new projects (V1 logic)
   const getWelcomeMessage = () => (
-    <div className="text-center py-8">
-      <div className="bg-muted/80 rounded-[15px] shadow-sm p-4 mx-auto max-w-md">
-        <h3 className="font-medium text-base mb-2">Welcome to your new project!</h3>
-        <p className="text-sm text-muted-foreground mb-3">
-          Describe what kind of video scene you want to create. For example:
-        </p>
-        <div className="text-left bg-primary/5 rounded-[15px] p-3 text-sm">
-          <p className="mb-1">• "Create a gradient background in blue and purple"</p>
-          <p className="mb-1">• "Add a title that says Hello World in the center"</p>
-          <p className="mb-1">• "Make the title fade in and add a subtle animation"</p>
-          <p className="mb-1">• "make it red" (when a scene is selected)</p>
+    <div className="flex items-center justify-center min-h-[400px] py-8 px-4">
+      <div className="bg-gradient-to-br from-white to-gray-50/80 rounded-2xl shadow-lg border border-gray-200/60 p-8 mx-auto max-w-3xl">
+        {/* Header Section */}
+        <div className="text-center mb-8">
+          <h3 className="text-2xl font-semibold text-gray-900 mb-3">Welcome to your new project</h3>
+          <p className="text-gray-600 text-base leading-relaxed max-w-xl mx-auto">
+            Create, edit or delete scenes — all with simple prompts.
+          </p>
+        </div>
+        
+        {/* Divider */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+          <span className="px-4 text-sm font-medium text-gray-500 bg-white rounded-full">Examples</span>
+          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+        </div>
+        
+        {/* Examples Section */}
+        <div className="space-y-6">
+          {/* Create Example */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  Create
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">New Scene</span>
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-gray-700 text-sm leading-relaxed italic">
+                    "Animate a hero section for Finance.ai. Use white text on a black background. Add a heading that says 'Smarter Finance. Powered by AI.' The subheading is 'Automate reports, optimize decisions, and forecast in real-time.' Use blue and white colors similar to Facebook's branding. At the bottom center, add a neon blue 'Try Now' button with a gentle pulsing animation."
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Edit Example */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  Edit
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Modify Scene</span>
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-gray-700 text-sm leading-relaxed italic">
+                    "Make the header bold and increase font size to 120px."
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Delete Example */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  Delete
+                  <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">Remove Scene</span>
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-gray-700 text-sm leading-relaxed italic">
+                    "Delete the CTA scene."
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Footer */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <p className="text-center text-sm text-gray-500">
+            💡 <strong>Tip:</strong> Be specific with colors, fonts, animations, and layout for best results
+          </p>
         </div>
       </div>
     </div>
   );
 
-  // Status indicator component for tool messages (V1 logic)
-  const getStatusIndicator = (status?: string | null) => {
-    if (!status) return null;
-    
-    switch (status) {
-      case "tool_calling":
-      case "building":
-      case "pending":
-        return <Loader2Icon className="h-4 w-4 animate-spin text-primary mr-2" />;
-      case "success":
-        return <CheckCircleIcon className="h-4 w-4 text-green-500 mr-2" />;
-      case "error":
-        return <XCircleIcon className="h-4 w-4 text-red-500 mr-2" />;
-      default:
-        return null;
-    }
-  };
-
   const hasMessages = allMessages && allMessages.length > 0;
   const isLoading = isLoadingMessages && !hasMessages;
   const showWelcome = !hasMessages && !isLoading;
+
+  // Reset component state when projectId changes (for new projects)
+  useEffect(() => {
+    // Clear optimistic messages when switching projects
+    setOptimisticMessages([]);
+    setMessage("");
+    setIsGenerating(false);
+    setGenerationComplete(false);
+    setCurrentPrompt('');
+    
+    // Reset first message flag for new projects
+    isFirstMessageRef.current = true;
+    
+    console.log('[ChatPanelG] Reset state for new project:', projectId);
+  }, [projectId]);
 
   // Check if we have any existing messages on load (V1 logic)
   useEffect(() => {
@@ -639,6 +736,82 @@ export function ChatPanelG({
       isFirstMessageRef.current = false;
     }
   }, [dbMessages]);
+
+  // Handle voice transcription results
+  useEffect(() => {
+    if (transcription && transcription.trim()) {
+      setMessage(prev => {
+        // If there's existing text, append with a space
+        const newText = prev ? `${prev} ${transcription}` : transcription;
+        return newText;
+      });
+    }
+  }, [transcription]);
+
+  // Handle voice errors
+  useEffect(() => {
+    if (voiceError) {
+      console.error('[ChatPanelG] Voice error:', voiceError);
+      // Error is already handled by the hook with toast, just log it
+    }
+  }, [voiceError]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Calculate new height (min 40px, max 10 lines ~200px)
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 40), 200);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [message]);
+
+  // Handle keyboard events for textarea
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!message.trim() || isGenerating) return;
+      
+      // Trigger form submission directly
+      const form = e.currentTarget.closest('form');
+      if (form) {
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(submitEvent);
+      }
+    }
+  }, [message, isGenerating]);
+
+  // Handle microphone button click
+  const handleMicrophoneClick = useCallback(() => {
+    if (recordingState === 'idle') {
+      startRecording();
+    } else if (recordingState === 'recording') {
+      stopRecording();
+    }
+    // Do nothing during transcribing state
+  }, [recordingState, startRecording, stopRecording]);
+
+  // Clear optimistic messages when new database messages arrive (to avoid duplicates)
+  useEffect(() => {
+    if (dbMessages && dbMessages.length > 0) {
+      // Only clear optimistic messages if we have real messages from the database
+      // This prevents duplicates when the server responds with persisted messages
+      const hasRecentDbMessage = dbMessages.some(msg => {
+        const messageAge = Date.now() - new Date(msg.createdAt).getTime();
+        return messageAge < 10000; // Clear if there's a message from the last 10 seconds
+      });
+      
+      if (hasRecentDbMessage) {
+        console.log('[ChatPanelG] Clearing optimistic messages due to new database messages');
+        setOptimisticMessages([]);
+      }
+    }
+  }, [dbMessages]);
+
+  // Check if content has multiple lines
+  const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
   return (
     <div className="flex flex-col h-full">
@@ -681,36 +854,37 @@ export function ChatPanelG({
                         : 'bg-muted text-muted-foreground border'
                     } ${isOptimistic ? 'opacity-90' : ''}`}
                   >
-                    <div className="flex items-center">
-                      {isGenerating && <Loader2Icon className="h-4 w-4 animate-spin mr-2" />}
-                      {isSuccess && <CheckCircleIcon className="h-4 w-4 mr-2" />}
-                      {isError && <XCircleIcon className="h-4 w-4 mr-2" />}
-                      
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {isUser ? (
+                      // User messages: plain text only, no icons or markdown
+                      <div>
+                        <div className="text-sm">
                           {msg.content}
-                        </ReactMarkdown>
+                        </div>
+                        <div className="text-[10px] opacity-50 mt-2">
+                          <span>{formatTimestamp(msg.createdAt.getTime())}</span>
+                        </div>
                       </div>
-                    </div>
-                    
-                    {/* Show status indicator for assistant messages (V1 logic) */}
-                    {msg.role === 'assistant' && msg.status && (
-                      <div className="flex items-center text-xs mt-2 opacity-70">
-                        {getStatusIndicator(msg.status)}
-                        <span>
-                          {msg.status === 'tool_calling' && 'Generating scene...'}
-                          {msg.status === 'building' && 'Building component...'}
-                          {msg.status === 'pending' && 'Processing...'}
-                          {msg.status === 'success' && 'Completed'}
-                          {msg.status === 'error' && 'Error occurred'}
-                        </span>
+                    ) : (
+                      // Assistant messages: keep icons and markdown
+                      <div>
+                        <div className="flex items-center">
+                          {isGenerating && <Loader2Icon className="h-4 w-4 animate-spin mr-2" />}
+                          {isSuccess && <CheckCircleIcon className="h-4 w-4 mr-2" />}
+                          {isError && <XCircleIcon className="h-4 w-4 mr-2" />}
+                          
+                          <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                        
+                        <div className="text-[10px] opacity-50 mt-2 flex items-center gap-2">
+                          <span>{formatTimestamp(msg.createdAt.getTime())}</span>
+                          {isOptimistic && <span className="text-blue-500">•</span>}
+                        </div>
                       </div>
                     )}
-                    
-                    <div className="text-[10px] opacity-50 mt-2 flex items-center gap-2">
-                      <span>{formatTimestamp(msg.createdAt.getTime())}</span>
-                      {isOptimistic && <span className="text-blue-500">•</span>}
-                    </div>
                   </div>
                 </div>
               );
@@ -723,51 +897,62 @@ export function ChatPanelG({
 
       {/* Input form */}
       <div className="flex-shrink-0 p-4 border-t border-gray-200">
-        {/* Context indicator (V1 logic) */}
-        {selectedScene && (
-          <div className="mb-2 text-xs text-muted-foreground bg-primary/10 rounded-md px-2 py-1">
-            <span className="font-medium">
-              {selectedSceneId ? 'Editing:' : 'Auto-selected for editing:'}
-            </span> {(selectedScene as any).data?.name || selectedScene.type || `Scene ${selectedScene.id.slice(0, 8)}`}
-            <span className="ml-2 opacity-70">
-              {selectedSceneId ? '(manually selected)' : '(latest scene, edit commands will modify this)'}
-            </span>
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={
-              selectedScene 
-                ? "Describe changes to this scene or create a new scene..."
-                : "Describe the scene you want to create..."
-            }
-            disabled={isGenerating}
-            className="flex-1"
-          />
-          <Button 
-            type="submit" 
-            disabled={!message.trim() || isGenerating}
-            size="sm"
-            className="px-3"
-          >
-            {isGenerating ? (
-              <Loader2Icon className="h-4 w-4 animate-spin" />
-            ) : (
-              <SendIcon className="h-4 w-4" />
+        <form onSubmit={handleSubmit} className="flex gap-2 items-start">
+          <div className={`flex-1 relative flex border border-input rounded-md bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${hasMultipleLines ? 'items-start' : 'items-center'}`}>
+            {/* Microphone button */}
+            {isVoiceSupported && (
+              <Button
+                type="button"
+                onClick={handleMicrophoneClick}
+                size="sm"
+                variant="ghost"
+                className={`flex-shrink-0 h-8 w-8 p-1 m-1 ${
+                  recordingState === 'recording' 
+                    ? 'text-red-500 hover:text-red-600' 
+                    : recordingState === 'transcribing'
+                    ? 'text-blue-500'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+                disabled={recordingState === 'transcribing'}
+              >
+                {recordingState === 'transcribing' ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MicIcon className="h-4 w-4" />
+                )}
+              </Button>
             )}
-          </Button>
+            
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={
+                selectedScene 
+                  ? "Describe changes to this scene or create a new scene..."
+                  : "Describe the scene you want to create..."
+              }
+              className="flex-1 resize-none bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 min-h-[40px] max-h-[200px] overflow-y-auto border-0"
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
+            
+            {/* Send button */}
+            <Button 
+              type="submit" 
+              disabled={!message.trim() || isGenerating}
+              size="sm"
+              variant="ghost"
+              className="flex-shrink-0 h-8 w-8 p-1 m-1"
+            >
+              {isGenerating ? (
+                <Loader2Icon className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendIcon className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </form>
-        
-        {/* Helper text (V1 logic) */}
-        <p className="text-xs text-muted-foreground mt-2">
-          {selectedScene 
-            ? `Edit commands will automatically target the ${selectedSceneId ? 'selected' : 'latest'} scene. Use descriptive prompts for new scenes.`
-            : "Describe a scene to create your first animation. Once created, short commands will edit existing scenes."
-          }
-        </p>
       </div>
     </div>
   );

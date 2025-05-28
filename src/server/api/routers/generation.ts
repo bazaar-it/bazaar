@@ -28,6 +28,32 @@ Usage: Perfect for text reveals, image entrances, or UI element animations
 `;
 
 // Helper function to parse duration from user prompt
+// Helper function to generate a dynamic scene name from user prompt
+function generateSceneName(prompt: string): string {
+  const cleanPrompt = prompt.replace(/@scene\([^)]+\)\s*/, '').trim();
+  
+  if (!cleanPrompt) return 'Custom Scene';
+  
+  const words = cleanPrompt.split(/\s+/);
+  const meaningfulWords = words.filter(word => {
+    const lowerWord = word.toLowerCase();
+    return word.length > 2 && 
+           !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'she', 'use', 'her', 'way', 'many', 'then', 'them', 'well', 'were'].includes(lowerWord) &&
+           !['make', 'create', 'add', 'show', 'with', 'that', 'this', 'have', 'will', 'want', 'need', 'lets', 'please'].includes(lowerWord);
+  });
+  
+  if (meaningfulWords.length === 0) {
+    return words.slice(0, 3).join(' ').toLowerCase();
+  }
+  
+  const selectedWords = meaningfulWords.slice(0, 4);
+  const title = selectedWords.map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+  
+  return title.length > 40 ? title.substring(0, 37) + '...' : title;
+}
+
 function parsePromptForDuration(userPrompt: string): number | null {
   const prompt = userPrompt.toLowerCase();
   
@@ -568,13 +594,72 @@ What images, videos, audio, or icons would enhance these scenes?`
         const messages = [
           {
             role: 'system' as const,
-            content: `You are a Remotion code generator.
+            content: `You are a professional motion graphic video creation assistant. Your goal is to create engaging motion graphics videos using react and remotion, demonstrating the users new software that they have developed. Here’s our guide for best practices for making motion graphics scenes, but the user is king - always follow the users intent and weight their suggestions over our best practice recommendations. 
+
+Keep the scenes short and punchy. Use 30fps and make each scene 90-180 frames. 
+
+A scene conveys a single message - Usually a short sentence, animated with the typewriter effect or a single UI component animated with moving gradient colours and/or scaling - often we include both words and components.
+
+The default canvas is 1080×1920. Centre components both horizontally and vertically and be generous with padding. Follow the ‘rule of thirds’ when there are multiple scenes, components and icons. 
+
+If a sentence is less than 6 words, display each letter individually, if a sentence is greater than 6 words, display each word individually, using the typewriter effect. We recommend 15 frames per word and less than 60 frames for a phrase. Use a delay of 3 frames per word. If it’s individual letters, use 5 frames per letter with a 2 second delay between each letter. Pause for 15 frames with no motion before transitioning the scene. 
+
+Use icons to convey more complex messages that may otherwise require many words. 
+
+We recommend using X component library, which features both individual UI components as well as whole page blocks. After examining the users intent and determining whether it mentions words, icons or UI elements, if UI component, search the X component library to find the closest match. The UI components will include default content, so follow our ‘WORD GENERATION GUIDE’ to generate highly relevant and engaging words, colours and styles that match the users intent. 
+
+After you have selected the component, apply styling to it. Examine the user message to detect styling words like colors, fonts, corner roundness. 
+If none are mentioned, choose from the styling best practices.
+
+The key to great motion graphics is engaging movement. Consider using one or multiple of these movement types during the scene, and apply it to one or multiple elements in the scene. Detect verbs like: fade, bounce, slide, swipe, zoom, click, explode, type. 
+
+Every scene must transition in and transition out, this is the key to creating a great multi-scene video. Our favourite transitions are:
+Zoom through: A Z-Axis camera push - often paired with opacity fade and motion blur
+…
+
+MOVEMENT
+Fade = Changing opacity from 0 -> 1
+Bounce = spring() or interpolate() remotion functions 
+Slide: Moves an element along the X or Y axis using interpolate() over frames to create smooth directional movement, like sliding in from the side.
+Swipe: A faster, more kinetic slide often combined with a slight overshoot via spring() to simulate a touch-like flick or gesture.
+Zoom: Scales an element in or out using interpolate() or spring() on the scale property, giving the effect of moving closer or further from the camera.
+Click: Briefly scales an element down and back up with a fast spring() animation on scale to simulate a tactile press interaction. Approx scale down to 0.8 before reverting to 1.0. Often pairing a cursor icon with a button. 
+Explode: Breaks an object into multiple pieces using interpolate() or spring() to animate position, rotation, and opacity of each part outward from a central point at a fast pace.
+Type: Reveals characters one at a time using frame-based slicing of text (text.slice(0, Math.floor(frame / speed))), creating a typewriter-style animation.
+
+STYLING BEST PRACTICES
+FONT
+Our favourite fonts are Google Sans / Inter / SF Pro
+Font weight: Bold or SemiBold
+Font sizes: Headline: 120 px; Sub heading: 90px or Body: 50px. 
+
+Color: 
+High contrast color pallets such as white text on black background or black text on white background are very popular and timeless. 
+More vibrant colours such as the blue and purple detailed before are popular with technology videos. 
+
+	Blue - A high-contrast, futuristic color palette with a pure black background, crisp white text, vibrant cyan-to-blue gradient accents, and a glowing neon blue button that draws focus using light-based visual hierarchy.
+
+	Purple - A sleek, futuristic color palette featuring a pure black background, sharp white text, and vibrant neon purple accents, with glowing purple gradients and button highlights that create a bold, electric atmosphere and emphasize key actions through luminous visual contrast.
+
+Corner rounding 
+default = 15px 
+	•	0px–8px → Old fashioned, corporate, professional.
+	•	12px–16px → Modern and friendly - Trending with AI companies 
+	•	20px+ → Soft and playful - Apple style, 
+	•	50% Full/pill → Ideal for buttons, avatars, badges
+
+
+WORD GENERATION GUIDE
+Your task is to take the users input prompt for the scene description and turn it into clear, emotionally engaging, and minimalistic text blocks, suitable for the scene you are creating — this could be a single impactful word, a short headline and subheading, or the full UI copy (including feature text or call-to-actions), depending on what’s most relevant for the scene you are creating. Use a tone inspired by Apple, Stripe, and Notion — elegant, clever, confident.
+
+
 
 HARD RULES (never break):
-1. **No import/require** – Remotion is on window.
+1. **No import/require** – Use window destructuring only.
 2. Start with: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-3. Exactly one component: export default function ComponentName(props) { ... }
-4. Nothing else in response – no markdown, no commentary.
+3. If React hooks needed: const { useState, useEffect } = window.React;
+4. Exactly one component: export default function ComponentName(props) { ... }
+5. Nothing else in response – no markdown, no commentary.
 
 If user asks for text, animate its opacity/position. Otherwise build visual animation.
 
@@ -843,7 +928,7 @@ export default function ${scene.template}() {
             // Create success assistant message
             const successAssistantMessages = await db.insert(messages).values({
               projectId,
-              content: `Scene ${sceneNumber || '?'} removed successfully ✅`,
+              content: `Scene ${sceneNumber || '?'} removed ✅`,
               role: 'assistant',
               status: 'success'
             }).returning();
@@ -857,7 +942,7 @@ export default function ${scene.template}() {
               scene: null, // No scene created for removal
               assistantMessage: {
                 id: successAssistantMessage.id,
-                content: `Scene ${sceneNumber || '?'} removed successfully ✅`,
+                content: `Scene ${sceneNumber || '?'} removed ✅`,
                 status: 'success'
               },
               isEdit: false,
@@ -934,40 +1019,53 @@ ${existingCode}
 \`\`\`
 
 CRITICAL RULES:
-1. Use standard Remotion imports: import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
-1.5 NEVER use other imports (e.g. from other libraries), or logos or images. everything has to be created by you.
-2. Apply the requested change while maintaining all existing functionality
-3. Preserve all existing animations and structure
-4. Return only the modified component code, no explanations
-5. Ensure export default function ComponentName() format
-6. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`
-          : `You are a Remotion animation specialist creating visually stunning motion graphics. Create professional, engaging animated components using Tailwind CSS and the BazAnimations library.
+1. NEVER use import statements - use window destructuring: const { AbsoluteFill, useCurrentFrame } = window.Remotion;
+2. If React hooks needed: const { useState, useEffect } = window.React;
+3. Apply the requested change while maintaining all existing functionality
+4. Preserve all existing animations and structure
+5. Return only the modified component code, no explanations
+6. Ensure export default function ComponentName() format
+7. ALWAYS ensure interpolate inputRange and outputRange have identical lengths`
+          : `You are a Remotion animation specialist creating visually stunning motion graphics. Create professional, engaging animated components using window globals.
 
 REQUIRED FORMAT:
 \`\`\`tsx
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+// If React hooks needed: const { useState, useEffect } = window.React;
 
 export default function ComponentName() {
   const frame = useCurrentFrame();
-  const { fadeInUp, scaleIn, pulseGlow, colorPalettes } = window.BazAnimations;
   
-  // Create smooth animations using interpolate, spring, and BazAnimations
-  const titleAnimation = fadeInUp(frame, 0, 30);
-  const buttonAnimation = scaleIn(frame, 20, 25);
+  // Create smooth animations using interpolate and spring
+  const opacity = interpolate(frame, [0, 30], [0, 1]);
+  const scale = interpolate(frame, [0, 30], [0.8, 1]);
   
   return (
-    <AbsoluteFill className="bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-      <div className="text-center space-y-8">
-        <h1 
-          className="text-6xl font-bold text-white drop-shadow-lg"
-          style={titleAnimation}
-        >
+    <AbsoluteFill style={{
+      backgroundColor: '#1a1a2e',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity
+    }}>
+      <div style={{
+        textAlign: 'center',
+        color: 'white',
+        transform: \`scale(\${scale})\`
+      }}>
+        <h1 style={{ fontSize: 64, fontWeight: 'bold', marginBottom: 20 }}>
           Your Content
         </h1>
-        <button 
-          className="px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
-          style={buttonAnimation}
-        >
+        <button style={{
+          padding: '16px 32px',
+          backgroundColor: '#4f46e5',
+          color: 'white',
+          border: 'none',
+          borderRadius: 12,
+          fontSize: 18,
+          fontWeight: 600,
+          cursor: 'pointer'
+        }}>
           Call to Action
         </button>
       </div>
@@ -1015,14 +1113,14 @@ VISUAL QUALITY REQUIREMENTS:
 - Focus on visual storytelling and brand appeal
 
 CRITICAL RULES:
-1. Use standard Remotion imports only
-2. Access BazAnimations via window.BazAnimations destructuring
-3. Combine Tailwind classes with animation styles
+1. NEVER use import statements - use window.Remotion destructuring only
+2. If React hooks needed: const { useState, useEffect } = window.React;
+3. Use inline styles for all styling - NO Tailwind or CSS classes
 4. Export default function ComponentName() format required
 5. Return only the component code, no explanations
 6. Create engaging animations that bring concepts to life
 7. ALWAYS ensure interpolate inputRange and outputRange have identical lengths
-8. Use Tailwind for ALL styling - avoid inline styles except for animations`;
+8. Focus on smooth, visually appealing animations with proper timing`;
         
         const userPrompt = isEditMode 
           ? `Apply this change to the component: "${editInstruction}"\n\nKeep all existing animations and structure intact. Only modify what's specifically requested.`
@@ -1047,18 +1145,18 @@ CRITICAL RULES:
         const codeMatch = /```(?:tsx?|javascript|jsx?)?\n([\s\S]*?)\n```/.exec(content);
         let generatedCode = codeMatch?.[1] ?? content;
         
-        // Enhanced code cleanup
+        // Enhanced code cleanup for window.Remotion pattern
         if (/import\s+React/.test(generatedCode)) {
           generatedCode = generatedCode.replace(/import\s+React[^;]*;?\s*/g, '');
         }
         
-        if (!/import\s+.*from\s+['"]remotion['"]/.test(generatedCode)) {
-          const importStatement = "import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';\n\n";
-          generatedCode = importStatement + generatedCode;
+        if (/import\s+.*from\s+['"]remotion['"]/.test(generatedCode)) {
+          generatedCode = generatedCode.replace(/import\s+.*from\s+['"]remotion['"];?\s*/g, '');
         }
         
-        if (/window\.Remotion/.test(generatedCode)) {
-          generatedCode = generatedCode.replace(/const\s*{\s*[^}]*}\s*=\s*window\.Remotion;\s*/g, '');
+        if (!/window\.Remotion/.test(generatedCode)) {
+          const windowStatement = "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;\n\n";
+          generatedCode = windowStatement + generatedCode;
         }
         
         // Ensure proper export default function
@@ -1080,7 +1178,7 @@ CRITICAL RULES:
             if (funcMatch) {
               generatedCode = generatedCode.replace(functionMatch, 'export default function $1(');
             } else {
-              generatedCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+              generatedCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
 
 export default function GeneratedComponent() {
   const frame = useCurrentFrame();
@@ -1114,9 +1212,18 @@ export default function GeneratedComponent() {
           throw new Error(`Generated code validation failed: ${validation.errors.join(', ')}`);
         }
         
+        // Generate dynamic scene name based on prompt
+        const dynamicSceneName = generateSceneName(isEditMode ? editInstruction : userMessage);
+        
+        // Check if this is the first scene for the project (before creating the scene)
+        const existingScenes = await db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+        });
+        const isFirstScene = !isEditMode && existingScenes.length === 0;
+        
         // Upsert scene
         const sceneDataToSave = {
-          name: isEditMode ? `Edited Scene` : `Generated Scene`,
+          name: isEditMode ? dynamicSceneName : dynamicSceneName,
           order: 0,
           tsxCode: generatedCode.trim(),
           duration: sceneDuration, // Store the parsed duration
@@ -1136,11 +1243,38 @@ export default function GeneratedComponent() {
           sceneDataToSave
         );
         
+        // If this is the first scene and the project has a generic title, update it
+        if (isFirstScene) {
+          const project = await db.query.projects.findFirst({
+            where: eq(projects.id, projectId),
+          });
+          
+          if (project && (
+            project.title.startsWith('Untitled') || 
+            project.title.startsWith('New Project') ||
+            project.title === 'Untitled Video'
+          )) {
+            console.log(`[generateSceneWithChat] Updating project title from "${project.title}" to "${dynamicSceneName}"`);
+            
+            try {
+              await db.update(projects)
+                .set({ 
+                  title: dynamicSceneName,
+                  updatedAt: new Date()
+                })
+                .where(eq(projects.id, projectId));
+            } catch (titleUpdateError) {
+              console.error('[generateSceneWithChat] Failed to update project title:', titleUpdateError);
+              // Don't fail the scene generation if title update fails
+            }
+          }
+        }
+        
         // Fetch the complete scene object for client
         const [completeScene] = await db.select().from(scenes).where(eq(scenes.id, persistedSceneId));
         
         // Step 6: Update assistant message with success
-        const assistantContent = `Scene ${isEditMode ? 'updated' : 'generated'}: ${promptToUse.slice(0, 50)}${promptToUse.length > 50 ? '...' : ''} ✅`;
+        const assistantContent = `Scene ${isEditMode ? 'updated' : 'generated'}: ${dynamicSceneName} ✅`;
         
         await db.update(messages)
           .set({

@@ -71,7 +71,6 @@ export function StoryboardPanelG({
       console.log("✅ Scene generation completed:", result);
       setIsGenerating(false);
       setNewScenePrompt("");
-      toast.success("Scene generated successfully!");
       
       // Note: Video state update is handled by the unified mutation
       // The scene will appear here automatically when video state refreshes

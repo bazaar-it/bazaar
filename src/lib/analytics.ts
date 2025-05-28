@@ -220,14 +220,16 @@ export const detectRedditReferral = () => {
 };
 
 // Core Web Vitals Tracking (simplified)
-export const trackWebVitals = () => {
+export const trackWebVitals = async () => {
   if (typeof window === 'undefined') return;
 
-  // Track Core Web Vitals when available
-  import('web-vitals').then((webVitals) => {
+  try {
+    // Track Core Web Vitals when available
+    const { onCLS, onLCP, onFCP, onTTFB, onINP } = await import('web-vitals');
+    
     // Track CLS (Cumulative Layout Shift)
-    if (webVitals.onCLS) {
-      webVitals.onCLS((metric) => {
+    if (onCLS) {
+      onCLS((metric) => {
         trackEvent('web_vital_cls', {
           value: metric.value,
           rating: metric.rating,
@@ -236,8 +238,8 @@ export const trackWebVitals = () => {
     }
 
     // Track LCP (Largest Contentful Paint)
-    if (webVitals.onLCP) {
-      webVitals.onLCP((metric) => {
+    if (onLCP) {
+      onLCP((metric) => {
         trackEvent('web_vital_lcp', {
           value: metric.value,
           rating: metric.rating,
@@ -246,8 +248,8 @@ export const trackWebVitals = () => {
     }
 
     // Track FCP (First Contentful Paint)
-    if (webVitals.onFCP) {
-      webVitals.onFCP((metric) => {
+    if (onFCP) {
+      onFCP((metric) => {
         trackEvent('web_vital_fcp', {
           value: metric.value,
           rating: metric.rating,
@@ -256,8 +258,8 @@ export const trackWebVitals = () => {
     }
 
     // Track TTFB (Time to First Byte)
-    if (webVitals.onTTFB) {
-      webVitals.onTTFB((metric) => {
+    if (onTTFB) {
+      onTTFB((metric) => {
         trackEvent('web_vital_ttfb', {
           value: metric.value,
           rating: metric.rating,
@@ -266,17 +268,18 @@ export const trackWebVitals = () => {
     }
 
     // Track INP (Interaction to Next Paint) - replaces FID
-    if (webVitals.onINP) {
-      webVitals.onINP((metric) => {
+    if (onINP) {
+      onINP((metric) => {
         trackEvent('web_vital_inp', {
           value: metric.value,
           rating: metric.rating,
         });
       });
     }
-  }).catch(() => {
+  } catch (error) {
     // web-vitals not available, skip tracking
-  });
+    console.warn('Web Vitals tracking unavailable:', error);
+  }
 };
 
 // Initialize analytics on app start
@@ -285,7 +288,7 @@ export const initializeAnalytics = () => {
 
   initGA();
   detectRedditReferral();
-  trackWebVitals();
+  trackWebVitals(); // This is now async but we don't need to await it
   
   // Track page load time
   window.addEventListener('load', () => {

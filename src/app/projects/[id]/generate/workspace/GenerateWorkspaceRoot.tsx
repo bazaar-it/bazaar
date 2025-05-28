@@ -21,6 +21,13 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   const [userProjects, setUserProjects] = useState(initialProjects);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
+  // Handle new project creation - reset workspace state
+  const handleNewProject = useCallback((newProjectId: string) => {
+    console.log('[GenerateWorkspaceRoot] New project created, resetting workspace state:', newProjectId);
+    // The redirect will happen automatically via the NewProjectButton
+    // The workspace will reset when the new page loads with the new projectId
+  }, []);
+  
   const { data: session } = useSession();
   const { setProject } = useVideoState();
 
@@ -123,6 +130,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
               projectId={projectId} 
               initialProps={initialProps}
               projects={initialProjects}
+              onProjectTitleUpdate={setTitle}
             />
           </div>
         </div>
@@ -136,6 +144,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
             onAddPanel={handleAddPanel}
             isCollapsed={!isSidebarExpanded}
             onToggleCollapse={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            onNewProject={handleNewProject}
           />
         </div>
       </div>

@@ -456,11 +456,11 @@ export default function ${componentName}({
       callbacks?.onStateChange({
         stage: 'complete',
         progress: 100,
-        message: result.isEdit ? 'Scene updated successfully!' : 'Scene generated successfully!'
+        message: result.isEdit ? 'Scene updated ✅' : 'Scene generated ✅'
       });
       
       // Log success
-      console.log(result.isEdit ? 'Scene updated successfully!' : 'Scene generated successfully!');
+      console.log(result.isEdit ? 'Scene updated ✅' : 'Scene generated ✅');
       
     } catch (error) {
       console.error('Error generating scene:', error);

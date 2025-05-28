@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, Loader2Icon } from "lucide-react";
 
 interface NewProjectButtonProps {
   className?: string;
@@ -12,6 +12,8 @@ interface NewProjectButtonProps {
   size?: "default" | "sm" | "lg" | "icon";
   showIcon?: boolean;
   onStart?: () => void;
+  onProjectCreated?: (projectId: string) => void;
+  children?: React.ReactNode; // Allow custom children content
 }
 
 export function NewProjectButton({ 
@@ -19,7 +21,9 @@ export function NewProjectButton({
   variant = "default", 
   size = "default",
   showIcon = false,
-  onStart
+  onStart,
+  onProjectCreated,
+  children
 }: NewProjectButtonProps = {}) {
   const router = useRouter();
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -33,10 +37,15 @@ export function NewProjectButton({
       setIsRedirecting(true);
       
       try {
-        // Invalidate the projects list query to refetch it
-        await utils.project.list.invalidate();
+        // Call the onProjectCreated callback if provided (for workspace reset)
+        if (onProjectCreated) {
+          onProjectCreated(data.projectId);
+        }
         
-        // Redirect to the editor page for the new project
+        // Skip the expensive projects list invalidation for better performance
+        // The list will be updated when user navigates back to projects page
+        
+        // Redirect immediately to the generate page for the new project
         router.push(`/projects/${data.projectId}/generate`);
       } catch (error) {
         console.error("Error after project creation:", error);
@@ -72,8 +81,13 @@ export function NewProjectButton({
       size={size}
       className={className}
     >
-      {showIcon && <PlusIcon className="h-4 w-4 mr-2" />}
-      {isDisabled ? "Creating..." : "New Project"}
+      {children ? children : (
+        <>
+          {showIcon && !isDisabled && <PlusIcon className="h-4 w-4 mr-2" />}
+          {showIcon && isDisabled && <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />}
+          {isDisabled ? "Creating..." : "New Project"}
+        </>
+      )}
     </Button>
   );
 } 

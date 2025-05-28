@@ -15,6 +15,7 @@ import {
   ChevronRightIcon, 
   PlusIcon,
   ListIcon,
+  Loader2Icon,
 } from "~/components/ui/icons";
 
 type Project = {
@@ -28,6 +29,7 @@ interface GenerateSidebarProps {
   onAddPanel?: (panelType: PanelTypeG) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onNewProject?: (projectId: string) => void; // Callback for when new project is created
 }
 
 interface WorkspacePanelG {
@@ -51,7 +53,8 @@ export function GenerateSidebar({
   currentProjectId, 
   onAddPanel, 
   isCollapsed = false, 
-  onToggleCollapse 
+  onToggleCollapse,
+  onNewProject
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
@@ -161,32 +164,19 @@ export function GenerateSidebar({
           {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <NewProjectButton
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-                  onClick={() => {
-                    // Create project and redirect to /generate
-                    const createProject = async () => {
-                      try {
-                        const response = await fetch('/api/trpc/project.create', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({}),
-                        });
-                        const data = await response.json();
-                        if (data.result?.data?.projectId) {
-                          router.push(`/projects/${data.result.data.projectId}/generate`);
-                        }
-                      } catch (error) {
-                        console.error('Failed to create project:', error);
-                      }
-                    };
-                    createProject();
-                  }}
+                  showIcon={false}
+                  onProjectCreated={onNewProject}
                 >
-                  <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                </Button>
+                  {createProject.isPending ? (
+                    <Loader2Icon className="h-5 w-5 text-gray-500 dark:text-gray-400 animate-spin" />
+                  ) : (
+                    <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                  )}
+                </NewProjectButton>
               </TooltipTrigger>
               <TooltipContent side="right">
                 New Project
@@ -198,6 +188,7 @@ export function GenerateSidebar({
               variant="ghost"
               size="default"
               showIcon={true}
+              onProjectCreated={onNewProject}
             />
           )}
         </div>

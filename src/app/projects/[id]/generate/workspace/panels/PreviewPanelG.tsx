@@ -48,6 +48,22 @@ export function PreviewPanelG({
   console.log('[PreviewPanelG] Current props:', currentProps);
   console.log('[PreviewPanelG] Scenes:', scenes);
   
+  // Reset preview state when projectId changes (for new projects)
+  useEffect(() => {
+    setComponentImporter(null);
+    setComponentError(null);
+    setIsCompiling(false);
+    setRefreshToken(`reset-${Date.now()}`);
+    
+    // Clean up old blob URL
+    if (componentBlobUrl) {
+      URL.revokeObjectURL(componentBlobUrl);
+      setComponentBlobUrl(null);
+    }
+    
+    console.log('[PreviewPanelG] Reset preview state for new project:', projectId);
+  }, [projectId, componentBlobUrl]);
+  
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
     const validScenes = scenes.filter(scene => (scene.data as any)?.code);
