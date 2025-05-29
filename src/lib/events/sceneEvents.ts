@@ -9,7 +9,9 @@ export type SceneEventType =
   | 'scene-ready'
   | 'scene-error'
   | 'tool-selected'
-  | 'clarification-needed';
+  | 'clarification-needed'
+  | 'code_validation'
+  | 'project_cost_update';
 
 export interface SceneEvent {
   type: SceneEventType;

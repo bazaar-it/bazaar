@@ -57,7 +57,7 @@ export function PreviewPanelG({
       return;
     }
 
-    console.log('[PreviewPanelG] Compiling multi-scene composition...');
+    console.log('[PreviewPanelG] Compiling composition with', validScenes.length, 'scenes...');
     
     setIsCompiling(true);
     setComponentError(null);
@@ -69,50 +69,147 @@ export function PreviewPanelG({
     }
 
     try {
-      const sceneImports: string[] = [];
-      const sceneComponents: string[] = [];
-      const totalDuration = validScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-      const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring']); // Include all common Remotion functions
-
-      validScenes.forEach((scene, index) => {
+      // For single scene, use simpler approach
+      if (validScenes.length === 1) {
+        const scene = validScenes[0];
+        if (!scene) {
+          throw new Error('Scene is undefined');
+        }
         const sceneCode = (scene.data as any).code;
-        if (!sceneCode) return;
         
-        try {
-          // Extract the component name from the scene code
-          const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
-          const componentName = componentNameMatch ? componentNameMatch[1] : `Scene${index}Component`;
+        // Extract the component name from the scene code
+        const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
+        const componentName = componentNameMatch ? componentNameMatch[1] : 'SingleSceneComponent';
+        
+        // Add 'random' to the imports for deterministic randomness
+        const allImports = new Set(['AbsoluteFill', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+        
+        // Scan the code for any Remotion functions that might be used
+        const remotionFunctions = ['Sequence', 'Audio', 'Video', 'Img', 'staticFile', 'Loop', 'Series'];
+        remotionFunctions.forEach(func => {
+          if (sceneCode.includes(func)) {
+            allImports.add(func);
+          }
+        });
+
+        // Clean the scene code: remove imports, window.Remotion destructuring, and export default
+        let cleanSceneCode = sceneCode
+          .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
+          .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
+          .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
+          .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
+
+        // 🚨 CRITICAL FIX: Strip ALL external library imports and components
+        cleanSceneCode = cleanSceneCode
+          .replace(/import\s+.*?from\s+['"]@mui\/.*?['"];?\s*/g, '') // Remove @mui imports
+          .replace(/import\s+.*?from\s+['"]react-typical['"];?\s*/g, '') // Remove react-typical imports
+          .replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '') // Remove any remaining imports
+          .replace(/<TextField[^>]*>/g, '<input') // Replace TextField with input
+          .replace(/<\/TextField>/g, '/>')
+          .replace(/<Typical[^>]*>.*?<\/Typical>/g, '"Type your prompt:"') // Replace Typical with plain text
+          .replace(/<Typical[^>]*\/>/g, '"Type your prompt:"'); // Replace self-closing Typical
+
+        const allImportsArray = Array.from(allImports);
+        const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
+
+        // Generate simple single scene composition
+        const compositeCode = `
+${singleDestructuring}
+
+${cleanSceneCode}
+
+export default function SingleSceneComposition() {
+  return <${componentName} />;
+}
+        `;
+
+        console.log('[PreviewPanelG] Generated single scene code:', compositeCode);
+
+        // Transform with Sucrase
+        const { code: transformedCode } = transform(compositeCode, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+
+        console.log('[PreviewPanelG] Sucrase transformation successful.');
+        
+        // Create blob URL
+        const blob = new Blob([transformedCode], { type: 'application/javascript' });
+        const newBlobUrl = URL.createObjectURL(blob);
+        setComponentBlobUrl(newBlobUrl);
+        
+        console.log('[PreviewPanelG] Created new single scene blob URL:', newBlobUrl);
+        
+        // Import the module
+        console.log('[PreviewPanelG] Importing single scene module from:', newBlobUrl);
+        const module = await import(/* webpackIgnore: true */ newBlobUrl);
+        const Component = module.default;
+        
+        if (!Component) {
+          throw new Error('No default export found in generated component');
+        }
+        
+        console.log('[PreviewPanelG] Single scene dynamic import successful.');
+        
+        setComponentImporter(() => () => Promise.resolve({ default: Component }));
+        
+      } else {
+        // Multi-scene composition logic (existing code)
+        const sceneImports: string[] = [];
+        const sceneComponents: string[] = [];
+        const totalDuration = validScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+        const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+
+        validScenes.forEach((scene, index) => {
+          const sceneCode = (scene.data as any).code;
+          if (!sceneCode) return;
           
-          // Extract imports from the scene code and add to our set
-          const importMatches = sceneCode.match(/import\s+\{([^}]+)\}\s+from\s+['"]remotion['"];?/g);
-          if (importMatches) {
-            importMatches.forEach((match: string) => {
-              const imports = match.match(/\{([^}]+)\}/)?.[1];
-              if (imports) {
-                imports.split(',').forEach(imp => {
-                  allImports.add(imp.trim());
-                });
+          try {
+            // Extract the component name from the scene code
+            const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
+            const componentName = componentNameMatch ? componentNameMatch[1] : `Scene${index}Component`;
+            
+            // Extract imports from the scene code and add to our set
+            const importMatches = sceneCode.match(/import\s+\{([^}]+)\}\s+from\s+['"]remotion['"];?/g);
+            if (importMatches) {
+              importMatches.forEach((match: string) => {
+                const imports = match.match(/\{([^}]+)\}/)?.[1];
+                if (imports) {
+                  imports.split(',').forEach(imp => {
+                    allImports.add(imp.trim());
+                  });
+                }
+              });
+            }
+            
+            // Also scan the code for any Remotion functions that might be used without explicit imports
+            const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
+            remotionFunctions.forEach(func => {
+              if (sceneCode.includes(func)) {
+                allImports.add(func);
               }
             });
-          }
-          
-          // Also scan the code for any Remotion functions that might be used without explicit imports
-          const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
-          remotionFunctions.forEach(func => {
-            if (sceneCode.includes(func)) {
-              allImports.add(func);
-            }
-          });
 
-          // Clean the scene code: remove imports, window.Remotion destructuring, and export default
-          let cleanSceneCode = sceneCode
-            .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
-            .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
-            .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
-            .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
+            // Clean the scene code: remove imports, window.Remotion destructuring, and export default
+            let cleanSceneCode = sceneCode
+              .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
+              .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
+              .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
+              .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
 
-          // Error boundary wrapper for each scene
-          const errorBoundaryWrapper = `
+            // 🚨 CRITICAL FIX: Strip ALL external library imports and components
+            cleanSceneCode = cleanSceneCode
+              .replace(/import\s+.*?from\s+['"]@mui\/.*?['"];?\s*/g, '') // Remove @mui imports
+              .replace(/import\s+.*?from\s+['"]react-typical['"];?\s*/g, '') // Remove react-typical imports
+              .replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '') // Remove any remaining imports
+              .replace(/<TextField[^>]*>/g, '<input') // Replace TextField with input
+              .replace(/<\/TextField>/g, '/>')
+              .replace(/<Typical[^>]*>.*?<\/Typical>/g, '"Type your prompt:"') // Replace Typical with plain text
+              .replace(/<Typical[^>]*\/>/g, '"Type your prompt:"'); // Replace self-closing Typical
+
+            // Error boundary wrapper for each scene
+            const errorBoundaryWrapper = `
 function ${componentName}WithErrorBoundary() {
   try {
     return React.createElement(${componentName});
@@ -134,27 +231,27 @@ function ${componentName}WithErrorBoundary() {
     ]);
   }
 }`;
-          
-          sceneImports.push(cleanSceneCode);
-          sceneImports.push(errorBoundaryWrapper);
-          sceneComponents.push(`
-            <Series.Sequence durationInFrames={${scene.duration || 150}} premountFor={60}>
-              <${componentName}WithErrorBoundary />
-            </Series.Sequence>
-          `);
+            
+            sceneImports.push(cleanSceneCode);
+            sceneImports.push(errorBoundaryWrapper);
+            sceneComponents.push(`
+              <Series.Sequence durationInFrames={${scene.duration || 150}} premountFor={60}>
+                <${componentName}WithErrorBoundary />
+              </Series.Sequence>
+            `);
 
-        } catch (error) {
-          console.error(`[PreviewPanelG] Error processing scene ${index}:`, error);
-          // Skip problematic scenes
-        }
-      });
+          } catch (error) {
+            console.error(`[PreviewPanelG] Error processing scene ${index}:`, error);
+            // Skip problematic scenes
+          }
+        });
 
-      // Create ONE destructuring statement with ALL unique imports
-      const allImportsArray = Array.from(allImports);
-      const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
+        // Create ONE destructuring statement with ALL unique imports
+        const allImportsArray = Array.from(allImports);
+        const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
 
-      // Generate the composite code with single destructuring at top
-      const compositeCode = `
+        // Generate the composite code with single destructuring at top
+        const compositeCode = `
 ${singleDestructuring}
 
 ${sceneImports.join('\n\n')}
@@ -170,41 +267,42 @@ export default function MultiSceneComposition() {
     </AbsoluteFill>
   );
 }
-      `;
+        `;
 
-      console.log('[PreviewPanelG] Generated composite code:', compositeCode);
+        console.log('[PreviewPanelG] Generated multi-scene composite code:', compositeCode);
 
-      // Transform with Sucrase
-      const { code: transformedCode } = transform(compositeCode, {
-        transforms: ['typescript', 'jsx'],
-        jsxRuntime: 'classic',
-        production: false,
-      });
+        // Transform with Sucrase
+        const { code: transformedCode } = transform(compositeCode, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
 
-      console.log('[PreviewPanelG] Sucrase transformation successful.');
-      
-      // Create blob URL
-      const blob = new Blob([transformedCode], { type: 'application/javascript' });
-      const newBlobUrl = URL.createObjectURL(blob);
-      setComponentBlobUrl(newBlobUrl);
-      
-      console.log('[PreviewPanelG] Created new multi-scene blob URL:', newBlobUrl);
-      
-      // Import the module
-      console.log('[PreviewPanelG] Importing multi-scene module from:', newBlobUrl);
-      const module = await import(/* webpackIgnore: true */ newBlobUrl);
-      const Component = module.default;
-      
-      if (!Component) {
-        throw new Error('No default export found in generated component');
+        console.log('[PreviewPanelG] Sucrase transformation successful.');
+        
+        // Create blob URL
+        const blob = new Blob([transformedCode], { type: 'application/javascript' });
+        const newBlobUrl = URL.createObjectURL(blob);
+        setComponentBlobUrl(newBlobUrl);
+        
+        console.log('[PreviewPanelG] Created new multi-scene blob URL:', newBlobUrl);
+        
+        // Import the module
+        console.log('[PreviewPanelG] Importing multi-scene module from:', newBlobUrl);
+        const module = await import(/* webpackIgnore: true */ newBlobUrl);
+        const Component = module.default;
+        
+        if (!Component) {
+          throw new Error('No default export found in generated component');
+        }
+        
+        console.log('[PreviewPanelG] Multi-scene dynamic import successful.');
+        
+        setComponentImporter(() => () => Promise.resolve({ default: Component }));
       }
       
-      console.log('[PreviewPanelG] Multi-scene dynamic import successful.');
-      
-      setComponentImporter(() => () => Promise.resolve({ default: Component }));
-      
     } catch (error) {
-      console.error('[PreviewPanelG] Error during multi-scene compilation:', error);
+      console.error('[PreviewPanelG] Error during compilation:', error);
       
       // IDIOT PROOF: Create a simple fallback that always works
       try {

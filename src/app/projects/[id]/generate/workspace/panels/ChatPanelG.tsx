@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
-import { useVideoState } from '~/stores/videoState';
+import { useVideoState, type ChatMessage, type DbMessage as VideoStateDbMessage } from '~/stores/videoState';
+// Renamed DbMessage import to avoid conflict with tRPC's inferred DbMessage type if any.
 import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, Mic, StopCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -71,7 +72,7 @@ export function ChatPanelG({
   const isFirstMessageRef = useRef(true);
   
   // Get video state and current scenes
-  const { getCurrentProps } = useVideoState();
+  const { getCurrentProps, syncDbMessages, getProjectChatHistory } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -212,30 +213,118 @@ export function ChatPanelG({
     setOptimisticMessages(prev => prev.filter(msg => msg.id !== id));
   }, []);
 
+  // Helper function to clear only assistant optimistic messages (preserve user messages)
+  const clearOptimisticAssistantMessages = useCallback(() => {
+    setOptimisticMessages(prev => prev.filter(msg => msg.role === 'user'));
+  }, []);
+
   // Helper function to clear all optimistic messages (when real messages arrive)
   const clearOptimisticMessages = useCallback(() => {
     setOptimisticMessages([]);
   }, []);
 
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || isGenerating) return;
+    
+    const trimmedMessage = message.trim();
+    
+    setIsGenerating(true);
+    setCurrentPrompt(trimmedMessage);
+    
+    // Clear the input immediately for better UX
+    setMessage("");
+    
+    // Add optimistic user message
+    const optimisticUserMessageId = addOptimisticUserMessage(trimmedMessage);
+    
+    // Add optimistic assistant message
+    const optimisticAssistantMessageId = addOptimisticAssistantMessage("Assistant is working on it...");
+    
+    // Use the unified scene generation
+    try {
+      await generateSceneWithChatMutation.mutateAsync({
+        projectId,
+        userMessage: trimmedMessage,
+        sceneId: effectiveSelectedSceneId || undefined,
+      });
+    } catch (error) {
+      console.error('Error during scene generation:', error);
+      setIsGenerating(false);
+      // Error handling is done in the mutation onError callback
+    }
+  };
+
   // Combine database messages with optimistic messages for display
+  // Effect to sync database messages with videoState
+  useEffect(() => {
+    console.log('[ChatPanelG] dbMessages useEffect triggered. isLoadingMessages:', isLoadingMessages, 'dbMessages:', dbMessages ? JSON.stringify(dbMessages).substring(0,300) + '...' : 'null');
+    if (dbMessages) {
+      // Filter messages to ensure they have a valid role and cast the role type
+      const validRoleMessages = dbMessages
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .map((msg): VideoStateDbMessage => { // Explicitly type the return of map to VideoStateDbMessage
+          const sanitizedStatus = (statusVal: string | null | undefined): 'pending' | 'success' | 'error' | 'building' | undefined => {
+            if (statusVal === null || statusVal === undefined) return undefined;
+            if (['pending', 'success', 'error', 'building'].includes(statusVal)) {
+              return statusVal as 'pending' | 'success' | 'error' | 'building';
+            }
+            return undefined; // Default for unrecognized status strings
+          };
+          return {
+            // Ensure all properties of VideoStateDbMessage are present and correctly typed
+            id: msg.id,
+            projectId: msg.projectId, // Assuming projectId is on msg from tRPC
+            content: msg.content,
+            role: msg.role as 'user' | 'assistant', // Already filtered
+            createdAt: msg.createdAt, // Assuming createdAt is a Date object
+            updatedAt: msg.updatedAt === null ? undefined : msg.updatedAt, // Convert null to undefined
+            status: sanitizedStatus(msg.status),
+            kind: msg.kind as 'text' | 'tool_result' | 'error' | 'status' | undefined, // Add kind if it's part of VideoStateDbMessage
+          };
+        });
+      syncDbMessages(projectId, validRoleMessages); // Removed 'as DbMessage[]' cast as map now returns VideoStateDbMessage[] // Lint fix ID: 355b15d0-640a-4d10-a185-b1bba0b81a8c
+    }
+  }, [dbMessages, projectId, syncDbMessages]);
+
+  // 🚨 SIMPLIFIED: Just show DB messages + simple optimistic messages
   const allMessages = useMemo(() => {
-    // Filter and type-guard database messages to ensure they have valid roles
-    const validDbMessages = (dbMessages || [])
-      .filter(msg => msg.role === 'user' || msg.role === 'assistant')
-      .map(msg => ({ 
-        ...msg, 
-        isOptimistic: false as const,
-        role: msg.role as 'user' | 'assistant' // Type assertion since we filtered above
-      }));
+    // Get synchronized chat history from videoState (these are the real DB messages)
+    const synchronizedHistory = getProjectChatHistory(projectId);
     
-    const combined: (DbMessage | OptimisticMessage)[] = [
-      ...validDbMessages,
-      ...optimisticMessages
-    ];
+    // Convert to display format
+    const dbMessages: (DbMessage | OptimisticMessage)[] = synchronizedHistory.map((chatMsg: ChatMessage) => ({
+      id: chatMsg.id,
+      projectId: projectId,
+      content: chatMsg.message,
+      role: chatMsg.isUser ? 'user' : 'assistant',
+      status: 'success' as const,
+      createdAt: new Date(chatMsg.timestamp),
+    }));
     
-    // Sort by creation time
-    return combined.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  }, [dbMessages, optimisticMessages]);
+    // Add optimistic messages (only if not already in DB)
+    const allDisplayMessages = [...dbMessages];
+    
+    optimisticMessages.forEach(optimistic => {
+      // Only add if not already in DB
+      const alreadyInDb = dbMessages.some(db => 
+        db.content === optimistic.content && 
+        db.role === optimistic.role
+      );
+      
+      if (!alreadyInDb) {
+        allDisplayMessages.push(optimistic);
+      }
+    });
+    
+    // Sort by timestamp
+    return allDisplayMessages.sort((a, b) => {
+      const aTime = a.createdAt ? a.createdAt.getTime() : Date.now();
+      const bTime = b.createdAt ? b.createdAt.getTime() : Date.now();
+      return aTime - bTime;
+    });
+  }, [getProjectChatHistory, projectId, optimisticMessages]);
 
   // Auto-scroll function (V2 improvement)
   const scrollToBottom = useCallback(() => {
@@ -270,20 +359,95 @@ export function ChatPanelG({
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
     
-    return title.length > 40 ? title.substring(0, 37) + '...' : title;
+    return title || 'New Scene';
   }, []);
-  
+
   // OPTIMIZATION #1: Use MCP scene generation instead of legacy
   const generateSceneWithChatMutation = api.generation.generateScene.useMutation({
-    onSuccess: (result: any) => {
+    onMutate: async () => {
+      // Don't add optimistic messages here - handleSubmit already does it
+      return {};
+    },
+    onSuccess: (result: any, variables, context) => {
       console.log("✅ Unified scene generation completed:", result);
       setIsGenerating(false);
       setGenerationComplete(true);
       
-      // OPTIMIZATION #2: Add scene directly to video state instead of full refetch
-      if (onSceneGenerated && result.scene) {
-        console.log('[ChatPanelG] Calling onSceneGenerated callback for scene:', result.scene.id);
-        onSceneGenerated(result.scene.id, result.scene.tsxCode);
+      // CRITICAL FIX: Ensure scene persistence to video state
+      if (result.scene) {
+        console.log('[ChatPanelG] Persisting scene to video state:', result.scene.id);
+        
+        try {
+          // Get video state functions
+          const { addScene, updateScene, getCurrentProps } = useVideoState.getState();
+          const currentProps = getCurrentProps();
+          
+          console.log('[ChatPanelG] Current props before update:', currentProps ? 'exist' : 'null');
+          console.log('[ChatPanelG] Current scenes count:', currentProps?.scenes?.length || 0);
+          
+          // Check if this is an edit (scene already exists) or new scene
+          const existingSceneIndex = currentProps?.scenes?.findIndex((s: any) => s.id === result.scene.id);
+          const isEdit = existingSceneIndex !== -1;
+          
+          console.log('[ChatPanelG] Scene operation type:', isEdit ? 'EDIT' : 'NEW');
+          
+          if (isEdit) {
+            console.log('[ChatPanelG] Updating existing scene in video state');
+            updateScene(projectId, result.scene.id, {
+              tsxCode: result.scene.tsxCode,
+              name: result.scene.name,
+              duration: result.scene.duration,
+              props: result.scene.props || {}
+            });
+          } else {
+            console.log('[ChatPanelG] Adding new scene to video state');
+            addScene(projectId, {
+              id: result.scene.id,
+              name: result.scene.name,
+              tsxCode: result.scene.tsxCode,
+              duration: result.scene.duration,
+              order: result.scene.order,
+              props: result.scene.props || {}
+            });
+          }
+          
+          // Verify the update worked
+          const updatedProps = getCurrentProps();
+          console.log('[ChatPanelG] Scenes count after update:', updatedProps?.scenes?.length || 0);
+          
+          // Call the external callback if provided
+          if (onSceneGenerated) {
+            console.log('[ChatPanelG] Calling external onSceneGenerated callback');
+            onSceneGenerated(result.scene.id, result.scene.tsxCode);
+          }
+          
+        } catch (error) {
+          console.error('[ChatPanelG] Error updating video state:', error);
+          // Still call the external callback as fallback
+          if (onSceneGenerated) {
+            console.log('[ChatPanelG] Fallback: calling external callback after state error');
+            onSceneGenerated(result.scene.id, result.scene.tsxCode);
+          }
+        }
+      } else {
+        console.warn('[ChatPanelG] No scene data in result:', result);
+      }
+      
+      // 🚨 NEW: Clean up optimistic messages that match the real ones
+      if (result.scene) {
+        // Clear optimistic messages after a brief delay to allow UI to update
+        setTimeout(() => {
+          setOptimisticMessages(prev => 
+            prev.filter(opt => {
+              // Keep optimistic messages that don't have DB counterparts yet
+              return !dbMessages?.some(db => 
+                db.content === opt.content && 
+                db.role === opt.role &&
+                Math.abs(new Date(db.createdAt).getTime() - opt.createdAt.getTime()) < 60000 // Within 1 minute
+              );
+            })
+          );
+        }, 1000); // 1 second delay to ensure DB update
       }
       
       // Refetch messages to show the assistant response
@@ -291,10 +455,14 @@ export function ChatPanelG({
         void refetchMessages();
       }, 100);
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
       console.error("❌ Unified scene generation failed:", error);
       setIsGenerating(false);
       toast.error(`Scene generation failed: ${error.message}`);
+      
+      // 🚨 FIXED: Don't clear optimistic messages on error
+      // Users should see their message and any error responses
+      // clearOptimisticMessages();
       
       void refetchMessages();
     }
@@ -302,356 +470,64 @@ export function ChatPanelG({
 
   // Scene removal mutation
   const removeSceneMutation = api.generation.removeScene.useMutation({
-    onSuccess: (result: any) => {
+    onMutate: async () => {
+      const optimisticAssistantMessageId = addOptimisticAssistantMessage("Assistant is working on it...");
+      return { optimisticAssistantMessageId };
+    },
+    onSuccess: (result: any, variables, context) => {
       console.log("✅ Scene removal completed:", result);
       setIsGenerating(false);
       setGenerationComplete(true);
       
-      // Trigger video state refresh to remove the scene from UI
-      if (onSceneGenerated) {
-        console.log('[ChatPanelG] Calling onSceneGenerated callback to refresh after removal');
-        onSceneGenerated('', ''); // Empty values to trigger refresh
+      // Trigger video state refresh specifically for removal
+      // Instead of calling onSceneGenerated which expects scene data,
+      // we'll trigger a direct refresh by refetching messages
+      console.log('[ChatPanelG] Scene removed successfully, triggering UI refresh');
+      
+      // FIXED: Clear optimistic messages immediately when real messages arrive
+      clearOptimisticMessages();
+      
+      // Update optimistic assistant message with success
+      if (context?.optimisticAssistantMessageId) {
+        updateOptimisticMessage(context.optimisticAssistantMessageId, { 
+          content: "Scene removed!", 
+          status: 'success', 
+          createdAt: new Date() 
+        });
       }
       
       // Refetch messages to show the assistant response
       setTimeout(() => {
         void refetchMessages();
       }, 100);
+      
+      // Trigger scene refresh if available
+      if (onSceneGenerated) {
+        // Call with special removal flag - empty strings indicate removal
+        console.log('[ChatPanelG] Calling scene refresh after removal');
+        onSceneGenerated('SCENE_REMOVED', '');
+      }
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
       console.error("❌ Scene removal failed:", error);
       setIsGenerating(false);
       toast.error(`Scene removal failed: ${error.message}`);
       
+      // FIXED: Clear optimistic messages on error too
+      clearOptimisticMessages();
+      
+      // Update optimistic assistant message with error
+      if (context?.optimisticAssistantMessageId) {
+        updateOptimisticMessage(context.optimisticAssistantMessageId, { 
+          content: `Error removing: ${error.message}`,
+          status: 'error',
+          createdAt: new Date()
+        });
+      }
+      
       void refetchMessages();
     }
   });
-
-  // Project rename mutation for first message (V1 logic)
-  const renameMutation = api.project.rename.useMutation({
-    onSuccess: (data: any) => {
-      if (data?.title) {
-        onProjectRename?.(data.title);
-      }
-    },
-    onError: (error: any) => {
-      console.error("Error renaming project:", error);
-    }
-  });
-
-  // AI title generation mutation (V1 logic)
-  const generateAITitleMutation = api.project.generateAITitle.useMutation();
-
-  // Helper function to get scene by number (1-based indexing) (V1 logic)
-  const getSceneByNumber = useCallback((sceneNumber: number): Scene | null => {
-    if (!scenes || scenes.length === 0) return null;
-    const index = sceneNumber - 1;
-    return scenes[index] || null;
-  }, [scenes]);
-
-  // Helper function to get scene number by ID (V1 logic)
-  const getSceneNumber = useCallback((sceneId: string): number | null => {
-    if (!scenes || scenes.length === 0) return null;
-    const index = scenes.findIndex(scene => scene.id === sceneId);
-    return index >= 0 ? index + 1 : null;
-  }, [scenes]);
-
-  // Helper function to detect if a message is likely an edit command (V1 enhanced logic)
-  const isLikelyEdit = useCallback((msg: string): boolean => {
-    const trimmed = msg.trim();
-    if (!trimmed) return false;
-    
-    // If no scenes exist, it can't be an edit
-    if (scenes.length === 0) return false;
-    
-    // If no scene is selected, don't auto-tag as edit
-    if (!selectedScene?.id) return false;
-    
-    // Split by spaces and filter out empty strings
-    const words = trimmed.split(/\s+/).filter(word => word.length > 0);
-    
-    // LESS AGGRESSIVE EDIT DETECTION: Only treat as edit if there are clear edit indicators
-    
-    // Very short messages (1-2 words) with clear edit verbs
-    if (words.length <= 2) {
-      const shortEditVerbs = ['red', 'blue', 'green', 'bigger', 'smaller', 'faster', 'slower'];
-      const hasShortEditVerb = shortEditVerbs.some(verb => trimmed.toLowerCase().includes(verb));
-      return hasShortEditVerb;
-    }
-    
-    // Medium messages (3-6 words) need edit indicators
-    if (words.length <= 6) {
-      const editIndicators = ['make', 'change', 'set', 'turn', 'fix', 'update', 'modify', 'adjust'];
-      const hasEditIndicator = editIndicators.some(indicator => trimmed.toLowerCase().includes(indicator));
-      return hasEditIndicator;
-    }
-    
-    // Longer messages (7+ words) need strong edit verbs at the beginning
-    const strongEditVerbs = ['change', 'make', 'set', 'turn', 'modify', 'update', 'fix', 'adjust'];
-    const startsWithEditVerb = strongEditVerbs.some(verb => trimmed.toLowerCase().startsWith(verb));
-    
-    return startsWithEditVerb;
-  }, [scenes, selectedScene]);
-
-  // Helper function to detect scene removal commands
-  const isRemovalCommand = useCallback((msg: string): { isRemoval: boolean; sceneNumber?: number; sceneId?: string } => {
-    const trimmed = msg.trim().toLowerCase();
-    
-    // Check for removal patterns
-    const removalPatterns = [
-      /(?:remove|delete|del)\s+scene\s+(\d+)/i,
-      /scene\s+(\d+)\s+(?:remove|delete|del)/i,
-      /(?:remove|delete|del)\s+(\d+)/i,
-    ];
-    
-    for (const pattern of removalPatterns) {
-      const match = pattern.exec(trimmed);
-      if (match?.[1]) {
-        const sceneNumber = parseInt(match[1], 10);
-        const targetScene = getSceneByNumber(sceneNumber);
-        if (targetScene) {
-          return { isRemoval: true, sceneNumber, sceneId: targetScene.id };
-        }
-      }
-    }
-    
-    return { isRemoval: false };
-  }, [getSceneByNumber]);
-
-  // Helper function to convert scene IDs to user-friendly numbers in display messages
-  const convertSceneIdToNumber = useCallback((msg: string): string => {
-    // Replace @scene(uuid) with @scene(number) for display
-    return msg.replace(/@scene\(([^)]+)\)/g, (match, sceneId) => {
-      const sceneNumber = getSceneNumber(sceneId);
-      return sceneNumber ? `@scene(${sceneNumber})` : match;
-    });
-  }, [getSceneNumber]);
-
-  // Helper function to auto-tag messages with @scene(id) when appropriate (V1 logic)
-  const autoTagMessage = useCallback((msg: string): string => {
-    // If already tagged, return as-is
-    if (msg.startsWith('@scene(')) return msg;
-    
-    // STEP 1: Check for scene removal commands
-    const removalCheck = isRemovalCommand(msg);
-    if (removalCheck.isRemoval && removalCheck.sceneId) {
-      console.log(`[ChatPanelG] Detected removal command for scene ${removalCheck.sceneNumber} (${removalCheck.sceneId})`);
-      return `@scene(${removalCheck.sceneId}) ${msg}`;
-    }
-    
-    // STEP 2: Check for scene number syntax (@scene(1), @scene(2), etc.)
-    const sceneNumberMatch = /\bscene\s+(\d+)\b/i.exec(msg);
-    if (sceneNumberMatch && sceneNumberMatch[1]) {
-      const sceneNumber = parseInt(sceneNumberMatch[1], 10);
-      const targetScene = getSceneByNumber(sceneNumber);
-      if (targetScene) {
-        console.log(`[ChatPanelG] Converting "scene ${sceneNumber}" to @scene(${targetScene.id})`);
-        return `@scene(${targetScene.id}) ${msg}`;
-      } else {
-        console.warn(`[ChatPanelG] Scene ${sceneNumber} not found (only ${scenes.length} scenes available)`);
-        return msg;
-      }
-    }
-    
-    // STEP 3: Auto-detect edit commands for the selected scene
-    if (!selectedScene?.id) return msg;
-    
-    const sceneId = selectedScene.id;
-    
-    // If it's a likely edit command, auto-tag it
-    if (isLikelyEdit(msg)) {
-      const sceneNumber = getSceneNumber(sceneId);
-      const sceneName = selectedScene.data?.name || `Scene ${sceneNumber || '?'}`;
-      console.log(`[ChatPanelG] Auto-tagging edit command for ${sceneName} (${sceneId})`);
-      return `@scene(${sceneId}) ${msg}`;
-    }
-    
-    return msg;
-  }, [selectedScene, isLikelyEdit, isRemovalCommand, getSceneByNumber, getSceneNumber, scenes]);
-
-  // Generate project name from first message (V1 logic)
-  const generateNameFromPrompt = useCallback((prompt: string): string => {
-    const cleanPrompt = prompt.replace(/[^\w\s]/g, '').trim();
-    const words = cleanPrompt.split(/\s+/).slice(0, 4);
-    let name = words.join(' ');
-    
-    if (name.length > 30) {
-      name = name.substring(0, 27) + '...';
-    }
-    
-    return name || 'New Video Project';
-  }, []);
-
-  // Handle form submission (V1 logic with V2 improvements + OPTIMISTIC UI)
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || isGenerating) return;
-    
-    const trimmedMessage = message.trim();
-    
-    // Check if no scene is selected for edit commands (V1 logic)
-    if (isLikelyEdit(trimmedMessage) && !selectedScene) {
-      toast.error('Please select a scene to edit first, or create a new scene with a descriptive prompt.');
-      return;
-    }
-    
-    // Generate project name from first message using AI (V1 logic)
-    if (isFirstMessageRef.current && (!dbMessages || dbMessages.length === 0)) {
-      console.log("Generating AI-powered title from first message...");
-      
-      generateAITitleMutation.mutate(
-        {
-          prompt: trimmedMessage,
-          contextId: projectId
-        },
-        {
-          onSuccess: (result: any) => {
-            const generatedTitle = result.title;
-            console.log(`Generated AI project name: "${generatedTitle}"`);
-            
-            renameMutation.mutate({
-              id: projectId,
-              title: generatedTitle,
-            });
-          },
-          onError: (error: any) => {
-            console.error("Error using AI title generation:", error);
-            const fallbackName = generateNameFromPrompt(trimmedMessage);
-            console.log(`Falling back to regex-based name: "${fallbackName}"`);
-            
-            renameMutation.mutate({
-              id: projectId,
-              title: fallbackName,
-            });
-          }
-        }
-      );
-      
-      isFirstMessageRef.current = false;
-    }
-    
-    // Auto-tag the message if it's an edit command and a scene is selected (V1 logic)
-    const processedMessage = autoTagMessage(trimmedMessage);
-    
-    console.log('Original message:', trimmedMessage);
-    console.log('Processed message:', processedMessage);
-    console.log('Selected scene:', selectedScene?.id);
-    console.log('Is likely edit:', isLikelyEdit(trimmedMessage));
-    
-    // OPTIMISTIC UI: Immediately add user message to chat
-    const displayMessage = convertSceneIdToNumber(processedMessage);
-    const optimisticUserMessageId = addOptimisticUserMessage(displayMessage);
-    
-    // Clear the input immediately for better UX
-    setMessage("");
-    setCurrentPrompt(trimmedMessage);
-    setIsGenerating(true);
-    setGenerationComplete(false);
-    
-    // OPTIMISTIC UI: Add assistant loading message
-    const optimisticAssistantMessageId = addOptimisticAssistantMessage('Generating scene...');
-    
-    // Check if this is a scene removal command
-    const removalCheck = isRemovalCommand(trimmedMessage);
-    
-    if (removalCheck.isRemoval && removalCheck.sceneId) {
-      console.log(`[ChatPanelG] Processing scene removal for scene ${removalCheck.sceneNumber}`);
-      
-      // Update optimistic assistant message for removal
-      updateOptimisticMessage(optimisticAssistantMessageId, {
-        content: `Removing scene ${removalCheck.sceneNumber}...`,
-      });
-      
-      // Execute scene removal using the tRPC mutation
-      try {
-        const result = await removeSceneMutation.mutateAsync({
-          projectId,
-          sceneId: removalCheck.sceneId,
-        });
-        
-        console.log('Scene removal result:', result);
-        
-        // Update optimistic assistant message with success
-        updateOptimisticMessage(optimisticAssistantMessageId, {
-          content: `Scene ${removalCheck.sceneNumber} removed successfully ✅`,
-          status: 'success',
-        });
-        
-        // Clear optimistic messages after a delay to let real messages load
-        setTimeout(() => {
-          clearOptimisticMessages();
-          void refetchMessages();
-        }, 1000);
-        
-      } catch (error) {
-        console.error('Error during scene removal:', error);
-        
-        // Update optimistic assistant message with error
-        updateOptimisticMessage(optimisticAssistantMessageId, {
-          content: `Failed to remove scene ${removalCheck.sceneNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          status: 'error',
-        });
-        
-        // Clear optimistic messages after a delay
-        setTimeout(() => {
-          clearOptimisticMessages();
-          void refetchMessages();
-        }, 2000);
-      }
-      
-      return; // Exit early for removal commands
-    }
-    
-    // Use ONLY the unified mutation (OPTIMIZATION #1)
-    try {
-      const isEditOperation = processedMessage.startsWith('@scene(') || 
-                             (selectedScene && isLikelyEdit(trimmedMessage));
-      
-      console.log('[ChatPanelG] Operation type:', isEditOperation ? 'EDIT' : 'NEW_SCENE');
-      console.log('[ChatPanelG] Scene ID to pass:', isEditOperation ? selectedScene?.id : undefined);
-      console.log('[ChatPanelG] Auto-tagged message:', processedMessage);
-      
-      const result = await generateSceneWithChatMutation.mutateAsync({
-        projectId,
-        userMessage: processedMessage, // Send UUID version to backend
-        sceneId: isEditOperation ? selectedScene?.id : undefined,
-      });
-      
-      console.log('Scene generation result:', result);
-      
-      // Update optimistic assistant message with success
-      updateOptimisticMessage(optimisticAssistantMessageId, {
-        content: `Scene ${isEditOperation ? 'updated' : 'generated'} successfully ✅`,
-        status: 'success',
-      });
-      
-      // Clear optimistic messages after a delay to let real messages load
-      setTimeout(() => {
-        clearOptimisticMessages();
-        void refetchMessages();
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error during scene generation:', error);
-      
-      // Update optimistic assistant message with error
-      updateOptimisticMessage(optimisticAssistantMessageId, {
-        content: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        status: 'error',
-      });
-      
-      // Clear optimistic messages after a delay
-      setTimeout(() => {
-        clearOptimisticMessages();
-        void refetchMessages();
-      }, 2000);
-    }
-
-    // Track chat message analytics
-    const messageLength = processedMessage.length;
-    const hasContext = scenes.length > 0;
-    analytics.chatMessageSent(projectId, messageLength, hasContext);
-  };
 
   // Auto-scroll to bottom when messages change (V2 improvement)
   useEffect(() => {
@@ -687,24 +563,6 @@ export function ChatPanelG({
     );
   }
 
-  // Get welcome message for new projects (V1 logic)
-  const getWelcomeMessage = () => (
-    <div className="text-center py-8">
-      <div className="bg-muted/80 rounded-[15px] shadow-sm p-4 mx-auto max-w-md">
-        <h3 className="font-medium text-base mb-2">Welcome to your new project!</h3>
-        <p className="text-sm text-muted-foreground mb-3">
-          Describe what kind of video scene you want to create. For example:
-        </p>
-        <div className="text-left bg-primary/5 rounded-[15px] p-3 text-sm">
-          <p className="mb-1">• "Create a gradient background in blue and purple"</p>
-          <p className="mb-1">• "Add a title that says Hello World in the center"</p>
-          <p className="mb-1">• "Make the title fade in and add a subtle animation"</p>
-          <p className="mb-1">• "make it red" (when a scene is selected)</p>
-        </div>
-      </div>
-    </div>
-  );
-
   // Status indicator component for tool messages (V1 logic)
   const getStatusIndicator = (status?: string | null) => {
     if (!status) return null;
@@ -725,7 +583,6 @@ export function ChatPanelG({
 
   const hasMessages = allMessages && allMessages.length > 0;
   const isLoading = isLoadingMessages && !hasMessages;
-  const showWelcome = !hasMessages && !isLoading;
 
   // Check if we have any existing messages on load (V1 logic)
   useEffect(() => {
@@ -733,6 +590,15 @@ export function ChatPanelG({
       isFirstMessageRef.current = false;
     }
   }, [dbMessages]);
+
+  // 🚨 FIXED: Simple polling without dependency issues
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void refetchMessages();
+    }, 3000); // Every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [projectId]); // Only depend on projectId, refetchMessages should be stable
 
   return (
     <div className="flex flex-col h-full">
@@ -743,8 +609,6 @@ export function ChatPanelG({
             <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
             <span className="ml-2 text-xs text-muted-foreground">Loading...</span>
           </div>
-        ) : showWelcome ? (
-          getWelcomeMessage()
         ) : (
           <>
             {/* Render combined messages (database + optimistic) */}
@@ -834,8 +698,10 @@ export function ChatPanelG({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={
-              selectedScene 
+              selectedScene && !selectedScene.data?.isWelcomeScene && selectedScene.type !== "welcome"
                 ? "Describe changes to this scene or create a new scene..."
+                : scenes.length > 0
+                ? "Describe a new scene or edit existing scenes..."
                 : "Describe the scene you want to create..."
             }
             disabled={isGenerating}
@@ -871,8 +737,10 @@ export function ChatPanelG({
         
         {/* Helper text (V1 logic) */}
         <p className="text-xs text-muted-foreground mt-2">
-          {selectedScene 
+          {selectedScene && !selectedScene.data?.isWelcomeScene && selectedScene.type !== "welcome"
             ? `Edit commands will automatically target the ${selectedSceneId ? 'selected' : 'latest'} scene. Use descriptive prompts for new scenes.`
+            : scenes.length > 0
+            ? `You have ${scenes.length} scene${scenes.length === 1 ? '' : 's'}. Describe new scenes or use "scene 1", "scene 2" to edit existing ones.`
             : "Describe a scene to create your first animation. Once created, short commands will edit existing scenes."
           }
         </p>

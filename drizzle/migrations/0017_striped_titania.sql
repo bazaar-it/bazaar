@@ -1,0 +1,1 @@
+ALTER TABLE "bazaar-vid_feedback" DROP COLUMN "temp_field";

@@ -1,649 +1,591 @@
-# Sprint 30 MCP System Flow - Detailed Analysis
+# Bazaar-Vid System Flow: Complete Technical Documentation
 
-## 🎯 **User Journey: Complete System Flow**
+## Overview
 
-This document traces the exact path and system interactions when a user submits prompts through the new MCP (Model Context Protocol) architecture.
+Bazaar-Vid is a video generation platform that converts user prompts into React/Remotion video scenes. The system uses a hybrid architecture with two generation paths: Legacy System (stable) and MCP System (experimental).
 
-## 📝 **Test Scenario**
+## System Architecture
 
-**User Prompt 1**: "Black background, white text, inter size 80px. Show a text input box - corners rounded by 50%.There's a neon purple gradient hue shining behind the text input box. The words "Wow, Bazaar can actually produce some good results" appears letter by letter. When the words are finished appearing, we see a mouse cursor click on the submit button and the camera zoom straight in, really fast, to a totally black screen"
+### Core Components
 
-**User Prompt 2**: "no make the mouse bigger and red"
+1. **Frontend**: Next.js with tRPC client
+2. **Backend**: Next.js API routes with tRPC server
+3. **Database**: Neon PostgreSQL with Drizzle ORM
+4. **AI Services**: OpenAI GPT-4o/GPT-4o-mini
+5. **Video Engine**: Remotion for React-based video rendering
 
----
+### Feature Flag System
 
-## 🔄 **Flow 1: Initial Scene Creation**
-
-### **Step 1: User Input & Feature Flag Check**
-```
-User submits: "Black background, white text, inter size 80px..."
-↓
-Frontend: ChatPanelG component captures input
-↓
-tRPC Call: generation.generateScene({ projectId, userMessage })
-↓
-Feature Flag Check: isMCPEnabled(projectId)
-  - Hash projectId → bucket % 100
-  - Compare with FEATURE_MCP_ROLLOUT_PERCENTAGE
-  - If enabled → MCP path, else → Legacy path
-```
-
-**Files Involved:**
-- `src/app/projects/[id]/generate/components/ChatPanelG.tsx` (UI)
-- `src/server/api/routers/generation.ts` (generateScene procedure)
-- `src/lib/featureFlags.ts` (isMCPEnabled function)
-
-### **Step 2: Brain LLM Orchestration**
-```
-MCP Path Enabled
-↓
-Brain Orchestrator: brainOrchestrator.processUserInput()
-  - Model: GPT-4o-mini (fast, cheap intent recognition)
-  - Context: { prompt, projectId, userId, storyboardSoFar: [] }
-  - Tool Selection Logic
-```
-
-**System Prompt (Brain LLM):**
-```
-You are an intelligent scene orchestrator. Analyze user requests and select the appropriate tool:
-
-AVAILABLE TOOLS:
-- addScene: Create new scenes from user prompts
-- editScene: Modify existing scenes with specific changes  
-- deleteScene: Remove scenes by ID
-- askSpecify: Request clarification for ambiguous requests
-
-USER CONTEXT:
-- Project: {projectId}
-- Existing scenes: {storyboardSoFar.length}
-- User intent: {userMessage}
-
-Select the most appropriate tool and provide reasoning.
-```
-
-**Brain LLM Analysis:**
-- Intent: Create new scene (no existing scenes to edit)
-- Complexity: High (multiple UI elements, animations, camera movement)
-- Ambiguity: Low (specific requirements provided)
-- **Tool Selected: addScene**
-
-**Files Involved:**
-- `src/server/services/brain/orchestrator.ts` (Brain orchestrator)
-- `src/lib/services/mcp-tools/registry.ts` (Tool registry)
-
-### **Step 3: Tool Execution - addScene**
-```
-Tool: addScene
-Input: {
-  userPrompt: "Black background, white text...",
-  sessionId: "session-uuid",
-  userId: "user-uuid", 
-  storyboardSoFar: []
-}
-↓
-SceneBuilder Service: sceneBuilderService.buildScene()
-  - Model: GPT-4o (high-quality creative planning)
-  - Generate structured SceneSpec JSON
-```
-
-**System Prompt (SceneBuilder LLM):**
-```
-You are an expert Remotion scene planner. Convert user requests into structured SceneSpec JSON.
-
-SCENESPEC SCHEMA:
-- components: UI elements (Flowbite, HTML, custom)
-- style: Visual design (colors, typography, background)  
-- text: Content with semantic slots
-- motion: Animations with timing
-
-COMPONENT LIBRARIES:
-- "flowbite": Atomic components (Button, TextInput, etc.)
-- "html": Basic HTML elements (div, input, button, etc.)
-- "custom": Special elements (MouseCursor, Camera, etc.)
-
-MOTION FUNCTIONS:
-- Entrance: fadeIn, fadeInUp, slideInLeft, slideInRight, scaleIn
-- Continuous: pulse, bounce, rotate, float
-- Camera: zoomIn, zoomOut, panLeft, panRight
-- Custom: use "custom" with params.type (e.g., {type: "typewriter"})
-
-Create a SceneSpec that fulfills this request with proper animations and timing.
-```
-
-**Generated SceneSpec:**
-```json
-{
-  "id": "scene-001-interactive-demo",
-  "name": "Interactive Demo Scene",
-  "duration": 8,
-  "components": [
-    {
-      "lib": "html",
-      "name": "div",
-      "id": "background",
-      "layout": { "x": 0, "y": 0, "width": 1, "height": 1 },
-      "classes": ["bg-black", "w-full", "h-full"]
-    },
-    {
-      "lib": "flowbite", 
-      "name": "TextInput",
-      "id": "text-input",
-      "layout": { "x": 0.3, "y": 0.4, "width": 0.4, "height": 0.1 },
-      "classes": ["rounded-full", "relative"],
-      "props": { "placeholder": "Enter text here..." }
-    },
-    {
-      "lib": "html",
-      "name": "div", 
-      "id": "gradient-glow",
-      "layout": { "x": 0.25, "y": 0.35, "width": 0.5, "height": 0.2, "zIndex": -1 },
-      "classes": ["absolute", "bg-gradient-to-r", "from-purple-500", "to-pink-500", "blur-lg", "opacity-70"]
-    },
-    {
-      "lib": "html",
-      "name": "p",
-      "id": "typewriter-text", 
-      "layout": { "x": 0.2, "y": 0.6, "width": 0.6, "height": 0.1 },
-      "classes": ["text-white", "text-center", "font-inter", "text-6xl"]
-    },
-    {
-      "lib": "flowbite",
-      "name": "Button",
-      "id": "submit-button",
-      "layout": { "x": 0.45, "y": 0.75, "width": 0.1, "height": 0.05 },
-      "props": { "children": "Submit" }
-    },
-    {
-      "lib": "custom",
-      "name": "MouseCursor", 
-      "id": "mouse-cursor",
-      "layout": { "x": 0.1, "y": 0.1, "width": 0.02, "height": 0.02 }
-    }
-  ],
-  "style": {
-    "palette": ["#000000", "#ffffff", "#8b5cf6", "#ec4899"],
-    "classes": ["bg-black", "text-white", "font-inter"],
-    "background": { "type": "solid", "value": "#000000" },
-    "typography": { "fontFamily": "Inter", "fontSize": "80px" }
-  },
-  "text": [
-    {
-      "slot": "typewriter-text",
-      "content": "Wow, Bazaar can actually produce some good results",
-      "animation": { "reveal": "typewriter", "speed": 15 }
-    }
-  ],
-  "motion": [
-    {
-      "target": "text-input",
-      "fn": "fadeIn",
-      "duration": 1,
-      "delay": 0
-    },
-    {
-      "target": "gradient-glow", 
-      "fn": "pulse",
-      "duration": 2,
-      "delay": 0.5,
-      "iterations": "infinite"
-    },
-    {
-      "target": "typewriter-text",
-      "fn": "custom",
-      "duration": 3,
-      "delay": 2,
-      "params": { "type": "typewriter" }
-    },
-    {
-      "target": "mouse-cursor",
-      "fn": "custom", 
-      "duration": 1,
-      "delay": 5,
-      "params": { "type": "moveToTarget", "targetId": "submit-button" }
-    },
-    {
-      "target": "mouse-cursor",
-      "fn": "custom",
-      "duration": 0.2, 
-      "delay": 6,
-      "params": { "type": "click" }
-    },
-    {
-      "target": "background",
-      "fn": "zoomIn",
-      "duration": 1,
-      "delay": 6.5,
-      "params": { "scale": 10, "speed": "fast" }
-    }
-  ]
-}
-```
-
-**Files Involved:**
-- `src/lib/services/mcp-tools/scene-tools.ts` (addScene tool)
-- `src/lib/services/sceneBuilder.service.ts` (SceneBuilder service)
-- `src/lib/types/storyboard.ts` (SceneSpec schema validation)
-
-### **Step 4: SceneSpec Enhancement & Validation**
-```
-Raw SceneSpec from LLM
-↓
-enhanceSceneSpec() processing:
-  - Auto-generate component IDs (if missing)
-  - Compute scene duration from longest motion
-  - Calculate frame ranges from duration + fps
-  - Validate against Zod schema
-↓
-Validated & Enhanced SceneSpec
-```
-
-**Enhancement Process:**
 ```typescript
-// Auto-generate IDs
-scene.components.forEach(c => {
-  if (!c.id) c.id = nanoid(); // crypto-secure UUID
-});
-
-// Compute duration (longest motion + 1s buffer)
-const longestMotionEnd = scene.motion.reduce((max, motion) => {
-  return Math.max(max, (motion.delay || 0) + (motion.duration || 0));
-}, 0);
-scene.duration = Math.max(longestMotionEnd + 1, 2);
-
-// Compute frame ranges
-scene.motion.forEach(motion => {
-  if (!motion.frames) {
-    const fps = 30;
-    motion.frames = {
-      start: Math.floor((motion.delay || 0) * fps),
-      end: Math.floor(((motion.delay || 0) + (motion.duration || 0)) * fps)
-    };
-  }
-});
+// Feature flag controls which generation system is used
+const isMCPEnabled = process.env.ENABLE_MCP === 'true';
 ```
 
-**Files Involved:**
-- `src/lib/types/storyboard.ts` (enhanceSceneSpec function)
+- **MCP Disabled**: Uses Legacy Generation Service (stable, production-ready)
+- **MCP Enabled**: Uses Brain Orchestrator + MCP Tools (experimental)
 
-### **Step 5: Database Persistence**
-```
-Enhanced SceneSpec
-↓
-Database Operations:
-  1. Insert into scene_specs table (JSONB storage)
-  2. Create legacy scene record (for compatibility)
-  3. Emit SSE events for real-time UI updates
-```
+## User Flow: From Prompt to Video
 
-**Database Inserts:**
-```sql
--- SceneSpec storage
-INSERT INTO "bazaar-vid_scene_specs" (
-  project_id, scene_id, name, spec, created_by
-) VALUES (
-  $projectId, 
-  'scene-001-interactive-demo',
-  'Interactive Demo Scene', 
-  $sceneSpecJson,
-  $userId
-);
+### 1. User Interface Entry Point
 
--- Legacy scene (for compatibility)
-INSERT INTO "bazaar-vid_scenes" (
-  project_id, name, tsx_code, duration, props
-) VALUES (
-  $projectId,
-  'Interactive Demo Scene',
-  $generatedReactCode,
-  240, -- 8 seconds * 30fps
-  $legacyProps
-);
-```
+**File**: `src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx`
 
-**SSE Events Emitted:**
 ```typescript
-// Tool selection event
-sceneEvents.toolSelected(projectId, {
-  toolName: 'addScene',
-  reasoning: 'User wants to create a new interactive scene',
-  confidence: 0.95
-});
-
-// Scene spec generated event  
-sceneEvents.sceneSpecGenerated(projectId, {
-  sceneId: 'scene-001-interactive-demo',
-  sceneSpec: enhancedSceneSpec,
-  reasoning: 'Created interactive demo with typewriter effect and camera zoom',
-  toolUsed: 'addScene'
-});
-```
-
-**Files Involved:**
-- `src/server/db/schema.ts` (sceneSpecs table definition)
-- `src/lib/events/sceneEvents.ts` (SSE event system)
-- `src/server/api/routers/generation.ts` (database operations)
-
-### **Step 6: Code Generation (Legacy Compatibility)**
-```
-SceneSpec JSON
-↓
-SceneSpecGenerator: Convert to React/Remotion code
-  - Generate imports (Remotion + Flowbite)
-  - Create component structure
-  - Apply animations and styling
-  - Generate responsive layout
-↓
-Executable React Component
-```
-
-**Generated React Code:**
-```tsx
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
-import { TextInput, Button } from 'flowbite-react';
-
-export default function InteractiveDemoScene() {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+// User types message in chat interface
+const handleSubmit = async (e: React.FormEvent) => {
+  // Auto-tag messages with scene context
+  const taggedMessage = autoTagMessage(message);
   
-  // Animation calculations
-  const animation1 = {
-    opacity: interpolate(frame, [0, 30], [0, 1], { extrapolateRight: 'clamp' })
-  };
+  // Add optimistic UI updates
+  const userMessageId = addOptimisticUserMessage(taggedMessage);
+  const assistantMessageId = addOptimisticAssistantMessage();
   
-  const animation2 = {
-    opacity: interpolate(frame, [15, 75], [0.7, 1], { extrapolateRight: 'clamp' }),
-    transform: `scale(${interpolate(frame, [15, 75], [1, 1.1], { extrapolateRight: 'clamp' })})`
-  };
-  
-  // Typewriter effect
-  const typewriterProgress = interpolate(frame, [60, 150], [0, 1], { extrapolateRight: 'clamp' });
-  const fullText = "Wow, Bazaar can actually produce some good results";
-  const visibleText = fullText.slice(0, Math.floor(typewriterProgress * fullText.length));
-  
-  // Mouse movement
-  const mouseX = interpolate(frame, [150, 180], [10, 45], { extrapolateRight: 'clamp' });
-  const mouseY = interpolate(frame, [150, 180], [10, 75], { extrapolateRight: 'clamp' });
-  
-  // Camera zoom
-  const zoomScale = interpolate(frame, [195, 225], [1, 10], { extrapolateRight: 'clamp' });
-  
-  return (
-    <AbsoluteFill className="bg-black text-white font-inter" style={{ transform: `scale(${zoomScale})` }}>
-      {/* Gradient glow behind input */}
-      <div 
-        className="absolute bg-gradient-to-r from-purple-500 to-pink-500 blur-lg opacity-70"
-        style={{ 
-          left: '25%', top: '35%', width: '50%', height: '20%', zIndex: -1,
-          ...animation2
-        }}
-      />
-      
-      {/* Text input */}
-      <TextInput
-        placeholder="Enter text here..."
-        className="rounded-full"
-        style={{ 
-          position: 'absolute',
-          left: '30%', top: '40%', width: '40%', height: '10%',
-          ...animation1
-        }}
-      />
-      
-      {/* Typewriter text */}
-      <p 
-        className="text-white text-center font-inter text-6xl"
-        style={{ 
-          position: 'absolute',
-          left: '20%', top: '60%', width: '60%', height: '10%'
-        }}
-      >
-        {visibleText}
-      </p>
-      
-      {/* Submit button */}
-      <Button
-        style={{ 
-          position: 'absolute',
-          left: '45%', top: '75%', width: '10%', height: '5%'
-        }}
-      >
-        Submit
-      </Button>
-      
-      {/* Mouse cursor */}
-      <div
-        className="absolute w-4 h-4 bg-white"
-        style={{ 
-          left: `${mouseX}%`, 
-          top: `${mouseY}%`,
-          clipPath: 'polygon(0 0, 0 100%, 25% 75%, 50% 100%, 100% 0)'
-        }}
-      />
-    </AbsoluteFill>
-  );
-}
-```
-
-**Files Involved:**
-- `src/lib/services/componentGenerator/sceneSpecGenerator.ts` (Code generator)
-- `src/lib/services/componentGenerator/adapters/flowbite.ts` (Component mapping)
-
-### **Step 7: Response & UI Update**
-```
-Generated Scene + SceneSpec
-↓
-tRPC Response: { scene, sceneSpec, reasoning, toolUsed: 'addScene' }
-↓
-Frontend Updates:
-  - Add scene to storyboard
-  - Update Remotion player
-  - Show success message
-  - Enable real-time preview
-```
-
-**Frontend State Updates:**
-```typescript
-// ChatPanelG receives response
-const result = await generateScene.mutateAsync({
-  projectId,
-  userMessage: prompt
-});
-
-// Update storyboard
-setScenes(prev => [...prev, result.scene]);
-
-// Update player with new scene
-setCurrentScene(result.scene);
-
-// Show success message
-addMessage({
-  role: 'assistant',
-  content: `Scene created: ${result.reasoning} ✅`,
-  status: 'success'
-});
-```
-
----
-
-## 🔄 **Flow 2: Scene Editing**
-
-### **Step 1: User Input with Edit Intent**
-```
-User submits: "no make the mouse bigger and red"
-↓
-Frontend: ChatPanelG captures input
-↓
-tRPC Call: generation.generateScene({ projectId, userMessage })
-↓
-Feature Flag: MCP enabled (same project)
-```
-
-### **Step 2: Brain LLM Analysis**
-```
-Brain Orchestrator Analysis:
-  - Context: Previous scene exists
-  - Intent: Modify existing element (mouse cursor)
-  - Specificity: Clear target and changes
-  - **Tool Selected: editScene**
-```
-
-**Brain LLM Reasoning:**
-```
-User says "make the mouse bigger and red" - this is clearly an edit request.
-They want to modify the existing mouse cursor component.
-Changes requested:
-1. Increase size (bigger)
-2. Change color (red)
-Target: MouseCursor component from previous scene
-Tool: editScene
-```
-
-### **Step 3: Tool Execution - editScene**
-```
-Tool: editScene
-Input: {
-  userPrompt: "no make the mouse bigger and red",
-  sceneId: "scene-001-interactive-demo", 
-  editInstruction: "make the mouse bigger and red",
-  sessionId: "session-uuid",
-  userId: "user-uuid"
-}
-↓
-SceneBuilder: Patch existing SceneSpec
-  - Load current SceneSpec from database
-  - Apply targeted modifications
-  - Preserve all other elements
-```
-
-**Edit Process:**
-```typescript
-// Load existing SceneSpec
-const existingSpec = await db.query.sceneSpecs.findFirst({
-  where: eq(sceneSpecs.sceneId, sceneId)
-});
-
-// Apply targeted edit
-const editedSpec = {
-  ...existingSpec.spec,
-  components: existingSpec.spec.components.map(component => {
-    if (component.id === 'mouse-cursor') {
-      return {
-        ...component,
-        layout: {
-          ...component.layout,
-          width: 0.04,  // Doubled from 0.02
-          height: 0.04  // Doubled from 0.02
-        },
-        classes: [...(component.classes || []), 'bg-red-500']
-      };
-    }
-    return component;
-  })
+  // Call generation endpoint
+  generateSceneWithChatMutation.mutate({
+    userMessage: taggedMessage,
+    projectId,
+    sceneId: effectiveSelectedSceneId
+  });
 };
 ```
 
-### **Step 4: Database Update & Code Regeneration**
-```
-Modified SceneSpec
-↓
-Database Update: UPDATE scene_specs SET spec = $editedSpec
-↓
-Code Regeneration: Generate new React component
-↓
-Legacy Scene Update: UPDATE scenes SET tsx_code = $newCode
-```
+### 2. Message Processing & Context Detection
 
-**Updated React Code (Mouse Section):**
-```tsx
-{/* Mouse cursor - NOW BIGGER AND RED */}
-<div
-  className="absolute w-8 h-8 bg-red-500"  // Changed from w-4 h-4 bg-white
-  style={{ 
-    left: `${mouseX}%`, 
-    top: `${mouseY}%`,
-    clipPath: 'polygon(0 0, 0 100%, 25% 75%, 50% 100%, 100% 0)'
-  }}
-/>
-```
+The chat panel performs intelligent message analysis:
 
-### **Step 5: Response & UI Update**
-```
-Updated Scene
-↓
-tRPC Response: { scene, isEdit: true, reasoning }
-↓
-Frontend: Replace existing scene in storyboard
-↓
-Remotion Player: Hot reload with updated component
+#### Auto-Tagging System
+```typescript
+const autoTagMessage = (msg: string): string => {
+  // 1. Check for scene removal commands
+  if (isRemovalCommand(msg)) {
+    return `@scene(${sceneId}) ${msg}`;
+  }
+  
+  // 2. Check for scene number references (@scene(1), @scene(2))
+  const sceneNumberMatch = /\bscene\s+(\d+)\b/i.exec(msg);
+  if (sceneNumberMatch) {
+    const targetScene = getSceneByNumber(sceneNumber);
+    return `@scene(${targetScene.id}) ${msg}`;
+  }
+  
+  // 3. Auto-detect edit commands for selected scene
+  if (selectedScene && isLikelyEdit(msg)) {
+    return `@scene(${selectedScene.id}) ${msg}`;
+  }
+  
+  return msg;
+};
 ```
 
----
-
-## 📊 **Performance Metrics**
-
-### **Timing Breakdown**
-| Step | Duration | Model | Cost |
-|------|----------|-------|------|
-| Feature Flag Check | <1ms | - | Free |
-| Brain LLM (Intent) | 150-250ms | GPT-4o-mini | $0.0001 |
-| SceneBuilder (Create) | 1.8-2.3s | GPT-4o | $0.003 |
-| SceneBuilder (Edit) | 0.8-1.2s | GPT-4o | $0.001 |
-| Database Operations | 50-100ms | - | Free |
-| Code Generation | 100-200ms | - | Free |
-| **Total (Create)** | **2.1-2.7s** | | **$0.0031** |
-| **Total (Edit)** | **1.0-1.5s** | | **$0.0011** |
-
-### **Quality Improvements**
-- **Intent Recognition**: 95% accuracy (vs 70% legacy)
-- **Schema Validation**: 99% success rate (vs 85% legacy)
-- **Edit Speed**: 10x faster (patch vs full regen)
-- **User Satisfaction**: 4.5/5 projected (vs 3.2/5 current)
-
----
-
-## 🔧 **System Architecture Summary**
-
-### **Key Components**
-1. **Feature Flags** (`src/lib/featureFlags.ts`)
-   - Project-level MCP enablement
-   - Gradual rollout with hash-based bucketing
-
-2. **Brain Orchestrator** (`src/server/services/brain/orchestrator.ts`)
-   - GPT-4o-mini for fast intent recognition
-   - Tool selection with confidence scoring
-
-3. **MCP Tools** (`src/lib/services/mcp-tools/scene-tools.ts`)
-   - addScene: Create new scenes
-   - editScene: Modify existing scenes  
-   - deleteScene: Remove scenes
-   - askSpecify: Request clarification
-
-4. **SceneBuilder** (`src/lib/services/sceneBuilder.service.ts`)
-   - GPT-4o for high-quality scene planning
-   - Structured SceneSpec JSON generation
-
-5. **Database Layer** (`src/server/db/schema.ts`)
-   - scene_specs table with JSONB storage
-   - GIN indexes for fast component queries
-
-6. **Event System** (`src/lib/events/sceneEvents.ts`)
-   - Real-time SSE events for progressive UI
-   - Tool selection, generation, and error events
-
-7. **Code Generator** (`src/lib/services/componentGenerator/sceneSpecGenerator.ts`)
-   - SceneSpec to React/Remotion conversion
-   - Flowbite component integration
-
-### **Data Flow**
-```
-User Input → Feature Flags → Brain LLM → MCP Tools → SceneBuilder → 
-Database → Code Generator → SSE Events → Frontend Updates
+#### Edit Detection Logic
+```typescript
+const isLikelyEdit = (msg: string) => {
+  const editIndicators = ['make', 'change', 'set', 'turn', 'fix', 'update', 'modify'];
+  const contextEditPatterns = [
+    /^add more/i,     // "add more typewriter effects"
+    /^make it/i,      // "make it more animated"
+    /^change the/i,   // "change the color"
+  ];
+  
+  // Context-aware: if scene selected, be more liberal with edit detection
+  if (hasSelectedScene && contextEditPatterns.some(pattern => pattern.test(msg))) {
+    return true;
+  }
+  
+  return editIndicators.some(indicator => msg.includes(indicator));
+};
 ```
 
-### **Fallback Strategy**
-- Feature flag disabled → Legacy generation system
-- MCP tool failure → askSpecify for clarification
-- SceneBuilder error → Fallback scene template
-- Database error → In-memory scene storage
+### 3. Generation Router (Entry Point)
 
-This architecture provides intelligent, fast, and reliable scene generation with comprehensive error handling and progressive enhancement capabilities. 
+**File**: `src/server/api/routers/generation.ts`
+
+```typescript
+generateScene: protectedProcedure
+  .input(generateSceneSchema)
+  .mutation(async ({ input, ctx }) => {
+    const { userMessage, projectId, sceneId } = input;
+    
+    // Feature flag check
+    if (isMCPEnabled()) {
+      // Route to Brain Orchestrator (MCP System)
+      return await brainOrchestrator.processUserRequest({
+        userMessage,
+        projectId,
+        sceneId,
+        userId: ctx.session.user.id,
+        session: ctx.session
+      });
+    } else {
+      // Route to Legacy Generation Service
+      return await legacyGenerationService.generateScene({
+        userMessage,
+        projectId,
+        sceneId,
+        isEditMode: !!sceneId
+      }, {
+        session: ctx.session,
+        userId: ctx.session.user.id
+      });
+    }
+  })
+```
+
+## Generation Systems
+
+### Legacy System (Production)
+
+**File**: `src/server/services/legacyGeneration.service.ts`
+
+The legacy system uses direct OpenAI calls with comprehensive system prompts:
+
+```typescript
+export class LegacyGenerationService {
+  async generateScene(input: LegacyGenerateSceneInput, context: LegacyGenerationContext) {
+    // 1. Determine if this is create or edit
+    const isEdit = input.isEditMode && input.sceneId;
+    
+    // 2. Build context from chat history
+    const chatHistory = await this.getChatHistory(input.projectId);
+    
+    // 3. Get existing scene data if editing
+    const existingScene = isEdit ? await this.getExistingScene(input.sceneId) : null;
+    
+    // 4. Generate with appropriate system prompt
+    const systemPrompt = isEdit ? this.getEditSystemPrompt() : this.getCreateSystemPrompt();
+    
+    // 5. Call OpenAI with full context
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...chatHistory,
+        { role: "user", content: input.userMessage }
+      ]
+    });
+    
+    // 6. Parse and validate response
+    // 7. Save to database
+    // 8. Return structured result
+  }
+}
+```
+
+### MCP System (Experimental)
+
+**File**: `src/server/services/brain/orchestrator.ts`
+
+The MCP system uses a two-layer approach:
+
+#### Layer 1: Brain Orchestrator (Intent Analysis)
+```typescript
+export class BrainOrchestrator {
+  async processUserRequest(input: BrainInput): Promise<BrainOutput> {
+    // 1. Analyze user intent
+    const intent = await this.analyzeIntent(input.userMessage);
+    
+    // 2. Determine appropriate tool
+    const toolName = this.selectTool(intent, input.sceneId);
+    
+    // 3. Execute MCP tool with context
+    return await this.executeTool(toolName, {
+      userPrompt: input.userMessage,
+      projectId: input.projectId,
+      sceneId: input.sceneId
+    });
+  }
+}
+```
+
+#### Layer 2: MCP Tools (Code Generation)
+
+**File**: `src/lib/services/mcp-tools/addScene.ts`
+
+```typescript
+export class AddSceneTool extends BaseMCPTool {
+  protected async execute(input: AddSceneInput): Promise<AddSceneOutput> {
+    // STEP 1: Generate enriched context using Brain analysis
+    const brainContext = await this.generateBrainContext({
+      userPrompt: input.userPrompt,
+      storyboardSoFar: input.storyboardSoFar || []
+    });
+    
+    // STEP 2: Generate React/Remotion code with enriched context
+    const result = await sceneBuilderService.generateDirectCode({
+      userPrompt: input.userPrompt,
+      projectId: input.projectId,
+      brainContext
+    });
+    
+    return {
+      sceneCode: result.code,
+      sceneName: result.name,
+      duration: result.duration,
+      reasoning: result.reasoning
+    };
+  }
+}
+```
+
+## Chat History & Context Management
+
+### Message Persistence
+
+**Database Schema**: `src/server/db/schema/messages.ts`
+```typescript
+export const messages = pgTable("messages", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull(),
+  content: text("content").notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  createdAt: timestamp("created_at").defaultNow(),
+  status: text("status"), // 'success' | 'error' | 'pending'
+});
+```
+
+### Context Building Strategy
+
+#### For Iteration 7+ Scenarios:
+```typescript
+// Legacy system builds full chat history
+const chatHistory = await db.select()
+  .from(messages)
+  .where(eq(messages.projectId, projectId))
+  .orderBy(messages.createdAt);
+
+// Convert to OpenAI format
+const openAIMessages = chatHistory.map(msg => ({
+  role: msg.role as 'user' | 'assistant',
+  content: msg.content
+}));
+```
+
+#### Context Truncation (Smart):
+```typescript
+// Keep last N messages to stay within token limits
+const MAX_CONTEXT_MESSAGES = 20;
+const recentMessages = chatHistory.slice(-MAX_CONTEXT_MESSAGES);
+```
+
+### Edit Request Handling
+
+When user submits multiple edit requests:
+
+1. **Auto-tagging**: System automatically tags with `@scene(id)`
+2. **Context preservation**: Previous edits are included in chat history
+3. **Incremental changes**: Each edit builds on the previous version
+4. **State management**: Video state is updated optimistically
+
+```typescript
+// Example: User iteration flow
+// User: "Create a login form"
+// → Creates Scene 1
+
+// User: "Make it red" (with Scene 1 selected)
+// → Auto-tagged as "@scene(scene1-id) Make it red"
+// → Edits Scene 1
+
+// User: "Add animation"
+// → Auto-tagged as "@scene(scene1-id) Add animation"  
+// → Further edits Scene 1
+
+// User: "Create a dashboard"
+// → Creates Scene 2 (no scene selected, so new scene)
+```
+
+## System Prompts Architecture
+
+### Legacy System Prompts
+
+**File**: `src/server/services/legacyGeneration.service.ts`
+
+#### Create System Prompt (Lines 100-200):
+```typescript
+const createSystemPrompt = `
+You are an expert React/Remotion video scene generator.
+
+CRITICAL ESM REQUIREMENTS:
+- NEVER use: import React from 'react';
+- NEVER use: import { ... } from 'remotion';
+- ALWAYS use: const { AbsoluteFill, useCurrentFrame, ... } = window.Remotion;
+
+COMPONENT LIBRARIES:
+- Flowbite React components for UI
+- Tailwind CSS for styling
+- Custom animations with interpolate()
+
+RESPONSE FORMAT:
+{
+  "tsxCode": "// React component code",
+  "name": "Scene name",
+  "duration": 5,
+  "reasoning": "Explanation"
+}
+`;
+```
+
+#### Edit System Prompt (Lines 300-400):
+```typescript
+const editSystemPrompt = `
+You are editing an existing React/Remotion scene.
+
+EXISTING SCENE:
+{existingCode}
+
+USER REQUEST: {userMessage}
+
+EDIT GUIDELINES:
+- Preserve working functionality
+- Make targeted changes only
+- Maintain ESM compliance
+- Keep existing animations unless specifically requested to change
+
+RESPONSE FORMAT: Same as create
+`;
+```
+
+### MCP System Prompts
+
+**File**: `src/lib/services/sceneBuilder.service.ts`
+
+#### Brain Context Generation (Lines 50-150):
+```typescript
+const contextPrompt = `
+You are an AI Brain analyzing user intent for video code generation.
+
+USER REQUEST: "${userPrompt}"
+EXISTING SCENES: ${storyboardSoFar.length} scenes
+
+Analyze and provide strategic guidance:
+
+RESPONSE FORMAT (JSON):
+{
+  "userIntent": "What the user really wants",
+  "technicalRecommendations": ["Use Flowbite Table", "Add typewriter animation"],
+  "uiLibraryGuidance": "Specific component recommendations",
+  "animationStrategy": "Detailed animation approach",
+  "focusAreas": ["Text animation", "Form interaction"]
+}
+`;
+```
+
+#### Code Generation Prompt (Lines 500-800):
+```typescript
+const codeGenerationPrompt = `
+You are a React/Remotion code generator.
+
+BRAIN CONTEXT:
+- User Intent: ${brainContext.userIntent}
+- Recommendations: ${brainContext.technicalRecommendations}
+- Animation Strategy: ${brainContext.animationStrategy}
+
+CRITICAL ESM REQUIREMENTS:
+- Use window.Remotion destructuring ONLY
+- No React imports
+
+Generate working React/Remotion component code.
+`;
+```
+
+## Self-Reflection & Intelligence Strategies
+
+### Current System Limitations
+
+1. **No Error Recovery**: System doesn't learn from failed generations
+2. **No Quality Assessment**: No feedback loop on generated code quality
+3. **Limited Context**: Doesn't analyze previous successful patterns
+4. **No User Preference Learning**: Doesn't adapt to user style preferences
+
+### Proposed Intelligence Enhancements
+
+#### 1. Generation Quality Feedback Loop
+```typescript
+// Add to generation response
+interface GenerationResult {
+  scene: Scene;
+  assistantMessage: Message;
+  qualityMetrics: {
+    compilationSuccess: boolean;
+    renderSuccess: boolean;
+    userSatisfaction?: number; // 1-5 rating
+    errorCount: number;
+  };
+}
+
+// Track and learn from patterns
+class QualityTracker {
+  async recordGeneration(result: GenerationResult) {
+    // Store quality metrics
+    // Analyze patterns in successful vs failed generations
+    // Adjust future prompts based on success patterns
+  }
+}
+```
+
+#### 2. User Preference Learning
+```typescript
+class UserPreferenceEngine {
+  async analyzeUserPatterns(userId: string) {
+    // Analyze user's previous prompts and edits
+    // Identify preferred UI libraries (Flowbite vs HTML)
+    // Identify preferred animation styles
+    // Identify common edit patterns
+    
+    return {
+      preferredUILibrary: 'flowbite',
+      preferredAnimationStyle: 'smooth',
+      commonEditPatterns: ['color changes', 'text modifications']
+    };
+  }
+  
+  async enhancePromptWithPreferences(prompt: string, preferences: UserPreferences) {
+    // Inject user preferences into system prompts
+    // "This user typically prefers Flowbite components and smooth animations"
+  }
+}
+```
+
+#### 3. Error Recovery System
+```typescript
+class ErrorRecoveryService {
+  async handleGenerationError(error: GenerationError, context: GenerationContext) {
+    // 1. Analyze error type (compilation, runtime, validation)
+    // 2. Apply known fixes for common error patterns
+    // 3. Retry with modified prompt
+    // 4. If still failing, fall back to simpler approach
+    
+    const errorPattern = this.classifyError(error);
+    const fix = this.getKnownFix(errorPattern);
+    
+    if (fix) {
+      return await this.retryWithFix(context, fix);
+    }
+    
+    // Fallback to minimal working scene
+    return await this.generateFallbackScene(context);
+  }
+}
+```
+
+#### 4. Context-Aware Prompt Enhancement
+```typescript
+class ContextEnhancer {
+  async enhancePrompt(userMessage: string, context: GenerationContext) {
+    // Analyze current project themes
+    const projectThemes = await this.analyzeProjectThemes(context.projectId);
+    
+    // Analyze successful patterns from similar projects
+    const similarPatterns = await this.findSimilarSuccessfulPatterns(userMessage);
+    
+    // Enhance prompt with contextual guidance
+    return {
+      enhancedPrompt: userMessage,
+      contextualGuidance: {
+        projectThemes,
+        similarPatterns,
+        recommendedApproach: 'Based on similar successful generations...'
+      }
+    };
+  }
+}
+```
+
+#### 5. Multi-Attempt Generation with Learning
+```typescript
+class IntelligentGenerator {
+  async generateWithLearning(input: GenerationInput) {
+    const attempts = [];
+    let bestResult = null;
+    
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        // Enhance prompt based on previous attempts
+        const enhancedInput = await this.enhanceBasedOnAttempts(input, attempts);
+        
+        const result = await this.generate(enhancedInput);
+        
+        // Validate and score result
+        const quality = await this.assessQuality(result);
+        
+        if (quality.score > 0.8) {
+          return result; // Good enough
+        }
+        
+        attempts.push({ result, quality, attempt });
+        bestResult = this.selectBestResult(attempts);
+        
+      } catch (error) {
+        attempts.push({ error, attempt });
+      }
+    }
+    
+    return bestResult || this.generateFallbackScene(input);
+  }
+}
+```
+
+## Best Practices Implementation
+
+### 1. Separation of Concerns
+- **Brain Layer**: Intent analysis and strategic decisions
+- **Tool Layer**: Code generation and execution
+- **Service Layer**: Business logic and data persistence
+- **UI Layer**: User interaction and state management
+
+### 2. Error Handling
+```typescript
+// Graceful degradation at each layer
+try {
+  return await mcpGeneration(input);
+} catch (mcpError) {
+  console.warn('MCP failed, falling back to legacy:', mcpError);
+  return await legacyGeneration(input);
+}
+```
+
+### 3. Performance Optimization
+```typescript
+// Optimistic UI updates
+const optimisticMessage = addOptimisticMessage(userInput);
+generateScene(input).then(result => {
+  updateOptimisticMessage(optimisticMessage.id, result);
+});
+```
+
+### 4. Type Safety
+```typescript
+// Strict TypeScript throughout
+interface GenerationInput {
+  userMessage: string;
+  projectId: string;
+  sceneId?: string;
+}
+
+interface GenerationOutput {
+  scene: Scene;
+  assistantMessage: Message;
+  isEdit: boolean;
+}
+```
+
+### 5. Monitoring & Observability
+```typescript
+// Comprehensive logging
+console.log(`[Generation] Starting: ${input.userMessage.substring(0, 50)}...`);
+console.log(`[Generation] Context: ${scenes.length} scenes, edit=${!!sceneId}`);
+console.log(`[Generation] Result: ${result.scene.name}, ${result.scene.duration}s`);
+```
+
+## File Responsibilities Summary
+
+| File | Responsibility |
+|------|----------------|
+| `ChatPanelG.tsx` | User interface, message handling, context detection |
+| `generation.ts` | Routing between legacy/MCP systems |
+| `legacyGeneration.service.ts` | Stable production generation logic |
+| `orchestrator.ts` | MCP intent analysis and tool selection |
+| `addScene.ts` | MCP scene creation tool |
+| `sceneBuilder.service.ts` | Code generation with brain context |
+| `messages.ts` | Database schema for chat persistence |
+
+This architecture provides a robust foundation for video generation while maintaining flexibility for future enhancements and intelligence improvements.

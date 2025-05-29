@@ -90,6 +90,7 @@ export const projects = createTable(
     userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
     title: d.varchar({ length: 255 }).notNull(),
     props: d.jsonb().$type<InputProps>().notNull(),
+    isWelcome: d.boolean().default(true).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
   }),
@@ -177,6 +178,7 @@ export const scenes = createTable(
     publishedAt: d.timestamp({ withTimezone: true }), // When the scene was published
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+    layoutJson: d.text("layout_json"), // NEW: Store JSON specification for two-step pipeline
   }),
   (t) => [
     index("scene_project_idx").on(t.projectId),
@@ -203,7 +205,7 @@ export const sceneSpecs = createTable(
     version: d.varchar({ length: 10 }).default("1.0").notNull(), // Schema version
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
-    createdBy: d.uuid().references(() => users.id),
+    createdBy: d.varchar({ length: 255 }).references(() => users.id),
   }),
   (t) => [
     index("scene_spec_project_idx").on(t.projectId),
@@ -399,11 +401,40 @@ export const animationDesignBriefs = createTable(
 );
 
 export const animationDesignBriefsRelations = relations(animationDesignBriefs, ({ one }) => ({
-  project: one(projects, { fields: [animationDesignBriefs.projectId], references: [projects.id] }),
-  componentJob: one(customComponentJobs, { 
-    fields: [animationDesignBriefs.componentJobId], 
-    references: [customComponentJobs.id] 
+  project: one(projects, {
+    fields: [animationDesignBriefs.projectId],
+    references: [projects.id],
   }),
+  componentJob: one(customComponentJobs, {
+    fields: [animationDesignBriefs.componentJobId],
+    references: [customComponentJobs.id],
+  }),
+}));
+
+// --- Feedback table ---
+// Stores user feedback and feature prioritization
+export const feedback = createTable(
+  "feedback",
+  (d) => ({
+    id: d.text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), // Using text for createId compatibility if needed, else use uuid()
+    content: d.text('content'), // Free-text comments, can be nullable if only features are prioritized
+    name: d.text('name'), // Optional name provided by user
+    email: d.text('email'), // Optional for anonymous, pre-filled for logged-in
+    userId: d.varchar('user_id', { length: 255 }).references(() => users.id, { onDelete: 'set null' }),
+    prioritizedFeatures: d.jsonb('prioritized_features').$type<string[]>(), // Array of selected feature IDs/names
+    createdAt: d.timestamp('created_at', { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    status: d.text('status').default('new').notNull(), // e.g., 'new', 'reviewed', 'planned', 'implemented', 'archived'
+    adminNotes: d.text('admin_notes'), // For internal team notes
+  }),
+  (t) => [
+    index("feedback_user_idx").on(t.userId),
+    index("feedback_status_idx").on(t.status),
+    index("feedback_created_at_idx").on(t.createdAt),
+  ]
+);
+
+export const feedbackRelations = relations(feedback, ({ one }) => ({
+  user: one(users, { fields: [feedback.userId], references: [users.id] }),
 }));
 
 // --- Agent Messages table ---

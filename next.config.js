@@ -40,6 +40,12 @@ const config = {
       type: 'asset/resource',
     });
 
+    // Add support for importing SVG as React components
+    config.module.rules.push({
+      test: /\.svg$/,
+      use: ['@svgr/webpack'],
+    });
+
     // Handle Node.js built-in modules in client-side code
     if (!isServer) {
       if (!config.resolve.fallback) {
@@ -152,8 +158,8 @@ const config = {
   // External packages that should be bundled separately
   serverExternalPackages: ['@prisma/client', 'drizzle-orm', 'esbuild', '@aws-sdk/client-s3', 'sharp'],
   
-  // Configure CORS for API routes
-  headers: async () => {
+  // Configure CORS and security headers
+  async headers() {
     return [
       {
         source: '/api/:path*',
@@ -164,6 +170,16 @@ const config = {
           { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
         ],
       },
+      {
+        // Add SEO-friendly headers for all pages
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      }
     ];
   },
   
@@ -172,6 +188,7 @@ const config = {
     ignoreBuildErrors: true,
   },
   
+  // Enhanced image optimization
   images: {
     remotePatterns: [
       {
@@ -179,15 +196,38 @@ const config = {
         hostname: '**',
       },
     ],
-    // domains: ['images.unsplash.com'], // Deprecated
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
+  // Performance optimizations
+  compress: true,
+  productionBrowserSourceMaps: false,
+  optimizeFonts: true,
+  
+  // Static generation optimizations
+  output: 'standalone',
+  
   // Add these settings to quiet down the Next.js internals
   onDemandEntries: {
     // Keep pages in memory longer to avoid constant reloads
     maxInactiveAge: 60 * 60 * 1000, // 1 hour
     // Don't show verbose logs for page compilation
     pagesBufferLength: 5,
+  },
+  
+  // Disable X-Powered-By header
+  poweredByHeader: false,
+  
+  // Enable experimental features for better performance
+  experimental: {
+    optimizeCss: true, 
+    scrollRestoration: true,
+    optimizePackageImports: ['lucide-react'],
   },
 };
 

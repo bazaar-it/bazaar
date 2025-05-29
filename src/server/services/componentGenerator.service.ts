@@ -149,8 +149,7 @@ export async function generateComponent(
     enhancedDescriptionLines.push(`\n### BOILERPLATE STRUCTURE (Follow this pattern):`);
     enhancedDescriptionLines.push(`\`\`\`typescript`);
     enhancedDescriptionLines.push(`// src/remotion/components/scenes/${componentName}.tsx`);
-    enhancedDescriptionLines.push(`import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence, Easing, Img, Audio } from 'remotion';`);
-    enhancedDescriptionLines.push(`import React from 'react';`);
+    enhancedDescriptionLines.push(`const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence, Easing, Img, Audio } = window.Remotion;`);
     enhancedDescriptionLines.push(`// import { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';`);
     enhancedDescriptionLines.push(``);
     enhancedDescriptionLines.push(`export const ${componentName}: React.FC<{ brief: AnimationDesignBrief }> = ({ brief }) => {`);

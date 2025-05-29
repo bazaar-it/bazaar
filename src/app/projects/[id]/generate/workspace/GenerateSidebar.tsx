@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
@@ -33,7 +34,6 @@ type Project = {
 };
 
 interface GenerateSidebarProps {
-  projects: Project[];
   currentProjectId: string;
   onAddPanel?: (panelType: PanelTypeG) => void;
   isCollapsed?: boolean;
@@ -69,7 +69,6 @@ const navItems: WorkspacePanelG[] = [
 ];
 
 export function GenerateSidebar({
-  projects,
   currentProjectId,
   onAddPanel,
   isCollapsed = false,
@@ -81,6 +80,14 @@ export function GenerateSidebar({
     "bazaar-projects-expanded",
     false, // Default to collapsed
   );
+
+  const { data: projectsData, isLoading: isLoadingProjects, error: projectsError } = api.project.list.useQuery();
+  // The project.list tRPC endpoint returns an array of DB projects (e.g., { id, title, ... })
+  // We need to map this to the component's Project type { id, name }
+  const projects: Project[] = (projectsData || []).map(dbProject => ({
+    id: dbProject.id,
+    name: dbProject.title, // Map 'title' from DB to 'name' for the UI
+  }));
 
   // Setup mutation for creating a new project (for collapsed button)
   const utils = api.useUtils();
@@ -300,11 +307,21 @@ export function GenerateSidebar({
           </div>
         </div>
 
-        {projectsExpanded && (
+        {isLoadingProjects && !isCollapsed && (
+          <div className="px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
+            Loading projects...
+          </div>
+        )}
+        {projectsError && !isCollapsed && (
+          <div className="px-2 py-1 text-sm text-red-500">
+            Error: {projectsError.message}
+          </div>
+        )}
+        {!isLoadingProjects && !projectsError && projectsExpanded && (
           <nav
             className={`${isCollapsed ? "px-0" : "px-2"} max-h-[30vh] w-full space-y-1 overflow-y-auto py-1`}
           >
-            {projects.map((project) => (
+            {projects.map((project: Project) => (
               <Tooltip key={project.id}>
                 <TooltipTrigger asChild>
                   <Link

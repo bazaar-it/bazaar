@@ -396,7 +396,32 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       console.log('[WorkspaceContentAreaG] Scene generated, validating before state update:', sceneId);
       
       try {
-        // STEP 1: Validate the generated code before adding to video state
+        // Handle scene removal case
+        if (sceneId === 'SCENE_REMOVED') {
+          console.log('[WorkspaceContentAreaG] Scene removal detected, refreshing project state...');
+          
+          // STEP 1: Refetch the latest project scenes from database
+          const result = await getProjectScenesQuery.refetch();
+          
+          if (result.data) {
+            console.log('[WorkspaceContentAreaG] Fetched updated scenes after removal:', result.data.length);
+            
+            // Convert database scenes to InputProps format
+            const updatedProps = convertDbScenesToInputProps(result.data);
+            
+            // Update the video state with the fresh data
+            replace(projectId, updatedProps);
+            
+            console.log('[WorkspaceContentAreaG] ✅ Video state updated successfully after scene removal, scene count:', updatedProps.scenes.length);
+            toast.success('Scene removed successfully!');
+            
+            return; // Exit early for removal case
+          } else {
+            throw new Error('Failed to fetch updated scenes from database');
+          }
+        }
+        
+        // STEP 1: Validate the generated code before adding to video state (only for new scenes)
         console.log('[WorkspaceContentAreaG] Validating scene code...');
         const validation = await validateSceneCode(code);
         

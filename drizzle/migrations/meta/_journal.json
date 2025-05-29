@@ -99,6 +99,41 @@
       "when": 1748348743950,
       "tag": "0013_tricky_eddie_brock",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1748507183763,
+      "tag": "0014_lush_naoko",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1748507264026,
+      "tag": "0015_mushy_meltdown",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1748508163595,
+      "tag": "0016_strong_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1748508177131,
+      "tag": "0017_striped_titania",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1748523130402,
+      "tag": "0018_black_terror",
+      "breakpoints": true
     }
   ]
 }

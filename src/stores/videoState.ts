@@ -76,6 +76,7 @@ interface VideoState {
   
   // Legacy methods (for backward compatibility)
   getChatHistory: () => ChatMessage[];
+  getProjectChatHistory: (projectId: string) => ChatMessage[]; // Added to interface
   applyPatch: (projectId: string, patch: Operation[]) => void;
   addMessage: (projectId: string, message: string, isUser: boolean) => void;
   syncDbMessages: (projectId: string, dbMessages: DbMessage[]) => void;
@@ -119,6 +120,12 @@ export const useVideoState = create<VideoState>((set, get) => ({
     return projects[currentProjectId].props || null;
   },
 
+  getProjectChatHistory: (projectId: string) => {
+    const { projects } = get();
+    if (!projectId || !projects[projectId]) return getDefaultChatHistory();
+    return projects[projectId].chatHistory || getDefaultChatHistory();
+  },
+
   getChatHistory: () => {
     const { currentProjectId, projects } = get();
     if (!currentProjectId || !projects[currentProjectId]) return getDefaultChatHistory();
@@ -127,6 +134,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
 
   setProject: (projectId, initialProps) => 
     set((state) => {
+      console.log('[videoState.setProject] Called. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 300) + (JSON.stringify(initialProps).length > 300 ? '...' : ''));
       const isProjectSwitch = state.currentProjectId && state.currentProjectId !== projectId;
       
       // If switching to a different project, clear old chat history to avoid contamination
@@ -142,11 +150,11 @@ export const useVideoState = create<VideoState>((set, get) => ({
             // Always use the provided initialProps - don't preserve old props
             props: initialProps,
             // Clear chat history on project switch, otherwise preserve
-            chatHistory: isProjectSwitch ? getDefaultChatHistory() : (state.projects[projectId]?.chatHistory || getDefaultChatHistory()),
+            chatHistory: isProjectSwitch ? (console.log('[videoState.setProject] Setting default chat history for new/switched project'), getDefaultChatHistory()) : (console.log('[videoState.setProject] Preserving existing chat history'), state.projects[projectId]?.chatHistory || getDefaultChatHistory()),
             dbMessagesLoaded: isProjectSwitch ? false : (state.projects[projectId]?.dbMessagesLoaded ?? false),
             activeStreamingMessageId: isProjectSwitch ? null : state.projects[projectId]?.activeStreamingMessageId,
-            // Clear refresh token on project switch to force fresh renders
-            refreshToken: isProjectSwitch ? undefined : state.projects[projectId]?.refreshToken,
+            // Always generate a new refresh token to ensure Player re-renders with new props
+            refreshToken: Date.now().toString(),
           }
         }
       };
@@ -379,6 +387,8 @@ export const useVideoState = create<VideoState>((set, get) => ({
     set((state) => {
       if (!state.projects[projectId]) return state;
       
+      console.log('[videoState.syncDbMessages] Called. ProjectId:', projectId, 'Incoming dbMessages:', JSON.stringify(dbMessages).substring(0,300) + (JSON.stringify(dbMessages).length > 300 ? '...' : ''));
+      console.log('[videoState.syncDbMessages] Current chatHistory before sync (projectId:', projectId, '):', JSON.stringify(state.projects[projectId]?.chatHistory).substring(0,300) + (JSON.stringify(state.projects[projectId]?.chatHistory).length > 300 ? '...' : ''));
       const activeStreamingMessageId = state.projects[projectId].activeStreamingMessageId;
 
       // Convert DB messages to ChatMessage format
@@ -427,7 +437,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
           ...state.projects,
           [projectId]: {
             ...state.projects[projectId],
-            chatHistory: combinedHistory,
+            chatHistory: (console.log('[videoState.syncDbMessages] Combined history after sync:', JSON.stringify(combinedHistory).substring(0,300) + '...'), combinedHistory),
             dbMessagesLoaded: true
           }
         }

@@ -27,6 +27,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   // Initialize video state on mount
   useEffect(() => {
     console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
+    console.log('[GenerateWorkspaceRoot] About to call setProject. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
     setProject(projectId, initialProps);
   }, [projectId, initialProps, setProject]);
   
@@ -137,7 +138,6 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
-            projects={userProjects}
             currentProjectId={projectId}
             onAddPanel={handleAddPanel}
             isCollapsed={!isSidebarExpanded}

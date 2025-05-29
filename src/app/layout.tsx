@@ -9,28 +9,96 @@ import { Analytics } from '@vercel/analytics/react';
 import { AnalyticsProvider } from '../client/components/AnalyticsProvider';
 import { ErrorBoundary } from '../client/components/ErrorBoundary';
 import { Footer } from "~/components/ui/Footer";
+import FeedbackButton from "~/components/ui/FeedbackButton";
+import Script from 'next/script';
+import { siteConfig } from '~/config/site';
 import type { Metadata } from "next";
 
+// Generate structured data for the website
+function getStructuredData() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": siteConfig.name,
+    "description": "AI-powered motion graphics generator that transforms your ideas into professional videos in minutes.",
+    "url": siteConfig.url,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": `${siteConfig.url}/search?q={search_term_string}`
+      },
+      "query-input": "required name=search_term_string"
+    }
+  };
+}
+
 export const metadata: Metadata = {
-  title: "Bazaar-Vid | AI Video Generation Platform",
-  description: "Create stunning videos with AI-powered scene generation. Transform your ideas into professional videos in minutes.",
-  keywords: "AI video generation, video creation, automated video, scene generation, video editing",
-  authors: [{ name: "Bazaar-Vid Team" }],
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: `${siteConfig.name} | AI Motion Graphics Generator`,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: "Create stunning motion graphics with AI. Transform your ideas into professional videos in minutes with Bazaar's AI-powered video generation platform.",
+  keywords: [
+    "AI video generator",
+    "motion graphics",
+    "AI animation",
+    "video creation",
+    "automated video",
+    "text to video",
+    "AI video maker",
+    "motion design",
+    "explainer video",
+    "AI video editor"
+  ],
+  authors: [
+    { 
+      name: "Bazaar Team",
+      url: siteConfig.url 
+    }
+  ],
+  creator: "Bazaar",
   openGraph: {
-    title: "Bazaar | AI Video Generation Platform",
-    description: "Create stunning videos with AI-powered scene generation",
-    url: "https://bazaar.it",
-    siteName: "Bazaar-Vid",
+    title: `${siteConfig.name} | AI Motion Graphics Generator`,
+    description: "Create stunning motion graphics with AI. Transform your ideas into professional videos in minutes.",
+    url: siteConfig.url,
+    siteName: siteConfig.name,
+    locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: `${siteConfig.url}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: siteConfig.name,
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Bazaar | AI Video Generation Platform",
-    description: "Create stunning videos with AI-powered scene generation",
+    title: `${siteConfig.name} | AI Motion Graphics Generator`,
+    description: "Create stunning motion graphics with AI. No design skills needed.",
+    creator: "@bazaar",
+    images: [`${siteConfig.url}/og-image.png`],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: siteConfig.url,
+  },
+  verification: {
+    // Add your Google Search Console verification code here
+    // google: 'your-google-verification-code',
   },
 };
 
@@ -39,8 +107,36 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Generate structured data
+  const structuredData = getStructuredData();
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+        
+        {/* Google Analytics */}
+        {process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}');
+              `}
+            </Script>
+          </>
+        )}
+      </head>
       <body className="min-h-screen bg-white text-gray-900 antialiased flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TRPCReactProvider>
@@ -53,6 +149,7 @@ export default function RootLayout({
                         {children}
                       </main>
                       <Footer />
+                      <FeedbackButton />
                     </div>
                   </ErrorBoundary>
                 </AnalyticsProvider>
