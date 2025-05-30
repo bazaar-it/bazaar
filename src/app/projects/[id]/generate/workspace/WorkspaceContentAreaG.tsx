@@ -43,7 +43,7 @@ interface WorkspaceContentAreaGProps {
   initialProps: InputProps;
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
-  onProjectTitleUpdate?: (newTitle: string) => void;
+  onProjectRename?: (newTitle: string) => void;
 }
 
 export interface WorkspaceContentAreaGHandle {
@@ -255,7 +255,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, initialProps, projects = [], onProjectTitleUpdate }, ref) => {
+  ({ projectId, initialProps, projects = [], onProjectRename }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -327,9 +327,13 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return { isValid: false, errors };
         }
         
-        // 2. Check for required export default function
-        if (!/export\s+default\s+function/.test(code)) {
-          errors.push('Missing export default function');
+        // 2. Check for required export default (accept multiple patterns)
+        const hasExportDefaultFunction = /export\s+default\s+function/.test(code);
+        const hasExportDefaultConst = /export\s+default\s+\w+/.test(code);
+        const hasConstWithExport = /const\s+\w+\s*=.*export\s+default\s+\w+/s.test(code);
+        
+        if (!hasExportDefaultFunction && !hasExportDefaultConst && !hasConstWithExport) {
+          errors.push('Missing export default (function or const component)');
         }
         
         // 3. Check for React/Remotion patterns
@@ -377,20 +381,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             errors.push('Unmatched brackets detected');
           }
           
-          // Check for unterminated strings (basic check)
-          const singleQuotes = (code.match(/'/g) || []).length;
-          const doubleQuotes = (code.match(/"/g) || []).length;
-          const backticks = (code.match(/`/g) || []).length;
-          
-          if (singleQuotes % 2 !== 0) {
-            errors.push('Unterminated single quote string detected');
-          }
-          if (doubleQuotes % 2 !== 0) {
-            errors.push('Unterminated double quote string detected');
-          }
-          if (backticks % 2 !== 0) {
-            errors.push('Unterminated template literal detected');
-          }
+          // Note: Removed string quote validation as it incorrectly flags JSX attributes
+          // JSX allows single quotes in attributes like className='text-lg' which is valid
           
         } catch (syntaxError) {
           errors.push(`Basic syntax validation failed: ${syntaxError instanceof Error ? syntaxError.message : 'Invalid syntax'}`);
@@ -674,11 +666,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       
       switch (panel.type) {
         case 'chat':
-          return <ChatPanelG 
-            projectId={projectId} 
+          return <ChatPanelG
+            projectId={projectId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
-            onProjectTitleUpdate={onProjectTitleUpdate}
+            onProjectRename={onProjectRename}
           />;
         case 'preview':
           return (

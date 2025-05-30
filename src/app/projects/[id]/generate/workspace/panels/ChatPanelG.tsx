@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, MicIcon } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, Mic, StopCircle, MicIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -49,22 +49,24 @@ interface DbMessage {
   isOptimistic?: false;
 }
 
-export function ChatPanelG({ 
+export function ChatPanelG({
   projectId,
   selectedSceneId,
   onSceneGenerated,
-  onProjectTitleUpdate
+  onProjectRename,
 }: { 
   projectId: string;
   selectedSceneId?: string | null;
   onSceneGenerated?: (sceneId: string, code: string) => void;
-  onProjectTitleUpdate?: (newTitle: string) => void;
+  onProjectRename?: (newTitle: string) => void;
 }) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
@@ -92,6 +94,13 @@ export function ChatPanelG({
   // Database message fetching (V1 logic)
   const { data: dbMessages, isLoading: isLoadingMessages, refetch: refetchMessages } = 
     api.chat.getMessages.useQuery({ projectId });
+    
+  // Voice transcription
+  const transcribe = api.voice.transcribe.useMutation({
+    onSuccess: (data) => {
+      setMessage((prev) => (prev ? `${prev} ${data.text}` : data.text));
+    },
+  });
   
   // Helper function to add optimistic user message
   const addOptimisticUserMessage = useCallback((content: string) => {
@@ -131,6 +140,84 @@ export function ChatPanelG({
       )
     );
   }, []);
+  
+  // Handle voice recording
+  const handleRecord = async () => {
+    if (isRecording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Find supported MIME type for this browser
+      const getMimeType = () => {
+        const types = [
+          'audio/webm',
+          'audio/webm;codecs=opus',
+          'audio/mp4',
+          'audio/ogg;codecs=opus',
+          'audio/wav'
+        ];
+        
+        for (const type of types) {
+          if (MediaRecorder.isTypeSupported(type)) {
+            console.log(`Using supported MIME type: ${type}`);
+            return type;
+          }
+        }
+        
+        // Fallback to default
+        console.warn('No listed MIME type supported, using browser default');
+        return '';
+      };
+      
+      const mimeType = getMimeType();
+      const recorderOptions = mimeType ? { mimeType } : {};
+      
+      // Create recorder with best supported format
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = async () => {
+        // Get the actual MIME type that was used
+        const actualType = recorder.mimeType || 'audio/webm';
+        console.log(`Recording complete with MIME type: ${actualType}`);
+        
+        // Create blob with the recorder's actual MIME type
+        const blob = new Blob(chunks, { type: actualType });
+        
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          toast.info('Transcribing audio...');
+          transcribe.mutate({ 
+            audio: base64, 
+            mimeType: actualType
+          });
+        };
+        reader.readAsDataURL(blob);
+        
+        // Cleanup
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+      };
+      
+      recorderRef.current = recorder;
+      // Set a timeslice to get data more frequently
+      recorder.start(1000);
+      setIsRecording(true);
+      toast.success('Recording started');
+    } catch (err) {
+      console.error('Voice recording failed', err);
+      toast.error('Failed to access microphone');
+    }
+  };
 
   // Helper function to remove optimistic message
   const removeOptimisticMessage = useCallback((id: string) => {
@@ -201,7 +288,7 @@ export function ChatPanelG({
   // Query to get current project details
   const { data: currentProject, refetch: refetchProject } = api.project.getById.useQuery({ id: projectId });
 
-  // OPTIMIZATION #1: Use unified scene generation with chat persistence
+  // OPTIMIZATION #1: Use unified scene generation with chat persistence and MCP
   const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
     onSuccess: async (result: any) => {
       console.log("✅ Unified scene generation completed:", result);
@@ -215,13 +302,13 @@ export function ChatPanelG({
       }
       
       // Check if this was the first scene and project title might have been updated
-      if (scenes.length === 0 && onProjectTitleUpdate) {
+      if (scenes.length === 0 && onProjectRename) {
         try {
           // Refetch project to get updated title
           const updatedProject = await refetchProject();
           if (updatedProject.data && updatedProject.data.title !== currentProject?.title) {
             console.log('[ChatPanelG] Project title updated, notifying parent:', updatedProject.data.title);
-            onProjectTitleUpdate(updatedProject.data.title);
+            onProjectRename(updatedProject.data.title);
           }
         } catch (error) {
           console.error('[ChatPanelG] Failed to check for title update:', error);
@@ -268,6 +355,11 @@ export function ChatPanelG({
 
   // Project rename mutation for first message (V1 logic)
   const renameMutation = api.project.rename.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.title) {
+        onProjectRename?.(data.title);
+      }
+    },
     onError: (error: any) => {
       console.error("Error renaming project:", error);
     }
@@ -897,26 +989,40 @@ export function ChatPanelG({
 
       {/* Input form */}
       <div className="flex-shrink-0 p-4 border-t border-gray-200">
+        {/* Context indicator (V1 logic) */}
+        {selectedScene && (
+          <div className="mb-2 text-xs text-muted-foreground bg-primary/10 rounded-md px-2 py-1">
+            <span className="font-medium">
+              {selectedSceneId ? 'Editing:' : 'Auto-selected for editing:'}
+            </span> {(selectedScene as any).data?.name || selectedScene.type || `Scene ${selectedScene.id.slice(0, 8)}`}
+            <span className="ml-2 opacity-70">
+              {selectedSceneId ? '(manually selected)' : '(latest scene, edit commands will modify this)'}
+            </span>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex gap-2 items-start">
           <div className={`flex-1 relative flex border border-input rounded-md bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${hasMultipleLines ? 'items-start' : 'items-center'}`}>
-            {/* Microphone button */}
+            {/* Microphone button - Integrated inside input field (from HEAD) */}
             {isVoiceSupported && (
               <Button
                 type="button"
                 onClick={handleMicrophoneClick}
                 size="sm"
                 variant="ghost"
-                className={`flex-shrink-0 h-8 w-8 p-1 m-1 ${
+                className={`flex-shrink-0 h-8 w-8 p-1 m-1 ${(
                   recordingState === 'recording' 
                     ? 'text-red-500 hover:text-red-600' 
                     : recordingState === 'transcribing'
                     ? 'text-blue-500'
                     : 'text-gray-400 hover:text-gray-600'
-                }`}
+                )}`}
                 disabled={recordingState === 'transcribing'}
               >
                 {recordingState === 'transcribing' ? (
                   <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : recordingState === 'recording' ? (
+                  <StopCircle className="h-4 w-4" />
                 ) : (
                   <MicIcon className="h-4 w-4" />
                 )}
@@ -937,7 +1043,7 @@ export function ChatPanelG({
               rows={1}
             />
             
-            {/* Send button */}
+            {/* Send button - Inside input area */}
             <Button 
               type="submit" 
               disabled={!message.trim() || isGenerating}

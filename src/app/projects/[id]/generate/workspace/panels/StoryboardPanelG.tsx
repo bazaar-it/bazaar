@@ -65,8 +65,8 @@ export function StoryboardPanelG({
     forceRefresh(projectId);
   }, [projectId]);
 
-  // Generate scene code mutation - Updated to use new unified API
-  const generateSceneWithChatMutation = api.generation.generateSceneWithChat.useMutation({
+  // Generate scene code mutation - Updated to use MCP API
+  const generateSceneWithChatMutation = api.generation.generateScene.useMutation({
     onSuccess: (result: any) => {
       console.log("✅ Scene generation completed:", result);
       setIsGenerating(false);

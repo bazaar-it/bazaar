@@ -71,7 +71,6 @@ yarn-error.log*
 # =============================================================================
 
 # Development documentation (keep in development, exclude from production)
-/memory-bank/
 
 # Development logs (keep in development, exclude from production)  
 /logs/

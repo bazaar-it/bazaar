@@ -3,9 +3,14 @@ import { z } from "zod";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { projects, scenes, scenePlans, messages } from "~/server/db/schema";
+import { projects, scenes, scenePlans, messages, sceneSpecs } from "~/server/db/schema";
 import { openai } from "~/server/lib/openai";
 import { generateObject } from "ai";
+import { isMCPEnabled } from "~/lib/featureFlags";
+import { brainOrchestrator } from "~/server/services/brain/orchestrator";
+import { sceneEvents } from "~/lib/events/sceneEvents";
+import { TRPCError } from "@trpc/server";
+import crypto from "crypto";
 
 // Import animation templates for LLM guidance
 const animationTemplateExamples = `
@@ -468,6 +473,8 @@ Consider the tone and content when choosing colors, fonts, and animations.`
         }
 
         const style = JSON.parse(content);
+        // MCP DEBUG LOGGING
+        console.log('[MCP][Style LLM] Style JSON output:', style);
         
                  // Convert to the expected client-side format
          const clientStyle = {
@@ -1441,6 +1448,383 @@ export default function GeneratedComponent() {
       } catch (error) {
         console.error('[removeScene] Error:', error);
         throw new Error(`Failed to remove scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }),
+
+  // MCP-based generateScene procedure
+  generateScene: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      userMessage: z.string(),
+      sceneId: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { projectId, userMessage, sceneId } = input;
+      const userId = ctx.session.user.id;
+      
+      let assistantMessageRow: any = null;
+      
+      try {
+        // Check if MCP is enabled for this project
+        if (!isMCPEnabled()) {
+          throw new Error('MCP is not enabled');
+        }
+
+        // Helper function to get scene number by ID
+        const getSceneNumber = async (sceneId: string): Promise<number | null> => {
+          const projectScenes = await db.query.scenes.findMany({
+            where: eq(scenes.projectId, projectId),
+            orderBy: [scenes.order, scenes.createdAt],
+          });
+          const index = projectScenes.findIndex(scene => scene.id === sceneId);
+          return index >= 0 ? index + 1 : null;
+        };
+
+        // Helper function to convert scene IDs to user-friendly numbers in messages
+        const convertSceneIdToNumber = async (msg: string): Promise<string> => {
+          // Replace @scene(uuid) with @scene(number) for display
+          const sceneIdPattern = /@scene\(([^)]+)\)/g;
+          let result = msg;
+          let match;
+          
+          while ((match = sceneIdPattern.exec(msg)) !== null) {
+            const sceneId = match[1];
+            if (sceneId) {
+              const sceneNumber = await getSceneNumber(sceneId);
+              if (sceneNumber) {
+                result = result.replace(match[0], `@scene(${sceneNumber})`);
+              }
+            }
+          }
+          
+          return result;
+        };
+
+        // Helper function to detect scene removal commands
+        const isRemovalCommand = (msg: string): { isRemoval: boolean; sceneId?: string } => {
+          const editMatch = /^@scene\(([^)]+)\)\s+([\s\S]*)$/.exec(msg);
+          if (!editMatch || !editMatch[1] || !editMatch[2]) return { isRemoval: false };
+          
+          const sceneId = editMatch[1];
+          const instruction = editMatch[2].trim().toLowerCase();
+          
+          const removalPatterns = [
+            /(?:remove|delete|del)/i,
+          ];
+          
+          const isRemoval = removalPatterns.some(pattern => pattern.test(instruction));
+          return { isRemoval, sceneId: isRemoval ? sceneId : undefined };
+        };
+
+        // STEP 1: Create user message in database
+        const displayMessage = await convertSceneIdToNumber(userMessage);
+        const [userMessageRow] = await db.insert(messages).values({
+          projectId,
+          content: displayMessage,
+          role: 'user',
+          status: 'success'
+        }).returning();
+
+        // STEP 2: Create placeholder assistant message
+        [assistantMessageRow] = await db.insert(messages).values({
+          projectId,
+          content: 'Generating scene...',
+          role: 'assistant',
+          status: 'pending'
+        }).returning();
+
+        // Get existing storyboard for MCP context
+        const storyboardSoFar = await db.query.sceneSpecs.findMany({
+          where: eq(sceneSpecs.projectId, projectId),
+          orderBy: [sceneSpecs.createdAt],
+        });
+
+        // Use MCP orchestrator for intelligent tool selection
+        const orchestrationResult = await brainOrchestrator.processUserInput({
+          prompt: userMessage,
+          projectId,
+          userId,
+          userContext: { sceneId },
+          storyboardSoFar: storyboardSoFar.map(s => s.spec),
+        });
+
+        // MCP DEBUG LOGGING - Essential info only
+        console.log(`[MCP] ${orchestrationResult.toolUsed} → ${orchestrationResult.reasoning}`);
+        if (orchestrationResult.result?.sceneSpec) {
+          console.log(`[MCP] SceneSpec: ${orchestrationResult.result.sceneSpec.components.length} components, ${orchestrationResult.result.sceneSpec.motion.length} animations`);
+        }
+
+        // Emit tool selection event
+        sceneEvents.toolSelected(projectId, {
+          toolName: orchestrationResult.toolUsed || 'unknown',
+          reasoning: orchestrationResult.reasoning || 'No reasoning provided',
+          confidence: 0.8, // TODO PHASE2: Get actual confidence from orchestrator
+        });
+
+        if (!orchestrationResult.success) {
+          throw new Error(orchestrationResult.error || 'MCP orchestration failed');
+        }
+
+        // Handle different tool results
+        if (orchestrationResult.toolUsed === 'addScene') {
+          const result = orchestrationResult.result as any;
+          
+          // Check if we got direct code generation (new approach)
+          if (result.sceneCode) {
+            console.log('[MCP] Direct code generation received');
+            
+            // Create scene with generated code directly
+            const legacySceneId = await upsertScene(projectId, undefined, {
+              name: result.sceneName || 'Generated Scene',
+              order: 0,
+              tsxCode: result.sceneCode,
+              duration: result.duration || 180, // Already in frames
+              props: {
+                userPrompt: userMessage,
+                mcpGenerated: true,
+                generatedAt: new Date().toISOString(),
+                directCodeGeneration: true, // Flag for new approach
+              },
+            });
+
+            // Emit scene ready event
+            sceneEvents.sceneReady(projectId, {
+              sceneId: legacySceneId,
+              bundleUrl: '', // Will be populated by bundler
+              duration: (result.duration || 180) / 30, // Convert frames to seconds
+            });
+
+            // Fetch the complete scene for response
+            const [completeScene] = await db.select().from(scenes).where(eq(scenes.id, legacySceneId));
+
+            // Update assistant message with success
+            const assistantContent = `Scene generated successfully: ${result.sceneName || 'Generated Scene'} ✅`;
+            await db.update(messages)
+              .set({
+                content: assistantContent,
+                status: 'success',
+                updatedAt: new Date()
+              })
+              .where(eq(messages.id, assistantMessageRow.id));
+
+            return {
+              scene: completeScene,
+              sceneSpec: null, // No SceneSpec in direct generation
+              reasoning: result.reasoning,
+              toolUsed: 'addScene',
+              mcpGenerated: true,
+              assistantMessage: {
+                id: assistantMessageRow.id,
+                content: assistantContent,
+                status: 'success'
+              }
+            };
+          }
+          
+          // Fallback: Legacy SceneSpec approach (if sceneSpec is present)
+          if (result.sceneSpec) {
+            console.log('[MCP] Legacy SceneSpec approach (fallback)');
+            
+            // Persist SceneSpec to database
+            const [persistedSceneSpec] = await db.insert(sceneSpecs).values({
+              projectId,
+              sceneId: result.sceneId,
+              name: result.sceneSpec.name || 'Generated Scene',
+              spec: result.sceneSpec,
+              createdBy: userId,
+            }).returning();
+
+            if (!persistedSceneSpec) {
+              throw new Error('Failed to persist SceneSpec to database');
+            }
+
+            // Emit scene spec generated event
+            sceneEvents.sceneSpecGenerated(projectId, {
+              sceneId: result.sceneId,
+              sceneSpec: result.sceneSpec,
+              reasoning: result.reasoning,
+              toolUsed: 'addScene',
+            });
+
+            // Generate component code from SceneSpec
+            console.log('[MCP] Generating JSX code from SceneSpec...');
+            
+            sceneEvents.sceneBuilding(projectId, {
+              sceneId: result.sceneId,
+              stage: 'component-generation',
+              progress: 50,
+            });
+            
+            const { sceneSpecGenerator } = await import('~/lib/services/componentGenerator/sceneSpecGenerator');
+            const generatedCode = sceneSpecGenerator.generateComponent(result.sceneSpec);
+            console.log(`[MCP] Generated ${generatedCode.length} chars of JSX code`);
+
+            // Create scene with generated code
+            const legacySceneId = await upsertScene(projectId, undefined, {
+              name: result.sceneSpec.name || 'Generated Scene',
+              order: 0,
+              tsxCode: generatedCode,
+              duration: Math.round((result.sceneSpec.duration || 5) * 30), // Convert to frames
+              props: {
+                userPrompt: userMessage,
+                mcpGenerated: true,
+                sceneSpecId: persistedSceneSpec.id,
+                generatedAt: new Date().toISOString(),
+                mcpSceneId: result.sceneId,
+              },
+            });
+
+            // Emit scene ready event
+            sceneEvents.sceneReady(projectId, {
+              sceneId: result.sceneId,
+              bundleUrl: '',
+              duration: result.sceneSpec.duration || 5,
+            });
+
+            // Fetch the complete scene for response
+            const [completeScene] = await db.select().from(scenes).where(eq(scenes.id, legacySceneId));
+
+            // Update assistant message with success
+            const assistantContent = `Scene generated successfully: ${result.sceneSpec.name || 'Generated Scene'} ✅`;
+            await db.update(messages)
+              .set({
+                content: assistantContent,
+                status: 'success',
+                updatedAt: new Date()
+              })
+              .where(eq(messages.id, assistantMessageRow.id));
+
+            return {
+              scene: completeScene,
+              sceneSpec: result.sceneSpec,
+              reasoning: result.reasoning,
+              toolUsed: 'addScene',
+              mcpGenerated: true,
+              assistantMessage: {
+                id: assistantMessageRow.id,
+                content: assistantContent,
+                status: 'success'
+              }
+            };
+          }
+          
+          throw new Error('Invalid addScene result: missing both sceneCode and sceneSpec');
+        }
+
+        if (orchestrationResult.toolUsed === 'askSpecify') {
+          const result = orchestrationResult.result as any;
+          
+          // Emit clarification needed event
+          sceneEvents.clarificationNeeded(projectId, {
+            question: result.question,
+            options: result.options,
+            ambiguityType: result.ambiguityType || 'unclear_intent',
+          });
+
+          // Update assistant message with clarification request
+          const assistantContent = `I need clarification: ${result.question}`;
+          await db.update(messages)
+            .set({
+              content: assistantContent,
+              status: 'success',
+              updatedAt: new Date()
+            })
+            .where(eq(messages.id, assistantMessageRow.id));
+
+          return {
+            scene: null,
+            clarification: {
+              question: result.question,
+              options: result.options,
+              suggestedAction: result.suggestedAction,
+            },
+            toolUsed: 'askSpecify',
+            mcpGenerated: true,
+            assistantMessage: {
+              id: assistantMessageRow.id,
+              content: assistantContent,
+              status: 'success'
+            }
+          };
+        }
+        if (orchestrationResult.toolUsed === 'deleteScene') {
+          const result = orchestrationResult.result as any;
+
+          const targetSceneId = result?.deletedSceneId || sceneId;
+          if (!targetSceneId) {
+            throw new Error('No scene ID provided for deletion');
+          }
+
+          // Verify the scene exists and belongs to the project
+          const scene = await db.query.scenes.findFirst({
+            where: and(eq(scenes.id, targetSceneId), eq(scenes.projectId, projectId)),
+          });
+
+          if (!scene) {
+            await db.update(messages)
+              .set({
+                content: `Scene not found`,
+                status: 'error',
+                updatedAt: new Date(),
+              })
+              .where(eq(messages.id, assistantMessageRow.id));
+
+            throw new Error('Scene not found');
+          }
+
+          await db.delete(scenes)
+            .where(and(eq(scenes.id, targetSceneId), eq(scenes.projectId, projectId)));
+
+          const sceneNumber = await getSceneNumber(targetSceneId);
+          const assistantContent = `Scene ${sceneNumber || '?'} removed successfully ✅`;
+          await db.update(messages)
+            .set({
+              content: assistantContent,
+              status: 'success',
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, assistantMessageRow.id));
+
+          return {
+            scene: null,
+            removedSceneId: targetSceneId,
+            toolUsed: 'deleteScene',
+            mcpGenerated: true,
+            assistantMessage: {
+              id: assistantMessageRow.id,
+              content: assistantContent,
+              status: 'success',
+            },
+          };
+        }
+
+
+        // TODO PHASE2: Handle editScene and deleteScene tools
+        throw new Error(`Tool ${orchestrationResult.toolUsed} not yet implemented in Phase 2`);
+        
+      } catch (error) {
+        console.error('[generateScene] MCP Error:', error);
+        
+        // Update assistant message with error if it was created
+        if (assistantMessageRow?.id) {
+          await db.update(messages)
+            .set({
+              content: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              status: 'error',
+              updatedAt: new Date()
+            })
+            .where(eq(messages.id, assistantMessageRow.id))
+            .catch(console.error); // Don't throw on cleanup errors
+        }
+        
+        // Emit error event
+        sceneEvents.sceneError(projectId, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stage: 'mcp-orchestration',
+          retryable: true,
+        });
+        
+        throw error;
       }
     }),
 }); 

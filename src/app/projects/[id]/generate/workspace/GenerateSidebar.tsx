@@ -1,21 +1,31 @@
 "use client";
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
 import { api } from "~/trpc/react";
-import type { PanelTypeG } from './WorkspaceContentAreaG';
+import type { PanelTypeG } from "./WorkspaceContentAreaG";
 import { Button } from "~/components/ui/button";
-import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "~/components/ui/tooltip";
-import { 
-  MessageSquareIcon, 
-  PlayIcon, 
-  Code2Icon, 
-  ChevronLeftIcon, 
-  ChevronRightIcon, 
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "~/components/ui/tooltip";
+import {
+  MessageSquareIcon,
+  PlayIcon,
+  Code2Icon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   PlusIcon,
   ListIcon,
   Loader2Icon,
+  FolderIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from "~/components/ui/icons";
 
 type Project = {
@@ -24,7 +34,7 @@ type Project = {
 };
 
 interface GenerateSidebarProps {
-  projects: Project[];
+  // Removed projects prop since they'll be fetched internally
   currentProjectId: string;
   onAddPanel?: (panelType: PanelTypeG) => void;
   isCollapsed?: boolean;
@@ -42,14 +52,25 @@ interface WorkspacePanelG {
 
 // Workspace panels for BAZAAR-304: Chat, Preview, Code (Storyboard commented out)
 const navItems: WorkspacePanelG[] = [
-  { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
-  { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
+  {
+    type: "chat",
+    id: "chat",
+    name: "Chat",
+    icon: MessageSquareIcon,
+    href: "#chat",
+  },
+  {
+    type: "preview",
+    id: "preview",
+    name: "Preview",
+    icon: PlayIcon,
+    href: "#preview",
+  },
   // { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
-  { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
+  { type: "code", id: "code", name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
 export function GenerateSidebar({ 
-  projects, 
   currentProjectId, 
   onAddPanel, 
   isCollapsed = false, 
@@ -58,7 +79,22 @@ export function GenerateSidebar({
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
+  const [projectsExpanded, setProjectsExpanded] = useLocalStorage(
+    "bazaar-projects-expanded",
+    false, // Default to collapsed
+  );
   
+  // Fetch projects data internally
+  const { data: projectsData, isLoading: isLoadingProjects, error: projectsError } = api.project.list.useQuery();
+  
+  // Map the projectsData to the expected Project format
+  const projects: Project[] = useMemo(() => {
+    return (projectsData || []).map(dbProject => ({
+      id: dbProject.id,
+      name: dbProject.title || 'Untitled Project', // Map 'title' from DB to 'name' for the UI
+    }));
+  }, [projectsData]);
+
   // Setup mutation for creating a new project (for collapsed button)
   const utils = api.useUtils();
   const createProject = api.project.create.useMutation({
@@ -66,7 +102,7 @@ export function GenerateSidebar({
       try {
         // Invalidate the projects list query to refetch it
         await utils.project.list.invalidate();
-        
+
         // Redirect to the generate page for the new project
         router.push(`/projects/${data.projectId}/generate`);
       } catch (error) {
@@ -82,50 +118,51 @@ export function GenerateSidebar({
     if (createProject.isPending) return;
     createProject.mutate();
   };
-  
+
   // Toggle the sidebar collapsed state
   const toggleCollapse = useCallback(() => {
     if (onToggleCollapse) {
       onToggleCollapse();
     }
   }, [onToggleCollapse]);
-  
+
   // Calculate sidebar width based on collapsed state
   const sidebarWidth = useMemo(() => {
-    return isCollapsed ? '3rem' : '10rem';
+    return isCollapsed ? "3rem" : "10rem";
   }, [isCollapsed]);
-  
+
   // Handle dragging panel icons from sidebar
   const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG) => {
     e.dataTransfer.setData("text/plain", panelType);
     e.dataTransfer.effectAllowed = "copy";
     setIsDragging(true);
-    
+
     // Create a drag preview
     const dragPreview = document.createElement("div");
-    dragPreview.className = "bg-white shadow-lg rounded-lg p-3 border border-gray-300";
+    dragPreview.className =
+      "bg-white shadow-lg rounded-lg p-3 border border-gray-300";
     dragPreview.innerHTML = `<span>${panelType} Panel</span>`;
     dragPreview.style.position = "absolute";
     dragPreview.style.top = "-1000px";
     document.body.appendChild(dragPreview);
-    
+
     // Use the custom drag preview if supported
     try {
       e.dataTransfer.setDragImage(dragPreview, 50, 25);
     } catch (error) {
       console.warn("Custom drag preview not supported", error);
     }
-    
+
     // Clean up the drag preview element after a short delay
     setTimeout(() => {
       document.body.removeChild(dragPreview);
     }, 100);
   };
-  
+
   const handleDragEnd = () => {
     setIsDragging(false);
   };
-  
+
   // Handle clicking on panel icons in sidebar
   const handlePanelClick = (panelType: PanelTypeG) => {
     if (onAddPanel) {
@@ -135,22 +172,22 @@ export function GenerateSidebar({
 
   return (
     <TooltipProvider>
-      <aside 
-        className={`flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-lg transition-all duration-200 ease-linear ${isCollapsed ? 'items-center' : 'items-start'}`}
-        style={{ 
+      <aside
+        className={`flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm transition-all duration-200 ease-linear dark:border-gray-800 dark:bg-gray-900 ${isCollapsed ? "items-center" : "items-start"}`}
+        style={{
           width: sidebarWidth,
-          maxWidth: isCollapsed ? '3rem' : '10rem',
-          minWidth: isCollapsed ? '3rem' : '10rem',
-          paddingTop: '25px',
-          paddingLeft: '10px',
-          paddingRight: isCollapsed ? '10px' : '20px'
+          maxWidth: isCollapsed ? "3rem" : "10rem",
+          minWidth: isCollapsed ? "3rem" : "10rem",
+          paddingTop: "25px",
+          paddingLeft: "10px",
+          paddingRight: isCollapsed ? "10px" : "20px",
         }}
       >
         {/* Collapse/Expand button */}
         <button
-          className="absolute -right-3 top-2 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
+          className="absolute top-2 -right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
           onClick={toggleCollapse}
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? (
             <ChevronRightIcon className="h-3 w-3 text-gray-700 dark:text-gray-300" />
@@ -160,15 +197,14 @@ export function GenerateSidebar({
         </button>
 
         {/* New Project Button */}
-        <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
+        <div className={`w-full ${isCollapsed ? "flex justify-center" : ""}`}>
           {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <NewProjectButton
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-                  showIcon={false}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                   onProjectCreated={onNewProject}
                 >
                   {createProject.isPending ? (
@@ -178,13 +214,11 @@ export function GenerateSidebar({
                   )}
                 </NewProjectButton>
               </TooltipTrigger>
-              <TooltipContent side="right">
-                New Project
-              </TooltipContent>
+              <TooltipContent side="right">New Project</TooltipContent>
             </Tooltip>
           ) : (
-            <NewProjectButton 
-              className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 pr-4"
+            <NewProjectButton
+              className="h-9 w-full justify-start rounded-lg bg-transparent pr-4 text-sm font-normal text-gray-700 transition-all duration-200 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
               variant="ghost"
               size="default"
               showIcon={true}
@@ -194,17 +228,19 @@ export function GenerateSidebar({
         </div>
 
         {/* Panel Navigation - Chat, Preview, Storyboard, Code */}
-        <nav className={`flex flex-col w-full mt-3 gap-3 ${isCollapsed ? 'items-center' : ''}`}>
+        <nav
+          className={`mt-3 flex w-full flex-col gap-3 ${isCollapsed ? "items-center" : ""}`}
+        >
           {navItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
-                <div className={`flex ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
+                <div
+                  className={`flex ${isCollapsed ? "w-full justify-center" : "w-full"}`}
+                >
                   {isCollapsed ? (
-                    <Button 
+                    <Button
                       variant="ghost"
-                      className="h-9 w-9 rounded-lg flex items-center justify-center transition-all duration-200 
-                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 
-                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-transparent text-gray-700 transition-all duration-200 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                       onClick={() => handlePanelClick(item.type)}
                       data-panel-type={item.type}
                       draggable
@@ -214,34 +250,100 @@ export function GenerateSidebar({
                       <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                     </Button>
                   ) : (
-                    <Button 
+                    <Button
                       variant="ghost"
-                      className="h-9 w-full flex items-center justify-start rounded-lg transition-all duration-200 
-                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800
-                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 pr-4"
+                      className="flex h-9 w-full items-center justify-start rounded-lg bg-transparent pr-4 text-gray-700 transition-all duration-200 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                       onClick={() => handlePanelClick(item.type)}
                       data-panel-type={item.type}
                       draggable
                       onDragStart={(e) => handleDragStart(e, item.type)}
                       onDragEnd={handleDragEnd}
                     >
-                      <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3" />
+                      <item.icon className="mr-3 h-5 w-5 text-gray-500 dark:text-gray-400" />
                       <span className="text-sm font-normal">{item.name}</span>
                     </Button>
                   )}
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="right" className={!isCollapsed ? 'hidden' : ''}>
+              <TooltipContent
+                side="right"
+                className={!isCollapsed ? "hidden" : ""}
+              >
                 {item.name}
               </TooltipContent>
             </Tooltip>
           ))}
         </nav>
 
+        {/* Previous Projects Toggle */}
+        <div className="mt-4 mb-2 w-full">
+          <div
+            className={`flex items-center justify-between ${isCollapsed ? "mx-auto justify-center" : "px-2"} cursor-pointer rounded-lg py-1 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800`}
+            onClick={() => setProjectsExpanded(!projectsExpanded)}
+          >
+            <span
+              className={`text-xs font-medium tracking-wide text-gray-500 uppercase ${isCollapsed ? "sr-only" : ""}`}
+            >
+              Projects
+            </span>
+            {!isCollapsed &&
+              (projectsExpanded ? (
+                <ChevronUpIcon className="h-4 w-4 text-gray-400" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+              ))}
+          </div>
+        </div>
+
+        {projectsExpanded && (
+          <nav
+            className={`${isCollapsed ? "px-0" : "px-2"} max-h-[30vh] w-full space-y-1 overflow-y-auto py-1`}
+          >
+            {isLoadingProjects && (
+              <div className="flex items-center justify-center p-2">
+                <Loader2Icon className="h-5 w-5 animate-spin text-gray-500" />
+              </div>
+            )}
+            {projectsError && (
+              <div className="p-2 text-sm text-red-500">
+                Error loading projects
+              </div>
+            )}
+            {!isLoadingProjects && projects.map((project) => (
+              <Tooltip key={project.id}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={`/projects/${project.id}/generate`}
+                    className={`flex items-center gap-2 rounded-lg px-2 py-1 text-sm whitespace-nowrap transition-colors ${
+                      project.id === currentProjectId
+                        ? "cursor-default bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
+                        : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                    } ${isCollapsed ? "mx-auto h-8 w-8 justify-center" : "w-full"}`}
+                    onClick={(e) => {
+                      if (project.id === currentProjectId) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+                    <FolderIcon className="h-4 w-4 shrink-0" />
+                    {!isCollapsed && (
+                      <span className="truncate" style={{ maxWidth: 160 }}>
+                        {project.name}
+                      </span>
+                    )}
+                  </Link>
+                </TooltipTrigger>
+                {isCollapsed && (
+                  <TooltipContent side="right">{project.name}</TooltipContent>
+                )}
+              </Tooltip>
+            ))}
+          </nav>
+        )}
+
         {/* Separator */}
         <div className="flex-grow"></div>
-
       </aside>
     </TooltipProvider>
   );
-} 
+}

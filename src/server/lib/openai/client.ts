@@ -6,9 +6,11 @@
 import OpenAI from 'openai';
 import { env } from '~/env';
 
-// Create and export a configured OpenAI client
+// Create and export a configured OpenAI client with resilience settings
 export const openaiClient = new OpenAI({
   apiKey: env.OPENAI_API_KEY,
+  timeout: 60000, // 60 seconds timeout
+  maxRetries: 3, // Retry failed requests up to 3 times
 });
 
 // Export default for convenience
