@@ -437,6 +437,29 @@ export const feedbackRelations = relations(feedback, ({ one }) => ({
   user: one(users, { fields: [feedback.userId], references: [users.id] }),
 }));
 
+// --- Email Subscribers table ---
+// Stores email addresses for newsletter/updates signup
+export const emailSubscribers = createTable(
+  "email_subscriber",
+  (d) => ({
+    id: d.text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    email: d.text('email').notNull().unique(),
+    subscribedAt: d.timestamp('subscribed_at', { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    status: d.text('status').default('active').notNull(), // 'active', 'unsubscribed'
+    source: d.text('source').default('homepage').notNull(), // 'homepage', 'footer', etc.
+    userId: d.varchar('user_id', { length: 255 }).references(() => users.id, { onDelete: 'set null' }), // Optional link to user if logged in
+  }),
+  (t) => [
+    index("email_subscriber_email_idx").on(t.email),
+    index("email_subscriber_status_idx").on(t.status),
+    index("email_subscriber_subscribed_at_idx").on(t.subscribedAt),
+  ]
+);
+
+export const emailSubscribersRelations = relations(emailSubscribers, ({ one }) => ({
+  user: one(users, { fields: [emailSubscribers.userId], references: [users.id] }),
+}));
+
 // --- Agent Messages table ---
 // Stores messages exchanged between agents for A2A protocol support
 export const agentMessages = createTable(

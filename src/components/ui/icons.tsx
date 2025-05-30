@@ -25,6 +25,8 @@ import {
   RefreshCwIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  Loader2Icon,
+  MicIcon,
 } from "lucide-react"
 
 export {
@@ -51,4 +53,6 @@ export {
   RefreshCwIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  Loader2Icon,
+  MicIcon,
 } 
