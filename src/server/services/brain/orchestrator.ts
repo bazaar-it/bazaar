@@ -11,6 +11,23 @@ import { db } from "~/server/db";
 import { scenes } from "~/server/db/schema";
 import { eq, sql } from "drizzle-orm";
 
+// ✅ FIXED: Module-level singleton initialization
+let toolsInitialized = false;
+
+function initializeTools() {
+  if (!toolsInitialized) {
+    const newSceneTools = [addSceneTool, editSceneTool, deleteSceneTool, askSpecifyTool];
+    newSceneTools.forEach(tool => toolRegistry.register(tool));
+    toolsInitialized = true;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[BrainOrchestrator] Tools registered successfully');
+    }
+  }
+}
+
+// Initialize tools immediately when module loads
+initializeTools();
+
 export interface OrchestrationInput {
   prompt: string;
   projectId: string;
@@ -43,28 +60,24 @@ export interface OrchestrationOutput {
 export class BrainOrchestrator {
   private readonly model = "gpt-4.1-mini";
   private readonly temperature = 0.3; // Low temperature for consistent tool selection
-  private toolsRegistered = false;
+  private readonly DEBUG = process.env.NODE_ENV === 'development';
   
   constructor() {
-    // Register the new intelligence-first tools
-    if (!this.toolsRegistered) {
-      const newSceneTools = [addSceneTool, editSceneTool, deleteSceneTool, askSpecifyTool];
-      newSceneTools.forEach(tool => toolRegistry.register(tool));
-      this.toolsRegistered = true;
-    }
+    // ✅ FIXED: No tool registration in constructor
+    // Tools are initialized at module level to prevent race conditions
   }
   
   async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
     try {
-      console.log('\n[DEBUG] PROCESSING USER INPUT:', input.prompt);
-      console.log(`[DEBUG] PROJECT: ${input.projectId}, SCENES: ${input.storyboardSoFar?.length || 0}`);
+      if (this.DEBUG) console.log('\n[DEBUG] PROCESSING USER INPUT:', input.prompt);
+      if (this.DEBUG) console.log(`[DEBUG] PROJECT: ${input.projectId}, SCENES: ${input.storyboardSoFar?.length || 0}`);
       
       if (input.userContext) {
-        console.log(`[DEBUG] USER CONTEXT:`, input.userContext);
+        if (this.DEBUG) console.log(`[DEBUG] USER CONTEXT:`, input.userContext);
       }
       
       if (input.chatHistory?.length) {
-        console.log(`[DEBUG] CHAT HISTORY (last 3):`, 
+        if (this.DEBUG) console.log(`[DEBUG] CHAT HISTORY (last 3):`, 
           input.chatHistory.slice(-3).map(msg => `${msg.role}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`))
       }
       
@@ -72,21 +85,21 @@ export class BrainOrchestrator {
       const toolSelection = await this.analyzeIntent(input);
       
       if (!toolSelection.success) {
-        console.log(`[DEBUG] INTENT ANALYSIS FAILED:`, toolSelection.error);
+        if (this.DEBUG) console.log(`[DEBUG] INTENT ANALYSIS FAILED:`, toolSelection.error);
         return {
           success: false,
           error: toolSelection.error || "Failed to analyze user intent",
         };
       }
       
-      console.log(`[DEBUG] TOOL SELECTED:`, toolSelection.toolName || 'multi-step workflow');
-      console.log(`[DEBUG] REASONING:`, toolSelection.reasoning || 'No reasoning provided');
+      if (this.DEBUG) console.log(`[DEBUG] TOOL SELECTED:`, toolSelection.toolName || 'multi-step workflow');
+      if (this.DEBUG) console.log(`[DEBUG] REASONING:`, toolSelection.reasoning || 'No reasoning provided');
       if (toolSelection.targetSceneId) {
-        console.log(`[DEBUG] TARGET SCENE ID:`, toolSelection.targetSceneId);
+        if (this.DEBUG) console.log(`[DEBUG] TARGET SCENE ID:`, toolSelection.targetSceneId);
         // Verify the scene exists
         const sceneExists = input.storyboardSoFar?.some(scene => scene.id === toolSelection.targetSceneId);
         if (!sceneExists) {
-          console.warn(`[DEBUG] WARNING: Selected scene ID ${toolSelection.targetSceneId} NOT FOUND in storyboard`);
+          if (this.DEBUG) console.warn(`[DEBUG] WARNING: Selected scene ID ${toolSelection.targetSceneId} NOT FOUND in storyboard`);
         }
       }
       
@@ -111,7 +124,7 @@ export class BrainOrchestrator {
       return await this.processToolResult(result, toolSelection.toolName!, input);
       
     } catch (error) {
-      console.error("[BrainOrchestrator] Error:", error);
+      if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
       return await this.handleError(error, input);
     }
   }
@@ -124,7 +137,7 @@ export class BrainOrchestrator {
     workflow: Array<{toolName: string, context: string, dependencies?: string[]}>,
     reasoning?: string
   ): Promise<OrchestrationOutput> {
-    console.log(`[BrainOrchestrator] Executing workflow with ${workflow.length} steps`);
+    if (this.DEBUG) console.log(`[BrainOrchestrator] Executing workflow with ${workflow.length} steps`);
     
     const workflowResults: Record<string, any> = {};
     let finalResult: any = null;
@@ -138,7 +151,7 @@ export class BrainOrchestrator {
       
       const stepKey = `step${i + 1}_result`;
       
-      console.log(`[BrainOrchestrator] Executing step ${i + 1}: ${step.toolName} - ${step.context}`);
+      if (this.DEBUG) console.log(`[BrainOrchestrator] Executing step ${i + 1}: ${step.toolName} - ${step.context}`);
       
       try {
         // Get the tool
@@ -167,10 +180,10 @@ export class BrainOrchestrator {
           finalResult = processedResult.result;
         }
         
-        console.log(`[BrainOrchestrator] Step ${i + 1} completed: ${processedResult.success ? 'SUCCESS' : 'FAILED'}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Step ${i + 1} completed: ${processedResult.success ? 'SUCCESS' : 'FAILED'}`);
         
       } catch (stepError) {
-        console.error(`[BrainOrchestrator] Workflow step ${i + 1} failed:`, stepError);
+        if (this.DEBUG) console.error(`[BrainOrchestrator] Workflow step ${i + 1} failed:`, stepError);
         
         // Decide whether to continue or fail the entire workflow
         // For now, we'll fail the entire workflow if any step fails
@@ -182,7 +195,7 @@ export class BrainOrchestrator {
       }
     }
     
-    console.log(`[BrainOrchestrator] Workflow completed successfully with ${workflow.length} steps`);
+    if (this.DEBUG) console.log(`[BrainOrchestrator] Workflow completed successfully with ${workflow.length} steps`);
     
     return {
       success: true,
@@ -219,20 +232,20 @@ export class BrainOrchestrator {
   private async processToolResult(result: any, toolName: string, input: OrchestrationInput): Promise<OrchestrationOutput> {
     // 🚨 SPECIAL HANDLING for askSpecify - SIMPLIFIED (no duplicate message saving)
     if (toolName === 'askSpecify') {
-      console.log(`[BrainOrchestrator] 🤔 askSpecify tool executed, result:`, result);
+      if (this.DEBUG) console.log(`[BrainOrchestrator] 🤔 askSpecify tool executed, result:`, result);
       
       let clarificationMessage: string;
       
       if (result.success && result.data?.chatResponse) {
         clarificationMessage = result.data.chatResponse;
-        console.log(`[BrainOrchestrator] ✅ Using askSpecify chatResponse`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] ✅ Using askSpecify chatResponse`);
       } else if (result.success && result.data?.clarificationQuestion) {
         clarificationMessage = result.data.clarificationQuestion;
-        console.log(`[BrainOrchestrator] ✅ Using askSpecify clarificationQuestion`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] ✅ Using askSpecify clarificationQuestion`);
       } else {
         // Fallback for failed askSpecify
         clarificationMessage = "I need more information to help you better. Could you please clarify what you'd like me to do?";
-        console.log(`[BrainOrchestrator] ⚠️ askSpecify failed, using fallback message`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] ⚠️ askSpecify failed, using fallback message`);
       }
       
       // ✅ SIMPLIFIED: Let Generation Router handle ALL message saving (single source of truth)
@@ -252,7 +265,7 @@ export class BrainOrchestrator {
     if (result.success && toolName === 'addScene' && result.data) {
       const sceneData = result.data as any;
       if (sceneData.sceneCode && sceneData.sceneName) {
-        console.log(`[BrainOrchestrator] Saving scene to database: ${sceneData.sceneName}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Saving scene to database: ${sceneData.sceneName}`);
         
         try {
           // Get next order for the scene
@@ -276,7 +289,7 @@ export class BrainOrchestrator {
             })
             .returning();
           
-          console.log(`[BrainOrchestrator] Scene saved successfully: ${newScene?.id}`);
+          if (this.DEBUG) console.log(`[BrainOrchestrator] Scene saved successfully: ${newScene?.id}`);
           
           // Update result to include scene database record
           result.data = {
@@ -291,8 +304,15 @@ export class BrainOrchestrator {
           };
           
         } catch (dbError) {
-          console.error(`[BrainOrchestrator] Failed to save scene to database:`, dbError);
-          // Don't fail the entire operation, but log the error
+          if (this.DEBUG) console.error(`[BrainOrchestrator] Failed to save scene to database:`, dbError);
+          // ✅ FIXED: Return proper error instead of ignoring database failure
+          return {
+            success: false,
+            error: `Failed to create your scene. Please try again.`,
+            chatResponse: "I couldn't create your scene right now. Please try again in a moment.",
+            toolUsed: toolName,
+            reasoning: "Database save operation failed"
+          };
         }
       }
     }
@@ -303,9 +323,9 @@ export class BrainOrchestrator {
       const sceneId = input.userContext?.sceneId as string;
       
       if (sceneData.sceneCode && sceneData.sceneName && sceneId && typeof sceneId === 'string') {
-        console.log(`[BrainOrchestrator] Updating edited scene in database: ${sceneData.sceneName}`);
-        console.log(`[BrainOrchestrator] Applied changes: ${sceneData.changes?.join(', ') || 'none'}`);
-        console.log(`[BrainOrchestrator] Preserved: ${sceneData.preserved?.join(', ') || 'none'}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Updating edited scene in database: ${sceneData.sceneName}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Applied changes: ${sceneData.changes?.join(', ') || 'none'}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Preserved: ${sceneData.preserved?.join(', ') || 'none'}`);
         
         try {
           // Update existing scene in database
@@ -326,7 +346,7 @@ export class BrainOrchestrator {
             .where(eq(scenes.id, sceneId))
             .returning();
           
-          console.log(`[BrainOrchestrator] Scene updated successfully: ${updatedScene?.id}`);
+          if (this.DEBUG) console.log(`[BrainOrchestrator] Scene updated successfully: ${updatedScene?.id}`);
           
           // Update result to include updated scene database record
           result.data = {
@@ -341,8 +361,15 @@ export class BrainOrchestrator {
           };
           
         } catch (dbError) {
-          console.error(`[BrainOrchestrator] Failed to update scene in database:`, dbError);
-          // Don't fail the entire operation, but log the error
+          if (this.DEBUG) console.error(`[BrainOrchestrator] Failed to update scene in database:`, dbError);
+          // ✅ FIXED: Return proper error instead of ignoring database failure
+          return {
+            success: false,
+            error: `Failed to update your scene. Please try again.`,
+            chatResponse: "I couldn't update your scene right now. Please try again in a moment.",
+            toolUsed: toolName,
+            reasoning: "Database update operation failed"
+          };
         }
       }
     }
@@ -353,7 +380,7 @@ export class BrainOrchestrator {
       const sceneIdToDelete = deleteData.deletedSceneId;
       
       if (sceneIdToDelete && typeof sceneIdToDelete === 'string') {
-        console.log(`[BrainOrchestrator] Deleting scene from database: ${deleteData.deletedSceneName || sceneIdToDelete}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Deleting scene from database: ${deleteData.deletedSceneName || sceneIdToDelete}`);
         
         try {
           // Delete the scene from database
@@ -362,7 +389,7 @@ export class BrainOrchestrator {
             .returning();
           
           if (deletedScenes.length > 0) {
-            console.log(`[BrainOrchestrator] Scene deleted successfully: ${deletedScenes[0]?.name}`);
+            if (this.DEBUG) console.log(`[BrainOrchestrator] Scene deleted successfully: ${deletedScenes[0]?.name}`);
             
             // Update result to confirm deletion
             result.data = {
@@ -374,7 +401,7 @@ export class BrainOrchestrator {
               }
             };
           } else {
-            console.warn(`[BrainOrchestrator] No scene found to delete with ID: ${sceneIdToDelete}`);
+            if (this.DEBUG) console.warn(`[BrainOrchestrator] No scene found to delete with ID: ${sceneIdToDelete}`);
             result.data = {
               ...result.data,
               success: false,
@@ -383,15 +410,16 @@ export class BrainOrchestrator {
           }
           
         } catch (dbError) {
-          console.error(`[BrainOrchestrator] Failed to delete scene from database:`, dbError);
+          if (this.DEBUG) console.error(`[BrainOrchestrator] Failed to delete scene from database:`, dbError);
           result.data = {
             ...result.data,
             success: false,
-            error: `Database error: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`
+            error: `Failed to delete your scene. Please try again.`,
+            chatResponse: "I couldn't delete your scene right now. Please try again in a moment.",
           };
         }
       } else {
-        console.warn(`[BrainOrchestrator] Invalid scene ID for deletion: ${sceneIdToDelete}`);
+        if (this.DEBUG) console.warn(`[BrainOrchestrator] Invalid scene ID for deletion: ${sceneIdToDelete}`);
         result.data = {
           ...result.data,
           success: false,
@@ -440,12 +468,12 @@ export class BrainOrchestrator {
     const userPrompt = this.buildUserPrompt(input);
     
     // Log the prompt information (summarized)
-    console.log(`[DEBUG] LLM SYSTEM PROMPT LENGTH: ${systemPrompt.length} chars`);
-    console.log(`[DEBUG] LLM USER PROMPT: ${userPrompt.substring(0, 200)}...`);
+    if (this.DEBUG) console.log(`[DEBUG] LLM SYSTEM PROMPT LENGTH: ${systemPrompt.length} chars`);
+    if (this.DEBUG) console.log(`[DEBUG] LLM USER PROMPT: ${userPrompt.substring(0, 200)}...`);
     
     // Log storyboard info (if available)
     if (input.storyboardSoFar?.length) {
-      console.log(`[DEBUG] STORYBOARD SCENE IDS:`, 
+      if (this.DEBUG) console.log(`[DEBUG] STORYBOARD SCENE IDS:`, 
         input.storyboardSoFar.map(scene => {
           return { id: scene.id, name: scene.name, order: scene.order || '?' };
         }));
@@ -453,7 +481,7 @@ export class BrainOrchestrator {
     
     try {
       // Log the LLM call parameters
-      console.log(`[DEBUG] CALLING LLM: ${this.model} }`);
+      if (this.DEBUG) console.log(`[DEBUG] CALLING LLM: ${this.model} }`);
       
       const response = await openai.chat.completions.create({
         model: this.model,
@@ -471,15 +499,15 @@ export class BrainOrchestrator {
       }
       
       // Log the raw LLM response
-      console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
+      if (this.DEBUG) console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
       
       const parsed = JSON.parse(rawOutput);
       
       // Log detailed parsed data
-      console.log(`[DEBUG] PARSED TOOL_NAME: ${parsed.toolName || 'none'}`);
-      console.log(`[DEBUG] PARSED REASONING: ${parsed.reasoning || 'none'}`);
-      console.log(`[DEBUG] PARSED TARGET_SCENE_ID: ${parsed.targetSceneId || 'none'}`);
-      console.log(`[DEBUG] PARSED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED TOOL_NAME: ${parsed.toolName || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED REASONING: ${parsed.reasoning || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED TARGET_SCENE_ID: ${parsed.targetSceneId || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded || 'none'}`);
       
       // Check if input contains a reference to modifying existing content
       const editKeywords = ['edit', 'change', 'modify', 'update', 'fix', 'adjust', 'revise'];
@@ -487,14 +515,14 @@ export class BrainOrchestrator {
         input.prompt.toLowerCase().includes(keyword));
       
       if (containsEditKeyword && parsed.toolName === 'addScene') {
-        console.log(`[DEBUG] POTENTIAL MISMATCH: User prompt contains edit keywords, but LLM selected 'addScene'`);
-        console.log(`[DEBUG] USER CONTEXT SCENE ID: ${input.userContext?.sceneId || 'none'}`);
+        if (this.DEBUG) console.log(`[DEBUG] POTENTIAL MISMATCH: User prompt contains edit keywords, but LLM selected 'addScene'`);
+        if (this.DEBUG) console.log(`[DEBUG] USER CONTEXT SCENE ID: ${input.userContext?.sceneId || 'none'}`);
       }
       
       // Check if this is a multi-step workflow
       if (parsed.workflow && Array.isArray(parsed.workflow)) {
-        console.log(`[DEBUG] Multi-step workflow detected: ${parsed.workflow.length} steps`);
-        console.log(`[DEBUG] WORKFLOW DETAILS:`, JSON.stringify(parsed.workflow, null, 2));
+        if (this.DEBUG) console.log(`[DEBUG] Multi-step workflow detected: ${parsed.workflow.length} steps`);
+        if (this.DEBUG) console.log(`[DEBUG] WORKFLOW DETAILS:`, JSON.stringify(parsed.workflow, null, 2));
         return {
           success: true,
           workflow: parsed.workflow,
@@ -513,30 +541,30 @@ export class BrainOrchestrator {
       // 🚨 CRITICAL FIX: Extract clarificationNeeded from top-level parsed response
       if (parsed.clarificationNeeded) {
         result.clarificationNeeded = parsed.clarificationNeeded;
-        console.log(`[DEBUG] EXTRACTED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded}`);
+        if (this.DEBUG) console.log(`[DEBUG] EXTRACTED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded}`);
       }
       
       // CRITICAL FIX: Extract targetSceneId from Brain LLM response
       if (parsed.targetSceneId) {
         result.targetSceneId = parsed.targetSceneId;
-        console.log(`[DEBUG] BRAIN SELECTED SCENE: ${parsed.targetSceneId}`);
+        if (this.DEBUG) console.log(`[DEBUG] BRAIN SELECTED SCENE: ${parsed.targetSceneId}`);
         
         // Double-check if the scene actually exists in the storyboard
         const sceneExists = input.storyboardSoFar?.some(scene => scene.id === parsed.targetSceneId);
         if (!sceneExists) {
-          console.warn(`[DEBUG] WARNING: Selected scene ID ${parsed.targetSceneId} NOT FOUND in storyboard`);
+          if (this.DEBUG) console.warn(`[DEBUG] WARNING: Selected scene ID ${parsed.targetSceneId} NOT FOUND in storyboard`);
         }
       } else if (parsed.toolName === 'editScene') {
-        console.warn(`[DEBUG] WARNING: editScene selected but no targetSceneId provided`);
+        if (this.DEBUG) console.warn(`[DEBUG] WARNING: editScene selected but no targetSceneId provided`);
       }
       
       // Log the final decision
-      console.log(`[DEBUG] FINAL DECISION:`, result);
+      if (this.DEBUG) console.log(`[DEBUG] FINAL DECISION:`, result);
       
       return result;
       
     } catch (error) {
-      console.error("[BrainOrchestrator] Intent analysis error:", error);
+      if (this.DEBUG) console.error("[BrainOrchestrator] Intent analysis error:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Intent analysis failed",
@@ -726,7 +754,7 @@ Respond with valid JSON only.`;
           throw new Error(`Scene with ID ${sceneId} not found in storyboard`);
         }
         
-        console.log(`[BrainOrchestrator] Editing scene: ${scene.name} (${sceneId})`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Editing scene: ${scene.name} (${sceneId})`);
         
         return {
           ...baseInput,
@@ -754,7 +782,7 @@ Respond with valid JSON only.`;
                                      (toolSelection.toolInput?.ambiguityType as string) || 
                                      "action-unclear";
         
-        console.log(`[DEBUG] MAPPED AMBIGUITY TYPE: ${ambiguityTypeFromLLM} (from clarificationNeeded: ${toolSelection.clarificationNeeded})`);
+        if (this.DEBUG) console.log(`[DEBUG] MAPPED AMBIGUITY TYPE: ${ambiguityTypeFromLLM} (from clarificationNeeded: ${toolSelection.clarificationNeeded})`);
         
         return {
           userPrompt: input.prompt,
@@ -839,7 +867,7 @@ Respond with valid JSON only.`;
   //       focusAreas: parsed.focusAreas || ["Visual appeal", "Smooth animations"]
   //     };
   //   } catch (error) {
-  //     console.warn("[Brain] Failed to generate context, using fallback:", error);
+  //     if (this.DEBUG) console.warn("[Brain] Failed to generate context, using fallback:", error);
       
   //     // Fallback context
   //     return {
@@ -853,7 +881,7 @@ Respond with valid JSON only.`;
   // }
 
   private async handleError(error: any, input: OrchestrationInput): Promise<OrchestrationOutput> {
-    console.error("[BrainOrchestrator] Error:", error);
+    if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
     
     // Generate error response for user
     const errorResponse = await conversationalResponseService.generateContextualResponse({

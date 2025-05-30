@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/agents/codeGenerator.ts
 import type { CodeGenerator } from './interfaces';
 import type { Storyboard } from '../types/storyboard';
 
@@ -8,6 +9,8 @@ import type { Storyboard } from '../types/storyboard';
  * which handles the tRPC calls to the server-side LLM services
  */
 export class AICodeGenerator implements CodeGenerator {
+  private readonly DEBUG = process.env.NODE_ENV === 'development';
+
   /**
    * Generate Remotion components for all scenes in the storyboard
    * This method now returns fallback success and expects the orchestrator
@@ -31,7 +34,7 @@ export class AICodeGenerator implements CodeGenerator {
       
       return true;
     } catch (error) {
-      console.error('Error generating scene components:', error);
+      if (this.DEBUG) console.error('Error generating scene components:', error);
       return false;
     }
   }

@@ -1,3 +1,4 @@
+// src/lib/services/layoutGenerator.service.ts
 import { openai } from "~/server/lib/openai";
 import { type SceneLayout } from "~/lib/schemas/sceneLayout";
 
@@ -24,20 +25,20 @@ export interface LayoutGeneratorOutput {
  * First step of the two-step pipeline: User Intent → JSON Spec → React Code
  */
 export class LayoutGeneratorService {
+  private readonly DEBUG = process.env.NODE_ENV === 'development';
   private readonly model = "gpt-4.1-mini";
   private readonly temperature = 0.3; // Low temperature for consistent JSON structure
 
   async generateLayout(input: LayoutGeneratorInput): Promise<LayoutGeneratorOutput> {
     const prompt = this.buildLayoutPrompt(input);
     
-    console.log(`[LayoutGenerator] 🎯 Starting layout generation`);
-    console.log(`[LayoutGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
-    console.log(`[LayoutGenerator] 🆕 Is first scene: ${input.isFirstScene}`);
-    console.log(`[LayoutGenerator] 🎨 Has previous scene JSON: ${input.previousSceneJson ? 'YES' : 'NO'}`);
-    // console.log(`[LayoutGenerator] 🎛️ Model: ${this.model}, Temperature: ${this.temperature}`);
+    this.DEBUG && console.log(`[LayoutGenerator] 🎯 Starting layout generation`);
+    this.DEBUG && console.log(`[LayoutGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
+    this.DEBUG && console.log(`[LayoutGenerator] 🆕 Is first scene: ${input.isFirstScene}`);
+    this.DEBUG && console.log(`[LayoutGenerator] 🎨 Has previous scene JSON: ${input.previousSceneJson ? 'YES' : 'NO'}`);
     
     try {
-      console.log(`[LayoutGenerator] 🚀 Calling OpenAI LLM for JSON layout...`);
+      this.DEBUG && console.log(`[LayoutGenerator] 🚀 Calling OpenAI LLM for JSON layout...`);
       const response = await openai.chat.completions.create({
         model: this.model,
         temperature: this.temperature,
@@ -59,25 +60,28 @@ export class LayoutGeneratorService {
         throw new Error("No response from LayoutGenerator LLM");
       }
       
-      console.log(`[LayoutGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
-      console.log(`[LayoutGenerator] 📤 Raw LLM response preview: ${rawOutput.substring(0, 200)}...`);
+      this.DEBUG && console.log(`[LayoutGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
       
-      // Add safeguard for non-JSON responses
-      if (!rawOutput.trim().startsWith('{')) {
-        throw new Error(`LayoutGenerator returned non-JSON response: ${rawOutput.substring(0, 100)}...`);
+      // ---------- Minimal JSON parsing - let code generator handle whatever we get ----------
+      let parsed;
+      try {
+        parsed = JSON.parse(rawOutput);
+      } catch (jsonError) {
+        // If JSON parsing fails, create a basic fallback structure
+        parsed = {
+          sceneType: "simple",
+          background: "#1e1b4b",
+          elements: [{ type: "title", id: "title1", text: "Generated Content" }],
+          layout: { align: "center" }
+        };
+        this.DEBUG && console.warn(`[LayoutGenerator] JSON parse failed, using fallback: ${jsonError instanceof Error ? jsonError.message : 'Unknown parse error'}`);
       }
       
-      const parsed = JSON.parse(rawOutput);
-      
-      // Skip schema validation - just use the parsed JSON directly
-      // The CodeGenerator can handle whatever JSON the LLM produces
       const layoutJson = parsed as SceneLayout;
       
-      console.log(`[LayoutGenerator] ✅ Layout generation successful`);
-      console.log(`[LayoutGenerator] 🎨 Scene type: ${layoutJson.sceneType || 'unknown'}`);
-      console.log(`[LayoutGenerator] 📊 Elements count: ${layoutJson.elements?.length || 0}`);
-      console.log(`[LayoutGenerator] 🎭 Animations count: ${layoutJson.animations ? Object.keys(layoutJson.animations).length : 0}`);
-      console.log(`[LayoutGenerator] 🎨 Background: ${layoutJson.background}`);
+      this.DEBUG && console.log(`[LayoutGenerator] ✅ Layout generation successful`);
+      this.DEBUG && console.log(`[LayoutGenerator] 🎨 Scene type: ${layoutJson.sceneType || 'unknown'}`);
+      this.DEBUG && console.log(`[LayoutGenerator] 📊 Elements count: ${layoutJson.elements?.length || 0}`);
       
       return {
         layoutJson,
@@ -89,7 +93,7 @@ export class LayoutGeneratorService {
         },
       };
     } catch (error) {
-      console.error("[LayoutGenerator] Error:", error);
+      this.DEBUG && console.error("[LayoutGenerator] Error:", error);
       
       // Fallback to simple layout
       const fallbackLayout: SceneLayout = {

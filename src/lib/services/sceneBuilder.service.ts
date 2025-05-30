@@ -1,6 +1,4 @@
-import { openai } from "~/server/lib/openai";
-import { codeValidationService } from "~/server/services/codeValidation.service";
-import { jsonrepair } from 'jsonrepair';
+// src/lib/services/sceneBuilder.service.ts
 import { layoutGeneratorService } from "./layoutGenerator.service";
 import { codeGeneratorService } from "./codeGenerator.service";
 import { type SceneLayout } from "~/lib/schemas/sceneLayout";
@@ -11,9 +9,8 @@ import { type SceneLayout } from "~/lib/schemas/sceneLayout";
  * Step 2: CodeGenerator (@codegen-prompt.md)
  */
 export class SceneBuilderService {
-  private readonly model = "gpt-4.1-mini";
-  private readonly temperature = 0.3; // Balanced creativity vs consistency
-  
+  private readonly DEBUG = process.env.NODE_ENV === 'development';
+
   /**
    * Two-step pipeline using proven prompts
    * LayoutGenerator (@style-json-prompt.md) → CodeGenerator (@codegen-prompt.md)
@@ -33,18 +30,19 @@ export class SceneBuilderService {
   }> {
     const startTime = Date.now();
     const sceneNumber = input.sceneNumber || 1;
-    const uniqueId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    // ✅ FIXED: Use cryptographically secure UUID instead of weak Date.now() + Math.random()
+    const uniqueId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const uniqueFunctionName = `Scene${sceneNumber}_${uniqueId}`;
     
-    console.log(`[SceneBuilder] 🚀 Two-step pipeline starting`);
-    console.log(`[SceneBuilder] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
-    console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
-    console.log(`[SceneBuilder] 📊 Scene number: ${sceneNumber}`);
-    console.log(`[SceneBuilder] 🎨 Has previous scene: ${input.previousSceneJson ? 'YES' : 'NO'}`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 🚀 Two-step pipeline starting`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 📊 Scene number: ${sceneNumber}`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 🎨 Has previous scene: ${input.previousSceneJson ? 'YES' : 'NO'}`);
     
     try {
       // STEP 1: Generate JSON layout using @style-json-prompt.md
-      console.log(`[SceneBuilder] 📋 STEP 1: LayoutGenerator`);
+      if (this.DEBUG) console.log(`[SceneBuilder] 📋 STEP 1: LayoutGenerator`);
       const layoutResult = await layoutGeneratorService.generateLayout({
         userPrompt: input.userPrompt,
         projectId: input.projectId,
@@ -52,10 +50,10 @@ export class SceneBuilderService {
         isFirstScene: !input.previousSceneJson,
       });
       
-      console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);
+      if (this.DEBUG) console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);
       
       // STEP 2: Generate React/Remotion code from JSON
-      console.log(`[SceneBuilder] 🎬 STEP 2: CodeGenerator for ${layoutResult.layoutJson.sceneType} scene`);
+      if (this.DEBUG) console.log(`[SceneBuilder] 🎬 STEP 2: CodeGenerator for ${layoutResult.layoutJson.sceneType} scene`);
       const codeResult = await codeGeneratorService.generateCode({
         layoutJson: layoutResult.layoutJson,
         userPrompt: input.userPrompt,
@@ -63,8 +61,8 @@ export class SceneBuilderService {
       });
       
       const generationTime = Date.now() - startTime;
-      console.log(`[SceneBuilder] ✅ Two-step pipeline completed successfully in ${generationTime}ms`);
-      console.log(`[SceneBuilder] 📊 Final result: ${codeResult.code.length} chars of code generated`);
+      if (this.DEBUG) console.log(`[SceneBuilder] ✅ Two-step pipeline completed successfully in ${generationTime}ms`);
+      if (this.DEBUG) console.log(`[SceneBuilder] 📊 Final result: ${codeResult.code.length} chars of code generated`);
       
       return {
         code: codeResult.code,
@@ -80,7 +78,7 @@ export class SceneBuilderService {
       };
       
     } catch (error) {
-      console.error("[SceneBuilder] Pipeline error:", error);
+      if (this.DEBUG) console.error("[SceneBuilder] Pipeline error:", error);
       
       // Complete fallback
       const fallbackLayout: SceneLayout = {

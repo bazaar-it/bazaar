@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -6,10 +7,7 @@ import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { toast } from 'sonner';
-import { analytics } from '~/lib/analytics';
+
 import { useVoiceToText } from '~/hooks/useVoiceToText';
 import { Card, CardContent } from "~/components/ui/card";
 

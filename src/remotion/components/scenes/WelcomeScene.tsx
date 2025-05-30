@@ -1,3 +1,4 @@
+// src/remotion/components/scenes/WelcomeScene.tsx
 import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 
 export interface WelcomeSceneProps {

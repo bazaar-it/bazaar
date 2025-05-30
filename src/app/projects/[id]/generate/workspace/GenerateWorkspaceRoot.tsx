@@ -1,3 +1,5 @@
+// src/app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx
+
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -10,6 +12,9 @@ import { GenerateSidebar } from "./GenerateSidebar";
 import WorkspaceContentAreaG from './WorkspaceContentAreaG';
 import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContentAreaG';
 
+// ✅ NEW: Debug flag for production logging
+const DEBUG = process.env.NODE_ENV === 'development';
+
 type Props = {
   projectId: string;
   initialProps: InputProps;
@@ -17,7 +22,6 @@ type Props = {
 };
 
 export default function GenerateWorkspaceRoot({ projectId, initialProps, initialProjects }: Props) {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [userProjects, setUserProjects] = useState(initialProjects);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
@@ -26,8 +30,8 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
 
   // Initialize video state on mount
   useEffect(() => {
-    console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
-    console.log('[GenerateWorkspaceRoot] About to call setProject. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
+    if (DEBUG) console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
+    if (DEBUG) console.log('[GenerateWorkspaceRoot] About to call setProject. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
     setProject(projectId, initialProps);
   }, [projectId, initialProps, setProject]);
   
@@ -66,7 +70,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   // Set up render mutation
   const renderMutation = api.render.start.useMutation({
     onSuccess: () => {
-      console.log("Render started successfully");
+      if (DEBUG) console.log("Render started successfully");
     },
     onError: (error: unknown) => {
       console.error("Failed to start render:", error);
