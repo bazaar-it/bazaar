@@ -139,3 +139,75 @@ User Input → planScene() → JSON Structure → generateCodeFromPlan() → Rem
 - Database schema and API interfaces preserved
 - New generation uses gpt-4o-mini model for both steps
 - Clear JSON intermediate step allows for better debugging 
+
+## Latest Update: UI Improvements Integration (main2-Update → main3Jack)
+
+### Successfully Integrated Features ✅
+
+1. **Voice-to-Text Functionality**
+   - Added `useVoiceToText` hook with recording states (idle/recording/transcribing)
+   - Integrated OpenAI Whisper API via `/api/transcribe` endpoint
+   - Support for multiple audio formats with 5-minute limit
+   - Proper error handling and user feedback
+
+2. **Enhanced Chat Panel UI**
+   - Replaced Input component with auto-resizing textarea
+   - Added microphone button with visual state indicators
+   - Implemented keyboard shortcuts (Enter to send, Shift+Enter for new line)
+   - Dynamic alignment: centered for single-line, top-aligned for multi-line
+
+3. **Updated Branding & Components**
+   - Footer updated with "Neural Hub Limited" branding
+   - Improved NewProjectButton functionality and performance
+   - Enhanced icons component with MicIcon support
+
+4. **Voice Integration Features**
+   - Real-time transcription appending to existing text
+   - Visual feedback during recording/transcribing states
+   - Graceful error handling for microphone access issues
+   - Browser compatibility checks for MediaRecorder API
+
+### Technical Implementation Details
+
+- **Hook Architecture**: `useVoiceToText` manages recording state, MediaRecorder, and API calls
+- **API Integration**: `/api/transcribe` handles file upload, validation, and OpenAI Whisper calls
+- **UI Components**: Flexbox-based layout with proper focus management
+- **Error Handling**: Comprehensive error messages for various failure scenarios
+
+### Known Issues & Limitations
+
+1. **Server API Conflicts**: Some linter errors remain due to `removeScene` being defined as `.query()` instead of `.mutation()` in the server
+2. **MCP Architecture**: Voice functionality integrated while preserving existing MCP (Model Context Protocol) architecture
+3. **Browser Support**: Voice features require modern browsers with MediaRecorder API support
+
+### Files Modified/Added
+
+**New Files:**
+- `src/hooks/useVoiceToText.ts` - Voice recording and transcription hook
+- `src/app/api/transcribe/route.ts` - OpenAI Whisper API integration
+
+**Modified Files:**
+- `src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx` - Enhanced with voice UI
+- `src/components/ui/Footer.tsx` - Updated branding
+- `src/components/client/NewProjectButton.tsx` - Performance improvements
+- `src/components/ui/icons.tsx` - Added MicIcon support
+
+### Next Steps
+
+1. **Resolve Server API Issues**: Fix `removeScene` to use proper mutation pattern
+2. **Testing**: Comprehensive testing of voice functionality across browsers
+3. **Performance**: Optimize audio processing and transcription speed
+4. **UX Enhancements**: Add visual waveform during recording, better loading states
+
+### Integration Strategy Used
+
+Instead of a full merge (which caused conflicts), used selective file copying:
+```bash
+git checkout feature/main2-update -- src/hooks/useVoiceToText.ts
+git checkout feature/main2-update -- src/app/api/transcribe/route.ts
+git checkout feature/main2-update -- src/components/ui/Footer.tsx
+git checkout feature/main2-update -- src/components/client/NewProjectButton.tsx
+git checkout feature/main2-update -- src/components/ui/icons.tsx
+```
+
+This approach preserved the MCP architecture while successfully integrating the UI improvements. 
