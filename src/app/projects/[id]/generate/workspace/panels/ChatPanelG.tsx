@@ -6,11 +6,12 @@ import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState, type ChatMessage, type DbMessage as VideoStateDbMessage } from '~/stores/videoState';
 // Renamed DbMessage import to avoid conflict with tRPC's inferred DbMessage type if any.
-import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, Mic, StopCircle } from 'lucide-react';
+import { Loader2Icon, CheckCircleIcon, XCircleIcon, SendIcon, Mic, StopCircle, MicIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 import { analytics } from '~/lib/analytics';
+import { useVoiceToText } from '~/hooks/useVoiceToText';
 
 interface Scene {
   id: string;
@@ -70,6 +71,7 @@ export function ChatPanelG({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Get video state and current scenes
   const { getCurrentProps, syncDbMessages, getProjectChatHistory } = useVideoState();
@@ -90,6 +92,16 @@ export function ChatPanelG({
       setMessage((prev) => (prev ? `${prev} ${data.text}` : data.text));
     },
   });
+  
+  // Voice-to-text functionality
+  const {
+    recordingState,
+    startRecording,
+    stopRecording,
+    transcription: voiceTranscription,
+    error: voiceError,
+    isSupported: isVoiceSupported,
+  } = useVoiceToText();
   
   // Helper function to add optimistic user message
   const addOptimisticUserMessage = useCallback((content: string) => {
@@ -130,6 +142,46 @@ export function ChatPanelG({
     );
   }, []);
   
+  // Scene removal mutation
+  const removeSceneMutation = api.generation.removeScene.useMutation({
+    onMutate: async () => {
+      const optimisticAssistantMessageId = addOptimisticAssistantMessage("Assistant is working on it...");
+      return { optimisticAssistantMessageId };
+    },
+    onSuccess: (result: any, variables, context) => {
+      console.log("✅ Scene removal completed:", result);
+      setIsGenerating(false);
+      setGenerationComplete(true);
+      
+      // Trigger video state refresh specifically for removal
+      // Instead of calling onSceneGenerated which expects scene data,
+      // we'll trigger a direct refresh by refetching messages
+      console.log('[ChatPanelG] Scene removed successfully, triggering UI refresh');
+      
+      // FIXED: Clear optimistic messages immediately when real messages arrive
+      clearOptimisticMessages();
+      
+      // Update optimistic assistant message with success
+      if (context?.optimisticAssistantMessageId) {
+        updateOptimisticMessage(context.optimisticAssistantMessageId, { 
+          content: "Scene removed!", 
+          status: 'success', 
+          createdAt: new Date() 
+        });
+      }
+      
+      // Don't refetch immediately - let optimistic UI handle the success state
+    },
+    onError: (error: any, variables, context) => {
+      console.error("❌ Scene removal failed:", error);
+      setIsGenerating(false);
+      toast.error(`Scene removal failed: ${error.message}`);
+      
+      // Only refetch on error to show error message from server
+      void refetchMessages();
+    }
+  });
+
   // Handle voice recording
   const handleRecord = async () => {
     if (isRecording) {
@@ -468,67 +520,6 @@ export function ChatPanelG({
     }
   });
 
-  // Scene removal mutation
-  const removeSceneMutation = api.generation.removeScene.useMutation({
-    onMutate: async () => {
-      const optimisticAssistantMessageId = addOptimisticAssistantMessage("Assistant is working on it...");
-      return { optimisticAssistantMessageId };
-    },
-    onSuccess: (result: any, variables, context) => {
-      console.log("✅ Scene removal completed:", result);
-      setIsGenerating(false);
-      setGenerationComplete(true);
-      
-      // Trigger video state refresh specifically for removal
-      // Instead of calling onSceneGenerated which expects scene data,
-      // we'll trigger a direct refresh by refetching messages
-      console.log('[ChatPanelG] Scene removed successfully, triggering UI refresh');
-      
-      // FIXED: Clear optimistic messages immediately when real messages arrive
-      clearOptimisticMessages();
-      
-      // Update optimistic assistant message with success
-      if (context?.optimisticAssistantMessageId) {
-        updateOptimisticMessage(context.optimisticAssistantMessageId, { 
-          content: "Scene removed!", 
-          status: 'success', 
-          createdAt: new Date() 
-        });
-      }
-      
-      // Refetch messages to show the assistant response
-      setTimeout(() => {
-        void refetchMessages();
-      }, 100);
-      
-      // Trigger scene refresh if available
-      if (onSceneGenerated) {
-        // Call with special removal flag - empty strings indicate removal
-        console.log('[ChatPanelG] Calling scene refresh after removal');
-        onSceneGenerated('SCENE_REMOVED', '');
-      }
-    },
-    onError: (error: any, variables, context) => {
-      console.error("❌ Scene removal failed:", error);
-      setIsGenerating(false);
-      toast.error(`Scene removal failed: ${error.message}`);
-      
-      // FIXED: Clear optimistic messages on error too
-      clearOptimisticMessages();
-      
-      // Update optimistic assistant message with error
-      if (context?.optimisticAssistantMessageId) {
-        updateOptimisticMessage(context.optimisticAssistantMessageId, { 
-          content: `Error removing: ${error.message}`,
-          status: 'error',
-          createdAt: new Date()
-        });
-      }
-      
-      void refetchMessages();
-    }
-  });
-
   // Auto-scroll to bottom when messages change (V2 improvement)
   useEffect(() => {
     if (!generationComplete) {
@@ -599,6 +590,65 @@ export function ChatPanelG({
 
     return () => clearInterval(interval);
   }, [projectId]); // Only depend on projectId, refetchMessages should be stable
+
+  // Handle voice transcription results
+  useEffect(() => {
+    if (voiceTranscription && voiceTranscription.trim()) {
+      setMessage(prev => {
+        // If there's existing text, append with a space
+        const newText = prev ? `${prev} ${voiceTranscription}` : voiceTranscription;
+        return newText;
+      });
+    }
+  }, [voiceTranscription]);
+
+  // Handle voice errors
+  useEffect(() => {
+    if (voiceError) {
+      console.error('[ChatPanelG] Voice error:', voiceError);
+      // Error is already handled by the hook with toast, just log it
+    }
+  }, [voiceError]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Calculate new height (min 40px, max 10 lines ~200px)
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, 40), 200);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [message]);
+
+  // Handle keyboard events for textarea
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!message.trim() || isGenerating) return;
+      
+      // Trigger form submission directly
+      const form = e.currentTarget.closest('form');
+      if (form) {
+        const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+        form.dispatchEvent(submitEvent);
+      }
+    }
+  }, [message, isGenerating]);
+
+  // Handle microphone button click
+  const handleMicrophoneClick = useCallback(() => {
+    if (recordingState === 'idle') {
+      startRecording();
+    } else if (recordingState === 'recording') {
+      stopRecording();
+    }
+    // Do nothing during transcribing state
+  }, [recordingState, startRecording, stopRecording]);
+
+  // Check if content has multiple lines
+  const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
   return (
     <div className="flex flex-col h-full">
@@ -693,46 +743,61 @@ export function ChatPanelG({
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={
-              selectedScene && !selectedScene.data?.isWelcomeScene && selectedScene.type !== "welcome"
-                ? "Describe changes to this scene or create a new scene..."
-                : scenes.length > 0
-                ? "Describe a new scene or edit existing scenes..."
-                : "Describe the scene you want to create..."
-            }
-            disabled={isGenerating}
-            className="flex-1"
-          />
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleRecord}
-            disabled={transcribe.isPending || isGenerating}
-            size="sm"
-            className="px-3"
-          >
-            {isRecording ? (
-              <StopCircle className="h-4 w-4" />
-            ) : (
-              <Mic className="h-4 w-4" />
+        <form onSubmit={handleSubmit} className="flex gap-2 items-start">
+          <div className={`flex-1 relative flex border border-input rounded-md bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ${hasMultipleLines ? 'items-start' : 'items-center'}`}>
+            {/* Microphone button */}
+            {isVoiceSupported && (
+              <Button
+                type="button"
+                onClick={handleMicrophoneClick}
+                size="sm"
+                variant="ghost"
+                className={`flex-shrink-0 h-8 w-8 p-1 m-1 ${
+                  recordingState === 'recording' 
+                    ? 'text-red-500 hover:text-red-600' 
+                    : recordingState === 'transcribing'
+                    ? 'text-blue-500'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+                disabled={recordingState === 'transcribing'}
+              >
+                {recordingState === 'transcribing' ? (
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MicIcon className="h-4 w-4" />
+                )}
+              </Button>
             )}
-          </Button>
-          <Button 
-            type="submit" 
-            disabled={!message.trim() || isGenerating}
-            size="sm"
-            className="px-3"
-          >
-            {isGenerating ? (
-              <Loader2Icon className="h-4 w-4 animate-spin" />
-            ) : (
-              <SendIcon className="h-4 w-4" />
-            )}
-          </Button>
+            
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={
+                selectedScene 
+                  ? "Describe changes to this scene or create a new scene..."
+                  : "Describe the scene you want to create..."
+              }
+              className="flex-1 resize-none bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 min-h-[40px] max-h-[200px] overflow-y-auto border-0"
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
+            
+            {/* Send button */}
+            <Button 
+              type="submit" 
+              disabled={!message.trim() || isGenerating}
+              size="sm"
+              variant="ghost"
+              className="flex-shrink-0 h-8 w-8 p-1 m-1"
+            >
+              {isGenerating ? (
+                <Loader2Icon className="h-4 w-4 animate-spin" />
+              ) : (
+                <SendIcon className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </form>
         
         {/* Helper text (V1 logic) */}
