@@ -25,7 +25,7 @@ export interface LayoutGeneratorOutput {
  */
 export class LayoutGeneratorService {
   private readonly model = "gpt-4.1-mini";
-  private readonly temperature = 0.2; // Low temperature for consistent JSON structure
+  private readonly temperature = 0.3; // Low temperature for consistent JSON structure
 
   async generateLayout(input: LayoutGeneratorInput): Promise<LayoutGeneratorOutput> {
     const prompt = this.buildLayoutPrompt(input);

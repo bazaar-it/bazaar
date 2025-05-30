@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches, scenePlans, messages } from "~/server/db/schema";
+import { projects, patches, scenePlans } from "~/server/db/schema";
 import { eq, desc, like, count, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/types/remotion-constants";
@@ -130,36 +130,7 @@ export const projectRouter = createTRPCRouter({
           });
         }
 
-        // Add a welcome message from the system
-        await executeWithRetry(() => ctx.db
-          .insert(messages)
-          .values({
-            projectId: insertResult.id,
-            content: `👋 **Welcome to your new project!**
-
-I'm here to help you create amazing video content. Here's how to get started:
-
-**🎬 Describe what you want to create:**
-- "Create a gradient background in blue and purple"
-- "Add a title that says 'Hello World' with a fade-in animation"
-- "Make a spinning logo animation"
-- "Create a product showcase with smooth transitions"
-
-**✨ Tips for better results:**
-- Be specific about colors, animations, and layout
-- Mention any text content you want to include
-- Describe the mood or style you're going for
-
-**🔧 Once you have scenes:**
-- Select a scene and describe changes to edit it
-- Use commands like "make it red" or "add a bounce effect"
-- Ask for variations: "make it more professional" or "add more energy"
-
-Ready to create something amazing? Just describe your first scene below! 🚀`,
-            role: 'assistant',
-            kind: 'message',
-            status: 'success',
-          }));
+        // NO WELCOME MESSAGE CREATION - Let UI show the nice default instead
 
         // If initialMessage is provided, trigger LLM/assistant processing asynchronously
         if (input?.initialMessage && input.initialMessage.trim().length > 0) {

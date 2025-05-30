@@ -283,4 +283,102 @@ export const generationRouter = createTRPCRouter({
 
       return projectScenes;
     }),
+
+  /**
+   * SCENE ROLLBACK
+   * Rollback to a previous version of a scene
+   */
+  sceneRollback: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      sceneId: z.string(),
+      versionNumber: z.number().optional(), // Optional: rollback to specific version, defaults to previous
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        console.log(`[sceneRollback] Rolling back scene ${input.sceneId} in project ${input.projectId}`);
+        
+        // Get scene versions from database (you'll need to add a scene_versions table)
+        // For now, we'll implement a simple "undo last change" mechanism
+        
+        // Get the scene
+        const currentScene = await db.query.scenes.findFirst({
+          where: eq(scenes.id, input.sceneId)
+        });
+        
+        if (!currentScene) {
+          throw new Error("Scene not found");
+        }
+        
+        // For MVP: Simple approach - regenerate scene with "fix the errors" instruction
+        console.log(`[sceneRollback] Attempting to fix broken scene: ${currentScene.name}`);
+        
+        // Get the layout JSON to regenerate a safe version
+        let layoutJson = currentScene.layoutJson as any;
+        if (!layoutJson) {
+          // If no layout JSON, create a simple fallback layout
+          layoutJson = {
+            sceneType: "simple",
+            background: "#1e1b4b",
+            elements: [
+              {
+                type: "title",
+                id: "title1",
+                text: currentScene.name || "Fixed Scene",
+                fontSize: 48,
+                fontWeight: "700",
+                color: "#ffffff",
+              }
+            ],
+            layout: {
+              align: "center",
+              direction: "column",
+              gap: 16,
+            },
+            animations: {
+              title1: {
+                type: "fadeIn",
+                duration: 60,
+                delay: 0,
+              }
+            }
+          };
+        }
+        
+        // Use the code generator to create a safe version
+        const { codeGeneratorService } = await import("~/lib/services/codeGenerator.service");
+        
+        const safeCode = await codeGeneratorService.generateCode({
+          layoutJson,
+          userPrompt: `Fix and simplify this scene: ${currentScene.name}. Make it safe and working.`,
+          functionName: `Scene_${currentScene.id.replace(/-/g, '_').substring(0, 16)}`,
+        });
+        
+        // Update the scene with the safe code
+        const [updatedScene] = await db.update(scenes)
+          .set({
+            tsxCode: safeCode.code,
+            updatedAt: new Date(),
+          })
+          .where(eq(scenes.id, input.sceneId))
+          .returning();
+        
+        console.log(`[sceneRollback] Scene successfully fixed: ${updatedScene?.name}`);
+        
+        return {
+          success: true,
+          scene: {
+            id: updatedScene?.id,
+            name: updatedScene?.name,
+            tsxCode: updatedScene?.tsxCode,
+            duration: updatedScene?.duration,
+          },
+          message: "Scene has been fixed and should now work properly",
+        };
+        
+      } catch (error) {
+        console.error("[sceneRollback] Error:", error);
+        throw new Error(`Failed to rollback scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }),
 }); 

@@ -3,10 +3,11 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "~/server/auth";
 import { getUserProjects } from "~/server/queries/getUserProjects";
 import { db } from "~/server/db";
-import { projects } from "~/server/db/schema";
+import { projects, scenes } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
 import { analytics } from '~/lib/analytics';
+import type { InputProps } from '~/types/input-props';
 
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -43,6 +44,54 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
       );
     }
 
+    // 🚨 CRITICAL FIX: Check for existing scenes FIRST to avoid welcome video override
+    console.log('[GeneratePage] Checking for existing scenes in database...');
+    const existingScenes = await db.query.scenes.findMany({
+      where: eq(scenes.projectId, projectId),
+      orderBy: [scenes.order],
+    });
+    
+    let actualInitialProps: InputProps;
+    
+    if (existingScenes.length > 0) {
+      // ✅ HAS REAL SCENES: Convert database scenes to props format
+      console.log('[GeneratePage] Found', existingScenes.length, 'existing scenes, building props from database');
+      
+      let currentStart = 0;
+      const convertedScenes = existingScenes.map((dbScene) => {
+        const sceneDuration = dbScene.duration || 150; // Fallback to 5s
+        const scene = {
+          id: dbScene.id,
+          type: 'custom' as const,
+          start: currentStart,
+          duration: sceneDuration,
+          data: {
+            code: dbScene.tsxCode,
+            name: dbScene.name,
+            componentId: dbScene.id,
+            props: dbScene.props || {}
+          }
+        };
+        currentStart += sceneDuration;
+        return scene;
+      });
+      
+      actualInitialProps = {
+        meta: {
+          title: projectResult.title,
+          duration: currentStart,
+          backgroundColor: projectResult.props?.meta?.backgroundColor || '#000000'
+        },
+        scenes: convertedScenes
+      };
+      
+      console.log('[GeneratePage] ✅ Built initial props from', convertedScenes.length, 'database scenes');
+    } else {
+      // ✅ NEW PROJECT: Use stored props (welcome video for new projects)
+      console.log('[GeneratePage] No existing scenes found, using stored project props (welcome video)');
+      actualInitialProps = projectResult.props;
+    }
+
     // Track project opening analytics
     analytics.projectOpened(projectId);
 
@@ -50,7 +99,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
       <GenerateWorkspaceRoot
         projectId={projectId}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
-        initialProps={projectResult.props}
+        initialProps={actualInitialProps}
       />
     );
   } catch (error) {

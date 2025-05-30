@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
@@ -10,7 +11,7 @@ import { XIcon, RefreshCwIcon } from 'lucide-react';
 import type { InputProps } from '~/types/input-props';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
-import { ChatPanelG } from './panels/ChatPanelG';
+import ChatPanelG from './panels/ChatPanelG';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
@@ -265,8 +266,28 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Scene selection state - shared between Storyboard and Code panels
     const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
     
+    // 🚨 NEW: Restore last selected scene from localStorage on mount
+    useEffect(() => {
+      const lastSceneKey = `lastSelectedScene_${projectId}`;
+      const lastSceneId = localStorage.getItem(lastSceneKey);
+      
+      if (lastSceneId) {
+        console.log('[WorkspaceContentAreaG] Restoring last selected scene:', lastSceneId);
+        setSelectedSceneId(lastSceneId);
+      }
+    }, [projectId]);
+    
+    // 🚨 NEW: Save selected scene to localStorage whenever it changes
+    useEffect(() => {
+      if (selectedSceneId) {
+        const lastSceneKey = `lastSelectedScene_${projectId}`;
+        localStorage.setItem(lastSceneKey, selectedSceneId);
+        console.log('[WorkspaceContentAreaG] Saved last selected scene to localStorage:', selectedSceneId);
+      }
+    }, [selectedSceneId, projectId]);
+    
     // Get video state methods
-    const { replace, getCurrentProps } = useVideoState();
+    const { replace, getCurrentProps, syncDbMessages } = useVideoState();
     
     // Query for fetching updated project scenes from database
     const getProjectScenesQuery = api.generation.getProjectScenes.useQuery(
@@ -277,6 +298,25 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         refetchOnMount: false
       }
     );
+    
+    // ✅ SINGLE POINT: Database message sync
+    const { data: dbMessages } = api.chat.getMessages.useQuery(
+      { projectId },
+      {
+        refetchOnWindowFocus: false,
+        enabled: !!projectId,
+        retry: 1,
+        staleTime: 0,
+      }
+    );
+    
+    // ✅ SYNC: When database messages are loaded, sync them with VideoState
+    useEffect(() => {
+      if (dbMessages && dbMessages.length > 0) {
+        console.log('[WorkspaceContentAreaG] Syncing database messages with VideoState:', dbMessages.length);
+        syncDbMessages(projectId, dbMessages as any[]);
+      }
+    }, [dbMessages, projectId, syncDbMessages]);
     
     // Helper function to convert database scenes to InputProps format
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -392,108 +432,17 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     }, []);
     
     // Callback for handling new scene generation with validation
-    const handleSceneGenerated = useCallback(async (sceneId: string, code: string) => {
-      console.log('[WorkspaceContentAreaG] Scene generated, validating before state update:', sceneId);
+    const handleSceneGenerated = useCallback(async (sceneId: string) => {
+      console.log('[WorkspaceContentAreaG] Scene generated, selecting scene:', sceneId);
       
-      try {
-        // Handle scene removal case
-        if (sceneId === 'SCENE_REMOVED') {
-          console.log('[WorkspaceContentAreaG] Scene removal detected, refreshing project state...');
-          
-          // STEP 1: Refetch the latest project scenes from database
-          const result = await getProjectScenesQuery.refetch();
-          
-          if (result.data) {
-            console.log('[WorkspaceContentAreaG] Fetched updated scenes after removal:', result.data.length);
-            
-            // Convert database scenes to InputProps format
-            const updatedProps = convertDbScenesToInputProps(result.data);
-            
-            // Update the video state with the fresh data
-            replace(projectId, updatedProps);
-            
-            console.log('[WorkspaceContentAreaG] ✅ Video state updated successfully after scene removal, scene count:', updatedProps.scenes.length);
-            toast.success('Scene removed successfully!');
-            
-            return; // Exit early for removal case
-          } else {
-            throw new Error('Failed to fetch updated scenes from database');
-          }
-        }
-        
-        // STEP 1: Validate the generated code before adding to video state (only for new scenes)
-        console.log('[WorkspaceContentAreaG] Validating scene code...');
-        const validation = await validateSceneCode(code);
-        
-        if (!validation.isValid) {
-          console.error('[WorkspaceContentAreaG] ❌ Scene validation failed:', validation.errors);
-          toast.error(`Scene validation failed: ${validation.errors.join(', ')}`);
-          
-          // Don't update video state with invalid scenes
-          return;
-        }
-        
-        console.log('[WorkspaceContentAreaG] ✅ Scene validation passed, proceeding with state update');
-        
-        // STEP 2: Create state snapshot for rollback capability
-        const currentProps = getCurrentProps();
-        const stateSnapshot = currentProps ? JSON.parse(JSON.stringify(currentProps)) : null;
-        
-        try {
-          // STEP 3: Refetch the latest project scenes from database
-          const result = await getProjectScenesQuery.refetch();
-          
-          if (result.data) {
-            console.log('[WorkspaceContentAreaG] Fetched updated scenes:', result.data.length);
-            
-            // Convert database scenes to InputProps format
-            const updatedProps = convertDbScenesToInputProps(result.data);
-            
-            // STEP 4: Validate the entire video state before updating
-            const hasValidScenes = updatedProps.scenes.every(scene => {
-              return scene.data?.code && scene.data.code.trim().length > 0;
-            });
-            
-            if (!hasValidScenes) {
-              throw new Error('One or more scenes have invalid code');
-            }
-            
-            // STEP 5: Update the video state with the fresh data
-            replace(projectId, updatedProps);
-            
-            // Select the newly generated scene
-            setSelectedSceneId(sceneId);
-            
-            console.log('[WorkspaceContentAreaG] ✅ Video state updated successfully with scene count:', updatedProps.scenes.length);
-            toast.success('Scene added successfully!');
-            
-          } else {
-            throw new Error('Failed to fetch updated scenes from database');
-          }
-          
-        } catch (stateUpdateError) {
-          console.error('[WorkspaceContentAreaG] ❌ Error updating video state:', stateUpdateError);
-          
-          // STEP 6: Rollback to previous state if update fails
-          if (stateSnapshot) {
-            console.log('[WorkspaceContentAreaG] 🔄 Rolling back to previous state...');
-            replace(projectId, stateSnapshot);
-            toast.error('Scene update failed - rolled back to previous state');
-          } else {
-            toast.error('Scene update failed and no backup state available');
-          }
-        }
-        
-      } catch (error) {
-        console.error('[WorkspaceContentAreaG] ❌ Critical error in scene generation handling:', error);
-        toast.error('Critical error handling scene generation - please refresh the page');
-      }
-    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, replace, getCurrentProps, validateSceneCode]);
+      // Simply select the generated scene - the VideoState will be updated by the chat mutation
+      setSelectedSceneId(sceneId);
+    }, []);
     
     // Track if initialization has been attempted for this project
     const initializationAttemptedRef = useRef<Set<string>>(new Set());
     
-    // Load existing project scenes on initialization
+    // 🚨 SIMPLIFIED: Initialization now handled by page.tsx, just set the props once
     useEffect(() => {
       // Only initialize once per project
       if (initializationAttemptedRef.current.has(projectId)) {
@@ -501,49 +450,21 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         return;
       }
       
-      const initializeProject = async () => {
-        // Mark this project as initialization attempted
-        initializationAttemptedRef.current.add(projectId);
-        
-        console.log('[WorkspaceContentAreaG] Initializing project:', projectId);
-        console.log('[WorkspaceContentAreaG] Initial props:', initialProps);
-        
-        try {
-          // Always fetch from database first to check if there are existing scenes
-          const result = await getProjectScenesQuery.refetch();
-          
-          if (result.data && result.data.length > 0) {
-            console.log('[WorkspaceContentAreaG] Found existing scenes in database:', result.data.length);
-            
-            // Convert and set in video state
-            const props = convertDbScenesToInputProps(result.data);
-            replace(projectId, props);
-            
-            console.log('[WorkspaceContentAreaG] Initialized video state with existing scenes');
-          } else {
-            console.log('[WorkspaceContentAreaG] No existing scenes found in database, using initial props');
-            
-            // Use initial props for new projects (this ensures empty scenes array for new projects)
-            if (initialProps) {
-              replace(projectId, initialProps);
-              console.log('[WorkspaceContentAreaG] Initialized video state with initial props:', initialProps);
-            } else {
-              console.warn('[WorkspaceContentAreaG] No initial props provided for new project');
-            }
-          }
-        } catch (error) {
-          console.error('[WorkspaceContentAreaG] Error loading project data:', error);
-          
-          // Fallback to initial props
-          if (initialProps) {
-            replace(projectId, initialProps);
-            console.log('[WorkspaceContentAreaG] Fallback: Initialized video state with initial props');
-          }
-        }
-      };
+      // Mark this project as initialization attempted
+      initializationAttemptedRef.current.add(projectId);
       
-      void initializeProject();
-    }, [projectId, initialProps, getProjectScenesQuery, convertDbScenesToInputProps, replace]);
+      console.log('[WorkspaceContentAreaG] Initializing project with provided props:', projectId);
+      console.log('[WorkspaceContentAreaG] Initial props scenes count:', initialProps?.scenes?.length || 0);
+      
+      // ✅ TRUST page.tsx: Use the provided initialProps directly 
+      // page.tsx now ensures these are ALWAYS the correct props (either real scenes or welcome)
+      if (initialProps) {
+        replace(projectId, initialProps);
+        console.log('[WorkspaceContentAreaG] ✅ Initialized video state with correct props from page.tsx');
+      } else {
+        console.warn('[WorkspaceContentAreaG] No initial props provided - this should not happen');
+      }
+    }, [projectId, initialProps, replace]);
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);

@@ -138,6 +138,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
+            projects={userProjects}
             currentProjectId={projectId}
             onAddPanel={handleAddPanel}
             isCollapsed={!isSidebarExpanded}

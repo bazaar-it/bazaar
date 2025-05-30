@@ -26,7 +26,7 @@ export interface CodeGeneratorOutput {
  */
 export class CodeGeneratorService {
   private readonly model = "gpt-4.1";
-  private readonly temperature = 0.4; // Low temperature for consistent code generation
+  private readonly temperature = 0.5; // Low temperature for consistent code generation
 
   async generateCode(input: CodeGeneratorInput): Promise<CodeGeneratorOutput> {
     const prompt = this.buildCodePrompt(input);
@@ -35,7 +35,6 @@ export class CodeGeneratorService {
     console.log(`[CodeGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
     console.log(`[CodeGenerator] 🎨 Scene type: ${input.layoutJson.sceneType || 'unknown'}`);
     console.log(`[CodeGenerator] 📊 Elements count: ${input.layoutJson.elements?.length || 0}`);
-    // console.log(`[CodeGenerator] 🎛️ Model: ${this.model}, Temperature: ${this.temperature}`);
     
     try {
       console.log(`[CodeGenerator] 🚀 Calling OpenAI LLM...`);
@@ -52,7 +51,6 @@ export class CodeGeneratorService {
             content: prompt.user,
           },
         ],
-        // NO response_format - expecting direct code output like the proven prompt
       });
       
       const rawOutput = response.choices[0]?.message?.content;
@@ -61,174 +59,55 @@ export class CodeGeneratorService {
       }
       
       console.log(`[CodeGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
-      console.log(`[CodeGenerator] 📤 Raw LLM response preview: ${rawOutput.substring(0, 300)}...`);
       
       // 🚨 CRITICAL FIX: Remove markdown code fences if present
       let cleanCode = rawOutput.trim();
-      
-      // Remove markdown code fences (```javascript, ```tsx, etc.)
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
       
       // 🚨 CRITICAL FIX: Ensure single export default only
       if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
         console.warn(`[CodeGenerator] ⚠️ Detected wrapper function pattern - extracting scene function only`);
-        // Extract just the scene function - match everything from const to the scene function export
         const sceneMatch = cleanCode.match(/const \{[^}]+\} = window\.Remotion;[\s\S]*?export default function \w+\(\)[^{]*\{[\s\S]*?\n\}/);
         if (sceneMatch) {
           cleanCode = sceneMatch[0];
         }
       }
       
-      // 🚨 ADDITIONAL FIX: If there are TWO functions, keep only the scene function
-      const functionMatches = cleanCode.match(/function (\w+)\(/g);
-      if (functionMatches && functionMatches.length > 1) {
-        console.warn(`[CodeGenerator] ⚠️ Multiple functions detected: ${functionMatches.join(', ')}`);
+      // 🚨 NEW: Comprehensive Code Validation
+      const validationResult = this.validateGeneratedCode(cleanCode, input.functionName);
+      if (!validationResult.isValid) {
+        console.error(`[CodeGenerator] ❌ Code validation failed:`, validationResult.errors);
         
-        // Find the scene function (should match our functionName)
-        const sceneFunctionRegex = new RegExp(`function ${input.functionName}\\([^)]*\\)[^{]*\\{[\\s\\S]*?\\n\\}`, 'g');
-        const sceneFunctionMatch = cleanCode.match(sceneFunctionRegex);
-        
-        if (sceneFunctionMatch) {
-          // Rebuild with just the scene function
-          const windowRemotionLine = cleanCode.match(/const \{[^}]+\} = window\.Remotion;/);
-          if (windowRemotionLine) {
-            cleanCode = `${windowRemotionLine[0]}\n\n${sceneFunctionMatch[0].replace(/^function/, 'export default function')}`;
-          }
+        // 🚨 RETRY MECHANISM: Try generating again with explicit instructions
+        if (validationResult.canRetry) {
+          console.log(`[CodeGenerator] 🔄 Retrying with validation feedback...`);
+          return await this.retryWithValidationFeedback(input, validationResult.errors);
         }
+        
+        // 🚨 FALLBACK: Generate safe fallback code
+        console.log(`[CodeGenerator] 🛡️ Using safe fallback code...`);
+        return this.generateSafeFallbackCode(input);
       }
       
-      // 🚨 ENSURE proper export default format
-      if (!cleanCode.includes(`export default function ${input.functionName}`)) {
-        // Try to fix it by replacing the function declaration
-        cleanCode = cleanCode.replace(
-          new RegExp(`function ${input.functionName}\\(`),
-          `export default function ${input.functionName}(`
-        );
-      }
-      
-      console.log(`[CodeGenerator] 🧹 Cleaned code length: ${cleanCode.length} chars`);
-      console.log(`[CodeGenerator] 🧹 Cleaned code preview: ${cleanCode.substring(0, 300)}...`);
-      
-      // Validate it looks like React code
-      if (!cleanCode.includes('export default function') || !cleanCode.includes('AbsoluteFill')) {
-        throw new Error(`Generated code doesn't look like valid React component. Preview: ${cleanCode.substring(0, 200)}...`);
-      }
-      
-      // Ensure it has the right function name
-      if (!cleanCode.includes(`function ${input.functionName}`)) {
-        console.warn(`[CodeGenerator] ⚠️ Function name mismatch - expected ${input.functionName}`);
-      }
-      
+      console.log(`[CodeGenerator] ✅ Code validation passed`);
       console.log(`[CodeGenerator] ✅ Code generation successful for ${input.functionName}`);
-      console.log(`[CodeGenerator] 📊 Generated code validation: export=${cleanCode.includes('export default')}, AbsoluteFill=${cleanCode.includes('AbsoluteFill')}, fps=${cleanCode.includes('fps')}`);
       
       return {
         code: cleanCode,
         name: input.functionName,
-        duration: 180, // Default duration
-        reasoning: "Code generated using proven codegen-prompt.md with markdown cleanup",
+        duration: 180,
+        reasoning: "Code generated and validated successfully",
         debug: {
           prompt,
           response: rawOutput,
-          parsed: { code: cleanCode, cleaned: true },
+          parsed: { code: cleanCode, validated: true },
         },
       };
     } catch (error) {
       console.error("[CodeGenerator] Error:", error);
       
-      // Fallback to sophisticated code with proper animations
-      const fallbackCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
-
-export default function ${input.functionName}() {
-  const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
-  
-  // Staggered entrance animations
-  const titleStart = 0;
-  const titleDuration = fps * 1.5;
-  const subtitleStart = fps * 0.8;
-  const subtitleDuration = fps * 2;
-  
-  // Background gradient animation
-  const gradientRotation = interpolate(frame, [0, durationInFrames], [0, 360], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  
-  // Title animations
-  const titleOpacity = interpolate(frame, [titleStart, titleStart + titleDuration], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const titleScale = interpolate(frame, [titleStart, titleStart + titleDuration], [0.8, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  
-  // Subtitle animations
-  const subtitleOpacity = interpolate(frame, [subtitleStart, subtitleStart + subtitleDuration], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const subtitleTranslateY = interpolate(frame, [subtitleStart, subtitleStart + subtitleDuration], [20, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  
-  return (
-    <AbsoluteFill style={{
-      background: \`linear-gradient(\${gradientRotation}deg, ${input.layoutJson.background}, #1a1a3a, ${input.layoutJson.background})\`,
-      fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "center",
-      alignItems: "center",
-      position: "relative",
-      overflow: "hidden"
-    }}>
-      {/* Main content */}
-      <div style={{ textAlign: "center", zIndex: 1 }}>
-        ${input.layoutJson.elements.map((el, i) => {
-          const isTitle = el.type === 'title' || i === 0;
-          const isSubtitle = el.type === 'subtitle' || i === 1;
-          
-          if (isTitle) {
-            return `<h1 style={{
-              fontSize: "4rem",
-              fontWeight: "700",
-              color: "${el.color}",
-              margin: "0 0 1rem 0",
-              opacity: titleOpacity,
-              transform: \`scale(\${titleScale})\`,
-              background: \`linear-gradient(45deg, ${el.color}, #a855f7, #3b82f6)\`,
-              backgroundClip: "text",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent"
-            }}>
-              ${el.text}
-            </h1>`;
-          } else if (isSubtitle) {
-            return `<p style={{
-              fontSize: "1.5rem",
-              color: "${el.color}",
-              opacity: subtitleOpacity * 0.8,
-              transform: \`translateY(\${subtitleTranslateY}px)\`,
-              margin: "0",
-              maxWidth: "600px",
-              lineHeight: "1.6"
-            }}>
-              ${el.text}
-            </p>`;
-          } else {
-            return `<div style={{
-              fontSize: "${el.fontSize}px",
-              fontWeight: "${el.fontWeight}",
-              color: "${el.color}",
-              textAlign: "center",
-              margin: "10px 0",
-              opacity: interpolate(frame, [fps * ${i * 0.5}, fps * ${i * 0.5 + 1}], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
-            }}>
-              ${el.text}
-            </div>`;
-          }
-        }).join('')}
-      </div>
-    </AbsoluteFill>
-  );
-}`;
-      
-      return {
-        code: fallbackCode,
-        name: "Fallback Scene",
-        duration: 180,
-        reasoning: "Used fallback code due to generation error",
-        debug: { error: String(error) }
-      };
+      // 🚨 ENHANCED FALLBACK: Always provide working code
+      return this.generateSafeFallbackCode(input);
     }
   }
   
@@ -311,6 +190,237 @@ You only output complete and ready-to-render JavaScript/TypeScript code. Do not 
     const user = JSON.stringify(layoutJson, null, 2);
 
     return { system, user };
+  }
+
+  /**
+   * 🚨 FIXED: Simple pattern validation instead of broken Function() constructor
+   */
+  private validateGeneratedCode(code: string, functionName: string): {
+    isValid: boolean;
+    errors: string[];
+    canRetry: boolean;
+  } {
+    const errors: string[] = [];
+    let canRetry = true;
+
+    // ✅ SIMPLE: Basic required patterns validation only
+    if (!code.includes(`export default function ${functionName}`)) {
+      errors.push(`Missing export default function ${functionName}`);
+      canRetry = true;
+    }
+
+    if (!code.includes('AbsoluteFill')) {
+      errors.push('Missing AbsoluteFill component');
+      canRetry = true;
+    }
+
+    if (!code.includes('return')) {
+      errors.push('Missing return statement');
+      canRetry = true;
+    }
+
+    // ✅ SIMPLE: Basic brace matching (but not strict - JSX can have complex nesting)
+    const openBraces = (code.match(/\{/g) || []).length;
+    const closeBraces = (code.match(/\}/g) || []).length;
+    const braceDifference = Math.abs(openBraces - closeBraces);
+    
+    // Only flag as error if there's a significant brace mismatch (more than 2)
+    // JSX can have temporary imbalances that are valid
+    if (braceDifference > 2) {
+      errors.push(`Possible unmatched braces: ${openBraces} open, ${closeBraces} close`);
+      canRetry = true;
+    }
+
+    // ✅ SIMPLE: Check for completely empty or truncated code
+    if (code.trim().length < 50) {
+      errors.push('Generated code is too short or empty');
+      canRetry = true;
+    }
+
+    // ✅ SIMPLE: Check for obvious syntax errors in strings
+    const singleQuotes = (code.match(/'/g) || []).length;
+    const doubleQuotes = (code.match(/"/g) || []).length;
+    const backticks = (code.match(/`/g) || []).length;
+    
+    if (singleQuotes % 2 !== 0) {
+      errors.push('Unmatched single quotes');
+      canRetry = true;
+    }
+    if (doubleQuotes % 2 !== 0) {
+      errors.push('Unmatched double quotes');
+      canRetry = true;
+    }
+    if (backticks % 2 !== 0) {
+      errors.push('Unmatched backticks');
+      canRetry = true;
+    }
+
+    // ✅ SAFETY: Check for dangerous patterns
+    if (code.includes('function.constructor') || code.includes('eval(')) {
+      errors.push('Potentially dangerous code patterns detected');
+      canRetry = false; // Don't retry dangerous code
+    }
+
+    console.log(`[CodeGenerator] 🔍 Pattern validation for ${functionName}:`);
+    console.log(`[CodeGenerator] - Export function: ${code.includes(`export default function ${functionName}`) ? '✅' : '❌'}`);
+    console.log(`[CodeGenerator] - AbsoluteFill: ${code.includes('AbsoluteFill') ? '✅' : '❌'}`);
+    console.log(`[CodeGenerator] - Return statement: ${code.includes('return') ? '✅' : '❌'}`);
+    console.log(`[CodeGenerator] - Code length: ${code.trim().length} chars`);
+    console.log(`[CodeGenerator] - Braces: ${openBraces} open, ${closeBraces} close (diff: ${braceDifference})`);
+    
+    if (errors.length === 0) {
+      console.log(`[CodeGenerator] ✅ Pattern validation passed - code looks valid`);
+    } else {
+      console.log(`[CodeGenerator] ❌ Pattern validation failed:`, errors);
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      canRetry
+    };
+  }
+
+  /**
+   * 🚨 NEW: Retry mechanism with validation feedback
+   */
+  private async retryWithValidationFeedback(input: CodeGeneratorInput, validationErrors: string[]): Promise<CodeGeneratorOutput> {
+    console.log(`[CodeGenerator] 🔄 Retrying with validation feedback for: ${input.functionName}`);
+    
+    const enhancedPrompt = this.buildCodePrompt(input);
+    const validationFeedback = `
+CRITICAL: The previous code generation failed validation with these errors:
+${validationErrors.map(error => `- ${error}`).join('\n')}
+
+Please fix these issues and ensure:
+1. All braces {} are properly matched
+2. All string literals are properly closed
+3. The function has a complete return statement
+4. No incomplete or dangling code
+5. Proper export default function ${input.functionName}() structure
+`;
+
+    try {
+      const response = await openai.chat.completions.create({
+        model: this.model,
+        temperature: 0.2, // Lower temperature for retry
+        messages: [
+          {
+            role: "system",
+            content: enhancedPrompt.system + '\n\n' + validationFeedback,
+          },
+          {
+            role: "user", 
+            content: enhancedPrompt.user,
+          },
+        ],
+      });
+      
+      const rawOutput = response.choices[0]?.message?.content;
+      if (!rawOutput) {
+        throw new Error("No response from retry attempt");
+      }
+      
+      let cleanCode = rawOutput.trim();
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Validate the retry attempt
+      const retryValidation = this.validateGeneratedCode(cleanCode, input.functionName);
+      if (retryValidation.isValid) {
+        console.log(`[CodeGenerator] ✅ Retry successful!`);
+        return {
+          code: cleanCode,
+          name: input.functionName,
+          duration: 180,
+          reasoning: "Code generated successfully after retry with validation feedback",
+          debug: {
+            prompt: enhancedPrompt,
+            response: rawOutput,
+            parsed: { code: cleanCode, retried: true, originalErrors: validationErrors },
+          },
+        };
+      } else {
+        console.warn(`[CodeGenerator] ⚠️ Retry still has errors:`, retryValidation.errors);
+        throw new Error(`Retry failed: ${retryValidation.errors.join(', ')}`);
+      }
+      
+    } catch (error) {
+      console.error(`[CodeGenerator] ❌ Retry failed:`, error);
+      return this.generateSafeFallbackCode(input);
+    }
+  }
+
+  /**
+   * 🚨 NEW: Generate safe fallback code that always works
+   */
+  private generateSafeFallbackCode(input: CodeGeneratorInput): CodeGeneratorOutput {
+    console.log(`[CodeGenerator] 🛡️ Generating safe fallback for: ${input.functionName}`);
+    
+    const fallbackCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
+
+export default function ${input.functionName}() {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  
+  // Safe fade-in animation
+  const opacity = interpolate(frame, [0, fps * 1], [0, 1], { 
+    extrapolateLeft: "clamp", 
+    extrapolateRight: "clamp" 
+  });
+  
+  // Safe scale animation
+  const scale = interpolate(frame, [0, fps * 1.5], [0.9, 1], { 
+    extrapolateLeft: "clamp", 
+    extrapolateRight: "clamp" 
+  });
+  
+  return (
+    <AbsoluteFill style={{
+      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+      opacity: opacity,
+      transform: \`scale(\${scale})\`
+    }}>
+      <div style={{
+        textAlign: "center",
+        maxWidth: "80%",
+        padding: "2rem"
+      }}>
+        <h1 style={{
+          fontSize: "3rem",
+          fontWeight: "700",
+          color: "white",
+          margin: "0 0 1rem 0",
+          textShadow: "0 2px 10px rgba(0,0,0,0.3)"
+        }}>
+          Scene Generated
+        </h1>
+        <p style={{
+          fontSize: "1.2rem",
+          color: "rgba(255,255,255,0.9)",
+          margin: "0",
+          lineHeight: "1.6"
+        }}>
+          This scene was safely generated as a fallback. You can edit it to customize the content.
+        </p>
+      </div>
+    </AbsoluteFill>
+  );
+}`;
+
+    return {
+      code: fallbackCode,
+      name: input.functionName,
+      duration: 180,
+      reasoning: "Generated safe fallback code due to validation errors",
+      debug: { 
+        error: "Validation failed, used safe fallback"
+      }
+    };
   }
 }
 

@@ -5,10 +5,13 @@ import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq, and, like } from "drizzle-orm";
 import { analytics } from '~/lib/analytics';
+import { createDefaultProjectProps } from "~/types/remotion-constants";
 
 /**
  * Special route that automatically creates a new project and redirects to it
  * This allows direct navigation to /projects/new to work as expected
+ * 
+ * UNIFIED WITH tRPC ROUTE: Now uses same title generation, default props, and NO welcome message
  */
 export default async function NewProjectPage() {
   const session = await auth();
@@ -25,21 +28,21 @@ export default async function NewProjectPage() {
   while (!newProject && attempts < MAX_ATTEMPTS) {
     attempts++;
     try {
-      // Get a list of all "New Project" projects with their numbers
+      // Get a list of all "Untitled Video" projects with their numbers (UNIFIED NAMING)
       const userProjects = await db
         .select({ title: projects.title })
         .from(projects)
         .where(
           and(
             eq(projects.userId, session.user.id),
-            like(projects.title, 'New Project%')
+            like(projects.title, 'Untitled Video%')
           )
         );
       
-      // Find the highest number used in "New Project X" titles
+      // Find the highest number used in "Untitled Video X" titles (UNIFIED LOGIC)
       let highestNumber = 0;
       for (const project of userProjects) {
-        const match = /^New Project (\d+)$/.exec(project.title);
+        const match = /^Untitled Video (\d+)$/.exec(project.title);
         if (match?.[1]) {
           const num = parseInt(match[1], 10);
           if (!isNaN(num) && num > highestNumber) {
@@ -48,26 +51,24 @@ export default async function NewProjectPage() {
         }
       }
       
-      // Generate a unique title with the next available number, adjusted for retries
+      // Generate a unique title with the next available number, adjusted for retries (UNIFIED LOGIC)
       const nextNumberBasedOnAttempts = highestNumber + attempts;
       
       let titleToInsert = userProjects.length === 0 && highestNumber === 0 && attempts === 1
-                          ? "New Project"
-                          : `New Project ${nextNumberBasedOnAttempts}`;
+                          ? "Untitled Video"
+                          : `Untitled Video ${nextNumberBasedOnAttempts}`;
 
-      // If the generated title is "New Project", explicitly check if it already exists.
-      // If it does, force a numbered title to avoid collision if numbering should have started.
-      if (titleToInsert === "New Project") {
-        const existingBaseNewProject = await db
+      // If the generated title is "Untitled Video", explicitly check if it already exists (UNIFIED LOGIC)
+      if (titleToInsert === "Untitled Video") {
+        const existingBaseProject = await db
           .select({ id: projects.id })
           .from(projects)
-          .where(and(eq(projects.userId, session.user.id), eq(projects.title, "New Project")))
+          .where(and(eq(projects.userId, session.user.id), eq(projects.title, "Untitled Video")))
           .limit(1);
         
-        if (existingBaseNewProject.length > 0) {
-          // "New Project" exists, and we might be in a situation where it's the only one
-          // or highestNumber was 0. Force numbering based on attempts.
-          titleToInsert = `New Project ${nextNumberBasedOnAttempts}`;
+        if (existingBaseProject.length > 0) {
+          // "Untitled Video" exists, force numbering based on attempts
+          titleToInsert = `Untitled Video ${nextNumberBasedOnAttempts}`;
         }
       }
 
@@ -76,14 +77,7 @@ export default async function NewProjectPage() {
         .values({
           userId: session.user.id,
           title: titleToInsert,
-          props: {
-            meta: {
-              duration: 10,
-              title: titleToInsert, // Ensure this uses the title being inserted
-              backgroundColor: "#111",
-            },
-            scenes: [],
-          },
+          props: createDefaultProjectProps(), // UNIFIED: Use same welcome video props as tRPC route
         })
         .returning();
       
@@ -94,6 +88,8 @@ export default async function NewProjectPage() {
         analytics.projectCreated(newProject.id);
       }
 
+      // NO WELCOME MESSAGE CREATION - Let UI show the nice default instead (UNIFIED)
+
     } catch (error: any) {
       // Check for PostgreSQL unique violation error (SQLSTATE 23505)
       if (error.code === '23505' || (error.message && (error.message.includes('violates unique constraint') || error.message.includes('duplicate key value')))) {
@@ -102,18 +98,16 @@ export default async function NewProjectPage() {
           console.error("Max attempts reached. Failed to create new project.");
           // Track error analytics
           analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Max attempts reached', '/projects/new');
-          // Optionally, redirect to a specific error page or add a query param
           redirect("/projects?error=creation_failed_max_attempts");
-          return null; // Exit loop and function
+          return null;
         }
-        // Loop will continue for another attempt
       } else {
         // For other, unexpected errors, log and redirect
         console.error("Failed to create new project (non-unique constraint error):", error);
         // Track error analytics
         analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Unknown error', '/projects/new');
         redirect("/projects?error=unknown_creation_failure");
-        return null; // Exit loop and function
+        return null;
       }
     }
   }
@@ -122,8 +116,7 @@ export default async function NewProjectPage() {
     // Redirect to the new project's generate page
     redirect(`/projects/${newProject.id}/generate`);
   } else {
-    // Fallback to projects page if something went wrong (e.g., max attempts reached without success)
-    // This path should ideally be covered by the redirect within the catch block for MAX_ATTEMPTS
+    // Fallback to projects page if something went wrong
     console.error("Failed to create new project after multiple attempts or unexpected issue.");
     // Track error analytics
     analytics.errorOccurred('project_creation_failed', 'Fallback creation failure', '/projects/new');

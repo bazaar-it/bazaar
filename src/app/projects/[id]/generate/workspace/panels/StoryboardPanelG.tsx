@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';

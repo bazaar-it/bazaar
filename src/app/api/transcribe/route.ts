@@ -29,24 +29,19 @@ export async function POST(request: NextRequest) {
     
     console.log(`[Transcription] Processing audio file: ${audioFile.name}, size: ${audioFile.size} bytes, type: ${audioFile.type}`);
     
-    // Convert File to the format expected by OpenAI
-    const audioBuffer = await audioFile.arrayBuffer();
+    // Get the audio data and prepare it for the OpenAI API
+    const audioBlob = new Blob([await audioFile.arrayBuffer()], { type: audioFile.type || 'audio/webm' });
     
-    // Create a proper file extension based on MIME type or default to webm
-    let fileName = 'recording.webm';
-    if (audioFile.type.includes('mp3')) fileName = 'recording.mp3';
-    else if (audioFile.type.includes('wav')) fileName = 'recording.wav';
-    else if (audioFile.type.includes('m4a')) fileName = 'recording.m4a';
-    else if (audioFile.type.includes('ogg')) fileName = 'recording.ogg';
-    
-    // Create a File object that OpenAI can handle
-    const audioFileForOpenAI = new File([audioBuffer], fileName, { 
-      type: audioFile.type || 'audio/webm'
-    });
+    // Create a File object from the Blob with the original name
+    const file = new File(
+      [audioBlob], 
+      audioFile.name || 'audio.webm', 
+      { type: audioFile.type || 'audio/webm' }
+    );
     
     // Call OpenAI Whisper API
     const transcription = await openai.audio.transcriptions.create({
-      file: audioFileForOpenAI,
+      file: file,
       model: "whisper-1",
       language: "en", // Can be made dynamic if needed
       response_format: "text"

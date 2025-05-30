@@ -1,6 +1,7 @@
+// src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/types/input-props';
 import { Button } from "~/components/ui/button";
@@ -8,6 +9,7 @@ import { RefreshCwIcon, CodeIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
+import { Player, type PlayerRef } from '@remotion/player';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -48,16 +50,107 @@ export function PreviewPanelG({
   console.log('[PreviewPanelG] Current props:', currentProps);
   console.log('[PreviewPanelG] Scenes:', scenes);
   
+  // 🚨 SIMPLIFIED: Direct scene compilation - no stupid validation, just real compilation
+  const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
+    const sceneCode = (scene.data as any)?.code;
+    const sceneName = (scene.data as any)?.name || scene.id;
+    
+    if (!sceneCode) {
+      console.warn(`[PreviewPanelG] Scene ${index} has no code`);
+      return {
+        isValid: false,
+        compiledCode: createFallbackScene(sceneName, index, 'No code found'),
+        componentName: `FallbackScene${index}`
+      };
+    }
+
+    try {
+      // Extract component name from the actual generated code
+      const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
+      const componentName = componentNameMatch ? componentNameMatch[1] : `Scene${index}Component`;
+      
+      // Clean the scene code for compilation (remove imports/exports that don't work in our system)
+      let cleanSceneCode = sceneCode
+        .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove remotion imports
+        .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
+        .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
+        .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
+
+      // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
+      const testCompositeCode = `
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random } = window.Remotion;
+
+${cleanSceneCode}
+
+export default function TestComponent() {
+  return <${componentName} />;
+}`;
+
+      // This is REAL validation - if Sucrase can't compile it, it's actually broken
+      const { code: transformedCode } = transform(testCompositeCode, {
+        transforms: ['typescript', 'jsx'],
+        jsxRuntime: 'classic',
+        production: false,
+      });
+
+      console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) compiled successfully`);
+      return {
+        isValid: true,
+        compiledCode: cleanSceneCode,
+        componentName: componentName
+      };
+
+    } catch (error) {
+      console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) REAL compilation failed:`, error);
+      // ONLY use fallback when REAL compilation actually fails
+      return {
+        isValid: false,
+        compiledCode: createFallbackScene(sceneName, index, `Compilation error: ${error instanceof Error ? error.message : 'Unknown error'}`),
+        componentName: `FallbackScene${index}`
+      };
+    }
+  }, []);
+
+  // 🚨 NEW: Create safe fallback scene for ACTUALLY broken scenes
+  const createFallbackScene = useCallback((sceneName: string, sceneIndex: number, errorDetails?: string) => {
+    return `
+function FallbackScene${sceneIndex}() {
+  return (
+    <AbsoluteFill style={{
+      backgroundColor: '#ffebee',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      border: '2px dashed #f44336',
+      borderRadius: '8px',
+      margin: '20px'
+    }}>
+      <h3 style={{ color: '#d32f2f', marginBottom: '16px' }}>
+        ⚠️ Scene Error
+      </h3>
+      <p style={{ color: '#666', marginBottom: '8px' }}>
+        "${sceneName || `Scene ${sceneIndex + 1}`}" has a compilation issue
+      </p>
+      <small style={{ color: '#999' }}>
+        Other scenes continue to work normally
+      </small>
+      ${errorDetails ? `<div style={{ fontSize: '12px', color: '#999', marginTop: '8px', maxWidth: '300px', textAlign: 'center' }}>${errorDetails.substring(0, 100)}...</div>` : ''}
+    </AbsoluteFill>
+  );
+}`;
+  }, []);
+
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
-    const validScenes = scenes.filter(scene => (scene.data as any)?.code);
+    const scenesWithCode = scenes.filter(scene => (scene.data as any)?.code);
     
-    if (validScenes.length === 0) {
+    if (scenesWithCode.length === 0) {
       setComponentError(new Error('No scenes with code found.'));
       return;
     }
 
-    console.log('[PreviewPanelG] Compiling composition with', validScenes.length, 'scenes...');
+    console.log('[PreviewPanelG] Compiling composition with', scenesWithCode.length, 'scenes...');
     
     setIsCompiling(true);
     setComponentError(null);
@@ -69,45 +162,30 @@ export function PreviewPanelG({
     }
 
     try {
+      // 🚨 NEW: Compile each scene individually using REAL compilation
+      const compiledScenes = await Promise.all(
+        scenesWithCode.map((scene, index) => compileSceneDirectly(scene, index))
+      );
+      
+      const validScenes = compiledScenes.filter(s => s.isValid).length;
+      console.log(`[PreviewPanelG] Scene compilation: ${validScenes}/${compiledScenes.length} scenes compiled successfully`);
+
       // For single scene, use simpler approach
-      if (validScenes.length === 1) {
-        const scene = validScenes[0];
+      if (compiledScenes.length === 1) {
+        const scene = compiledScenes[0];
         if (!scene) {
-          throw new Error('Scene is undefined');
+          throw new Error('Scene compilation failed');
         }
-        const sceneCode = (scene.data as any).code;
         
-        // Extract the component name from the scene code
-        const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
-        const componentName = componentNameMatch ? componentNameMatch[1] : 'SingleSceneComponent';
-        
-        // Add 'random' to the imports for deterministic randomness
         const allImports = new Set(['AbsoluteFill', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
         
         // Scan the code for any Remotion functions that might be used
         const remotionFunctions = ['Sequence', 'Audio', 'Video', 'Img', 'staticFile', 'Loop', 'Series'];
         remotionFunctions.forEach(func => {
-          if (sceneCode.includes(func)) {
+          if (scene.compiledCode.includes(func)) {
             allImports.add(func);
           }
         });
-
-        // Clean the scene code: remove imports, window.Remotion destructuring, and export default
-        let cleanSceneCode = sceneCode
-          .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
-          .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
-          .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
-          .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
-
-        // 🚨 CRITICAL FIX: Strip ALL external library imports and components
-        cleanSceneCode = cleanSceneCode
-          .replace(/import\s+.*?from\s+['"]@mui\/.*?['"];?\s*/g, '') // Remove @mui imports
-          .replace(/import\s+.*?from\s+['"]react-typical['"];?\s*/g, '') // Remove react-typical imports
-          .replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '') // Remove any remaining imports
-          .replace(/<TextField[^>]*>/g, '<input') // Replace TextField with input
-          .replace(/<\/TextField>/g, '/>')
-          .replace(/<Typical[^>]*>.*?<\/Typical>/g, '"Type your prompt:"') // Replace Typical with plain text
-          .replace(/<Typical[^>]*\/>/g, '"Type your prompt:"'); // Replace self-closing Typical
 
         const allImportsArray = Array.from(allImports);
         const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
@@ -116,10 +194,10 @@ export function PreviewPanelG({
         const compositeCode = `
 ${singleDestructuring}
 
-${cleanSceneCode}
+${scene.compiledCode}
 
 export default function SingleSceneComposition() {
-  return <${componentName} />;
+  return <${scene.componentName} />;
 }
         `;
 
@@ -155,35 +233,19 @@ export default function SingleSceneComposition() {
         setComponentImporter(() => () => Promise.resolve({ default: Component }));
         
       } else {
-        // Multi-scene composition logic (existing code)
+        // Multi-scene composition logic with compiled scenes
         const sceneImports: string[] = [];
         const sceneComponents: string[] = [];
-        const totalDuration = validScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+        const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
         const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
 
-        validScenes.forEach((scene, index) => {
-          const sceneCode = (scene.data as any).code;
-          if (!sceneCode) return;
+        compiledScenes.forEach((compiled, index) => {
+          const originalScene = scenesWithCode[index];
+          if (!compiled || !originalScene) return;
           
           try {
-            // Extract the component name from the scene code
-            const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
-            const componentName = componentNameMatch ? componentNameMatch[1] : `Scene${index}Component`;
-            
             // Extract imports from the scene code and add to our set
-            const importMatches = sceneCode.match(/import\s+\{([^}]+)\}\s+from\s+['"]remotion['"];?/g);
-            if (importMatches) {
-              importMatches.forEach((match: string) => {
-                const imports = match.match(/\{([^}]+)\}/)?.[1];
-                if (imports) {
-                  imports.split(',').forEach(imp => {
-                    allImports.add(imp.trim());
-                  });
-                }
-              });
-            }
-            
-            // Also scan the code for any Remotion functions that might be used without explicit imports
+            const sceneCode = compiled.compiledCode;
             const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
             remotionFunctions.forEach(func => {
               if (sceneCode.includes(func)) {
@@ -191,30 +253,13 @@ export default function SingleSceneComposition() {
               }
             });
 
-            // Clean the scene code: remove imports, window.Remotion destructuring, and export default
-            let cleanSceneCode = sceneCode
-              .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove imports
-              .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
-              .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
-              .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
-
-            // 🚨 CRITICAL FIX: Strip ALL external library imports and components
-            cleanSceneCode = cleanSceneCode
-              .replace(/import\s+.*?from\s+['"]@mui\/.*?['"];?\s*/g, '') // Remove @mui imports
-              .replace(/import\s+.*?from\s+['"]react-typical['"];?\s*/g, '') // Remove react-typical imports
-              .replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '') // Remove any remaining imports
-              .replace(/<TextField[^>]*>/g, '<input') // Replace TextField with input
-              .replace(/<\/TextField>/g, '/>')
-              .replace(/<Typical[^>]*>.*?<\/Typical>/g, '"Type your prompt:"') // Replace Typical with plain text
-              .replace(/<Typical[^>]*\/>/g, '"Type your prompt:"'); // Replace self-closing Typical
-
-            // Error boundary wrapper for each scene
+            // Error boundary wrapper for each scene (even fallback scenes)
             const errorBoundaryWrapper = `
-function ${componentName}WithErrorBoundary() {
+function ${compiled.componentName}WithErrorBoundary() {
   try {
-    return React.createElement(${componentName});
+    return React.createElement(${compiled.componentName});
   } catch (error) {
-    console.error('Scene ${index} error:', error);
+    console.error('Scene ${index} runtime error:', error);
     return React.createElement('div', {
       style: {
         padding: '20px',
@@ -225,24 +270,24 @@ function ${componentName}WithErrorBoundary() {
         color: '#d32f2f'
       }
     }, [
-      React.createElement('h3', {key: 'title'}, 'Scene ${index + 1} Error'),
-      React.createElement('p', {key: 'msg'}, 'This scene has an issue but the video continues'),
+      React.createElement('h3', {key: 'title'}, 'Scene ${index + 1} Runtime Error'),
+      React.createElement('p', {key: 'msg'}, 'This scene has a runtime issue but the video continues'),
       React.createElement('small', {key: 'hint'}, 'Try editing the scene to fix it')
     ]);
   }
 }`;
             
-            sceneImports.push(cleanSceneCode);
+            sceneImports.push(compiled.compiledCode);
             sceneImports.push(errorBoundaryWrapper);
             sceneComponents.push(`
-              <Series.Sequence durationInFrames={${scene.duration || 150}} premountFor={60}>
-                <${componentName}WithErrorBoundary />
+              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
+                <${compiled.componentName}WithErrorBoundary />
               </Series.Sequence>
             `);
 
           } catch (error) {
-            console.error(`[PreviewPanelG] Error processing scene ${index}:`, error);
-            // Skip problematic scenes
+            console.error(`[PreviewPanelG] Error processing compiled scene ${index}:`, error);
+            // Skip problematic scenes entirely
           }
         });
 

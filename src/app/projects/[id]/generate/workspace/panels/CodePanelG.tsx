@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/panels/CodePanelG.tsx
 "use client";
 
 import React, { useState, useCallback } from 'react';

@@ -1,3 +1,4 @@
+// src/server/services/brain/orchestrator.ts
 import { openai } from "~/server/lib/openai";
 import { addSceneTool } from "~/lib/services/mcp-tools/addScene";
 import { editSceneTool } from "~/lib/services/mcp-tools/editScene";
@@ -26,6 +27,7 @@ export interface OrchestrationOutput {
   reasoning?: string;
   error?: string;
   chatResponse?: string;
+  isAskSpecify?: boolean;
   debug?: {
     prompt?: { system: string; user: string };
     response?: string;
@@ -215,7 +217,7 @@ export class BrainOrchestrator {
    * Process tool result and handle database operations
    */
   private async processToolResult(result: any, toolName: string, input: OrchestrationInput): Promise<OrchestrationOutput> {
-    // 🚨 SPECIAL HANDLING for askSpecify - ALWAYS send clarification message
+    // 🚨 SPECIAL HANDLING for askSpecify - SIMPLIFIED (no duplicate message saving)
     if (toolName === 'askSpecify') {
       console.log(`[BrainOrchestrator] 🤔 askSpecify tool executed, result:`, result);
       
@@ -233,24 +235,16 @@ export class BrainOrchestrator {
         console.log(`[BrainOrchestrator] ⚠️ askSpecify failed, using fallback message`);
       }
       
-      // ALWAYS send clarification message to chat
-      try {
-        await conversationalResponseService.sendChatMessage(
-          clarificationMessage,
-          input.projectId,
-          'system-notification'
-        );
-        console.log(`[BrainOrchestrator] ✅ Clarification message sent to chat`);
-      } catch (error) {
-        console.error(`[BrainOrchestrator] ❌ Failed to send clarification message:`, error);
-      }
+      // ✅ SIMPLIFIED: Let Generation Router handle ALL message saving (single source of truth)
+      // Removed duplicate conversationalResponseService.sendChatMessage() call
       
       return {
-        success: true, // Always return success for askSpecify so frontend doesn't think it failed
+        success: true, // Always return success for askSpecify
         result: result.data,
         toolUsed: toolName,
         reasoning: result.data?.reasoning || "Clarification requested",
         chatResponse: clarificationMessage,
+        isAskSpecify: true, // NEW: Flag to distinguish from scene generation
       };
     }
     
@@ -411,14 +405,8 @@ export class BrainOrchestrator {
     if (result.data && typeof result.data === 'object' && 'chatResponse' in result.data) {
       chatResponse = (result.data as any).chatResponse;
       
-      // Send conversational response as chat message
-      if (chatResponse) {
-        await conversationalResponseService.sendChatMessage(
-          chatResponse, 
-          input.projectId, 
-          result.success ? 'success' : 'error'
-        );
-      }
+      // ✅ SIMPLIFIED: Let Generation Router handle ALL message saving (single source of truth)
+      // Removed duplicate conversationalResponseService.sendChatMessage() call
     }
     
     // Propagate debug info if present
@@ -445,6 +433,7 @@ export class BrainOrchestrator {
     targetSceneId?: string;
     workflow?: Array<{toolName: string, context: string, dependencies?: string[]}>;
     error?: string;
+    clarificationNeeded?: string;
   }> {
     // Build prompts for the LLM
     const systemPrompt = this.buildIntentAnalysisPrompt();
@@ -490,6 +479,7 @@ export class BrainOrchestrator {
       console.log(`[DEBUG] PARSED TOOL_NAME: ${parsed.toolName || 'none'}`);
       console.log(`[DEBUG] PARSED REASONING: ${parsed.reasoning || 'none'}`);
       console.log(`[DEBUG] PARSED TARGET_SCENE_ID: ${parsed.targetSceneId || 'none'}`);
+      console.log(`[DEBUG] PARSED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded || 'none'}`);
       
       // Check if input contains a reference to modifying existing content
       const editKeywords = ['edit', 'change', 'modify', 'update', 'fix', 'adjust', 'revise'];
@@ -512,13 +502,19 @@ export class BrainOrchestrator {
         };
       }
       
-      // Single tool operation - extract targetSceneId
+      // Single tool operation - extract targetSceneId AND clarificationNeeded
       const result: any = {
         success: true,
         toolName: parsed.toolName,
         reasoning: parsed.reasoning,
         toolInput: parsed.toolInput || {},
       };
+      
+      // 🚨 CRITICAL FIX: Extract clarificationNeeded from top-level parsed response
+      if (parsed.clarificationNeeded) {
+        result.clarificationNeeded = parsed.clarificationNeeded;
+        console.log(`[DEBUG] EXTRACTED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded}`);
+      }
       
       // CRITICAL FIX: Extract targetSceneId from Brain LLM response
       if (parsed.targetSceneId) {
@@ -695,7 +691,7 @@ Respond with valid JSON only.`;
   
   private async prepareToolInput(
     input: OrchestrationInput, 
-    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string }
+    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string; clarificationNeeded?: string }
   ): Promise<Record<string, unknown>> {
     const baseInput = {
       userPrompt: input.prompt,
@@ -752,11 +748,26 @@ Respond with valid JSON only.`;
         };
         
       case "askSpecify":
+        // 🚨 CRITICAL FIX: Use clarificationNeeded from top-level LLM response, not toolInput
+        const ambiguityTypeFromLLM = toolSelection.clarificationNeeded ||
+                                     (toolSelection.toolInput?.clarificationNeeded as string) || 
+                                     (toolSelection.toolInput?.ambiguityType as string) || 
+                                     "action-unclear";
+        
+        console.log(`[DEBUG] MAPPED AMBIGUITY TYPE: ${ambiguityTypeFromLLM} (from clarificationNeeded: ${toolSelection.clarificationNeeded})`);
+        
         return {
-          ...baseInput,
-          ambiguityType: toolSelection.toolInput?.ambiguityType || "unclear_intent",
-          clarificationCount: 0, // TODO PHASE2: Track in userContext/session
-        };
+          userPrompt: input.prompt,
+          projectId: input.projectId,
+          userId: input.userId,
+          ambiguityType: ambiguityTypeFromLLM,
+          availableScenes: (input.storyboardSoFar || []).map(scene => ({
+            id: scene.id,
+            name: scene.name || `Scene ${scene.order || '?'}`,
+            number: scene.order
+          })),
+          context: input.userContext || {},
+        };  
         
       default:
         return baseInput;

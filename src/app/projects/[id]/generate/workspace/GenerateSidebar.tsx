@@ -16,6 +16,7 @@ import {
   ChevronRightIcon, 
   PlusIcon,
   ListIcon,
+  FolderIcon,
 } from "~/components/ui/icons";
 
 type Project = {
@@ -128,6 +129,13 @@ export function GenerateSidebar({
   const handlePanelClick = (panelType: PanelTypeG) => {
     if (onAddPanel) {
       onAddPanel(panelType);
+    }
+  };
+
+  // Handle project navigation
+  const handleProjectClick = (projectId: string) => {
+    if (projectId !== currentProjectId) {
+      router.push(`/projects/${projectId}/generate`);
     }
   };
 
@@ -247,6 +255,45 @@ export function GenerateSidebar({
             </Tooltip>
           ))}
         </nav>
+
+        {/* My Projects Section - Only show when expanded */}
+        {!isCollapsed && projects.length > 0 && (
+          <div className="w-full mt-4">
+            {/* Section Header */}
+            <div className="flex items-center mb-2 px-1">
+              <FolderIcon className="h-4 w-4 text-gray-400 dark:text-gray-500 mr-2" />
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                My Projects
+              </span>
+            </div>
+            
+            {/* Projects List */}
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {projects.slice(0, 8).map((project) => (
+                <Button
+                  key={project.id}
+                  variant="ghost"
+                  className={`h-8 w-full flex items-center justify-start rounded-lg text-xs transition-all duration-200 px-2
+                    ${project.id === currentProjectId 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' 
+                      : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                  onClick={() => handleProjectClick(project.id)}
+                  title={project.name}
+                >
+                  <span className="truncate text-left">
+                    {project.name.length > 12 ? `${project.name.substring(0, 12)}...` : project.name}
+                  </span>
+                </Button>
+              ))}
+              {projects.length > 8 && (
+                <div className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
+                  +{projects.length - 8} more
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Separator */}
         <div className="flex-grow"></div>
