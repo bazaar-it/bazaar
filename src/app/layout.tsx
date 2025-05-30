@@ -9,7 +9,6 @@ import { Analytics } from '@vercel/analytics/react';
 import { AnalyticsProvider } from '../client/components/AnalyticsProvider';
 import { ErrorBoundary } from '../client/components/ErrorBoundary';
 import { Footer } from "~/components/ui/Footer";
-import FeedbackButton from "~/components/ui/FeedbackButton";
 import Script from 'next/script';
 import { siteConfig } from '~/config/site';
 import type { Metadata } from "next";
@@ -149,7 +148,6 @@ export default function RootLayout({
                         {children}
                       </main>
                       <Footer />
-                      <FeedbackButton />
                     </div>
                   </ErrorBoundary>
                 </AnalyticsProvider>

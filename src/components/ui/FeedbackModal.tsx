@@ -1,15 +1,12 @@
 // src/components/ui/FeedbackModal.tsx
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { api } from '~/trpc/react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
-import { Input } from '~/components/ui/input';
-import { Checkbox } from '~/components/ui/checkbox';
 import { Label } from '~/components/ui/label';
-import { X } from 'lucide-react';
-import { feedbackFeatureOptions, type FeedbackFeatureOption } from '~/config/feedbackFeatures';
+import { X, Mic } from 'lucide-react';
 import type { TRPCClientErrorLike } from '@trpc/client';
 import type { AppRouter } from '~/server/api/root';
 
@@ -19,74 +16,82 @@ interface FeedbackModalProps {
 
 export default function FeedbackModal({ onClose }: FeedbackModalProps) {
   const { data: session } = useSession();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [feedback, setFeedback] = useState('');
-  const [selectedFeatures, setSelectedFeatures] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
 
-  useEffect(() => {
-    if (session?.user) {
-      setName(session.user.name || '');
-      setEmail(session.user.email || '');
-    } else {
-      // Reset if user logs out while modal might be open or cached
-      setName('');
-      setEmail('');
+  // Voice-to-text transcription
+  const transcribe = api.voice.transcribe.useMutation({
+    onSuccess: (data) => {
+      setFeedback((prev) => (prev ? `${prev} ${data.text}` : data.text));
+    },
+    onError: (error) => {
+      console.error('Transcription error:', error);
+    },
+  });
+
+  const handleRecord = async () => {
+    if (isRecording) {
+      recorderRef.current?.stop();
+      return;
     }
-  }, [session]);
-
-  const handleFeatureChange = (featureId: string) => {
-    setSelectedFeatures(prev => ({ ...prev, [featureId]: !prev[featureId] }));
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          transcribe.mutate({ audio: base64, mimeType: blob.type });
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach((t) => t.stop());
+        setIsRecording(false);
+      };
+      
+      recorderRef.current = recorder;
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Voice recording failed', err);
+    }
   };
 
   const submitFeedbackMutation = api.feedback.submit.useMutation({
     onSuccess: () => {
       setIsSubmitted(true);
       setIsSubmitting(false);
-      setFeedback(''); // Clear form
-      setSelectedFeatures({}); // Clear selections
-      // Name and email are intentionally not cleared here if user is logged in
-      // For anonymous, they might want to submit another feedback with same details
+      setFeedback('');
       setTimeout(() => {
         onClose();
-        setIsSubmitted(false); // Reset for next time modal opens
-      }, 3000); // Longer delay to read thank you message
+        setIsSubmitted(false);
+      }, 3000);
     },
     onError: (error: TRPCClientErrorLike<AppRouter>) => {
       console.error('Feedback submission error:', error);
       setIsSubmitting(false);
-      // Optionally show an error message to the user, e.g., using a toast notification
       alert(`Error submitting feedback: ${error.message}`);
     }
   });
 
   const handleSubmit = () => {
-    const prioritized = Object.entries(selectedFeatures)
-      .filter(([,isSelected]) => isSelected)
-      .map(([featureId]) => featureId);
-
-    if (!feedback.trim() && prioritized.length === 0) {
-      alert('Please select at least one feature to prioritize or provide some comments.');
-      return;
-    }
+    if (!feedback.trim()) return;
 
     setIsSubmitting(true);
-    // Assuming 'prioritized' is already defined in the scope from user's previous changes
-    // or that selectedFeatures should be processed here directly.
-    // For now, let's process selectedFeatures directly here to avoid redeclaration error.
-    const currentPrioritizedFeatures = Object.entries(selectedFeatures)
-      .filter(([, value]) => value)
-      .map(([key]) => key);
-
-    const payload = {
-      name: name.trim() || undefined,
-      email: email.trim() || undefined, // Backend schema allows empty string, will be treated as undefined if so
-      content: feedback.trim() || undefined,
-      prioritizedFeatures: currentPrioritizedFeatures.length > 0 ? currentPrioritizedFeatures : undefined,
-    };
-    submitFeedbackMutation.mutate(payload);
+    submitFeedbackMutation.mutate({
+      content: feedback.trim(),
+      name: session?.user?.name || undefined,
+      email: session?.user?.email || undefined,
+    });
   };
 
   return (
@@ -109,74 +114,42 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
           <>
             <h2 className="text-xl sm:text-2xl font-semibold mb-6 text-gray-800 dark:text-gray-100">We'd Love Your Feedback</h2>
 
-            <div className="mb-6 p-4 bg-sky-50 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-700 rounded-md">
-              <h3 className="text-md font-medium text-sky-800 dark:text-sky-200">Help us prioritize!</h3>
-              <p className="text-sm text-sky-700 dark:text-sky-300 mb-3">What features are most important to you?</p>
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                {feedbackFeatureOptions.map((feature: FeedbackFeatureOption) => (
-                  <div key={feature.id} className="flex items-center space-x-3">
-                    <Checkbox 
-                      id={`feature-${feature.id}`} 
-                      checked={selectedFeatures[feature.id] || false} 
-                      onCheckedChange={() => handleFeatureChange(feature.id)}
-                      className="shrink-0"
-                    />
-                    <Label htmlFor={`feature-${feature.id}`} className="text-sm font-normal text-gray-700 dark:text-gray-300 cursor-pointer">
-                      {feature.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Name {session?.user?.name ? '' : '(Optional)'}
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-                  placeholder="Your Name"
-                  className="mt-1 block w-full bg-white dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600"
-                  disabled={!!session?.user?.name} // Pre-fill and disable if user has a name in session
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email {session?.user?.email ? '' : '(Optional)'}
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="mt-1 block w-full bg-white dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600"
-                  disabled={!!session?.user?.email} // Pre-fill and disable if user has an email in session
-                />
-              </div>
-
-              <div>
                 <Label htmlFor="feedback" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Additional Comments {(!feedback.trim() && Object.values(selectedFeatures).every(v => !v)) ? '' : '(Optional)'}
+                  Your Feedback
                 </Label>
-                <Textarea
-                  id="feedback"
-                  value={feedback}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
-                  placeholder="Share your thoughts, other feature requests, or report issues..."
-                  className="mt-1 block w-full bg-white dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600"
-                  rows={4}
-                />
+                <div className="mt-1 relative">
+                  <Textarea
+                    id="feedback"
+                    value={feedback}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+                    placeholder="Share your thoughts, feature requests, or report issues..."
+                    className="block w-full bg-white dark:bg-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 pr-12"
+                    rows={4}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRecord}
+                    disabled={transcribe.isPending}
+                    className={`absolute right-2 top-2 p-2 rounded-md transition-colors ${
+                      isRecording 
+                        ? 'text-red-500 hover:text-red-600' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500'
+                    } disabled:opacity-50`}
+                    aria-label={isRecording ? 'Stop recording' : 'Start voice recording'}
+                  >
+                    <Mic size={16} className={isRecording ? 'text-red-500' : ''} />
+                  </button>
+                </div>
+                {transcribe.isPending && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">Transcribing audio...</p>
+                )}
               </div>
 
               <Button
                 onClick={handleSubmit}
-                disabled={isSubmitting || (!feedback.trim() && Object.values(selectedFeatures).filter(Boolean).length === 0)}
+                disabled={isSubmitting || !feedback.trim()}
                 className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 transition-colors duration-150 disabled:opacity-50"
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Feedback'}

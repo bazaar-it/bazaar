@@ -35,6 +35,7 @@ import {
 } from "~/components/ui/icons";
 import { ListChecksIcon as ShapesIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
+import SidebarFeedbackButton from "~/components/ui/SidebarFeedbackButton";
 
 type Project = {
   id: string;
@@ -246,6 +247,11 @@ export function Sidebar({
 
         {/* Separator */}
         <div className="flex-grow"></div>
+
+        {/* Feedback Button - aligned to bottom */}
+        <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
+          <SidebarFeedbackButton isCollapsed={isCollapsed} />
+        </div>
 
       </aside>
     </TooltipProvider>

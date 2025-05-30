@@ -72,6 +72,13 @@
   - **SERVICES FIXED**: BrainOrchestrator, CodeGenerator, LayoutGenerator, SceneBuilder
   - **IMPACT**: Delete scene now properly removes scenes from database, GPT-4.1 mini API calls work correctly
 
+- **Email Subscription System** (NEW)
+  - Created email subscribers database table with Neon integration
+  - Built tRPC API endpoint for email subscription
+  - Added UX states: loading spinner and success checkmark
+  - Handles duplicate email subscriptions gracefully
+  - Links subscriptions to user accounts when logged in
+
 ### 🎯 Active Sprint 31 Goals
 
 **Latest Multi-Turn Conversation Fix (2025-01-25)**: Fixed askSpecify tool to properly handle multi-turn conversations. Now when Brain LLM asks for clarification, it sends a chat message and the follow-up user response is correctly processed as an editScene/addScene/deleteScene action.
@@ -149,3 +156,114 @@ console.log(`[CodeGenerator] 🎨 Scene type: ${layoutJson.sceneType}`);
 - **Video/Message Initialization Debugging (Current Sprint)**: Investigating issue where welcome video and message fail to appear after clearing browser cache and creating a new project. Added extensive console logging across `GenerateWorkspaceRoot.tsx`, `videoState.ts` (for `setProject` and `syncDbMessages`), and `ChatPanelG.tsx` to trace data flow. Awaiting USER to reproduce the bug and provide console logs for analysis.
 
 - **Chat Welcome Message Fix (Sprint 31)**: Resolved inconsistent display of the welcome message in the chat panel. Implemented robust synchronization between database-fetched messages and the Zustand `videoState`
+
+## File: email-subscription-system.md
+
+### Summary
+- Implements complete email subscription functionality for homepage signup
+- Users can subscribe to updates with proper UX feedback
+- Stores emails in Neon database with relationship to user accounts
+- Provides loading states and success confirmation
+
+### Technical Implementation
+- **Database**: `emailSubscribers` table with indexes and foreign key to users
+- **API**: tRPC `emailSubscriber.subscribe` mutation with validation
+- **Frontend**: Responsive form with loading spinner and success checkmark
+- **UX**: Disabled states, error handling, and 3-second auto-reset
+
+### Recent Achievements
+- ✅ Database schema and migration created
+- ✅ tRPC router implemented with proper error handling  
+- ✅ Homepage form updated with loading/success states
+- ✅ Duplicate email handling and resubscription support
+- ✅ **Fixed Duplicate Email Handling** (Just Completed):
+  - Fixed database query issue (`db.query.emailSubscribers` → direct SQL queries)
+  - Added proper duplicate email detection with user-friendly error messages
+  - Shows "Email address already signed up for updates" for duplicates
+  - Error message displays below form with red text styling
+  - Reactivates unsubscribed emails automatically
+  - Extended error display time to 5 seconds for better UX
+
+## Next Priority
+- Test email subscription functionality on localhost:3008
+- Deploy database migration to production
+- Consider adding email notifications for new subscribers
+
+# Sprint Progress
+
+## Current Sprint Features Completed ✅
+
+### Feedback System Enhancements
+- ✅ **Removed feedback button from homepage** (now only shows for logged-in users in project interfaces)
+- ✅ **Added feedback button to project sidebars** - appears at bottom of sidebar in edit and generate pages
+- ✅ **Implemented voice-to-text functionality** in feedback modal using existing Whisper API
+- ✅ **Simplified feedback form** - removed feature checkboxes, kept only text feedback
+- ✅ **Improved UX** - proper spacing between microphone icon and text input
+- ✅ **Consistent UI styling** - feedback button matches sidebar icon styling with tooltips
+- ✅ **Latest UI Improvements** (Just Completed):
+  - Added more padding between feedback icon and bottom of sidebar (mb-4)
+  - Removed name/email fields from feedback popup (uses session data automatically)
+  - Moved microphone icon to top-right corner of textarea
+  - Simplified recording state: microphone turns red when recording (no icon switching)
+
+### Email Subscription System (Previously Completed)
+- ✅ Created email subscribers database table with Neon integration
+- ✅ Built tRPC API endpoint for email subscription
+- ✅ Added UX states: loading spinner and success checkmark
+- ✅ Handles duplicate email subscriptions gracefully
+- ✅ Links subscriptions to user accounts when logged in
+- ✅ **Fixed Duplicate Email Handling** (Just Completed):
+  - Fixed database query issue (`db.query.emailSubscribers` → direct SQL queries)
+  - Added proper duplicate email detection with user-friendly error messages
+  - Shows "Email address already signed up for updates" for duplicates
+  - Error message displays below form with red text styling
+  - Reactivates unsubscribed emails automatically
+  - Extended error display time to 5 seconds for better UX
+
+## Technical Implementation Details
+
+### Feedback Button Improvements
+1. **New SidebarFeedbackButton Component** (`src/components/ui/SidebarFeedbackButton.tsx`)
+   - Responsive design: icon-only when collapsed, icon + text when expanded
+   - Consistent styling with other sidebar buttons
+   - Proper tooltip integration
+
+2. **Updated FeedbackModal Component** (`src/components/ui/FeedbackModal.tsx`)
+   - Removed feature prioritization checkboxes section
+   - Integrated voice-to-text recording functionality
+   - Uses existing `api.voice.transcribe` tRPC endpoint
+   - Microphone button positioned in bottom-right of textarea
+   - Visual feedback for recording state (red background when recording)
+   - Transcription status indicator
+
+3. **Sidebar Integration**
+   - **GenerateSidebar** (`src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx`)
+   - **EditSidebar** (`src/app/projects/[id]/edit/Sidebar.tsx`)
+   - Positioned at bottom using flex-grow separator
+   - Consistent with existing sidebar button patterns
+
+4. **Removed from Root Layout**
+   - Removed FeedbackButton from `src/app/layout.tsx`
+   - No longer appears on homepage or public pages
+
+### Voice-to-Text Integration
+- Leverages existing Whisper API infrastructure
+- Uses MediaRecorder API for audio capture
+- Base64 encoding for audio transmission
+- Appends transcribed text to existing feedback content
+- Error handling for microphone permissions and recording failures
+
+### Files Modified
+- `src/app/layout.tsx` - Removed global feedback button
+- `src/components/ui/FeedbackModal.tsx` - Simplified form + voice-to-text
+- `src/components/ui/SidebarFeedbackButton.tsx` - New sidebar-specific component
+- `src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx` - Added feedback button
+- `src/app/projects/[id]/edit/Sidebar.tsx` - Added feedback button
+- `memory-bank/progress.md` - This documentation update
+
+## Testing Status
+- ✅ Feedback button removed from homepage
+- ✅ Feedback button appears in project sidebars (bottom position)
+- ✅ Voice recording functionality working with existing API
+- ✅ Simplified feedback form (text only, no checkboxes)
+- ✅ Consistent UI styling with sidebar icons
