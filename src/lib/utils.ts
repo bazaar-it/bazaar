@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getBaseUrl } from "~/config/site"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -9,7 +10,7 @@ export function cn(...inputs: ClassValue[]) {
  * Environment-aware URL utility functions
  */
 export function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  return getBaseUrl();
 }
 
 export function getShareUrl(shareId: string): string {

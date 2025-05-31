@@ -21,7 +21,7 @@ import puppeteer, { type Browser, type Page, type ConsoleMessage } from 'puppete
 import { Pool, type QueryResult } from 'pg';
 
 // Environment variables
-const API_URL: string = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const API_URL: string = process.env.NEXT_PUBLIC_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://bazaar.it' : 'http://localhost:3000');
 const DB_URL: string | undefined = process.env.DATABASE_URL;
 const R2_ENDPOINT: string | undefined = process.env.R2_ENDPOINT;
 const R2_ACCESS_KEY_ID: string | undefined = process.env.R2_ACCESS_KEY_ID;
