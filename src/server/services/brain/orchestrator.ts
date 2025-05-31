@@ -787,17 +787,23 @@ ${availableTools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}
 CRITICAL: You are responsible for SCENE TARGETING based on conversation context. DO NOT rely on frontend tagging.
 
 SCENE TARGETING RULES:
-1. If user says "edit scene 1" or "change scene 2" → Look at CURRENT STORYBOARD to find scene with that order/number
+1. If user says "edit scene 1" or "change scene 2" → Look at CURRENT STORYBOARD to find scene with that order/number, then use its REAL UUID
 2. If user references "the title" or "that animation" → Look at CHAT HISTORY to see which scene they're discussing
 3. If user says "make it blue" or "add text" without specifying → Look at CHAT HISTORY for recent scene context
 4. If user says "create new scene" or describes something completely new → Use addScene
 5. If user says "delete scene X" → Use deleteScene
 6. If user says "delete scene" - Use AskSpecify to clarify which scene to delete
 
+🎯 **TEMPLATE & RECENT SCENE PRIORITY** (HIGH PRIORITY):
+7. If CHAT HISTORY shows "I've added the [X] template" or "template as Scene [Y]" → That template scene is now the CURRENT SCENE
+8. If user makes edit requests immediately after template addition → Target the template scene for editing
+9. If CHAT HISTORY shows recent scene addition/creation → Prioritize that scene for subsequent edit requests
+10. **"Current Scene" Context**: The most recently mentioned scene in chat history is the implied target for edits
+
 🕐 DURATION & TIMING RULES:
-7. If user mentions duration/timing (e.g., "make it 3 seconds", "shorter", "longer") → Check for clarification context first!
-8. 🚨 NEW: If CLARIFICATION CONTEXT indicates this is a follow-up to askSpecify → DON'T use askSpecify again, proceed with editScene
-9. 🚨 NEW: If user request is AMBIGUOUS and NOT a follow-up → DON'T use tools, instead respond with clarification question
+11. If user mentions duration/timing (e.g., "make it 3 seconds", "shorter", "longer") → Check for clarification context first!
+12. 🚨 NEW: If CLARIFICATION CONTEXT indicates this is a follow-up to askSpecify → DON'T use askSpecify again, proceed with editScene
+13. 🚨 NEW: If user request is AMBIGUOUS and NOT a follow-up → DON'T use tools, instead respond with clarification question
 
 AMBIGUITY DETECTION - When to ask clarification (respond directly, don't use tools):
 - Duration requests without clear context: "make it 3 seconds", "make it shorter", "slow it down"
@@ -937,7 +943,30 @@ Analyze the user's request and respond with the appropriate JSON format.`;
       ? `\n\n🤔 CLARIFICATION CONTEXT: The user is responding to a previous clarification request. Analyze their response and proceed with the appropriate tool (addScene, editScene, deleteScene).`
       : "";
 
-    return `USER MESSAGE: "${prompt}"${storyboardInfo}${chatContext}${clarificationContext}
+    // 🎯 NEW: Extract template and current scene context
+    let currentSceneContext = "";
+    const lastAssistantMsg = filteredChatHistory.filter(msg => msg.role === 'assistant').pop();
+    if (lastAssistantMsg?.content && lastAssistantMsg.content.includes('template as Scene')) {
+      // Extract scene number from template message
+      const templateSceneMatch = lastAssistantMsg.content.match(/template as Scene (\d+)/);
+      if (templateSceneMatch && templateSceneMatch[1] && storyboardSoFar) {
+        const sceneNumber = parseInt(templateSceneMatch[1]);
+        const templateScene = storyboardSoFar[sceneNumber - 1]; // 0-indexed
+        if (templateScene) {
+          currentSceneContext = `\n\n🎯 CURRENT SCENE CONTEXT: Recently added template scene "${templateScene.name}" (ID: ${templateScene.id}) is the implied target for edit requests.`;
+        }
+      }
+    }
+    
+    // 🚨 NEW: If no template context but user has selected scene, highlight it
+    if (!currentSceneContext && input.userContext?.sceneId && storyboardSoFar) {
+      const selectedScene = storyboardSoFar.find(s => s.id === input.userContext?.sceneId);
+      if (selectedScene) {
+        currentSceneContext = `\n\n🎯 CURRENT SCENE CONTEXT: User has selected scene "${selectedScene.name}" (ID: ${selectedScene.id}) - this should be the target for edit requests.`;
+      }
+    }
+
+    return `USER MESSAGE: "${prompt}"${storyboardInfo}${chatContext}${clarificationContext}${currentSceneContext}
 
 Analyze the user's intent and select the appropriate tool and parameters. For editScene operations, use the EXACT scene ID from the storyboard above.
 

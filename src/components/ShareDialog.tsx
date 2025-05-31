@@ -45,10 +45,10 @@ interface ShareData {
 }
 
 // Utility function to generate share URL
+import { getBaseUrl } from "~/config/site";
+
 const getShareUrl = (shareId: string) => {
-  const baseUrl = process.env.NODE_ENV === "production" 
-    ? "https://bazaar-vid.vercel.app" 
-    : "http://localhost:3000";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getBaseUrl();
   return `${baseUrl}/share/${shareId}`;
 };
 

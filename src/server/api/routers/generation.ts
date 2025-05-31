@@ -467,6 +467,26 @@ export const generationRouter = createTRPCRouter({
           duration: newScene.duration
         });
 
+        // 🚨 CRITICAL FIX: Clear welcome flag when template is added
+        if (project.isWelcome) {
+          console.log(`[Generation] Clearing welcome flag - template addition counts as real content`);
+          await db.update(projects)
+            .set({ isWelcome: false })
+            .where(eq(projects.id, projectId));
+        }
+
+        // 🚨 CRITICAL FIX: Add chat message so Brain LLM has context
+        const contextMessage = `I've added the ${templateName} template as Scene ${nextOrder + 1}. This is now your current scene - any edits you request will apply to this template scene.`;
+        
+        await db.insert(messages).values({
+          projectId,
+          content: contextMessage,
+          role: "assistant",
+          createdAt: new Date(),
+        });
+
+        console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
+
         return {
           success: true,
           message: `${templateName} added to your video!`,

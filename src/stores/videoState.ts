@@ -233,6 +233,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
       if (state.projects[projectId]) {
         return {
           ...state,
+          currentProjectId: projectId,
           projects: {
             ...state.projects,
             [projectId]: {
@@ -246,6 +247,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
       // Otherwise create a new project entry
       return {
         ...state,
+        currentProjectId: projectId,
         projects: {
           ...state.projects,
           [projectId]: {

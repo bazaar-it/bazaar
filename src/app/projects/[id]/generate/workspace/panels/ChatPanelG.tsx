@@ -6,7 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2 } from 'lucide-react';
+import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon } from 'lucide-react';
 
 import { useVoiceToText } from '~/hooks/useVoiceToText';
 import { Card, CardContent } from "~/components/ui/card";
@@ -95,7 +95,7 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps } = useVideoState();
+  const { getCurrentProps, replace, forceRefresh } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -107,7 +107,7 @@ export default function ChatPanelG({
     getProjectChatHistory, 
     addUserMessage, 
     addAssistantMessage, 
-    updateMessage 
+    updateMessage,
   } = useVideoState();
 
   // ✅ SINGLE SOURCE: Get messages from VideoState only
@@ -136,8 +136,46 @@ export default function ChatPanelG({
     }
   }, []);
   
-  // Query to get current project details
-  const { data: currentProject, refetch: refetchProject } = api.project.getById.useQuery({ id: projectId });
+  // Get chat history and messages management
+  const { 
+    addUserMessage: videoStateAddUserMessage, 
+    addAssistantMessage: videoStateAddAssistantMessage, 
+    updateMessage: videoStateUpdateMessage,
+  } = useVideoState();
+
+  // 🚨 CRITICAL FIX: Use getProjectScenes instead of getById to get actual scene data
+  const { data: scenesData, refetch: refetchScenes } = api.generation.getProjectScenes.useQuery({ projectId: projectId });
+  
+  // Helper function to convert database scenes to InputProps format (same as page.tsx)
+  const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
+    let currentStart = 0;
+    const convertedScenes = dbScenes.map((dbScene) => {
+      const sceneDuration = dbScene.duration || 150; 
+      const scene = {
+        id: dbScene.id,
+        type: 'custom' as const,
+        start: currentStart,
+        duration: sceneDuration,
+        data: {
+          code: dbScene.tsxCode,
+          name: dbScene.name,
+          componentId: dbScene.id,
+          props: dbScene.props || {}
+        }
+      };
+      currentStart += sceneDuration;
+      return scene;
+    });
+    
+    return {
+      meta: {
+        title: currentProps?.meta?.title || 'New Project',
+        duration: currentStart,
+        backgroundColor: currentProps?.meta?.backgroundColor || '#000000'
+      },
+      scenes: convertedScenes
+    };
+  }, [currentProps]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -253,7 +291,7 @@ export default function ChatPanelG({
         
         // Update the assistant message with complexity feedback
         if (activeAssistantMessageId) {
-          updateMessage(projectId, activeAssistantMessageId, {
+          videoStateUpdateMessage(projectId, activeAssistantMessageId, {
             content: editComplexityFeedback,
             status: 'building'
           });
@@ -265,7 +303,7 @@ export default function ChatPanelG({
           if (firstMessage) {
             setProgressStage(firstMessage);
             if (activeAssistantMessageId) {
-              updateMessage(projectId, activeAssistantMessageId, {
+              videoStateUpdateMessage(projectId, activeAssistantMessageId, {
                 content: firstMessage,
                 status: 'building'
               });
@@ -289,7 +327,7 @@ export default function ChatPanelG({
           
           // Update the assistant message with current progress
           if (activeAssistantMessageId) {
-            updateMessage(projectId, activeAssistantMessageId, {
+            videoStateUpdateMessage(projectId, activeAssistantMessageId, {
               content: currentMessage,
               status: 'building'
             });
@@ -303,7 +341,7 @@ export default function ChatPanelG({
         setEditComplexityFeedback(null);
       };
     }
-  }, [isGenerating, activeAssistantMessageId, projectId, updateMessage, editComplexityFeedback]);
+  }, [isGenerating, activeAssistantMessageId, projectId, videoStateUpdateMessage, editComplexityFeedback]);
 
   // 🎯 NEW: Listen for edit complexity from Brain LLM (would come from mutation result)
   const handleEditComplexityDetected = (complexity: string) => {
@@ -319,23 +357,25 @@ export default function ChatPanelG({
     const trimmedMessage = message.trim();
     
     // ✅ SIMPLE: Add user message to VideoState
-    addUserMessage(projectId, trimmedMessage);
+    videoStateAddUserMessage(projectId, trimmedMessage);
     
     // ✅ SIMPLE: Add assistant loading message with progress simulation
     const assistantMessageId = `assistant-${Date.now()}`;
     setActiveAssistantMessageId(assistantMessageId);
-    addAssistantMessage(projectId, assistantMessageId, '🧠 Analyzing your request...');
+    videoStateAddAssistantMessage(projectId, assistantMessageId, '🧠 Analyzing your request...');
     
     setMessage("");
     setIsGenerating(true);
 
     try {
+      setIsGenerating(true);
+
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: trimmedMessage,
-        sceneId: selectedSceneId || undefined,
+        sceneId: selectedSceneId || undefined, // Convert null to undefined for type compatibility
       });
-      
+
       // 🎯 NEW: Check for edit complexity feedback in result
       // TODO: Implement editComplexity in mutation result when Brain LLM actually returns this data
       // For now, we use honest progress messages instead of fake complexity feedback
@@ -343,12 +383,36 @@ export default function ChatPanelG({
       // if (result.editComplexity) {
       //   handleEditComplexityDetected(result.editComplexity);
       // }
-      
-      // ✅ FIXED: Use correct interface for updateMessage
-      updateMessage(projectId, assistantMessageId, {
-        content: result.chatResponse || 'Scene operation completed ✅',
-        status: 'success'
-      });
+
+      // 🚨 CRITICAL FIX: Update VideoState with latest scene data after successful operation
+      if (result.success) {
+        console.log('[ChatPanelG] 🔄 Scene operation successful, refreshing VideoState...');
+        
+        try {
+          // Fetch the latest project data to get updated scenes
+          const updatedScenes = await refetchScenes();
+          
+          if (updatedScenes.data && updatedScenes.data.length > 0) {
+            console.log('[ChatPanelG] ✅ Fetched updated scenes from database:', updatedScenes.data.length);
+            
+            // Convert database scenes to InputProps format
+            const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
+            console.log('[ChatPanelG] ✅ Converted scenes to InputProps format');
+            
+            // Update VideoState with fresh data from database
+            replace(projectId, updatedProps);
+            
+            // Force preview panel to re-render with new data
+            forceRefresh(projectId);
+            console.log('[ChatPanelG] 🎬 VideoState updated, preview should show changes');
+          } else {
+            console.warn('[ChatPanelG] ⚠️ No scenes data returned from database query');
+          }
+        } catch (refreshError) {
+          console.error('[ChatPanelG] ❌ Failed to refresh scene data:', refreshError);
+          // Don't throw - the scene operation succeeded, just state sync failed
+        }
+      }
 
       // Handle callbacks
       if (result.scene?.id && onSceneGenerated) {
@@ -359,7 +423,7 @@ export default function ChatPanelG({
       console.error("Error in chat generation:", error);
       
       // ✅ FIXED: Use correct interface for updateMessage
-      updateMessage(projectId, assistantMessageId, {
+      videoStateUpdateMessage(projectId, assistantMessageId, {
         content: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
         status: 'error'
       });
@@ -431,6 +495,93 @@ export default function ChatPanelG({
 
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
+
+  // 🚨 NEW: Error fix state
+  const [hasSceneError, setHasSceneError] = useState(false);
+  const [sceneErrorDetails, setSceneErrorDetails] = useState<{
+    sceneId: string;
+    sceneName: string;
+    errorMessage: string;
+  } | null>(null);
+
+  // 🚨 NEW: Listen for preview panel errors
+  useEffect(() => {
+    const handlePreviewError = (event: CustomEvent) => {
+      const { sceneId, sceneName, error } = event.detail;
+      console.log('[ChatPanelG] 🔧 Preview error detected:', { sceneId, sceneName, error });
+      
+      setHasSceneError(true);
+      setSceneErrorDetails({
+        sceneId,
+        sceneName,
+        errorMessage: error.message || String(error)
+      });
+    };
+
+    window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
+    
+    return () => {
+      window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
+    };
+  }, []);
+
+  // 🚨 NEW: Auto-fix function
+  const handleAutoFix = async () => {
+    if (!sceneErrorDetails) return;
+    
+    const fixPrompt = `🔧 AUTO-FIX: Scene "${sceneErrorDetails.sceneName}" has a Remotion error: "${sceneErrorDetails.errorMessage}". Please analyze and fix this scene automatically.`;
+    
+    // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
+    videoStateAddUserMessage(projectId, fixPrompt);
+    
+    // ✅ IMMEDIATE: Add assistant loading message
+    const assistantMessageId = `assistant-fix-${Date.now()}`;
+    setActiveAssistantMessageId(assistantMessageId);
+    videoStateAddAssistantMessage(projectId, assistantMessageId, '🔧 Analyzing and fixing scene error...');
+    
+    setIsGenerating(true);
+    setHasSceneError(false);
+    
+    try {
+      const result = await generateSceneMutation.mutateAsync({
+        projectId,
+        userMessage: fixPrompt,
+        sceneId: sceneErrorDetails.sceneId,
+      });
+
+      // ✅ CRITICAL: Force complete state refresh after successful fix
+      if (result.success) {
+        console.log('[ChatPanelG] 🔧 Auto-fix successful, force refreshing all state...');
+        
+        // Fetch latest scene data
+        const updatedScenes = await refetchScenes();
+        if (updatedScenes.data && updatedScenes.data.length > 0) {
+          const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
+          
+          // Force complete state replacement
+          replace(projectId, updatedProps);
+          
+          // Force preview panel to recompile
+          forceRefresh(projectId);
+          
+          console.log('[ChatPanelG] ✅ Auto-fix complete - preview should show fixed scene');
+        }
+      }
+      
+    } catch (error) {
+      console.error('Auto-fix failed:', error);
+      
+      // Update assistant message with error
+      videoStateUpdateMessage(projectId, assistantMessageId, {
+        content: `Auto-fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: 'error'
+      });
+    } finally {
+      setIsGenerating(false);
+      setSceneErrorDetails(null);
+      setActiveAssistantMessageId(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -556,20 +707,56 @@ export default function ChatPanelG({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input form */}
-      <div className="border-t p-4">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={
-              selectedSceneId
-                ? "Describe changes to the selected scene..."
-                : "Describe your video or add a new scene..."
-            }
-            disabled={isGenerating}
-            className="flex-1"
-          />
+      {/* Input area */}
+      <div className="p-4 border-t bg-gray-50/50">
+        {/* 🚨 NEW: Auto-fix error banner */}
+        {hasSceneError && sceneErrorDetails && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-red-700">
+                  Scene Error Detected: {sceneErrorDetails.sceneName}
+                </span>
+              </div>
+              <Button
+                onClick={handleAutoFix}
+                disabled={isGenerating}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCwIcon className="h-3 w-3 mr-1 animate-spin" />
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    🔧 Fix Automatically
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-red-600 mt-1">
+              {sceneErrorDetails.errorMessage.substring(0, 100)}...
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <div className="flex-1 relative">
+            <Input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder={
+                selectedSceneId
+                  ? "Describe changes to the selected scene..."
+                  : "Describe your video or add a new scene..."
+              }
+              disabled={isGenerating}
+              className="flex-1"
+            />
+          </div>
           <Button type="submit" disabled={!message.trim() || isGenerating}>
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />

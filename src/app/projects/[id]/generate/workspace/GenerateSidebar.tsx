@@ -54,12 +54,11 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels for BAZAAR-304: Chat, Preview, Code (Storyboard commented out)
+// Workspace panels - storyboard is hidden but can still be added through panel options
 const navItems: WorkspacePanelG[] = [
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
-  { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
 ];
 

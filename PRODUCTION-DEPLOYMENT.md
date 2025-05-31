@@ -127,6 +127,9 @@ OPENAI_API_KEY=
 # Analytics (Sprint 28)
 NEXT_PUBLIC_GA_MEASUREMENT_ID=
 VERCEL_ANALYTICS_ID=
+
+# Application
+NEXT_PUBLIC_BASE_URL=https://bazaar.it
 ```
 
 ### **Production Checklist**

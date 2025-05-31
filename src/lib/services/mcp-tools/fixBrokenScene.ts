@@ -17,6 +17,7 @@ type FixBrokenSceneInput = z.infer<typeof fixBrokenSceneInputSchema>;
 interface FixBrokenSceneOutput {
   fixedCode: string;
   sceneName: string;
+  sceneId: string;
   duration: number;
   reasoning: string;
   changesApplied: string[];
@@ -67,6 +68,7 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
         return {
           fixedCode: fallbackResult.fixedCode,
           sceneName: displayName,
+          sceneId,
           duration: 180,
           reasoning: "Used safe fallback fix due to complex error",
           changesApplied: fallbackResult.changesApplied,
@@ -96,6 +98,7 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
       return {
         fixedCode: fixResult.fixedCode,
         sceneName: displayName,
+        sceneId,
         duration: 180,
         reasoning: fixResult.reasoning,
         changesApplied: fixResult.changesApplied,
@@ -123,6 +126,7 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
       return {
         fixedCode: emergencyFix,
         sceneName: displayName,
+        sceneId,
         duration: 180,
         reasoning: "Auto-fix encountered issues, provided emergency replacement",
         changesApplied: ["Emergency replacement scene generated"],

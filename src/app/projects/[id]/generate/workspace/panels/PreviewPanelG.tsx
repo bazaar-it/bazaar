@@ -5,11 +5,12 @@ import React, { useEffect, useState, useCallback, useMemo, Suspense } from 'reac
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/types/input-props';
 import { Button } from "~/components/ui/button";
-import { RefreshCwIcon, CodeIcon } from "lucide-react";
+import { RefreshCwIcon, CodeIcon, WrenchIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
+import { api } from "~/trpc/react";
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -19,12 +20,6 @@ function ErrorFallback({ error }: { error: Error }) {
       <p className="mb-2">{error.message}</p>
     </div>
   );
-}
-
-// Create blob URL for component code
-function createBlobUrl(code: string): string {
-  const blob = new Blob([code], { type: 'application/javascript' });
-  return URL.createObjectURL(blob);
 }
 
 export function PreviewPanelG({ 
@@ -49,11 +44,12 @@ export function PreviewPanelG({
   
   console.log('[PreviewPanelG] Current props:', currentProps);
   console.log('[PreviewPanelG] Scenes:', scenes);
-  
-  // 🚨 SIMPLIFIED: Direct scene compilation - no stupid validation, just real compilation
+
+  // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
     const sceneCode = (scene.data as any)?.code;
     const sceneName = (scene.data as any)?.name || scene.id;
+    const sceneId = scene.id;
     
     if (!sceneCode) {
       console.warn(`[PreviewPanelG] Scene ${index} has no code`);
@@ -102,6 +98,19 @@ export default function TestComponent() {
 
     } catch (error) {
       console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) REAL compilation failed:`, error);
+      
+      // 🚨 NEW: Dispatch error event to ChatPanelG for auto-fix
+      if (error instanceof Error) {
+        const errorEvent = new CustomEvent('preview-scene-error', {
+          detail: {
+            sceneId,
+            sceneName,
+            error: error
+          }
+        });
+        window.dispatchEvent(errorEvent);
+      }
+      
       // ONLY use fallback when REAL compilation actually fails
       return {
         isValid: false,
@@ -268,6 +277,16 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Scene ${index} error caught by boundary:', error, errorInfo);
+    
+    // 🚨 NEW: Dispatch error event to ChatPanelG for auto-fix
+    const errorEvent = new CustomEvent('preview-scene-error', {
+      detail: {
+        sceneId: '${originalScene.id}',
+        sceneName: '${(originalScene.data as any)?.name || `Scene ${index + 1}`}',
+        error: error
+      }
+    });
+    window.dispatchEvent(errorEvent);
   }
 
   render() {
