@@ -12,24 +12,31 @@ import type { InputProps } from '~/types/input-props';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 import ChatPanelG from './panels/ChatPanelG';
+import ChatPanelAI from './panels/ChatPanelAI';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
+import TemplatesPanelG from './panels/TemplatesPanelG';
 import { toast } from 'sonner';
+import { cn } from "~/lib/utils";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
   chat: ChatPanelG,
+  chatai: ChatPanelAI,
   preview: PreviewPanelG,
   code: CodePanelG,
   storyboard: StoryboardPanelG,
+  templates: TemplatesPanelG,
 };
 
 const PANEL_LABELS_G = {
   chat: 'Chat',
+  chatai: 'AI Chat',
   preview: 'Video Player',
   code: 'Code',
   storyboard: 'Storyboard',
+  templates: 'Templates',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -433,12 +440,39 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Callback for handling new scene generation with validation
     const handleSceneGenerated = useCallback(async (sceneId: string) => {
-      console.log('[WorkspaceContentAreaG] Scene generated, selecting scene:', sceneId);
+      console.log('[WorkspaceContentAreaG] 🎉 NEW SCENE GENERATED! Scene ID:', sceneId);
+      console.log('[WorkspaceContentAreaG] Starting scene refresh pipeline...');
       
-      // Simply select the generated scene - the VideoState will be updated by the chat mutation
-      setSelectedSceneId(sceneId);
-    }, []);
-    
+      try {
+        // ✅ FETCH: Get updated scenes from database  
+        console.log('[WorkspaceContentAreaG] Fetching updated scenes from database...');
+        const scenesResult = await getProjectScenesQuery.refetch();
+        
+        if (scenesResult.data) {
+          console.log('[WorkspaceContentAreaG] ✅ Fetched', scenesResult.data.length, 'scenes from database');
+          console.log('[WorkspaceContentAreaG] Scene details:', scenesResult.data.map(s => ({ id: s.id, name: s.name })));
+          
+          // ✅ CONVERT: Database scenes to InputProps format
+          const updatedProps = convertDbScenesToInputProps(scenesResult.data);
+          console.log('[WorkspaceContentAreaG] ✅ Converted to InputProps format:', updatedProps.scenes.length, 'scenes');
+          console.log('[WorkspaceContentAreaG] Total video duration:', updatedProps.meta.duration, 'frames');
+          
+          // ✅ UPDATE: VideoState with new scenes
+          replace(projectId, updatedProps);
+          console.log('[WorkspaceContentAreaG] ✅ Updated VideoState with new scenes');
+          
+          // ✅ SELECT: The newly generated scene
+          setSelectedSceneId(sceneId);
+          console.log('[WorkspaceContentAreaG] ✅ Selected new scene:', sceneId);
+        } else {
+          console.warn('[WorkspaceContentAreaG] ⚠️ No scenes data returned from database query');
+        }
+      } catch (error) {
+        console.error('[WorkspaceContentAreaG] ❌ CRITICAL ERROR in scene generation handling:', error);
+        toast.error('Critical error handling scene generation - please refresh the page');
+      }
+    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, replace]);
+
     // Track if initialization has been attempted for this project
     const initializationAttemptedRef = useRef<Set<string>>(new Set());
     
@@ -613,6 +647,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             onSceneGenerated={handleSceneGenerated}
             onProjectRename={onProjectRename}
           />;
+        case 'chatai':
+          return <ChatPanelAI projectId={projectId} selectedSceneId={selectedSceneId} />;
         case 'preview':
           return (
             <div id="preview-panel-container-g" className="h-full">
@@ -624,12 +660,18 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             projectId={projectId} 
             selectedSceneId={selectedSceneId} 
             onClose={() => removePanel(panel.id)}
+            onSceneSelect={setSelectedSceneId}
           />;
         case 'storyboard':
           return <StoryboardPanelG 
             projectId={projectId} 
             selectedSceneId={selectedSceneId} 
             onSceneSelect={setSelectedSceneId}
+          />;
+        case 'templates':
+          return <TemplatesPanelG 
+            projectId={projectId} 
+            onSceneGenerated={handleSceneGenerated} 
           />;
         default:
           return null;

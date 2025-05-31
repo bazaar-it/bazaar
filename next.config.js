@@ -207,7 +207,6 @@ const config = {
   // Performance optimizations
   compress: true,
   productionBrowserSourceMaps: false,
-  optimizeFonts: true,
   
   // Static generation optimizations
   output: 'standalone',

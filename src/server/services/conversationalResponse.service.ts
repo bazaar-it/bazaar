@@ -4,7 +4,7 @@ import { messages } from "~/server/db/schema";
 import { emitSceneEvent } from "~/lib/events/sceneEvents";
 
 export interface ConversationalResponseInput {
-  operation: 'addScene' | 'editScene' | 'deleteScene' | 'askSpecify';
+  operation: 'addScene' | 'editScene' | 'deleteScene' | 'askSpecify' | 'fixBrokenScene';
   userPrompt: string;
   result: any;
   context: {
@@ -13,6 +13,15 @@ export interface ConversationalResponseInput {
     sceneCount?: number;
     availableScenes?: Array<{ id: string; name: string }>;
     projectId?: string;
+    actualElements?: Array<{
+      type: string;
+      text?: string;
+      color?: string;
+      fontSize?: string | number;
+    }>;
+    sceneType?: string;
+    background?: string;
+    animations?: string[];
   };
 }
 
@@ -136,6 +145,9 @@ STYLE: Natural, not robotic
       case 'askSpecify':
         return basePrompt + `You need clarification. Ask a specific question to help understand what the user wants.`;
       
+      case 'fixBrokenScene':
+        return basePrompt + `You need to fix a broken scene. Mention the specific issue and the steps you'll take to fix it.`;
+      
       default:
         return basePrompt + `You completed an operation. Briefly describe what happened.`;
     }
@@ -151,6 +163,29 @@ STYLE: Natural, not robotic
       context += `SCENE NAME: ${input.context.sceneName}\n`;
     }
     
+    if (input.context.sceneType) {
+      context += `SCENE TYPE: ${input.context.sceneType}\n`;
+    }
+    
+    if (input.context.background) {
+      context += `BACKGROUND: ${input.context.background}\n`;
+    }
+    
+    if (input.context.actualElements && input.context.actualElements.length > 0) {
+      context += `ACTUAL ELEMENTS CREATED:\n`;
+      input.context.actualElements.forEach((element, index) => {
+        context += `  ${index + 1}. ${element.type}`;
+        if (element.text) context += ` - "${element.text}"`;
+        if (element.color) context += ` (${element.color})`;
+        if (element.fontSize) context += ` (${element.fontSize}px)`;
+        context += `\n`;
+      });
+    }
+    
+    if (input.context.animations && input.context.animations.length > 0) {
+      context += `ANIMATIONS: ${input.context.animations.join(', ')}\n`;
+    }
+    
     if (input.context.changes && input.context.changes.length > 0) {
       context += `CHANGES MADE: ${input.context.changes.join(', ')}\n`;
     }
@@ -163,6 +198,7 @@ STYLE: Natural, not robotic
       context += `AVAILABLE SCENES: ${input.context.availableScenes.map(s => s.name).join(', ')}\n`;
     }
     
+    context += `\n✅ CRITICAL: Base your response ONLY on the actual elements and content listed above. Do NOT invent details like clouds, sunset, or other elements that are not explicitly mentioned in the ACTUAL ELEMENTS CREATED section.`;
     context += `\nGenerate a conversational response about this ${input.operation} operation.`;
     
     return context;
@@ -181,6 +217,8 @@ STYLE: Natural, not robotic
         return "Scene deleted successfully.";
       case 'askSpecify':
         return "Could you please provide more details about what you'd like me to do?";
+      case 'fixBrokenScene':
+        return "I'm sorry to hear that the scene is broken. I'll work on fixing it for you.";
       default:
         return "Operation completed successfully!";
     }

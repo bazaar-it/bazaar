@@ -33,6 +33,9 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
   description = "Create a new scene from user prompt. Use when user requests a new scene or this is the first scene. Automatically replaces welcome scene if present.";
   inputSchema = addSceneInputSchema;
   
+  // NEW: Support for progress callbacks
+  private onProgress?: (stage: string, status: string) => void;
+  
   /**
    * Get the previous scene's JSON for style consistency
    */
@@ -62,6 +65,9 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
       
       const shouldReplaceWelcome = hasWelcomeScene && (storyboardSoFar?.length === 1);
 
+      // 🎯 PROGRESS UPDATE: Starting layout generation
+      this.onProgress?.('🎨 Planning your scene layout...', 'building');
+
       // Use the proven two-step pipeline for code generation
       const result = await sceneBuilderService.generateTwoStepCode({
         userPrompt,
@@ -70,12 +76,32 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
         previousSceneJson: await this.getPreviousSceneJson(projectId),
       });
 
-      // STEP 3: Generate conversational response
+      // 🎯 PROGRESS UPDATE: Generating conversational response
+      this.onProgress?.('💬 Preparing response...', 'building');
+
+      // STEP 3: Generate conversational response with ACTUAL scene content
       const chatResponse = await conversationalResponseService.generateContextualResponse({
         operation: 'addScene',
         userPrompt,
-        result: { sceneName: result.name, duration: result.duration },
-        context: { sceneCount: (storyboardSoFar?.length || 0) + 1, projectId }
+        result: { 
+          sceneName: result.name, 
+          duration: result.duration,
+          sceneType: result.layoutJson.sceneType,
+          elements: result.layoutJson.elements || [],
+          background: result.layoutJson.background,
+          animations: Object.keys(result.layoutJson.animations || {}),
+          elementCount: result.layoutJson.elements?.length || 0
+        },
+        context: { 
+          sceneCount: (storyboardSoFar?.length || 0) + 1, 
+          projectId,
+          actualElements: result.layoutJson.elements?.map((el: any) => ({
+            type: el.type,
+            text: el.text || '',
+            color: el.color || '',
+            fontSize: el.fontSize || ''
+          })) || []
+        }
       });
 
       return {
@@ -112,6 +138,11 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
         replacedWelcomeScene: false
       };
     }
+  }
+
+  // NEW: Method to set progress callback
+  setProgressCallback(callback: (stage: string, status: string) => void) {
+    this.onProgress = callback;
   }
 }
 

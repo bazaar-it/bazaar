@@ -3,12 +3,12 @@ import { openai } from "~/server/lib/openai";
 import { addSceneTool } from "~/lib/services/mcp-tools/addScene";
 import { editSceneTool } from "~/lib/services/mcp-tools/editScene";
 import { deleteSceneTool } from "~/lib/services/mcp-tools/deleteScene";
-import { askSpecifyTool } from "~/lib/services/mcp-tools/askSpecify";
+import { fixBrokenSceneTool } from "~/lib/services/mcp-tools/fixBrokenScene";
 import { toolRegistry } from "~/lib/services/mcp-tools/registry";
 import { type MCPResult } from "~/lib/services/mcp-tools/base";
 import { conversationalResponseService } from "~/server/services/conversationalResponse.service";
 import { db } from "~/server/db";
-import { scenes } from "~/server/db/schema";
+import { scenes, sceneIterations } from "~/server/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 // ✅ FIXED: Module-level singleton initialization
@@ -16,7 +16,7 @@ let toolsInitialized = false;
 
 function initializeTools() {
   if (!toolsInitialized) {
-    const newSceneTools = [addSceneTool, editSceneTool, deleteSceneTool, askSpecifyTool];
+    const newSceneTools = [addSceneTool, editSceneTool, deleteSceneTool, fixBrokenSceneTool];
     newSceneTools.forEach(tool => toolRegistry.register(tool));
     toolsInitialized = true;
     if (process.env.NODE_ENV === 'development') {
@@ -35,6 +35,7 @@ export interface OrchestrationInput {
   userContext?: Record<string, unknown>;
   storyboardSoFar?: any[];
   chatHistory?: Array<{role: string, content: string}>;
+  onProgress?: (stage: string, status: string) => void;
 }
 
 export interface OrchestrationOutput {
@@ -81,6 +82,9 @@ export class BrainOrchestrator {
           input.chatHistory.slice(-3).map(msg => `${msg.role}: ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`))
       }
       
+      // 🎯 PROGRESS UPDATE: Starting intent analysis
+      input.onProgress?.('🧠 Analyzing your request...', 'building');
+      
       // 1. Analyze intent and select tool(s)
       const toolSelection = await this.analyzeIntent(input);
       
@@ -103,12 +107,41 @@ export class BrainOrchestrator {
         }
       }
       
-      // 2. Handle multi-step workflow
+      // 2. Handle clarification responses directly (NEW)
+      if (toolSelection.needsClarification) {
+        if (this.DEBUG) console.log(`[DEBUG] CLARIFICATION NEEDED:`, toolSelection.clarificationQuestion);
+        return {
+          success: true,
+          chatResponse: toolSelection.clarificationQuestion,
+          reasoning: toolSelection.reasoning || "Clarification needed",
+          isAskSpecify: true, // Keep this flag for compatibility
+        };
+      }
+
+      // 3. Handle multi-step workflow
       if (toolSelection.workflow && toolSelection.workflow.length > 0) {
         return await this.executeWorkflow(input, toolSelection.workflow, toolSelection.reasoning);
       }
       
-      // 3. Handle single tool operation (existing logic)
+      // 4. Handle single tool operation (existing logic)
+      if (!toolSelection.toolName) {
+        return {
+          success: false,
+          error: "No tool selected and no clarification provided",
+        };
+      }
+
+      // 🎯 PROGRESS UPDATE: Tool execution starting
+      const toolDisplayName = {
+        'addScene': '🎬 Creating your scene...',
+        'editScene': '✏️ Editing your scene...',
+        'deleteScene': '🗑️ Deleting scene...',
+        'fixBrokenScene': '🔧 Fixing broken scene...'
+      }[toolSelection.toolName] || '⚙️ Processing...';
+      
+      input.onProgress?.(toolDisplayName, 'building');
+
+      // 5. Execute single tool
       const tool = toolRegistry.get(toolSelection.toolName!);
       if (!tool) {
         return {
@@ -119,9 +152,29 @@ export class BrainOrchestrator {
       
       // Execute single tool
       const toolInput = await this.prepareToolInput(input, toolSelection);
+      
+      // 🎯 NEW: Pass progress callback to tools that support it
+      if (toolSelection.toolName === 'addScene' && input.onProgress) {
+        (tool as any).setProgressCallback?.(input.onProgress);
+      }
+      
+      // 🎯 NEW: Show complexity-based feedback for editScene
+      if (toolSelection.toolName === 'editScene' && input.onProgress && toolSelection.userFeedback) {
+        input.onProgress(toolSelection.userFeedback, 'generating');
+      }
+      
       const result = await tool.run(toolInput);
       
-      return await this.processToolResult(result, toolSelection.toolName!, input);
+      // 🎯 PROGRESS UPDATE: Tool completed, saving to database
+      if (result.success) {
+        input.onProgress?.('💾 Saving your scene...', 'building');
+      }
+      
+      return await this.processToolResult(result, toolSelection.toolName!, input, {
+        targetSceneId: toolSelection.targetSceneId,
+        editComplexity: toolSelection.editComplexity,
+        reasoning: toolSelection.reasoning,
+      });
       
     } catch (error) {
       if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
@@ -167,7 +220,9 @@ export class BrainOrchestrator {
         const stepResult = await tool.run(stepInput);
         
         // Process and store result
-        const processedResult = await this.processToolResult(stepResult, step.toolName, input);
+        const processedResult = await this.processToolResult(stepResult, step.toolName, input, {
+          reasoning: `Workflow step ${i + 1}: ${step.context}`,
+        });
         workflowResults[stepKey] = processedResult;
         
         // Accumulate chat responses
@@ -229,38 +284,9 @@ export class BrainOrchestrator {
   /**
    * Process tool result and handle database operations
    */
-  private async processToolResult(result: any, toolName: string, input: OrchestrationInput): Promise<OrchestrationOutput> {
-    // 🚨 SPECIAL HANDLING for askSpecify - SIMPLIFIED (no duplicate message saving)
-    if (toolName === 'askSpecify') {
-      if (this.DEBUG) console.log(`[BrainOrchestrator] 🤔 askSpecify tool executed, result:`, result);
-      
-      let clarificationMessage: string;
-      
-      if (result.success && result.data?.chatResponse) {
-        clarificationMessage = result.data.chatResponse;
-        if (this.DEBUG) console.log(`[BrainOrchestrator] ✅ Using askSpecify chatResponse`);
-      } else if (result.success && result.data?.clarificationQuestion) {
-        clarificationMessage = result.data.clarificationQuestion;
-        if (this.DEBUG) console.log(`[BrainOrchestrator] ✅ Using askSpecify clarificationQuestion`);
-      } else {
-        // Fallback for failed askSpecify
-        clarificationMessage = "I need more information to help you better. Could you please clarify what you'd like me to do?";
-        if (this.DEBUG) console.log(`[BrainOrchestrator] ⚠️ askSpecify failed, using fallback message`);
-      }
-      
-      // ✅ SIMPLIFIED: Let Generation Router handle ALL message saving (single source of truth)
-      // Removed duplicate conversationalResponseService.sendChatMessage() call
-      
-      return {
-        success: true, // Always return success for askSpecify
-        result: result.data,
-        toolUsed: toolName,
-        reasoning: result.data?.reasoning || "Clarification requested",
-        chatResponse: clarificationMessage,
-        isAskSpecify: true, // NEW: Flag to distinguish from scene generation
-      };
-    }
-    
+  private async processToolResult(result: any, toolName: string, input: OrchestrationInput, toolSelection?: { targetSceneId?: string; editComplexity?: string; reasoning?: string }): Promise<OrchestrationOutput> {
+    const startTime = Date.now(); // Track processing time
+
     // 🚨 CRITICAL FIX: Save generated scene to database
     if (result.success && toolName === 'addScene' && result.data) {
       const sceneData = result.data as any;
@@ -291,6 +317,35 @@ export class BrainOrchestrator {
           
           if (this.DEBUG) console.log(`[BrainOrchestrator] Scene saved successfully: ${newScene?.id}`);
           
+          // ✅ NEW: Log scene iteration for tracking
+          if (newScene?.id) {
+            const processingTime = Date.now() - startTime;
+            await this.logSceneIteration({
+              sceneId: newScene.id,
+              projectId: input.projectId,
+              operationType: 'create',
+              userPrompt: input.prompt,
+              brainReasoning: toolSelection?.reasoning,
+              toolReasoning: sceneData.reasoning,
+              codeAfter: sceneData.sceneCode,
+              generationTimeMs: processingTime,
+              modelUsed: this.model,
+              temperature: this.temperature,
+              sessionId: input.userId, // Using userId as session identifier
+            });
+          }
+          
+          // ✅ NEW: Log the complete scene save result
+          if (this.DEBUG) {
+            console.log(`\n[BrainOrchestrator] 💾 SCENE SAVED TO DATABASE:`);
+            console.log(`[BrainOrchestrator] 🆔 Scene ID: ${newScene?.id}`);
+            console.log(`[BrainOrchestrator] 📛 Scene name: ${newScene?.name}`);
+            console.log(`[BrainOrchestrator] 🎬 Duration: ${newScene?.duration} frames`);
+            console.log(`[BrainOrchestrator] 📊 Order: ${newScene?.order}`);
+            console.log(`[BrainOrchestrator] 📝 Code length: ${newScene?.tsxCode.length} characters`);
+            console.log(`[BrainOrchestrator] 📋 Has layout JSON: ${result.data.layoutJson ? 'YES' : 'NO'}\n`);
+          }
+          
           // Update result to include scene database record
           result.data = {
             ...result.data,
@@ -320,14 +375,26 @@ export class BrainOrchestrator {
     // 🚨 NEW: Update edited scene in database
     if (result.success && toolName === 'editScene' && result.data) {
       const sceneData = result.data as any;
-      const sceneId = input.userContext?.sceneId as string;
+      // 🚨 CRITICAL FIX: Use Brain LLM's targetSceneId instead of frontend userContext
+      const sceneId = toolSelection?.targetSceneId || input.userContext?.sceneId as string;
       
       if (sceneData.sceneCode && sceneData.sceneName && sceneId && typeof sceneId === 'string') {
-        if (this.DEBUG) console.log(`[BrainOrchestrator] Updating edited scene in database: ${sceneData.sceneName}`);
+        // ✅ CONVERT: Technical name to user-friendly display name
+        const displayName = sceneData.sceneName.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || sceneData.sceneName;
+        
+        if (this.DEBUG) console.log(`[BrainOrchestrator] 🎯 Brain selected scene ID: ${toolSelection?.targetSceneId || 'none'}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] 🖱️ Frontend selected scene ID: ${input.userContext?.sceneId || 'none'}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] ✅ Using scene ID for update: ${sceneId}`);
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Updating edited scene in database: ${displayName}`);
         if (this.DEBUG) console.log(`[BrainOrchestrator] Applied changes: ${sceneData.changes?.join(', ') || 'none'}`);
         if (this.DEBUG) console.log(`[BrainOrchestrator] Preserved: ${sceneData.preserved?.join(', ') || 'none'}`);
         
         try {
+          // Get the current scene for "before" tracking
+          const currentScene = await db.query.scenes.findFirst({
+            where: eq(scenes.id, sceneId),
+          });
+
           // Update existing scene in database
           const updateData: any = {
             name: sceneData.sceneName,
@@ -347,6 +414,31 @@ export class BrainOrchestrator {
             .returning();
           
           if (this.DEBUG) console.log(`[BrainOrchestrator] Scene updated successfully: ${updatedScene?.id}`);
+          
+          // ✅ NEW: Log scene iteration for tracking
+          if (updatedScene?.id) {
+            const processingTime = Date.now() - startTime;
+            await this.logSceneIteration({
+              sceneId: updatedScene.id,
+              projectId: input.projectId,
+              operationType: 'edit',
+              editComplexity: toolSelection?.editComplexity as 'surgical' | 'creative' | 'structural',
+              userPrompt: input.prompt,
+              brainReasoning: toolSelection?.reasoning,
+              toolReasoning: sceneData.reasoning,
+              codeBefore: currentScene?.tsxCode,
+              codeAfter: sceneData.sceneCode,
+              changesApplied: sceneData.changes,
+              changesPreserved: sceneData.preserved,
+              generationTimeMs: processingTime,
+              modelUsed: this.model,
+              temperature: this.temperature,
+              sessionId: input.userId,
+            });
+
+            // ✅ NEW: Check for re-editing patterns (user dissatisfaction)
+            await this.markReEditedScenes(sceneId, input.projectId);
+          }
           
           // Update result to include updated scene database record
           result.data = {
@@ -380,9 +472,17 @@ export class BrainOrchestrator {
       const sceneIdToDelete = deleteData.deletedSceneId;
       
       if (sceneIdToDelete && typeof sceneIdToDelete === 'string') {
-        if (this.DEBUG) console.log(`[BrainOrchestrator] Deleting scene from database: ${deleteData.deletedSceneName || sceneIdToDelete}`);
+        // ✅ CONVERT: Technical name to user-friendly display name  
+        const displayName = deleteData.deletedSceneName?.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || deleteData.deletedSceneName || sceneIdToDelete;
+        
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Deleting scene from database: ${displayName}`);
         
         try {
+          // Get the scene before deletion for tracking
+          const sceneToDelete = await db.query.scenes.findFirst({
+            where: eq(scenes.id, sceneIdToDelete),
+          });
+
           // Delete the scene from database
           const deletedScenes = await db.delete(scenes)
             .where(eq(scenes.id, sceneIdToDelete))
@@ -390,6 +490,22 @@ export class BrainOrchestrator {
           
           if (deletedScenes.length > 0) {
             if (this.DEBUG) console.log(`[BrainOrchestrator] Scene deleted successfully: ${deletedScenes[0]?.name}`);
+            
+            // ✅ NEW: Log scene iteration for tracking
+            const processingTime = Date.now() - startTime;
+            await this.logSceneIteration({
+              sceneId: sceneIdToDelete,
+              projectId: input.projectId,
+              operationType: 'delete',
+              userPrompt: input.prompt,
+              brainReasoning: toolSelection?.reasoning,
+              toolReasoning: deleteData.reasoning,
+              codeBefore: sceneToDelete?.tsxCode,
+              generationTimeMs: processingTime,
+              modelUsed: this.model,
+              temperature: this.temperature,
+              sessionId: input.userId,
+            });
             
             // Update result to confirm deletion
             result.data = {
@@ -428,6 +544,69 @@ export class BrainOrchestrator {
       }
     }
     
+    // 🚨 NEW: Fix broken scene in database
+    if (result.success && toolName === 'fixBrokenScene' && result.data) {
+      const fixData = result.data as any;
+      const fixSceneId = fixData.sceneId;
+      
+      if (fixSceneId && typeof fixSceneId === 'string') {
+        // ✅ CONVERT: Technical name to user-friendly display name  
+        const displayName = fixData.sceneName?.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || fixData.sceneName || fixSceneId;
+        
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Fixing broken scene in database: ${displayName}`);
+        
+        try {
+          // Update the scene in the database
+          const updateData: any = {
+            name: fixData.sceneName,
+            tsxCode: fixData.fixedCode,
+            duration: fixData.duration || 180,
+            updatedAt: new Date(),
+          };
+          
+          // Only update tsxCode if it exists (DirectCodeEditor doesn't generate it)
+          if (fixData.fixedCode) {
+            updateData.tsxCode = fixData.fixedCode;
+          }
+          
+          const [fixedScene] = await db.update(scenes)
+            .set(updateData)
+            .where(eq(scenes.id, fixSceneId))
+            .returning();
+          
+          if (this.DEBUG) console.log(`[BrainOrchestrator] Scene fixed successfully: ${fixedScene?.id}`);
+          
+          // Update result to include fixed scene database record
+          result.data = {
+            ...result.data,
+            scene: {
+              id: fixedScene?.id,
+              name: fixedScene?.name,
+              tsxCode: fixedScene?.tsxCode,
+              duration: fixedScene?.duration,
+              order: fixedScene?.order,
+            }
+          };
+          
+        } catch (dbError) {
+          if (this.DEBUG) console.error(`[BrainOrchestrator] Failed to fix scene in database:`, dbError);
+          result.data = {
+            ...result.data,
+            success: false,
+            error: `Failed to fix your scene. Please try again.`,
+            chatResponse: "I couldn't fix your scene right now. Please try again in a moment.",
+          };
+        }
+      } else {
+        if (this.DEBUG) console.warn(`[BrainOrchestrator] Invalid scene ID for fixing: ${fixSceneId}`);
+        result.data = {
+          ...result.data,
+          success: false,
+          error: 'Invalid scene ID provided for fixing'
+        };
+      }
+    }
+    
     // 5. Extract conversational response from tool result
     let chatResponse: string | undefined;
     if (result.data && typeof result.data === 'object' && 'chatResponse' in result.data) {
@@ -462,6 +641,10 @@ export class BrainOrchestrator {
     workflow?: Array<{toolName: string, context: string, dependencies?: string[]}>;
     error?: string;
     clarificationNeeded?: string;
+    needsClarification?: boolean;
+    clarificationQuestion?: string;
+    editComplexity?: string;
+    userFeedback?: string;
   }> {
     // Build prompts for the LLM
     const systemPrompt = this.buildIntentAnalysisPrompt();
@@ -508,6 +691,8 @@ export class BrainOrchestrator {
       if (this.DEBUG) console.log(`[DEBUG] PARSED REASONING: ${parsed.reasoning || 'none'}`);
       if (this.DEBUG) console.log(`[DEBUG] PARSED TARGET_SCENE_ID: ${parsed.targetSceneId || 'none'}`);
       if (this.DEBUG) console.log(`[DEBUG] PARSED CLARIFICATION_NEEDED: ${parsed.clarificationNeeded || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED EDIT_COMPLEXITY: ${parsed.editComplexity || 'none'}`);
+      if (this.DEBUG) console.log(`[DEBUG] PARSED USER_FEEDBACK: ${parsed.userFeedback || 'none'}`);
       
       // Check if input contains a reference to modifying existing content
       const editKeywords = ['edit', 'change', 'modify', 'update', 'fix', 'adjust', 'revise'];
@@ -561,6 +746,25 @@ export class BrainOrchestrator {
       // Log the final decision
       if (this.DEBUG) console.log(`[DEBUG] FINAL DECISION:`, result);
       
+      // 🚨 NEW: Handle clarification responses directly
+      if (parsed.needsClarification) {
+        result.needsClarification = true;
+        result.clarificationQuestion = parsed.clarificationQuestion;
+        if (this.DEBUG) console.log(`[DEBUG] CLARIFICATION QUESTION: ${parsed.clarificationQuestion}`);
+      }
+      
+      // 🚨 NEW: Handle edit complexity classification
+      if (parsed.editComplexity) {
+        result.editComplexity = parsed.editComplexity;
+        if (this.DEBUG) console.log(`[DEBUG] EDIT COMPLEXITY: ${parsed.editComplexity}`);
+      }
+      
+      // 🚨 NEW: Handle user feedback
+      if (parsed.userFeedback) {
+        result.userFeedback = parsed.userFeedback;
+        if (this.DEBUG) console.log(`[DEBUG] USER FEEDBACK: ${parsed.userFeedback}`);
+      }
+      
       return result;
       
     } catch (error) {
@@ -593,20 +797,45 @@ SCENE TARGETING RULES:
 🕐 DURATION & TIMING RULES:
 7. If user mentions duration/timing (e.g., "make it 3 seconds", "shorter", "longer") → Check for clarification context first!
 8. 🚨 NEW: If CLARIFICATION CONTEXT indicates this is a follow-up to askSpecify → DON'T use askSpecify again, proceed with editScene
-9. Duration ambiguity examples that REQUIRE askSpecify (ONLY if NOT a follow-up):
-   - "make it 3 seconds" → Could mean: truncate to 3s OR compress animations to fit 3s
-   - "make it shorter" → Could mean: reduce total duration OR speed up animations
-   - "slow it down" → Could mean: extend duration OR slower animation speed
+9. 🚨 NEW: If user request is AMBIGUOUS and NOT a follow-up → DON'T use tools, instead respond with clarification question
+
+AMBIGUITY DETECTION - When to ask clarification (respond directly, don't use tools):
+- Duration requests without clear context: "make it 3 seconds", "make it shorter", "slow it down"
+  Could mean: trim duration OR speed up animations OR extend timing
+- Scene references without clear target: "change the background" when multiple scenes exist
+- Vague edit requests: "make it better", "fix it", "change the style"
 
 TOOL SELECTION RULES:
 1. **addScene**: Use when user wants to create a NEW scene or describes something completely different
 2. **editScene**: Use when user wants to modify an EXISTING scene (based on context clues or explicit references)
 3. **deleteScene**: Use when user explicitly wants to remove a scene
-4. **askSpecify**: Use when the request is ambiguous (max 2 clarifications per session)
-   - Duration/timing requests (see examples above)
-   - Unclear scene references
-   - Ambiguous edit requests
-   - 🚨 NEVER use askSpecify if CLARIFICATION CONTEXT is present (user already responded to clarification)
+4. **CLARIFICATION**: If request is ambiguous and NOT a follow-up → Respond with clarification question directly (don't use tools)
+
+🎯 EDIT COMPLEXITY DETECTION - For editScene requests, classify the edit type:
+
+**SURGICAL EDITS** (Fast ~2-3s):
+- Simple, specific changes: "change text color to blue", "update title to X", "make font bigger"
+- Single element modifications: "change background color", "update button text"
+- Clear, atomic requests with no ambiguity
+
+USER FEEDBACK EXAMPLES:
+- **Surgical**: "Quick fix coming up!" or "Making that change now..."
+
+**CREATIVE EDITS** (Medium ~5-7s):
+- Style improvements: "make it more modern", "make it more elegant", "improve the design"
+- Visual enhancements: "add some flair", "make it look better", "polish the UI"
+- Holistic style changes that may affect multiple visual properties
+
+USER FEEDBACK EXAMPLES:
+- **Creative**: "Let me see what I can do to improve this!" or "Working on some creative magic..."
+
+**STRUCTURAL EDITS** (Slower ~8-12s):
+- Layout changes: "move text A under text B", "rearrange elements", "change the layout"
+- Multi-element coordination: "swap the title and subtitle", "reorganize the content"
+- Changes that affect element relationships and positioning
+
+USER FEEDBACK EXAMPLES:
+- **Structural**: "This is a bigger change, going through several steps..." or "Restructuring the layout..."
 
 CONTEXT ANALYSIS:
 - **CHAT HISTORY**: Shows recent conversation about specific scenes
@@ -639,30 +868,28 @@ FOR COMPLEX REQUESTS - Use workflow JSON format:
 
 FOR SIMPLE REQUESTS - Use single tool JSON format:
 {
-  "toolName": "addScene|editScene|deleteScene|askSpecify",
+  "toolName": "addScene|editScene|deleteScene",
   "reasoning": "Brief explanation of why this tool was selected and which scene (if editing)",
   "targetSceneId": "ACTUAL_SCENE_ID_FROM_STORYBOARD", // ONLY for editScene - use REAL ID from CURRENT STORYBOARD
-  "clarificationNeeded": "duration_intent|scene_reference|edit_scope" // ONLY for askSpecify
+  "editComplexity": "surgical|creative|structural", // ONLY for editScene - classify edit type
+  "userFeedback": "Quick fix coming up!" // ONLY for editScene - progress message based on complexity
 }
 
-CRITICAL: For editScene operations, you MUST extract the REAL scene ID from the CURRENT STORYBOARD data, not placeholder text.
+FOR CLARIFICATION NEEDED - Use clarification JSON format:
+{
+  "needsClarification": true,
+  "clarificationQuestion": "Specific question to ask the user",
+  "reasoning": "Why clarification is needed"
+}
 
-SCENE TARGETING EXAMPLES:
-- If storyboard shows: [{"id": "93a47963-06f7-4b8d-8d7c-7f7f4e731a8e", "name": "Scene1_mb9tb465mb1hi"}]
-- And user says "change the background" → Use: "targetSceneId": "93a47963-06f7-4b8d-8d7c-7f7f4e731a8e"
-- If user has sceneId in context → Use that specific ID
-- If multiple scenes exist and user doesn't specify → Use latest scene ID from storyboard
-
-DURATION CLARIFICATION EXAMPLES:
-- User: "make it 3 seconds" + NO clarification context → askSpecify with clarificationNeeded: "duration_intent"
+CLARIFICATION EXAMPLES:
+- User: "make it 3 seconds" + NO clarification context → 
+  {"needsClarification": true, "clarificationQuestion": "I can help with that! Do you want to:\n1. Trim the scene to 3 seconds total, or\n2. Speed up the animations to fit in 3 seconds?\n\nPlease let me know which option you prefer.", "reasoning": "Ambiguous duration intent"}
 - User: "make it 3 seconds" + HAS clarification context → editScene (user already clarified)
-- User: "make it shorter" → askSpecify with clarificationNeeded: "duration_intent"  
-- User: "slow down the animation" → askSpecify with clarificationNeeded: "duration_intent"
-
-SCENE IDENTIFICATION EXAMPLES:
-- "edit scene 1" → Find scene with order:0 in storyboard, use its id as targetSceneId
-- "change the title" + recent chat about specific scene → Use that scene's id
-- "make the text blue" + user context has sceneId → Use that sceneId
+- User: "make it shorter" → 
+  {"needsClarification": true, "clarificationQuestion": "I can make it shorter! Would you like me to:\n1. Reduce the total scene duration, or\n2. Speed up the animation timing?\n\nWhich approach would work better for you?", "reasoning": "Unclear duration modification method"}
+- User: "change the background" + multiple scenes → 
+  {"needsClarification": true, "clarificationQuestion": "I see you have multiple scenes. Which scene's background would you like me to change?\n\n[List scenes here]", "reasoning": "Ambiguous scene reference"}
 
 Analyze the user's request and respond with the appropriate JSON format.`;
   }
@@ -719,7 +946,7 @@ Respond with valid JSON only.`;
   
   private async prepareToolInput(
     input: OrchestrationInput, 
-    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string; clarificationNeeded?: string }
+    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string; clarificationNeeded?: string; editComplexity?: string; userFeedback?: string }
   ): Promise<Record<string, unknown>> {
     const baseInput = {
       userPrompt: input.prompt,
@@ -754,7 +981,10 @@ Respond with valid JSON only.`;
           throw new Error(`Scene with ID ${sceneId} not found in storyboard`);
         }
         
-        if (this.DEBUG) console.log(`[BrainOrchestrator] Editing scene: ${scene.name} (${sceneId})`);
+        // ✅ CONVERT: Technical name to user-friendly display name
+        const displayName = scene.name?.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || scene.name || "Untitled Scene";
+        
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Editing scene: ${displayName} (${sceneId})`);
         
         return {
           ...baseInput,
@@ -765,120 +995,61 @@ Respond with valid JSON only.`;
           existingDuration: scene.duration || 180,
           storyboardSoFar: input.storyboardSoFar || [],
           chatHistory: input.chatHistory || [],
+          editComplexity: toolSelection.editComplexity,
         };
         
       case "deleteScene":
         // Use targetSceneId for deletion as well
         const deleteSceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
+        if (!deleteSceneId) {
+          throw new Error("Scene ID required for deletion - Brain LLM must provide targetSceneId or user must have scene selected");
+        }
+
+        // Find scene data to pass to deleteScene tool
+        const sceneToDelete = input.storyboardSoFar?.find(s => s.id === deleteSceneId);
+        if (!sceneToDelete) {
+          throw new Error(`Scene with ID ${deleteSceneId} not found in storyboard`);
+        }
+
         return {
           ...baseInput,
-          sceneId: deleteSceneId || "scene-to-delete",
+          sceneId: deleteSceneId,
+          sceneName: sceneToDelete.name || "Untitled Scene",
+          projectId: input.projectId,
+          remainingScenes: (input.storyboardSoFar || [])
+            .filter(s => s.id !== deleteSceneId)
+            .map(s => ({ id: s.id, name: s.name || "Untitled Scene" }))
         };
         
-      case "askSpecify":
-        // 🚨 CRITICAL FIX: Use clarificationNeeded from top-level LLM response, not toolInput
-        const ambiguityTypeFromLLM = toolSelection.clarificationNeeded ||
-                                     (toolSelection.toolInput?.clarificationNeeded as string) || 
-                                     (toolSelection.toolInput?.ambiguityType as string) || 
-                                     "action-unclear";
-        
-        if (this.DEBUG) console.log(`[DEBUG] MAPPED AMBIGUITY TYPE: ${ambiguityTypeFromLLM} (from clarificationNeeded: ${toolSelection.clarificationNeeded})`);
-        
+      case "fixBrokenScene":
+        // fixBrokenScene requires scene ID and error information
+        const fixSceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
+        if (!fixSceneId) {
+          throw new Error("Scene ID required for fixing - Brain LLM must provide targetSceneId or user must have scene selected");
+        }
+
+        // Find the broken scene data
+        const brokenScene = input.storyboardSoFar?.find(s => s.id === fixSceneId);
+        if (!brokenScene) {
+          throw new Error(`Scene with ID ${fixSceneId} not found in storyboard`);
+        }
+
+        // Extract error message from user context if available
+        const errorMessage = input.userContext?.errorMessage as string || "Unknown error occurred";
+
         return {
-          userPrompt: input.prompt,
+          ...baseInput,
+          brokenCode: brokenScene.tsxCode || "",
+          errorMessage: errorMessage,
+          sceneId: fixSceneId,
+          sceneName: brokenScene.name || "Untitled Scene",
           projectId: input.projectId,
-          userId: input.userId,
-          ambiguityType: ambiguityTypeFromLLM,
-          availableScenes: (input.storyboardSoFar || []).map(scene => ({
-            id: scene.id,
-            name: scene.name || `Scene ${scene.order || '?'}`,
-            number: scene.order
-          })),
-          context: input.userContext || {},
-        };  
+        };
         
       default:
         return baseInput;
     }
   }
-
-  /**
-   * Generate enriched context for code generation
-   * Analyzes user intent and provides strategic guidance
-   */
-  // private async generateCodeGenerationContext(input: OrchestrationInput): Promise<{
-  //   userIntent: string;
-  //   technicalRecommendations: string[];
-  //   uiLibraryGuidance: string;
-  //   animationStrategy: string;
-  //   previousContext?: string;
-  //   focusAreas: string[];
-  // }> {
-  //   const contextPrompt = `You are an AI Brain analyzing user intent for video code generation.
-
-  // USER REQUEST: "${input.prompt}"
-
-  // EXISTING SCENES: ${input.storyboardSoFar?.length || 0} scenes already created
-
-  // Analyze the user's request and provide strategic guidance for code generation.
-
-  // RESPONSE FORMAT (JSON):
-  // {
-  //   "userIntent": "What the user really wants to achieve",
-  //   "technicalRecommendations": [
-  //     "Specific technical approaches to use",
-  //     "Recommended patterns or libraries"
-  //   ],
-  //   "uiLibraryGuidance": "Specific UI library recommendations (e.g., 'Use Flowbite Table component for data display')",
-  //   "animationStrategy": "Animation approach and timing strategy",
-  //   "focusAreas": [
-  //     "Key areas to focus on",
-  //     "Most important visual elements"
-  //   ],
-  //   "previousContext": "Context from existing scenes (if any)"
-  // }
-
-  // Provide specific, actionable guidance that will help generate better code.`;
-
-  //   try {
-  //     const response = await openai.chat.completions.create({
-  //       model: this.model,
-  //       messages: [
-  //         { role: "system", content: contextPrompt },
-  //         { role: "user", content: input.prompt }
-  //       ],
-  //       temperature: 0.3,
-  //       response_format: { type: "json_object" }
-  //     });
-
-  //     const content = response.choices[0]?.message?.content;
-  //     if (!content) {
-  //       throw new Error("No context response from Brain");
-  //     }
-
-  //     const parsed = JSON.parse(content);
-      
-  //     return {
-  //       userIntent: parsed.userIntent || "Generate video scene",
-  //       technicalRecommendations: parsed.technicalRecommendations || [],
-  //       uiLibraryGuidance: parsed.uiLibraryGuidance || "Use appropriate UI components",
-  //       animationStrategy: parsed.animationStrategy || "Smooth fade-in animations",
-  //       previousContext: parsed.previousContext,
-  //       focusAreas: parsed.focusAreas || ["Visual appeal", "Smooth animations"]
-  //     };
-  //   } catch (error) {
-  //     if (this.DEBUG) console.warn("[Brain] Failed to generate context, using fallback:", error);
-      
-  //     // Fallback context
-  //     return {
-  //       userIntent: "Generate video scene based on user request",
-  //       technicalRecommendations: ["Use modern React patterns", "Implement smooth animations"],
-  //       uiLibraryGuidance: "Use Flowbite components when appropriate for UI elements",
-  //       animationStrategy: "Use interpolate() for smooth transitions with proper timing",
-  //       focusAreas: ["Visual appeal", "User experience", "Smooth animations"]
-  //     };
-  //   }
-  // }
 
   private async handleError(error: any, input: OrchestrationInput): Promise<OrchestrationOutput> {
     if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
@@ -906,6 +1077,96 @@ Respond with valid JSON only.`;
       error: error instanceof Error ? error.message : "Unknown orchestration error",
       chatResponse: errorResponse,
     };
+  }
+
+  // 🎯 NEW: Scene Iteration Tracking for Data-Driven Improvement
+  private async logSceneIteration(input: {
+    sceneId: string;
+    projectId: string;
+    operationType: 'create' | 'edit' | 'delete';
+    editComplexity?: 'surgical' | 'creative' | 'structural';
+    userPrompt: string;
+    brainReasoning?: string;
+    toolReasoning?: string;
+    codeBefore?: string;
+    codeAfter?: string;
+    changesApplied?: string[];
+    changesPreserved?: string[];
+    generationTimeMs: number;
+    modelUsed: string;
+    temperature: number;
+    tokensUsed?: number;
+    sessionId?: string;
+  }) {
+    try {
+      await db.insert(sceneIterations).values({
+        sceneId: input.sceneId,
+        projectId: input.projectId,
+        operationType: input.operationType,
+        editComplexity: input.editComplexity,
+        userPrompt: input.userPrompt,
+        brainReasoning: input.brainReasoning,
+        toolReasoning: input.toolReasoning,
+        codeBefore: input.codeBefore,
+        codeAfter: input.codeAfter,
+        changesApplied: input.changesApplied,
+        changesPreserved: input.changesPreserved,
+        generationTimeMs: input.generationTimeMs,
+        modelUsed: input.modelUsed,
+        temperature: input.temperature,
+        tokensUsed: input.tokensUsed,
+        sessionId: input.sessionId,
+      });
+
+      if (this.DEBUG) {
+        console.log(`[SceneIterationTracker] 📊 Logged ${input.operationType} operation:`, {
+          sceneId: input.sceneId,
+          complexity: input.editComplexity,
+          timeMs: input.generationTimeMs,
+          model: input.modelUsed,
+          promptLength: input.userPrompt.length,
+        });
+      }
+    } catch (error) {
+      if (this.DEBUG) {
+        console.error('[SceneIterationTracker] ❌ Failed to log iteration:', error);
+      }
+      // Don't throw - tracking failure shouldn't break the main operation
+    }
+  }
+
+  // 🎯 NEW: Background job to detect re-editing patterns (user dissatisfaction)
+  private async markReEditedScenes(sceneId: string, projectId: string) {
+    try {
+      // Check if this scene was edited within the last 5 minutes
+      const recentEdits = await db
+        .select()
+        .from(sceneIterations)
+        .where(
+          sql`${sceneIterations.sceneId} = ${sceneId} 
+              AND ${sceneIterations.operationType} = 'edit' 
+              AND ${sceneIterations.createdAt} > NOW() - INTERVAL '5 minutes'`
+        );
+
+      if (recentEdits.length > 1) {
+        // Mark all but the most recent as "user edited again"
+        const editsToMark = recentEdits.slice(0, -1);
+        for (const edit of editsToMark) {
+          await db
+            .update(sceneIterations)
+            .set({ userEditedAgain: true })
+            .where(eq(sceneIterations.id, edit.id));
+        }
+
+        if (this.DEBUG) {
+          console.log(`[SceneIterationTracker] 📈 Marked ${editsToMark.length} iterations as re-edited (user dissatisfaction signal)`);
+        }
+      }
+    } catch (error) {
+      if (this.DEBUG) {
+        console.error('[SceneIterationTracker] ❌ Failed to mark re-edited scenes:', error);
+      }
+    }
   }
 }
 

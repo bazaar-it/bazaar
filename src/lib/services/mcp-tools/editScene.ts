@@ -17,6 +17,7 @@ const editSceneInputSchema = z.object({
     role: z.string(),
     content: z.string()
   })).optional().describe("Chat history for edit context"),
+  editComplexity: z.enum(["surgical", "creative", "structural"]).optional().describe("Edit complexity level from Brain LLM"),
 });
 
 type EditSceneInput = z.infer<typeof editSceneInputSchema>;
@@ -38,51 +39,42 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
   inputSchema = editSceneInputSchema;
   
   protected async execute(input: EditSceneInput): Promise<EditSceneOutput> {
-    const { userPrompt, existingCode, existingName, existingDuration, projectId, storyboardSoFar, chatHistory } = input;
+    const { userPrompt, existingCode, existingName, existingDuration, projectId, storyboardSoFar, chatHistory, editComplexity } = input;
+
+    // CONVERT: Technical name to user-friendly display name (available throughout function)
+    const displayName = existingName.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || existingName;
 
     try {
-      console.log(`[EditScene] Starting surgical edit for "${existingName}": ${userPrompt}`);
+      console.log(`[EditScene] Starting ${editComplexity || 'standard'} edit for "${displayName}": ${userPrompt}`);
       
       // Use DirectCodeEditor for surgical code modifications
       const result = await directCodeEditorService.editCode({
         userPrompt,
         existingCode,
         existingName,
-        chatHistory: chatHistory || []
+        chatHistory: chatHistory || [],
+        editComplexity: editComplexity || 'surgical' // Default to surgical if not specified
       });
 
-      // 🚨 CRITICAL FIX: Detect duration changes and calculate new duration
-      let newDuration = existingDuration; // Default to existing duration
+      // DURATION DETECTION: Use LLM reasoning from DirectCodeEditor instead of regex
+      let newDuration = existingDuration;
       
-      // Check if user is requesting a duration change
-      const durationChangeRegex = /(?:make it|last|duration|time|seconds?|minutes?)\s*(?:for|to be|of)?\s*(\d+(?:\.\d+)?)\s*(seconds?|second|sec|s|minutes?|minute|min|m)/i;
-      const durationMatch = userPrompt.match(durationChangeRegex);
-      
-      if (durationMatch && durationMatch[1] && durationMatch[2]) {
-        const value = parseFloat(durationMatch[1]);
-        const unit = durationMatch[2].toLowerCase();
+      // Check if DirectCodeEditor detected a duration change
+      if (result.newDurationFrames && typeof result.newDurationFrames === 'number') {
+        newDuration = result.newDurationFrames;
+        console.log(`[EditScene] Using DirectCodeEditor duration: ${result.newDurationFrames} frames (${(result.newDurationFrames / 30).toFixed(1)}s)`);
+      } else {
+        // Fallback: Check for relative duration changes (shorter/longer)
+        const shorterRegex = /(?:make it|make)\s*(?:much\s+)?(?:shorter|faster|quicker)/i;
+        const longerRegex = /(?:make it|make)\s*(?:much\s+)?(?:longer|slower)/i;
         
-        // Convert to frames (assuming 30 fps)
-        const fps = 30;
-        if (unit.startsWith('s')) { // seconds
-          newDuration = Math.round(value * fps);
-        } else if (unit.startsWith('m')) { // minutes
-          newDuration = Math.round(value * 60 * fps);
+        if (shorterRegex.test(userPrompt)) {
+          newDuration = Math.round(existingDuration * 0.6); // 40% shorter
+          console.log(`[EditScene] Making scene shorter: ${existingDuration} → ${newDuration} frames`);
+        } else if (longerRegex.test(userPrompt)) {
+          newDuration = Math.round(existingDuration * 1.5); // 50% longer
+          console.log(`[EditScene] Making scene longer: ${existingDuration} → ${newDuration} frames`);
         }
-        
-        console.log(`[EditScene] Detected duration change: ${value} ${unit} = ${newDuration} frames`);
-      }
-      
-      // Also check for relative duration changes
-      const shorterRegex = /(?:make it|make)\s*(?:much\s+)?(?:shorter|faster|quicker)/i;
-      const longerRegex = /(?:make it|make)\s*(?:much\s+)?(?:longer|slower)/i;
-      
-      if (shorterRegex.test(userPrompt)) {
-        newDuration = Math.round(existingDuration * 0.6); // 40% shorter
-        console.log(`[EditScene] Making scene shorter: ${existingDuration} → ${newDuration} frames`);
-      } else if (longerRegex.test(userPrompt)) {
-        newDuration = Math.round(existingDuration * 1.5); // 50% longer
-        console.log(`[EditScene] Making scene longer: ${existingDuration} → ${newDuration} frames`);
       }
 
       // Generate conversational response for user
@@ -90,13 +82,13 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         operation: 'editScene',
         userPrompt,
         result: {
-          sceneName: existingName,
+          sceneName: displayName,
           duration: newDuration,
           changes: result.changes,
           preserved: result.preserved
         },
         context: {
-          sceneName: existingName,
+          sceneName: displayName,
           sceneCount: storyboardSoFar?.length || 1,
           projectId
         }
@@ -110,7 +102,7 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
 
       return {
         sceneCode: result.code,
-        sceneName: existingName, // Keep original name
+        sceneName: displayName,
         duration: newDuration,
         reasoning: result.reasoning,
         changes: result.changes,
@@ -128,7 +120,7 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         userPrompt,
         result: { error: String(error) },
         context: {
-          sceneName: existingName,
+          sceneName: displayName,
           sceneCount: storyboardSoFar?.length || 1,
           projectId
         }
@@ -136,7 +128,7 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
 
       return {
         sceneCode: existingCode, // Return original code on error
-        sceneName: existingName,
+        sceneName: displayName,
         duration: existingDuration,
         reasoning: "Surgical edit failed - returned original code",
         changes: [],

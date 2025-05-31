@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -14,11 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { ShareDialog } from "~/components/ShareDialog";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
   let hash = 0;
-  for (let i = 0; i < string.length; i++) {
+  for (let i = 0; i <string.length; i++) {
     hash = string.charCodeAt(i) + ((hash << 5) - hash);
   }
   let color = '#';
@@ -51,6 +52,7 @@ interface AppHeaderProps {
   onRender?: () => void;
   isRendering?: boolean;
   user?: { name: string; email?: string };
+  projectId?: string;
 }
 
 export default function AppHeader({
@@ -60,9 +62,11 @@ export default function AppHeader({
   onRender,
   isRendering = false,
   user,
+  projectId,
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
+  const [showShareDialog, setShowShareDialog] = useState(false);
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
@@ -141,6 +145,19 @@ export default function AppHeader({
 
       {/* Right: User info & Export button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
+        {/* Share button */}
+        {projectId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 rounded-[15px] shadow-sm border-blue-200 text-blue-600 hover:bg-blue-50"
+            onClick={() => setShowShareDialog(true)}
+          >
+            <ShareIcon className="h-4 w-4" />
+            Share
+          </Button>
+        )}
+        
         {/* Export button temporarily disabled until export feature is ready */}
         {/*
         <Button
@@ -181,6 +198,16 @@ export default function AppHeader({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        
+        {/* Share Dialog */}
+        {projectId && (
+          <ShareDialog
+            projectId={projectId}
+            projectTitle={projectTitle}
+            open={showShareDialog}
+            onOpenChange={setShowShareDialog}
+          />
         )}
       </div>
     </header>

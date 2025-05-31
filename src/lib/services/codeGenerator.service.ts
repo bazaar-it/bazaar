@@ -3,7 +3,7 @@ import { openai } from "~/server/lib/openai";
 import { type SceneLayout } from "~/lib/schemas/sceneLayout";
 
 export interface CodeGeneratorInput {
-  layoutJson: SceneLayout;
+  layoutJson: any;  // ✅ No schema - Layout LLM freedom
   userPrompt: string; // For context
   functionName: string;
 }
@@ -28,7 +28,7 @@ export interface CodeGeneratorOutput {
 export class CodeGeneratorService {
   private readonly DEBUG = process.env.NODE_ENV === 'development';
   private readonly model = "gpt-4.1";
-  private readonly temperature = 0.5; // Low temperature for consistent code generation
+  private readonly temperature = 0.4;
 
   async generateCode(input: CodeGeneratorInput): Promise<CodeGeneratorOutput> {
     const prompt = this.buildCodePrompt(input);
@@ -37,6 +37,16 @@ export class CodeGeneratorService {
     this.DEBUG && console.log(`[CodeGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
     this.DEBUG && console.log(`[CodeGenerator] 🎨 Scene type: ${input.layoutJson.sceneType || 'unknown'}`);
     this.DEBUG && console.log(`[CodeGenerator] 📊 Elements count: ${input.layoutJson.elements?.length || 0}`);
+    
+    // ✅ NEW: Log the received JSON for debugging
+    if (this.DEBUG) {
+      console.log(`\n[CodeGenerator] 📥 RECEIVED LAYOUT JSON:`);
+      console.log('='.repeat(80));
+      console.log(JSON.stringify(input.layoutJson, null, 2));
+      console.log('='.repeat(80));
+      console.log(`[CodeGenerator] 📏 JSON size: ${JSON.stringify(input.layoutJson).length} characters`);
+      console.log(`[CodeGenerator] 🧠 Will combine this JSON with user prompt: "${input.userPrompt.substring(0, 50)}..."\n`);
+    }
     
     try {
       this.DEBUG && console.log(`[CodeGenerator] 🚀 Calling OpenAI LLM...`);
@@ -110,99 +120,27 @@ export class CodeGeneratorService {
   private buildCodePrompt(input: CodeGeneratorInput) {
     const { layoutJson, userPrompt, functionName } = input;
     
-    // 1. PERSONA + CREATIVE BRIEF AT THE TOP --------------------------------
-    const identity = `You are "RemotionMotionPro v1" – a senior motion-graphics designer with 10 years of After Effects and React-Remotion experience.
-Your mission: turn structured JSON layouts into **professional, visually striking** Remotion scenes that feel like premium motion graphics.
+    const system = `React/Remotion expert. Convert JSON guidance to high-quality code.
 
-🎨 CREATIVE BRIEF (Your Design Principles):
-• Hierarchy first – titles must dominate, CTAs must pop
-• Easing matters – every move eased or sprung, never linear
-• Contrast & harmony – text must pass WCAG AA on its background  
-• Motion rhythm – stagger elements by 0.1-0.3s for natural flow
-• Keep it lightweight – ≤ 3 spring configs, ≤ 2 simultaneous transforms
-• Professional polish – gradients, shadows, proper typography spacing`;
+🚨 CRITICAL RULES:
+- const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+- export default function ${functionName}()
+- NO imports, NO markdown
+- Quote ALL CSS values: fontSize: "4rem", fontWeight: "700"
+- Use extrapolateLeft: "clamp", extrapolateRight: "clamp"
+- Single transform per element (combine: translate(-50%, -50%) scale(1.2))
+- Use standard CSS, avoid WebKit-only properties
 
-    // 2. HARD TECHNICAL CONSTRAINTS (IMMUTABLE) --------------------------
-    const constraints = `🚨 TECHNICAL RULES (immutable):
-- MUST use: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-- Exactly one \`export default function ${functionName}()\`
-- No external imports, no markdown fences, no CSS imports
-- All numeric CSS values must include units or be quoted (fontSize: "4rem", fontWeight: "700")
-- Use frame-based timing: fps * 0.8, fps * 1.5, fps * 2.3, etc.
-- Proper extrapolation: { extrapolateLeft: "clamp", extrapolateRight: "clamp" }`;
+ANIMATION PATTERN:
+const opacity = interpolate(frame, [0, fps * 1], [0, 1], { 
+  extrapolateLeft: "clamp", extrapolateRight: "clamp" 
+});
 
-    // 3. FEW-SHOT EXAMPLE (Mini quality example) -------------------------
-    const fewShot = `### Example Quality Bar
-INPUT  { "sceneType": "hero", "elements": [{ "type": "title", "text": "Hello World", "fontSize": 72 }] }
-OUTPUT const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-
-export default function HeroSample() {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  // Professional timing with spring easing
-  const titleSpring = spring({ frame, fps, config: { damping: 12, stiffness: 100 } });
-  const titleOpacity = interpolate(frame, [0, fps * 0.8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  
-  return (
-    <AbsoluteFill style={{ 
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      display: "flex", alignItems: "center", justifyContent: "center"
-    }}>
-      <h1 style={{
-        fontSize: "4.5rem", fontWeight: "700", color: "white",
-        opacity: titleOpacity, transform: \`scale(\${titleSpring})\`,
-        textShadow: "0 4px 20px rgba(0,0,0,0.4)"
-      }}>
-        Hello World
-      </h1>
-    </AbsoluteFill>
-  );
-}`;
-
-    // 4. MOTION GRAPHICS VOCABULARY GLOSSARY -----------------------------
-    const glossary = `### Motion terms you know and use:
-• squash & stretch • overshoot • anticipation • parallax • follow-through
-• ease-out • ease-in-out • bounce • elastic • back-easing
-• stagger • cascade • reveal • morph • parallax scrolling`;
-
-    // 5. REFERENCE QUALITY SCENE (truncated WelcomeScene.tsx patterns) ---
-    const referencePatterns = `### Reference Quality Patterns (from premium scenes):
-// Multiple animation layers with staggered timing
-const titleStart = 0;
-const titleDuration = fps * 1.5; 
-const subtitleStart = fps * 0.8; // Stagger for rhythm
-const effectsStart = fps * 2;
-
-// Professional easing combinations
-const titleOpacity = interpolate(frame, [titleStart, titleStart + titleDuration], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-const titleScale = interpolate(frame, [titleStart, titleStart + titleDuration], [0.8, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-
-// Particle systems for richness
-{[...Array(12)].map((_, i) => {
-  const particleDelay = i * 0.2;
-  const particleOpacity = interpolate(frame, [fps * particleDelay, fps * (particleDelay + 2)], [0, 0.4]);
-  return <div key={i} style={{ opacity: particleOpacity, /* positioning */ }} />;
-})}
-
-// Text gradients for premium feel
-background: "linear-gradient(45deg, #ffffff, #a855f7, #3b82f6)",
-backgroundClip: "text",
-WebkitBackgroundClip: "text", 
-WebkitTextFillColor: "transparent"`;
-
-    // 6. ASSEMBLE THE SYSTEM PROMPT --------------------------------------
-    const system = [
-      identity,
-      constraints,
-      fewShot,
-      glossary,
-      referencePatterns,
-      `Now convert this JSON layout into premium motion graphics code:`
-    ].join('\n\n');
+User wants: "${userPrompt}"
+Build exactly what they requested using the JSON below.`;
 
     const user = JSON.stringify(layoutJson, null, 2);
-
+    
     return { system, user };
   }
 

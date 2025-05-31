@@ -141,6 +141,27 @@
       "when": 1748577701063,
       "tag": "0019_ambiguous_imperial_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1748711834739,
+      "tag": "0020_aberrant_zarek",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1748712377575,
+      "tag": "0021_military_black_widow",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1748716776355,
+      "tag": "0022_orange_alex_power",
+      "breakpoints": true
     }
   ]
 }

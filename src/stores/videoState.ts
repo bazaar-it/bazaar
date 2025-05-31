@@ -72,7 +72,7 @@ interface VideoState {
   // Chat management
   addUserMessage: (projectId: string, content: string) => void;
   addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
-  updateMessage: (projectId: string, messageId: string, updates: Partial<ChatMessage>) => void;
+  updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
   
   // Legacy methods (for backward compatibility)
   getChatHistory: () => ChatMessage[];
@@ -97,16 +97,6 @@ interface VideoState {
   getSelectedScene: (projectId: string) => InputProps['scenes'][number] | null;
 }
 
-// Default welcome message
-const getDefaultChatHistory = (): ChatMessage[] => [
-  {
-    id: "system-welcome",
-    message: "Welcome to your video editor! I can help you create beautiful animations with text, images, colors, and effects. Try saying:\n\n• \"Create a blue background with a bouncing red ball\"\n• \"Add a title that says 'My Amazing Video' with a fade-in animation\"\n• \"Create a split-screen with an image on the left and text on the right\"\n• \"Add a gradient background that transitions from purple to orange\"\n\nWhat would you like to create today?",
-    isUser: false,
-    timestamp: Date.now(),
-  }
-];
-
 export const useVideoState = create<VideoState>((set, get) => ({
   projects: {},
   currentProjectId: null,
@@ -122,14 +112,14 @@ export const useVideoState = create<VideoState>((set, get) => ({
 
   getProjectChatHistory: (projectId: string) => {
     const { projects } = get();
-    if (!projectId || !projects[projectId]) return getDefaultChatHistory();
-    return projects[projectId].chatHistory || getDefaultChatHistory();
+    if (!projectId || !projects[projectId]) return [];
+    return projects[projectId].chatHistory || [];
   },
 
   getChatHistory: () => {
     const { currentProjectId, projects } = get();
-    if (!currentProjectId || !projects[currentProjectId]) return getDefaultChatHistory();
-    return projects[currentProjectId].chatHistory || getDefaultChatHistory();
+    if (!currentProjectId || !projects[currentProjectId]) return [];
+    return projects[currentProjectId].chatHistory || [];
   },
 
   setProject: (projectId, initialProps) => 
@@ -150,7 +140,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
             // Always use the provided initialProps - don't preserve old props
             props: initialProps,
             // Clear chat history on project switch, otherwise preserve
-            chatHistory: isProjectSwitch ? (console.log('[videoState.setProject] Setting default chat history for new/switched project'), getDefaultChatHistory()) : (console.log('[videoState.setProject] Preserving existing chat history'), state.projects[projectId]?.chatHistory || getDefaultChatHistory()),
+            chatHistory: isProjectSwitch ? (console.log('[videoState.setProject] Setting default chat history for new/switched project'), []) : (console.log('[videoState.setProject] Preserving existing chat history'), state.projects[projectId]?.chatHistory || []),
             dbMessagesLoaded: isProjectSwitch ? false : (state.projects[projectId]?.dbMessagesLoaded ?? false),
             activeStreamingMessageId: isProjectSwitch ? null : state.projects[projectId]?.activeStreamingMessageId,
             // Always generate a new refresh token to ensure Player re-renders with new props
@@ -260,7 +250,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
           ...state.projects,
           [projectId]: {
             props: next,
-            chatHistory: getDefaultChatHistory(),
+            chatHistory: [],
             dbMessagesLoaded: false
           }
         }
@@ -553,12 +543,18 @@ export const useVideoState = create<VideoState>((set, get) => ({
       const updatedScenes = [...project.props.scenes];
       const existingScene = updatedScenes[sceneIndex];
       
+      // Use new duration if provided, otherwise preserve existing
+      const newDuration = updatedScene.duration || existingScene?.duration || 150;
+      const oldDuration = existingScene?.duration || 150;
+      const durationChange = newDuration - oldDuration;
+      
+      // Update the current scene
       updatedScenes[sceneIndex] = {
         ...existingScene,
         id: existingScene?.id || sceneId,
         type: existingScene?.type || 'custom',
         start: existingScene?.start || 0,
-        duration: existingScene?.duration || 150,
+        duration: newDuration, // Use new duration
         data: {
           ...existingScene?.data,
           code: updatedScene.tsxCode,
@@ -566,6 +562,23 @@ export const useVideoState = create<VideoState>((set, get) => ({
           props: updatedScene.props || {}
         }
       };
+      
+      // TIMELINE FIX: Recalculate start times for subsequent scenes
+      if (durationChange !== 0) {
+        for (let i = sceneIndex + 1; i < updatedScenes.length; i++) {
+          const currentScene = updatedScenes[i];
+          if (currentScene) {
+            updatedScenes[i] = {
+              ...currentScene,
+              start: currentScene.start + durationChange
+            };
+          }
+        }
+        console.log(`[VideoState] Scene ${sceneIndex + 1} duration changed by ${durationChange} frames, updated ${updatedScenes.length - sceneIndex - 1} subsequent scenes`);
+      }
+      
+      // TOTAL DURATION FIX: Recalculate total video duration
+      const totalDuration = updatedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
       
       return {
         ...state,
@@ -575,6 +588,10 @@ export const useVideoState = create<VideoState>((set, get) => ({
             ...project,
             props: {
               ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: totalDuration // Update total duration
+              },
               scenes: updatedScenes
             }
           }

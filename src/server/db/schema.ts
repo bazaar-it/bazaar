@@ -40,6 +40,7 @@ export const users = createTable("user", (d) => ({
 
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
+  sharedVideos: many(sharedVideos),
 }));
 
 export const accounts = createTable(
@@ -105,6 +106,7 @@ export const projectsRelations = relations(projects, ({ many }) => ({ // Added p
   patches: many(patches),
   messages: many(messages), // Add relation to messages
   scenes: many(scenes), // Add relation to scenes
+  sharedVideos: many(sharedVideos), // Add relation to sharedVideos
 }));
 
 // --- Patches table ---
@@ -190,6 +192,53 @@ export const scenes = createTable(
 
 export const scenesRelations = relations(scenes, ({ one }) => ({
   project: one(projects, { fields: [scenes.projectId], references: [projects.id] }),
+}));
+
+// ✅ NEW: Scene Iterations Tracking Table - Track every LLM operation for continuous improvement
+export const sceneIterations = createTable(
+  "scene_iteration",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    sceneId: d.uuid("scene_id").notNull().references(() => scenes.id, { onDelete: "cascade" }),
+    projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    
+    // LLM Decision Data
+    operationType: d.varchar("operation_type", { length: 50 }).notNull(), // 'create', 'edit', 'delete'
+    editComplexity: d.varchar("edit_complexity", { length: 20 }), // 'surgical', 'creative', 'structural'
+    userPrompt: d.text("user_prompt").notNull(),
+    brainReasoning: d.text("brain_reasoning"), // Brain LLM's tool selection reasoning
+    toolReasoning: d.text("tool_reasoning"), // Tool's execution reasoning
+    
+    // Code Changes
+    codeBefore: d.text("code_before"), // Previous TSX code (for edits)
+    codeAfter: d.text("code_after"), // New TSX code
+    changesApplied: d.jsonb("changes_applied"), // Structured list of changes
+    changesPreserved: d.jsonb("changes_preserved"), // What was kept the same
+    
+    // Performance Metrics
+    generationTimeMs: d.integer("generation_time_ms"),
+    modelUsed: d.varchar("model_used", { length: 50 }), // 'gpt-4.1', 'gpt-4.1-mini', etc.
+    temperature: d.real("temperature"),
+    tokensUsed: d.integer("tokens_used"),
+    
+    // User Satisfaction Indicators
+    userEditedAgain: d.boolean("user_edited_again").default(false), // Did user edit this scene again within 5 minutes?
+    userSatisfactionScore: d.integer("user_satisfaction_score"), // 1-5 rating (future feature)
+    sessionId: d.varchar("session_id", { length: 255 }), // Track user sessions
+    
+    createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("scene_iteration_scene_idx").on(t.sceneId),
+    index("scene_iteration_project_idx").on(t.projectId),
+    index("scene_iteration_operation_idx").on(t.operationType, t.editComplexity),
+    index("scene_iteration_satisfaction_idx").on(t.userEditedAgain, t.createdAt),
+  ],
+);
+
+export const sceneIterationsRelations = relations(sceneIterations, ({ one }) => ({
+  scene: one(scenes, { fields: [sceneIterations.sceneId], references: [scenes.id] }),
+  project: one(projects, { fields: [sceneIterations.projectId], references: [projects.id] }),
 }));
 
 // --- Scene Specs table ---
@@ -604,3 +653,36 @@ export type Scene = InferSelectModel<typeof scenes>;
 
 // Define and export TaskStatus type
 export type TaskStatus = "pending" | "building" | "success" | "error";
+
+// --- Shared Videos table ---
+// Stores shared videos for public video sharing
+export const sharedVideos = createTable(
+  "shared_video",
+  (d) => ({
+    id: d.varchar({ length: 255 }).notNull().primaryKey().$defaultFn(() => crypto.randomUUID()),
+    projectId: d.uuid().notNull().references(() => projects.id),
+    userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
+    title: d.varchar({ length: 255 }),
+    description: d.text(),
+    videoUrl: d.varchar({ length: 500 }), // R2 public URL
+    thumbnailUrl: d.varchar({ length: 500 }),
+    isPublic: d.boolean().default(true),
+    viewCount: d.integer().default(0),
+    createdAt: d
+      .timestamp({ withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    expiresAt: d.timestamp({ withTimezone: true }), // Optional expiration
+  }),
+);
+
+export const sharedVideosRelations = relations(sharedVideos, ({ one }) => ({
+  project: one(projects, {
+    fields: [sharedVideos.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [sharedVideos.userId],
+    references: [users.id],
+  }),
+}));

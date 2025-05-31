@@ -108,6 +108,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
           onRender={handleRender}
           isRendering={renderMutation.isPending}
           user={user}
+          projectId={projectId}
         />
       </div>
       

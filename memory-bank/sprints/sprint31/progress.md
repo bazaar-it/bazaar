@@ -945,3 +945,162 @@ return {
 - **Error Recovery**: Sophisticated rollback and error handling
 
 This fix should restore basic system functionality. The Brain Orchestrator was the critical bottleneck preventing any scene operations from working.
+
+# Sprint 31 Progress
+
+## 🎯 **Sprint Goals**
+1. **Improve Code Generation Quality** - Make LLM generate WelcomeScene-level animations
+2. **Branch Analysis & Stabilization** - Compare stable vs broken branches
+3. **Production Readiness** - Ensure reliable scene generation flow
+
+## ✅ **Completed Tasks**
+
+### **Code Generation Improvements**
+- [x] **Surgical refactor of generation services** (layoutGenerator, codeGenerator, sceneBuilder)
+- [x] **Removed Zod validation complexity** - simplified to lightweight sanity checks
+- [x] **Added DEBUG flag wrapping** - zero production logs
+- [x] **Implemented "RemotionMotionPro v1" persona** with 5-lever approach:
+  1. Strong identity sentence in system prompt
+  2. Creative brief bullet block (design principles)
+  3. Few-shot example structure ready
+  4. Glossary-style appendix with motion terms
+  5. Reference-quality scene preparation
+
+### **Critical Branch Analysis** 
+- [x] **Comprehensive comparison** of `feature/main3-ui-integration` (stable) vs `main3-ui-integration-almost` (broken)
+- [x] **Root cause identification** of failures in "almost" branch
+- [x] **Solution strategy documentation** with clear action plan
+
+## 🚨 **Critical Findings**
+
+### **Broken Branch Issues (`main3-ui-integration-almost`)**
+1. **Unwanted Assistant Messages**: Automatic database welcome messages on project creation
+2. **Scene Update Failures**: New scenes don't appear in video player due to state sync issues  
+3. **Over-Engineering**: 5+ competing state management layers vs 2 in stable branch
+4. **Complex Message Handling**: 600+ lines vs 350 lines in stable branch
+
+### **Stable Branch Strengths (`feature/main3-ui-integration`)**
+1. **Simple Architecture**: VideoState + tRPC only
+2. **Reliable Scene Generation**: Direct `api.generation.generateScene` mutation
+3. **Clean Welcome Handling**: UI-only, no database complications
+4. **Maintainable Code**: Clear, predictable flows
+
+## 📋 **Current Status**
+
+### **Working Branch**: ✅ `feature/main3-ui-integration` 
+- Scene generation works reliably
+- No unwanted assistant messages
+- Clean state management
+- Ready for production
+
+### **Code Generation Quality**: 🔄 In Progress
+- Enhanced prompts implemented
+- "RemotionMotionPro v1" persona active
+- Need to add WelcomeScene reference snippet
+- Need to test animation quality improvements
+
+## 🎯 **Next Actions (Priority Order)**
+
+### **Immediate (This Sprint)**
+1. **Apply WelcomeScene Reference Snippet**
+   - Convert WelcomeScene.tsx to ESM-compliant format
+   - Add as assistant message in code generation prompt
+   - Test animation quality improvements
+
+2. **Validate Code Generation Improvements**
+   - Test "RemotionMotionPro v1" prompt effectiveness
+   - Ensure animations match WelcomeScene quality
+   - Verify ESM compliance and reliability
+
+3. **Production Testing**
+   - Test full user flow: new project → scene generation → preview
+   - Validate no unwanted welcome messages
+   - Confirm scene updates appear in player
+
+### **Medium Term (Next Sprint)**
+4. **Selective Feature Migration**
+   - Cherry-pick ONLY working improvements from "almost" branch
+   - Avoid complex state management changes
+   - Focus on UI polish without architectural changes
+
+5. **Documentation & Guidelines**
+   - Document working architecture patterns
+   - Create development guidelines to prevent over-engineering
+   - Establish testing protocols for new features
+
+## 🔧 **Technical Implementation Notes**
+
+### **Code Generation Service Updates**
+- `layoutGenerator.service.ts`: Lightweight validation, DEBUG-wrapped logs
+- `codeGenerator.service.ts`: 4 essential checks only, no retry loops
+- `sceneBuilder.service.ts`: Unchanged, already optimal
+
+### **Branch Strategy**
+- **Production branch**: `feature/main3-ui-integration`
+- **Development**: Continue from stable branch
+- **Broken branch**: Archive for reference, do not merge
+
+## 📊 **Architecture Decision Record**
+
+### **State Management Pattern** ✅ APPROVED
+```
+User Input → tRPC Mutation → Database Update → VideoState Update → UI Refresh
+```
+
+### **Welcome Message Pattern** ✅ APPROVED  
+```
+New Project → UI-only welcome (no database) → First user message → Normal flow
+```
+
+### **Code Generation Pattern** ✅ APPROVED
+```
+User Prompt → layoutGenerator → codeGenerator → Validation → Database Storage
+```
+
+## 🚫 **Anti-Patterns Identified**
+1. **Multiple Message State Systems** - Use VideoState only
+2. **Complex Optimistic Updates** - Keep simple loading states
+3. **Database Welcome Messages** - UI-only welcome display
+4. **Streaming Message Complexity** - Direct request/response flow
+5. **Over-Engineered Validation** - Simple sanity checks sufficient
+
+## 📈 **Success Metrics**
+
+### **Reliability Metrics**
+- [ ] 100% scene generation success rate
+- [ ] 0 unwanted assistant messages
+- [ ] <2s average generation time
+- [ ] 0 state synchronization errors
+
+### **Quality Metrics**
+- [ ] WelcomeScene-level animation richness
+- [ ] Proper ESM compliance (100%)
+- [ ] Smooth, professional motion graphics
+- [ ] User prompt adherence
+
+## 🔄 **Risk Mitigation**
+
+### **Identified Risks**
+1. **Animation Quality**: May not reach WelcomeScene level yet
+2. **ESM Compliance**: Reference snippet must be properly formatted
+3. **Performance**: Enhanced prompts may increase latency
+
+### **Mitigation Strategies**
+1. **Incremental Testing**: Test each prompt improvement separately
+2. **Fallback Patterns**: Keep simple generation working while enhancing
+3. **Performance Monitoring**: Track generation times, optimize if needed
+
+---
+
+## 📝 **Documentation Created**
+- [x] `BRANCH-COMPARISON-ANALYSIS.md` - Comprehensive branch analysis
+- [x] Code generation service improvements documented
+- [x] Anti-patterns and working patterns identified
+
+## 🎉 **Key Achievements**
+1. **Identified root cause** of broken branch issues
+2. **Established working architecture pattern** for future development
+3. **Implemented surgical code generation improvements** without breaking changes
+4. **Created clear roadmap** for production readiness
+
+**Status**: ✅ **On Track** - Clear path to production-ready scene generation

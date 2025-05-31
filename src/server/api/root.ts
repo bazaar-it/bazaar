@@ -16,6 +16,8 @@ import { generationRouter } from "~/server/api/routers/generation";
 import { voiceRouter } from "~/server/api/routers/voice";
 import { feedbackRouter } from "~/server/api/routers/feedback";
 import { emailSubscriberRouter } from "~/server/api/routers/emailSubscriber";
+import { scenesRouter } from "~/server/api/routers/scenes";
+import { shareRouter } from "~/server/api/routers/share";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -43,6 +45,8 @@ export const appRouter = createTRPCRouter({
   voice: voiceRouter,
   feedback: feedbackRouter,
   emailSubscriber: emailSubscriberRouter,
+  scenes: scenesRouter,
+  share: shareRouter,
 });
 
 // export type definition of API

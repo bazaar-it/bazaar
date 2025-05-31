@@ -17,7 +17,12 @@ import {
   PlusIcon,
   ListIcon,
   FolderIcon,
-} from "~/components/ui/icons";
+  BrainIcon,
+  LayoutTemplateIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+} from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 
 type Project = {
   id: string;
@@ -40,12 +45,69 @@ interface WorkspacePanelG {
   href: string;
 }
 
+interface PanelOption {
+  type: PanelTypeG;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  badge?: string;
+  color: string;
+}
+
 // Workspace panels for BAZAAR-304: Chat, Preview, Code (Storyboard commented out)
 const navItems: WorkspacePanelG[] = [
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
-  // { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
+  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
+  { type: 'storyboard', id: 'storyboard', name: "Storyboard", icon: ListIcon, href: "#storyboard" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
+];
+
+const PANEL_OPTIONS: PanelOption[] = [
+  {
+    type: 'chat',
+    label: 'Chat',
+    description: 'Interactive chat for scene generation',
+    icon: <MessageSquareIcon className="h-5 w-5" />,
+    color: 'from-blue-500 to-blue-600',
+  },
+  {
+    type: 'chatai',
+    label: 'AI Chat',
+    description: 'Advanced AI conversation interface',
+    icon: <BrainIcon className="h-5 w-5" />,
+    badge: 'AI',
+    color: 'from-purple-500 to-purple-600',
+  },
+  {
+    type: 'preview',
+    label: 'Video Player',
+    description: 'Live preview of your video project',
+    icon: <PlayIcon className="h-5 w-5" />,
+    color: 'from-green-500 to-green-600',
+  },
+  {
+    type: 'storyboard',
+    label: 'Storyboard',
+    description: 'Visual timeline of your scenes',
+    icon: <ListIcon className="h-5 w-5" />,
+    color: 'from-orange-500 to-orange-600',
+  },
+  {
+    type: 'code',
+    label: 'Code Editor',
+    description: 'Direct code editing and debugging',
+    icon: <Code2Icon className="h-5 w-5" />,
+    color: 'from-gray-500 to-gray-600',
+  },
+  {
+    type: 'templates',
+    label: 'Templates',
+    description: 'Professional pre-made templates',
+    icon: <LayoutTemplateIcon className="h-5 w-5" />,
+    badge: 'NEW',
+    color: 'from-pink-500 to-pink-600',
+  },
 ];
 
 export function GenerateSidebar({ 
@@ -57,6 +119,7 @@ export function GenerateSidebar({
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(false); // Default to collapsed
   
   // Setup mutation for creating a new project (for collapsed button)
   const utils = api.useUtils();
@@ -265,33 +328,45 @@ export function GenerateSidebar({
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                 My Projects
               </span>
+              <button
+                className="ml-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-all duration-200"
+                onClick={() => setIsProjectsExpanded(!isProjectsExpanded)}
+              >
+                {isProjectsExpanded ? (
+                  <ChevronUpIcon className="h-4 w-4" />
+                ) : (
+                  <ChevronDownIcon className="h-4 w-4" />
+                )}
+              </button>
             </div>
             
             {/* Projects List */}
-            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-              {projects.slice(0, 8).map((project) => (
-                <Button
-                  key={project.id}
-                  variant="ghost"
-                  className={`h-8 w-full flex items-center justify-start rounded-lg text-xs transition-all duration-200 px-2
-                    ${project.id === currentProjectId 
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' 
-                      : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
-                  onClick={() => handleProjectClick(project.id)}
-                  title={project.name}
-                >
-                  <span className="truncate text-left">
-                    {project.name.length > 12 ? `${project.name.substring(0, 12)}...` : project.name}
-                  </span>
-                </Button>
-              ))}
-              {projects.length > 8 && (
-                <div className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
-                  +{projects.length - 8} more
-                </div>
-              )}
-            </div>
+            {isProjectsExpanded && (
+              <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                {projects.slice(0, 8).map((project) => (
+                  <Button
+                    key={project.id}
+                    variant="ghost"
+                    className={`h-8 w-full flex items-center justify-start rounded-lg text-xs transition-all duration-200 px-2
+                      ${project.id === currentProjectId 
+                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' 
+                        : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                      }`}
+                    onClick={() => handleProjectClick(project.id)}
+                    title={project.name}
+                  >
+                    <span className="truncate text-left">
+                      {project.name.length > 12 ? `${project.name.substring(0, 12)}...` : project.name}
+                    </span>
+                  </Button>
+                ))}
+                {projects.length > 8 && (
+                  <div className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
+                    +{projects.length - 8} more
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

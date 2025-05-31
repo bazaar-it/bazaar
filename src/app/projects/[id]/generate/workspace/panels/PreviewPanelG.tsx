@@ -253,28 +253,50 @@ export default function SingleSceneComposition() {
               }
             });
 
-            // Error boundary wrapper for each scene (even fallback scenes)
+            // ✅ FIXED: React Error Boundary wrapper for each scene (not just try-catch)
             const errorBoundaryWrapper = `
-function ${compiled.componentName}WithErrorBoundary() {
-  try {
-    return React.createElement(${compiled.componentName});
-  } catch (error) {
-    console.error('Scene ${index} runtime error:', error);
-    return React.createElement('div', {
-      style: {
-        padding: '20px',
-        backgroundColor: '#ffebee',
-        border: '2px dashed #f44336',
-        borderRadius: '8px',
-        textAlign: 'center',
-        color: '#d32f2f'
-      }
-    }, [
-      React.createElement('h3', {key: 'title'}, 'Scene ${index + 1} Runtime Error'),
-      React.createElement('p', {key: 'msg'}, 'This scene has a runtime issue but the video continues'),
-      React.createElement('small', {key: 'hint'}, 'Try editing the scene to fix it')
-    ]);
+// React Error Boundary for Scene ${index}
+class ${compiled.componentName}ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
   }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Scene ${index} error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return React.createElement('div', {
+        style: {
+          padding: '20px',
+          backgroundColor: '#ffebee',
+          border: '2px dashed #f44336',
+          borderRadius: '8px',
+          textAlign: 'center',
+          color: '#d32f2f',
+          margin: '10px'
+        }
+      }, [
+        React.createElement('h3', {key: 'title'}, '⚠️ Scene ${index + 1} Error'),
+        React.createElement('p', {key: 'msg'}, 'This scene crashed but the video continues'),
+        React.createElement('small', {key: 'hint'}, 'Error: ' + (this.state.error?.message || 'Unknown error')),
+        React.createElement('div', {key: 'tech', style: {fontSize: '10px', marginTop: '8px', color: '#999'}}, 
+          'Scene isolated - other scenes unaffected')
+      ]);
+    }
+
+    return React.createElement(${compiled.componentName});
+  }
+}
+
+function ${compiled.componentName}WithErrorBoundary() {
+  return React.createElement(${compiled.componentName}ErrorBoundary);
 }`;
             
             sceneImports.push(compiled.compiledCode);

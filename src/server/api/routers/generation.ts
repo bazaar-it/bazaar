@@ -2,9 +2,11 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { brainOrchestrator } from "~/server/services/brain/orchestrator";
+import { codeValidationService } from "~/server/services/codeValidation.service";
 import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
+import crypto from "crypto";
 
 export const generationRouter = createTRPCRouter({
   /**
@@ -100,23 +102,30 @@ export const generationRouter = createTRPCRouter({
           createdAt: new Date(),
         });
 
-        // Use Brain Orchestrator with MCP tools to process the request
+        // Process user message through brain orchestrator
         const result = await brainOrchestrator.processUserInput({
           prompt: userMessage,
           projectId,
           userId,
-          userContext: sceneId ? { sceneId } : {},
+          userContext: { sceneId },
           storyboardSoFar: storyboardForBrain,
-          chatHistory, // Add chat history for edit context
+          chatHistory: recentMessages.map(msg => ({ role: msg.role, content: msg.content })),
+          // onProgress: progressCallback, // TODO: Implement progress callback
         });
 
-        console.log(`[Generation] Brain orchestrator result:`, {
-          success: result.success,
-          toolUsed: result.toolUsed,
-          hasResponse: !!result.chatResponse
-        });
+        if (!result.success) {
+          // Store error message in chat
+          await db.insert(messages).values({
+            projectId,
+            content: result.error || "Sorry, I encountered an issue processing your request.",
+            role: "assistant",
+            createdAt: new Date(),
+          });
+          
+          throw new Error(result.error || "Scene generation failed");
+        }
 
-        // Store assistant response in chat if available
+        // Store assistant's response in chat
         if (result.chatResponse) {
           await db.insert(messages).values({
             projectId,
@@ -126,12 +135,12 @@ export const generationRouter = createTRPCRouter({
           });
         }
 
-        // Return the result for the frontend
         return {
-          success: result.success,
+          success: true,
           operation: result.toolUsed || 'unknown',
-          scene: result.result?.scene || null,
+          scene: result.result,
           chatResponse: result.chatResponse,
+          // editComplexity: result.editComplexity, // TODO: Add to OrchestrationOutput interface
           debug: result.debug,
         };
 
@@ -379,6 +388,100 @@ export const generationRouter = createTRPCRouter({
       } catch (error) {
         console.error("[sceneRollback] Error:", error);
         throw new Error(`Failed to rollback scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }),
+
+  /**
+   * DIRECT TEMPLATE ADDITION
+   * Add template directly to database without LLM processing
+   */
+  addTemplate: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      templateId: z.string(),
+      templateName: z.string(),
+      templateCode: z.string(),
+      templateDuration: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { projectId, templateId, templateName, templateCode, templateDuration } = input;
+      const userId = ctx.session.user.id;
+
+      console.log(`[Generation] Direct template addition:`, {
+        projectId,
+        templateId,
+        templateName,
+        templateDuration,
+        userId
+      });
+
+      try {
+        // Verify project ownership
+        const project = await db.query.projects.findFirst({
+          where: and(
+            eq(projects.id, projectId),
+            eq(projects.userId, userId)
+          ),
+        });
+
+        if (!project) {
+          throw new Error("Project not found or access denied");
+        }
+
+        // Get next order for the scene
+        const maxOrderResult = await db
+          .select({ maxOrder: sql<number>`COALESCE(MAX("order"), -1)` })
+          .from(scenes)
+          .where(eq(scenes.projectId, projectId));
+
+        const nextOrder = (maxOrderResult[0]?.maxOrder ?? -1) + 1;
+        
+        // Create scene name with template info
+        const sceneName = `${templateName} (Template)`;
+
+        // Insert template scene directly into database
+        const [newScene] = await db.insert(scenes)
+          .values({
+            projectId,
+            name: sceneName,
+            order: nextOrder,
+            tsxCode: templateCode,
+            duration: templateDuration,
+            layoutJson: JSON.stringify({
+              sceneType: "template",
+              templateId: templateId,
+              templateName: templateName
+            }),
+            props: {},
+          })
+          .returning();
+
+        if (!newScene) {
+          throw new Error("Failed to create template scene");
+        }
+
+        console.log(`[Generation] Template scene created successfully:`, {
+          sceneId: newScene.id,
+          name: newScene.name,
+          order: newScene.order,
+          duration: newScene.duration
+        });
+
+        return {
+          success: true,
+          message: `${templateName} added to your video!`,
+          scene: {
+            id: newScene.id,
+            name: newScene.name,
+            order: newScene.order,
+            duration: newScene.duration,
+            tsxCode: newScene.tsxCode
+          }
+        };
+
+      } catch (error) {
+        console.error(`[Generation] Template addition failed:`, error);
+        throw new Error(`Failed to add template: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
 }); 

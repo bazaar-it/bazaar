@@ -1,6 +1,5 @@
 // src/lib/services/layoutGenerator.service.ts
 import { openai } from "~/server/lib/openai";
-import { type SceneLayout } from "~/lib/schemas/sceneLayout";
 
 export interface LayoutGeneratorInput {
   userPrompt: string;
@@ -10,7 +9,7 @@ export interface LayoutGeneratorInput {
 }
 
 export interface LayoutGeneratorOutput {
-  layoutJson: SceneLayout;
+  layoutJson: any;  // ✅ No schema - accept any JSON structure
   reasoning: string;
   debug: {
     prompt?: { system: string; user: string };
@@ -77,11 +76,20 @@ export class LayoutGeneratorService {
         this.DEBUG && console.warn(`[LayoutGenerator] JSON parse failed, using fallback: ${jsonError instanceof Error ? jsonError.message : 'Unknown parse error'}`);
       }
       
-      const layoutJson = parsed as SceneLayout;
+      const layoutJson = parsed; // ✅ No schema casting - accept any JSON
       
       this.DEBUG && console.log(`[LayoutGenerator] ✅ Layout generation successful`);
       this.DEBUG && console.log(`[LayoutGenerator] 🎨 Scene type: ${layoutJson.sceneType || 'unknown'}`);
       this.DEBUG && console.log(`[LayoutGenerator] 📊 Elements count: ${layoutJson.elements?.length || 0}`);
+      
+      // ✅ NEW: Log the complete generated JSON for debugging
+      if (this.DEBUG) {
+        console.log(`\n[LayoutGenerator] 🔍 FULL GENERATED JSON:`);
+        console.log('='.repeat(80));
+        console.log(JSON.stringify(layoutJson, null, 2));
+        console.log('='.repeat(80));
+        console.log(`[LayoutGenerator] 📏 JSON size: ${JSON.stringify(layoutJson).length} characters\n`);
+      }
       
       return {
         layoutJson,
@@ -95,8 +103,8 @@ export class LayoutGeneratorService {
     } catch (error) {
       this.DEBUG && console.error("[LayoutGenerator] Error:", error);
       
-      // Fallback to simple layout
-      const fallbackLayout: SceneLayout = {
+      // Fallback to simple layout (no schema)
+      const fallbackLayout = {
         sceneType: "simple",
         background: "#1e1b4b",
         elements: [
@@ -134,47 +142,78 @@ export class LayoutGeneratorService {
   private buildLayoutPrompt(input: LayoutGeneratorInput) {
     const { userPrompt, previousSceneJson, isFirstScene } = input;
     
-    // USE EXACT @style-json-prompt.md content
-    const system = `You are a scene layout generator for animated UI videos. Your job is to convert a user's description of a visual scene (such as a hero section) into a structured JSON object that defines all the necessary elements for rendering that scene in a motion graphics video.
+    const system = `You are a motion graphics director who converts any user request into a complete JSON specification for professional-quality animations.
 
-You do not return code. You only return structured JSON. Your output is consumed by another AI model that transforms the JSON into animated React components using Remotion.
+Your job: Take whatever the user describes and create JSON that captures EVERY detail needed for stunning motion graphics.
 
-Each scene must contain these top-level keys:
-- \`sceneType\`: The type of scene (e.g., "hero", "feature", "pricing").
-- \`background\`: A hex, CSS color string, or gradient value.
-- \`elements\`: An array of objects describing every visual element in order (titles, subtitles, buttons, icons, images).
-- \`layout\`: An object describing layout and alignment preferences (e.g., flex direction, spacing).
-- \`animations\`: Defines animation styles for each element by ID (optional spring configs, delays, types).
+QUALITY STANDARD - Here's the level of detail expected:
 
-Each element inside \`elements\` must include:
-- \`type\`: e.g., "title", "subtitle", "button"
-- \`id\`: a unique string ID (e.g., "title1", "cta1")
-- \`text\`: The text content
-- \`fontSize\`: A pixel value (e.g., 72)
-- \`fontWeight\`: One of: 400, 500, 600, 700
-- \`color\`: A hex or named color
-- \`glow\`: Optional object defining glow effect: \`{ color, intensity, spread }\`
-- \`style\`: Any extra styles like padding, margin, textAlign
+EXAMPLE: User says "intro for my company"
+{
+  "sceneType": "company-intro",
+  "background": {
+    "type": "animated-gradient", 
+    "colors": ["#0f0f23", "#1a1a3a"],
+    "animation": {"type": "rotation", "duration": 180}
+  },
+  "elements": [
+    {
+      "id": "title",
+      "type": "gradient-text",
+      "content": {"text": "Welcome to [Company]"},
+      "visual": {"fontSize": 64, "fontWeight": "700", "gradient": ["#fff", "#a855f7"]},
+      "motion": {
+        "entrance": {"type": "fade-scale", "delay": 0, "duration": 45, "scale": [0.8, 1]}
+      }
+    },
+    {
+      "id": "particles", 
+      "type": "floating-particles",
+      "properties": {"count": 20, "size": 4, "behavior": "gentle-drift"},
+      "motion": {"staggerDelay": 6, "opacity": [0, 0.3]}
+    }
+  ],
+  "timing": {
+    "phases": [
+      {"name": "title-entrance", "start": 0, "duration": 45},
+      {"name": "ambient-motion", "start": 60, "duration": 120}
+    ]
+  }
+}
 
-Animations can include:
-- \`type\`: "spring", "fadeIn", "pulse", "interpolate"
-- \`delay\`: Number of frames to delay
-- \`duration\`: Number of frames
-- \`config\`: Optional spring config: \`{ damping, stiffness }\`
+MOTION GRAPHICS VOCABULARY:
+- Visual effects: gradient-text, floating-particles, glow-effects, animated-lines
+- Animation types: fade-scale, slide-in, typewriter, morph, bounce, pulse
+- Backgrounds: animated-gradient, particle-field, blur-overlay, pattern-animation
+- Timing: staggered, sequential, simultaneous, phase-based
 
-IMPORTANT: Always use string values for fontWeight (e.g., "700" not 700). Do not include image or icon elements.
+JSON STRUCTURE (completely flexible):
+{
+  "sceneType": "any description that fits user request",
+  "background": "any background system - color, gradient, particles, etc",
+  "elements": [
+    {
+      "id": "unique_id",
+      "type": "whatever element type fits the user's vision", 
+      "content": "any content - text, data, images, etc",
+      "visual": "all visual properties - fonts, colors, sizes, effects",
+      "motion": "complete animation specification - timing, easing, effects"
+    }
+  ],
+  "timing": "scene-level orchestration and flow"
+}
 
-Only return a JSON object. Do not explain anything.
+CRITICAL PRINCIPLES:
+1. CAPTURE the user's exact request - miss nothing they described
+2. ENRICH with motion graphics detail - professional timing, visual effects, polish
+3. BE SPECIFIC about all visual properties - exact values, not vague descriptions
+4. BE COMPLETE about motion - precise frame-based timing, smooth animations
+5. THINK MOTION GRAPHICS - particles, gradients, easing, layering, orchestration
 
-Your goal is to capture:
-- What components exist
-- How they look
-- How they move
-- In what order they appear`;
+Remember: Your JSON is the complete blueprint. Make it rich enough that the code generator can create professional-quality motion graphics.`;
 
-    // Simple context addition
-    const user = `"${userPrompt}"`;
-
+    const user = `Create a motion graphics scene: "${userPrompt}"`;
+    
     return { system, user };
   }
 }

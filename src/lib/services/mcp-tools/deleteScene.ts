@@ -30,6 +30,9 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
   protected async execute(input: DeleteSceneInput): Promise<DeleteSceneOutput> {
     const { sceneId, sceneName, projectId, remainingScenes } = input;
 
+    // ✅ CONVERT: Technical name to user-friendly display name
+    const displayName = sceneName.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || sceneName;
+
     try {
       // Note: Actual deletion logic would be handled by the orchestrator
       // This tool just provides the intent and conversational response
@@ -37,13 +40,13 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
       // Generate conversational response for user
       const chatResponse = await conversationalResponseService.generateContextualResponse({
         operation: 'deleteScene',
-        userPrompt: `Delete scene: ${sceneName}`,
+        userPrompt: `Delete scene: ${displayName}`, // ✅ FIXED: Use display name
         result: {
-          deletedScene: sceneName,
+          deletedScene: displayName, // ✅ FIXED: Use display name
           remainingCount: remainingScenes?.length || 0
         },
         context: {
-          sceneName,
+          sceneName: displayName, // ✅ FIXED: Use display name
           sceneCount: remainingScenes?.length || 0,
           availableScenes: remainingScenes || [],
           projectId
@@ -53,8 +56,8 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
       return {
         success: true,
         deletedSceneId: sceneId,
-        deletedSceneName: sceneName,
-        reasoning: `Scene "${sceneName}" marked for deletion`,
+        deletedSceneName: displayName, // ✅ FIXED: Return display name
+        reasoning: `Scene "${displayName}" marked for deletion`, // ✅ FIXED: Use display name
         chatResponse // NEW: Include conversational response
       };
     } catch (error) {
@@ -63,10 +66,10 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
       // Generate error response for user
       const errorResponse = await conversationalResponseService.generateContextualResponse({
         operation: 'deleteScene',
-        userPrompt: `Delete scene: ${sceneName}`,
+        userPrompt: `Delete scene: ${displayName}`, // ✅ FIXED: Use display name
         result: { error: String(error) },
         context: {
-          sceneName,
+          sceneName: displayName, // ✅ FIXED: Use display name
           sceneCount: remainingScenes?.length || 0,
           projectId
         }
@@ -75,7 +78,7 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
       return {
         success: false,
         deletedSceneId: sceneId,
-        deletedSceneName: sceneName,
+        deletedSceneName: displayName, // ✅ FIXED: Return display name
         reasoning: "Failed to delete scene",
         chatResponse: errorResponse
       };

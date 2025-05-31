@@ -1,7 +1,6 @@
 // src/lib/services/sceneBuilder.service.ts
 import { layoutGeneratorService } from "./layoutGenerator.service";
 import { codeGeneratorService } from "./codeGenerator.service";
-import { type SceneLayout } from "~/lib/schemas/sceneLayout";
 
 /**
  * SceneBuilder service - Simple orchestrator for the two-step pipeline
@@ -25,18 +24,23 @@ export class SceneBuilderService {
     name: string;
     duration: number;
     reasoning: string;
-    layoutJson: SceneLayout;
+    layoutJson: any;  // ✅ No schema - accept any JSON
     debug: any;
   }> {
     const startTime = Date.now();
     const sceneNumber = input.sceneNumber || 1;
-    // ✅ FIXED: Use cryptographically secure UUID instead of weak Date.now() + Math.random()
+    
+    // ✅ TECHNICAL: Unique function name for React compilation
     const uniqueId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
     const uniqueFunctionName = `Scene${sceneNumber}_${uniqueId}`;
+    
+    // ✅ USER-FRIENDLY: Simple display name for users
+    const displayName = `Scene ${sceneNumber}`;
     
     if (this.DEBUG) console.log(`[SceneBuilder] 🚀 Two-step pipeline starting`);
     if (this.DEBUG) console.log(`[SceneBuilder] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
     if (this.DEBUG) console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
+    if (this.DEBUG) console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
     if (this.DEBUG) console.log(`[SceneBuilder] 📊 Scene number: ${sceneNumber}`);
     if (this.DEBUG) console.log(`[SceneBuilder] 🎨 Has previous scene: ${input.previousSceneJson ? 'YES' : 'NO'}`);
     
@@ -52,6 +56,14 @@ export class SceneBuilderService {
       
       if (this.DEBUG) console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);
       
+      // ✅ NEW: Log the JSON handoff between steps
+      if (this.DEBUG) {
+        console.log(`\n[SceneBuilder] 🔄 PIPELINE HANDOFF:`);
+        console.log(`[SceneBuilder] ✅ Layout Generator produced: ${layoutResult.layoutJson.sceneType || 'unknown'} scene`);
+        console.log(`[SceneBuilder] ⚡ Passing ${JSON.stringify(layoutResult.layoutJson).length} char JSON to Code Generator`);
+        console.log(`[SceneBuilder] 🎯 Target function: ${uniqueFunctionName}\n`);
+      }
+      
       // STEP 2: Generate React/Remotion code from JSON
       if (this.DEBUG) console.log(`[SceneBuilder] 🎬 STEP 2: CodeGenerator for ${layoutResult.layoutJson.sceneType} scene`);
       const codeResult = await codeGeneratorService.generateCode({
@@ -64,14 +76,26 @@ export class SceneBuilderService {
       if (this.DEBUG) console.log(`[SceneBuilder] ✅ Two-step pipeline completed successfully in ${generationTime}ms`);
       if (this.DEBUG) console.log(`[SceneBuilder] 📊 Final result: ${codeResult.code.length} chars of code generated`);
       
+      // ✅ NEW: Log the complete pipeline result
+      if (this.DEBUG) {
+        console.log(`\n[SceneBuilder] 🎉 PIPELINE COMPLETE:`);
+        console.log(`[SceneBuilder] ⏱️  Total time: ${generationTime}ms`);
+        console.log(`[SceneBuilder] 📝 Generated code: ${codeResult.code.length} characters`);
+        console.log(`[SceneBuilder] 🎬 Scene duration: ${codeResult.duration} frames`);
+        console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
+        console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
+        console.log(`[SceneBuilder] 🎨 Scene type: ${layoutResult.layoutJson.sceneType || 'unknown'}\n`);
+      }
+      
       return {
         code: codeResult.code,
-        name: codeResult.name,
+        name: displayName,
         duration: codeResult.duration,
         reasoning: `${layoutResult.reasoning} → ${codeResult.reasoning}`,
         layoutJson: layoutResult.layoutJson,
         debug: {
           generationTime,
+          functionName: uniqueFunctionName,
           layoutStep: layoutResult.debug,
           codeStep: codeResult.debug,
         }
@@ -80,8 +104,8 @@ export class SceneBuilderService {
     } catch (error) {
       if (this.DEBUG) console.error("[SceneBuilder] Pipeline error:", error);
       
-      // Complete fallback
-      const fallbackLayout: SceneLayout = {
+      // Complete fallback (no schema)
+      const fallbackLayout = {
         sceneType: "simple",
         background: "#1e1b4b",
         elements: [
@@ -132,11 +156,14 @@ export default function ${uniqueFunctionName}() {
 
       return {
         code: fallbackCode,
-        name: "Error Scene",
+        name: displayName,
         duration: 90,
         reasoning: "Complete fallback due to two-step pipeline error",
         layoutJson: fallbackLayout,
-        debug: { error: String(error) }
+        debug: { 
+          error: String(error),
+          functionName: uniqueFunctionName
+        }
       };
     }
   }
