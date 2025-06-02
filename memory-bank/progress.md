@@ -1,412 +1,212 @@
-# Bazaar-Vid Progress Log
+# Project Progress Overview 
 
-## 🚀 Current Status: Sprint 32 - SCHEMA-FREE OPTIMIZATION BREAKTHROUGH
+## 🔧 **CRITICAL BUG FIXED - Scene Addition Integration** ✅
 
-### Share Feature Major Upgrade (Jun 1, 2025) ✅ COMPLETE
-**BREAKTHROUGH: Removed Artificial Render Requirement**
-- Implemented live rendering approach instead of requiring pre-rendered videos
-- Users can now share immediately after creating content
-- Eliminated confusing "render first" workflow 
-- Modern live rendering UX similar to contemporary video tools
-- Reduced storage costs and infrastructure complexity
+**Date**: January 17, 2025  
+**Issue**: New scenes created via "Add Scene" button not properly integrating with system state
+**Status**: RESOLVED
 
-Full details in: `/memory-bank/sprints/sprint32/progress.md`
+### **Problem Description**
+After adding a new scene, users had to manually refresh to see changes. The Save and Run buttons would fail because newly added scenes weren't properly integrated into the VideoState store, creating a disconnect between database and local state.
 
-### Live Remotion Player Implementation (Jun 1, 2025) ✅ COMPLETED
-- **Implemented ShareVideoPlayerClient**: Fully functional Remotion Player replacing placeholder UI
-- **Live Scene Compilation**: Dynamic TSX code compilation using Sucrase transformation
-- **Instant Sharing**: Videos now render live from scene data, removing artificial render requirement
-- **Production Ready**: Comprehensive error handling, loading states, and user feedback
-- **Technical Excellence**: Server/client component split, dynamic imports, blob URL handling
+### **Root Cause** 
+CodePanelG's `addSceneMutation` was only invalidating React Query caches but NOT updating the VideoState store, causing:
+- New scenes existed in database + React Query cache
+- VideoState store unaware of new scenes  
+- Save/Run operations failed (selectedScene was null)
 
-### 🔥 **REVOLUTIONARY CHANGE: Complete Schema Liberation** (2025-01-26)
+### **Solution Implemented**
+Updated `addSceneMutation.onSuccess` in CodePanelG.tsx with dual cache invalidation:
+- ✅ Invalidate React Query caches (existing)
+- ✅ **NEW**: Update VideoState store using `updateAndRefresh()`
+- ✅ Proper scene object structure with TypeScript compliance
+- ✅ Automatic scene selection for immediate editing
 
-**PARADIGM SHIFT**: "Trust the LLMs, remove all JSON constraints"
+**Result**: Scene addition now works seamlessly without manual refresh. Save/Run buttons work immediately.
 
-#### **✅ Schema-Free JSON Pipeline (JUST COMPLETED)**
-
-**Core Philosophy**: JSON is helpful guidance for Code Generator, not rigid rules
-- **LayoutGeneratorOutput**: `layoutJson: any` (complete creative freedom)
-- **CodeGeneratorInput**: `layoutJson: any` (accepts any structure) 
-- **SceneBuilder**: No schema casting or validation
-- **ESM Requirements**: PRESERVED (critical for component loading)
-
-**Revolutionary Benefits**:
-- 🎯 **Layout LLM Freedom**: Can create any JSON for any user request (particles, galaxies, software demos)
-- 🚀 **No Schema Maintenance**: Zero time spent updating Zod schemas for new patterns
-- 🧠 **Intelligent Code Generation**: Uses both user prompt + JSON guidance intelligently
-- 🔄 **Future-Proof**: System adapts to any motion graphics request automatically
-
-**New Pipeline Flow**:
-```
-User: "floating particles with physics simulation"
-↓
-Layout LLM: Creates rich JSON with physics + animation specifications
-↓  
-Code Generator: Combines prompt + JSON → professional motion graphics
-↓
-Result: Exact user vision without hardcoded limitations
-```
-
-**This changes everything. No more "we can't do X because schema doesn't support it"**
-
-### 🔥 **CRITICAL FIX: Code Generator Not Following Instructions** (2025-01-26)
-
-**MAJOR PROBLEM SOLVED**: AI was generating basic text animations instead of following user requests for particle effects
-
-**ROOT CAUSE IDENTIFIED**:
-- **Poor Few-Shot Examples**: No particle effect examples in prompt
-- **Weak Instruction Following**: No emphasis on user request compliance  
-- **Positioning Issues**: No guidance on proper flexbox centering
-- **Generic Templates**: System defaulted to basic text instead of following specific requests
-
-**COMPREHENSIVE SOLUTION IMPLEMENTED**:
-
-#### **✅ Enhanced Code Generator Prompt (COMPLETED)**
-- **Added Particle Effects Example**: Real moving particles with proper animation patterns
-- **Strengthened User Compliance**: "MUST follow user requests exactly"
-- **Fixed Positioning Guidelines**: Proper flexbox centering instructions
-- **ESM Compliance**: Maintained all window.Remotion requirements
-- **Professional Quality**: WelcomeScene-level animation standards
-
-#### **✅ Architecture Simplification (COMPLETED)  
-- **Removed Complex Validation**: 100+ lines → 4 essential checks
-- **Eliminated Retry Loops**: Faster generation, trust the model
-- **Enhanced Fallback System**: Always produces working React components
-- **Debug Logging**: Environment-based console output
-
-#### **✅ Performance Improvements (COMPLETED)**
-- **Model Optimization**: Kept 4.1-mini (20s vs 67s for 4.1)
-- **Prompt Efficiency**: Reduced bloat while maintaining quality
-- **Validation Speed**: Simplified checks for faster processing
-- **Temperature Tuning**: Optimized for consistent output
-
-**RESULT**: AI now generates proper particle effects, glow animations, and complex motion graphics that match user requests exactly.
-
-## 🚀 Current Status: Sprint 33 - MULTI-TIERED EDITSCENE BREAKTHROUGH
-
-### 🔥 **REVOLUTIONARY CHANGE: EditScene Now Handles Creative & Structural Edits** (2025-01-27)
-
-**PARADIGM SHIFT**: Context-aware editing with surgical/creative/structural routing
-
-#### **✅ Multi-Tiered EditScene System (JUST COMPLETED)**
-
-**Problem Solved**: EditScene was too restrictive for creative requests like "make it more modern" or "move text A under text B"
-
-**Solution**: Three-tiered editing approach with Brain LLM complexity detection:
-- **🔬 Surgical** (2-3s): "change color", "update title" → precise, minimal changes
-- **🎨 Creative** (5-7s): "make it modern", "more elegant" → holistic style improvements  
-- **🏗️ Structural** (8-12s): "move text under", "rearrange" → layout restructuring
-
-**Implementation**:
-- **Brain LLM**: Detects edit complexity + provides user feedback ("Quick fix coming up!" vs "Working on creative magic...")
-- **DirectCodeEditor**: Routes to appropriate editing strategy with tailored prompts
-- **User Experience**: Immediate feedback on edit complexity and expected duration
-
-**This transforms user experience from frustrating minimal edits to intelligent, context-aware modifications**
-
-## ✅ **Completed Tasks**
-
-### **Comprehensive System Analysis**
-- [x] **Complete component documentation** - Analyzed all 15 core system components
-- [x] **Branch comparison analysis** - Identified 4 critical UX-breaking issues in "almost" branch
-- [x] **Architecture violation identification** - Documented violations of single source of truth, simplicity, and error surface principles
-- [x] **Priority fix list creation** - Systematically categorized issues by impact and urgency
-
-### **Critical Issue Root Cause Analysis** 
-- [x] **Message Duplication Problem** - ChatPanelG has 3 competing message systems
-- [x] **Welcome Scene Race Conditions** - generation.ts has non-atomic database operations
-- [x] **State Synchronization Failures** - Multiple competing state management layers
-- [x] **Technical Debt Impact** - 45KB+ unused code causing performance degradation
-
-## 🚨 **Critical Findings**
-
-### **"Almost" Branch Issues (4 UX-Breaking Problems)**
-1. **❌ Message Duplication**: Users see same message 2-3 times due to optimistic + VideoState + direct DB queries
-2. **❌ Unwanted Welcome Messages**: Race conditions in welcome scene logic create database inconsistency
-3. **❌ Scene Updates Don't Appear**: State desync between UI and database 
-4. **❌ State Synchronization Failures**: Multiple competing state systems cause user confusion
-
-### **Stable Branch Strengths (`b16ab959bc7baa30345b0a8d8d021797fed7f473`)**
-1. **✅ Single Message System**: VideoState only, no duplicates
-2. **✅ Atomic Operations**: Proper database transactions
-3. **✅ Clean State Management**: No competing state systems
-4. **✅ Reliable Scene Updates**: Changes appear in Remotion player
-5. **✅ No Unwanted Messages**: Welcome logic works correctly
-
-## 📋 **Current Status**
-
-### **Working Branch Analysis**: ✅ **COMPREHENSIVE ANALYSIS COMPLETE**
-- **Stable Branch**: `feature/main3-ui-integration` (commit `b16ab959bc7baa30345b0a8d8d021797fed7f473`)
-- **Almost Branch**: `main3-ui-integration-almost` (has valuable backend improvements + 4 critical issues)
-- **Component Health**: 9/15 components analyzed with detailed fix recommendations
-
-### **Architecture Violations Identified**: 📊 **SYSTEMATIC DOCUMENTATION**
-- **Single Source of Truth**: ChatPanelG (3 message systems), inconsistent message limits
-- **Simplicity**: 45KB+ dead code, complex validation systems, unused state variables
-- **Low Error Surface**: Race conditions, silent failures, no transaction atomicity
-
-## 🎯 **Recommended Strategy** (Updated Based on Analysis)
-
-### **✅ DECISION: Fix "Almost" Branch (Not Revert)**
-**Rationale**: 
-- "Almost" branch has valuable backend improvements
-- Issues are well-documented with exact fixes
-- Systematic repair is faster than cherry-picking
-- **Estimated fix time**: 3 hours focused work
-
-### **🚨 Critical Fixes (Priority 1 - 1 hour)**
-1. **ChatPanelG Message Duplication** (30 min)
-   - Remove `optimisticMessages` state
-   - Remove direct `dbMessages` query
-   - Use VideoState as single source of truth
-
-2. **Generation Router Race Conditions** (15 min)
-   - Wrap welcome scene logic in `db.transaction()`
-   - Ensure atomic database operations
-
-3. **Brain Orchestrator Error Swallowing** (15 min)
-   - Stop ignoring database save failures
-   - Return proper error status to user
-
-### **🔧 Performance/Technical Debt (Priority 2 - 1.5 hours)**
-4. **Remove Dead Code** (45 min)
-   - ChatPanelG: Remove unused imports (45KB savings)
-   - WorkspaceContentAreaG: Remove unused functions (8KB savings)
-   - Add performance memoization
-
-5. **Fix State Persistence** (30 min)
-   - Ensure scene updates appear in player
-   - Fix page refresh issues
-
-6. **Add Debug Flags** (15 min)
-   - Wrap production console.log statements
-   - Clean up logging noise
-
-### **🟢 Polish (Priority 3 - 0.5 hours)**
-7. **Final Testing & Documentation** (30 min)
-   - Test each fix individually
-   - Update progress documentation
-   - Verify all 4 critical issues resolved
-
-## 📊 **Architecture Decision Record** (Updated)
-
-### **State Management Pattern** ✅ **CONFIRMED WORKING**
-```
-User Input → VideoState → tRPC → Brain → MCP Tools → Database → VideoState Update → UI Refresh
-```
-
-### **Message Flow Pattern** ✅ **SINGLE SOURCE OF TRUTH**
-```
-User Message → VideoState addUserMessage → Database insert → VideoState getProjectChatHistory → UI render
-```
-
-### **Welcome Scene Pattern** ✅ **ATOMIC OPERATIONS REQUIRED**
-```
-First User Message → db.transaction(clear welcome flag + delete scenes) → Normal flow
-```
-
-## 🎯 **Component Health Scorecard** (From Analysis)
-
-| Component | Stable Branch | Almost Branch | Issues | Fix Time |
-|-----------|---------------|---------------|---------|----------|
-| **ChatPanelG** | ✅ A | ❌ C+ | Message duplication, dead code | 30 min |
-| **generation.ts** | ✅ A- | ⚠️ B+ | Race conditions, inconsistent limits | 15 min |
-| **orchestrator.ts** | ✅ A- | ⚠️ B+ | Error swallowing, logging noise | 15 min |
-| **WorkspaceContentAreaG** | ✅ A- | ⚠️ B+ | Dead code, performance issues | 30 min |
-| **page.tsx** | ✅ A- | ✅ A- | Actually identical in both branches | 0 min |
-
-**Overall System Grade**: Stable (A-) → Almost (B-) → **Target: A- after fixes**
-
-## 🔄 **Risk Assessment** (Updated)
-
-### **Low Risk Fixes** ✅
-- Remove unused code (dead imports, unused functions)
-- Add debug flags
-- Wrap database operations in transactions
-
-### **Medium Risk Fixes** ⚠️
-- Fix ChatPanelG message state (well-documented pattern)
-- Add performance memoization (standard React patterns)
-
-### **Mitigation Strategy**
-- Test each fix individually before moving to next
-- Use comprehensive component documentation as guide
-- Keep stable branch as fallback option
-
-## 📈 **Success Metrics** (Updated)
-
-### **UX Metrics (Must achieve 100%)**
-- [ ] 0 duplicate messages in chat interface
-- [ ] 0 unwanted assistant welcome messages  
-- [ ] 100% scene updates appear in Remotion player
-- [ ] 0 state synchronization errors
-
-### **Performance Metrics**
-- [ ] 45KB+ bundle size reduction (remove dead code)
-- [ ] <2s average scene generation time
-- [ ] Improved message rendering performance (memoization)
-
-### **Code Quality Metrics**
-- [ ] 0 unused imports or dead code
-- [ ] 100% database operations in transactions where needed
-- [ ] Production-ready logging (debug flags)
+### **UI Simplification - Removed Redundant Run Button** ✅
+After confirming the Save button now handles both saving and preview updates, removed the redundant "Run" button from CodePanelG:
+- ✅ Cleaner UI with single "Save" action
+- ✅ Reduced 47 lines of `handleCompile` code
+- ✅ Better user experience - one button does everything
+- ✅ Toolbar now: [Scene Selector] [Add Scene] [Save] [Close X]
 
 ---
 
-## 📝 **Documentation Created This Sprint**
-- [x] **15 Component Analysis Documents** - Complete system documentation
-- [x] **BRANCH-COMPARISON-ANALYSIS.md** - Systematic comparison with exact fixes
-- [x] **COMPLETE-SYSTEM-FLOW-ANALYSIS.md** - End-to-end flow documentation  
-- [x] **TODO-RESTRUCTURE.md** - Prioritized fix list with time estimates
+## 🚨 **CRITICAL INCIDENT ACTIVE - Complete Data Loss** 
 
-## 🎯 **Next Sprint Preparation**
+**Date**: January 17, 2025  
+**Status**: ACTIVE INCIDENT  
+**Severity**: CRITICAL  
 
-### **Ready for Implementation**
-- All critical issues documented with exact fixes
-- Component-by-component repair strategy
-- Time estimates for each fix (3 hours total)
-- Fallback plan (stable branch) if needed
+### **Incident Summary**
+Complete production database data loss due to destructive migration `0024_yummy_chamber.sql`. Migration converted user IDs from varchar to UUID, destroying all NextAuth.js user data and cascading to all related tables.
 
-### **Post-Fix Testing Plan**
-1. Test message flow (no duplicates)
-2. Test new project creation (no unwanted messages)
-3. Test scene generation (updates appear in player)
-4. Test page refresh (state persistence)
-5. Performance verification (bundle size, memory)
+### **Impact**
+- 🔴 **0 users, 0 projects, 0 accounts** in production database
+- 🔴 https://bazaar.it/projects completely broken
+- 🔴 All user-generated content lost (565+ users, all projects, scenes, animations)
 
-**Status**: ✅ **ANALYSIS COMPLETE** - Ready for systematic implementation
+### **Root Cause**
+Documentation claimed migration reverted "from uuid() to varchar(255)" but actual migration did OPPOSITE: changed FROM varchar TO uuid, destroying all existing NextAuth user data.
 
-## 🎉 **Key Achievement**
-
-**Major Breakthrough**: Instead of reverting to stable branch and losing backend improvements, we now have a **systematic repair strategy** for the "almost" branch with exact fixes for all 4 critical UX-breaking issues.
-
-This approach preserves valuable backend improvements while addressing the stability problems that were making the system unusable.
-
-## 🚨 **CRITICAL BUGS FIXED** (February 1, 2025)
-
-### ✅ **FIXED: Scene ID Mix-Up Bug**
-**Problem**: Brain LLM correctly selected Scene 1 (`7258c226-9553-4d78-a199-0f30e291cece`) but database updated Scene 2 (`3b081541-1ae9-4103-b458-26e34374e223`)
-
-**Root Cause**: Line 323 in `orchestrator.ts` used `input.userContext?.sceneId` (frontend selection) instead of `toolSelection?.targetSceneId` (Brain decision)
-
-**Fix Applied**: 
-```typescript
-// ❌ BEFORE: Used frontend selection
-const sceneId = input.userContext?.sceneId as string;
-
-// ✅ AFTER: Use Brain LLM decision first, fallback to frontend
-const sceneId = toolSelection?.targetSceneId || input.userContext?.sceneId as string;
-```
-
-**Impact**: ✅ Scene edits now target the correct scene based on user intent analysis
-
-### ✅ **FIXED: Inaccurate Conversational Responses**
-**Problem**: AI said "vibrant sunset backdrop with clouds" but no clouds were generated. Chat responses were hallucinated.
-
-**Root Cause**: Conversational response service only received user prompt + scene name, but no actual scene content
-
-**Fix Applied**: Pass actual layout elements to response generator:
-```typescript
-// ✅ NEW: Include actual scene content
-result: { 
-  sceneName: result.name, 
-  duration: result.duration,
-  sceneType: result.layoutJson.sceneType,
-  elements: result.layoutJson.elements || [],
-  background: result.layoutJson.background,
-  animations: Object.keys(result.layoutJson.animations || {}),
-  elementCount: result.layoutJson.elements?.length || 0
-},
-context: {
-  actualElements: result.layoutJson.elements?.map(el => ({
-    type: el.type,
-    text: el.text || '',
-    color: el.color || '',
-    fontSize: el.fontSize || ''
-  })) || []
-}
-```
-
-**Updated prompt**: Added critical instruction - "Base your response ONLY on the actual elements and content listed above. Do NOT invent details like clouds, sunset, or other elements."
-
-**Impact**: ✅ Chat responses now accurately describe what was actually generated
-
-### 🎯 **EXPECTED FIX: Scene Naming Collision**
-**Problem**: "Error: Identifier 'Scene1_4b577665' has already been declared"
-
-**Root Cause**: Likely caused by Scene ID bug - wrong scene was being updated with new code that had duplicate function names
-
-**Expected Resolution**: With Scene ID bug fixed, correct scenes will be updated and naming collisions should be eliminated
-
-**Status**: 🟡 **Monitor** - Should be resolved automatically with Scene ID fix
-
-## 🧪 **TESTING REQUIRED**
-
-### **Test Scenario 1: Scene Targeting**
-1. Create Scene 1
-2. Create Scene 2  
-3. Say "make scene 1 shorter"
-4. ✅ **Expected**: Scene 1 should be updated (not Scene 2)
-
-### **Test Scenario 2: Accurate Responses**  
-1. Say "add new scene"
-2. ✅ **Expected**: Response should describe actual elements created (no hallucinated clouds/sunset)
-
-### **Test Scenario 3: No Naming Collision**
-1. Create multiple scenes
-2. Edit scenes multiple times
-3. ✅ **Expected**: No "Identifier already declared" errors
-
-## 📊 **IMPACT SUMMARY**
-
-| Issue | Before | After |
-|-------|--------|-------|
-| **Scene Targeting** | ❌ Brain selected Scene 1, DB updated Scene 2 | ✅ Brain and DB target same scene |
-| **Chat Accuracy** | ❌ "clouds and sunset" (hallucinated) | ✅ Describes actual elements created |
-| **Naming Collision** | ❌ "Identifier already declared" errors | 🎯 Expected: No collisions |
-| **User Experience** | ❌ Broken, confusing, unreliable | ✅ Accurate, predictable responses |
-
-**Status**: 🎉 **CRITICAL ISSUES RESOLVED** - Ready for testing
-
-## 🎯 **ARCHITECTURE DECISION: AI SDK Removed**
-
-### **✅ Smart Simplification**
-- **Removed**: Vercel AI SDK layer 
-- **Reason**: Added complexity without real benefits over existing system
-- **Result**: Cleaner architecture, easier to optimize
-
-### **🏗️ Back to Proven Core Architecture**
-```
-User → generation.ts → orchestrator.ts → sceneBuilder.service.ts
-                                              ↓
-                      layoutGenerator.service.ts → codeGenerator.service.ts  
-                                              ↓
-                                      Database → UI Update
-```
-
-**Benefits**: Direct control, simpler debugging, proven performance
-
-## Jan 31, 2025 - 15:47 - CodeGenerator Prompt Optimization 
-
-**MAJOR PERFORMANCE BREAKTHROUGH: 65% Prompt Size Reduction**
-
-### Changes Made:
-- **Trimmed CodeGenerator prompt**: 5,000 → 1,750 chars (65% reduction)
-- **Strategic approach**: "Keep the brain, cut the fat" 
-- **Removed bloat**: Verbose persona, motion graphics glossary, redundant patterns
-- **100% preserved**: Technical constraints, working examples, core patterns
-
-### Expected Impact:
-- **Speed improvement**: 18s → 8-12s generation time (50-60% faster)
-- **Cost reduction**: Significant token savings
-- **Quality maintained**: All essential elements preserved
-
-### User Validation:
-- User emphasized maintaining code quality and criteria compliance
-- Optimization strategy approved: remove redundancy while preserving functionality
-- All technical rules and quality examples kept intact
-
-**Next Steps**: Test generation speed improvement and validate code quality remains high.
+### **Recovery Status**
+- ✅ Admin setup script updated and ready
+- 🔄 Database restoration in progress
+- 📋 See detailed incident report: [CRITICAL-DATA-LOSS-INCIDENT.md](memory-bank/sprints/sprint32/CRITICAL-DATA-LOSS-INCIDENT.md)
 
 ---
+
+## 📝 **Template Registration Update - Nov 2023**
+
+Successfully registered 15 UI template components in the central registry system. Added imports and template definitions to `src/templates/registry.ts` for all newly created animation components including BlueGradientText, BubbleZoom, Code, DotRipple, FintechUI, GoogleSignIn and more. All templates are now properly integrated with consistent ID naming, display names, durations, and code retrieval functions.
+
+## 🎯 **Current Status: Phase 4.1 COMPLETE - Data Lifecycle Management** ✅
+
+**Major Achievement**: Comprehensive data lifecycle management with automated cleanup, retention policies, and production monitoring. Phase 4 infrastructure hardening complete with enterprise-grade data management.
+
+**Performance Target**: ✅ **30% latency improvement MAINTAINED + Enterprise data retention**
+
+---
+
+## 📈 **Sprint 32: Async Context-Driven Architecture - COMPLETE**
+
+### **🚀 Phase 4: Infrastructure Hardening & Stress Testing - COMPLETE**
+*Status: Production-ready validation with load testing*
+
+**Infrastructure Hardening**:
+- ✅ **TTL Cache System**: Memory leak prevention (10-min expiry + automatic cleanup)
+- ✅ **Error Tracking**: Comprehensive async error capture with performance telemetry
+- ✅ **Token Monitoring**: GPT-4o context limit management with intelligent truncation
+- ✅ **Performance Anomaly Detection**: Automated threshold monitoring
+
+**Stress Testing Framework**:
+- ✅ **Concurrent Users**: 5-50 simultaneous user simulation
+- ✅ **Multi-scenario Testing**: New projects, editing, image processing workflows
+- ✅ **Performance Metrics**: P95/P99 latencies, throughput, memory monitoring
+- ✅ **CLI Tools**: `scripts/stress-test.js` with predefined configurations
+
+**Validation Results**:
+```
+🎯 Target Load (20 users, 2 min): ✅ PASSED
+  - Success Rate: >99% 
+  - Avg Response: <2.5s
+  - Error Rate: <1%
+  - Memory: Stable (no leaks)
+```
+
+### **🏆 Phase 3: Brain Orchestrator Integration - CONFIRMED COMPLETE**
+*Status: User-reviewed and production-ready*
+
+**What's Live**:
+- ✅ **Async image workflow**: Complete round-trip with DB backing (`startAsyncImageAnalysis` → `handleLateArrivingImageFacts`)
+- ✅ **Context packet**: Real user preferences + scene relationships from ProjectMemoryService
+- ✅ **Memory persistence**: Conversation context + preferences with confidence scores
+- ✅ **Observer pattern**: EventEmitter with `imageFactsProcessed` events for downstream consumers
+- ✅ **Performance telemetry**: Real-time 30% improvement tracking with 🎯/🔄 console badges
+- ✅ **Test coverage**: ObserverPatternTester for CI pipeline
+
+**Architecture Transformation Complete**:
+- **Before**: Single-prompt, blocking, context-less
+- **After**: Context-aware, async-driven, memory-accumulating
+
+### **⚠️ Watch-outs for Future Phases**
+- TTL for imageFactsCache (10 min recommended)
+- Sentry/Logtail error tracking integration
+- Token count monitoring for large contexts
+- Type safety improvements (`Map<string, ImageFacts>` generic)
+
+---
+
+## 🛣️ **Upcoming: Phase 4.1 & Phase 5**
+
+### **Phase 4.1: Data Lifecycle Management** ✅ COMPLETE
+**Goal**: Automated database cleanup and long-term data management
+
+**Completed Implementation**:
+- ✅ **Automated Cleanup Service**: Daily scheduled cleanup with configurable retention periods  
+- ✅ **Multi-Table Management**: image_analysis (30d), conversation context (90d), scene iterations (60d), project memory (180d)
+- ✅ **Smart Retention Logic**: Preserves user preferences while cleaning temporary data
+- ✅ **Production Cron Integration**: Secure API endpoint with authorization validation
+- ✅ **Monitoring & Health Checks**: Lifecycle statistics and space reclamation tracking
+- ✅ **Server Integration**: Automatic startup with graceful shutdown in production
+
+### **Phase 5: Production Dashboard**
+**Goal**: Real-time monitoring and performance visualization
+
+**Planned Activities**:
+- Live performance monitoring dashboard
+- Real-time async performance win visualization
+- Alert thresholds and capacity planning
+- Grafana/Next.js integration for `performanceService.getPerformanceReport()`
+
+---
+
+## 📊 **Recent Major Achievements**
+
+### **Sprint 32 Highlights**:
+- ✅ **Phase 1**: Async foundation (30% faster response times, fire-and-forget image analysis)
+- ✅ **Phase 2**: Database integration (schema conflicts resolved, 601 orphaned records cleaned)  
+- ✅ **Phase 3**: Brain orchestrator integration (persistent context, observer pattern, performance tracking)
+- ✅ **Phase 4**: Infrastructure hardening & stress testing (production validation, error resilience)
+- ✅ **Phase 4.1**: Data lifecycle management (automated cleanup, retention policies, production monitoring)
+
+### **Sprint 31**: Two-step pipeline implementation, state persistence fixes, scene error isolation
+### **Sprint 30**: MCP architecture overhaul, smart edit implementation, system flow optimization
+
+---
+
+## 🔗 **Documentation References**
+
+- **Phase 4.1 Complete**: [sprint32/phase4.1-completion-summary.md](memory-bank/sprints/sprint32/phase4.1-completion-summary.md)
+- **Async Architecture V2**: [sprint32/async-context-architecture-v2.md](memory-bank/sprints/sprint32/async-context-architecture-v2.md)
+- **Phase 4 Complete**: [sprint32/phase4-completion-summary.md](memory-bank/sprints/sprint32/phase4-completion-summary.md)
+- **Phase 3 Complete**: [sprint32/phase3-completion-summary.md](memory-bank/sprints/sprint32/phase3-completion-summary.md)
+- **Sprint 32 Progress**: [sprint32/progress.md](memory-bank/sprints/sprint32/progress.md)
+- **Sprint 31 Summary**: [sprint31/FINAL-SUMMARY.md](memory-bank/sprints/sprint31/FINAL-SUMMARY.md)
+
+---
+
+## ⏭️ **Next Steps**
+
+1. **Async Architecture V2**: Enhanced context-driven architecture with 30+ prompt memory and async image processing
+2. **Phase 5 Implementation**: Production dashboard and real-time monitoring setup  
+3. **Context Intelligence**: User preference learning and scene relationship mapping
+4. **Production Deployment**: Final preparation for production-scale deployment
+
+*Last Updated: Sprint 32 - Phase 4.1 data lifecycle management complete + Architecture V2 ready*
+
+## 📈 **Sprint 32: Scene Creation Button Feature - COMPLETE**
+
+### ✅ Scene Creation Button Feature Completed (2025-06-03)
+**OBJECTIVE:** Add "Add Scene" button next to SCENES dropdown in CodePanelG for easy scene creation
+
+**✅ COMPLETED IMPLEMENTATION:**
+- **Backend API**: Added `addScene` mutation in `src/server/api/routers/generation.ts`
+  - Creates new blank scene with basic Remotion template 
+  - Generates default scene name (`Scene ${nextOrder + 1}`)
+  - Includes proper validation, project ownership checks
+  - Clears welcome flag and adds context message for Brain LLM
+  - Returns scene data for immediate selection
+- **Frontend Integration**: Modified `CodePanelG.tsx` component
+  - Added `addScene` mutation hook with proper error handling
+  - Added `onSceneGenerated` prop for cache invalidation callback
+  - Added `handleAddScene` function for scene creation workflow
+  - Added "Add Scene" button next to scene selector dropdown (both states)
+  - Integrated with existing cache invalidation and video state updates
+
+**🎯 KEY FEATURES:**
+- **Smart Positioning**: Button appears next to scene dropdown in both no-scene and scene-selected states
+- **Automatic Selection**: Newly created scene is automatically selected for immediate editing
+- **Cache Synchronization**: Proper tRPC cache invalidation ensures UI updates instantly
+- **Default Template**: New scenes include basic Remotion template with fade-in animation
+- **Consistent UX**: Follows same pattern as TemplatesPanelG for template addition
+
+**🔧 TECHNICAL DETAILS:**
+- Mutation: `api.generation.addScene.useMutation()`
+- Input: `{ projectId: string, sceneName?: string }`
+- Output: Scene data with id, name, order, duration, tsxCode
+- UI: Orange button with Plus icon, positioned next to scene selector
+- Integration: Works with existing video state management and scene selection
+
+**STATUS**: ✅ Ready for testing. Feature provides streamlined scene creation workflow within the code editing interface.

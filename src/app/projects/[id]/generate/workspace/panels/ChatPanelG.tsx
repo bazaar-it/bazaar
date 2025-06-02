@@ -6,10 +6,10 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon } from 'lucide-react';
-
 import { useVoiceToText } from '~/hooks/useVoiceToText';
 import { Card, CardContent } from "~/components/ui/card";
+import { nanoid } from 'nanoid';
+import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon, ImageIcon } from 'lucide-react';
 
 interface Scene {
   id: string;
@@ -56,6 +56,7 @@ interface ComponentMessage {
   timestamp: Date;
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
   kind?: "text" | "error" | "status" | "tool_result";
+  imageUrls?: string[];
 }
 
 interface ChatPanelGProps {
@@ -76,13 +77,18 @@ export default function ChatPanelG({
   const [generationComplete, setGenerationComplete] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
-  const [activeAssistantMessageId, setActiveAssistantMessageId] = useState<string | null>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [progressStage, setProgressStage] = useState<string | null>(null);
   const [editComplexityFeedback, setEditComplexityFeedback] = useState<string | null>(null);
+  
+  // 🚨 NEW: State for image uploads
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Voice-to-text functionality (SIMPLIFIED: single voice system)
   const {
@@ -95,7 +101,7 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, forceRefresh } = useVideoState();
+  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -103,14 +109,6 @@ export default function ChatPanelG({
   const selectedScene = selectedSceneId ? scenes.find(s => s.id === selectedSceneId) : null;
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
-  const { 
-    getProjectChatHistory, 
-    addUserMessage, 
-    addAssistantMessage, 
-    updateMessage,
-  } = useVideoState();
-
-  // ✅ SINGLE SOURCE: Get messages from VideoState only
   const messages = getProjectChatHistory(projectId);
   
   // Convert VideoState messages to component format for rendering
@@ -121,6 +119,7 @@ export default function ChatPanelG({
     timestamp: new Date(msg.timestamp),
     status: msg.status,
     kind: msg.kind,
+    imageUrls: msg.imageUrls,
   }));
 
   // ✅ FIXED: Use the correct tRPC endpoint
@@ -136,15 +135,11 @@ export default function ChatPanelG({
     }
   }, []);
   
-  // Get chat history and messages management
-  const { 
-    addUserMessage: videoStateAddUserMessage, 
-    addAssistantMessage: videoStateAddAssistantMessage, 
-    updateMessage: videoStateUpdateMessage,
-  } = useVideoState();
-
   // 🚨 CRITICAL FIX: Use getProjectScenes instead of getById to get actual scene data
   const { data: scenesData, refetch: refetchScenes } = api.generation.getProjectScenes.useQuery({ projectId: projectId });
+  
+  // 🚨 NEW: Get tRPC utils for cache invalidation
+  const utils = api.useUtils();
   
   // Helper function to convert database scenes to InputProps format (same as page.tsx)
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -290,8 +285,8 @@ export default function ChatPanelG({
         setProgressStage(editComplexityFeedback);
         
         // Update the assistant message with complexity feedback
-        if (activeAssistantMessageId) {
-          videoStateUpdateMessage(projectId, activeAssistantMessageId, {
+        if (activeAssistantMessageIdRef.current) {
+          updateMessage(projectId, activeAssistantMessageIdRef.current, {
             content: editComplexityFeedback,
             status: 'building'
           });
@@ -302,8 +297,8 @@ export default function ChatPanelG({
           const firstMessage = progressMessages[0];
           if (firstMessage) {
             setProgressStage(firstMessage);
-            if (activeAssistantMessageId) {
-              videoStateUpdateMessage(projectId, activeAssistantMessageId, {
+            if (activeAssistantMessageIdRef.current) {
+              updateMessage(projectId, activeAssistantMessageIdRef.current, {
                 content: firstMessage,
                 status: 'building'
               });
@@ -326,8 +321,8 @@ export default function ChatPanelG({
           setProgressStage(currentMessage);
           
           // Update the assistant message with current progress
-          if (activeAssistantMessageId) {
-            videoStateUpdateMessage(projectId, activeAssistantMessageId, {
+          if (activeAssistantMessageIdRef.current) {
+            updateMessage(projectId, activeAssistantMessageIdRef.current, {
               content: currentMessage,
               status: 'building'
             });
@@ -341,7 +336,7 @@ export default function ChatPanelG({
         setEditComplexityFeedback(null);
       };
     }
-  }, [isGenerating, activeAssistantMessageId, projectId, videoStateUpdateMessage, editComplexityFeedback]);
+  }, [isGenerating, projectId, updateMessage, editComplexityFeedback]);
 
   // 🎯 NEW: Listen for edit complexity from Brain LLM (would come from mutation result)
   const handleEditComplexityDetected = (complexity: string) => {
@@ -356,55 +351,105 @@ export default function ChatPanelG({
 
     const trimmedMessage = message.trim();
     
+    // 🚨 NEW: Build user context with image URLs if available
+    const userContext: Record<string, unknown> = {};
+    if (selectedSceneId) {
+      userContext.sceneId = selectedSceneId;
+    }
+    if (uploadedImages.length > 0) {
+      const imageUrls = uploadedImages
+        .filter(img => img.status === 'uploaded' && img.url)
+        .map(img => img.url!);
+      userContext.imageUrls = imageUrls;
+      console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
+    }
+    
     // ✅ SIMPLE: Add user message to VideoState
-    videoStateAddUserMessage(projectId, trimmedMessage);
+    addUserMessage(projectId, trimmedMessage, uploadedImages.length > 0 ? uploadedImages.filter(img => img.status === 'uploaded' && img.url).map(img => img.url!) : undefined);
     
     // ✅ SIMPLE: Add assistant loading message with progress simulation
     const assistantMessageId = `assistant-${Date.now()}`;
-    setActiveAssistantMessageId(assistantMessageId);
-    videoStateAddAssistantMessage(projectId, assistantMessageId, '🧠 Analyzing your request...');
+    activeAssistantMessageIdRef.current = assistantMessageId;
+    addAssistantMessage(projectId, assistantMessageId, "🧠 Starting scene generation...");
+    
+    // 🚨 NEW: Start progress tracking with realistic steps
+    const progressSteps = uploadedImages.length > 0 
+      ? [
+          "🖼️ Analyzing uploaded images...",
+          "🎨 Extracting visual style and colors...", 
+          "📐 Planning scene layout...",
+          "⚡ Generating React/Remotion code...",
+          "🎬 Compiling and saving scene..."
+        ]
+      : [
+          "🧠 Understanding your request...",
+          "📐 Planning scene layout...", 
+          "⚡ Generating React/Remotion code...",
+          "🎬 Compiling and saving scene..."
+        ];
+    
+    let currentStep = 0;
+    const progressInterval = setInterval(() => {
+      if (currentStep < progressSteps.length - 1) {
+        currentStep++;
+        updateMessage(projectId, assistantMessageId, {
+          content: progressSteps[currentStep],
+          status: 'building'
+        });
+      }
+    }, 3000); // Update every 3 seconds
     
     setMessage("");
+    // 🚨 NEW: Clear uploaded images after submission (as per user feedback)
+    setUploadedImages([]);
     setIsGenerating(true);
 
     try {
-      setIsGenerating(true);
-
+      console.log('[ChatPanelG] 🚀 Starting scene generation via generateSceneMutation...');
+      
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: trimmedMessage,
         sceneId: selectedSceneId || undefined, // Convert null to undefined for type compatibility
+        userContext: Object.keys(userContext).length > 0 ? userContext : undefined, // 🚨 NEW: Include user context with images
       });
 
-      // 🎯 NEW: Check for edit complexity feedback in result
-      // TODO: Implement editComplexity in mutation result when Brain LLM actually returns this data
-      // For now, we use honest progress messages instead of fake complexity feedback
+      console.log('[ChatPanelG] ✅ Generation completed:', result);
       
-      // if (result.editComplexity) {
-      //   handleEditComplexityDetected(result.editComplexity);
-      // }
-
+      // 🚨 NEW: Clear progress interval once generation completes
+      clearInterval(progressInterval);
+      
       // 🚨 CRITICAL FIX: Update VideoState with latest scene data after successful operation
       if (result.success) {
         console.log('[ChatPanelG] 🔄 Scene operation successful, refreshing VideoState...');
         
+        // ✅ STEP 1: Update assistant message with success status
+        updateMessage(projectId, assistantMessageId, {
+          content: result.chatResponse || 'Scene generated successfully! ✅',
+          status: 'success'
+        });
+        
         try {
-          // Fetch the latest project data to get updated scenes
+          // ✅ STEP 2: Invalidate tRPC cache FIRST to ensure fresh data
+          console.log('[ChatPanelG] ♻️ Invalidating tRPC cache...');
+          await utils.generation.getProjectScenes.invalidate({ projectId });
+          
+          // ✅ STEP 3: Fetch fresh data from database
+          console.log('[ChatPanelG] 🔄 Fetching fresh scenes from database...');
           const updatedScenes = await refetchScenes();
           
           if (updatedScenes.data && updatedScenes.data.length > 0) {
             console.log('[ChatPanelG] ✅ Fetched updated scenes from database:', updatedScenes.data.length);
             
-            // Convert database scenes to InputProps format
+            // ✅ STEP 4: Convert database scenes to InputProps format
             const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
             console.log('[ChatPanelG] ✅ Converted scenes to InputProps format');
             
-            // Update VideoState with fresh data from database
-            replace(projectId, updatedProps);
+            // ✅ STEP 5: Use updateAndRefresh for guaranteed UI updates
+            console.log('[ChatPanelG] 🚀 Using updateAndRefresh for guaranteed state sync...');
+            updateAndRefresh(projectId, () => updatedProps);
             
-            // Force preview panel to re-render with new data
-            forceRefresh(projectId);
-            console.log('[ChatPanelG] 🎬 VideoState updated, preview should show changes');
+            console.log('[ChatPanelG] 🎬 VideoState updated with updateAndRefresh, all panels should refresh');
           } else {
             console.warn('[ChatPanelG] ⚠️ No scenes data returned from database query');
           }
@@ -412,6 +457,13 @@ export default function ChatPanelG({
           console.error('[ChatPanelG] ❌ Failed to refresh scene data:', refreshError);
           // Don't throw - the scene operation succeeded, just state sync failed
         }
+      } else {
+        // ✅ Handle failed operations
+        console.error('[ChatPanelG] ❌ Scene operation failed:', result);
+        updateMessage(projectId, assistantMessageId, {
+          content: `Error: Scene generation failed`,
+          status: 'error'
+        });
       }
 
       // Handle callbacks
@@ -420,30 +472,25 @@ export default function ChatPanelG({
       }
 
     } catch (error) {
-      console.error("Error in chat generation:", error);
+      // 🚨 NEW: Clear progress interval on error
+      clearInterval(progressInterval);
       
-      // ✅ FIXED: Use correct interface for updateMessage
-      videoStateUpdateMessage(projectId, assistantMessageId, {
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
+      console.error('[ChatPanelG] ❌ Scene generation failed:', error);
+      
+      // Update message with error status
+      updateMessage(projectId, assistantMessageId, {
+        content: `❌ Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         status: 'error'
       });
+    } finally {
+      setIsGenerating(false);
+      activeAssistantMessageIdRef.current = null;
+      setGenerationComplete(true);
+      
+      // 🚨 NEW: Final cleanup - ensure interval is cleared
+      clearInterval(progressInterval);
     }
-
-    setIsGenerating(false);
-    setActiveAssistantMessageId(null);
   };
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      const textarea = textareaRef.current;
-      // Reset height to auto to get the correct scrollHeight
-      textarea.style.height = 'auto';
-      // Calculate new height (min 40px, max 10 lines ~200px)
-      const newHeight = Math.min(Math.max(textarea.scrollHeight, 40), 200);
-      textarea.style.height = `${newHeight}px`;
-    }
-  }, [message]);
 
   // Handle keyboard events for textarea
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -470,6 +517,90 @@ export default function ChatPanelG({
     // Do nothing during transcribing state
   }, [recordingState, startRecording, stopRecording]);
 
+  // 🚨 NEW: Image upload functions
+  const handleImageUpload = useCallback(async (files: File[]) => {
+    const newImages: UploadedImage[] = files.map(file => ({
+      id: nanoid(),
+      file,
+      status: 'uploading' as const,
+    }));
+
+    setUploadedImages(prev => [...prev, ...newImages]);
+
+    // Upload each image to R2
+    for (const image of newImages) {
+      try {
+        const formData = new FormData();
+        formData.append('file', image.file);
+        formData.append('projectId', projectId);
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        
+        setUploadedImages(prev => 
+          prev.map(img => 
+            img.id === image.id 
+              ? { ...img, status: 'uploaded' as const, url: result.url }
+              : img
+          )
+        );
+      } catch (error) {
+        console.error('Image upload failed:', error);
+        setUploadedImages(prev => 
+          prev.map(img => 
+            img.id === image.id 
+              ? { ...img, status: 'error' as const, error: error instanceof Error ? error.message : 'Upload failed' }
+              : img
+          )
+        );
+      }
+    }
+  }, [projectId]);
+
+  // Handle file input change
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      handleImageUpload(files);
+    }
+    // Clear input so same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [handleImageUpload]);
+
+  // Handle drag and drop
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files).filter(file => 
+      file.type.startsWith('image/')
+    );
+    
+    if (files.length > 0) {
+      handleImageUpload(files);
+    }
+  }, [handleImageUpload]);
+
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
     // Clear optimistic messages when switching projects
@@ -479,6 +610,7 @@ export default function ChatPanelG({
     setGenerationComplete(false);
     setCurrentPrompt('');
     setEditComplexityFeedback(null);
+    setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
     
     // Reset first message flag for new projects
     isFirstMessageRef.current = true;
@@ -532,12 +664,12 @@ export default function ChatPanelG({
     const fixPrompt = `🔧 AUTO-FIX: Scene "${sceneErrorDetails.sceneName}" has a Remotion error: "${sceneErrorDetails.errorMessage}". Please analyze and fix this scene automatically.`;
     
     // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
-    videoStateAddUserMessage(projectId, fixPrompt);
+    addUserMessage(projectId, fixPrompt);
     
     // ✅ IMMEDIATE: Add assistant loading message
     const assistantMessageId = `assistant-fix-${Date.now()}`;
-    setActiveAssistantMessageId(assistantMessageId);
-    videoStateAddAssistantMessage(projectId, assistantMessageId, '🔧 Analyzing and fixing scene error...');
+    activeAssistantMessageIdRef.current = assistantMessageId;
+    addAssistantMessage(projectId, assistantMessageId, '🔧 Analyzing and fixing scene error...');
     
     setIsGenerating(true);
     setHasSceneError(false);
@@ -553,16 +685,20 @@ export default function ChatPanelG({
       if (result.success) {
         console.log('[ChatPanelG] 🔧 Auto-fix successful, force refreshing all state...');
         
-        // Fetch latest scene data
+        // ✅ STEP 1: Invalidate tRPC cache FIRST
+        console.log('[ChatPanelG] ♻️ Auto-fix: Invalidating tRPC cache...');
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+        
+        // ✅ STEP 2: Fetch latest scene data
+        console.log('[ChatPanelG] 🔄 Auto-fix: Fetching fresh scenes...');
         const updatedScenes = await refetchScenes();
+        
         if (updatedScenes.data && updatedScenes.data.length > 0) {
+          // ✅ STEP 3: Convert and update with guaranteed refresh
           const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
           
-          // Force complete state replacement
-          replace(projectId, updatedProps);
-          
-          // Force preview panel to recompile
-          forceRefresh(projectId);
+          console.log('[ChatPanelG] 🚀 Auto-fix: Using updateAndRefresh for guaranteed sync...');
+          updateAndRefresh(projectId, () => updatedProps);
           
           console.log('[ChatPanelG] ✅ Auto-fix complete - preview should show fixed scene');
         }
@@ -572,14 +708,14 @@ export default function ChatPanelG({
       console.error('Auto-fix failed:', error);
       
       // Update assistant message with error
-      videoStateUpdateMessage(projectId, assistantMessageId, {
+      updateMessage(projectId, assistantMessageId, {
         content: `Auto-fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         status: 'error'
       });
     } finally {
       setIsGenerating(false);
       setSceneErrorDetails(null);
-      setActiveAssistantMessageId(null);
+      activeAssistantMessageIdRef.current = null;
     }
   };
 
@@ -678,6 +814,30 @@ export default function ChatPanelG({
               >
                 <CardContent className="p-3">
                   <div className="space-y-2">
+                    {/* 🚨 NEW: Show uploaded images for user messages */}
+                    {msg.isUser && msg.imageUrls && msg.imageUrls.length > 0 && (
+                      <div className="space-y-2 mb-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          {msg.imageUrls.map((imageUrl, index) => (
+                            <div key={index} className="relative">
+                              <img 
+                                src={imageUrl} 
+                                alt={`Uploaded image ${index + 1}`}
+                                className="w-full h-20 object-cover rounded border"
+                              />
+                              <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                ✓
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs opacity-75">
+                          <span>📎</span>
+                          <span>{msg.imageUrls.length} image{msg.imageUrls.length > 1 ? 's' : ''} included</span>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="whitespace-pre-wrap text-sm flex items-center gap-2">
                       {msg.content}
                       {msg.status === "building" && (
@@ -709,6 +869,28 @@ export default function ChatPanelG({
 
       {/* Input area */}
       <div className="p-4 border-t bg-gray-50/50">
+        {/* Voice recording feedback */}
+        {recordingState === 'recording' && (
+          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-blue-700">Listening... {transcription && `"${transcription}"`}</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={stopRecording}
+              className="ml-auto text-blue-700 hover:bg-blue-100"
+            >
+              <StopCircle className="h-4 w-4" />
+              Stop
+            </Button>
+          </div>
+        )}
+        {voiceError && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            Error: {voiceError}
+          </div>
+        )}
+
         {/* 🚨 NEW: Auto-fix error banner */}
         {hasSceneError && sceneErrorDetails && (
           <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -743,9 +925,36 @@ export default function ChatPanelG({
           </div>
         )}
 
+        {/* 🚨 NEW: Compact image preview area (only when images are uploading/uploaded) */}
+        {uploadedImages.length > 0 && (
+          <div className="mb-3 flex gap-2">
+            {uploadedImages.map((image) => (
+              <div key={image.id} className="relative w-12 h-12 rounded border bg-gray-50 flex items-center justify-center">
+                {image.status === 'uploading' && (
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                )}
+                {image.status === 'uploaded' && (
+                  <CheckCircleIcon className="h-4 w-4 text-green-500" />
+                )}
+                {image.status === 'error' && (
+                  <XCircleIcon className="h-4 w-4 text-red-500" />
+                )}
+                {image.url && image.status === 'uploaded' && (
+                  <img 
+                    src={image.url} 
+                    alt="Upload preview" 
+                    className="absolute inset-0 w-full h-full object-cover rounded"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="flex gap-2">
           <div className="flex-1 relative">
             <Input
+              ref={inputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder={
@@ -753,11 +962,60 @@ export default function ChatPanelG({
                   ? "Describe changes to the selected scene..."
                   : "Describe your video or add a new scene..."
               }
-              disabled={isGenerating}
-              className="flex-1"
+              disabled={isGenerating || recordingState === 'recording'}
+              className={`flex-1 pr-20 ${isDragOver ? 'border-blue-500 bg-blue-50' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             />
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            
+            {/* Gallery icon button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              disabled={isGenerating}
+              aria-label="Upload images"
+            >
+              <ImageIcon className="h-5 w-5" />
+            </button>
+
+            {/* Voice recording button */}
+            {isVoiceSupported && (
+              <button
+                type="button"
+                onClick={recordingState === 'recording' ? stopRecording : startRecording}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full ${
+                  recordingState === 'recording' 
+                    ? 'text-red-500 animate-pulse' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+                disabled={isGenerating}
+                aria-label={recordingState === 'recording' ? 'Stop recording' : 'Start voice recording'}
+              >
+                {recordingState === 'recording' ? (
+                  <Mic className="h-5 w-5" />
+                ) : (
+                  <MicIcon className="h-5 w-5" />
+                )}
+              </button>
+            )}
           </div>
-          <Button type="submit" disabled={!message.trim() || isGenerating}>
+          <Button 
+            type="submit" 
+            disabled={!message.trim() || isGenerating || recordingState === 'recording'}
+            className="min-w-[40px]"
+          >
             {isGenerating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -775,3 +1033,11 @@ export default function ChatPanelG({
     </div>
   );
 } 
+
+interface UploadedImage {
+  id: string;
+  file: File;
+  status: 'uploading' | 'uploaded' | 'error';
+  url?: string;
+  error?: string;
+}

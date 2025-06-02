@@ -3,6 +3,7 @@ import { startBuildWorker } from './cron/buildWorker';
 import { startCodeGenWorker, stopCodeGenWorker } from './cron/codeGenWorker';
 import { TaskProcessor } from '~/server/services/a2a/taskProcessor.service';
 import { a2aLogger } from '~/lib/logger';
+import { dataLifecycleService } from '~/lib/services/dataLifecycle.service';
 
 // Create a global object for truly persisting state across HMR cycles
 declare global {
@@ -66,6 +67,22 @@ export function initializeServer() {
     a2aLogger.info("lifecycle", '🤖 Started A2A task processor service');
   } else {
     a2aLogger.warn('lifecycle', 'ℹ️ A2A task processor is not available or disabled');
+  }
+
+  // Start Data Lifecycle Management
+  try {
+    dataLifecycleService.startAutomatedCleanup({
+      imageAnalysisRetentionDays: 30,
+      conversationContextRetentionDays: 90,
+      sceneIterationsRetentionDays: 60,
+      projectMemoryRetentionDays: 180,
+      enableAutoCleanup: process.env.NODE_ENV === 'production',
+      cleanupIntervalHours: 24
+    });
+    workerCleanupFunctions.push(() => dataLifecycleService.stopAutomatedCleanup());
+    console.log('🗂️ Data lifecycle management service started');
+  } catch (error) {
+    console.error('❌ Failed to start data lifecycle management:', error);
   }
 
   // Mark as initialized in the global state

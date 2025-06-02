@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { BaseMCPTool } from "./base";
 import { sceneBuilderService } from "../sceneBuilder.service";
-import { openai } from "~/server/lib/openai";
 import { conversationalResponseService } from "~/server/services/conversationalResponse.service";
 import { db } from "~/server/db";
 import { scenes } from "~/server/db/schema";
@@ -13,6 +12,7 @@ const addSceneInputSchema = z.object({
   sceneNumber: z.number().optional().describe("Optional scene number/position"),
   storyboardSoFar: z.array(z.any()).optional().describe("Existing scenes for context"),
   replaceWelcomeScene: z.boolean().optional().describe("Whether to replace the welcome scene"),
+  visionAnalysis: z.any().optional().describe("Vision analysis from analyzeImage tool"),
 });
 
 type AddSceneInput = z.infer<typeof addSceneInputSchema>;
@@ -74,6 +74,7 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
         projectId,
         sceneNumber: input.sceneNumber,
         previousSceneJson: await this.getPreviousSceneJson(projectId),
+        visionAnalysis: input.visionAnalysis,
       });
 
       // 🎯 PROGRESS UPDATE: Generating conversational response

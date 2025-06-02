@@ -18,6 +18,7 @@ import { feedbackRouter } from "~/server/api/routers/feedback";
 import { emailSubscriberRouter } from "~/server/api/routers/emailSubscriber";
 import { scenesRouter } from "~/server/api/routers/scenes";
 import { shareRouter } from "~/server/api/routers/share";
+import { adminRouter } from "~/server/api/routers/admin";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -47,6 +48,7 @@ export const appRouter = createTRPCRouter({
   emailSubscriber: emailSubscriberRouter,
   scenes: scenesRouter,
   share: shareRouter,
+  admin: adminRouter,
 });
 
 // export type definition of API

@@ -1,11 +1,14 @@
 // src/lib/services/layoutGenerator.service.ts
-import { openai } from "~/server/lib/openai";
+import { AIClientService } from "~/lib/services/aiClient.service";
+import { getLayoutGeneratorModel } from "~/config/models.config";
+import { getSystemPrompt } from "~/config/prompts.config";
 
 export interface LayoutGeneratorInput {
   userPrompt: string;
   projectId: string;
   previousSceneJson?: string; // For style consistency
   isFirstScene?: boolean;
+  visionAnalysis?: any; // 🚨 NEW: Vision analysis from analyzeImage tool
 }
 
 export interface LayoutGeneratorOutput {
@@ -22,44 +25,51 @@ export interface LayoutGeneratorOutput {
 /**
  * LayoutGenerator service - converts user prompts to structured JSON specifications
  * First step of the two-step pipeline: User Intent → JSON Spec → React Code
+ * 🚨 NEW: Uses centralized model configuration system
  */
 export class LayoutGeneratorService {
   private readonly DEBUG = process.env.NODE_ENV === 'development';
-  private readonly model = "gpt-4.1-mini";
-  private readonly temperature = 0.3; // Low temperature for consistent JSON structure
 
   async generateLayout(input: LayoutGeneratorInput): Promise<LayoutGeneratorOutput> {
+    // 🚨 NEW: Get model configuration from centralized system
+    const modelConfig = getLayoutGeneratorModel();
     const prompt = this.buildLayoutPrompt(input);
     
     this.DEBUG && console.log(`[LayoutGenerator] 🎯 Starting layout generation`);
+    this.DEBUG && console.log(`[LayoutGenerator] 🤖 Using model: ${modelConfig.provider}/${modelConfig.model}`);
     this.DEBUG && console.log(`[LayoutGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
     this.DEBUG && console.log(`[LayoutGenerator] 🆕 Is first scene: ${input.isFirstScene}`);
     this.DEBUG && console.log(`[LayoutGenerator] 🎨 Has previous scene JSON: ${input.previousSceneJson ? 'YES' : 'NO'}`);
+    this.DEBUG && console.log(`[LayoutGenerator] 🖼️ Has vision analysis: ${input.visionAnalysis ? 'YES' : 'NO'}`);
+    
+    if (input.visionAnalysis && this.DEBUG) {
+      console.log(`[LayoutGenerator] 🎨 Vision palette: ${input.visionAnalysis.palette?.join(', ') || 'None'}`);
+      console.log(`[LayoutGenerator] 🎭 Vision mood: ${input.visionAnalysis.mood || 'None'}`);
+      console.log(`[LayoutGenerator] ✍️ Vision typography: ${input.visionAnalysis.typography || 'None'}`);
+    }
     
     try {
-      this.DEBUG && console.log(`[LayoutGenerator] 🚀 Calling OpenAI LLM for JSON layout...`);
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        temperature: this.temperature,
-        messages: [
-          {
-            role: "system",
-            content: prompt.system,
-          },
-          {
-            role: "user", 
-            content: prompt.user,
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
+      this.DEBUG && console.log(`[LayoutGenerator] 🚀 Calling ${modelConfig.provider} LLM for JSON layout...`);
       
-      const rawOutput = response.choices[0]?.message?.content;
+      // 🚨 NEW: Use centralized AI client instead of direct OpenAI calls
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: prompt.user }],
+        { role: "system", content: prompt.system },
+        { responseFormat: { type: "json_object" } }
+      );
+      
+      const rawOutput = response.content;
       if (!rawOutput) {
         throw new Error("No response from LayoutGenerator LLM");
       }
       
       this.DEBUG && console.log(`[LayoutGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
+      
+      // 🚨 NEW: Log model usage for debugging
+      if (this.DEBUG) {
+        AIClientService.logModelUsage(modelConfig, response.usage);
+      }
       
       // ---------- Minimal JSON parsing - let code generator handle whatever we get ----------
       let parsed;
@@ -140,8 +150,96 @@ export class LayoutGeneratorService {
   }
   
   private buildLayoutPrompt(input: LayoutGeneratorInput) {
-    const { userPrompt, previousSceneJson, isFirstScene } = input;
+    const { userPrompt, previousSceneJson, isFirstScene, visionAnalysis } = input;
     
+    // 🚨 NEW: Image-first approach - completely different prompts based on whether images are provided
+    if (visionAnalysis && visionAnalysis.layoutJson) {
+      // VISION-DRIVEN MODE: Image is the blueprint, user prompt only modifies
+      return this.buildVisionDrivenPrompt(userPrompt, visionAnalysis);
+    } else {
+      // TEXT-DRIVEN MODE: Traditional prompt-based generation
+      return this.buildTextDrivenPrompt(userPrompt, previousSceneJson, isFirstScene);
+    }
+  }
+
+  private buildVisionDrivenPrompt(userPrompt: string, visionAnalysis: any) {
+    const system = `🎯 VISION-DRIVEN MOTION GRAPHICS MODE
+
+You are converting a PIXEL-PERFECT image analysis into motion graphics JSON.
+
+CRITICAL APPROACH:
+- The vision analysis is your BLUEPRINT - recreate it exactly
+- User prompt only modifies specific aspects or adds animations
+- Every visual detail from the image must be preserved
+- Focus on motion graphics enhancement, not redesign
+
+MOTION GRAPHICS ENHANCEMENT RULES:
+1. ADD animations to existing elements (don't change their appearance)
+2. ENHANCE with motion graphics effects (particles, glows, etc.)
+3. CREATE animation sequences that bring the image to life
+4. PRESERVE exact colors, positions, sizes from vision analysis
+5. ADD motion graphics vocabulary (floating, pulsing, flowing)
+
+JSON STRUCTURE for image recreation:
+{
+  "sceneType": "vision-recreation",
+  "sourceImage": "1:1 recreation with motion graphics",
+  "background": "EXACT recreation from vision analysis",
+  "elements": "EXACT elements from vision + motion graphics animations",
+  "motionEnhancements": "Additional particles, glows, motion effects",
+  "animations": "Sophisticated motion graphics timing and effects",
+  "fidelity": "pixel-perfect recreation with motion graphics life"
+}
+
+ANIMATION VOCABULARY FOR IMAGES:
+- Floating elements: gentle drift, bounce, sway
+- Text animations: typewriter, fade-in, scale-bounce
+- Background effects: gradient rotation, particle systems
+- Decorative elements: pulse, glow, morph, orbit
+- Stagger patterns: sequential reveals, cascading effects`;
+
+    const user = `🖼️ RECREATE THIS IMAGE EXACTLY WITH MOTION GRAPHICS
+
+User modification request: "${userPrompt}"
+
+📊 VISION ANALYSIS (YOUR BLUEPRINT):
+${JSON.stringify(visionAnalysis.layoutJson, null, 2)}
+
+🎨 EXACT SPECIFICATIONS:
+- Colors: ${visionAnalysis.palette?.join(', ') || 'Use image colors'}
+- Typography: ${JSON.stringify(visionAnalysis.typography) || 'Match image fonts'}
+- Mood: ${visionAnalysis.mood || 'Match image style'}
+- Motion Specs: ${JSON.stringify(visionAnalysis.motionGraphicsSpecs) || 'Add motion graphics'}
+
+🚨 CRITICAL INSTRUCTIONS:
+
+1. **START with the vision analysis layoutJson as your base**
+2. **PRESERVE every visual detail** - colors, positions, sizes, text
+3. **ADD motion graphics animations** that enhance the existing design
+4. **ONLY modify** what the user specifically requests
+5. **ENHANCE with motion graphics** - particles, glows, smooth animations
+
+USER MODIFICATION ANALYSIS:
+"${userPrompt}"
+
+INTERPRETATION GUIDE:
+- "make it animated" → Add smooth motion graphics to existing elements
+- "change to squares" → Keep everything else, change shape type only
+- "make it blue" → Keep layout, change color palette only  
+- "add particles" → Keep everything, add particle system
+- "make it faster" → Keep visuals, adjust animation timing
+
+🎯 YOUR TASK:
+Return JSON that recreates the image EXACTLY but brings it to life with motion graphics.
+Every element from the vision analysis should be preserved and enhanced with animations.
+The user prompt should only modify specific aspects, not redesign the entire layout.
+
+Use the motion graphics vocabulary to add life while maintaining visual fidelity.`;
+
+    return { system, user };
+  }
+
+  private buildTextDrivenPrompt(userPrompt: string, previousSceneJson?: string, isFirstScene?: boolean) {
     const system = `You are a motion graphics director who converts any user request into a complete JSON specification for professional-quality animations.
 
 Your job: Take whatever the user describes and create JSON that captures EVERY detail needed for stunning motion graphics.
@@ -212,7 +310,14 @@ CRITICAL PRINCIPLES:
 
 Remember: Your JSON is the complete blueprint. Make it rich enough that the code generator can create professional-quality motion graphics.`;
 
-    const user = `Create a motion graphics scene: "${userPrompt}"`;
+    let user = `Create a motion graphics scene: "${userPrompt}"`;
+    
+    if (previousSceneJson && !isFirstScene) {
+      user += `\n\nPREVIOUS SCENE CONTEXT (for visual consistency):
+${previousSceneJson}
+
+Maintain visual cohesion with the previous scene while creating something new.`;
+    }
     
     return { system, user };
   }

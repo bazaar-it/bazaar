@@ -18,9 +18,10 @@ export const generationRouter = createTRPCRouter({
       projectId: z.string(),
       userMessage: z.string(),
       sceneId: z.string().optional(), // If provided, this is an edit operation
+      userContext: z.record(z.unknown()).optional(), // 🚨 NEW: User context with imageUrls, etc.
     }))
     .mutation(async ({ input, ctx }) => {
-      const { projectId, userMessage, sceneId } = input;
+      const { projectId, userMessage, sceneId, userContext } = input;
       const userId = ctx.session.user.id;
 
       console.log(`[Generation] MCP-only generation started:`, {
@@ -107,7 +108,10 @@ export const generationRouter = createTRPCRouter({
           prompt: userMessage,
           projectId,
           userId,
-          userContext: { sceneId },
+          userContext: { 
+            ...(userContext || {}), 
+            sceneId // 🚨 Always include sceneId for brain context
+          },
           storyboardSoFar: storyboardForBrain,
           chatHistory: recentMessages.map(msg => ({ role: msg.role, content: msg.content })),
           // onProgress: progressCallback, // TODO: Implement progress callback
@@ -502,6 +506,149 @@ export const generationRouter = createTRPCRouter({
       } catch (error) {
         console.error(`[Generation] Template addition failed:`, error);
         throw new Error(`Failed to add template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }),
+
+  /**
+   * ADD BLANK SCENE
+   * Creates a new empty scene with basic Remotion template
+   */
+  addScene: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      sceneName: z.string().optional(), // Optional custom scene name
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { projectId, sceneName } = input;
+      const userId = ctx.session.user.id;
+
+      console.log(`[Generation] Direct scene addition:`, {
+        projectId,
+        sceneName,
+        userId
+      });
+
+      try {
+        // Verify project ownership
+        const project = await db.query.projects.findFirst({
+          where: and(
+            eq(projects.id, projectId),
+            eq(projects.userId, userId)
+          ),
+        });
+
+        if (!project) {
+          throw new Error("Project not found or access denied");
+        }
+
+        // Get next order for the scene
+        const maxOrderResult = await db
+          .select({ maxOrder: sql<number>`COALESCE(MAX("order"), -1)` })
+          .from(scenes)
+          .where(eq(scenes.projectId, projectId));
+
+        const nextOrder = (maxOrderResult[0]?.maxOrder ?? -1) + 1;
+        
+        // Create default scene name if not provided
+        const defaultSceneName = sceneName || `Scene ${nextOrder + 1}`;
+
+        // Basic Remotion template code for new scene
+        const defaultSceneCode = `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+
+  // Add your animation logic here
+  const opacity = interpolate(frame, [0, 30], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: '#f0f0f0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        opacity,
+      }}
+    >
+      <h1
+        style={{
+          fontSize: '48px',
+          color: '#333',
+          fontFamily: 'Arial, sans-serif',
+        }}
+      >
+        ${defaultSceneName}
+      </h1>
+    </AbsoluteFill>
+  );
+}`;
+
+        // Insert new scene into database
+        const [newScene] = await db.insert(scenes)
+          .values({
+            projectId,
+            name: defaultSceneName,
+            order: nextOrder,
+            tsxCode: defaultSceneCode,
+            duration: 180, // 6 seconds default
+            layoutJson: JSON.stringify({
+              sceneType: "custom",
+              isUserCreated: true
+            }),
+            props: {},
+          })
+          .returning();
+
+        if (!newScene) {
+          throw new Error("Failed to create new scene");
+        }
+
+        console.log(`[Generation] New scene created successfully:`, {
+          sceneId: newScene.id,
+          name: newScene.name,
+          order: newScene.order,
+          duration: newScene.duration
+        });
+
+        // Clear welcome flag when scene is added
+        if (project.isWelcome) {
+          console.log(`[Generation] Clearing welcome flag - scene addition counts as real content`);
+          await db.update(projects)
+            .set({ isWelcome: false })
+            .where(eq(projects.id, projectId));
+        }
+
+        // Add chat message so Brain LLM has context
+        const contextMessage = `I've created a new blank scene called "${defaultSceneName}" as Scene ${nextOrder + 1}. You can now edit this scene or ask me to add content to it.`;
+        
+        await db.insert(messages).values({
+          projectId,
+          content: contextMessage,
+          role: "assistant",
+          createdAt: new Date(),
+        });
+
+        console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
+
+        return {
+          success: true,
+          message: `New scene "${defaultSceneName}" added to your video!`,
+          scene: {
+            id: newScene.id,
+            name: newScene.name,
+            order: newScene.order,
+            duration: newScene.duration,
+            tsxCode: newScene.tsxCode
+          }
+        };
+
+      } catch (error) {
+        console.error(`[Generation] Scene addition failed:`, error);
+        throw new Error(`Failed to add scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
 }); 

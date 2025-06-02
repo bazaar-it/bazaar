@@ -25,17 +25,17 @@ export const users = createTable("user", (d) => ({
   id: d
     .varchar({ length: 255 })
     .notNull()
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
+    .primaryKey(),
   name: d.varchar({ length: 255 }),
   email: d.varchar({ length: 255 }).notNull(),
-  emailVerified: d
-    .timestamp({
-      mode: "date",
-      withTimezone: true,
-    })
-    .default(sql`CURRENT_TIMESTAMP`),
-  image: d.varchar({ length: 255 }),
+  emailVerified: d.timestamp({
+    mode: "date",
+    withTimezone: true,
+  }),
+  image: d.text(),
+  isAdmin: d.boolean().default(false).notNull(),
+  createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -686,3 +686,79 @@ export const sharedVideosRelations = relations(sharedVideos, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// --- Phase 2: Project Memory & Image Analysis Tables for Async Context Storage ---
+
+/**
+ * Project Memory Table: Stores accumulated context across user sessions
+ * Enables 30+ prompt workflows with persistent user preferences and scene relationships
+ */
+export const projectMemory = createTable("project_memory", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  memoryType: d.varchar("memory_type", { length: 50 }).notNull(), // 'user_preference', 'scene_relationship', 'conversation_context'
+  memoryKey: d.varchar("memory_key", { length: 255 }).notNull(), // e.g., 'duration_preference', 'style_preference', 'scene_reference'
+  memoryValue: d.text("memory_value").notNull(), // JSON or text value
+  confidence: d.real("confidence").default(0.8), // 0.0-1.0 confidence score
+  sourcePrompt: d.text("source_prompt"), // Original user prompt that created this memory
+  createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
+  expiresAt: d.timestamp("expires_at", { withTimezone: true }), // Optional expiration for temporary context
+}), (t) => [
+  index("project_memory_project_idx").on(t.projectId),
+  index("project_memory_type_key_idx").on(t.memoryType, t.memoryKey),
+]);
+
+/**
+ * Image Analysis Table: Stores persistent image facts from vision analysis
+ * Supports fire-and-forget async image processing with late-arriving facts integration
+ */
+export const imageAnalysis = createTable("image_analysis", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  traceId: d.varchar("trace_id", { length: 100 }).notNull(), // From startAsyncImageAnalysis()
+  imageUrls: d.jsonb("image_urls").notNull(), // Array of uploaded image URLs
+  palette: d.jsonb("palette").notNull(), // Extracted color palette  
+  typography: d.text("typography").notNull(), // Typography analysis
+  mood: d.text("mood").notNull(), // Style mood analysis
+  layoutJson: d.jsonb("layout_json"), // Structured layout analysis
+  processingTimeMs: d.integer("processing_time_ms").notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  usedInScenes: d.jsonb("used_in_scenes"), // Track which scenes used this analysis
+}), (t) => [
+  index("image_analysis_project_idx").on(t.projectId),
+  index("image_analysis_trace_idx").on(t.traceId),
+  index("image_analysis_created_idx").on(t.createdAt),
+]);
+
+// Relations for project memory
+export const projectMemoryRelations = relations(projectMemory, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectMemory.projectId],
+    references: [projects.id],
+  }),
+}));
+
+// Relations for image analysis
+export const imageAnalysisRelations = relations(imageAnalysis, ({ one }) => ({
+  project: one(projects, {
+    fields: [imageAnalysis.projectId],
+    references: [projects.id],
+  }),
+}));
+
+// Memory type enum for better type safety
+export const MEMORY_TYPES = {
+  USER_PREFERENCE: 'user_preference',
+  SCENE_RELATIONSHIP: 'scene_relationship', 
+  CONVERSATION_CONTEXT: 'conversation_context',
+} as const;
+
+export type MemoryType = typeof MEMORY_TYPES[keyof typeof MEMORY_TYPES];
+
+// Type exports for TypeScript
+export type ProjectMemory = typeof projectMemory.$inferSelect;
+export type InsertProjectMemory = typeof projectMemory.$inferInsert;
+
+export type ImageAnalysis = typeof imageAnalysis.$inferSelect;
+export type InsertImageAnalysis = typeof imageAnalysis.$inferInsert;

@@ -1,4 +1,5 @@
-import { openai } from "~/server/lib/openai";
+import { AIClientService } from "~/lib/services/aiClient.service";
+import { getModel, resolveDirectCodeEditorModel } from "~/config/models.config";
 
 export interface DirectCodeEditInput {
   userPrompt: string;
@@ -6,6 +7,7 @@ export interface DirectCodeEditInput {
   existingName: string;
   chatHistory?: Array<{role: string, content: string}>;
   editComplexity?: 'surgical' | 'creative' | 'structural';
+  visionAnalysis?: any; // 🚨 NEW: Vision analysis from analyzeImage tool
 }
 
 export interface DirectCodeEditOutput {
@@ -32,10 +34,52 @@ interface ChangeAnalysis {
 /**
  * DirectCodeEditor service - performs surgical edits to existing React/Remotion code
  * Instead of regenerating everything, this makes targeted changes while preserving functionality
+ * 🚨 NEW: Uses centralized model configuration system with complexity-specific models
  */
 export class DirectCodeEditorService {
-  private readonly model = "gpt-4.1-mini";
-  private readonly temperature = 0.25; // Low temperature for precise code editing
+  private readonly DEBUG = process.env.NODE_ENV === 'development';
+
+  // Helper method to safely extract JSON from markdown-wrapped responses
+  private extractJsonFromResponse(content: string): any {
+    if (!content || typeof content !== 'string') {
+      throw new Error('Empty or invalid response content');
+    }
+
+    // Remove any leading/trailing whitespace
+    const cleaned = content.trim();
+
+    // Check if response is wrapped in markdown code blocks
+    if (cleaned.startsWith('```')) {
+      // Extract JSON from markdown code blocks
+      const lines = cleaned.split('\n');
+      const startIndex = lines.findIndex(line => line.includes('```json') || line === '```');
+      const endIndex = lines.findIndex((line, index) => index > startIndex && line.includes('```'));
+      
+      if (startIndex !== -1 && endIndex !== -1) {
+        const jsonLines = lines.slice(startIndex + 1, endIndex);
+        const jsonString = jsonLines.join('\n').trim();
+        
+        if (!jsonString) {
+          throw new Error('Empty JSON content in markdown block');
+        }
+        
+        try {
+          return JSON.parse(jsonString);
+        } catch (jsonError) {
+          console.error("[DirectCodeEditor] Failed to parse extracted JSON:", jsonString.substring(0, 200));
+          throw new Error(`Invalid JSON in markdown block: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
+        }
+      }
+    }
+
+    // Try parsing as direct JSON
+    try {
+      return JSON.parse(cleaned);
+    } catch (jsonError) {
+      console.error("[DirectCodeEditor] Failed to parse direct JSON:", cleaned.substring(0, 200));
+      throw new Error(`Response is not valid JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
+    }
+  }
 
   async editCode(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
     try {
@@ -77,13 +121,13 @@ export class DirectCodeEditorService {
   private async surgicalEdit(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
     try {
       // Step 1: Analyze what needs to change
-      const changeAnalysis = await this.analyzeRequestedChanges(input);
+      const changeAnalysis = await this.analyzeRequestedChanges(input, 'surgical');
       
       // Step 2: Apply targeted modifications
-      const modifiedCode = await this.applyTargetedChanges(input.existingCode, changeAnalysis);
+      const modifiedCode = await this.applyTargetedChanges(input.existingCode, changeAnalysis, 'surgical');
       
       // Step 3: Detect duration changes using LLM reasoning
-      const newDurationFrames = await this.detectDurationChange(input.userPrompt, changeAnalysis);
+      const newDurationFrames = await this.detectDurationChange(input.userPrompt, changeAnalysis, 'surgical');
       
       return {
         code: modifiedCode.code,
@@ -108,6 +152,9 @@ export class DirectCodeEditorService {
   private async creativeEdit(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
     try {
       console.log("[DirectCodeEditor] Creative edit - allowing holistic style changes");
+      
+      // 🚨 NEW: Get model configuration for creative editing
+      const modelConfig = resolveDirectCodeEditorModel('creative');
       
       // Skip analysis phase - go directly to creative modification
       const prompt = `You are making CREATIVE improvements to existing React/Remotion code.
@@ -148,22 +195,20 @@ RESPONSE FORMAT (JSON):
 
 Apply creative improvements while preserving core functionality.`;
 
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: input.userPrompt }
-        ],
-        temperature: 0.4, // Higher temperature for more creativity
-        response_format: { type: "json_object" }
-      });
+      // 🚨 NEW: Use centralized AI client
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: input.userPrompt }],
+        { role: "system", content: prompt },
+        { responseFormat: { type: "json_object" } }
+      );
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content;
       if (!content) {
         throw new Error("No creative modification response from DirectCodeEditor");
       }
 
-      const parsed = JSON.parse(content);
+      const parsed = this.extractJsonFromResponse(content);
       
       // Validate that we got valid code
       if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
@@ -177,7 +222,7 @@ Apply creative improvements while preserving core functionality.`;
         preserveAnimations: [],
         preserveElements: [],
         modificationStrategy: "creative"
-      });
+      }, 'creative');
       
       console.log(`[DirectCodeEditor] Creative edit completed:`, {
         changesCount: parsed.changes?.length || 0,
@@ -208,6 +253,9 @@ Apply creative improvements while preserving core functionality.`;
   private async structuralEdit(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
     try {
       console.log("[DirectCodeEditor] Structural edit - allowing layout and element restructuring");
+      
+      // 🚨 NEW: Get model configuration for structural editing
+      const modelConfig = resolveDirectCodeEditorModel('structural');
       
       const prompt = `You are making STRUCTURAL changes to React/Remotion code layout and element organization.
 
@@ -252,22 +300,20 @@ RESPONSE FORMAT (JSON):
 
 Apply structural modifications while preserving all content.`;
 
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: input.userPrompt }
-        ],
-        temperature: 0.3, // Medium temperature for structural precision
-        response_format: { type: "json_object" }
-      });
+      // 🚨 NEW: Use centralized AI client
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: input.userPrompt }],
+        { role: "system", content: prompt },
+        { responseFormat: { type: "json_object" } }
+      );
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content;
       if (!content) {
         throw new Error("No structural modification response from DirectCodeEditor");
       }
 
-      const parsed = JSON.parse(content);
+      const parsed = this.extractJsonFromResponse(content);
       
       // Validate that we got valid code
       if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
@@ -281,7 +327,7 @@ Apply structural modifications while preserving all content.`;
         preserveAnimations: [],
         preserveElements: [],
         modificationStrategy: "structural"
-      });
+      }, 'structural');
       
       console.log(`[DirectCodeEditor] Structural edit completed:`, {
         changesCount: parsed.changes?.length || 0,
@@ -309,10 +355,16 @@ Apply structural modifications while preserving all content.`;
   /**
    * Analyze what the user wants to change and create a modification plan
    */
-  private async analyzeRequestedChanges(input: DirectCodeEditInput): Promise<ChangeAnalysis> {
+  private async analyzeRequestedChanges(input: DirectCodeEditInput, complexity: string): Promise<ChangeAnalysis> {
+    // 🚨 NEW: Get model configuration for analysis
+    const modelConfig = resolveDirectCodeEditorModel('surgical'); // Use surgical for analysis
+    
     const chatContext = input.chatHistory && input.chatHistory.length > 0
       ? `\nCHAT HISTORY (for context):\n${input.chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`
       : "";
+
+    // 🚨 NEW: Add vision context if available
+    const visionContext = this.buildVisionContextString(input.visionAnalysis);
 
     const prompt = `You are a code editor analyzing what changes to make to existing React/Remotion code.
 
@@ -321,7 +373,7 @@ EXISTING CODE:
 ${input.existingCode}
 \`\`\`
 
-USER REQUEST: "${input.userPrompt}"${chatContext}
+USER REQUEST: "${input.userPrompt}"${chatContext}${visionContext}
 
 CRITICAL: You must preserve ALL existing functionality and animations.
 Only modify what the user specifically requested.
@@ -344,22 +396,26 @@ RESPONSE FORMAT (JSON):
 
 Be very specific about what to preserve vs what to change.`;
 
-    const response = await openai.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: input.userPrompt }
-      ],
-      temperature: this.temperature,
-      response_format: { type: "json_object" }
-    });
+    // 🚨 NEW: Use centralized AI client
+    const response = await AIClientService.generateResponse(
+      modelConfig,
+      [{ role: "user", content: input.userPrompt }],
+      { role: "system", content: prompt },
+      { responseFormat: { type: "json_object" } }
+    );
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.content;
     if (!content) {
       throw new Error("No analysis response from DirectCodeEditor");
     }
 
-    const parsed = JSON.parse(content);
+    let parsed;
+    try {
+      parsed = this.extractJsonFromResponse(content);
+    } catch (jsonError) {
+      console.error("[DirectCodeEditor] JSON parsing failed for analysis response:", content.substring(0, 200));
+      throw jsonError; // Re-throw the detailed error from extractJsonFromResponse
+    }
     
     console.log(`[DirectCodeEditor] Change analysis:`, {
       target: parsed.targetElement,
@@ -382,12 +438,16 @@ Be very specific about what to preserve vs what to change.`;
    */
   private async applyTargetedChanges(
     existingCode: string, 
-    changeAnalysis: ChangeAnalysis
+    changeAnalysis: ChangeAnalysis,
+    complexity: string
   ): Promise<{
     code: string;
     changes: string[];
     preserved: string[];
   }> {
+    // 🚨 NEW: Get model configuration for modifications
+    const modelConfig = resolveDirectCodeEditorModel('surgical'); // Use surgical for precise changes
+    
     const prompt = `You are a surgical code editor. Make ONLY the requested change while preserving everything else.
 
 EXISTING WORKING CODE:
@@ -442,22 +502,20 @@ RESPONSE FORMAT (JSON):
 
 Return the complete working code with only the requested modification applied.`;
 
-    const response = await openai.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: `Apply this change: ${changeAnalysis.requestedChange}` }
-      ],
-      temperature: this.temperature,
-      response_format: { type: "json_object" }
-    });
+    // 🚨 NEW: Use centralized AI client
+    const response = await AIClientService.generateResponse(
+      modelConfig,
+      [{ role: "user", content: `Apply this change: ${changeAnalysis.requestedChange}` }],
+      { role: "system", content: prompt },
+      { responseFormat: { type: "json_object" } }
+    );
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.content;
     if (!content) {
       throw new Error("No modification response from DirectCodeEditor");
     }
 
-    const parsed = JSON.parse(content);
+    const parsed = this.extractJsonFromResponse(content);
     
     // Validate that we got valid code
     if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
@@ -476,7 +534,10 @@ Return the complete working code with only the requested modification applied.`;
     };
   }
 
-  private async detectDurationChange(userPrompt: string, changeAnalysis: ChangeAnalysis): Promise<number | undefined> {
+  private async detectDurationChange(userPrompt: string, changeAnalysis: ChangeAnalysis, complexity: string): Promise<number | undefined> {
+    // 🚨 NEW: Get model configuration for duration analysis
+    const modelConfig = resolveDirectCodeEditorModel('surgical'); // Use surgical for precise analysis
+    
     const prompt = `Analyze if this user request involves changing the TOTAL SCENE DURATION:
 
 USER REQUEST: "${userPrompt}"
@@ -494,46 +555,68 @@ RESPONSE FORMAT (JSON):
 {
   "isDurationChange": boolean,
   "newDurationSeconds": number or null,
-  "reasoning": "explanation of why this is/isn't a duration change"
+  "reasoning": "Explanation of duration analysis"
 }
 
-If the user is only changing animation timing (without changing total scene length), return isDurationChange: false.
-If the user wants to change the total scene duration, calculate the new duration in seconds.`;
+If no duration change is detected, return isDurationChange: false.`;
 
     try {
-      const response = await openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.1, // Very low temperature for precise analysis
-        response_format: { type: "json_object" }
-      });
+      // 🚨 NEW: Use centralized AI client
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: userPrompt }],
+        { role: "system", content: prompt },
+        { responseFormat: { type: "json_object" } }
+      );
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) return undefined;
-
-      const parsed = JSON.parse(content);
-      
-      console.log(`[DirectCodeEditor] Duration analysis:`, {
-        isDurationChange: parsed.isDurationChange,
-        newDurationSeconds: parsed.newDurationSeconds,
-        reasoning: parsed.reasoning
-      });
-
-      if (parsed.isDurationChange && typeof parsed.newDurationSeconds === 'number') {
-        const newDurationFrames = Math.round(parsed.newDurationSeconds * 30); // Convert to frames at 30fps
-        console.log(`[DirectCodeEditor] Detected duration change: ${parsed.newDurationSeconds}s = ${newDurationFrames} frames`);
-        return newDurationFrames;
+      const content = response.content;
+      if (!content) {
+        return undefined;
       }
 
+      const parsed = this.extractJsonFromResponse(content);
+      
+      if (parsed.isDurationChange && parsed.newDurationSeconds) {
+        const newFrames = Math.round(parsed.newDurationSeconds * 30); // Convert to frames (30fps)
+        console.log(`[DirectCodeEditor] Duration change detected: ${parsed.newDurationSeconds}s = ${newFrames} frames`);
+        return newFrames;
+      }
+      
       return undefined;
     } catch (error) {
-      console.error('[DirectCodeEditor] Duration detection failed:', error);
+      console.warn("[DirectCodeEditor] Duration analysis failed:", error);
       return undefined;
     }
   }
+
+  // 🚨 NEW: Helper method to build vision context string
+  private buildVisionContextString(visionAnalysis?: any): string {
+    if (!visionAnalysis || !visionAnalysis.palette) {
+      return "";
+    }
+
+    let visionContext = `\n\n🎨 VISUAL REFERENCE PROVIDED:
+- Style Mood: ${visionAnalysis.mood || 'Not specified'}
+- Color Palette: ${visionAnalysis.palette.join(', ')}
+- Typography: ${visionAnalysis.typography || 'Not specified'}`;
+
+    if (visionAnalysis.layoutJson) {
+      visionContext += `\n- Layout Reference: ${JSON.stringify(visionAnalysis.layoutJson)}`;
+    }
+
+    if (visionAnalysis.animations && visionAnalysis.animations.length > 0) {
+      visionContext += `\n- Suggested Animations: ${visionAnalysis.animations.join(', ')}`;
+    }
+
+    visionContext += `\n\n🚨 VISUAL GUIDANCE: Apply these visual styles to the modification.
+Use the detected color palette for any new colors.
+Match the mood and typography style when modifying text elements.
+Maintain visual consistency with the reference image.`;
+
+    return visionContext;
+  }
+
+
 }
 
 // Export singleton instance

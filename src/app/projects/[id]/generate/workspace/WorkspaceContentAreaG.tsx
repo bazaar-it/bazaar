@@ -294,7 +294,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     }, [selectedSceneId, projectId]);
     
     // Get video state methods
-    const { replace, getCurrentProps, syncDbMessages } = useVideoState();
+    const { updateAndRefresh, getCurrentProps, syncDbMessages } = useVideoState();
     
     // Query for fetching updated project scenes from database
     const getProjectScenesQuery = api.generation.getProjectScenes.useQuery(
@@ -457,9 +457,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           console.log('[WorkspaceContentAreaG] ✅ Converted to InputProps format:', updatedProps.scenes.length, 'scenes');
           console.log('[WorkspaceContentAreaG] Total video duration:', updatedProps.meta.duration, 'frames');
           
-          // ✅ UPDATE: VideoState with new scenes
-          replace(projectId, updatedProps);
-          console.log('[WorkspaceContentAreaG] ✅ Updated VideoState with new scenes');
+          // 🚨 CRITICAL FIX: Use updateAndRefresh instead of replace for guaranteed UI updates
+          console.log('[WorkspaceContentAreaG] 🚀 Using updateAndRefresh for guaranteed state sync...');
+          updateAndRefresh(projectId, () => updatedProps);
+          console.log('[WorkspaceContentAreaG] ✅ Updated VideoState with new unified state management');
           
           // ✅ SELECT: The newly generated scene
           setSelectedSceneId(sceneId);
@@ -471,7 +472,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         console.error('[WorkspaceContentAreaG] ❌ CRITICAL ERROR in scene generation handling:', error);
         toast.error('Critical error handling scene generation - please refresh the page');
       }
-    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, replace]);
+    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, updateAndRefresh]);
 
     // Track if initialization has been attempted for this project
     const initializationAttemptedRef = useRef<Set<string>>(new Set());
@@ -493,12 +494,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       // ✅ TRUST page.tsx: Use the provided initialProps directly 
       // page.tsx now ensures these are ALWAYS the correct props (either real scenes or welcome)
       if (initialProps) {
-        replace(projectId, initialProps);
+        updateAndRefresh(projectId, () => initialProps);
         console.log('[WorkspaceContentAreaG] ✅ Initialized video state with correct props from page.tsx');
       } else {
         console.warn('[WorkspaceContentAreaG] No initial props provided - this should not happen');
       }
-    }, [projectId, initialProps, replace]);
+    }, [projectId, initialProps, updateAndRefresh]);
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);

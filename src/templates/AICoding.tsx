@@ -1,0 +1,140 @@
+import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+
+export default function AICoding() {
+  const frame = useCurrentFrame();
+
+  const codeLines = [
+    { text: "export const Animation: React.FC = () => {", indent: 0, delay: 0 },
+    { text: "const frame = useCurrentFrame();", indent: 1, delay: 10 },
+    { text: "return (", indent: 1, delay: 20 },
+    { text: "<Series>", indent: 2, delay: 30 },
+    { text: "<Series.Sequence durationInFrames={60}>", indent: 3, delay: 40 },
+    { text: "<FadeIn>", indent: 4, delay: 50 },
+    { text: "const progress = interpolate(", indent: 5, delay: 60 },
+    { text: "frame,", indent: 6, delay: 70 },
+    { text: "[0, 30],", indent: 6, delay: 80 },
+    { text: "[0, 1],", indent: 6, delay: 90 },
+    { text: ");", indent: 5, delay: 100 },
+    { text: "</FadeIn>", indent: 4, delay: 110 },
+    { text: "</Series.Sequence>", indent: 3, delay: 120 },
+    { text: "</Series>", indent: 2, delay: 130 },
+    { text: ");", indent: 1, delay: 140 },
+    { text: "}", indent: 0, delay: 145 },
+  ];
+
+  const containerOpacity = interpolate(
+    frame,
+    [0, 10],
+    [0, 1],
+    { extrapolateRight: "clamp" }
+  );
+
+  function CodeLine({ text, delay, indent }: { text: string; delay: number; indent: number }) {
+    const charCount = Math.floor(
+      interpolate(frame - delay, [0, 20], [0, text.length], {
+        extrapolateRight: "clamp",
+      })
+    );
+
+    const opacity = interpolate(frame - delay, [0, 5], [0, 1], {
+      extrapolateRight: "clamp",
+    });
+
+    const colorizeToken = (token: string) => {
+      if (token.match(/^(Sequence|Series|interpolate|useCurrentFrame|spring)$/)) {
+        return "#FF92FF";
+      } else if (token.match(/^[A-Z]\w+/)) {
+        return "#00FFFF";
+      } else if (token.match(/^['""].*['""]$/)) {
+        return "#50FA7B";
+      } else if (token.match(/^[{}\[\](),;]$/)) {
+        return "#F8F8F2";
+      } else if (token.match(/^\d+$/)) {
+        return "#FF79C6";
+      } else if (token.match(/^[\w]+(?=\()/)) {
+        return "#00B4FF";
+      } else if (token.match(/^\.[\w]+/)) {
+        return "#BD93F9";
+      }
+      return "#F8F8F2";
+    };
+
+    return (
+      <div
+        style={{
+          fontFamily: "SF Mono, monospace",
+          fontSize: "24px",
+          marginLeft: `${indent * 24}px`,
+          opacity,
+          height: "36px",
+          display: "flex",
+          alignItems: "center",
+          color: "#F8F8F2",
+        }}
+      >
+        {text.slice(0, charCount).split(/([{}\[\](),;.]|\s+)/).map((token, i) => {
+          if (token.trim() === "") return token;
+          const color = colorizeToken(token);
+          return (
+            <span key={i} style={{ color }}>
+              {token}
+            </span>
+          );
+        })}
+        {frame >= delay && frame < delay + 20 && (
+          <span
+            style={{
+              width: "2px",
+              height: "24px",
+              background: "#00FFFF",
+              display: "inline-block",
+              marginLeft: "2px",
+              animation: "blink 1s infinite",
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: "linear-gradient(135deg, #0D1117 0%, #161B22 100%)",
+        padding: "40px",
+        opacity: containerOpacity,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          background: "#1C2128",
+          borderRadius: "12px",
+          padding: "32px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          border: "1px solid #30363D",
+          maxWidth: "900px",
+          margin: "0 auto",
+        }}
+      >
+        <div
+          style={{
+            color: "#7C3AED",
+            fontSize: "20px",
+            fontFamily: "SF Mono, monospace",
+            marginBottom: "24px",
+            opacity: 0.8,
+          }}
+        >
+          // AI-Generated Animation Code
+        </div>
+
+        {codeLines.map((line, i) => (
+          <CodeLine key={i} {...line} />
+        ))}
+      </div>
+    </AbsoluteFill>
+  );
+} 

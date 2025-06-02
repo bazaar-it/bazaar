@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { BaseMCPTool } from "./base";
-import { openai } from "~/server/lib/openai";
+import { AIClientService } from "../aiClient.service";
+import { getFixBrokenSceneModel } from "~/config/models.config";
+import { getSystemPrompt } from "~/config/prompts.config";
 import { conversationalResponseService } from "~/server/services/conversationalResponse.service";
 import { transform } from "sucrase";
 
@@ -137,22 +139,24 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
   }
 
   /**
-   * Use GPT-4.1 to intelligently analyze and fix the broken code
+   * Use the centralized AI client to intelligently analyze and fix the broken code
    */
   private async generateFixedCode(brokenCode: string, errorMessage: string) {
     const fixPrompt = this.buildFixPrompt(brokenCode, errorMessage);
     
-    const response = await openai.chat.completions.create({
-      model: "gpt-4.1",
-      temperature: 0.2, // Low temperature for precise fixes
-      messages: [
+    const response = await AIClientService.generateResponse(
+      getFixBrokenSceneModel(),
+      [
         { role: "system", content: fixPrompt.system },
         { role: "user", content: fixPrompt.user }
       ],
-      response_format: { type: "json_object" }
-    });
+      undefined, // no system prompt override
+      {
+        responseFormat: { type: "json_object" }
+      }
+    );
 
-    const rawOutput = response.choices[0]?.message?.content;
+    const rawOutput = response.content;
     if (!rawOutput) {
       throw new Error("No response from fix LLM");
     }
@@ -170,25 +174,9 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
    * Build the prompt for the fix LLM
    */
   private buildFixPrompt(brokenCode: string, errorMessage: string) {
-    const system = `You are a Remotion code doctor. Fix broken scene code with minimal changes.
-
-🚨 CRITICAL RULES (same as CodeGenerator):
-- const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-- export default function [FUNCTION_NAME]() 
-- NO imports, NO markdown, NO extra exports
-- Quote ALL CSS values: fontSize: "4rem", fontWeight: "700"
-- Use extrapolateLeft: "clamp", extrapolateRight: "clamp"
-- Single transform per element
-
-COMMON FIXES:
-1. Interpolation errors: inputRange must be strictly increasing [0, 30, 60] not [60, 30, 0]
-2. Multiple exports: Only ONE export default function
-3. Import statements: Remove all imports, use window.Remotion destructuring
-4. Missing destructuring: Must have const { ... } = window.Remotion;
-5. Quote CSS values: fontWeight: "700" not fontWeight: 700
-6. Transform syntax: transform: \`scale(\${value})\` not transform: "scale(" + value + ")"
-7. Undefined variables: Check all variables are defined
-8. Division by zero: Add safety checks for mathematical operations
+    const systemPrompt = getSystemPrompt('FIX_BROKEN_SCENE');
+    
+    const system = `${systemPrompt.content}
 
 RESPONSE FORMAT (JSON):
 {

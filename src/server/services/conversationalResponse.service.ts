@@ -4,7 +4,7 @@ import { messages } from "~/server/db/schema";
 import { emitSceneEvent } from "~/lib/events/sceneEvents";
 
 export interface ConversationalResponseInput {
-  operation: 'addScene' | 'editScene' | 'deleteScene' | 'askSpecify' | 'fixBrokenScene';
+  operation: 'addScene' | 'editScene' | 'deleteScene' | 'askSpecify' | 'fixBrokenScene' | 'createSceneFromImage' | 'editSceneWithImage';
   userPrompt: string;
   result: any;
   context: {
@@ -22,6 +22,9 @@ export interface ConversationalResponseInput {
     sceneType?: string;
     background?: string;
     animations?: string[];
+    imageUrls?: number; // Number of images provided
+    imageCount?: number; // Alternative name for consistency
+    approach?: string; // For describing the generation approach
   };
 }
 
@@ -148,6 +151,12 @@ STYLE: Natural, not robotic
       case 'fixBrokenScene':
         return basePrompt + `You need to fix a broken scene. Mention the specific issue and the steps you'll take to fix it.`;
       
+      case 'createSceneFromImage':
+        return basePrompt + `You just created a scene by analyzing uploaded images. Mention what you recreated from the images and highlight key visual elements.`;
+      
+      case 'editSceneWithImage':
+        return basePrompt + `You just modified a scene using an image reference for styling. Mention what styling changes you made based on the image.`;
+      
       default:
         return basePrompt + `You completed an operation. Briefly describe what happened.`;
     }
@@ -198,6 +207,15 @@ STYLE: Natural, not robotic
       context += `AVAILABLE SCENES: ${input.context.availableScenes.map(s => s.name).join(', ')}\n`;
     }
     
+    if (input.context.imageUrls || input.context.imageCount) {
+      const imageCount = input.context.imageUrls || input.context.imageCount || 0;
+      context += `IMAGES PROCESSED: ${imageCount} image(s)\n`;
+    }
+    
+    if (input.context.approach) {
+      context += `APPROACH: ${input.context.approach}\n`;
+    }
+    
     context += `\n✅ CRITICAL: Base your response ONLY on the actual elements and content listed above. Do NOT invent details like clouds, sunset, or other elements that are not explicitly mentioned in the ACTUAL ELEMENTS CREATED section.`;
     context += `\nGenerate a conversational response about this ${input.operation} operation.`;
     
@@ -219,6 +237,10 @@ STYLE: Natural, not robotic
         return "Could you please provide more details about what you'd like me to do?";
       case 'fixBrokenScene':
         return "I'm sorry to hear that the scene is broken. I'll work on fixing it for you.";
+      case 'createSceneFromImage':
+        return "I've created a new scene for you! Check it out in the timeline.";
+      case 'editSceneWithImage':
+        return "I've updated the scene with your requested changes.";
       default:
         return "Operation completed successfully!";
     }

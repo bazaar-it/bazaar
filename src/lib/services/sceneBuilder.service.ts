@@ -1,4 +1,5 @@
 // src/lib/services/sceneBuilder.service.ts
+import crypto from 'crypto';
 import { layoutGeneratorService } from "./layoutGenerator.service";
 import { codeGeneratorService } from "./codeGenerator.service";
 
@@ -19,6 +20,7 @@ export class SceneBuilderService {
     projectId: string;
     sceneNumber?: number;
     previousSceneJson?: string;
+    visionAnalysis?: any; // 🚨 NEW: Vision analysis from analyzeImage tool
   }): Promise<{
     code: string;
     name: string;
@@ -52,6 +54,7 @@ export class SceneBuilderService {
         projectId: input.projectId,
         previousSceneJson: input.previousSceneJson,
         isFirstScene: !input.previousSceneJson,
+        visionAnalysis: input.visionAnalysis,
       });
       
       if (this.DEBUG) console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);

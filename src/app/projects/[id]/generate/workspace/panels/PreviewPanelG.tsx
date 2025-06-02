@@ -29,7 +29,7 @@ export function PreviewPanelG({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { getCurrentProps } = useVideoState();
+  const { getCurrentProps, globalRefreshCounter } = useVideoState();
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -44,6 +44,7 @@ export function PreviewPanelG({
   
   console.log('[PreviewPanelG] Current props:', currentProps);
   console.log('[PreviewPanelG] Scenes:', scenes);
+  console.log('[PreviewPanelG] Global refresh counter:', globalRefreshCounter);
 
   // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
@@ -460,6 +461,47 @@ export default function FallbackComposition() {
       compileMultiSceneComposition();
     }
   }, [scenes, compileMultiSceneComposition]);
+
+  // 🚨 NEW: Listen to VideoState updates via globalRefreshCounter
+  useEffect(() => {
+    if (scenes.length > 0) {
+      console.log('[PreviewPanelG] 🔄 GlobalRefreshCounter changed, recompiling...', globalRefreshCounter);
+      compileMultiSceneComposition();
+    }
+  }, [globalRefreshCounter, compileMultiSceneComposition]);
+
+  // 🚨 NEW: Listen to VideoState update events
+  useEffect(() => {
+    const handleVideoStateUpdate = (event: CustomEvent) => {
+      const { projectId: eventProjectId, type, refreshToken: eventRefreshToken } = event.detail;
+      
+      if (eventProjectId === projectId && type === 'scenes-updated') {
+        console.log('[PreviewPanelG] 📡 VideoState update event received, recompiling...', {
+          eventProjectId,
+          type,
+          eventRefreshToken
+        });
+        
+        // Update our refresh token and recompile
+        setRefreshToken(eventRefreshToken || `event-${Date.now()}`);
+        
+        // Get fresh props and recompile
+        const freshProps = getCurrentProps();
+        if (freshProps?.scenes && freshProps.scenes.length > 0) {
+          console.log('[PreviewPanelG] 🚀 Fresh scenes available, triggering recompilation...');
+          compileMultiSceneComposition();
+        }
+      }
+    };
+
+    console.log('[PreviewPanelG] 📡 Setting up VideoState update listener for project:', projectId);
+    window.addEventListener('videostate-update', handleVideoStateUpdate as EventListener);
+    
+    return () => {
+      console.log('[PreviewPanelG] 📡 Cleaning up VideoState update listener');
+      window.removeEventListener('videostate-update', handleVideoStateUpdate as EventListener);
+    };
+  }, [projectId, compileMultiSceneComposition, getCurrentProps]);
 
   // Manual refresh
   const handleRefresh = useCallback(() => {

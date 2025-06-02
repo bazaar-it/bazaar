@@ -2,6 +2,7 @@
 "use client";
 
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import type { InputProps } from "../types/input-props";
@@ -19,6 +20,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStartTime?: number;
   executionTimeSeconds?: number | null;
+  imageUrls?: string[]; // 🚨 NEW: Support for uploaded images
 }
 
 // Define message update parameters for streaming support
@@ -61,18 +63,33 @@ interface VideoState {
   chatHistory: Record<string, ChatMessage[]>;
   refreshTokens: Record<string, number>;
   
+  // 🚨 NEW: Global refresh counter to force all components to re-render
+  globalRefreshCounter: number;
+  
   // OPTIMIZATION #5: Scene selection state
   selectedScenes: Record<string, string | null>;
+  
+  // 🚨 NEW: Hybrid persistence state
+  lastSyncTime: number;
+  pendingDbSync: Record<string, boolean>; // Track which projects need DB sync
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps) => void;
   replace: (projectId: string, newProps: InputProps) => void;
   getCurrentProps: () => InputProps | null;
   
-  // Chat management
-  addUserMessage: (projectId: string, content: string) => void;
+  // 🚨 NEW: Reactive update that guarantees UI refresh
+  updateAndRefresh: (projectId: string, updater: (props: InputProps) => InputProps) => void;
+  
+  // Chat management with hybrid persistence
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[]) => void;
   addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
   updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
+  
+  // 🚨 NEW: Database sync methods
+  syncToDatabase: (projectId: string) => Promise<void>;
+  loadFromDatabase: (projectId: string) => Promise<void>;
+  markForSync: (projectId: string) => void;
   
   // Legacy methods (for backward compatibility)
   getChatHistory: () => ChatMessage[];
@@ -103,7 +120,10 @@ export const useVideoState = create<VideoState>((set, get) => ({
   chatHistory: {},
   refreshTokens: {},
   selectedScenes: {},
-
+  globalRefreshCounter: 0,
+  lastSyncTime: 0,
+  pendingDbSync: {},
+  
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
     if (!currentProjectId || !projects[currentProjectId]) return null;
@@ -229,16 +249,23 @@ export const useVideoState = create<VideoState>((set, get) => ({
 
   replace: (projectId, next) => 
     set((state) => {
+      // 🚨 CRITICAL FIX: Generate new refresh token and increment global counter
+      const newRefreshToken = Date.now().toString();
+      const newGlobalCounter = (state.globalRefreshCounter || 0) + 1;
+      
       // If project exists, just update its props
       if (state.projects[projectId]) {
         return {
           ...state,
           currentProjectId: projectId,
+          globalRefreshCounter: newGlobalCounter, // ✅ Force all components to re-render
           projects: {
             ...state.projects,
             [projectId]: {
               ...state.projects[projectId],
-              props: next
+              props: next,
+              refreshToken: newRefreshToken, // ✅ Force preview panel re-render
+              lastUpdated: Date.now(), // ✅ Track when updated
             }
           }
         };
@@ -248,12 +275,15 @@ export const useVideoState = create<VideoState>((set, get) => ({
       return {
         ...state,
         currentProjectId: projectId,
+        globalRefreshCounter: newGlobalCounter,
         projects: {
           ...state.projects,
           [projectId]: {
             props: next,
             chatHistory: [],
-            dbMessagesLoaded: false
+            dbMessagesLoaded: false,
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now(),
           }
         }
       };
@@ -624,7 +654,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
   },
   
   // Implement missing addUserMessage method
-  addUserMessage: (projectId: string, content: string) =>
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[]) =>
     set((state) => {
       const project = state.projects[projectId];
       if (!project) return state;
@@ -634,7 +664,8 @@ export const useVideoState = create<VideoState>((set, get) => ({
         message: content,
         isUser: true,
         timestamp: Date.now(),
-        status: 'success'
+        status: 'success',
+        imageUrls: imageUrls // 🚨 NEW: Include uploaded images with message
       };
       
       return {
@@ -648,4 +679,149 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       };
     }),
-})); 
+
+  // 🚨 NEW: Reactive update that guarantees UI refresh
+  updateAndRefresh: (projectId: string, updater: (props: InputProps) => InputProps) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) {
+        console.warn(`[VideoState.updateAndRefresh] Project ${projectId} not found`);
+        return state;
+      }
+      
+      console.log('[VideoState.updateAndRefresh] Starting reactive update for project:', projectId);
+      
+      try {
+        const updatedProps = updater(project.props);
+        const newRefreshToken = Date.now().toString();
+        const newGlobalCounter = (state.globalRefreshCounter || 0) + 1;
+        
+        console.log('[VideoState.updateAndRefresh] Generated new refresh token:', newRefreshToken);
+        console.log('[VideoState.updateAndRefresh] Global counter:', newGlobalCounter);
+        
+        // Update state with all necessary refresh triggers
+        const newState = {
+          ...state,
+          currentProjectId: projectId,
+          globalRefreshCounter: newGlobalCounter,
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...project,
+              props: updatedProps,
+              refreshToken: newRefreshToken,
+              lastUpdated: Date.now(),
+            }
+          }
+        };
+        
+        // Dispatch custom event for components that need manual refresh
+        setTimeout(() => {
+          console.log('[VideoState.updateAndRefresh] Dispatching videostate-update event');
+          window.dispatchEvent(new CustomEvent('videostate-update', {
+            detail: { 
+              projectId, 
+              type: 'scenes-updated',
+              refreshToken: newRefreshToken,
+              globalCounter: newGlobalCounter
+            }
+          }));
+        }, 0);
+        
+        return newState;
+      } catch (error) {
+        console.error('[VideoState.updateAndRefresh] Error during update:', error);
+        return state;
+      }
+    }),
+  
+  // 🚨 NEW: Database sync methods
+  syncToDatabase: async (projectId: string) => {
+    const project = get().projects[projectId];
+    if (!project) return;
+    
+    try {
+      // Fetch the latest project data from the server
+      const response = await fetch(`/api/trpc/video.getProjectData`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ projectId })
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch project data:', response.statusText);
+        return;
+      }
+      
+      const projectData = await response.json();
+      
+      // Update the project state with the latest data
+      set((state) => {
+        return {
+          ...state,
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...project,
+              props: projectData.props,
+              chatHistory: projectData.chatHistory,
+              dbMessagesLoaded: true
+            }
+          }
+        };
+      });
+    } catch (error) {
+      console.error('Error syncing project data:', error);
+    }
+  },
+
+  loadFromDatabase: async (projectId: string) => {
+    try {
+      // Fetch the latest project data from the server
+      const response = await fetch(`/api/trpc/video.getProjectData`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ projectId })
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to fetch project data:', response.statusText);
+        return;
+      }
+      
+      const projectData = await response.json();
+      
+      // Update the project state with the latest data
+      set((state) => {
+        return {
+          ...state,
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              props: projectData.props,
+              chatHistory: projectData.chatHistory,
+              dbMessagesLoaded: true
+            }
+          }
+        };
+      });
+    } catch (error) {
+      console.error('Error loading project data:', error);
+    }
+  },
+  
+  markForSync: (projectId: string) => 
+    set((state) => {
+      return {
+        ...state,
+        pendingDbSync: {
+          ...state.pendingDbSync,
+          [projectId]: true
+        }
+      };
+    }),
+}));

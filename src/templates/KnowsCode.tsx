@@ -1,0 +1,83 @@
+import { AbsoluteFill, interpolate, useCurrentFrame, spring } from 'remotion';
+
+export default function KnowsCode() {
+  const frame = useCurrentFrame();
+
+  const BRACE_START = 1;
+  const TEXT_START = 5;
+
+  const braceScale = spring({
+    frame: frame - BRACE_START,
+    fps: 30,
+    config: {
+      damping: 12,
+    },
+  });
+
+  const GradientBrace = ({ isLeft, scale }: { isLeft: boolean; scale: number }) => {
+    return (
+      <div
+        style={{
+          fontSize: '120px',
+          lineHeight: '120px',
+          fontFamily: 'SF Pro Display, system-ui, sans-serif',
+          background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          transform: `scale(${scale})`,
+        }}
+      >
+        {isLeft ? '{' : '}'}
+      </div>
+    );
+  };
+
+  const TypewriterText = ({ text, startFrame }: { text: string; startFrame: number }) => {
+    const charCount = Math.floor(
+      interpolate(Math.max(0, frame - startFrame), [0, 30], [0, text.length], {
+        extrapolateRight: 'clamp',
+      })
+    );
+
+    const cursorVisible = Math.floor((frame - startFrame) / 15) % 2 === 0;
+
+    return (
+      <div
+        style={{
+          fontSize: '80px',
+          lineHeight: '80px',
+          fontFamily: 'SF Pro Display, system-ui, sans-serif',
+          fontWeight: 'bold',
+        }}
+      >
+        {text.slice(0, charCount)}
+        <span
+          style={{
+            opacity: cursorVisible ? 1 : 0,
+            borderRight: '3px solid black',
+            marginLeft: '2px',
+            height: '80px',
+            display: 'inline-block',
+          }}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <GradientBrace isLeft={true} scale={braceScale} />
+        <TypewriterText text="Software is eating the world" startFrame={TEXT_START} />
+        <GradientBrace isLeft={false} scale={braceScale} />
+      </div>
+    </AbsoluteFill>
+  );
+} 

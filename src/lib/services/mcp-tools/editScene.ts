@@ -18,6 +18,7 @@ const editSceneInputSchema = z.object({
     content: z.string()
   })).optional().describe("Chat history for edit context"),
   editComplexity: z.enum(["surgical", "creative", "structural"]).optional().describe("Edit complexity level from Brain LLM"),
+  visionAnalysis: z.any().optional().describe("Vision analysis from analyzeImage tool"),
 });
 
 type EditSceneInput = z.infer<typeof editSceneInputSchema>;
@@ -39,7 +40,7 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
   inputSchema = editSceneInputSchema;
   
   protected async execute(input: EditSceneInput): Promise<EditSceneOutput> {
-    const { userPrompt, existingCode, existingName, existingDuration, projectId, storyboardSoFar, chatHistory, editComplexity } = input;
+    const { userPrompt, existingCode, existingName, existingDuration, projectId, storyboardSoFar, chatHistory, editComplexity, visionAnalysis } = input;
 
     // CONVERT: Technical name to user-friendly display name (available throughout function)
     const displayName = existingName.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || existingName;
@@ -53,7 +54,8 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         existingCode,
         existingName,
         chatHistory: chatHistory || [],
-        editComplexity: editComplexity || 'surgical' // Default to surgical if not specified
+        editComplexity: editComplexity || 'surgical', // Default to surgical if not specified
+        visionAnalysis, // 🚨 NEW: Pass vision analysis for image-guided editing
       });
 
       // DURATION DETECTION: Use LLM reasoning from DirectCodeEditor instead of regex

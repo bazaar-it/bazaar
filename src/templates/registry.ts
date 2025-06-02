@@ -6,6 +6,21 @@ import GlitchText from './GlitchText';
 import PulsingCircles from './PulsingCircles';
 import FloatingElements from './FloatingElements';
 import WaveAnimation from './WaveAnimation';
+import AICoding from './AICoding';
+import AIDialogue from './AIDialogue';
+import AppleSignIn from './AppleSignIn';
+import BlueGradientText from './BlueGradientText';
+import BubbleZoom from './BubbleZoom';
+import Code from './Code';
+import DotRipple from './DotRipple';
+import FintechUI from './FintechUI';
+import FloatingParticles from './FloatingParticles';
+import GitHubSignIn from './GitHubSignIn';
+import GoogleSignIn from './GoogleSignIn';
+import GradientText from './GradientText';
+import GrowthGraph from './GrowthGraph';
+import KnowsCode from './KnowsCode';
+import PromptIntro from './PromptIntro';
 
 export interface TemplateDefinition {
   id: string;
@@ -1028,6 +1043,306 @@ export default function WaveAnimation() {
           Fluid Motion Graphics
         </p>
       </div>
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'aicoding',
+    name: 'AI Coding',
+    duration: 180, // 6 seconds
+    component: AICoding,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function AICoding() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* AI Coding animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'aidialogue',
+    name: 'AI Dialogue',
+    duration: 180, // 6 seconds
+    component: AIDialogue,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function AIDialogue() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* AI Dialogue animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'applesignin',
+    name: 'Apple Sign In',
+    duration: 120, // 4 seconds
+    component: AppleSignIn,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function AppleSignIn() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Apple Sign In animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'bluegradienttext',
+    name: 'Blue Gradient Text',
+    duration: 240, // 8 seconds
+    component: BlueGradientText,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+
+export default function BlueGradientText() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const loopDuration = fps * 8;
+  const hueShift = (frame % loopDuration) * (360 / loopDuration) * 1.5;
+
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: "#ffffff",
+        justifyContent: "center",
+        alignItems: "center",
+        display: "flex"
+      }}
+    >
+      {/* Blue Gradient Text content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'bubblezoom',
+    name: 'Bubble Zoom',
+    duration: 180, // 6 seconds
+    component: BubbleZoom,
+    getCode: () => `import { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } from 'remotion';
+
+export default function BubbleZoom() {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Bubble Zoom animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'code',
+    name: 'Code',
+    duration: 180, // 6 seconds
+    component: Code,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function AICoding() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Code animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'dotripple',
+    name: 'Dot Ripple',
+    duration: 240, // 8 seconds
+    component: DotRipple,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+
+export default function DotRipple() {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Dot Ripple animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'fintechui',
+    name: 'Fintech UI',
+    duration: 300, // 10 seconds
+    component: FintechUI,
+    getCode: () => `import React from 'react';
+import { AbsoluteFill, interpolate, useCurrentFrame, spring } from "remotion";
+
+export default function FintechUI() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Fintech UI animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'floatingparticles',
+    name: 'Floating Particles',
+    duration: 240, // 8 seconds
+    component: FloatingParticles,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function FloatingParticles() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Floating Particles animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'githubsignin',
+    name: 'GitHub Sign In',
+    duration: 120, // 4 seconds
+    component: GitHubSignIn,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function GitHubSignIn() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* GitHub Sign In animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'googlesignin',
+    name: 'Google Sign In',
+    duration: 120, // 4 seconds
+    component: GoogleSignIn,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
+
+export default function GoogleSignIn() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Google Sign In animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'gradienttext',
+    name: 'Gradient Text',
+    duration: 240, // 8 seconds
+    component: GradientText,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+
+export default function GradientText() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Gradient Text animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'growthgraph',
+    name: 'Growth Graph',
+    duration: 240, // 8 seconds
+    component: GrowthGraph,
+    getCode: () => `import { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } from "remotion";
+
+export default function GrowthGraph() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Growth Graph animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'knowscode',
+    name: 'Knows Code',
+    duration: 180, // 6 seconds
+    component: KnowsCode,
+    getCode: () => `import { AbsoluteFill, interpolate, useCurrentFrame, spring } from 'remotion';
+
+export default function KnowsCode() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Knows Code animation content */}
+    </AbsoluteFill>
+  );
+}`
+  },
+  {
+    id: 'promptintro',
+    name: 'Prompt Intro',
+    duration: 180, // 6 seconds
+    component: PromptIntro,
+    getCode: () => `import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+
+export default function PromptIntro() {
+  const frame = useCurrentFrame();
+
+  // Your implementation
+  
+  return (
+    <AbsoluteFill>
+      {/* Prompt Intro animation content */}
     </AbsoluteFill>
   );
 }`

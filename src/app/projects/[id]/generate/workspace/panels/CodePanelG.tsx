@@ -8,7 +8,7 @@ import { useVideoState } from '~/stores/videoState';
 import { Button } from '~/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { toast } from 'sonner';
-import { PlayIcon, XIcon, SaveIcon } from 'lucide-react';
+import { XIcon, SaveIcon, PlusIcon } from 'lucide-react';
 import { api } from "~/trpc/react";
 import * as Sucrase from 'sucrase';
 
@@ -48,20 +48,21 @@ export function CodePanelG({
   projectId,
   selectedSceneId,
   onClose,
-  onSceneSelect
+  onSceneSelect,
+  onSceneGenerated
 }: { 
   projectId: string;
   selectedSceneId?: string | null;
   onClose?: () => void;
   onSceneSelect?: (sceneId: string) => void;
+  onSceneGenerated?: () => void;
 }) {
-  const { getCurrentProps, replace, updateScene } = useVideoState();
+  const { getCurrentProps, replace, updateScene, updateAndRefresh } = useVideoState();
   const [localCode, setLocalCode] = useState<string>("");
-  const [isCompiling, setIsCompiling] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const utils = api.useUtils();
   const monaco = useMonaco();
   const { theme } = useTheme();
-  const utils = api.useUtils();
 
   // Disable TypeScript semantic diagnostics to remove red underline
   React.useEffect(() => {
@@ -125,12 +126,76 @@ export function CodePanelG({
     }
   });
 
+  // Add scene mutation
+  const addSceneMutation = api.generation.addScene.useMutation({
+    onSuccess: (result) => {
+      toast.success(result.message);
+      
+      // Invalidate caches to refresh scenes
+      utils.generation.getProjectScenes.invalidate({ projectId });
+      utils.generation.getChatMessages.invalidate({ projectId });
+      
+      // Update VideoState store immediately to ensure scene is available
+      if (result.scene) {
+        // Add the new scene to VideoState store
+        const newScene = {
+          id: result.scene.id,
+          type: "custom" as const,
+          start: 0, // New scenes start at the end, will be calculated properly
+          duration: result.scene.duration || 150,
+          data: {
+            name: result.scene.name,
+            code: result.scene.tsxCode || "",
+          },
+          tsxCode: result.scene.tsxCode || "",
+          props: {} // Empty props for new scenes
+        };
+        
+        // Update video state using the updateAndRefresh method for consistency
+        updateAndRefresh(projectId, (props) => ({
+          ...props,
+          scenes: [...props.scenes, newScene],
+          meta: {
+            ...props.meta,
+            duration: props.scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0) + (newScene.duration || 150)
+          }
+        }));
+      }
+      
+      // Update video state if callback provided (similar to TemplatesPanelG)
+      if (onSceneGenerated) {
+        onSceneGenerated();
+      }
+      
+      // Select the newly added scene
+      if (result.scene && onSceneSelect) {
+        onSceneSelect(result.scene.id);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to add scene: ${error.message}`);
+    }
+  });
+
   // Handle scene selection
   const handleSceneSelect = useCallback((sceneId: string) => {
     if (onSceneSelect) {
       onSceneSelect(sceneId);
     }
   }, [onSceneSelect]);
+
+  // Handle add scene
+  const handleAddScene = useCallback(async () => {
+    try {
+      await addSceneMutation.mutateAsync({
+        projectId,
+        sceneName: undefined // Let the backend generate a default name
+      });
+    } catch (error) {
+      console.error('[CodePanelG] Add scene failed:', error);
+      // Error handling is already done in the mutation onError
+    }
+  }, [projectId, addSceneMutation]);
 
   // Save code to database
   const handleSave = useCallback(async () => {
@@ -164,53 +229,6 @@ export function CodePanelG({
     }
   }, [selectedScene, localCode, projectId, saveCodeMutation]);
 
-  // Compile and update the scene code
-  const handleCompile = useCallback(async () => {
-    if (!selectedScene || !localCode.trim()) {
-      toast.error("No code to compile");
-      return;
-    }
-
-    setIsCompiling(true);
-    
-    try {
-      // Validate that the code has export default
-      if (!localCode.includes('export default')) {
-        throw new Error('Component must have a default export');
-      }
-
-      // Try to compile with Sucrase
-      const compiledCode = compileWithSucrase(localCode);
-      
-      // Update the scene in the video state
-      const updatedProps = {
-        ...currentProps,
-        meta: currentProps?.meta || {
-          duration: 300,
-          title: "Video Project",
-          backgroundColor: "#000000"
-        },
-        scenes: scenes.map((scene: Scene) => 
-          scene.id === selectedScene.id 
-            ? {
-                ...scene,
-                tsxCode: localCode
-              }
-            : scene
-        )
-      };
-
-      replace(projectId, updatedProps);
-      
-      toast.success("Code compiled! Use 'Save' to persist changes.");
-    } catch (error) {
-      console.error('[CodePanelG] Compilation failed:', error);
-      toast.error(error instanceof Error ? error.message : "Compilation failed");
-    } finally {
-      setIsCompiling(false);
-    }
-  }, [selectedScene, localCode, currentProps, scenes, projectId, replace]);
-
   // Auto-save on code change (debounced)
   const handleCodeChange = useCallback((value: string | undefined) => {
     setLocalCode(value || "");
@@ -237,6 +255,14 @@ export function CodePanelG({
                 </SelectContent>
               </Select>
             )}
+            <Button 
+              onClick={handleAddScene}
+              size="sm"
+              className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
+            >
+              <PlusIcon className="h-3 w-3" />
+              Add Scene
+            </Button>
           </div>
           <div className="flex items-center gap-1">
             {onClose && (
@@ -283,6 +309,14 @@ export function CodePanelG({
               ))}
             </SelectContent>
           </Select>
+          <Button 
+            onClick={handleAddScene}
+            size="sm"
+            className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
+          >
+            <PlusIcon className="h-3 w-3" />
+            Add Scene
+          </Button>
         </div>
         <div className="flex items-center gap-1">
           <Button 
@@ -293,15 +327,6 @@ export function CodePanelG({
           >
             <SaveIcon className="h-3 w-3" />
             {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-          <Button 
-            onClick={handleCompile}
-            disabled={isCompiling || !localCode.trim()}
-            size="sm"
-            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
-          >
-            <PlayIcon className="h-3 w-3" />
-            {isCompiling ? 'Running...' : 'Run'}
           </Button>
           {onClose && (
             <button 

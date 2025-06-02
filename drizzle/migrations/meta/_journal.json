@@ -162,6 +162,20 @@
       "when": 1748716776355,
       "tag": "0022_orange_alex_power",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1748885243619,
+      "tag": "0023_condemned_doctor_faustus",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1748885717557,
+      "tag": "0024_yummy_chamber",
+      "breakpoints": true
     }
   ]
 }
