@@ -339,10 +339,10 @@ export function GenerateSidebar({
               </button>
             </div>
             
-            {/* Projects List */}
+            {/* Projects List - FIXED: Show all projects with scrolling */}
             {isProjectsExpanded && (
-              <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                {projects.slice(0, 8).map((project) => (
+              <div className="flex flex-col gap-1 max-h-64 overflow-y-auto custom-scrollbar">
+                {projects.map((project) => (
                   <Button
                     key={project.id}
                     variant="ghost"
@@ -359,11 +359,6 @@ export function GenerateSidebar({
                     </span>
                   </Button>
                 ))}
-                {projects.length > 8 && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 px-2 py-1">
-                    +{projects.length - 8} more
-                  </div>
-                )}
               </div>
             )}
           </div>

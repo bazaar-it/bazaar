@@ -4,12 +4,12 @@
  * Basic mock implementation of rxjs Subject
  */
 class Subject {
+  observers: Array<{next?: (value: any) => void, error?: (err: any) => void, complete?: () => void}> = [];
   /**
    * @constructor
    */
   constructor() {
-    /** @type {Array<{next?: Function, error?: Function, complete?: Function}>} */
-    this.observers = [];
+    // this.observers = []; // Now initialized at class level
   }
 
   /**
@@ -17,7 +17,7 @@ class Subject {
    * @param {Function|{next?: Function, error?: Function, complete?: Function}} observer
    * @returns {{unsubscribe: Function, closed: boolean}}
    */
-  subscribe(observer) {
+  subscribe(observer: ((value: any) => void) | { next?: (value: any) => void; error?: (err: any) => void; complete?: () => void; }) {
     const actualObserver = typeof observer === 'function' 
       ? { next: observer } 
       : observer;
@@ -36,7 +36,7 @@ class Subject {
    * Emit a value to all observers
    * @param {*} value 
    */
-  next(value) {
+  next(value: any) {
     this.observers.forEach(observer => {
       if (observer.next) {
         observer.next(value);
@@ -48,7 +48,7 @@ class Subject {
    * Emit an error to all observers
    * @param {*} err 
    */
-  error(err) {
+  error(err: any) {
     this.observers.forEach(observer => {
       if (observer.error) {
         observer.error(err);
@@ -75,10 +75,11 @@ class Subject {
  * @extends Subject
  */
 class BehaviorSubject extends Subject {
+  value: any;
   /**
    * @param {*} initialValue 
    */
-  constructor(initialValue) {
+  constructor(initialValue: any) {
     super();
     this.value = initialValue;
   }
@@ -94,7 +95,7 @@ class BehaviorSubject extends Subject {
   /**
    * @param {*} value 
    */
-  next(value) {
+  next(value: any) {
     this.value = value;
     super.next(value);
   }
@@ -103,7 +104,7 @@ class BehaviorSubject extends Subject {
    * @param {Function|{next?: Function, error?: Function, complete?: Function}} observer 
    * @returns {{unsubscribe: Function, closed: boolean}}
    */
-  subscribe(observer) {
+  subscribe(observer: ((value: any) => void) | { next?: (value: any) => void; error?: (err: any) => void; complete?: () => void; }) {
     const subscription = super.subscribe(observer);
     const actualObserver = typeof observer === 'function' 
       ? { next: observer } 
@@ -122,7 +123,7 @@ class BehaviorSubject extends Subject {
  * @param {Function} fn - Mapping function
  * @returns {Function} - Operator function
  */
-const map = (fn) => (source: any) => {
+const map = (fn: (value: any) => any) => (source: any) => {
   const result = new Subject();
   source.subscribe({
     next: (value: any) => result.next(fn(value)),
@@ -137,7 +138,7 @@ const map = (fn) => (source: any) => {
  * @param {Function} predicate - Filter function
  * @returns {Function} - Operator function
  */
-const filter = (predicate) => (source: any) => {
+const filter = (predicate: (value: any) => boolean) => (source: any) => {
   const result = new Subject();
   source.subscribe({
     next: (value: any) => {
@@ -156,7 +157,7 @@ const filter = (predicate) => (source: any) => {
  * @param {...*} args - Values to emit
  * @returns {Subject}
  */
-const of = (...args) => {
+const of = (...args: any[]) => {
   const subject = new Subject();
   setTimeout(() => {
     args.forEach(arg => subject.next(arg));

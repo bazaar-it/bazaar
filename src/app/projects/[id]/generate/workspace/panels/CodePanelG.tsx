@@ -105,16 +105,39 @@ export function CodePanelG({
       toast.success("Code saved successfully!");
       setIsSaving(false);
       
-      // Update video state cache after successful save
+      // 🚨 CRITICAL FIX: Use updateAndRefresh instead of updateScene to trigger proper video refresh
       if (selectedScene) {
-        updateScene(projectId, selectedScene.id, {
-          ...selectedScene,
-          data: {
-            ...selectedScene.data,
-            code: localCode // Update the code in the cache
-          },
-          tsxCode: localCode // Also update the tsxCode field
+        updateAndRefresh(projectId, (props) => {
+          const sceneIndex = props.scenes.findIndex((s: any) => s.id === selectedScene.id);
+          if (sceneIndex === -1) return props;
+          
+          const updatedScenes = [...props.scenes];
+          const currentScene = updatedScenes[sceneIndex];
+          if (currentScene) {
+            updatedScenes[sceneIndex] = {
+              ...currentScene,
+              data: {
+                ...currentScene.data,
+                code: localCode // Update the code in the cache
+              },
+              // TypeScript safe assignment for tsxCode (Scene type may not include it)
+              ...(localCode && { tsxCode: localCode })
+            };
+          }
+          
+          return {
+            ...props,
+            scenes: updatedScenes
+          };
         });
+        
+        // Add system message to chat when scene is saved
+        const sceneName = getSceneName(selectedScene, scenes.findIndex(s => s.id === selectedScene.id));
+        useVideoState.getState().addSystemMessage(
+          projectId, 
+          `💾 Updated ${sceneName}`,
+          'status'
+        );
       }
 
       // Also invalidate React Query cache for project data

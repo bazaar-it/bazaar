@@ -8,6 +8,7 @@ import {
   analyzeImageTool,
   createSceneFromImageTool,
   editSceneWithImageTool,
+  changeDurationTool,
   toolRegistry,
   type MCPResult 
 } from "~/lib/services/mcp-tools";
@@ -40,12 +41,21 @@ import { MEMORY_TYPES } from "~/server/db/schema";
 // 🆕 PHASE 3: Import Performance Service for latency measurement
 import { performanceService } from "~/lib/services/performance.service";
 
+import { TRPCError } from '@trpc/server';
+import { SceneBuilderService } from '../../../lib/services/sceneBuilder.service';
+import { CodeGeneratorService } from '../../../lib/services/codeGenerator.service';
+import { DirectCodeEditorService } from '../../../lib/services/directCodeEditor.service';
+import { LayoutGeneratorService } from '../../../lib/services/layoutGenerator.service';
+import { ContextBuilderService } from '../../../lib/services/contextBuilder.service';
+import type { InputProps } from '../../../types/input-props';
+
 // ✅ SIMPLIFIED: Single tool array with all tools
 const ALL_TOOLS = [
   addSceneTool, 
   editSceneTool, 
   deleteSceneTool, 
   fixBrokenSceneTool, 
+  changeDurationTool,
   analyzeImageTool, 
   createSceneFromImageTool, 
   editSceneWithImageTool
@@ -418,6 +428,12 @@ export class BrainOrchestrator extends EventEmitter {
   // 🆕 NEW: In-memory cache for image facts (will be replaced with database)
   private imageFactsCache = new TTLCache<string, ImageFacts>(600000); // 10 minutes TTL
   
+  private contextBuilder: ContextBuilderService;
+  private sceneBuilder: SceneBuilderService;
+  private codeGenerator: CodeGeneratorService;
+  private directCodeEditor: DirectCodeEditorService;
+  private layoutGenerator: LayoutGeneratorService;
+
   constructor() {
     super();
     this.setupImageFactsListener();
@@ -430,6 +446,12 @@ export class BrainOrchestrator extends EventEmitter {
       const config = this.modelConfig;
       console.log(`[BrainOrchestrator] 🤖 Using model: ${config.provider}/${config.model} (temp: ${config.temperature})`);
     }
+
+    this.contextBuilder = ContextBuilderService.getInstance();
+    this.sceneBuilder = new SceneBuilderService();
+    this.codeGenerator = new CodeGeneratorService();
+    this.directCodeEditor = new DirectCodeEditorService();
+    this.layoutGenerator = new LayoutGeneratorService();
   }
 
   // Helper method to safely extract JSON from markdown-wrapped responses
@@ -703,6 +725,7 @@ export class BrainOrchestrator extends EventEmitter {
 
   /**
    * 🆕 PHASE 3: Build enhanced context packet with REAL database integration
+   * 🚨 NEW: Enhanced with ContextBuilder for centralized context orchestration
    */
   async buildContextPacket(
     projectId: string,
@@ -712,6 +735,38 @@ export class BrainOrchestrator extends EventEmitter {
     console.log(`🧠 [Brain] Building enhanced context packet for project: ${projectId}`);
 
     try {
+      // 🚨 NEW: Use ContextBuilder for enhanced context orchestration
+      // Extract user ID from the conversation or use a fallback
+      const userId = 'system'; // TODO: Extract from actual user context
+      const storyboardSoFar = await db
+        .select({ 
+          id: scenes.id, 
+          type: sql<string>`'scene'`.as('type'), // Default type since no type column exists
+          start: scenes.order,
+          duration: scenes.duration,
+          data: sql<{ code?: string; name?: string }>
+            `json_build_object('code', ${scenes.tsxCode}, 'name', ${scenes.name})`.as('data')
+        })
+        .from(scenes)
+        .where(eq(scenes.projectId, projectId));
+
+      // 🚨 NEW: Build enhanced context using ContextBuilder
+      const contextBuilderResult = await this.contextBuilder.buildContext({
+        projectId,
+        userId,
+        storyboardSoFar: storyboardSoFar as any, // Type cast for compatibility
+        userMessage: conversationHistory[conversationHistory.length - 1]?.content,
+        imageUrls: [], // Will be populated with actual image URLs
+      });
+
+      console.log(`🧠 [Brain] ContextBuilder results:`, {
+        isFirstScene: contextBuilderResult.projectContext.isFirstScene,
+        realSceneCount: contextBuilderResult.projectContext.realSceneCount,
+        totalScenes: contextBuilderResult.projectContext.totalScenes,
+        userPreferences: Object.keys(contextBuilderResult.userPreferences).length
+      });
+
+      // 🚨 LEGACY: Maintain backward compatibility with existing system
       // 🚨 NEW: Get REAL user preferences from database
       const userPreferences = await projectMemoryService.getUserPreferences(projectId);
       
@@ -730,8 +785,19 @@ export class BrainOrchestrator extends EventEmitter {
       // 🚨 NEW: Extract MORE user preferences from chat history
       const chatPreferences = this.extractUserPreferences(conversationHistory);
       
-      // 🚨 NEW: Merge database preferences with chat-extracted preferences
-      const allPreferences = { ...userPreferences, ...chatPreferences };
+      // 🚨 NEW: Merge all preference sources: database + chat + ContextBuilder
+      // Convert ContextBuilder preferences to string format for compatibility
+      const contextBuilderPrefs = Object.fromEntries(
+        Object.entries(contextBuilderResult.userPreferences).map(([key, value]) => [
+          key, 
+          String(value)
+        ])
+      );
+      const allPreferences = { 
+        ...userPreferences, 
+        ...chatPreferences,
+        ...contextBuilderPrefs
+      };
 
       // 🚨 NEW: Build rich context packet with REAL data
       const contextPacket: MemoryBankSummary = {
@@ -933,6 +999,17 @@ export class BrainOrchestrator extends EventEmitter {
   private buildEnhancedUserPrompt(input: OrchestrationInput, contextPacket: any): string {
     const { prompt, storyboardSoFar } = input;
     
+    // 🔧 AUTOFIX DEBUG: Check if this is an autofix prompt
+    const isAutofixPrompt = prompt.includes('🔧 AUTO-FIX:') || prompt.includes('AUTO-FIX');
+    if (isAutofixPrompt) {
+      console.log('[BrainOrchestrator] 🔧 AUTOFIX DEBUG: Building enhanced prompt for autofix:', {
+        prompt: prompt,
+        userContext: input.userContext,
+        hasSceneId: !!input.userContext?.sceneId,
+        hasErrorMessage: !!input.userContext?.errorMessage
+      });
+    }
+    
     // Build storyboard context
     let storyboardInfo = "No scenes yet";
     if (storyboardSoFar && storyboardSoFar.length > 0) {
@@ -990,6 +1067,25 @@ Respond with JSON only.`;
     toolSelection: ToolSelectionResult, 
     contextPacket: any
   ): Promise<OrchestrationOutput> {
+    // 🧠 NEW: Build enhanced context using ContextBuilder (matches architecture diagram)
+    const { ContextBuilderService } = await import('../../../lib/services/contextBuilder.service');
+    const contextBuilder = ContextBuilderService.getInstance();
+    
+    const enhancedContext = await contextBuilder.buildContext({
+      projectId: input.projectId,
+      userId: input.userId,
+      storyboardSoFar: input.storyboardSoFar,
+      userMessage: input.prompt,
+      imageUrls: (input.userContext?.imageUrls as string[]) || [],
+      isFirstScene: !input.storyboardSoFar || input.storyboardSoFar.length === 0
+    });
+    
+    if (this.DEBUG) {
+      console.log(`[BrainOrchestrator] 🧠 Enhanced context built:`);
+      console.log(`[BrainOrchestrator] 👤 User preferences: ${enhancedContext.userPreferences.style}`);
+      console.log(`[BrainOrchestrator] 📚 Scene history: ${enhancedContext.sceneHistory.previousScenes.length} scenes`);
+      console.log(`[BrainOrchestrator] 🏗️ Is first scene: ${enhancedContext.projectContext.isFirstScene}`);
+    }
     if (!toolSelection.toolName) {
       return {
         success: false,
@@ -1003,6 +1099,7 @@ Respond with JSON only.`;
       'editScene': '✏️ Editing your scene...',
       'deleteScene': '🗑️ Deleting scene...',
       'fixBrokenScene': '🔧 Fixing broken scene...',
+      'changeDuration': '⏱️ Changing scene duration...',
       'analyzeImage': '🖼️ Analyzing image...',
       'createSceneFromImage': '🖼️ Creating scene from image...',
       'editSceneWithImage': '✏️ Editing scene with image...'
@@ -1019,8 +1116,19 @@ Respond with JSON only.`;
       };
     }
 
+    // 🚨 NEW: Detect if this is the first scene (matching architecture diagram)
+    const isFirstScene = !input.storyboardSoFar || input.storyboardSoFar.length === 0;
+    
     // Execute single tool with enhanced context
     const toolInput = await this.prepareToolInput(input, toolSelection);
+
+    // 🚨 NEW: Pass first scene detection to addScene tool
+    if (toolSelection.toolName === ToolName.AddScene) {
+      (toolInput as any).isFirstScene = isFirstScene;
+      if (this.DEBUG) {
+        console.log(`[BrainOrchestrator] 🏗️ Scene creation: ${isFirstScene ? 'FROM SCRATCH' : 'WITH PALETTE'}`);
+      }
+    }
 
     // 🎯 NEW: Pass progress callback to tools that support it
     if (toolSelection.toolName === ToolName.AddScene && input.onProgress) {
@@ -1054,6 +1162,17 @@ Respond with JSON only.`;
     input: OrchestrationInput, 
     contextPacket: any
   ): ToolSelectionResult {
+    // 🔧 AUTOFIX DEBUG: Check if autofix was selected
+    const isAutofixPrompt = input.prompt.includes('🔧 AUTO-FIX:') || input.prompt.includes('AUTO-FIX');
+    if (isAutofixPrompt) {
+      console.log('[BrainOrchestrator] 🔧 AUTOFIX DEBUG: Brain decision for autofix prompt:', {
+        selectedTool: parsed.toolName || parsed.workflow?.[0]?.toolName,
+        reasoning: parsed.reasoning,
+        targetSceneId: parsed.targetSceneId,
+        fullDecision: parsed
+      });
+    }
+    
     // Check if this is a multi-step workflow
     if (parsed.workflow && Array.isArray(parsed.workflow)) {
       if (this.DEBUG) console.log(`[DEBUG] Multi-step workflow detected: ${parsed.workflow.length} steps`);
@@ -1132,7 +1251,7 @@ Respond with JSON only.`;
    */
   private async executeWorkflow(
     input: OrchestrationInput, 
-    workflow: Array<{toolName: string, context: string, dependencies?: string[]}>,
+    workflow: Array<{toolName: string, context: string, dependencies?: string[], targetSceneId?: string}>,
     reasoning?: string
   ): Promise<OrchestrationOutput> {
     if (this.DEBUG) console.log(`[BrainOrchestrator] Executing workflow with ${workflow.length} steps`);
@@ -1168,6 +1287,7 @@ Respond with JSON only.`;
         const toolNameEnum = step.toolName as ToolName;
         const processedResult = await this.processToolResult(stepResult, toolNameEnum, input, {
           reasoning: `Workflow step ${i + 1}: ${step.context}`,
+          targetSceneId: step.targetSceneId, // Pass targetSceneId from workflow step
         });
         workflowResults[stepKey] = processedResult;
         
@@ -1212,11 +1332,16 @@ Respond with JSON only.`;
    */
   private async prepareWorkflowStepInput(
     originalInput: OrchestrationInput,
-    step: {toolName: string, context: string, dependencies?: string[]},
+    step: {toolName: string, context: string, dependencies?: string[], targetSceneId?: string},
     workflowResults: Record<string, any>
   ): Promise<Record<string, unknown>> {
     // Start with the original tool input preparation
-    const baseInput = await this.prepareToolInput(originalInput, { toolName: step.toolName });
+    // 🚨 CRITICAL FIX: Extract targetSceneId from step definition and pass to prepareToolInput
+    const toolSelection = { 
+      toolName: step.toolName,
+      targetSceneId: step.targetSceneId // Pass targetSceneId from workflow step
+    };
+    const baseInput = await this.prepareToolInput(originalInput, toolSelection);
     
     // 🚨 CRITICAL FIX: Extract visionAnalysis from previous step results for addScene and editScene
     let visionAnalysis: any = undefined;
@@ -1298,6 +1423,11 @@ Respond with JSON only.`;
         
       case ToolName.DeleteScene:
         sceneOperationResult = await this.handleSceneDeletion(result.data, operationContext, modelUsage);
+        break;
+        
+      case ToolName.ChangeDuration:
+        // ChangeDuration is a special case - it just returns the result without database operations
+        // since the tool handles the duration update internally
         break;
         
       default:
@@ -1426,6 +1556,8 @@ Respond with JSON only.`;
         return 'edit';
       case ToolName.DeleteScene:
         return 'delete';
+      case ToolName.ChangeDuration:
+        return 'edit';
       default:
         return 'create'; // fallback
     }
@@ -1788,6 +1920,27 @@ Respond with JSON only.`;
           existingDuration: editScene.duration || 180,
           projectId: input.projectId,
           sceneId: editSceneId,
+        };
+        
+      case "changeDuration":
+        // changeDuration requires scene ID and new duration
+        const changeDurationSceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
+        if (!changeDurationSceneId) {
+          throw new Error("Scene ID required for duration change - Brain LLM should provide targetSceneId");
+        }
+        
+        // Extract duration from user prompt using simple regex patterns
+        const durationMatch = input.prompt.match(/(\d+)\s*seconds?/i);
+        let durationSeconds = 4; // Default to 4 seconds
+        if (durationMatch && durationMatch[1]) {
+          durationSeconds = parseInt(durationMatch[1], 10);
+        }
+        
+        return {
+          ...baseInput,
+          sceneId: changeDurationSceneId,
+          durationSeconds: durationSeconds,
+          projectId: input.projectId,
         };
         
       default:

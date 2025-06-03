@@ -74,9 +74,9 @@ const starterPack: ModelPack = {
     fixBrokenScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2 },
     codeGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.25 },
-      creative: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4 },
-      structural: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 }
+      surgical: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
@@ -99,9 +99,9 @@ const performancePack: ModelPack = {
     fixBrokenScene: { provider: 'openai', model: 'gpt-4o', temperature: 0.2 },
     codeGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'openai', model: 'gpt-4o', temperature: 0.25 },
-      creative: { provider: 'openai', model: 'gpt-4o', temperature: 0.4 },
-      structural: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+      surgical: { provider: 'openai', model: 'gpt-4o', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'openai', model: 'gpt-4o', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'openai', model: 'gpt-4o', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
@@ -124,9 +124,9 @@ const mixedPack: ModelPack = {
     fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.2 },
     codeGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
@@ -149,9 +149,9 @@ const claudePack: ModelPack = {
     fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.2 },
     codeGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
@@ -174,9 +174,9 @@ const haikuPack: ModelPack = {
     fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.2 },
     codeGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },

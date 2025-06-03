@@ -6,7 +6,6 @@ import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "@auth/core/adapters";
 import { type InputProps } from "~/types/input-props";
 import { type JsonPatch } from "~/types/json-patch";
-import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 import { type InferSelectModel } from "drizzle-orm";
 
 // Import the InputProps type for the projects table
@@ -140,6 +139,7 @@ export const messages = createTable(
     role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
     kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
+    imageUrls: d.jsonb("image_urls").$type<string[]>(), // 🚨 NEW: Support for uploaded images
     createdAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -424,7 +424,6 @@ export const animationDesignBriefs = createTable(
     componentJobId: d
       .uuid()
       .references(() => customComponentJobs.id), // Optional link to component job
-    designBrief: d.jsonb().$type<AnimationDesignBrief>().notNull(), // The structured design brief
     llmModel: d.varchar({ length: 100 }).notNull(), // Model used to generate the brief
     status: d.varchar({ length: 50 })
       .default("pending")

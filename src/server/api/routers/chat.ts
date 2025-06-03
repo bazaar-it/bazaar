@@ -9,7 +9,7 @@
 /* Features:                                                          */
 /* - tRPC v11 compatible                                              */
 /* - Uses experimental_stream for HTTP Streaming Subscriptions (SSE)  */
-/* - Single OpenAI streaming call (context-aware)                     */
+/* - Routes through Brain Orchestrator for proper tool selection      */
 /* - Handles text deltas & tool calls                                 */
 /* - Single final database update for assistant message               */
 /* - Structured client events                                         */
@@ -20,7 +20,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { db } from "~/server/db";
-import { projects, patches, messages, customComponentJobs, scenePlans } from "~/server/db/schema";
+import { projects, patches, messages, customComponentJobs, scenePlans, scenes } from "~/server/db/schema";
 import { eq, desc, and, lt, count } from "drizzle-orm";
 import { openai } from "~/server/lib/openai";
 import { randomUUID } from "crypto";
@@ -38,8 +38,11 @@ import {
     generateAnimationDesignBrief,
     type AnimationBriefGenerationParams,
 } from "~/server/services/animationDesigner.service";
-import { type AnimationDesignBrief } from "~/lib/schemas/animationDesignBrief.schema";
 import { eventBufferService } from "~/server/services/eventBuffer.service";
+import { BrainOrchestrator } from "~/server/services/brain/orchestrator";
+
+// Initialize brain orchestrator
+const brainOrchestrator = new BrainOrchestrator();
 
 // Set to track active streams and prevent duplicates
 const activeStreamIds = new Set<string>();
@@ -73,8 +76,7 @@ export const chatRouter = createTRPCRouter({
 
     /**
      * LEGACY: Synchronous message processing (kept for potential non-streaming clients/tests).
-     * NOTE: This likely duplicates logic now present in streamResponse.
-     * Consider refactoring or removing if no longer needed.
+     * NOTE: This now routes through the brain orchestrator for consistency.
      */
     sendMessage: protectedProcedure
         .input(z.object({ projectId: z.string().uuid(), message: z.string().min(1) }))
@@ -92,9 +94,10 @@ export const chatRouter = createTRPCRouter({
             projectId: z.string().uuid(),
             message: z.string().min(1),
             sceneId: z.string().nullable().optional(),
+            imageUrls: z.array(z.string()).optional(), // 🚨 NEW: Support for uploaded images
         }))
         .mutation(async ({ ctx, input }) => {
-            const { projectId, message, sceneId } = input;
+            const { projectId, message, sceneId, imageUrls } = input;
             const { session } = ctx;
             
             // Log if scene ID is provided for context-aware responses
@@ -120,13 +123,14 @@ export const chatRouter = createTRPCRouter({
 
             const userMessageId = randomUUID();
             try {
-              // 2. Insert User Message
+              // 2. Insert User Message with optional imageUrls
               await ctx.db.insert(messages).values({
                   id: userMessageId,
                   projectId,
                   content: message,
                   role: "user",
                   createdAt: new Date(),
+                  imageUrls: imageUrls || null, // 🚨 NEW: Store uploaded images
               });
             } catch (error) {
               console.error(`[initiateChat] Failed to insert user message for projectId: ${projectId}, userMessageId: ${userMessageId}:`, error);
@@ -158,8 +162,7 @@ export const chatRouter = createTRPCRouter({
         }),
 
     /**
-     * Core streaming logic: Handles OpenAI stream, text deltas, tool execution,
-     * and the final single DB update for the assistant message.
+     * Core streaming logic: Routes through Brain Orchestrator for proper tool selection
      */
     streamResponse: protectedProcedure
         .input(z.object({
@@ -345,7 +348,7 @@ export const chatRouter = createTRPCRouter({
 
                 const mainProcess = async () => {
                     try {
-                        console.log(`[Stream ${assistantMessageId}] Starting subscription for client ${effectiveClientId}.`);
+                        console.log(`[Stream ${assistantMessageId}] Starting brain orchestrator processing for client ${effectiveClientId}.`);
                         emit.next({ type: "status", status: "thinking" });
 
                         // --- 1. Fetch Context (Project & History) ---
@@ -372,33 +375,121 @@ export const chatRouter = createTRPCRouter({
                                 lt(messages.createdAt, placeholderMessage.createdAt) // Messages before placeholder
                             ),
                             orderBy: [desc(messages.createdAt)],
-                            limit: MAX_CONTEXT_MESSAGES * 2 // Fetch more to ensure we get user/assistant pairs
+                            limit: 20 // Get recent context
                         });
 
                         // Find the most recent user message from the fetched history
                         const lastUserMessage = history.find(m => m.role === 'user');
                         if (!lastUserMessage) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not find triggering user message in history." });
 
-                        // Process the user message
-                        await processUserMessage(
-                            projectId, 
-                            session.user.id,
-                            lastUserMessage.id,
-                            assistantMessageId,
-                            lastUserMessage.content,
-                            project.props,
-                            openai,
-                            eventEmitter,
-                            effectiveClientId,  // Client ID for reconnection support
-                            shouldResume || undefined // Convert null to undefined
-                        );
+                        // Prepare chat history for brain orchestrator
+                        const chatHistory = history.reverse().map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                        }));
+
+                        // Get current scenes for context
+                        const currentScenes = await db.query.scenes.findMany({
+                            where: eq(scenes.projectId, projectId),
+                            orderBy: [scenes.order],
+                        });
+
+                        const storyboardForBrain = currentScenes.map(scene => ({
+                            id: scene.id,
+                            name: scene.name,
+                            order: scene.order,
+                            duration: scene.duration,
+                            layoutJson: scene.layoutJson,
+                        }));
+
+                        // Process through brain orchestrator
+                        emit.next({ type: "status", status: "thinking" });
+                        
+                        const result = await brainOrchestrator.processUserInput({
+                            prompt: lastUserMessage.content,
+                            projectId,
+                            userId: session.user.id,
+                            userContext: { 
+                                imageUrls: lastUserMessage.imageUrls || undefined
+                            },
+                            storyboardSoFar: storyboardForBrain,
+                            chatHistory,
+                        });
+
+                        if (!result.success) {
+                            // Update assistant message with error
+                            await db.update(messages)
+                                .set({
+                                    content: result.error || "Sorry, I encountered an issue processing your request.",
+                                    status: "error",
+                                    updatedAt: new Date(),
+                                })
+                                .where(eq(messages.id, assistantMessageId));
+
+                            eventEmitter.next({
+                                type: StreamEventType.ERROR,
+                                error: result.error || "Processing failed",
+                                content: result.error || "Sorry, I encountered an issue processing your request."
+                            });
+                            
+                            eventEmitter.next({
+                                type: StreamEventType.DONE,
+                                status: "error",
+                                jobId: null
+                            });
+                            return;
+                        }
+
+                        // Update assistant message with successful response
+                        const finalContent = result.chatResponse || "Task completed successfully!";
+                        
+                        await db.update(messages)
+                            .set({
+                                content: finalContent,
+                                status: "success",
+                                kind: result.toolUsed ? "tool_result" : "response",
+                                updatedAt: new Date(),
+                            })
+                            .where(eq(messages.id, assistantMessageId));
+
+                        // Send completion events
+                        eventEmitter.next({
+                            type: StreamEventType.CONTENT_COMPLETE,
+                            content: finalContent
+                        });
+
+                        if (result.toolUsed) {
+                            eventEmitter.next({
+                                type: StreamEventType.TOOL_RESULT,
+                                toolName: result.toolUsed,
+                                success: true,
+                                result: finalContent
+                            });
+                        }
+
+                        eventEmitter.next({
+                            type: StreamEventType.DONE,
+                            status: "success",
+                            jobId: null
+                        });
 
                     } catch (error: any) {
-                        console.error(`[Stream ${assistantMessageId}] Error during stream processing:`, error);
+                        console.error(`[Stream ${assistantMessageId}] Error during brain orchestrator processing:`, error);
+                        
+                        // Update assistant message with error
+                        const errorMessage = `❌ Error: ${error instanceof Error ? error.message : String(error)}`;
+                        await db.update(messages)
+                            .set({
+                                content: errorMessage,
+                                status: "error",
+                                updatedAt: new Date(),
+                            })
+                            .where(eq(messages.id, assistantMessageId));
+
                         eventEmitter.next({
                             type: StreamEventType.ERROR,
                             error: error instanceof Error ? error.message : String(error),
-                            content: `❌ Error: ${error instanceof Error ? error.message : String(error)}`
+                            content: errorMessage
                         });
                         
                         // Final status update
@@ -430,11 +521,6 @@ export const chatRouter = createTRPCRouter({
                     
                     // Mark client as disconnected in event buffer
                     eventBufferService.markDisconnected(effectiveClientId);
-                    
-                    // Only remove from active streams if no clients are connected
-                    // This is necessary for reconnection support
-                    // We'll rely on the buffer cleanup mechanism to eventually remove it
-                    // activeStreamIds.delete(assistantMessageId);
                 };
             });
         }),

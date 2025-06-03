@@ -176,6 +176,13 @@
       "when": 1748885717557,
       "tag": "0024_yummy_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1748975153814,
+      "tag": "0025_add_image_urls_to_messages",
+      "breakpoints": true
     }
   ]
 }

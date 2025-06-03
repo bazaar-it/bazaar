@@ -6,7 +6,7 @@
  */
 class Observable {
   /**
-   * @param {Function} subscriber - Subscriber function
+   * @param {(observer: {next?: (value: T) => void, error?: (err: any) => void, complete?: () => void}) => (() => void) | void} subscriber - Subscriber function that is called with an observer
    */
   constructor(subscriber) {
     /** @type {Function} */

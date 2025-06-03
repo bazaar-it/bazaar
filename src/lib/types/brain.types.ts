@@ -13,6 +13,7 @@ export enum ToolName {
   EditScene = 'editScene', 
   DeleteScene = 'deleteScene',
   FixBrokenScene = 'fixBrokenScene',
+  ChangeDuration = 'changeDuration',
   AnalyzeImage = 'analyzeImage',
   CreateSceneFromImage = 'createSceneFromImage',
   EditSceneWithImage = 'editSceneWithImage',

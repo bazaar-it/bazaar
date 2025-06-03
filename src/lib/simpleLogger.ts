@@ -4,10 +4,11 @@
 // This replaces the complex winston logger for production use
 
 interface SimpleLogger {
-  info: (message: string, meta?: any) => void;
-  error: (message: string, meta?: any) => void;
-  warn: (message: string, meta?: any) => void;
-  debug: (message: string, meta?: any) => void;
+  info: (messageOrId: string, messageOrMeta?: string | any, meta?: any) => void;
+  error: (messageOrId: string, messageOrMeta?: string | any, meta?: any) => void;
+  warn: (messageOrId: string, messageOrMeta?: string | any, meta?: any) => void;
+  debug: (messageOrId: string, messageOrMeta?: string | any, meta?: any) => void;
+  tool: (messageId: string, toolName: string, message: string, meta?: any) => void;
   child: (meta: any) => SimpleLogger;
 }
 
@@ -32,6 +33,10 @@ const createSimpleLogger = (defaultMeta: any = {}): SimpleLogger => {
       if (process.env.NODE_ENV === 'development') {
         console.log(formatMessage('debug', message, meta));
       }
+    },
+    tool: (messageId: string, toolName: string, message: string, meta?: any) => {
+      const toolMeta = { messageId, toolName, ...meta };
+      console.log(formatMessage('info', `[TOOL:${toolName}] ${message}`, toolMeta));
     },
     child: (childMeta: any) => {
       return createSimpleLogger({ ...defaultMeta, ...childMeta });

@@ -76,7 +76,7 @@ export class DirectCodeEditorService {
     try {
       return JSON.parse(cleaned);
     } catch (jsonError) {
-      console.error("[DirectCodeEditor] Failed to parse direct JSON:", cleaned.substring(0, 200));
+      console.error("[DirectCodeEditor] Failed to parse JSON:", cleaned.substring(0, 200));
       throw new Error(`Response is not valid JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
     }
   }

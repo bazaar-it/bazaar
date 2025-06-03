@@ -29,19 +29,10 @@ export async function POST(request: NextRequest) {
     
     console.log(`[Transcription] Processing audio file: ${audioFile.name}, size: ${audioFile.size} bytes, type: ${audioFile.type}`);
     
-    // Get the audio data and prepare it for the OpenAI API
-    const audioBlob = new Blob([await audioFile.arrayBuffer()], { type: audioFile.type || 'audio/webm' });
-    
-    // Create a File object from the Blob with the original name
-    const file = new File(
-      [audioBlob], 
-      audioFile.name || 'audio.webm', 
-      { type: audioFile.type || 'audio/webm' }
-    );
-    
-    // Call OpenAI Whisper API
+    // Call OpenAI Whisper API directly with the audio file
+    // No need to recreate File object - formData File works directly with OpenAI
     const transcription = await openai.audio.transcriptions.create({
-      file: file,
+      file: audioFile,
       model: "whisper-1",
       language: "en", // Can be made dynamic if needed
       response_format: "text"
