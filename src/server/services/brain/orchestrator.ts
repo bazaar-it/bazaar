@@ -650,13 +650,15 @@ export class BrainOrchestrator extends EventEmitter {
   async startAsyncImageAnalysis(
     projectId: string,
     imageUrls: string[],
-    traceId?: string
+    traceId?: string // This traceId parameter might be the long user prompt
   ): Promise<ImageFacts | null> {
     if (!imageUrls || imageUrls.length === 0) {
       return null;
     }
 
-    const analysisTraceId = traceId || `img-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+    // 🚨 MODIFIED: Generate a shorter, more robust unique ID for analysisTraceId
+    // This avoids using the potentially very long user prompt passed as traceId
+    const analysisTraceId = `img-${Math.random().toString(36).substring(2, 7)}-${Date.now().toString(36)}`;
     console.log(`🔄 [Brain] Starting async image analysis: ${analysisTraceId}`);
 
           // Fire-and-forget: Don't await this operation  
@@ -937,6 +939,9 @@ export class BrainOrchestrator extends EventEmitter {
     
     if (this.DEBUG) console.log(`[DEBUG] Enhanced LLM USER PROMPT: ${enhancedPrompt.substring(0, 200)}...`);
     
+    // 🆕 Extract requested duration using the new helper method
+    const requestedDurationSeconds = this._extractRequestedDuration(input.prompt);
+    
     try {
       // 🆕 PHASE 4: Token monitoring before LLM call
       const combinedPrompt = systemPrompt + enhancedPrompt;
@@ -982,7 +987,14 @@ export class BrainOrchestrator extends EventEmitter {
       const parsed = this.extractJsonFromResponse(rawOutput);
       
       // Process the brain's decision...
-      return this.processBrainDecision(parsed, input, contextPacket);
+      const decision = this.processBrainDecision(parsed, input, contextPacket);
+
+      // 🆕 Add requested duration to the decision result if found
+      if (requestedDurationSeconds) {
+        decision.requestedDurationSeconds = requestedDurationSeconds;
+      }
+      
+      return decision;
       
     } catch (error) {
       if (this.DEBUG) console.error("[BrainOrchestrator] Intent analysis error:", error);
@@ -1377,7 +1389,7 @@ Respond with JSON only.`;
    * Process tool result and handle database operations
    * 🚨 DRAMATICALLY SIMPLIFIED: Now uses SceneRepository service for DRY database operations
    */
-  private async processToolResult(result: any, toolName: ToolName, input: OrchestrationInput, toolSelection?: { targetSceneId?: string; editComplexity?: EditComplexity; reasoning?: string }): Promise<OrchestrationOutput> {
+  private async processToolResult(result: any, toolName: ToolName, input: OrchestrationInput, toolSelection?: { targetSceneId?: string; editComplexity?: EditComplexity; reasoning?: string, requestedDurationSeconds?: number }): Promise<OrchestrationOutput> {
     // 🚨 NEW: Early return for failed tool results
     if (!result.success) {
       return {
@@ -1457,6 +1469,45 @@ Respond with JSON only.`;
       debug = (result.data as any).debug;
     }
 
+    // 🆕 Handle explicit duration adjustment
+    if (toolSelection?.requestedDurationSeconds && sceneOperationResult?.success && sceneOperationResult?.scene) {
+      const actualDurationFrames = sceneOperationResult.scene.duration;
+      const requestedDurationFrames = Math.round(toolSelection.requestedDurationSeconds * 30);
+
+      if (actualDurationFrames !== requestedDurationFrames) {
+        if (this.DEBUG) {
+          console.log(`[BrainOrchestrator] Adjusting scene duration. Actual: ${actualDurationFrames}f, Requested: ${requestedDurationFrames}f (${toolSelection.requestedDurationSeconds}s) for scene ${sceneOperationResult.scene.id}`);
+        }
+        try {
+          const durationChangeResult = await changeDurationTool.run({
+            sceneId: sceneOperationResult.scene.id,
+            durationSeconds: toolSelection.requestedDurationSeconds,
+            projectId: input.projectId,
+          });
+
+          if (durationChangeResult.success) {
+            // Update the duration in the result we are about to return
+            if(sceneOperationResult.scene) sceneOperationResult.scene.duration = requestedDurationFrames;
+            
+            const actualDurationSeconds = (actualDurationFrames / 30).toFixed(1);
+            const messageSuffix = ` P.S. The animation content is ${actualDurationSeconds}s long, but I've set the scene playback to your requested ${toolSelection.requestedDurationSeconds}s.`;
+            chatResponse = (chatResponse || "Operation successful.") + messageSuffix;
+            if (this.DEBUG) console.log(`[BrainOrchestrator] Duration adjusted to ${requestedDurationFrames}f and chat response updated for scene ${sceneOperationResult.scene.id}.`);
+          } else {
+            // Try to get specific reasoning from the tool's output data first
+            const failureReason = durationChangeResult.data?.reasoning || "Failed to update duration (specific reason unavailable).";
+            console.error(`[BrainOrchestrator] changeDurationTool failed for scene ${sceneOperationResult.scene.id}:`, failureReason);
+            const errorSuffix = ` P.S. I tried to set the scene playback to your requested ${toolSelection.requestedDurationSeconds}s, but couldn\'t update it (${failureReason}). The scene duration remains ${(actualDurationFrames / 30).toFixed(1)}s.`;
+            chatResponse = (chatResponse || "Operation successful.") + errorSuffix;
+          }
+        } catch (durationError) {
+          console.error(`[BrainOrchestrator] Exception while adjusting duration for scene ${sceneOperationResult.scene.id}:`, durationError);
+          const errorSuffix = ` P.S. I tried to set the scene playback to your requested ${toolSelection.requestedDurationSeconds}s, but encountered an error. The scene duration remains ${(actualDurationFrames / 30).toFixed(1)}s.`;
+          chatResponse = (chatResponse || "Operation successful.") + errorSuffix;
+        }
+      }
+    }
+
     return {
       success: true,
       result: sceneOperationResult ? { ...result.data, scene: sceneOperationResult.scene } : result.data,
@@ -1498,20 +1549,24 @@ Respond with JSON only.`;
   private async handleSceneUpdate(
     sceneData: any,
     targetSceneId: string | undefined,
-    context: DatabaseOperationContext,
+    context: DatabaseOperationContext, // context now includes toolName
     modelUsage: ModelUsageData
   ) {
     const sceneId = targetSceneId || sceneData?.sceneId;
     
-    if (!sceneId || !sceneData?.sceneCode || !sceneData?.sceneName) {
-      if (this.DEBUG) console.warn(`[BrainOrchestrator] Invalid scene data for update:`, { sceneId, sceneData });
+    // 🚨 MODIFIED: Use sceneData.fixedCode if tool was FixBrokenScene, otherwise sceneData.sceneCode
+    const code = context.toolName === ToolName.FixBrokenScene ? sceneData?.fixedCode : sceneData?.sceneCode;
+
+    // 🚨 MODIFIED: Check for 'code' (which might be fixedCode or sceneCode) instead of sceneData.sceneCode directly
+    if (!sceneId || !code || !sceneData?.sceneName) { 
+      if (this.DEBUG) console.warn(`[BrainOrchestrator] Invalid scene data for update:`, { sceneId, sceneData, resolvedCode: code });
       return null;
     }
 
     const standardizedData: SceneData = {
       sceneId,
       sceneName: sceneData.sceneName,
-      sceneCode: sceneData.sceneCode,
+      sceneCode: code, // 🚨 Use the determined code here
       duration: sceneData.duration || 180,
       layoutJson: sceneData.layoutJson,
       reasoning: sceneData.reasoning,
@@ -2166,6 +2221,19 @@ Respond with JSON only.`;
     if (this.DEBUG) {
       console.log(`🎧 [Brain] Observer pattern listeners setup complete`);
     }
+  }
+
+  // 🆕 Helper method to extract requested duration from prompt
+  private _extractRequestedDuration(prompt: string): number | undefined {
+    const durationMatch = prompt.match(/\b(\d+)\s*(?:seconds?|sec|se[ocn]{1,3}ds?)\b/i); // More forgiving regex
+    if (durationMatch && durationMatch[1]) {
+      const seconds = parseInt(durationMatch[1], 10);
+      if (!isNaN(seconds) && seconds > 0) {
+        if (this.DEBUG) console.log(`[BrainOrchestrator] Extracted requested duration: ${seconds} seconds`);
+        return seconds;
+      }
+    }
+    return undefined;
   }
 }
 

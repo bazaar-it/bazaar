@@ -46,6 +46,7 @@ export interface ToolSelectionResult {
   clarificationQuestion?: string;
   editComplexity?: EditComplexity;
   userFeedback?: string;
+  requestedDurationSeconds?: number;
 }
 
 /**

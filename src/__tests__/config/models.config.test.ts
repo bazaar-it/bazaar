@@ -107,7 +107,7 @@ describe('Model Management System', () => {
     test('getModel returns correct model configuration', () => {
       const brainModel = getModel('brain');
       expect(brainModel.provider).toBe('anthropic');
-      expect(brainModel.model).toBe('claude-3-5-sonnet-20241022');
+      expect(brainModel.model).toBe('claude-sonnet-4-20250514');
     });
 
     test('resolveModel applies overrides correctly', () => {

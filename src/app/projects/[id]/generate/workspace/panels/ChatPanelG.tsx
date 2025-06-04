@@ -11,6 +11,16 @@ import { Card, CardContent } from "~/components/ui/card";
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon, ImageIcon } from 'lucide-react';
+import { cn } from "~/lib/utils";
+
+// Define UploadedImage interface for image uploads
+interface UploadedImage {
+  id: string;
+  file: File;
+  status: 'uploading' | 'uploaded' | 'error';
+  url?: string;
+  error?: string;
+}
 
 interface Scene {
   id: string;
@@ -46,6 +56,7 @@ interface DbMessage {
   role: 'user' | 'assistant';
   createdAt: Date;
   status?: string | null; // Match database schema - can be null
+  imageUrls?: string[] | null; // 🚨 FIXED: Added missing imageUrls field
   isOptimistic?: false;
 }
 
@@ -222,10 +233,6 @@ export default function ChatPanelG({
     return messages[Math.floor(Math.random() * messages.length)] || "⚙️ Processing your request...";
   };
 
-  // 🚨 REMOVED: Problematic progress messages that were overriding real responses
-  // The old progress message system was cycling every 2 seconds and destroying real AI responses
-  // Let the real responses from the Brain Orchestrator show instead
-
   // 🎯 NEW: Listen for edit complexity from Brain LLM (would come from mutation result)
   const handleEditComplexityDetected = (complexity: string) => {
     const feedback = getComplexityFeedback(complexity);
@@ -278,7 +285,7 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] ✅ Generation completed:', result);
       
       // ✅ Update assistant message with response from Brain Orchestrator
-      const finalResponse = result.chatResponse || result.reasoning || 'Scene operation completed! ✅';
+      const finalResponse = result.chatResponse || 'Scene operation completed! ✅';
       updateMessage(projectId, assistantMessageId, {
         content: finalResponse,
         status: 'success'
@@ -968,12 +975,4 @@ export default function ChatPanelG({
       </div>
     </div>
   );
-} 
-
-interface UploadedImage {
-  id: string;
-  file: File;
-  status: 'uploading' | 'uploaded' | 'error';
-  url?: string;
-  error?: string;
 }

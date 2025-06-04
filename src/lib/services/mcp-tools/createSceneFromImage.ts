@@ -11,6 +11,7 @@ const createSceneFromImageInputSchema = z.object({
   userPrompt: z.string().describe("User's description/context for the image"),
   projectId: z.string().describe("Project ID to add the scene to"),
   sceneNumber: z.number().optional().describe("Optional scene number/position"),
+  visionAnalysis: z.any().optional().describe("Optional pre-computed vision analysis from analyzeImage tool"),
 });
 
 type CreateSceneFromImageInput = z.infer<typeof createSceneFromImageInputSchema>;
@@ -30,7 +31,7 @@ export class CreateSceneFromImageTool extends BaseMCPTool<CreateSceneFromImageIn
   inputSchema = createSceneFromImageInputSchema;
   
   protected async execute(input: CreateSceneFromImageInput): Promise<CreateSceneFromImageOutput> {
-    const { imageUrls, userPrompt, projectId, sceneNumber } = input;
+    const { imageUrls, userPrompt, projectId, sceneNumber, visionAnalysis } = input;
 
     try {
       console.log(`[CreateSceneFromImage] 🖼️ Creating scene from ${imageUrls.length} image(s)`);
@@ -45,6 +46,7 @@ export class CreateSceneFromImageTool extends BaseMCPTool<CreateSceneFromImageIn
         imageUrls,
         userPrompt,
         functionName,
+        visionAnalysis,
       });
 
       // Generate conversational response

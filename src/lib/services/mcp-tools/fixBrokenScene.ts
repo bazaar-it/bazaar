@@ -32,6 +32,76 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
   description = "Automatically analyze and fix broken scene code. Use when a scene has crashed and needs repair.";
   inputSchema = fixBrokenSceneInputSchema;
   
+  // 🚨 IMPROVED: More robust JSON extraction from potentially markdown-wrapped LLM responses
+  private _extractJsonFromLlmResponse(content: string): any {
+    if (!content || typeof content !== 'string') {
+      throw new Error('Empty or invalid response content for JSON extraction');
+    }
+
+    let cleaned = content.trim();
+    
+    // Log the raw content for debugging
+    console.log(`[FixBrokenSceneTool] Raw LLM response length: ${content.length}`);
+    console.log(`[FixBrokenSceneTool] First 100 chars: "${content.substring(0, 100)}"`);
+
+    // Handle various markdown patterns
+    if (cleaned.startsWith("```")) {
+      // Find the start and end of the code block
+      const lines = cleaned.split('\n');
+      let startIndex = -1;
+      let endIndex = -1;
+
+      // Look for the opening code fence
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("```") && (line === "```" || line.includes("json"))) {
+          startIndex = i;
+          break;
+        }
+      }
+
+      // Look for the closing code fence
+      if (startIndex !== -1) {
+        for (let i = startIndex + 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (line === "```") {
+            endIndex = i;
+            break;
+          }
+        }
+      }
+      
+      if (startIndex !== -1 && endIndex !== -1) {
+        const jsonLines = lines.slice(startIndex + 1, endIndex);
+        cleaned = jsonLines.join('\n').trim();
+        console.log(`[FixBrokenSceneTool] Extracted from markdown block: "${cleaned.substring(0, 100)}..."`);
+      } else {
+        // If we can't find proper fences, try to strip the first line if it starts with ```
+        cleaned = cleaned.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '');
+        console.log(`[FixBrokenSceneTool] Stripped markdown manually: "${cleaned.substring(0, 100)}..."`);
+      }
+    }
+
+    // Remove any remaining backticks or common prefixes
+    cleaned = cleaned.replace(/^`+|`+$/g, ''); // Remove leading/trailing backticks
+    cleaned = cleaned.replace(/^json\s*/i, ''); // Remove "json" prefix if present
+    cleaned = cleaned.trim();
+
+    if (!cleaned) {
+      throw new Error('Empty JSON content after markdown extraction');
+    }
+
+    try {
+      const parsed = JSON.parse(cleaned);
+      console.log(`[FixBrokenSceneTool] Successfully parsed JSON with keys: ${parsed && typeof parsed === 'object' && parsed !== null ? Object.keys(parsed).join(', ') : 'none'}`);
+      return parsed;
+    } catch (jsonError) {
+      console.error(`[FixBrokenSceneTool] JSON parsing failed. Cleaned content: "${cleaned}"`);
+      console.error(`[FixBrokenSceneTool] JSON error:`, jsonError);
+      throw new Error(`Response is not valid JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown error'}`);
+    }
+  }
+
   protected async execute(input: FixBrokenSceneInput): Promise<FixBrokenSceneOutput> {
     const { brokenCode, errorMessage, sceneId, sceneName, projectId } = input;
 
@@ -161,7 +231,8 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
       throw new Error("No response from fix LLM");
     }
 
-    const parsed = JSON.parse(rawOutput);
+    // 🚨 MODIFIED: Use the robust JSON extraction helper
+    const parsed = this._extractJsonFromLlmResponse(rawOutput);
     
     return {
       fixedCode: parsed.fixedCode,

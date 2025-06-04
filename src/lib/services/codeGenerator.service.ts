@@ -28,6 +28,7 @@ export interface CodeGeneratorFromImageInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
+  visionAnalysis?: any;
 }
 
 export interface CodeGeneratorEditWithImageInput {
@@ -174,16 +175,24 @@ export default function ${input.functionName}() {
    * Bypasses JSON intermediary for pure image-to-animation creation
    */
   async generateCodeFromImage(input: CodeGeneratorFromImageInput): Promise<CodeGeneratorOutput> {
-    const { imageUrls, userPrompt, functionName } = input;
+    const { imageUrls, userPrompt, functionName, visionAnalysis } = input;
     
     this.DEBUG && console.log(`[CodeGenerator] Direct image-to-code generation for: ${functionName}`);
     this.DEBUG && console.log(`[CodeGenerator] Processing ${imageUrls.length} image(s)`);
     this.DEBUG && console.log(`[CodeGenerator] User context: "${userPrompt.substring(0, 100)}..."`);
+    if (visionAnalysis && this.DEBUG) {
+      console.log(`[CodeGenerator] Using pre-computed vision analysis:`, {
+        palette: visionAnalysis.palette?.join(', '),
+        mood: visionAnalysis.mood,
+        typography: visionAnalysis.typography,
+        layoutHighlights: visionAnalysis.layoutJson ? Object.keys(visionAnalysis.layoutJson).slice(0,3).join(', ') : 'N/A',
+      });
+    }
     
     try {
       // 🚨 NEW: Use centralized vision API instead of direct OpenAI calls
       const config = getModel('codeGenerator');
-      const prompt = this.buildImageToCodePrompt(userPrompt, functionName);
+      const prompt = this.buildImageToCodePrompt(userPrompt, functionName, visionAnalysis);
       
       this.DEBUG && console.log(`[CodeGenerator] Using centralized vision API with ${config.provider}/${config.model}`);
       
@@ -331,12 +340,41 @@ export default function ${functionName}() {
   /**
    * NEW: Build prompt for direct image-to-motion-graphics generation
    */
-  private buildImageToCodePrompt(userPrompt: string, functionName: string): string {
-    const prompt = getParameterizedPrompt('IMAGE_TO_CODE', {
+  private buildImageToCodePrompt(userPrompt: string, functionName: string, visionAnalysis?: any): string {
+    let augmentedUserPrompt = userPrompt;
+
+    if (visionAnalysis) {
+      let analysisContext = "\n\nPre-computed Image Analysis Context:\n";
+      if (visionAnalysis.palette && visionAnalysis.palette.length > 0) {
+        analysisContext += `- Dominant Colors: ${visionAnalysis.palette.join(", ")}\n`;
+      }
+      if (visionAnalysis.mood) {
+        analysisContext += `- Overall Mood/Style: ${visionAnalysis.mood}\n`;
+      }
+      if (visionAnalysis.typography) {
+        analysisContext += `- Suggested Typography: ${visionAnalysis.typography}\n`;
+      }
+      if (visionAnalysis.layoutJson && typeof visionAnalysis.layoutJson === 'object') {
+        // Add some high-level layout info if available, keep it concise
+        const layoutSummary = Object.entries(visionAnalysis.layoutJson)
+          .slice(0, 3) // Limit to first 3 high-level keys for brevity
+          .map(([key, value]) => `${key}: ${typeof value === 'string' ? value.substring(0,30) : JSON.stringify(value).substring(0,30)}...`)
+          .join("; ");
+        if (layoutSummary) {
+          analysisContext += `- Key Layout Elements: ${layoutSummary}\n`;
+        }
+      }
+      if (visionAnalysis.imageDescription) {
+        analysisContext += `- Image Description: ${visionAnalysis.imageDescription}\n`;
+      }
+      augmentedUserPrompt += analysisContext;
+    }
+
+    const promptConfig = getParameterizedPrompt('IMAGE_TO_CODE', {
       FUNCTION_NAME: functionName,
-      USER_PROMPT: userPrompt,
+      USER_PROMPT: augmentedUserPrompt,
     });
-    return prompt.content;
+    return promptConfig.content;
   }
 
   /**

@@ -7,6 +7,8 @@ import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import crypto from "crypto";
+import { analytics } from '~/lib/analytics';
+import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 export const generationRouter = createTRPCRouter({
   /**
@@ -594,7 +596,7 @@ export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
             name: defaultSceneName,
             order: nextOrder,
             tsxCode: defaultSceneCode,
-            duration: 180, // 6 seconds default
+            duration: analyzeDuration(defaultSceneCode).frames,
             layoutJson: JSON.stringify({
               sceneType: "custom",
               isUserCreated: true

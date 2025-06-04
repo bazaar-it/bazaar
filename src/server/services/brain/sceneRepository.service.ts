@@ -8,6 +8,7 @@ import type {
   ToolName,
   OperationType 
 } from "~/lib/types/brain.types";
+import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 // =============================================================================
 // SCENE REPOSITORY SERVICE - DRY Database Operations
@@ -48,6 +49,20 @@ export class SceneRepositoryService {
         console.log(`[SceneRepository] Creating scene: ${sceneData.sceneName}`);
       }
 
+      // Calculate actual duration from code
+      let actualDuration = 90; // Default fallback
+      if (sceneData.sceneCode && sceneData.sceneCode.trim() !== "") {
+        try {
+          const analysis = analyzeDuration(sceneData.sceneCode);
+          actualDuration = analysis.frames;
+          if (this.DEBUG) console.log(`[SceneRepository] Analyzed duration for create: ${actualDuration} frames`);
+        } catch (e) {
+          if (this.DEBUG) console.warn(`[SceneRepository] analyzeDuration failed for new scene, using ${actualDuration}f fallback:`, e);
+        }
+      } else {
+        if (this.DEBUG) console.warn(`[SceneRepository] No sceneCode for new scene, using ${actualDuration}f fallback.`);
+      }
+
       // Get next order for the scene
       const maxOrderResult = await db
         .select({ maxOrder: sql<number>`COALESCE(MAX("order"), -1)` })
@@ -63,7 +78,7 @@ export class SceneRepositoryService {
           name: sceneData.sceneName,
           order: nextOrder,
           tsxCode: sceneData.sceneCode,
-          duration: sceneData.duration,
+          duration: actualDuration,
           layoutJson: sceneData.layoutJson,
           props: {}, // Empty props for now
         })
@@ -143,21 +158,34 @@ export class SceneRepositoryService {
         where: eq(scenes.id, sceneData.sceneId),
       });
 
-      // Update existing scene in database
-      const updateData: any = {
+      // Calculate actual duration from code
+      let actualDuration = currentScene?.duration || 90; // Default to current or fallback
+      if (sceneData.sceneCode && sceneData.sceneCode.trim() !== "") {
+        try {
+          const analysis = analyzeDuration(sceneData.sceneCode);
+          actualDuration = analysis.frames;
+          if (this.DEBUG) console.log(`[SceneRepository] Analyzed duration for update: ${actualDuration} frames`);
+        } catch (e) {
+          if (this.DEBUG) console.warn(`[SceneRepository] analyzeDuration failed for update, using ${actualDuration}f fallback:`, e);
+        }
+      } else {
+         if (this.DEBUG) console.warn(`[SceneRepository] No sceneCode for update, using ${actualDuration}f fallback.`);
+      }
+
+      // Prepare data for update, ensuring type safety and conditional inclusion of layoutJson
+      const finalUpdateData: Partial<typeof scenes.$inferInsert> = {
         name: sceneData.sceneName,
-        tsxCode: sceneData.sceneCode,
-        duration: sceneData.duration,
+        tsxCode: sceneData.sceneCode, // CRITICAL: Ensure tsxCode is updated
+        duration: actualDuration,
         updatedAt: new Date(),
       };
 
-      // Only update layoutJson if it exists
-      if (sceneData.layoutJson) {
-        updateData.layoutJson = sceneData.layoutJson;
+      if (sceneData.layoutJson !== undefined) { // Only include layoutJson if it's actually provided
+        finalUpdateData.layoutJson = sceneData.layoutJson;
       }
 
       const [updatedScene] = await db.update(scenes)
-        .set(updateData)
+        .set(finalUpdateData)
         .where(eq(scenes.id, sceneData.sceneId))
         .returning();
 
