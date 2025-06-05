@@ -1,12 +1,13 @@
 //src/server/api/routers/share.ts
 import { z } from "zod";
-import { eq, and, desc, isNull, or } from "drizzle-orm";
+import { eq, and, desc, isNull, or, asc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { projects, scenes, sharedVideos } from "~/server/db/schema";
 import { TRPCError } from "@trpc/server";
 import { getShareUrl } from "~/lib/utils";
+import type { InputProps } from "~/types/input-props";
 
 export const shareRouter = createTRPCRouter({
   // Create a shared video link
@@ -20,12 +21,8 @@ export const shareRouter = createTRPCRouter({
       const { projectId, title, description } = input;
       const userId = ctx.session.user.id;
 
-      // 1. Verify project ownership
       const project = await db.query.projects.findFirst({
-        where: and(
-          eq(projects.id, projectId),
-          eq(projects.userId, userId)
-        ),
+        where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
       });
 
       if (!project) {
@@ -35,22 +32,17 @@ export const shareRouter = createTRPCRouter({
         });
       }
 
-      // 2. Get the latest scene from this project (no need for it to be published/rendered)
-      const latestScene = await db.query.scenes.findFirst({
-        where: and(
-          eq(scenes.projectId, projectId)
-        ),
-        orderBy: (scenes, { desc }) => [desc(scenes.createdAt)],
+      const projectScenes = await db.query.scenes.findMany({
+        where: eq(scenes.projectId, projectId),
       });
 
-      if (!latestScene) {
+      if (projectScenes.length === 0) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "No scenes found for this project. Please create some content first.",
         });
       }
 
-      // 3. Create or update shared video record
       const existingShare = await db.query.sharedVideos.findFirst({
         where: and(
           eq(sharedVideos.projectId, projectId),
@@ -61,30 +53,28 @@ export const shareRouter = createTRPCRouter({
       let shareId: string;
 
       if (existingShare) {
-        // Update existing share
-        await db.update(sharedVideos)
+        await db
+          .update(sharedVideos)
           .set({
             title: title || project.title,
             description,
-            videoUrl: null, // Will be rendered live on the share page
+            videoUrl: null, 
             isPublic: true,
           })
           .where(eq(sharedVideos.id, existingShare.id));
-        
         shareId = existingShare.id;
       } else {
-        // Create new share
-        const newShare = await db.insert(sharedVideos)
+        const newShare = await db
+          .insert(sharedVideos)
           .values({
             projectId,
             userId,
             title: title || project.title,
             description,
-            videoUrl: null, // Will be rendered live on the share page
+            videoUrl: null, 
             isPublic: true,
           })
           .returning({ id: sharedVideos.id });
-        
         shareId = newShare[0]!.id;
       }
 
@@ -106,26 +96,25 @@ export const shareRouter = createTRPCRouter({
         where: and(
           eq(sharedVideos.id, shareId),
           eq(sharedVideos.isPublic, true),
-          or(
-            isNull(sharedVideos.expiresAt),
-            sql`${sharedVideos.expiresAt} > NOW()`
-          )
+          or(isNull(sharedVideos.expiresAt), sql`${sharedVideos.expiresAt} > NOW()`)
         ),
         with: {
           project: {
             columns: {
               id: true,
               title: true,
+              props: true,
             },
             with: {
               scenes: {
-                orderBy: (scenes, { desc }) => [desc(scenes.createdAt)],
-                limit: 1,
+                orderBy: (scenesTable, { asc }) => [asc(scenesTable.order)],
                 columns: {
                   id: true,
                   tsxCode: true,
                   duration: true,
-                  createdAt: true,
+                  name: true,
+                  props: true,
+                  order: true,
                 },
               },
             },
@@ -139,24 +128,65 @@ export const shareRouter = createTRPCRouter({
         },
       });
 
-      if (!sharedVideo) {
+      if (!sharedVideo || !sharedVideo.project) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Shared video not found or no longer available",
+          message: "Shared video or associated project not found or no longer available",
         });
       }
 
-      // Increment view count atomically (prevents race conditions)
-      await db.update(sharedVideos)
-        .set({
-          viewCount: sql`COALESCE("viewCount", 0) + 1`,
-        })
+      await db
+        .update(sharedVideos)
+        .set({ viewCount: sql`COALESCE("viewCount", 0) + 1` })
         .where(eq(sharedVideos.id, shareId));
+        
+      const allProjectScenes = sharedVideo.project.scenes;
+      let currentStart = 0;
+      const formattedScenes = allProjectScenes.map(dbScene => {
+        const sceneDuration = dbScene.duration || 180; // Default if null
+        const sceneToAdd = {
+          id: dbScene.id,
+          type: 'custom' as const, // Assuming all are custom
+          start: currentStart,
+          duration: sceneDuration,
+          data: {
+            code: dbScene.tsxCode,
+            name: dbScene.name || `Scene ${dbScene.order + 1}`,
+            componentId: dbScene.id, // For Remotion, often same as sceneId
+            props: dbScene.props || {},
+          },
+        };
+        currentStart += sceneDuration;
+        return sceneToAdd;
+      });
+
+      const projectInputProps: InputProps = {
+        meta: {
+          title: sharedVideo.title || sharedVideo.project.title || "Untitled Video",
+          duration: currentStart, // Total duration of all scenes
+          backgroundColor: (sharedVideo.project.props as InputProps)?.meta?.backgroundColor || '#000000',
+        },
+        scenes: formattedScenes,
+      };
 
       return {
-        ...sharedVideo,
+        id: sharedVideo.id,
+        projectId: sharedVideo.projectId,
+        userId: sharedVideo.userId,
+        title: sharedVideo.title,
+        description: sharedVideo.description,
+        videoUrl: sharedVideo.videoUrl,
+        thumbnailUrl: sharedVideo.thumbnailUrl,
+        isPublic: sharedVideo.isPublic,
+        viewCount: sharedVideo.viewCount,
+        createdAt: sharedVideo.createdAt,
+        expiresAt: sharedVideo.expiresAt,
         creator: sharedVideo.user,
-        latestScene: sharedVideo.project.scenes[0] || null,
+        project: {
+            id: sharedVideo.project.id,
+            title: sharedVideo.project.title,
+            inputProps: projectInputProps 
+        }
       };
     }),
 
@@ -164,19 +194,13 @@ export const shareRouter = createTRPCRouter({
   getMyShares: protectedProcedure
     .query(async ({ ctx }) => {
       const userId = ctx.session.user.id;
-
       const shares = await db.query.sharedVideos.findMany({
         where: eq(sharedVideos.userId, userId),
         with: {
-          project: {
-            columns: {
-              title: true,
-            }
-          }
+          project: { columns: { title: true } },
         },
         orderBy: (sharedVideos, { desc }) => [desc(sharedVideos.createdAt)],
       });
-
       return shares.map(share => ({
         id: share.id,
         title: share.title,
@@ -190,18 +214,13 @@ export const shareRouter = createTRPCRouter({
 
   // Delete shared video
   deleteShare: protectedProcedure
-    .input(z.object({
-      shareId: z.string().uuid(),
-    }))
+    .input(z.object({ shareId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const { shareId } = input;
       const userId = ctx.session.user.id;
-
-      const result = await db.delete(sharedVideos)
-        .where(and(
-          eq(sharedVideos.id, shareId),
-          eq(sharedVideos.userId, userId)
-        ))
+      const result = await db
+        .delete(sharedVideos)
+        .where(and(eq(sharedVideos.id, shareId), eq(sharedVideos.userId, userId)))
         .returning({ id: sharedVideos.id });
 
       if (result.length === 0) {
@@ -210,7 +229,6 @@ export const shareRouter = createTRPCRouter({
           message: "Shared video not found or you don't have permission to delete it",
         });
       }
-
       return { success: true };
     }),
 });
