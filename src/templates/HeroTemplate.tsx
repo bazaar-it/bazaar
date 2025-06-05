@@ -1,3 +1,4 @@
+// src/templates/HeroTemplate.tsx
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 
 export default function HeroTemplate() {

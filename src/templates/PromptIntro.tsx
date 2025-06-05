@@ -1,11 +1,10 @@
-//src/templates/PromptIntro.tsx
+// src/templates/PromptIntro.tsx
 import {
     AbsoluteFill,
     interpolate,
     useCurrentFrame,
     spring,
   } from "remotion";
-  import React from "react";
   
   const InputBar: React.FC<{
     text: string;

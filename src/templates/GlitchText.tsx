@@ -1,4 +1,10 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+// src/templates/GlitchText.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  interpolate,
+} from 'remotion';
 
 export default function GlitchText() {
   const frame = useCurrentFrame();

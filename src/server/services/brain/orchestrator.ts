@@ -778,6 +778,8 @@ export class BrainOrchestrator extends EventEmitter {
       // 🚨 NEW: Get REAL image analyses from database
       const imageAnalyses = await projectMemoryService.getProjectImageAnalyses(projectId);
       
+
+      
       // 🚨 NEW: Get current scene list from database for context
       const currentScenes = await db
         .select({ id: scenes.id, name: scenes.name, order: scenes.order })
@@ -2235,6 +2237,8 @@ Respond with JSON only.`;
     }
     return undefined;
   }
+
+
 }
 
 // Export singleton instance

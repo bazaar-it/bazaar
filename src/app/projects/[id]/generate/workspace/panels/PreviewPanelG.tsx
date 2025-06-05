@@ -506,6 +506,20 @@ export default function MultiSceneComposition() {
     } catch (error) {
       console.error('[PreviewPanelG] Error during compilation:', error);
       
+      // 🚨 CRITICAL FIX: Dispatch error event for autofixer when compilation fails
+      const firstSceneWithCode = scenesWithCode[0];
+      if (firstSceneWithCode) {
+        console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching preview-scene-error event for autofixer');
+        const errorEvent = new CustomEvent('preview-scene-error', {
+          detail: {
+            sceneId: firstSceneWithCode.id,
+            sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
+            error: error
+          }
+        });
+        window.dispatchEvent(errorEvent);
+      }
+      
       // IDIOT PROOF: Create a simple fallback that always works
       try {
         console.log('[PreviewPanelG] Creating fallback composition...');
@@ -562,6 +576,21 @@ export default function FallbackComposition() {
         URL.revokeObjectURL(fallbackBlobUrl);
       } catch (fallbackError) {
         console.error('[PreviewPanelG] Even fallback compilation failed:', fallbackError);
+        
+        // 🚨 CRITICAL FIX: Dispatch error event even for fallback failures
+        const firstSceneWithCode = scenesWithCode[0];
+        if (firstSceneWithCode) {
+          console.log('[PreviewPanelG] 🔧 FALLBACK ERROR: Dispatching preview-scene-error event for autofixer');
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId: firstSceneWithCode.id,
+              sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
+              error: fallbackError
+            }
+          });
+          window.dispatchEvent(errorEvent);
+        }
+        
         setComponentError(new Error('Critical compilation failure'));
       }
     } finally {

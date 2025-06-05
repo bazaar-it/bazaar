@@ -4,7 +4,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { brainOrchestrator } from "~/server/services/brain/orchestrator";
 import { codeValidationService } from "~/server/services/codeValidation.service";
 import { db } from "~/server/db";
-import { scenes, projects, messages } from "~/server/db/schema";
+import { scenes, projects, messages, sceneIterations } from "~/server/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { analytics } from '~/lib/analytics';
@@ -465,6 +465,8 @@ export const generationRouter = createTRPCRouter({
         if (!newScene) {
           throw new Error("Failed to create template scene");
         }
+
+
 
         console.log(`[Generation] Template scene created successfully:`, {
           sceneId: newScene.id,

@@ -184,6 +184,11 @@ export class SceneRepositoryService {
         finalUpdateData.layoutJson = sceneData.layoutJson;
       }
 
+      if (this.DEBUG) {
+        console.log('[SceneRepository] ATTEMPTING TO SAVE TSX CODE (first 100 chars):', finalUpdateData.tsxCode?.substring(0, 100));
+        console.log('[SceneRepository] ATTEMPTING TO SAVE FULL finalUpdateData:', JSON.stringify(finalUpdateData, null, 2));
+      }
+
       const [updatedScene] = await db.update(scenes)
         .set(finalUpdateData)
         .where(eq(scenes.id, sceneData.sceneId))
@@ -191,6 +196,7 @@ export class SceneRepositoryService {
 
       if (this.DEBUG) {
         console.log(`[SceneRepository] Scene updated successfully: ${updatedScene?.id}`);
+        console.log('[SceneRepository] RETURNED TSX CODE (first 100 chars):', updatedScene?.tsxCode?.substring(0, 100));
       }
 
       // Log scene iteration for tracking

@@ -12,7 +12,6 @@ import type { InputProps } from '~/types/input-props';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 import ChatPanelG from './panels/ChatPanelG';
-import ChatPanelAI from './panels/ChatPanelAI';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
@@ -23,7 +22,6 @@ import { cn } from "~/lib/utils";
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
   chat: ChatPanelG,
-  chatai: ChatPanelAI,
   preview: PreviewPanelG,
   code: CodePanelG,
   storyboard: StoryboardPanelG,
@@ -32,7 +30,6 @@ const PANEL_COMPONENTS_G = {
 
 const PANEL_LABELS_G = {
   chat: 'Chat',
-  chatai: 'AI Chat',
   preview: 'Video Player',
   code: 'Code',
   storyboard: 'Storyboard',
@@ -648,8 +645,6 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             onSceneGenerated={handleSceneGenerated}
             onProjectRename={onProjectRename}
           />;
-        case 'chatai':
-          return <ChatPanelAI projectId={projectId} selectedSceneId={selectedSceneId} />;
         case 'preview':
           return (
             <div id="preview-panel-container-g" className="h-full">

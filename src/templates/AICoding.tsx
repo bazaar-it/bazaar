@@ -1,4 +1,9 @@
-import { AbsoluteFill, useCurrentFrame, interpolate } from 'remotion';
+// src/templates/AICoding.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  interpolate,
+} from 'remotion';
 
 export default function AICoding() {
   const frame = useCurrentFrame();

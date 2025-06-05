@@ -72,7 +72,51 @@ export function extractDurationFromCode(code: string): number {
       }
     }
     
-    // Pattern 2: useCurrentFrame with explicit frame checks
+    // Pattern 2: Spring animations with durationInFrames
+    // Example: spring({frame, fps, from: 0, to: 1, durationInFrames: fps * 0.8})
+    const springRegex = /spring\s*\(\s*\{[^}]*durationInFrames:\s*fps\s*\*\s*([\d.]+)[^}]*\}/g;
+    while ((match = springRegex.exec(cleanCode)) !== null) {
+      const multiplier = match[1] ? parseFloat(match[1]) : NaN;
+      if (!isNaN(multiplier) && multiplier > 0) {
+        const durationFrames = Math.round(30 * multiplier); // Assume 30fps
+        ranges.push({
+          startFrame: 0,
+          endFrame: durationFrames,
+          purpose: 'spring-animation'
+        });
+      }
+    }
+    
+    // Pattern 3: Frame offset patterns (for staggered animations)
+    // Example: frame - 38, frame - 16
+    const frameOffsetRegex = /frame\s*-\s*(\d+)/g;
+    while ((match = frameOffsetRegex.exec(cleanCode)) !== null) {
+      const offset = match[1] ? parseInt(match[1], 10) : NaN;
+      if (!isNaN(offset) && offset > 0) {
+        ranges.push({
+          startFrame: offset,
+          endFrame: offset + 30, // Assume at least 1 second of animation after offset
+          purpose: 'frame-offset'
+        });
+      }
+    }
+    
+    // Pattern 4: FPS-based duration patterns
+    // Example: fps * 0.8, fps * 1.5
+    const fpsDurationRegex = /fps\s*\*\s*([\d.]+)/g;
+    while ((match = fpsDurationRegex.exec(cleanCode)) !== null) {
+      const multiplier = match[1] ? parseFloat(match[1]) : NaN;
+      if (!isNaN(multiplier) && multiplier > 0) {
+        const durationFrames = Math.round(30 * multiplier); // Assume 30fps
+        ranges.push({
+          startFrame: 0,
+          endFrame: durationFrames,
+          purpose: 'fps-duration'
+        });
+      }
+    }
+
+    // Pattern 5: useCurrentFrame with explicit frame checks
     // Example: frame < 60, frame > 120
     const frameComparisonRegex = /frame\s*[<>]=?\s*(\d+)/g;
     while ((match = frameComparisonRegex.exec(cleanCode)) !== null) {
@@ -86,7 +130,7 @@ export function extractDurationFromCode(code: string): number {
       }
     }
     
-    // Pattern 3: Animation duration comments or constants
+    // Pattern 6: Animation duration comments or constants
     // Example: // Duration: 3 seconds, const DURATION = 90
     const durationCommentRegex = /(?:duration|DURATION).*?(\d+).*?(?:second|frame)/gi;
     while ((match = durationCommentRegex.exec(cleanCode)) !== null) {
@@ -104,7 +148,7 @@ export function extractDurationFromCode(code: string): number {
       }
     }
     
-    // Pattern 4: Sequence-based animations with delays
+    // Pattern 7: Sequence-based animations with delays
     // Example: delay + duration patterns
     const sequenceRegex = /(\w+)\s*\+\s*(\d+)|delay.*?(\d+).*?duration.*?(\d+)/gi;
     while ((match = sequenceRegex.exec(cleanCode)) !== null) {
@@ -201,9 +245,15 @@ export function analyzeDuration(code: string): {
   let confidence: 'high' | 'medium' | 'low' = 'low';
   let source = 'default fallback';
   
-  if (code.includes('interpolate(')) {
+  if (code.includes('spring(') && code.includes('durationInFrames')) {
+    confidence = 'high';
+    source = 'spring animations + smart buffer';
+  } else if (code.includes('interpolate(')) {
     confidence = 'high';
     source = 'interpolate calls + smart buffer';
+  } else if (code.includes('fps *') || /frame\s*-\s*\d+/.test(code)) {
+    confidence = 'medium';
+    source = 'fps timing + frame offsets + smart buffer';
   } else if (code.includes('frame')) {
     confidence = 'medium';
     source = 'frame logic + smart buffer';

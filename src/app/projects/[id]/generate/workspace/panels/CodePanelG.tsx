@@ -78,6 +78,57 @@ export function CodePanelG({
   const currentProps = getCurrentProps();
   const scenes = (currentProps?.scenes || []) as Scene[];
   
+  // 🚨 NEW: Add debugging to track state changes
+  React.useEffect(() => {
+    console.log('[CodePanelG] 📊 State changed - Current props:', currentProps);
+    console.log('[CodePanelG] 📊 Scene count:', scenes.length);
+    console.log('[CodePanelG] 📊 Scene IDs:', scenes.map(s => ({ id: s.id, name: s.data?.name })));
+  }, [currentProps, scenes]);
+  
+  // 🚨 NEW: Listen for VideoState global updates
+  React.useEffect(() => {
+    const handleVideoStateUpdate = (event: CustomEvent) => {
+      const { projectId: eventProjectId, type, sceneCount } = event.detail;
+      
+      if (eventProjectId === projectId && (type === 'scenes-updated' || type === 'emergency-refresh')) {
+        console.log('[CodePanelG] 📡 VideoState update event received:', {
+          eventProjectId,
+          type,
+          sceneCount,
+          currentScenes: scenes.length
+        });
+        
+        // Force a re-render by updating a local state
+        setLocalCode(prev => prev); // Trigger re-render without changing code
+        
+        // If this is an emergency refresh, force a more aggressive update
+        if (type === 'emergency-refresh') {
+          console.log('[CodePanelG] 🚨 Emergency refresh triggered - forcing component remount');
+          // Force a more aggressive refresh by updating all relevant state
+          setTimeout(() => {
+            setLocalCode(prev => prev + ''); // Force string update
+          }, 100);
+        }
+      }
+    };
+
+    console.log('[CodePanelG] 📡 Setting up VideoState update listener');
+    try {
+      window.addEventListener('videostate-update', handleVideoStateUpdate as EventListener);
+    } catch (error) {
+      console.error('[CodePanelG] ❌ Failed to add event listener:', error);
+    }
+    
+    return () => {
+      console.log('[CodePanelG] 📡 Cleaning up VideoState update listener');
+      try {
+        window.removeEventListener('videostate-update', handleVideoStateUpdate as EventListener);
+      } catch (error) {
+        console.error('[CodePanelG] ❌ Failed to remove event listener:', error);
+      }
+    };
+  }, [projectId, scenes.length]);
+  
   // Find the selected scene or default to first scene
   const selectedScene = selectedSceneId 
     ? scenes.find((s: Scene) => s.id === selectedSceneId) 

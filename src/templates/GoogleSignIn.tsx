@@ -1,4 +1,11 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
+// src/templates/GoogleSignIn.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  spring,
+  interpolate,
+} from 'remotion';
 
 export default function GoogleSignIn() {
   const frame = useCurrentFrame();

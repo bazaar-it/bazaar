@@ -1,4 +1,10 @@
-import { AbsoluteFill, interpolate, useCurrentFrame, spring } from 'remotion';
+// src/templates/AIDialogue.tsx
+import {
+  AbsoluteFill,
+  interpolate,
+  useCurrentFrame,
+  spring,
+} from 'remotion';
 
 const messages = [
   { text: "Hey, I want to generate a motion graphic video for my product.", isUser: true, delay: 0 },

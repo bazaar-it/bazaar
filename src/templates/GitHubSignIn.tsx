@@ -1,5 +1,11 @@
-//src/templates/GitHubSignIn.tsx
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';
+// src/templates/GitHubSignIn.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  spring,
+  interpolate,
+} from 'remotion';
 
 export default function GithubSignIn() {
   const frame = useCurrentFrame();

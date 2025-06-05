@@ -292,29 +292,93 @@ export default function ChatPanelG({
       });
       
       try {
-        // ✅ Refresh scene data after successful operation
-        console.log('[ChatPanelG] ♻️ Invalidating tRPC cache...');
+        // ✅ CRITICAL FIX: Force refresh scene data after successful operation
+        console.log('[ChatPanelG] ♻️ CRITICAL: Starting forced state refresh...');
+        
+        // STEP 1: Invalidate all related caches
         await utils.generation.getProjectScenes.invalidate({ projectId });
+        await utils.generation.invalidate(); // Invalidate entire generation namespace
         
-        console.log('[ChatPanelG] 🔄 Fetching fresh scenes from database...');
-        const updatedScenes = await refetchScenes();
+        console.log('[ChatPanelG] 🔄 CRITICAL: Fetching fresh scenes from database...');
         
-        if (updatedScenes.data && updatedScenes.data.length > 0) {
-          console.log('[ChatPanelG] ✅ Fetched updated scenes from database:', updatedScenes.data.length);
+        // STEP 2: Force refetch with error handling
+        let updatedScenes;
+        try {
+          updatedScenes = await refetchScenes();
+        } catch (refetchError) {
+          console.error('[ChatPanelG] ❌ CRITICAL: refetchScenes failed, trying direct query...', refetchError);
+          // Fallback: Try to refetch manually
+          updatedScenes = await utils.generation.getProjectScenes.fetch({ projectId });
+        }
+        
+        console.log('[ChatPanelG] 📊 CRITICAL: Raw scenes data:', updatedScenes);
+        
+        if (updatedScenes) {
+          // Handle different response formats from tRPC query
+          const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
+          console.log('[ChatPanelG] ✅ CRITICAL: Fetched updated scenes from database:', scenesArray?.length || 0);
           
-          const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
-          console.log('[ChatPanelG] ✅ Converted scenes to InputProps format');
-          
-          console.log('[ChatPanelG] 🚀 Using updateAndRefresh for guaranteed state sync...');
-          updateAndRefresh(projectId, () => updatedProps);
-          
-          console.log('[ChatPanelG] 🎬 VideoState updated with updateAndRefresh, all panels should refresh');
+          if (scenesArray && scenesArray.length > 0) {
+            const updatedProps = convertDbScenesToInputProps(scenesArray);
+            console.log('[ChatPanelG] ✅ CRITICAL: Converted scenes to InputProps format:', updatedProps);
+            
+            console.log('[ChatPanelG] 🚀 CRITICAL: Forcing VideoState update with updateAndRefresh...');
+            updateAndRefresh(projectId, () => updatedProps);
+            
+            console.log('[ChatPanelG] 🎬 CRITICAL: VideoState updated - all panels should refresh NOW');
+            
+            // STEP 3: Also force global VideoState refresh
+            console.log('[ChatPanelG] 🔄 CRITICAL: Forcing VideoState global refresh...');
+            useVideoState.getState().forceRefresh(projectId);
+            
+            // STEP 4: Manual dispatch of update event as backup
+            console.log('[ChatPanelG] 📡 CRITICAL: Manually dispatching videostate-update event...');
+            window.dispatchEvent(new CustomEvent('videostate-update', {
+              detail: { 
+                projectId,
+                type: 'scenes-updated',
+                refreshToken: Date.now().toString(),
+                sceneCount: scenesArray?.length || 0
+              }
+            }));
+            
+            console.log('[ChatPanelG] ✅ CRITICAL: All refresh operations completed successfully');
+            
+          } else {
+            console.error('[ChatPanelG] ❌ CRITICAL: No scenes in updated data - something is wrong');
+          }
         } else {
-          console.warn('[ChatPanelG] ⚠️ No scenes data returned from database query');
+          console.error('[ChatPanelG] ❌ CRITICAL: No scenes data returned from database query');
+          
+          // Last resort: Force reload the page after a short delay
+          console.log('[ChatPanelG] 🚨 LAST RESORT: Will force page reload in 2 seconds if state sync failed');
+          setTimeout(() => {
+            console.log('[ChatPanelG] 🔄 FORCING PAGE RELOAD due to state sync failure');
+            window.location.reload();
+          }, 2000);
         }
       } catch (refreshError) {
-        console.error('[ChatPanelG] ❌ Failed to refresh scene data:', refreshError);
-        // Don't throw - the scene operation succeeded, just state sync failed
+        console.error('[ChatPanelG] ❌ CRITICAL: Refresh failed, but chat will continue:', refreshError);
+        
+        // 🚨 FALLBACK: Even if refresh fails, still try to notify other panels
+        try {
+          console.log('[ChatPanelG] 🔧 CRITICAL: Attempting fallback refresh...');
+          useVideoState.getState().forceRefresh(projectId);
+          
+          // Force a manual event dispatch as last resort
+          window.dispatchEvent(new CustomEvent('videostate-update', {
+            detail: { 
+              projectId,
+              type: 'emergency-refresh',
+              error: refreshError,
+              timestamp: Date.now()
+            }
+          }));
+          
+          console.log('[ChatPanelG] ✅ CRITICAL: Fallback refresh completed');
+        } catch (fallbackError) {
+          console.error('[ChatPanelG] 💥 CRITICAL: Even fallback refresh failed:', fallbackError);
+        }
       }
 
       // Handle callbacks
@@ -740,6 +804,8 @@ export default function ChatPanelG({
                     ? "bg-primary text-primary-foreground"
                     : msg.status === "error"
                     ? "bg-destructive/10 border-destructive"
+                    : msg.kind === "status"
+                    ? "bg-blue-50 border-blue-200 border-dashed"
                     : "bg-muted"
                 }`}
               >
@@ -769,7 +835,9 @@ export default function ChatPanelG({
                       </div>
                     )}
                     
-                    <div className="whitespace-pre-wrap text-sm leading-none flex items-center gap-1">
+                    <div className={`whitespace-pre-wrap text-sm leading-none flex items-center gap-1 ${
+                      msg.kind === "status" ? "text-blue-700 font-medium" : ""
+                    }`}>
                       {msg.content}
                       {msg.status === "building" && (
                         <div className="flex space-x-1">
@@ -822,49 +890,55 @@ export default function ChatPanelG({
           </div>
         )}
 
-        {/* 🚨 NEW: Auto-fix error banner */}
+        {/* Auto-fix error banner */}
         {hasSceneError && sceneErrorDetails && (
-          <div className="mb-3 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-red-700">
-                  Scene Error Detected: {sceneErrorDetails.sceneName}
-                </span>
+          <div className="mb-3 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <span className="text-red-600 text-sm">⚠</span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-900">
+                    Scene Compilation Error
+                  </span>
+                  <p className="text-xs text-gray-500">{sceneErrorDetails.sceneName}</p>
+                </div>
               </div>
               <Button
                 onClick={handleAutoFix}
                 disabled={isGenerating}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 font-medium"
               >
                 {isGenerating ? (
                   <>
-                    <RefreshCwIcon className="h-3 w-3 mr-1 animate-spin" />
+                    <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
                     Fixing...
                   </>
                 ) : (
                   <>
-                    🔧 Fix Automatically
+                    🔧 Auto-Fix
                   </>
                 )}
               </Button>
             </div>
             
-            {/* Reid Hoffman Quote */}
-            <div className="bg-white/70 border-l-4 border-blue-500 p-3 mb-3 rounded">
-              <p className="text-xs italic text-gray-700 mb-1">
+            {/* Quotes */}
+            <div className="bg-gray-50 border-l-4 border-gray-300 p-4 mb-3 rounded-r">
+              <p className="text-sm italic text-gray-700 mb-2">
                 "If you're not embarrassed by the first version of your product, you've launched too late."
               </p>
-              <p className="text-xs text-gray-500">— Reid Hoffman, LinkedIn Founder</p>
+              <p className="text-xs text-gray-500 mb-3">— Reid Hoffman</p>
+              
+              <p className="text-xs text-gray-600 leading-relaxed">
+                If you're one of those few people who still knows how to code, you can open the code panel and fix it yourself, or else send it to the higher powers and hope for the best.
+              </p>
             </div>
             
-            <p className="text-xs text-red-600">
-              <strong>Error:</strong> {sceneErrorDetails.errorMessage.substring(0, 150)}...
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              Don't worry! Other scenes continue working while we fix this one.
-            </p>
+            <div className="text-xs text-gray-500">
+              <span className="font-medium">Error:</span> {sceneErrorDetails.errorMessage.substring(0, 120)}...
+            </div>
           </div>
         )}
 
