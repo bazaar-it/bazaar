@@ -12,6 +12,8 @@ import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
 import { Player } from "@remotion/player";
 import { useVideoState } from '~/stores/videoState';
 
+const PLAYER_FPS = 30;
+
 interface TemplatesPanelGProps {
   projectId: string;
   onSceneGenerated?: (sceneId: string) => Promise<void>;
@@ -45,7 +47,7 @@ const TemplateCard: React.FC<{
             durationInFrames={template.duration}
             compositionWidth={1920} 
             compositionHeight={1080}
-            fps={template.previewFrame || 30}
+            fps={PLAYER_FPS}
             style={{ width: "100%", height: "100%" }}
             controls={false}
             loop={isHovering}
@@ -71,7 +73,7 @@ const TemplateCard: React.FC<{
             <div className="min-w-0 flex-grow">
               <h3 className="font-medium text-sm truncate" title={template.name}>{template.name}</h3>
               <p className="text-xs text-gray-500">
-                {Math.round(template.duration / (template.previewFrame || 30) * 10) / 10}s duration
+                {Math.round(template.duration / PLAYER_FPS * 10) / 10}s duration
               </p>
             </div>
             <Button

@@ -142,7 +142,7 @@ export const shareRouter = createTRPCRouter({
         
       const allProjectScenes = sharedVideo.project.scenes;
       let currentStart = 0;
-      const formattedScenes = allProjectScenes.map(dbScene => {
+      const formattedScenes = allProjectScenes.map((dbScene, index) => {
         const sceneDuration = dbScene.duration || 180; // Default if null
         const sceneToAdd = {
           id: dbScene.id,
@@ -151,7 +151,7 @@ export const shareRouter = createTRPCRouter({
           duration: sceneDuration,
           data: {
             code: dbScene.tsxCode,
-            name: dbScene.name || `Scene ${dbScene.order + 1}`,
+            name: dbScene.name || `Scene ${(dbScene.order ?? index) + 1}`,
             componentId: dbScene.id, // For Remotion, often same as sceneId
             props: dbScene.props || {},
           },
