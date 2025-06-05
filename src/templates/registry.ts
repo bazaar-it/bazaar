@@ -25,7 +25,7 @@ export interface TemplateDefinition {
   id: string;
   name: string;
   duration: number; // in frames
-  previewFps: number; // fps for preview
+  previewFrame: number; // fps for preview
   component: React.ComponentType; // Real React component for Remotion Player
   getCode: () => string; // Code string for database storage
 }
@@ -35,7 +35,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     id: 'hero',
     name: 'Hero Section',
     duration: 180, // 6 seconds
-    previewFps: 30,
+    previewFrame: 30,
     component: HeroTemplate,
     getCode: () => `// src/templates/HeroTemplate.tsx
 const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
@@ -131,7 +131,7 @@ export default function HeroTemplate() {
     id: 'particles',
     name: 'Particle Explosion',
     duration: 240, // 8 seconds
-    previewFps: 30,
+    previewFrame: 30,
     component: ParticleExplosion,
     getCode: () => `// src/templates/ParticleExplosion.tsx
 const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
@@ -247,7 +247,7 @@ export default function ParticleExplosion() {
     id: 'logo',
     name: 'Logo Reveal',
     duration: 120, // 4 seconds
-    previewFps: 30,
+    previewFrame: 30,
     component: LogoTemplate,
     getCode: () => `// src/templates/LogoTemplate.tsx
 const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
@@ -383,7 +383,7 @@ export default function LogoTemplate() {
     id: 'knowscode',
     name: 'Knows Code',
     duration: 180, // 6 seconds
-    previewFps: 30,
+    previewFrame: 30,
     component: KnowsCode,
     getCode: () => `// src/templates/KnowsCode.tsx
 const { AbsoluteFill, interpolate, useCurrentFrame, spring } = window.Remotion;
@@ -474,7 +474,7 @@ export default function KnowsCode() {
     id: 'promptintro',
     name: 'Prompt Intro',
     duration: 180, // 6 seconds
-    previewFps: 30,
+    previewFrame: 30,
     component: PromptIntro,
     getCode: () => `// src/templates/PromptIntro.tsx
 const {
@@ -652,7 +652,7 @@ export default function PromptIntro() {
   id: 'typing',
   name: 'Terminal Typing',
   duration: 300, // 10 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: TypingTemplate,
   getCode: () => `// src/templates/TypingTemplate.tsx
 const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
@@ -728,7 +728,7 @@ return (
   id: 'glitch',
   name: 'Glitch Text Effect',
   duration: 200, // ~6.7 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: GlitchText,
   getCode: () => `// src/templates/GlitchText.tsx
 const {
@@ -859,7 +859,7 @@ return (
   id: 'pulsing',
   name: 'Pulsing Circles',
   duration: 240, // 8 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: PulsingCircles,
   getCode: () => `// src/templates/PulsingCircles.tsx
 const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
@@ -915,7 +915,7 @@ return (
   id: 'floating',
   name: 'Floating Elements',
   duration: 240, // 8 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: FloatingElements,
   getCode: () => `const {
 AbsoluteFill,
@@ -1114,7 +1114,7 @@ return (
   id: 'github-signin',
   name: 'GitHub Sign In',
   duration: 120, // 4 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: GitHubSignIn,
   getCode: () => `const {
 AbsoluteFill,
@@ -1209,7 +1209,7 @@ return (
   id: 'gradient-text',
   name: 'Gradient Text',
   duration: 240, // 8 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: GradientText,
   getCode: () => `const {
 AbsoluteFill,
@@ -1287,7 +1287,7 @@ return (
   id: 'apple-signin',
   name: 'Apple Sign In',
   duration: 120, // 4 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: AppleSignIn,
   getCode: () => `const {
   AbsoluteFill,
@@ -1381,7 +1381,7 @@ return (
   id: 'ai-coding',
   name: 'AI Coding',
   duration: 180, // 6 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: AICoding,
   getCode: () => `const {
 AbsoluteFill,
@@ -1532,7 +1532,7 @@ return (
   id: 'growth-graph',
   name: 'Growth Graph',
   duration: 240, // 8 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: GrowthGraph,
   getCode: () => `const {
 AbsoluteFill,
@@ -1685,7 +1685,7 @@ return (
   id: 'wave-animation',
   name: 'Wave Animation',
   duration: 300, // 10 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: WaveAnimation,
   getCode: () => `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
 
@@ -1835,7 +1835,7 @@ export default function WaveAnimation() {
   id: 'fintech-ui',
   name: 'Fintech UI',
   duration: 240, // 8 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: FintechUI,
   getCode: () => `const {
 AbsoluteFill,
@@ -1953,7 +1953,7 @@ return (
   id: 'blue-gradient-text',
   name: 'Blue Gradient Text',
   duration: 180, // 6 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: BlueGradientText,
   getCode: () => `const {
 AbsoluteFill,
@@ -2007,7 +2007,7 @@ return (
   id: 'dot-ripple',
   name: 'Dot Ripple',
   duration: 180, // 6 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: DotRipple,
   getCode: () => `const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
 
@@ -2078,7 +2078,7 @@ return (
   id: 'ai-dialogue',
   name: 'AI Dialogue',
   duration: 180, // 6 seconds
-  previewFps: 30,
+  previewFrame: 30,
   component: AIDialogue,
   getCode: () => `const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
   const messages = [
