@@ -1,4 +1,11 @@
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig, random } from 'remotion';
+// src/templates/FloatingParticles.tsx
+import {
+  AbsoluteFill,
+  interpolate,
+  useCurrentFrame,
+  useVideoConfig,
+  random,
+} from 'remotion';
 
 // Static color array (safe for SSR)
 const colors = ['#FF8DC7', '#86A8E7', '#FF69B4', '#9B6DFF'];

@@ -86,6 +86,9 @@ interface VideoState {
   addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
   updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
   
+  // 🚨 NEW: Add system message for cross-panel communication
+  addSystemMessage: (projectId: string, content: string, kind?: ChatMessage['kind']) => void;
+  
   // 🚨 NEW: Database sync methods
   syncToDatabase: (projectId: string) => Promise<void>;
   loadFromDatabase: (projectId: string) => Promise<void>;
@@ -821,6 +824,33 @@ export const useVideoState = create<VideoState>((set, get) => ({
         pendingDbSync: {
           ...state.pendingDbSync,
           [projectId]: true
+        }
+      };
+    }),
+
+  // 🚨 NEW: Add system message for cross-panel communication
+  addSystemMessage: (projectId: string, content: string, kind?: ChatMessage['kind']) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      const newMessage: ChatMessage = {
+        id: `system-${Date.now()}`,
+        message: content,
+        isUser: false,
+        timestamp: Date.now(),
+        status: 'success',
+        kind: kind || 'text'
+      };
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            chatHistory: [...project.chatHistory, newMessage]
+          }
         }
       };
     }),

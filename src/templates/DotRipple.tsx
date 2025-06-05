@@ -1,4 +1,9 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+// src/templates/DotRipple.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 
 export default function DotRipple() {
   const frame = useCurrentFrame();

@@ -100,3 +100,45 @@
     color: #ffffff;
   }
 }
+
+@layer components {
+  /* Custom scrollbar for projects list */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(203 213 225) rgb(248 250 252);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgb(248 250 252);
+    border-radius: 2px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgb(203 213 225);
+    border-radius: 2px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgb(148 163 184);
+  }
+  
+  .dark .custom-scrollbar {
+    scrollbar-color: rgb(55 65 81) rgb(17 24 39);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgb(17 24 39);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgb(55 65 81);
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgb(75 85 99);
+  }
+}

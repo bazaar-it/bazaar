@@ -1,4 +1,5 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+// src/templates/ParticleExplosion.tsx
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function ParticleExplosion() {
   const frame = useCurrentFrame();

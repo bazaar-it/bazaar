@@ -9,7 +9,18 @@ import { useVideoState } from '~/stores/videoState';
 import { useVoiceToText } from '~/hooks/useVoiceToText';
 import { Card, CardContent } from "~/components/ui/card";
 import { nanoid } from 'nanoid';
+import { toast } from 'sonner';
 import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon, ImageIcon } from 'lucide-react';
+import { cn } from "~/lib/utils";
+
+// Define UploadedImage interface for image uploads
+interface UploadedImage {
+  id: string;
+  file: File;
+  status: 'uploading' | 'uploaded' | 'error';
+  url?: string;
+  error?: string;
+}
 
 interface Scene {
   id: string;
@@ -45,6 +56,7 @@ interface DbMessage {
   role: 'user' | 'assistant';
   createdAt: Date;
   status?: string | null; // Match database schema - can be null
+  imageUrls?: string[] | null; // 🚨 FIXED: Added missing imageUrls field
   isOptimistic?: false;
 }
 
@@ -122,7 +134,7 @@ export default function ChatPanelG({
     imageUrls: msg.imageUrls,
   }));
 
-  // ✅ FIXED: Use the correct tRPC endpoint
+  // ✅ CORRECT: Use the generation endpoint that goes through Brain Orchestrator
   const generateSceneMutation = api.generation.generateScene.useMutation();
 
   // Auto-scroll function
@@ -221,123 +233,6 @@ export default function ChatPanelG({
     return messages[Math.floor(Math.random() * messages.length)] || "⚙️ Processing your request...";
   };
 
-  // 🎯 PROGRESS: Continuous subtle messages until completion
-  useEffect(() => {
-    if (isGenerating) {
-      // 50 subtle progress messages that loop until completion
-      const progressMessages = [
-        '🧠 Analyzing your request...',
-        '🎨 Planning the design...',
-        '✨ Gathering inspiration...',
-        '🎬 Setting up the scene...',
-        '⚡ Generating code...',
-        '🎯 Fine-tuning details...',
-        '🌟 Adding polish...',
-        '🎪 Crafting animations...',
-        '🎭 Perfecting timing...',
-        '🎨 Mixing colors...',
-        '✨ Sprinkling magic...',
-        '🔧 Optimizing performance...',
-        '🎵 Syncing rhythms...',
-        '🌈 Balancing elements...',
-        '🎪 Choreographing motion...',
-        '🎯 Aligning components...',
-        '✨ Enhancing visuals...',
-        '🎬 Directing the scene...',
-        '🎨 Painting pixels...',
-        '⚡ Energizing animations...',
-        '🌟 Illuminating details...',
-        '🎭 Staging drama...',
-        '🎪 Orchestrating flow...',
-        '🎯 Targeting perfection...',
-        '✨ Weaving wonder...',
-        '🔧 Engineering elegance...',
-        '🎵 Harmonizing elements...',
-        '🌈 Colorizing creation...',
-        '🎪 Choreographing chaos...',
-        '🎯 Zeroing in...',
-        '✨ Almost there...',
-        '🎬 Final touches...',
-        '🎨 Last brushstrokes...',
-        '⚡ Finalizing magic...',
-        '🌟 Polishing brilliance...',
-        '🎭 Curtain rising...',
-        '🎪 Show time approaching...',
-        '🎯 Precision mode...',
-        '✨ Creating wonder...',
-        '🔧 Final adjustments...',
-        '🎵 Perfect harmony...',
-        '🌈 Vivid completion...',
-        '🎪 Grand finale...',
-        '🎯 Mission complete...',
-        '✨ Masterpiece ready...',
-        '🎬 And... action!',
-        '🎨 Voilà!',
-        '⚡ Lightning fast!',
-        '🌟 Shining bright!',
-        '🎭 Take a bow!'
-      ];
-      
-      let messageIndex = 0;
-      
-      // Show edit complexity feedback immediately if available
-      if (editComplexityFeedback) {
-        setProgressStage(editComplexityFeedback);
-        
-        // Update the assistant message with complexity feedback
-        if (activeAssistantMessageIdRef.current) {
-          updateMessage(projectId, activeAssistantMessageIdRef.current, {
-            content: editComplexityFeedback,
-            status: 'building'
-          });
-        }
-        
-        // After 3 seconds, switch to regular progress messages
-        setTimeout(() => {
-          const firstMessage = progressMessages[0];
-          if (firstMessage) {
-            setProgressStage(firstMessage);
-            if (activeAssistantMessageIdRef.current) {
-              updateMessage(projectId, activeAssistantMessageIdRef.current, {
-                content: firstMessage,
-                status: 'building'
-              });
-            }
-          }
-        }, 3000);
-      } else {
-        // No complexity feedback, start with regular progress
-        const firstMessage = progressMessages[0];
-        if (firstMessage) {
-          setProgressStage(firstMessage);
-        }
-      }
-      
-      const interval = setInterval(() => {
-        messageIndex = (messageIndex + 1) % progressMessages.length;
-        const currentMessage = progressMessages[messageIndex];
-        
-        if (currentMessage) {
-          setProgressStage(currentMessage);
-          
-          // Update the assistant message with current progress
-          if (activeAssistantMessageIdRef.current) {
-            updateMessage(projectId, activeAssistantMessageIdRef.current, {
-              content: currentMessage,
-              status: 'building'
-            });
-          }
-        }
-      }, 2000); // Change every 2 seconds
-      
-      return () => {
-        clearInterval(interval);
-        setProgressStage(null);
-        setEditComplexityFeedback(null);
-      };
-    }
-  }, [isGenerating, projectId, updateMessage, editComplexityFeedback]);
-
   // 🎯 NEW: Listen for edit complexity from Brain LLM (would come from mutation result)
   const handleEditComplexityDetected = (complexity: string) => {
     const feedback = getComplexityFeedback(complexity);
@@ -351,53 +246,22 @@ export default function ChatPanelG({
 
     const trimmedMessage = message.trim();
     
-    // 🚨 NEW: Build user context with image URLs if available
-    const userContext: Record<string, unknown> = {};
-    if (selectedSceneId) {
-      userContext.sceneId = selectedSceneId;
-    }
-    if (uploadedImages.length > 0) {
-      const imageUrls = uploadedImages
-        .filter(img => img.status === 'uploaded' && img.url)
-        .map(img => img.url!);
-      userContext.imageUrls = imageUrls;
+    // 🚨 NEW: Get image URLs from uploaded images
+    const imageUrls = uploadedImages
+      .filter(img => img.status === 'uploaded' && img.url)
+      .map(img => img.url!);
+    
+    if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
     }
     
     // ✅ SIMPLE: Add user message to VideoState
-    addUserMessage(projectId, trimmedMessage, uploadedImages.length > 0 ? uploadedImages.filter(img => img.status === 'uploaded' && img.url).map(img => img.url!) : undefined);
+    addUserMessage(projectId, trimmedMessage, imageUrls.length > 0 ? imageUrls : undefined);
     
-    // ✅ SIMPLE: Add assistant loading message with progress simulation
+    // ✅ SIMPLE: Add assistant loading message  
     const assistantMessageId = `assistant-${Date.now()}`;
     activeAssistantMessageIdRef.current = assistantMessageId;
-    addAssistantMessage(projectId, assistantMessageId, "🧠 Starting scene generation...");
-    
-    // 🚨 NEW: Start progress tracking with realistic steps
-    const progressSteps = uploadedImages.length > 0 
-      ? [
-          "🖼️ Analyzing uploaded images...",
-          "🎨 Extracting visual style and colors...", 
-          "📐 Planning scene layout...",
-          "⚡ Generating React/Remotion code...",
-          "🎬 Compiling and saving scene..."
-        ]
-      : [
-          "🧠 Understanding your request...",
-          "📐 Planning scene layout...", 
-          "⚡ Generating React/Remotion code...",
-          "🎬 Compiling and saving scene..."
-        ];
-    
-    let currentStep = 0;
-    const progressInterval = setInterval(() => {
-      if (currentStep < progressSteps.length - 1) {
-        currentStep++;
-        updateMessage(projectId, assistantMessageId, {
-          content: progressSteps[currentStep],
-          status: 'building'
-        });
-      }
-    }, 3000); // Update every 3 seconds
+    addAssistantMessage(projectId, assistantMessageId, "🧠 Processing your request...");
     
     setMessage("");
     // 🚨 NEW: Clear uploaded images after submission (as per user feedback)
@@ -405,77 +269,125 @@ export default function ChatPanelG({
     setIsGenerating(true);
 
     try {
-      console.log('[ChatPanelG] 🚀 Starting scene generation via generateSceneMutation...');
+      console.log('[ChatPanelG] 🚀 Starting generation via Brain Orchestrator...');
       
+      // ✅ CORRECT: Use generation endpoint that goes through Brain Orchestrator
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: trimmedMessage,
-        sceneId: selectedSceneId || undefined, // Convert null to undefined for type compatibility
-        userContext: Object.keys(userContext).length > 0 ? userContext : undefined, // 🚨 NEW: Include user context with images
+        sceneId: selectedSceneId || undefined,
+        userContext: {
+          sceneId: selectedSceneId || undefined,
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        }
       });
 
       console.log('[ChatPanelG] ✅ Generation completed:', result);
       
-      // 🚨 NEW: Clear progress interval once generation completes
-      clearInterval(progressInterval);
+      // ✅ Update assistant message with response from Brain Orchestrator
+      const finalResponse = result.chatResponse || 'Scene operation completed! ✅';
+      updateMessage(projectId, assistantMessageId, {
+        content: finalResponse,
+        status: 'success'
+      });
       
-      // 🚨 CRITICAL FIX: Update VideoState with latest scene data after successful operation
-      if (result.success) {
-        console.log('[ChatPanelG] 🔄 Scene operation successful, refreshing VideoState...');
+      try {
+        // ✅ CRITICAL FIX: Force refresh scene data after successful operation
+        console.log('[ChatPanelG] ♻️ CRITICAL: Starting forced state refresh...');
         
-        // ✅ STEP 1: Update assistant message with success status
-        updateMessage(projectId, assistantMessageId, {
-          content: result.chatResponse || 'Scene generated successfully! ✅',
-          status: 'success'
-        });
+        // STEP 1: Invalidate all related caches
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+        await utils.generation.invalidate(); // Invalidate entire generation namespace
         
+        console.log('[ChatPanelG] 🔄 CRITICAL: Fetching fresh scenes from database...');
+        
+        // STEP 2: Force refetch with error handling
+        let updatedScenes;
         try {
-          // ✅ STEP 2: Invalidate tRPC cache FIRST to ensure fresh data
-          console.log('[ChatPanelG] ♻️ Invalidating tRPC cache...');
-          await utils.generation.getProjectScenes.invalidate({ projectId });
+          updatedScenes = await refetchScenes();
+        } catch (refetchError) {
+          console.error('[ChatPanelG] ❌ CRITICAL: refetchScenes failed, trying direct query...', refetchError);
+          // Fallback: Try to refetch manually
+          updatedScenes = await utils.generation.getProjectScenes.fetch({ projectId });
+        }
+        
+        console.log('[ChatPanelG] 📊 CRITICAL: Raw scenes data:', updatedScenes);
+        
+        if (updatedScenes) {
+          // Handle different response formats from tRPC query
+          const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
+          console.log('[ChatPanelG] ✅ CRITICAL: Fetched updated scenes from database:', scenesArray?.length || 0);
           
-          // ✅ STEP 3: Fetch fresh data from database
-          console.log('[ChatPanelG] 🔄 Fetching fresh scenes from database...');
-          const updatedScenes = await refetchScenes();
-          
-          if (updatedScenes.data && updatedScenes.data.length > 0) {
-            console.log('[ChatPanelG] ✅ Fetched updated scenes from database:', updatedScenes.data.length);
+          if (scenesArray && scenesArray.length > 0) {
+            const updatedProps = convertDbScenesToInputProps(scenesArray);
+            console.log('[ChatPanelG] ✅ CRITICAL: Converted scenes to InputProps format:', updatedProps);
             
-            // ✅ STEP 4: Convert database scenes to InputProps format
-            const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
-            console.log('[ChatPanelG] ✅ Converted scenes to InputProps format');
-            
-            // ✅ STEP 5: Use updateAndRefresh for guaranteed UI updates
-            console.log('[ChatPanelG] 🚀 Using updateAndRefresh for guaranteed state sync...');
+            console.log('[ChatPanelG] 🚀 CRITICAL: Forcing VideoState update with updateAndRefresh...');
             updateAndRefresh(projectId, () => updatedProps);
             
-            console.log('[ChatPanelG] 🎬 VideoState updated with updateAndRefresh, all panels should refresh');
+            console.log('[ChatPanelG] 🎬 CRITICAL: VideoState updated - all panels should refresh NOW');
+            
+            // STEP 3: Also force global VideoState refresh
+            console.log('[ChatPanelG] 🔄 CRITICAL: Forcing VideoState global refresh...');
+            useVideoState.getState().forceRefresh(projectId);
+            
+            // STEP 4: Manual dispatch of update event as backup
+            console.log('[ChatPanelG] 📡 CRITICAL: Manually dispatching videostate-update event...');
+            window.dispatchEvent(new CustomEvent('videostate-update', {
+              detail: { 
+                projectId,
+                type: 'scenes-updated',
+                refreshToken: Date.now().toString(),
+                sceneCount: scenesArray?.length || 0
+              }
+            }));
+            
+            console.log('[ChatPanelG] ✅ CRITICAL: All refresh operations completed successfully');
+            
           } else {
-            console.warn('[ChatPanelG] ⚠️ No scenes data returned from database query');
+            console.error('[ChatPanelG] ❌ CRITICAL: No scenes in updated data - something is wrong');
           }
-        } catch (refreshError) {
-          console.error('[ChatPanelG] ❌ Failed to refresh scene data:', refreshError);
-          // Don't throw - the scene operation succeeded, just state sync failed
+        } else {
+          console.error('[ChatPanelG] ❌ CRITICAL: No scenes data returned from database query');
+          
+          // Last resort: Force reload the page after a short delay
+          console.log('[ChatPanelG] 🚨 LAST RESORT: Will force page reload in 2 seconds if state sync failed');
+          setTimeout(() => {
+            console.log('[ChatPanelG] 🔄 FORCING PAGE RELOAD due to state sync failure');
+            window.location.reload();
+          }, 2000);
         }
-      } else {
-        // ✅ Handle failed operations
-        console.error('[ChatPanelG] ❌ Scene operation failed:', result);
-        updateMessage(projectId, assistantMessageId, {
-          content: `Error: Scene generation failed`,
-          status: 'error'
-        });
+      } catch (refreshError) {
+        console.error('[ChatPanelG] ❌ CRITICAL: Refresh failed, but chat will continue:', refreshError);
+        
+        // 🚨 FALLBACK: Even if refresh fails, still try to notify other panels
+        try {
+          console.log('[ChatPanelG] 🔧 CRITICAL: Attempting fallback refresh...');
+          useVideoState.getState().forceRefresh(projectId);
+          
+          // Force a manual event dispatch as last resort
+          window.dispatchEvent(new CustomEvent('videostate-update', {
+            detail: { 
+              projectId,
+              type: 'emergency-refresh',
+              error: refreshError,
+              timestamp: Date.now()
+            }
+          }));
+          
+          console.log('[ChatPanelG] ✅ CRITICAL: Fallback refresh completed');
+        } catch (fallbackError) {
+          console.error('[ChatPanelG] 💥 CRITICAL: Even fallback refresh failed:', fallbackError);
+        }
       }
 
       // Handle callbacks
-      if (result.scene?.id && onSceneGenerated) {
+      if (onSceneGenerated && result.scene?.id) {
         onSceneGenerated(result.scene.id);
       }
 
     } catch (error) {
-      // 🚨 NEW: Clear progress interval on error
-      clearInterval(progressInterval);
-      
-      console.error('[ChatPanelG] ❌ Scene generation failed:', error);
+      console.error('[ChatPanelG] ❌ Chat flow failed:', error);
       
       // Update message with error status
       updateMessage(projectId, assistantMessageId, {
@@ -486,9 +398,6 @@ export default function ChatPanelG({
       setIsGenerating(false);
       activeAssistantMessageIdRef.current = null;
       setGenerationComplete(true);
-      
-      // 🚨 NEW: Final cleanup - ensure interval is cleared
-      clearInterval(progressInterval);
     }
   };
 
@@ -625,6 +534,25 @@ export default function ChatPanelG({
     }
   }, [messages]);
 
+  // 🎤 NEW: Auto-fill transcribed text into message input
+  useEffect(() => {
+    if (transcription && transcription.trim()) {
+      console.log('[ChatPanelG] 🎤 Transcription complete, filling into message input:', transcription);
+      
+      // Auto-fill the transcribed text into the message input
+      setMessage(prevMessage => {
+        // If there's already text, append the transcription with a space
+        const newMessage = prevMessage.trim() 
+          ? `${prevMessage} ${transcription}` 
+          : transcription;
+        return newMessage;
+      });
+      
+      // Optional: Show success toast
+      toast.success(`Transcription complete: "${transcription.slice(0, 50)}${transcription.length > 50 ? '...' : ''}"`);
+    }
+  }, [transcription]);
+
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
@@ -636,32 +564,21 @@ export default function ChatPanelG({
     errorMessage: string;
   } | null>(null);
 
-  // 🚨 NEW: Listen for preview panel errors
-  useEffect(() => {
-    const handlePreviewError = (event: CustomEvent) => {
-      const { sceneId, sceneName, error } = event.detail;
-      console.log('[ChatPanelG] 🔧 Preview error detected:', { sceneId, sceneName, error });
-      
-      setHasSceneError(true);
-      setSceneErrorDetails({
-        sceneId,
-        sceneName,
-        errorMessage: error.message || String(error)
-      });
-    };
-
-    window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
-    
-    return () => {
-      window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
-    };
-  }, []);
-
-  // 🚨 NEW: Auto-fix function
-  const handleAutoFix = async () => {
-    if (!sceneErrorDetails) return;
+  // 🚨 NEW: Auto-fix function (moved before useEffect that uses it)
+  const handleAutoFix = useCallback(async () => {
+    if (!sceneErrorDetails) {
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: No sceneErrorDetails available');
+      return;
+    }
     
     const fixPrompt = `🔧 AUTO-FIX: Scene "${sceneErrorDetails.sceneName}" has a Remotion error: "${sceneErrorDetails.errorMessage}". Please analyze and fix this scene automatically.`;
+    
+    console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Starting autofix flow:', {
+      sceneId: sceneErrorDetails.sceneId,
+      sceneName: sceneErrorDetails.sceneName,
+      errorMessage: sceneErrorDetails.errorMessage,
+      fixPrompt: fixPrompt
+    });
     
     // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
     addUserMessage(projectId, fixPrompt);
@@ -674,11 +591,19 @@ export default function ChatPanelG({
     setIsGenerating(true);
     setHasSceneError(false);
     
+    console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
+    
     try {
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: fixPrompt,
         sceneId: sceneErrorDetails.sceneId,
+        userContext: {
+          sceneId: sceneErrorDetails.sceneId,
+          errorMessage: sceneErrorDetails.errorMessage,
+          sceneName: sceneErrorDetails.sceneName,
+          isAutoFix: true
+        }
       });
 
       // ✅ CRITICAL: Force complete state refresh after successful fix
@@ -717,7 +642,77 @@ export default function ChatPanelG({
       setSceneErrorDetails(null);
       activeAssistantMessageIdRef.current = null;
     }
-  };
+  }, [sceneErrorDetails, projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, addUserMessage, addAssistantMessage, updateMessage, activeAssistantMessageIdRef, setIsGenerating, setHasSceneError]);
+
+  // 🚨 ENHANCED: Listen for preview panel errors with better debugging
+  useEffect(() => {
+    const handlePreviewError = (event: CustomEvent) => {
+      const { sceneId, sceneName, error } = event.detail;
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Preview error detected:', { 
+        sceneId, 
+        sceneName, 
+        error: error?.message || String(error),
+        errorType: typeof error,
+        fullEvent: event.detail 
+      });
+      
+      // 🚨 IMMEDIATE: Set error state to show autofix button
+      setHasSceneError(true);
+      setSceneErrorDetails({
+        sceneId,
+        sceneName,
+        errorMessage: error?.message || String(error)
+      });
+
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Error state updated, autofix button should appear');
+      
+      // 🚨 ENHANCED: Also show a toast notification for immediate feedback
+      toast.error(`Scene "${sceneName}" has an error - AutoFix available!`, {
+        duration: 5000,
+        action: {
+          label: "Auto-Fix",
+          onClick: () => {
+            console.log('[ChatPanelG] 🔧 AUTOFIX: Toast action clicked');
+            // The autofix button will handle this
+          }
+        }
+      });
+    };
+
+    // 🚨 NEW: Also listen for direct autofix triggers from error boundaries
+    const handleDirectAutoFix = (event: CustomEvent) => {
+      const { sceneId, sceneName, error } = event.detail;
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Direct autofix trigger received:', { 
+        sceneId, 
+        sceneName, 
+        error 
+      });
+      
+      // Set error state and immediately trigger autofix
+      setSceneErrorDetails({
+        sceneId,
+        sceneName,
+        errorMessage: error?.message || String(error)
+      });
+      
+      // Immediately trigger autofix without waiting for button click
+      setTimeout(() => {
+        handleAutoFix();
+      }, 100);
+    };
+
+    console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Setting up preview-scene-error listener');
+    window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
+    window.addEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
+    
+    return () => {
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Removing preview-scene-error listener');
+      window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
+      window.removeEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
+          };
+    }, [handleAutoFix]);
+
+
 
   return (
     <div className="flex flex-col h-full">
@@ -809,6 +804,8 @@ export default function ChatPanelG({
                     ? "bg-primary text-primary-foreground"
                     : msg.status === "error"
                     ? "bg-destructive/10 border-destructive"
+                    : msg.kind === "status"
+                    ? "bg-blue-50 border-blue-200 border-dashed"
                     : "bg-muted"
                 }`}
               >
@@ -838,7 +835,9 @@ export default function ChatPanelG({
                       </div>
                     )}
                     
-                    <div className="whitespace-pre-wrap text-sm flex items-center gap-2">
+                    <div className={`whitespace-pre-wrap text-sm leading-none flex items-center gap-1 ${
+                      msg.kind === "status" ? "text-blue-700 font-medium" : ""
+                    }`}>
                       {msg.content}
                       {msg.status === "building" && (
                         <div className="flex space-x-1">
@@ -891,37 +890,55 @@ export default function ChatPanelG({
           </div>
         )}
 
-        {/* 🚨 NEW: Auto-fix error banner */}
+        {/* Auto-fix error banner */}
         {hasSceneError && sceneErrorDetails && (
-          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-red-700">
-                  Scene Error Detected: {sceneErrorDetails.sceneName}
-                </span>
+          <div className="mb-3 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <span className="text-red-600 text-sm">⚠</span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-900">
+                    Scene Compilation Error
+                  </span>
+                  <p className="text-xs text-gray-500">{sceneErrorDetails.sceneName}</p>
+                </div>
               </div>
               <Button
                 onClick={handleAutoFix}
                 disabled={isGenerating}
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 h-7"
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 font-medium"
               >
                 {isGenerating ? (
                   <>
-                    <RefreshCwIcon className="h-3 w-3 mr-1 animate-spin" />
+                    <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
                     Fixing...
                   </>
                 ) : (
                   <>
-                    🔧 Fix Automatically
+                    🔧 Auto-Fix
                   </>
                 )}
               </Button>
             </div>
-            <p className="text-xs text-red-600 mt-1">
-              {sceneErrorDetails.errorMessage.substring(0, 100)}...
-            </p>
+            
+            {/* Quotes */}
+            <div className="bg-gray-50 border-l-4 border-gray-300 p-4 mb-3 rounded-r">
+              <p className="text-sm italic text-gray-700 mb-2">
+                "If you're not embarrassed by the first version of your product, you've launched too late."
+              </p>
+              <p className="text-xs text-gray-500 mb-3">— Reid Hoffman</p>
+              
+              <p className="text-xs text-gray-600 leading-relaxed">
+                If you're one of those few people who still knows how to code, you can open the code panel and fix it yourself, or else send it to the higher powers and hope for the best.
+              </p>
+            </div>
+            
+            <div className="text-xs text-gray-500">
+              <span className="font-medium">Error:</span> {sceneErrorDetails.errorMessage.substring(0, 120)}...
+            </div>
           </div>
         )}
 
@@ -1032,12 +1049,4 @@ export default function ChatPanelG({
       </div>
     </div>
   );
-} 
-
-interface UploadedImage {
-  id: string;
-  file: File;
-  status: 'uploading' | 'uploaded' | 'error';
-  url?: string;
-  error?: string;
 }

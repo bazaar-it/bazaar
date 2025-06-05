@@ -4,9 +4,11 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { brainOrchestrator } from "~/server/services/brain/orchestrator";
 import { codeValidationService } from "~/server/services/codeValidation.service";
 import { db } from "~/server/db";
-import { scenes, projects, messages } from "~/server/db/schema";
+import { scenes, projects, messages, sceneIterations } from "~/server/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import crypto from "crypto";
+import { analytics } from '~/lib/analytics';
+import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 export const generationRouter = createTRPCRouter({
   /**
@@ -464,6 +466,8 @@ export const generationRouter = createTRPCRouter({
           throw new Error("Failed to create template scene");
         }
 
+
+
         console.log(`[Generation] Template scene created successfully:`, {
           sceneId: newScene.id,
           name: newScene.name,
@@ -594,7 +598,7 @@ export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
             name: defaultSceneName,
             order: nextOrder,
             tsxCode: defaultSceneCode,
-            duration: 180, // 6 seconds default
+            duration: analyzeDuration(defaultSceneCode).frames,
             layoutJson: JSON.stringify({
               sceneType: "custom",
               isUserCreated: true

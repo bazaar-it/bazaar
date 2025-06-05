@@ -34,7 +34,7 @@ export class LLMService {
     const useTools = options.tools !== false;
     const temperature = options.temperature ?? 1; // Default to 1 as o4-mini only supports temperature=1
 
-    chatLogger.debug('LLMService', `Creating stream with ${messages.length} messages, model: ${model}`);
+    chatLogger.debug(`Creating stream with ${messages.length} messages, model: ${model}`);
     
     return this.client.chat.completions.create({
       model,

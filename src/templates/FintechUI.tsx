@@ -1,5 +1,11 @@
+// src/templates/FintechUI.tsx
 import React from 'react';
-import { AbsoluteFill, interpolate, useCurrentFrame, spring } from "remotion";
+import {
+  AbsoluteFill,
+  interpolate,
+  useCurrentFrame,
+  spring,
+} from 'remotion';
 
 const ChatMessage = ({ text, isUser, delay }: { text: string; isUser: boolean; delay: number }) => {
   const frame = useCurrentFrame();

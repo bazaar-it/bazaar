@@ -1,11 +1,11 @@
-//src/templates/AppleSignIn.tsx
+// src/templates/AppleSignIn.tsx
 import {
     AbsoluteFill,
     interpolate,
     useCurrentFrame,
     spring,
     useVideoConfig,
-  } from "remotion";
+} from 'remotion';
   
   export default function AppleSignIn() {
     const frame = useCurrentFrame();

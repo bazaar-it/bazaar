@@ -31,7 +31,7 @@ export function StoryboardPanelG({
   selectedSceneId?: string | null;
   onSceneSelect?: (sceneId: string | null) => void;
 }) {
-  const { replace } = useVideoState();
+  const { updateAndRefresh } = useVideoState();
   const [newScenePrompt, setNewScenePrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 

@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { eq, and } from "drizzle-orm";
-import { scenes } from "~/server/db/schema";
+import { scenes, sceneIterations } from "~/server/db/schema";
 
 export const scenesRouter = createTRPCRouter({
   updateSceneCode: protectedProcedure
@@ -33,6 +33,9 @@ export const scenesRouter = createTRPCRouter({
         throw new Error("Unauthorized: You don't own this project");
       }
 
+      // Store the "before" code for tracking changes
+      const codeBefore = existingScene.tsxCode;
+
       // Update scene code
       const updatedScenes = await ctx.db
         .update(scenes)
@@ -42,6 +45,8 @@ export const scenesRouter = createTRPCRouter({
         })
         .where(eq(scenes.id, input.sceneId))
         .returning();
+
+
 
       console.log(`[scenes.updateSceneCode] ✅ Scene code updated successfully`);
       

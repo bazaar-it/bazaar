@@ -13,6 +13,7 @@ export enum ToolName {
   EditScene = 'editScene', 
   DeleteScene = 'deleteScene',
   FixBrokenScene = 'fixBrokenScene',
+  ChangeDuration = 'changeDuration',
   AnalyzeImage = 'analyzeImage',
   CreateSceneFromImage = 'createSceneFromImage',
   EditSceneWithImage = 'editSceneWithImage',
@@ -45,6 +46,7 @@ export interface ToolSelectionResult {
   clarificationQuestion?: string;
   editComplexity?: EditComplexity;
   userFeedback?: string;
+  requestedDurationSeconds?: number;
 }
 
 /**

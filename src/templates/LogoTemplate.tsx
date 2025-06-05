@@ -1,3 +1,4 @@
+// src/templates/LogoTemplate.tsx
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 
 export default function LogoTemplate() {

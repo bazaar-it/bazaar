@@ -5,6 +5,7 @@ export { addSceneTool } from './addScene';
 export { editSceneTool } from './editScene';
 export { deleteSceneTool } from './deleteScene';
 export { fixBrokenSceneTool } from './fixBrokenScene';
+export { changeDurationTool } from './changeDuration';
 
 // Export image tools  
 export { analyzeImageTool } from './analyzeImage';

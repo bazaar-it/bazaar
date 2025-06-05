@@ -1,4 +1,9 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+// src/templates/BlueGradientText.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 
 export default function BlueGradientText() {
   const frame = useCurrentFrame();

@@ -1,4 +1,9 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+// src/templates/GradientText.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 
 export default function GradientText() {
   const frame = useCurrentFrame();

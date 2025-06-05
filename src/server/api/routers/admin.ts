@@ -757,4 +757,323 @@ export const adminRouter = createTRPCRouter({
         periodEnd: new Date().toISOString(),
       };
     }),
+
+  // EVALUATION ENDPOINTS - admin only
+
+  // Run evaluation suite
+  runEvaluation: adminOnlyProcedure
+    .input(z.object({
+      suiteId: z.string(),
+      modelPacks: z.array(z.string()),
+      maxPrompts: z.number().optional(),
+      showOutputs: z.boolean().optional(),
+      comparison: z.boolean().optional(),
+      verbose: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      // Import the evaluation runner
+      const { EvaluationRunner } = await import("~/lib/evals/runner");
+      
+      const runner = new EvaluationRunner();
+      
+      try {
+        const result = await runner.runSuite({
+          suiteId: input.suiteId,
+          modelPacks: input.modelPacks,
+          maxPrompts: input.maxPrompts,
+          showOutputs: input.showOutputs,
+          comparison: input.comparison,
+          verbose: input.verbose,
+        });
+
+        return result;
+      } catch (error) {
+        console.error('Evaluation failed:', error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    }),
+
+  // Create custom evaluation suite
+  createCustomSuite: adminOnlyProcedure
+    .input(z.object({
+      name: z.string(),
+      description: z.string(),
+      prompts: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.enum(['text', 'image', 'code', 'scene']),
+        input: z.object({
+          text: z.string().optional(),
+          image: z.string().optional(),
+          context: z.record(z.any()).optional(),
+        }),
+        expectedOutput: z.object({
+          type: z.enum(['exact', 'contains', 'pattern', 'quality_score']),
+          value: z.union([z.string(), z.number()]),
+        }).optional(),
+        expectedBehavior: z.object({
+          toolCalled: z.string().optional(),
+          editType: z.enum(['surgical', 'creative', 'structural']).optional(),
+          shouldMention: z.array(z.string()).optional(),
+          shouldModify: z.array(z.string()).optional(),
+          shouldAnalyzeImage: z.boolean().optional(),
+          shouldUseContext: z.boolean().optional(),
+          shouldConfirm: z.boolean().optional(),
+          shouldAsk: z.array(z.string()).optional(),
+          needsClarification: z.boolean().optional(),
+          expectedDuration: z.number().optional(),
+          complexity: z.enum(['low', 'medium', 'high', 'very-high']),
+        }).optional(),
+      })),
+      modelPacks: z.array(z.string()),
+      services: z.array(z.string()),
+    }))
+    .mutation(async ({ input }) => {
+      // For now, just return the created suite structure
+      // In the future, this could be stored in a database
+      const customSuite = {
+        id: `custom-${Date.now()}`,
+        name: input.name,
+        description: input.description,
+        prompts: input.prompts,
+        modelPacks: input.modelPacks,
+        services: input.services,
+      };
+
+      return customSuite;
+    }),
+
+  // Get available evaluation suites
+  getEvaluationSuites: adminOnlyProcedure
+    .query(async () => {
+      // Import suites dynamically
+      const { allEvalSuites } = await import("~/lib/evals/suites/basic-prompts");
+      
+      return allEvalSuites.map(suite => ({
+        id: suite.id,
+        name: suite.name,
+        description: suite.description,
+        promptCount: suite.prompts.length,
+        services: suite.services,
+        modelPacks: suite.modelPacks,
+      }));
+    }),
+
+  // Get available model packs
+  getModelPacks: adminOnlyProcedure
+    .query(async () => {
+      const { MODEL_PACKS } = await import("~/config/models.config");
+      
+      return Object.entries(MODEL_PACKS).map(([id, pack]) => ({
+        id,
+        name: pack.name,
+        description: pack.description,
+        models: {
+          brain: `${pack.models.brain.provider}/${pack.models.brain.model}`,
+          codeGenerator: `${pack.models.codeGenerator.provider}/${pack.models.codeGenerator.model}`,
+          visionAnalysis: `${pack.models.visionAnalysis.provider}/${pack.models.visionAnalysis.model}`,
+        },
+      }));
+    }),
+
+  // Create custom prompt - admin only
+  createCustomPrompt: adminOnlyProcedure
+    .input(z.object({
+      name: z.string(),
+      type: z.enum(['text', 'code', 'image', 'scene']),
+      text: z.string(),
+      expectedOutput: z.object({
+        type: z.string(),
+        value: z.string().optional(),
+      }).optional(),
+      context: z.any().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      // TODO: Store in database for persistence
+      const customPrompt = {
+        id: `prompt-${Date.now()}`,
+        name: input.name,
+        type: input.type,
+        input: {
+          text: input.text,
+          context: input.context,
+        },
+        expectedOutput: input.expectedOutput,
+        createdAt: new Date().toISOString(),
+      };
+
+      console.log('Creating custom prompt:', customPrompt);
+      return { 
+        success: true, 
+        promptId: customPrompt.id,
+        prompt: customPrompt
+      };
+    }),
+
+  // Create custom model pack - admin only
+  createCustomModelPack: adminOnlyProcedure
+    .input(z.object({
+      name: z.string(),
+      description: z.string(),
+      brainModel: z.string(),
+      codeModel: z.string(),
+      visionModel: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      // Parse provider/model format
+      const parseModel = (modelString: string) => {
+        const [provider, model] = modelString.split('/');
+        return { provider: provider!, model: model! };
+      };
+
+      const customPack = {
+        id: `custom-${Date.now()}`,
+        name: input.name,
+        description: input.description,
+        models: {
+          brain: parseModel(input.brainModel),
+          codeGenerator: parseModel(input.codeModel),
+          visionAnalysis: parseModel(input.visionModel),
+        },
+        createdAt: new Date().toISOString(),
+      };
+
+      // TODO: Store in database for persistence
+      console.log('Creating custom model pack:', customPack);
+      return { success: true, packId: customPack.id, pack: customPack };
+    }),
+
+  // Analyze uploaded image - admin only
+  analyzeUploadedImage: adminOnlyProcedure
+    .input(z.object({
+      imageData: z.string(), // base64 image data
+      prompt: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // TODO: Integrate with actual image analysis service from ~/lib/services/analyzeImage.ts
+        const analysisResult = {
+          success: true,
+          analysis: {
+            description: "A user interface mockup showing a modern web application with clean design elements, including navigation, content areas, and interactive components.",
+            colors: ["#3B82F6", "#1F2937", "#F9FAFB", "#EF4444"],
+            elements: ["Navigation bar", "Content cards", "Buttons", "Text elements"],
+            mood: "Professional and modern",
+            suggestions: [
+              "This design could be implemented using React components",
+              "The color scheme suggests a professional application",
+              "Layout appears to be responsive-friendly"
+            ],
+            palette: {
+              primary: "#3B82F6",
+              secondary: "#1F2937", 
+              accent: "#EF4444",
+              background: "#F9FAFB"
+            },
+            typography: {
+              headers: "Bold, sans-serif typography",
+              body: "Clean, readable text"
+            }
+          },
+          timestamp: new Date().toISOString(),
+        };
+
+        return analysisResult;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Image analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }),
+
+  // Generate scene from image - admin only
+  generateSceneFromImage: adminOnlyProcedure
+    .input(z.object({
+      imageData: z.string(),
+      analysisData: z.any().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // TODO: Integrate with actual scene generation service
+        const sceneCode = `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
+
+export default function GeneratedScene() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  const opacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp"
+  });
+  
+  const scale = interpolate(frame, [0, fps], [0.8, 1], {
+    extrapolateLeft: "clamp", 
+    extrapolateRight: "clamp"
+  });
+  
+  return (
+    <AbsoluteFill style={{ 
+      backgroundColor: "#3B82F6",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundImage: "linear-gradient(135deg, #3B82F6 0%, #1F2937 100%)"
+    }}>
+      <div style={{
+        opacity,
+        transform: \`scale(\${scale})\`,
+        textAlign: "center",
+        color: "white",
+        padding: "2rem"
+      }}>
+        <h1 style={{
+          fontSize: "4rem",
+          fontWeight: "700",
+          margin: "0 0 1rem 0",
+          textShadow: "0 4px 8px rgba(0,0,0,0.3)"
+        }}>
+          Generated from Image
+        </h1>
+        <p style={{
+          fontSize: "1.5rem",
+          opacity: 0.9,
+          maxWidth: "600px"
+        }}>
+          Professional UI Design with Modern Elements
+        </p>
+        <div style={{
+          marginTop: "2rem",
+          padding: "1rem 2rem",
+          backgroundColor: "rgba(255,255,255,0.1)",
+          borderRadius: "10px",
+          backdropFilter: "blur(10px)"
+        }}>
+          <span style={{ fontSize: "1.2rem" }}>
+            Auto-generated from uploaded reference
+          </span>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+}`;
+
+        return {
+          success: true,
+          sceneCode,
+          sceneId: `scene-${Date.now()}`,
+          sceneName: "Generated Scene",
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }),
 });

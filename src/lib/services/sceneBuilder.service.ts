@@ -2,6 +2,7 @@
 import crypto from 'crypto';
 import { layoutGeneratorService } from "./layoutGenerator.service";
 import { codeGeneratorService } from "./codeGenerator.service";
+import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 /**
  * SceneBuilder service - Simple orchestrator for the two-step pipeline
@@ -160,7 +161,7 @@ export default function ${uniqueFunctionName}() {
       return {
         code: fallbackCode,
         name: displayName,
-        duration: 90,
+        duration: analyzeDuration(fallbackCode).frames,
         reasoning: "Complete fallback due to two-step pipeline error",
         layoutJson: fallbackLayout,
         debug: { 

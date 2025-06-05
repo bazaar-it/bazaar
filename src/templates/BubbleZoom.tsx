@@ -1,6 +1,12 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
+// src/templates/BubbleZoom.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  interpolate,
+} from 'remotion';
 
-export default function AICoding() {
+export default function BubbleZoom() {
   const frame = useCurrentFrame();
 
   const codeLines = [

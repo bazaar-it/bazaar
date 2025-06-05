@@ -29,7 +29,13 @@ export function PreviewPanelG({
   projectId: string;
   initial?: InputProps;
 }) {
-  const { getCurrentProps, globalRefreshCounter } = useVideoState();
+  // ✅ FIXED: Use separate selectors to prevent infinite loops
+  const currentProps = useVideoState((state) => {
+    const project = state.projects[projectId];
+    return project?.props || initial;
+  });
+  
+  const globalRefreshCounter = useVideoState((state) => state.globalRefreshCounter);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -38,8 +44,7 @@ export function PreviewPanelG({
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
   
-  // Get current props from video state
-  const currentProps = getCurrentProps() || initial;
+  // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
   
   console.log('[PreviewPanelG] Current props:', currentProps);
@@ -121,31 +126,96 @@ export default function TestComponent() {
     }
   }, []);
 
-  // 🚨 NEW: Create safe fallback scene for ACTUALLY broken scenes
+  // 🚨 ENHANCED: Create safe fallback scene with autofix button
   const createFallbackScene = useCallback((sceneName: string, sceneIndex: number, errorDetails?: string) => {
     return `
 function FallbackScene${sceneIndex}() {
+  const handleAutoFix = () => {
+    console.log('[PreviewPanelG] 🔧 AUTOFIX: Direct button clicked from fallback scene ${sceneIndex}');
+    
+    // 🚨 DIRECT: Trigger autofix in ChatPanelG
+    const autoFixEvent = new CustomEvent('trigger-autofix', {
+      detail: {
+        sceneId: '${sceneName}', // This will be the actual scene ID
+        sceneName: '${sceneName || `Scene ${sceneIndex + 1}`}',
+        error: { message: '${errorDetails || 'Compilation error'}' }
+      }
+    });
+    window.dispatchEvent(autoFixEvent);
+  };
+
   return (
     <AbsoluteFill style={{
-      backgroundColor: '#ffebee',
+      background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'column',
-      border: '2px dashed #f44336',
-      borderRadius: '8px',
-      margin: '20px'
+      border: '2px dashed #ffc107',
+      borderRadius: '12px',
+      margin: '20px',
+      fontFamily: 'Inter, sans-serif'
     }}>
-      <h3 style={{ color: '#d32f2f', marginBottom: '16px' }}>
-        ⚠️ Scene Error
+      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛠️</div>
+      
+      <h3 style={{ 
+        color: '#856404', 
+        marginBottom: '16px',
+        fontSize: '1.5rem',
+        fontWeight: '600'
+      }}>
+        Scene needs a quick fix
       </h3>
-      <p style={{ color: '#666', marginBottom: '8px' }}>
-        "${sceneName || `Scene ${sceneIndex + 1}`}" has a compilation issue
+      
+      <p style={{ 
+        color: '#856404', 
+        marginBottom: '16px',
+        textAlign: 'center',
+        maxWidth: '400px',
+        lineHeight: '1.5'
+      }}>
+        "${sceneName || `Scene ${sceneIndex + 1}`}" has a compilation issue, but don't worry!
       </p>
-      <small style={{ color: '#999' }}>
+      
+      <button
+        onClick={handleAutoFix}
+        style={{
+          backgroundColor: '#3b82f6',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '0.75rem 1.5rem',
+          fontSize: '1rem',
+          fontWeight: '500',
+          cursor: 'pointer',
+          marginBottom: '1rem',
+          transition: 'all 0.2s'
+        }}
+      >
+        🚀 Auto-Fix Scene
+      </button>
+      
+      <small style={{ 
+        color: '#856404', 
+        opacity: '0.8',
+        textAlign: 'center',
+        maxWidth: '350px'
+      }}>
         Other scenes continue to work normally
       </small>
-      ${errorDetails ? `<div style={{ fontSize: '12px', color: '#999', marginTop: '8px', maxWidth: '300px', textAlign: 'center' }}>${errorDetails.substring(0, 100)}...</div>` : ''}
+      
+      <div style={{ 
+        fontSize: '11px', 
+        color: '#856404', 
+        marginTop: '12px', 
+        fontStyle: 'italic',
+        opacity: '0.7',
+        textAlign: 'center'
+      }}>
+        "If you are not embarrassed by the first version of your product, you've launched too late." - Reid Hoffman
+      </div>
+      
+      ${errorDetails ? `<div style={{ fontSize: '10px', color: '#856404', marginTop: '8px', maxWidth: '300px', textAlign: 'center', opacity: '0.6' }}>${errorDetails.substring(0, 100)}...</div>` : ''}
     </AbsoluteFill>
   );
 }`;
@@ -172,13 +242,19 @@ function FallbackScene${sceneIndex}() {
     }
 
     try {
-      // 🚨 NEW: Compile each scene individually using REAL compilation
+      // 🚨 FIXED: Compile each scene individually with ISOLATION (no cascade failures)
       const compiledScenes = await Promise.all(
         scenesWithCode.map((scene, index) => compileSceneDirectly(scene, index))
       );
       
       const validScenes = compiledScenes.filter(s => s.isValid).length;
-      console.log(`[PreviewPanelG] Scene compilation: ${validScenes}/${compiledScenes.length} scenes compiled successfully`);
+      console.log(`[PreviewPanelG] 🛡️ ISOLATION: ${validScenes}/${compiledScenes.length} scenes compiled successfully - broken scenes isolated`);
+      
+      // 🚨 CRITICAL FIX: If ALL scenes fail, show fallback. If SOME work, continue with working ones
+      if (validScenes === 0) {
+        console.warn('[PreviewPanelG] ⚠️ All scenes failed compilation, using fallback composition');
+        throw new Error('All scenes failed compilation');
+      }
 
       // For single scene, use simpler approach
       if (compiledScenes.length === 1) {
@@ -254,18 +330,20 @@ export default function SingleSceneComposition() {
           if (!compiled || !originalScene) return;
           
           try {
-            // Extract imports from the scene code and add to our set
-            const sceneCode = compiled.compiledCode;
-            const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
-            remotionFunctions.forEach(func => {
-              if (sceneCode.includes(func)) {
-                allImports.add(func);
-              }
-            });
+            // 🚨 CRITICAL FIX: Handle both valid AND invalid scenes gracefully
+            if (compiled.isValid) {
+              // ✅ VALID SCENE: Process normally
+              const sceneCode = compiled.compiledCode;
+              const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
+              remotionFunctions.forEach(func => {
+                if (sceneCode.includes(func)) {
+                  allImports.add(func);
+                }
+              });
 
-            // ✅ FIXED: React Error Boundary wrapper for each scene (not just try-catch)
-            const errorBoundaryWrapper = `
-// React Error Boundary for Scene ${index}
+              // ✅ VALID: Add working scene with error boundary for runtime protection
+              const errorBoundaryWrapper = `
+// React Error Boundary for Scene ${index} (Valid)
 class ${compiled.componentName}ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -277,9 +355,9 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Scene ${index} error caught by boundary:', error, errorInfo);
+    console.error('Scene ${index} runtime error caught by boundary:', error, errorInfo);
     
-    // 🚨 NEW: Dispatch error event to ChatPanelG for auto-fix
+    // 🚨 RUNTIME ERROR: Dispatch error event to ChatPanelG for auto-fix
     const errorEvent = new CustomEvent('preview-scene-error', {
       detail: {
         sceneId: '${originalScene.id}',
@@ -295,19 +373,19 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
       return React.createElement('div', {
         style: {
           padding: '20px',
-          backgroundColor: '#ffebee',
-          border: '2px dashed #f44336',
+          backgroundColor: '#fff3cd',
+          border: '2px dashed #ffc107',
           borderRadius: '8px',
           textAlign: 'center',
-          color: '#d32f2f',
+          color: '#856404',
           margin: '10px'
         }
       }, [
-        React.createElement('h3', {key: 'title'}, '⚠️ Scene ${index + 1} Error'),
-        React.createElement('p', {key: 'msg'}, 'This scene crashed but the video continues'),
+        React.createElement('h3', {key: 'title'}, '⚠️ Scene ${index + 1} Runtime Error'),
+        React.createElement('p', {key: 'msg'}, 'This scene crashed during playback'),
         React.createElement('small', {key: 'hint'}, 'Error: ' + (this.state.error?.message || 'Unknown error')),
         React.createElement('div', {key: 'tech', style: {fontSize: '10px', marginTop: '8px', color: '#999'}}, 
-          'Scene isolated - other scenes unaffected')
+          'Scene isolated - other scenes continue playing')
       ]);
     }
 
@@ -318,18 +396,55 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
 function ${compiled.componentName}WithErrorBoundary() {
   return React.createElement(${compiled.componentName}ErrorBoundary);
 }`;
-            
-            sceneImports.push(compiled.compiledCode);
-            sceneImports.push(errorBoundaryWrapper);
-            sceneComponents.push(`
-              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                <${compiled.componentName}WithErrorBoundary />
-              </Series.Sequence>
-            `);
+              
+              sceneImports.push(compiled.compiledCode);
+              sceneImports.push(errorBoundaryWrapper);
+              sceneComponents.push(`
+                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
+                  <${compiled.componentName}WithErrorBoundary />
+                </Series.Sequence>
+              `);
+              
+            } else {
+              // 🚨 INVALID SCENE: Already has fallback code, just add it with error boundary
+              console.log(`[PreviewPanelG] 🛡️ ISOLATION: Scene ${index} failed compilation, using safe fallback`);
+              
+              // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
+              sceneImports.push(compiled.compiledCode);
+              sceneComponents.push(`
+                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
+                  <${compiled.componentName} />
+                </Series.Sequence>
+              `);
+            }
 
           } catch (error) {
-            console.error(`[PreviewPanelG] Error processing compiled scene ${index}:`, error);
-            // Skip problematic scenes entirely
+            console.error(`[PreviewPanelG] Error processing scene ${index}:`, error);
+            // 🚨 LAST RESORT: Add emergency fallback for this scene
+            const emergencyFallback = `
+function EmergencyScene${index}() {
+  return React.createElement('div', {
+    style: {
+      padding: '20px',
+      backgroundColor: '#f8d7da',
+      border: '2px dashed #dc3545',
+      borderRadius: '8px',
+      textAlign: 'center',
+      color: '#721c24',
+      margin: '10px'
+    }
+  }, [
+    React.createElement('h3', {key: 'title'}, '🚨 Scene ${index + 1} Emergency Fallback'),
+    React.createElement('p', {key: 'msg'}, 'This scene had critical errors'),
+    React.createElement('small', {key: 'hint'}, 'Other scenes continue normally')
+  ]);
+}`;
+            sceneImports.push(emergencyFallback);
+            sceneComponents.push(`
+              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
+                <EmergencyScene${index} />
+              </Series.Sequence>
+            `);
           }
         });
 
@@ -391,6 +506,20 @@ export default function MultiSceneComposition() {
     } catch (error) {
       console.error('[PreviewPanelG] Error during compilation:', error);
       
+      // 🚨 CRITICAL FIX: Dispatch error event for autofixer when compilation fails
+      const firstSceneWithCode = scenesWithCode[0];
+      if (firstSceneWithCode) {
+        console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching preview-scene-error event for autofixer');
+        const errorEvent = new CustomEvent('preview-scene-error', {
+          detail: {
+            sceneId: firstSceneWithCode.id,
+            sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
+            error: error
+          }
+        });
+        window.dispatchEvent(errorEvent);
+      }
+      
       // IDIOT PROOF: Create a simple fallback that always works
       try {
         console.log('[PreviewPanelG] Creating fallback composition...');
@@ -447,6 +576,21 @@ export default function FallbackComposition() {
         URL.revokeObjectURL(fallbackBlobUrl);
       } catch (fallbackError) {
         console.error('[PreviewPanelG] Even fallback compilation failed:', fallbackError);
+        
+        // 🚨 CRITICAL FIX: Dispatch error event even for fallback failures
+        const firstSceneWithCode = scenesWithCode[0];
+        if (firstSceneWithCode) {
+          console.log('[PreviewPanelG] 🔧 FALLBACK ERROR: Dispatching preview-scene-error event for autofixer');
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId: firstSceneWithCode.id,
+              sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
+              error: fallbackError
+            }
+          });
+          window.dispatchEvent(errorEvent);
+        }
+        
         setComponentError(new Error('Critical compilation failure'));
       }
     } finally {
@@ -486,8 +630,7 @@ export default function FallbackComposition() {
         setRefreshToken(eventRefreshToken || `event-${Date.now()}`);
         
         // Get fresh props and recompile
-        const freshProps = getCurrentProps();
-        if (freshProps?.scenes && freshProps.scenes.length > 0) {
+        if (currentProps?.scenes && currentProps.scenes.length > 0) {
           console.log('[PreviewPanelG] 🚀 Fresh scenes available, triggering recompilation...');
           compileMultiSceneComposition();
         }
@@ -501,7 +644,7 @@ export default function FallbackComposition() {
       console.log('[PreviewPanelG] 📡 Cleaning up VideoState update listener');
       window.removeEventListener('videostate-update', handleVideoStateUpdate as EventListener);
     };
-  }, [projectId, compileMultiSceneComposition, getCurrentProps]);
+  }, [projectId, compileMultiSceneComposition, currentProps]);
 
   // Manual refresh
   const handleRefresh = useCallback(() => {

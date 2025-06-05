@@ -1,3 +1,4 @@
+// src/templates/KnowsCode.tsx
 import { AbsoluteFill, interpolate, useCurrentFrame, spring } from 'remotion';
 
 export default function KnowsCode() {

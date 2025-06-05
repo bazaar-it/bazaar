@@ -74,9 +74,9 @@ const starterPack: ModelPack = {
     fixBrokenScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2 },
     codeGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.25 },
-      creative: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4 },
-      structural: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 }
+      surgical: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
@@ -99,9 +99,9 @@ const performancePack: ModelPack = {
     fixBrokenScene: { provider: 'openai', model: 'gpt-4o', temperature: 0.2 },
     codeGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'openai', model: 'gpt-4o', temperature: 0.25 },
-      creative: { provider: 'openai', model: 'gpt-4o', temperature: 0.4 },
-      structural: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+      surgical: { provider: 'openai', model: 'gpt-4o', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'openai', model: 'gpt-4o', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'openai', model: 'gpt-4o', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
@@ -112,24 +112,24 @@ const performancePack: ModelPack = {
 
 const mixedPack: ModelPack = {
   name: 'Mixed Pack',
-  description: 'O1-mini for brain, GPT-4o for vision, Claude for code',
+  description: 'O1-mini for brain, GPT-4o for vision, Claude Sonnet 4 for code',
   models: {
     brain: { provider: 'openai', model: 'o1-mini', temperature: 1 }, // O1 doesn't use temperature
-    addScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    editScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    deleteScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
+    addScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    deleteScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
     analyzeImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
-    createSceneFromImage: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    editSceneWithImage: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.2 },
-    codeGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
+    createSceneFromImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    editSceneWithImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    fixBrokenScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.2 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 }
     },
-    sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
+    sceneBuilder: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
     imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
   }
@@ -137,26 +137,26 @@ const mixedPack: ModelPack = {
 
 const claudePack: ModelPack = {
   name: 'Claude Pack',
-  description: 'Claude 3.5 Sonnet for everything - excellent for code',
+  description: 'Claude Sonnet 4 for everything - excellent for code',
   models: {
-    brain: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.7 },
-    addScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    editScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    deleteScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    analyzeImage: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    createSceneFromImage: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    editSceneWithImage: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.2 },
-    codeGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
+    brain: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.7 },
+    addScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    deleteScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    analyzeImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    createSceneFromImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    editSceneWithImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    fixBrokenScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.2 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 }
     },
-    sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.5 },
-    layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    visionAnalysis: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 },
-    imageDescription: { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022', temperature: 0.3 }
+    sceneBuilder: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    visionAnalysis: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    imageDescription: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 }
   }
 };
 
@@ -174,9 +174,9 @@ const haikuPack: ModelPack = {
     fixBrokenScene: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.2 },
     codeGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
     directCodeEditor: {
-      surgical: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.25 },
-      creative: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.4 },
-      structural: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 }
+      surgical: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3, maxTokens: 16000 }
     },
     sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
@@ -185,8 +185,47 @@ const haikuPack: ModelPack = {
   }
 };
 
+const openaiPack: ModelPack = {
+  name: 'OpenAI Pack',
+  description: 'OpenAI exclusive - optimal mix of GPT-4.1, GPT-4o, and GPT-4.1-mini',
+  models: {
+    // Core reasoning with our most capable model
+    brain: { provider: 'openai', model: 'gpt-4.1', temperature: 0.7 },
+    
+    // Critical scene operations with GPT-4.1
+    addScene: { provider: 'openai', model: 'gpt-4.1', temperature: 0.5 },
+    editScene: { provider: 'openai', model: 'gpt-4.1', temperature: 0.3 },
+    deleteScene: { provider: 'openai', model: 'gpt-4.1-mini', temperature: 0.5 },
+    
+    // Vision capabilities with GPT-4o (optimized for vision)
+    analyzeImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    createSceneFromImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
+    editSceneWithImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // Error handling with most capable model
+    fixBrokenScene: { provider: 'openai', model: 'gpt-4.1', temperature: 0.2 },
+    
+    // Code generation with GPT-4.1 for highest quality
+    codeGenerator: { provider: 'openai', model: 'gpt-4.1', temperature: 0.3 },
+    directCodeEditor: {
+      surgical: { provider: 'openai', model: 'gpt-4.1', temperature: 0.25, maxTokens: 16000 },
+      creative: { provider: 'openai', model: 'gpt-4.1', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'openai', model: 'gpt-4.1', temperature: 0.3, maxTokens: 16000 }
+    },
+    
+    // Scene building with balanced approach
+    sceneBuilder: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
+    layoutGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // Vision analysis with GPT-4o
+    visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+  }
+};
+
 // Validate all packs at runtime
 export const MODEL_PACKS: Record<string, ModelPack> = {
+  'openai-pack': ModelPackSchema.parse(openaiPack),
   'starter-pack-1': ModelPackSchema.parse(starterPack),
   'performance-pack': ModelPackSchema.parse(performancePack),
   'mixed-pack': ModelPackSchema.parse(mixedPack),
@@ -198,7 +237,7 @@ export const MODEL_PACKS: Record<string, ModelPack> = {
 // ENVIRONMENT-DRIVEN ACTIVE PACK
 // =============================================================================
 
-export const ACTIVE_MODEL_PACK = process.env.MODEL_PACK ?? 'claude-pack';
+export const ACTIVE_MODEL_PACK = process.env.MODEL_PACK ?? 'openai-pack';
 
 // Get the currently active model configuration
 export function getActiveModelPack(): ModelPack {

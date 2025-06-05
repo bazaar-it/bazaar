@@ -8,8 +8,6 @@ import { customComponentFixRouter } from "./routers/customComponentFix";
 import { timelineRouter } from "~/server/api/routers/timeline";
 import { videoRouter } from "~/server/api/routers/video";
 import { animationRouter } from "~/server/api/routers/animation";
-import { a2aRouter } from "~/server/api/routers/a2a";
-import { a2aTestRouter } from "~/server/api/routers/a2a-test";
 import { evaluationRouter } from "~/server/api/routers/evaluation";
 import { debugRouter } from "~/server/api/routers/debug";
 import { generationRouter } from "~/server/api/routers/generation";
@@ -38,8 +36,6 @@ export const appRouter = createTRPCRouter({
   timeline: timelineRouter,
   video: videoRouter,
   animation: animationRouter,
-  a2a: a2aRouter,
-  a2aTest: a2aTestRouter,
   evaluation: evaluationRouter,
   debug: debugRouter,
   generation: generationRouter,

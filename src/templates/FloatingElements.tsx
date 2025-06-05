@@ -1,4 +1,10 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
+// src/templates/FloatingElements.tsx
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+  interpolate,
+} from 'remotion';
 
 export default function FloatingElements() {
   const frame = useCurrentFrame();

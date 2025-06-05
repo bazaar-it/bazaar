@@ -3,6 +3,7 @@ import { type SceneLayout } from "~/lib/schemas/sceneLayout";
 import { AIClientService } from "~/lib/services/aiClient.service";
 import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
+import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 export interface CodeGeneratorInput {
   layoutJson: any;  // No schema - Layout LLM freedom
@@ -27,6 +28,7 @@ export interface CodeGeneratorFromImageInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
+  visionAnalysis?: any;
 }
 
 export interface CodeGeneratorEditWithImageInput {
@@ -101,19 +103,26 @@ export class CodeGeneratorService {
         }
       }
       
-      // NEW APPROACH: Always return the generated code, let auto-fix handle any issues
+      // NEW: Extract actual duration from generated code instead of hardcoding 180
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
       this.DEBUG && console.log(`[CodeGenerator] Code generation completed for ${input.functionName}`);
+      this.DEBUG && console.log(`[CodeGenerator] Extracted duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence} from ${durationAnalysis.source}`);
       this.DEBUG && console.log(`[CodeGenerator] If code has issues, auto-fix will handle it (better than fallback)`);
       
       return {
         code: cleanCode,
         name: input.functionName,
-        duration: 180,
-        reasoning: "Code generated - auto-fix will handle any formatting issues",
+        duration: durationAnalysis.frames,
+        reasoning: `Code generated with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence from ${durationAnalysis.source}) - auto-fix will handle any formatting issues`,
         debug: {
           prompt,
           response: rawOutput,
-          parsed: { code: cleanCode, validated: false }, // Mark as not validated since we skip validation
+          parsed: { 
+            code: cleanCode, 
+            validated: false, // Mark as not validated since we skip validation
+            durationAnalysis 
+          },
         },
       };
     } catch (error) {
@@ -133,13 +142,16 @@ export default function ${input.functionName}() {
   );
 }`;
 
+      // Even for error cases, try to extract a reasonable duration
+      const fallbackDuration = extractDurationFromCode(errorCode);
+      
       return {
         code: errorCode,
         name: input.functionName,
-        duration: 180,
+        duration: fallbackDuration,
         reasoning: "CodeGenerator encountered an error - auto-fix can restore from layout JSON",
         debug: { 
-          error: `${error instanceof Error ? error.message : 'Unknown error'}. Layout: ${JSON.stringify(input.layoutJson, null, 2)}. User prompt: ${input.userPrompt}`
+          error: `${error instanceof Error ? error.message : 'Unknown error'}. Fallback duration: ${fallbackDuration} frames. Layout: ${JSON.stringify(input.layoutJson, null, 2)}. User prompt: ${input.userPrompt}`
         }
       };
     }
@@ -163,16 +175,24 @@ export default function ${input.functionName}() {
    * Bypasses JSON intermediary for pure image-to-animation creation
    */
   async generateCodeFromImage(input: CodeGeneratorFromImageInput): Promise<CodeGeneratorOutput> {
-    const { imageUrls, userPrompt, functionName } = input;
+    const { imageUrls, userPrompt, functionName, visionAnalysis } = input;
     
     this.DEBUG && console.log(`[CodeGenerator] Direct image-to-code generation for: ${functionName}`);
     this.DEBUG && console.log(`[CodeGenerator] Processing ${imageUrls.length} image(s)`);
     this.DEBUG && console.log(`[CodeGenerator] User context: "${userPrompt.substring(0, 100)}..."`);
+    if (visionAnalysis && this.DEBUG) {
+      console.log(`[CodeGenerator] Using pre-computed vision analysis:`, {
+        palette: visionAnalysis.palette?.join(', '),
+        mood: visionAnalysis.mood,
+        typography: visionAnalysis.typography,
+        layoutHighlights: visionAnalysis.layoutJson ? Object.keys(visionAnalysis.layoutJson).slice(0,3).join(', ') : 'N/A',
+      });
+    }
     
     try {
       // 🚨 NEW: Use centralized vision API instead of direct OpenAI calls
       const config = getModel('codeGenerator');
-      const prompt = this.buildImageToCodePrompt(userPrompt, functionName);
+      const prompt = this.buildImageToCodePrompt(userPrompt, functionName, visionAnalysis);
       
       this.DEBUG && console.log(`[CodeGenerator] Using centralized vision API with ${config.provider}/${config.model}`);
       
@@ -195,17 +215,21 @@ export default function ${input.functionName}() {
       let cleanCode = response.content.trim();
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
       
+      // Extract actual duration from image-generated code
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
       this.DEBUG && console.log(`[CodeGenerator] Direct image-to-code completed for ${functionName}`);
+      this.DEBUG && console.log(`[CodeGenerator] Image-generated duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
       
       return {
         code: cleanCode,
         name: functionName,
-        duration: 180,
-        reasoning: "Generated motion graphics directly from image analysis",
+        duration: durationAnalysis.frames,
+        reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence)`,
         debug: {
           prompt: { system: 'Vision-based generation', user: `${imageUrls.length} images provided` },
           response: response.content,
-          parsed: { code: cleanCode, imageCount: imageUrls.length },
+          parsed: { code: cleanCode, imageCount: imageUrls.length, durationAnalysis },
         },
       };
     } catch (error) {
@@ -227,13 +251,15 @@ export default function ${functionName}() {
   );
 }`;
 
+      const fallbackDuration = extractDurationFromCode(errorCode);
+      
       return {
         code: errorCode,
         name: functionName,
-        duration: 180,
+        duration: fallbackDuration,
         reasoning: "Image-to-code generation failed - auto-fix available",
         debug: { 
-          error: `${error instanceof Error ? error.message : 'Unknown error'}. Images: ${imageUrls.length}. User prompt: ${userPrompt}`
+          error: `${error instanceof Error ? error.message : 'Unknown error'}. Fallback duration: ${fallbackDuration} frames. Images: ${imageUrls.length}. User prompt: ${userPrompt}`
         }
       };
     }
@@ -276,30 +302,36 @@ export default function ${functionName}() {
       let cleanCode = response.content.trim();
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
       
+      // Extract duration from edited code
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
       this.DEBUG && console.log(`[CodeGenerator] Image-guided editing completed for ${functionName}`);
+      this.DEBUG && console.log(`[CodeGenerator] Edited code duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
       
       return {
         code: cleanCode,
         name: functionName,
-        duration: 180,
-        reasoning: "Modified existing code based on image reference styling",
+        duration: durationAnalysis.frames,
+        reasoning: `Modified existing code based on image reference styling with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence)`,
         debug: {
           prompt: { system: 'Image-guided editing', user: `Edit with ${imageUrls.length} images` },
           response: response.content,
-          parsed: { code: cleanCode, editType: "image-guided" },
+          parsed: { code: cleanCode, editType: "image-guided", durationAnalysis },
         },
       };
     } catch (error) {
       this.DEBUG && console.error("[CodeGenerator] Image-guided edit error:", error);
       
-      // Return original code on error
+      // Return original code on error with its actual duration
+      const originalDuration = extractDurationFromCode(existingCode);
+      
       return {
         code: existingCode,
         name: functionName,
-        duration: 180,
+        duration: originalDuration,
         reasoning: "Image-guided edit failed - returned original code",
         debug: { 
-          error: `${error instanceof Error ? error.message : 'Unknown error'}. Images: ${imageUrls.length}. User prompt: ${userPrompt}`
+          error: `${error instanceof Error ? error.message : 'Unknown error'}. Original duration: ${originalDuration} frames. Images: ${imageUrls.length}. User prompt: ${userPrompt}`
         }
       };
     }
@@ -308,12 +340,41 @@ export default function ${functionName}() {
   /**
    * NEW: Build prompt for direct image-to-motion-graphics generation
    */
-  private buildImageToCodePrompt(userPrompt: string, functionName: string): string {
-    const prompt = getParameterizedPrompt('IMAGE_TO_CODE', {
+  private buildImageToCodePrompt(userPrompt: string, functionName: string, visionAnalysis?: any): string {
+    let augmentedUserPrompt = userPrompt;
+
+    if (visionAnalysis) {
+      let analysisContext = "\n\nPre-computed Image Analysis Context:\n";
+      if (visionAnalysis.palette && visionAnalysis.palette.length > 0) {
+        analysisContext += `- Dominant Colors: ${visionAnalysis.palette.join(", ")}\n`;
+      }
+      if (visionAnalysis.mood) {
+        analysisContext += `- Overall Mood/Style: ${visionAnalysis.mood}\n`;
+      }
+      if (visionAnalysis.typography) {
+        analysisContext += `- Suggested Typography: ${visionAnalysis.typography}\n`;
+      }
+      if (visionAnalysis.layoutJson && typeof visionAnalysis.layoutJson === 'object') {
+        // Add some high-level layout info if available, keep it concise
+        const layoutSummary = Object.entries(visionAnalysis.layoutJson)
+          .slice(0, 3) // Limit to first 3 high-level keys for brevity
+          .map(([key, value]) => `${key}: ${typeof value === 'string' ? value.substring(0,30) : JSON.stringify(value).substring(0,30)}...`)
+          .join("; ");
+        if (layoutSummary) {
+          analysisContext += `- Key Layout Elements: ${layoutSummary}\n`;
+        }
+      }
+      if (visionAnalysis.imageDescription) {
+        analysisContext += `- Image Description: ${visionAnalysis.imageDescription}\n`;
+      }
+      augmentedUserPrompt += analysisContext;
+    }
+
+    const promptConfig = getParameterizedPrompt('IMAGE_TO_CODE', {
       FUNCTION_NAME: functionName,
-      USER_PROMPT: userPrompt,
+      USER_PROMPT: augmentedUserPrompt,
     });
-    return prompt.content;
+    return promptConfig.content;
   }
 
   /**
