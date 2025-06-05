@@ -9,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { type Metadata } from "next";
 import { getBazaarUrl, getShareUrl } from "~/lib/utils";
 import ShareVideoPlayerClient from "./ShareVideoPlayerClient";
+import type { InputProps } from "~/types/input-props";
 
 interface PageProps {
   params: {
@@ -18,24 +19,24 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   try {
-    const video = await api.share.getSharedVideo({ shareId: params.shareId });
+    const videoShareRecord = await api.share.getSharedVideo({ shareId: params.shareId });
+
+    const videoTitle = videoShareRecord.project?.inputProps?.meta?.title || videoShareRecord.title || "Shared Video";
+    const videoDescription = videoShareRecord.description || "An amazing video created with Bazaar";
 
     return {
-      title: `${video.title || "Shared Video"} - Bazaar`,
-      description: video.description || "An amazing video created with Bazaar",
+      title: `${videoTitle} - Bazaar`,
+      description: videoDescription,
       openGraph: {
         type: "video.other",
-        title: video.title || "Shared Video",
-        description: video.description || "An amazing video created with Bazaar",
+        title: videoTitle,
+        description: videoDescription,
         url: getShareUrl(params.shareId),
-        images: video.thumbnailUrl ? [video.thumbnailUrl] : [],
-        videos: video.videoUrl ? [video.videoUrl] : [],
       },
       twitter: {
         card: "player",
-        title: video.title || "Shared Video",
-        description: video.description || "An amazing video created with Bazaar",
-        images: video.thumbnailUrl ? [video.thumbnailUrl] : [],
+        title: videoTitle,
+        description: videoDescription,
       },
     };
   } catch (error) {
@@ -57,13 +58,16 @@ export default async function SharePage({ params }: PageProps) {
 
   const shareUrl = getShareUrl(params.shareId);
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | null | undefined) => {
+    if (!date) return 'Date not available';
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "long", 
       day: "numeric",
-    }).format(date);
+    }).format(new Date(date));
   };
+
+  const videoInputProps = share.project?.inputProps as InputProps | undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -90,13 +94,13 @@ export default async function SharePage({ params }: PageProps) {
         {/* Video Section */}
         <div className="bg-black/30 backdrop-blur-sm rounded-2xl overflow-hidden shadow-2xl border border-white/10">
           {/* Video Player */}
-          {share.latestScene ? (
-            <ShareVideoPlayerClient sceneData={{ tsxCode: share.latestScene.tsxCode, duration: share.latestScene.duration }} />
+          {videoInputProps && videoInputProps.scenes?.length > 0 ? (
+            <ShareVideoPlayerClient inputProps={videoInputProps} />
           ) : (
             <div className="aspect-video bg-gray-800 flex items-center justify-center rounded-lg">
               <div className="text-center text-white/60">
                 <p className="text-lg">No content available</p>
-                <p className="text-sm mt-1">This video hasn't been created yet</p>
+                <p className="text-sm mt-1">This video doesn't have any scenes yet.</p>
               </div>
             </div>
           )}
@@ -104,7 +108,7 @@ export default async function SharePage({ params }: PageProps) {
           {/* Video Info */}
           <div className="p-6">
             <h1 className="text-3xl font-bold text-white mb-3">
-              {share.title || "Untitled Video"}
+              {share.title || videoInputProps?.meta?.title || "Untitled Video"}
             </h1>
             
             {share.description && (
@@ -128,7 +132,7 @@ export default async function SharePage({ params }: PageProps) {
               
               <div className="flex items-center gap-2">
                 <Eye size={16} />
-                <span>{share.viewCount} {share.viewCount === 1 ? 'view' : 'views'}</span>
+                <span>{share.viewCount ?? 0} {share.viewCount === 1 ? 'view' : 'views'}</span>
               </div>
             </div>
           </div>
