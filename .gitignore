@@ -78,8 +78,6 @@ yarn-error.log*
 *.log
 
 # Development scripts (keep in development, exclude from production)
-/scripts/*
-!/scripts/setup-env.sh
 
 # Analysis outputs (keep in development, exclude from production)
 /analysis/
