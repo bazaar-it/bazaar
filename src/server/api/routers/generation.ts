@@ -26,12 +26,15 @@ export const generationRouter = createTRPCRouter({
       const { projectId, userMessage, sceneId, userContext } = input;
       const userId = ctx.session.user.id;
 
-      console.log(`[Generation] MCP-only generation started:`, {
+      // 🪵 Enhanced Logging
+      console.log("[GenerationRouter] Received generateScene request:", {
         projectId,
         userId,
-        operation: sceneId ? 'EDIT_SCENE' : 'NEW_SCENE',
-        sceneId,
-        messageLength: userMessage.length
+        sceneId: sceneId || "N/A",
+        messageLength: userMessage.length,
+        hasUserContext: !!userContext,
+        userContextKeys: userContext ? Object.keys(userContext) : [],
+        prompt: userMessage, // Log the full user prompt
       });
 
       try {
@@ -119,6 +122,14 @@ export const generationRouter = createTRPCRouter({
           // onProgress: progressCallback, // TODO: Implement progress callback
         });
 
+        // 🪵 Enhanced Logging
+        console.log("[GenerationRouter] Brain Orchestrator processing complete. Status:", {
+          success: result.success,
+          toolUsed: result.toolUsed || "N/A",
+          reasoning: result.reasoning, // Log the reasoning
+          isAskSpecify: result.isAskSpecify,
+        });
+
         if (!result.success) {
           // Store error message in chat
           await db.insert(messages).values({
@@ -128,6 +139,12 @@ export const generationRouter = createTRPCRouter({
             createdAt: new Date(),
           });
           
+          // 🪵 Enhanced Logging
+          console.error("[GenerationRouter] Orchestration failed:", {
+            projectId,
+            userId,
+            error: result.error,
+          });
           throw new Error(result.error || "Scene generation failed");
         }
 
@@ -141,6 +158,9 @@ export const generationRouter = createTRPCRouter({
           });
         }
 
+        // 🪵 Enhanced Logging
+        console.log("[GenerationRouter] Successfully processed generateScene request. Returning result to client.");
+
         return {
           success: true,
           operation: result.toolUsed || 'unknown',
@@ -151,7 +171,13 @@ export const generationRouter = createTRPCRouter({
         };
 
       } catch (error) {
-        console.error("[Generation] MCP generation failed:", error);
+        // 🪵 Enhanced Logging
+        console.error("[GenerationRouter] Critical error in generateScene mutation:", {
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          stack: error instanceof Error ? error.stack : "No stack available",
+          projectId,
+          userId,
+        });
 
         // Store error message in chat
         const errorMessage = `Oops! I'm in beta and something went wrong. Let me fix this for you... 🔧\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`;

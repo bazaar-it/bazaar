@@ -497,6 +497,15 @@ export class BrainOrchestrator extends EventEmitter {
   }
   
   async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
+    // 🪵 Enhanced Logging: Log the start of the process with the full input
+    console.log("Orchestrator: 🚀 --- Starting processUserInput ---", {
+      projectId: input.projectId,
+      userId: input.userId,
+      prompt: input.prompt,
+      hasUserContext: !!input.userContext,
+      userContextKeys: input.userContext ? Object.keys(input.userContext) : [],
+    });
+
     // 🆕 PHASE 3: Start performance measurement for the entire operation
     const operationId = `orchestrator_${Date.now()}`;
     performanceService.startMetric(operationId, {
@@ -516,6 +525,9 @@ export class BrainOrchestrator extends EventEmitter {
       if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
         if (this.DEBUG) console.log(`🖼️ Starting ASYNC image analysis for ${imageUrls.length} image(s)`);
         
+        // 🪵 Enhanced Logging
+        console.log("Orchestrator: 🖼️ Triggering async image analysis.", { count: imageUrls.length });
+
         // 🆕 PHASE 3: Measure image analysis performance separately
         performanceService.startMetric('image_analysis_async');
         imageAnalysisPromise = this.startAsyncImageAnalysis(input.projectId, imageUrls, input.prompt);
@@ -541,6 +553,15 @@ export class BrainOrchestrator extends EventEmitter {
       const contextPacket = await this.buildContextPacket(input.projectId, input.chatHistory || [], []);
       performanceService.endMetric('context_build');
       
+      // 🪵 Enhanced Logging: Log the summary of the context packet
+      console.log("Orchestrator: 🧠 Context packet built.", {
+        projectId: input.projectId,
+        preferences: Object.keys(contextPacket.userPreferences).length,
+        scenes: contextPacket.sceneList?.length,
+        images: contextPacket.imageAnalyses?.length,
+        pendingImages: contextPacket.pendingImageIds?.length,
+      });
+      
       if (this.DEBUG) {
         console.log(`[DEBUG] CONTEXT PACKET:`);
         console.log(`- Last messages: ${contextPacket.last5Messages?.length || 0}`);
@@ -557,12 +578,27 @@ export class BrainOrchestrator extends EventEmitter {
       const toolSelection = await this.analyzeIntentWithContext(input, contextPacket);
       performanceService.endMetric('brain_decision');
       
+      // 🪵 Enhanced Logging: Log the tool selection result
+      console.log("Orchestrator: 🤖 Brain has made a decision.", {
+        projectId: input.projectId,
+        toolName: toolSelection.toolName,
+        workflowSteps: toolSelection.workflow?.length,
+        needsClarification: toolSelection.needsClarification,
+        reasoning: toolSelection.reasoning,
+      });
+
       if (!toolSelection.success) {
         if (this.DEBUG) console.log(`[DEBUG] INTENT ANALYSIS FAILED:`, toolSelection.error);
         
         // 🆕 PHASE 3: End performance measurement on failure
         performanceService.endMetric(operationId);
         
+        // 🪵 Enhanced Logging
+        console.error("Orchestrator: ❌ Intent analysis failed.", {
+          projectId: input.projectId,
+          error: toolSelection.error,
+        });
+
         return {
           success: false,
           error: toolSelection.error || "Failed to analyze user intent",
@@ -575,6 +611,12 @@ export class BrainOrchestrator extends EventEmitter {
       // 🆕 PHASE 4: EXECUTE CHOSEN TOOL(S) (With context)
       let executionResult: OrchestrationOutput;
       
+      // 🪵 Enhanced Logging: Log which execution path is being taken
+      console.log("Orchestrator: 執行中... Executing chosen path...", {
+        projectId: input.projectId,
+        path: toolSelection.needsClarification ? 'clarification' : toolSelection.workflow ? 'workflow' : 'single_tool',
+      });
+
       if (toolSelection.needsClarification) {
         executionResult = {
           success: true,
@@ -617,6 +659,14 @@ export class BrainOrchestrator extends EventEmitter {
       // 🆕 PHASE 3: Complete performance measurement and log results
       const totalDuration = performanceService.endMetric(operationId);
       
+      // 🪵 Enhanced Logging: Log the final result of the orchestration
+      console.log("Orchestrator: ✅ --- processUserInput Complete ---", {
+        projectId: input.projectId,
+        success: executionResult.success,
+        toolUsed: executionResult.toolUsed,
+        durationMs: totalDuration,
+      });
+
       if (this.DEBUG && totalDuration) {
         console.log(`\n⏱️ [Performance] Operation completed in ${totalDuration.toFixed(2)}ms`);
         
@@ -639,6 +689,13 @@ export class BrainOrchestrator extends EventEmitter {
       // 🆕 PHASE 3: End performance measurement on error
       performanceService.endMetric(operationId);
       
+      // 🪵 Enhanced Logging: Log the critical error
+      console.error("Orchestrator: 💥 CRITICAL ERROR in processUserInput.", {
+        projectId: input.projectId,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
       if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
       return await this.handleError(error, input);
     }
@@ -734,7 +791,10 @@ export class BrainOrchestrator extends EventEmitter {
     conversationHistory: Array<{ role: string; content: string }>,
     currentImageTraceIds: string[]
   ): Promise<MemoryBankSummary> {
-    console.log(`🧠 [Brain] Building enhanced context packet for project: ${projectId}`);
+    // 🪵 Enhanced Logging
+    console.log(`Orchestrator: 🏗️ Building context packet for project: ${projectId}`);
+    
+    // console.log(`🧠 [Brain] Building enhanced context packet for project: ${projectId}`);
 
     try {
       // 🚨 NEW: Use ContextBuilder for enhanced context orchestration
@@ -838,9 +898,22 @@ export class BrainOrchestrator extends EventEmitter {
         console.log(`  - Pending images: ${currentImageTraceIds.length}`);
       }
 
+      // 🪵 Enhanced Logging
+      console.log(`Orchestrator: ✅ Context packet built successfully for project: ${projectId}`, {
+        preferences: Object.keys(allPreferences).length,
+        scenes: currentScenes.length,
+        images: imageAnalyses.length,
+        pending: currentImageTraceIds.length,
+      });
+
       return contextPacket;
 
     } catch (error) {
+      // 🪵 Enhanced Logging
+      console.error(`Orchestrator: ❌ Error building context packet for project: ${projectId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       ErrorTracker.captureAsyncError(error, {
         operation: 'context_packet_build',
         projectId,
@@ -938,6 +1011,13 @@ export class BrainOrchestrator extends EventEmitter {
     
     // 🚨 FIXED: Use centralized prompt config instead of hardcoded
     const systemPrompt = SYSTEM_PROMPTS.BRAIN_ORCHESTRATOR.content;
+
+    // 🪵 Enhanced Logging: Log the prompt being sent to the LLM for reasoning
+    console.log("Orchestrator: 🧠 Analyzing intent with LLM.", {
+      projectId: input.projectId,
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: enhancedPrompt.length,
+    });
     
     if (this.DEBUG) console.log(`[DEBUG] Enhanced LLM USER PROMPT: ${enhancedPrompt.substring(0, 200)}...`);
     
@@ -979,12 +1059,16 @@ export class BrainOrchestrator extends EventEmitter {
       if (!rawOutput) {
         throw new Error("No response from Brain LLM");
       }
+
+      // 🪵 Enhanced Logging: Log the raw response from the LLM
+      console.log("Orchestrator: 🤖 LLM analysis complete.", {
+        projectId: input.projectId,
+        rawResponse: rawOutput, // Log the raw JSON string
+      });
       
       // 🚨 NEW: Log model usage for debugging
-      if (this.DEBUG) {
-        AIClientService.logModelUsage(this.modelConfig, response.usage);
-        console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
-      }
+      AIClientService.logModelUsage(this.modelConfig, response.usage);
+      console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
       
       const parsed = this.extractJsonFromResponse(rawOutput);
       
@@ -999,6 +1083,12 @@ export class BrainOrchestrator extends EventEmitter {
       return decision;
       
     } catch (error) {
+      // 🪵 Enhanced Logging
+      console.error("Orchestrator: ❌ Error during intent analysis.", {
+        projectId: input.projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       if (this.DEBUG) console.error("[BrainOrchestrator] Intent analysis error:", error);
       return {
         success: false,
@@ -1392,8 +1482,19 @@ Respond with JSON only.`;
    * 🚨 DRAMATICALLY SIMPLIFIED: Now uses SceneRepository service for DRY database operations
    */
   private async processToolResult(result: any, toolName: ToolName, input: OrchestrationInput, toolSelection?: { targetSceneId?: string; editComplexity?: EditComplexity; reasoning?: string, requestedDurationSeconds?: number }): Promise<OrchestrationOutput> {
+    // 🪵 Enhanced Logging
+    console.log(`Orchestrator: ⚙️ Processing result for tool: ${toolName}`, {
+      projectId: input.projectId,
+      toolSuccess: result.success,
+    });
+
     // 🚨 NEW: Early return for failed tool results
     if (!result.success) {
+      // 🪵 Enhanced Logging
+      console.error(`Orchestrator: ❌ Tool execution failed: ${toolName}`, {
+        projectId: input.projectId,
+        error: result.error?.message || "Tool execution failed",
+      });
       return {
         success: false,
         error: result.error?.message || "Tool execution failed",
@@ -1451,6 +1552,11 @@ Respond with JSON only.`;
 
     // 🚨 NEW: Consistent error handling for database operations
     if (sceneOperationResult && !sceneOperationResult.success) {
+      // 🪵 Enhanced Logging
+      console.error(`Orchestrator: ❌ Database operation failed after tool: ${toolName}`, {
+        projectId: input.projectId,
+        error: sceneOperationResult.error,
+      });
       return {
         success: false,
         error: sceneOperationResult.error,
@@ -1481,6 +1587,10 @@ Respond with JSON only.`;
           console.log(`[BrainOrchestrator] Adjusting scene duration. Actual: ${actualDurationFrames}f, Requested: ${requestedDurationFrames}f (${toolSelection.requestedDurationSeconds}s) for scene ${sceneOperationResult.scene.id}`);
         }
         try {
+          // 🪵 Enhanced Logging
+          console.log(`Orchestrator: ⏱️ Adjusting duration for scene ${sceneOperationResult.scene.id}`, {
+            requestedSeconds: toolSelection.requestedDurationSeconds,
+          });
           const durationChangeResult = await changeDurationTool.run({
             sceneId: sceneOperationResult.scene.id,
             durationSeconds: toolSelection.requestedDurationSeconds,
@@ -1509,6 +1619,13 @@ Respond with JSON only.`;
         }
       }
     }
+
+    // 🪵 Enhanced Logging
+    console.log(`Orchestrator: ✅ Successfully processed tool result: ${toolName}`, {
+      projectId: input.projectId,
+      hasScene: !!sceneOperationResult?.scene,
+      hasChatResponse: !!chatResponse,
+    });
 
     return {
       success: true,
@@ -1626,8 +1743,10 @@ Respond with JSON only.`;
     const userPrompt = this.buildUserPrompt(input);
     
     // Log the prompt information (summarized)
-    if (this.DEBUG) console.log(`[DEBUG] LLM SYSTEM PROMPT LENGTH: ${systemPrompt.length} chars`);
-    if (this.DEBUG) console.log(`[DEBUG] LLM USER PROMPT: ${userPrompt.substring(0, 200)}...`);
+    if (this.DEBUG) {
+      console.log(`[DEBUG] LLM SYSTEM PROMPT LENGTH: ${systemPrompt.length} chars`);
+      console.log(`[DEBUG] LLM USER PROMPT: ${userPrompt.substring(0, 200)}...`);
+    }
     
     // Log storyboard info (if available)
     if (input.storyboardSoFar?.length) {
@@ -1658,10 +1777,8 @@ Respond with JSON only.`;
       }
       
       // 🚨 NEW: Log model usage for debugging
-      if (this.DEBUG) {
-        AIClientService.logModelUsage(this.modelConfig, response.usage);
-        console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
-      }
+      AIClientService.logModelUsage(this.modelConfig, response.usage);
+      console.log(`[DEBUG] RAW LLM RESPONSE: ${rawOutput}`);
       
       const parsed = JSON.parse(rawOutput);
       
@@ -1757,6 +1874,12 @@ Respond with JSON only.`;
       return result;
       
     } catch (error) {
+      // 🪵 Enhanced Logging
+      console.error("Orchestrator: ❌ Error during intent analysis.", {
+        projectId: input.projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       if (this.DEBUG) console.error("[BrainOrchestrator] Intent analysis error:", error);
       return {
         success: false,
@@ -2008,6 +2131,12 @@ Respond with JSON only.`;
   private async handleError(error: any, input: OrchestrationInput): Promise<OrchestrationOutput> {
     if (this.DEBUG) console.error("[BrainOrchestrator] Error:", error);
     
+    // 🪵 Enhanced Logging
+    console.error("Orchestrator: 🆘 Handling error and generating conversational response.", {
+      projectId: input.projectId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     // Generate error response for user
     const errorResponse = await conversationalResponseService.generateContextualResponse({
       operation: 'addScene', // Default operation for error

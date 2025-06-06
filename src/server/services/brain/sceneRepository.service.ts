@@ -42,6 +42,8 @@ export class SceneRepositoryService {
     context: DatabaseOperationContext,
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
+    // 🪵 Enhanced Logging
+    console.log(`SceneRepository: ➕ Creating scene "${sceneData.sceneName}" for project ${context.projectId}`);
     const startTime = Date.now();
 
     try {
@@ -102,6 +104,9 @@ export class SceneRepositoryService {
         });
       }
 
+      // 🪵 Enhanced Logging
+      console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" created successfully with ID ${newScene?.id}`);
+
       return {
         success: true,
         sceneId: newScene?.id,
@@ -115,6 +120,12 @@ export class SceneRepositoryService {
       };
 
     } catch (dbError) {
+      // 🪵 Enhanced Logging
+      console.error(`SceneRepository: ❌ Error creating scene "${sceneData.sceneName}" for project ${context.projectId}`, {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+      });
+
       if (this.DEBUG) {
         console.error(`[SceneRepository] Failed to create scene:`, dbError);
       }
@@ -133,6 +144,8 @@ export class SceneRepositoryService {
     context: DatabaseOperationContext,
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
+    // 🪵 Enhanced Logging
+    console.log(`SceneRepository: ✏️ Updating scene "${sceneData.sceneName}" (${sceneData.sceneId}) for project ${context.projectId}`);
     const startTime = Date.now();
 
     if (!sceneData.sceneId) {
@@ -216,6 +229,9 @@ export class SceneRepositoryService {
         await this.markReEditedScenes(sceneData.sceneId, context.projectId);
       }
 
+      // 🪵 Enhanced Logging
+      console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" updated successfully.`);
+
       return {
         success: true,
         sceneId: updatedScene?.id,
@@ -229,6 +245,12 @@ export class SceneRepositoryService {
       };
 
     } catch (dbError) {
+      // 🪵 Enhanced Logging
+      console.error(`SceneRepository: ❌ Error updating scene "${sceneData.sceneName}" (${sceneData.sceneId})`, {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+      });
+
       if (this.DEBUG) {
         console.error(`[SceneRepository] Failed to update scene:`, dbError);
       }
@@ -248,6 +270,8 @@ export class SceneRepositoryService {
     context: DatabaseOperationContext,
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
+    // 🪵 Enhanced Logging
+    console.log(`SceneRepository: 🗑️ Deleting scene "${sceneName}" (${sceneId}) from project ${context.projectId}`);
     const startTime = Date.now();
 
     try {
@@ -307,6 +331,12 @@ export class SceneRepositoryService {
       }
 
     } catch (dbError) {
+      // 🪵 Enhanced Logging
+      console.error(`SceneRepository: ❌ Error deleting scene "${sceneName}" (${sceneId})`, {
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+      });
+
       if (this.DEBUG) {
         console.error(`[SceneRepository] Failed to delete scene:`, dbError);
       }
