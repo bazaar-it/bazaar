@@ -1,3 +1,5 @@
+export const maxDuration = 180; // 3 minutes
+
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { type NextRequest } from "next/server";
 
