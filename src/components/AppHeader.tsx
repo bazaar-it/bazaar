@@ -146,6 +146,7 @@ export default function AppHeader({
       {/* Right: User info & Export button only */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
         {/* Share button */}
+        {/*
         {projectId && (
           <Button
             variant="outline"
@@ -157,6 +158,7 @@ export default function AppHeader({
             Share
           </Button>
         )}
+        */}
         
         {/* Export button temporarily disabled until export feature is ready */}
         {/*
@@ -201,6 +203,7 @@ export default function AppHeader({
         )}
         
         {/* Share Dialog */}
+        {/*
         {projectId && (
           <ShareDialog
             projectId={projectId}
@@ -209,6 +212,7 @@ export default function AppHeader({
             onOpenChange={setShowShareDialog}
           />
         )}
+        */}
       </div>
     </header>
   );

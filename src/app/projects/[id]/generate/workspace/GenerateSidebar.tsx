@@ -58,7 +58,7 @@ interface PanelOption {
 const navItems: WorkspacePanelG[] = [
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
-  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
+  // { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
@@ -69,14 +69,6 @@ const PANEL_OPTIONS: PanelOption[] = [
     description: 'Interactive chat for scene generation',
     icon: <MessageSquareIcon className="h-5 w-5" />,
     color: 'from-blue-500 to-blue-600',
-  },
-  {
-    type: 'chatai',
-    label: 'AI Chat',
-    description: 'Advanced AI conversation interface',
-    icon: <BrainIcon className="h-5 w-5" />,
-    badge: 'AI',
-    color: 'from-purple-500 to-purple-600',
   },
   {
     type: 'preview',
@@ -99,6 +91,7 @@ const PANEL_OPTIONS: PanelOption[] = [
     icon: <Code2Icon className="h-5 w-5" />,
     color: 'from-gray-500 to-gray-600',
   },
+  /*
   {
     type: 'templates',
     label: 'Templates',
@@ -107,6 +100,7 @@ const PANEL_OPTIONS: PanelOption[] = [
     badge: 'NEW',
     color: 'from-pink-500 to-pink-600',
   },
+  */
 ];
 
 export function GenerateSidebar({ 
