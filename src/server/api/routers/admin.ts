@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages } from "~/server/db/schema";
-import { sql, and, gte, desc, count, eq, like, or, inArray } from "drizzle-orm";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory } from "~/server/db/schema";
+import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Input schema for timeframe filtering
@@ -1075,5 +1075,207 @@ export default function GeneratedScene() {
           message: `Scene generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         });
       }
+    }),
+
+  // 🆕 NEW: Comprehensive user analytics endpoint
+  getUserAnalytics: adminOnlyProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(100).default(20),
+      offset: z.number().min(0).default(0),
+      sortBy: z.enum(['signup_date', 'last_activity', 'total_projects', 'total_prompts']).default('signup_date'),
+      sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    }))
+    .query(async ({ input }) => {
+      const { limit, offset, sortBy, sortOrder } = input;
+
+      // 🚨 COMPREHENSIVE USER ANALYTICS QUERY
+      const userAnalytics = await db
+        .select({
+          // Basic user info
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          image: users.image,
+          isAdmin: users.isAdmin,
+          signupDate: users.createdAt,
+          
+          // OAuth provider info
+          oauthProvider: accounts.provider,
+          
+          // Project metrics
+          totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
+          
+          // Scene metrics  
+          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
+          
+          // Chat/prompt metrics
+          totalMessages: sql<number>`COUNT(DISTINCT ${messages.id})`.as('total_messages'),
+          totalUserPrompts: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`.as('total_user_prompts'),
+          
+          // Error message tracking
+          totalErrorMessages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.status} = 'error' THEN ${messages.id} END)`.as('total_error_messages'),
+          
+          // Image usage metrics - simplified to avoid double-counting
+          promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
+          totalImagesUploaded: sql<number>`COALESCE(SUM(CASE WHEN ${messages.imageUrls} IS NOT NULL THEN jsonb_array_length(${messages.imageUrls}) ELSE 0 END), 0)`.as('total_images_uploaded'),
+          
+          // Activity metrics
+          firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
+          lastActivity: sql<Date>`MAX(${messages.createdAt})`.as('last_activity'),
+          
+          // Engagement metrics
+          totalSceneIterations: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('total_scene_iterations'),
+          
+          // Advanced behavior metrics
+          complexEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'structural' THEN ${sceneIterations.id} END)`.as('complex_edits'),
+          creativeEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'creative' THEN ${sceneIterations.id} END)`.as('creative_edits'),
+          surgicalEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'surgical' THEN ${sceneIterations.id} END)`.as('surgical_edits'),
+          
+          // Project memory insights
+          userPreferences: sql<number>`COUNT(DISTINCT CASE WHEN ${projectMemory.memoryType} = 'user_preference' THEN ${projectMemory.id} END)`.as('user_preferences'),
+        })
+        .from(users)
+        .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(projects, eq(users.id, projects.userId))
+        .leftJoin(scenes, eq(projects.id, scenes.projectId))
+        .leftJoin(messages, eq(projects.id, messages.projectId))
+        .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
+        .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
+        .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
+        .orderBy(
+          sortOrder === 'desc' 
+            ? desc(
+                sortBy === 'signup_date' ? users.createdAt :
+                sortBy === 'last_activity' ? sql`MAX(${messages.createdAt})` :
+                sortBy === 'total_projects' ? sql`COUNT(DISTINCT ${projects.id})` :
+                sql`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`
+              )
+            : asc(
+                sortBy === 'signup_date' ? users.createdAt :
+                sortBy === 'last_activity' ? sql`MAX(${messages.createdAt})` :
+                sortBy === 'total_projects' ? sql`COUNT(DISTINCT ${projects.id})` :
+                sql`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`
+              )
+        )
+        .limit(limit)
+        .offset(offset);
+
+      // Get total count for pagination
+      const totalCount = await db
+        .select({ count: sql<number>`COUNT(DISTINCT ${users.id})` })
+        .from(users)
+        .then(result => result[0]?.count || 0);
+
+      return {
+        users: userAnalytics,
+        totalCount,
+        hasMore: offset + limit < totalCount,
+      };
+    }),
+
+  // 🆕 NEW: Get detailed user activity timeline
+  getUserActivityTimeline: adminOnlyProcedure
+    .input(z.object({
+      userId: z.string(),
+      days: z.number().min(1).max(90).default(30),
+    }))
+    .query(async ({ input }) => {
+      const { userId, days } = input;
+      
+      // 🚨 FIXED: Calculate date threshold explicitly to avoid SQL parameter binding issues
+      const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      
+      const activityTimeline = await db
+        .select({
+          date: sql<string>`DATE(${messages.createdAt})`.as('date'),
+          totalMessages: sql<number>`COUNT(*)`.as('total_messages'),
+          userPrompts: sql<number>`COUNT(CASE WHEN ${messages.role} = 'user' THEN 1 END)`.as('user_prompts'),
+          assistantResponses: sql<number>`COUNT(CASE WHEN ${messages.role} = 'assistant' THEN 1 END)`.as('assistant_responses'),
+          imagesUploaded: sql<number>`COUNT(CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN 1 END)`.as('images_uploaded'),
+          scenesCreated: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('scenes_created'),
+          projectsWorkedOn: sql<number>`COUNT(DISTINCT ${projects.id})`.as('projects_worked_on'),
+          avgSessionTime: sql<number>`EXTRACT(EPOCH FROM (MAX(${messages.createdAt}) - MIN(${messages.createdAt})))/60`.as('avg_session_minutes'),
+        })
+        .from(messages)
+        .innerJoin(projects, eq(messages.projectId, projects.id))
+        .leftJoin(scenes, and(
+          eq(projects.id, scenes.projectId),
+          sql`DATE(${scenes.createdAt}) = DATE(${messages.createdAt})`
+        ))
+        .where(and(
+          eq(projects.userId, userId),
+          gte(messages.createdAt, startDate)
+        ))
+        .groupBy(sql`DATE(${messages.createdAt})`)
+        .orderBy(sql`DATE(${messages.createdAt}) DESC`);
+
+      return activityTimeline;
+    }),
+
+  // 🆕 NEW: Get individual user details
+  getUserDetails: adminOnlyProcedure
+    .input(z.object({
+      userId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const { userId } = input;
+      
+      const userDetails = await db
+        .select({
+          // Basic user info
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          image: users.image,
+          isAdmin: users.isAdmin,
+          signupDate: users.createdAt,
+          
+          // OAuth provider info
+          oauthProvider: accounts.provider,
+          
+          // Project metrics
+          totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
+          
+          // Scene metrics  
+          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
+          
+          // Chat/prompt metrics
+          totalMessages: sql<number>`COUNT(DISTINCT ${messages.id})`.as('total_messages'),
+          totalUserPrompts: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`.as('total_user_prompts'),
+          
+          // Error message tracking
+          totalErrorMessages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.status} = 'error' THEN ${messages.id} END)`.as('total_error_messages'),
+          
+          // Image usage metrics - simplified to avoid double-counting
+          promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
+          totalImagesUploaded: sql<number>`COALESCE(SUM(CASE WHEN ${messages.imageUrls} IS NOT NULL THEN jsonb_array_length(${messages.imageUrls}) ELSE 0 END), 0)`.as('total_images_uploaded'),
+          
+          // Activity metrics
+          firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
+          lastActivity: sql<Date>`MAX(${messages.createdAt})`.as('last_activity'),
+          
+          // Engagement metrics
+          totalSceneIterations: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('total_scene_iterations'),
+          
+          // Advanced behavior metrics
+          complexEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'structural' THEN ${sceneIterations.id} END)`.as('complex_edits'),
+          creativeEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'creative' THEN ${sceneIterations.id} END)`.as('creative_edits'),
+          surgicalEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'surgical' THEN ${sceneIterations.id} END)`.as('surgical_edits'),
+          
+          // Project memory insights
+          userPreferences: sql<number>`COUNT(DISTINCT CASE WHEN ${projectMemory.memoryType} = 'user_preference' THEN ${projectMemory.id} END)`.as('user_preferences'),
+        })
+        .from(users)
+        .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(projects, eq(users.id, projects.userId))
+        .leftJoin(scenes, eq(projects.id, scenes.projectId))
+        .leftJoin(messages, eq(projects.id, messages.projectId))
+        .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
+        .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
+        .where(eq(users.id, userId))
+        .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
+        .limit(1);
+
+      return userDetails[0] || null;
     }),
 });
