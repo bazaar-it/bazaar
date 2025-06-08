@@ -762,8 +762,6 @@ export default function ChatPanelG({
           };
     }, [handleAutoFix]);
 
-
-
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
@@ -846,7 +844,7 @@ export default function ChatPanelG({
           componentMessages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.isUser ? "justify-end" : "justify-start"} mb-1`}
+              className={`flex ${msg.isUser ? "justify-end" : "justify-start"}`}
             >
               <Card
                 className={`max-w-[80%] ${
@@ -859,8 +857,8 @@ export default function ChatPanelG({
                     : "bg-muted"
                 }`}
               >
-                <CardContent className="px-3 py-1"> 
-                  <div className="space-y-2">
+                <CardContent className="px-3"> 
+                  <div className="space-y-1">
                     {/* 🚨 NEW: Show uploaded images for user messages */}
                     {msg.isUser && msg.imageUrls && msg.imageUrls.length > 0 && (
                       <div className="space-y-2 mb-2">
