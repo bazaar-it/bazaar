@@ -154,3 +154,71 @@ export default function AICoding() {
     </AbsoluteFill>
   );
 }
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'code',
+  name: 'Code Animation',
+  duration: 180, // 6 seconds
+  previewFrame: 30,
+  getCode: () => `const {
+AbsoluteFill,
+useCurrentFrame,
+interpolate,
+} = window.Remotion;
+
+export default function Code() {
+const frame = useCurrentFrame();
+
+const codeLines = [
+  "const animation = () => {",
+  "  const progress = interpolate(",
+  "    frame,",
+  "    [0, 30],",
+  "    [0, 1]",
+  "  );",
+  "  return <div>{progress}</div>;",
+  "};"
+];
+
+return (
+  <AbsoluteFill
+    style={{
+      backgroundColor: "#1e1e2e",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      padding: "40px",
+      fontFamily: "Courier New, monospace",
+      fontSize: "24px",
+      color: "#cdd6f4",
+    }}
+  >
+    {codeLines.map((line, i) => {
+      const lineOpacity = interpolate(
+        frame,
+        [i * 15, i * 15 + 15],
+        [0, 1],
+        {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp"
+        }
+      );
+      
+      return (
+        <div
+          key={i}
+          style={{
+            opacity: lineOpacity,
+            marginBottom: "8px",
+            transform: \`translateX(\${interpolate(lineOpacity, [0, 1], [-20, 0])}px)\`,
+          }}
+        >
+          {line}
+        </div>
+      );
+    })}
+  </AbsoluteFill>
+);
+}`
+};

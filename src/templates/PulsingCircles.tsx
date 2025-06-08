@@ -166,4 +166,61 @@ export default function PulsingCircles() {
       })}
     </AbsoluteFill>
   );
-} 
+}
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'pulsing',
+  name: 'Pulsing Circles',
+  duration: 240, // 8 seconds
+  previewFrame: 30,
+  getCode: () => `// src/templates/PulsingCircles.tsx
+const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
+
+export default function PulsingCircles() {
+const frame = useCurrentFrame();
+
+const circles = Array.from({ length: 5 }, (_, i) => {
+  const delay = i * 20;
+  const scale = interpolate((frame - delay) % 120, [0, 60, 120], [0, 1.5, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp"
+  });
+  const opacity = interpolate((frame - delay) % 120, [0, 30, 90, 120], [0, 0.8, 0.2, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp"
+  });
+  
+  return { scale, opacity, size: 100 + i * 50, color: \`hsl(\${i * 60}, 70%, 60%)\` };
+});
+
+return (
+  <AbsoluteFill 
+    style={{
+      background: "radial-gradient(circle, #1a1a2e 0%, #16213e 100%)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }}
+  >
+    {circles.map((circle, i) => (
+      <div
+        key={i}
+        style={{
+          position: "absolute",
+          width: \`\${circle.size}px\`,
+          height: \`\${circle.size}px\`,
+          borderRadius: "50%",
+          border: \`3px solid \${circle.color}\`,
+          transform: \`scale(\${circle.scale})\`,
+          opacity: circle.opacity,
+        }}
+      />
+    ))}
+    <h1 style={{ fontSize: "48px", color: "#ffffff", fontWeight: "900", zIndex: 10 }}>
+      PULSE
+    </h1>
+  </AbsoluteFill>
+);
+}`
+}; 

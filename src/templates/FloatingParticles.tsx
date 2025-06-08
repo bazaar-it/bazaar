@@ -98,3 +98,78 @@ export default function ParticleFlow() {
     </AbsoluteFill>
   );
 }
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'floating-particles',
+  name: 'Floating Particles',
+  duration: 300, // 10 seconds
+  previewFrame: 30,
+  getCode: () => `const {
+AbsoluteFill,
+useCurrentFrame,
+useVideoConfig,
+interpolate,
+} = window.Remotion;
+
+export default function FloatingParticles() {
+const frame = useCurrentFrame();
+const { fps } = useVideoConfig();
+
+const particles = Array.from({ length: 50 }, (_, i) => {
+  const x = (i * 123) % 100;
+  const y = (i * 456) % 100;
+  const speed = 0.5 + (i % 3) * 0.3;
+  const size = 2 + (i % 4);
+  
+  const animatedY = (y + (frame * speed)) % 120;
+  const opacity = interpolate(animatedY, [0, 20, 100, 120], [0, 1, 1, 0]);
+  
+  return { x, y: animatedY, size, opacity };
+});
+
+return (
+  <AbsoluteFill
+    style={{
+      backgroundColor: "#0a0a0a",
+      overflow: "hidden",
+    }}
+  >
+    {particles.map((particle, i) => (
+      <div
+        key={i}
+        style={{
+          position: "absolute",
+          left: \`\${particle.x}%\`,
+          top: \`\${particle.y}%\`,
+          width: \`\${particle.size}px\`,
+          height: \`\${particle.size}px\`,
+          borderRadius: "50%",
+          backgroundColor: "#fff",
+          opacity: particle.opacity,
+          boxShadow: \`0 0 \${particle.size * 2}px #fff\`,
+        }}
+      />
+    ))}
+    
+    <div
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        color: "#fff",
+        fontSize: "48px",
+        fontWeight: "bold",
+        textAlign: "center",
+        textShadow: "0 0 20px #fff",
+      }}
+    >
+      FLOATING
+      <br />
+      PARTICLES
+    </div>
+  </AbsoluteFill>
+);
+}`
+};

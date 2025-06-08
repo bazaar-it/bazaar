@@ -16,7 +16,6 @@ export interface TemplateDefinition {
 
 export const TEMPLATES: TemplateDefinition[] = [
   // ✅ NEW FORMAT: Self-contained templates
-
   {
     ...knowsCodeConfig,
     component: KnowsCode,
@@ -36,5 +35,5 @@ export const TEMPLATES: TemplateDefinition[] = [
   {
     ...growthConfig,
     component: GrowthGraph,
-  },
+  }
 ];

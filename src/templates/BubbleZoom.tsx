@@ -154,3 +154,106 @@ export default function BubbleZoom() {
     </AbsoluteFill>
   );
 }
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'bubble-zoom',
+  name: 'Bubble Zoom',
+  duration: 240, // 8 seconds
+  previewFrame: 30,
+  getCode: () => `const {
+AbsoluteFill,
+useCurrentFrame,
+useVideoConfig,
+interpolate,
+} = window.Remotion;
+
+export default function BubbleZoom() {
+const frame = useCurrentFrame();
+const { fps } = useVideoConfig();
+
+const bubbles = Array.from({ length: 8 }, (_, i) => {
+  const delay = i * 10;
+  const scale = interpolate(
+    frame - delay,
+    [0, fps * 1.5],
+    [0, 2 + Math.random() * 1.5],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp"
+    }
+  );
+  
+  const opacity = interpolate(
+    frame - delay,
+    [0, fps * 0.5, fps * 1.5],
+    [0, 1, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp"
+    }
+  );
+  
+  const x = 50 + (Math.sin(i * 1.5) * 30);
+  const y = 50 + (Math.cos(i * 1.5) * 30);
+  const color = \`hsl(\${(i * 45) % 360}, 80%, 70%)\`;
+  
+  return { scale, opacity, x, y, color, size: 60 + i * 15 };
+});
+
+const zoomEffect = interpolate(
+  frame,
+  [fps * 1.5, fps * 2.5],
+  [1, 1.2],
+  {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp"
+  }
+);
+
+return (
+  <AbsoluteFill
+    style={{
+      background: "radial-gradient(circle, #1a1a2e 0%, #16213e 100%)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      transform: \`scale(\${zoomEffect})\`,
+    }}
+  >
+    {bubbles.map((bubble, i) => (
+      <div
+        key={i}
+        style={{
+          position: "absolute",
+          left: \`\${bubble.x}%\`,
+          top: \`\${bubble.y}%\`,
+          width: \`\${bubble.size}px\`,
+          height: \`\${bubble.size}px\`,
+          borderRadius: "50%",
+          background: \`radial-gradient(circle at 30% 30%, white, \${bubble.color})\`,
+          transform: \`translate(-50%, -50%) scale(\${bubble.scale})\`,
+          opacity: bubble.opacity,
+          boxShadow: \`0 0 30px \${bubble.color}\`,
+        }}
+      />
+    ))}
+    
+    <h1 
+      style={{
+        fontSize: "48px",
+        color: "#ffffff",
+        fontWeight: "900",
+        zIndex: 10,
+        opacity: interpolate(frame, [fps * 2, fps * 3], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp"
+        }),
+      }}
+    >
+      BUBBLE UNIVERSE
+    </h1>
+  </AbsoluteFill>
+);
+}`
+};
