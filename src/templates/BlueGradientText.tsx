@@ -75,4 +75,59 @@ export default function BlueGradientText() {
       </svg>
     </AbsoluteFill>
   );
-} 
+}
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'blue-gradient-text',
+  name: 'Blue Gradient Text',
+  duration: 180, // 6 seconds
+  previewFrame: 30,
+  getCode: () => `const {
+AbsoluteFill,
+useCurrentFrame,
+interpolate,
+} = window.Remotion;
+
+export default function BlueGradientText() {
+const frame = useCurrentFrame();
+
+const textOpacity = interpolate(frame, [0, 30], [0, 1], {
+  extrapolateLeft: "clamp",
+  extrapolateRight: "clamp",
+});
+
+const shimmer = interpolate(frame, [0, 120], [0, 100], {
+  extrapolateRight: "wrap",
+});
+
+return (
+  <AbsoluteFill
+    style={{
+      backgroundColor: "#0f0f23",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <div
+      style={{
+        fontSize: "64px",
+        fontWeight: "900",
+        background: \`linear-gradient(90deg, #00d4ff, #ff00d4, #00d4ff)\`,
+        backgroundSize: "200% 100%",
+        backgroundPosition: \`\${shimmer}% 0\`,
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
+        opacity: textOpacity,
+        letterSpacing: "2px",
+        textShadow: "0 0 30px rgba(0, 212, 255, 0.5)",
+      }}
+    >
+      FUTURE TECH
+    </div>
+  </AbsoluteFill>
+);
+}`
+}; 
