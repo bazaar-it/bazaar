@@ -163,4 +163,123 @@ export default function FintechUI() {
       </div>
     </AbsoluteFill>
   );
-} 
+}
+
+// Template configuration - exported so registry can use it
+export const templateConfig = {
+  id: 'fintech-ui',
+  name: 'Fintech UI',
+  duration: 240, // 8 seconds
+  previewFrame: 30,
+  getCode: () => `const {
+AbsoluteFill,
+interpolate,
+useCurrentFrame,
+spring,
+} = window.Remotion;
+
+const ChatMessage = ({ text, isUser, delay }) => {
+const frame = useCurrentFrame();
+const progress = spring({ frame: frame - delay, fps: 30, config: { damping: 12, stiffness: 200 } });
+
+return (
+  <div
+    style={{
+      display: "flex",
+      justifyContent: isUser ? "flex-end" : "flex-start",
+      opacity: progress,
+      transform: \`translateY(\${interpolate(progress, [0, 1], [20, 0])}px)\`,
+      marginBottom: 24,
+    }}
+  >
+    <div
+      style={{
+        maxWidth: "80%",
+        padding: "16px 20px",
+        borderRadius: 20,
+        background: isUser ? "#007AFF" : "#E9ECEF",
+        color: isUser ? "white" : "#212529",
+        fontFamily: "sans-serif",
+        fontSize: 16,
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+        lineHeight: 1.5,
+      }}
+    >
+      {text}
+    </div>
+  </div>
+);
+};
+
+const InputBar = ({ opacity }) => {
+const frame = useCurrentFrame();
+const text = "These Bazaar animations are pretty sick, right?!";
+const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
+const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+
+return (
+  <div
+    style={{
+      minHeight: 120,
+      background: "white",
+      borderRadius: 24,
+      display: "flex",
+      alignItems: "flex-start",
+      padding: 20,
+      opacity,
+      transform: \`translateY(\${interpolate(opacity, [0, 1], [20, 0])}px)\`,
+      boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
+      border: "1px solid #E5E5E5",
+    }}
+  >
+    <div
+      style={{
+        flex: 1,
+        color: "#212529",
+        fontFamily: "sans-serif",
+        fontSize: 16,
+        lineHeight: 1.5,
+        minHeight: 80,
+      }}
+    >
+      {text.slice(0, charCount)}
+      {cursorVisible && <span style={{ borderRight: "2px solid #007AFF", marginLeft: 2, height: 20, display: "inline-block" }} />}
+    </div>
+  </div>
+);
+};
+
+export default function FintechUI() {
+const frame = useCurrentFrame();
+const progress = spring({ frame, fps: 30, config: { damping: 20, stiffness: 80 } });
+const messages = [
+  { text: "I need help designing a landing page for my AI fintech startup.", isUser: true, delay: 0 },
+  { text: "Sure! What's the core message you want to highlight?", isUser: false, delay: 15 },
+  { text: "AI + Finance. We want it to feel smart but friendly.", isUser: true, delay: 30 },
+  { text: "Here's a layout with bold headlines and a dashboard.", isUser: false, delay: 45 },
+  { text: "This is 🔥🔥🔥", isUser: true, delay: 60 },
+];
+
+return (
+  <AbsoluteFill style={{ background: "#F8F9FA" }}>
+    <div style={{ display: "flex", height: "100%", padding: 32, gap: 32 }}>
+      <div style={{ width: "30%", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: 20 }}>
+          {messages.map((msg, i) => <ChatMessage key={i} {...msg} />)}
+        </div>
+        <InputBar opacity={progress} />
+      </div>
+      <div style={{ width: "70%" }}>
+        <div style={{ flex: 1, background: "linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%)", borderRadius: 16, opacity: progress, position: "relative", overflow: "hidden", padding: 24, color: "white", fontFamily: "sans-serif" }}>
+          <h1 style={{ fontSize: 56, marginBottom: 16, textAlign: "center", fontWeight: 700 }}>AI Financial Insights</h1>
+          <p style={{ fontSize: 22, marginBottom: 32, color: "#AAA", textAlign: "center" }}>Make smarter investments with predictive analytics.</p>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <button style={{ background: "#3F64F3", color: "white", border: "none", borderRadius: 12, padding: "16px 36px", fontSize: 20, fontWeight: "bold", cursor: "pointer" }}>Let's Go 🚀</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </AbsoluteFill>
+);
+}`
+}; 
