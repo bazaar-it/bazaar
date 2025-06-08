@@ -469,6 +469,11 @@ export default function ChatPanelG({
     // Do nothing during transcribing state
   }, [recordingState, startRecording, stopRecording]);
 
+  // 🚨 NEW: Delete uploaded image function
+  const handleDeleteImage = useCallback((imageId: string) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+  }, []);
+
   // 🚨 NEW: Image upload functions
   const handleImageUpload = useCallback(async (files: File[]) => {
     const newImages: UploadedImage[] = files.map(file => ({
@@ -986,15 +991,15 @@ export default function ChatPanelG({
         {uploadedImages.length > 0 && (
           <div className="mb-3 flex gap-2">
             {uploadedImages.map((image) => (
-              <div key={image.id} className="relative w-12 h-12 rounded border bg-gray-50 flex items-center justify-center">
+              <div key={image.id} className="relative w-24 h-24 rounded border bg-gray-50 flex items-center justify-center group">
                 {image.status === 'uploading' && (
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
                 )}
                 {image.status === 'uploaded' && (
-                  <CheckCircleIcon className="h-4 w-4 text-green-500" />
+                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 )}
                 {image.status === 'error' && (
-                  <XCircleIcon className="h-4 w-4 text-red-500" />
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
                 )}
                 {image.url && image.status === 'uploaded' && (
                   <img 
@@ -1002,6 +1007,16 @@ export default function ChatPanelG({
                     alt="Upload preview" 
                     className="absolute inset-0 w-full h-full object-cover rounded"
                   />
+                )}
+                {/* Delete button - always visible for uploaded images, hidden for uploading */}
+                {image.status !== 'uploading' && (
+                  <button
+                    onClick={() => handleDeleteImage(image.id)}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-sm transition-colors opacity-40 hover:opacity-100"
+                    aria-label="Delete image"
+                  >
+                    ×
+                  </button>
                 )}
               </div>
             ))}
