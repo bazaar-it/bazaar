@@ -199,7 +199,12 @@ const ProjectPreview = ({
         className={`relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group ${
           isCurrentProject ? 'ring-2 ring-blue-500 ring-offset-2' : ''
         }`}
-        onClick={onClick}
+        onClick={(e) => {
+          // Only allow navigation if we're not currently editing this project's title
+          if (editingProject !== project.id) {
+            onClick();
+          }
+        }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -250,8 +255,19 @@ const ProjectPreview = ({
                 />
               ) : (
                 <span
-                  onClick={(e) => onStartEdit(project, e)}
-                  className="cursor-text"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Force immediate edit mode without any navigation
+                    onStartEdit(project, e);
+                    return false;
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  style={{ pointerEvents: 'auto' }}
+                  className="cursor-text hover:bg-white/10 rounded px-1 -mx-1 transition-colors relative z-30"
                 >
                   {project.title}
                 </span>
