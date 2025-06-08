@@ -270,6 +270,11 @@ export default function ChatPanelG({
     activeAssistantMessageIdRef.current = assistantMessageId;
     addAssistantMessage(projectId, assistantMessageId, "🧠 Processing your request...");
     
+    // 🚨 NEW: Immediately scroll to bottom after adding messages
+    setTimeout(() => {
+      scrollToBottom();
+    }, 50);
+    
     setMessage("");
     // 🚨 NEW: Clear uploaded images after submission (as per user feedback)
     setUploadedImages([]);
@@ -297,6 +302,11 @@ export default function ChatPanelG({
         content: finalResponse,
         status: 'success'
       });
+
+      // 🚨 NEW: Scroll to bottom after updating assistant message
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
       
       try {
         // ✅ CRITICAL FIX: Force refresh scene data after successful operation
@@ -836,7 +846,7 @@ export default function ChatPanelG({
           componentMessages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.isUser ? "justify-end" : "justify-start"} mb-4`}
+              className={`flex ${msg.isUser ? "justify-end" : "justify-start"} mb-1`}
             >
               <Card
                 className={`max-w-[80%] ${
@@ -849,7 +859,7 @@ export default function ChatPanelG({
                     : "bg-muted"
                 }`}
               >
-                <CardContent className="p-3">
+                <CardContent className="px-3 py-1"> 
                   <div className="space-y-2">
                     {/* 🚨 NEW: Show uploaded images for user messages */}
                     {msg.isUser && msg.imageUrls && msg.imageUrls.length > 0 && (
