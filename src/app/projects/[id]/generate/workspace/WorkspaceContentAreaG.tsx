@@ -16,6 +16,7 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
+import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/utils";
 
@@ -26,6 +27,7 @@ const PANEL_COMPONENTS_G = {
   code: CodePanelG,
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
+  myprojects: MyProjectsPanelG,
 };
 
 const PANEL_LABELS_G = {
@@ -34,6 +36,7 @@ const PANEL_LABELS_G = {
   code: 'Code',
   storyboard: 'Storyboard',
   templates: 'Templates',
+  myprojects: 'My Projects',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -186,6 +189,15 @@ function DropZoneG({
           <rect width="18" height="7" x="3" y="3" rx="1"/>
           <rect width="9" height="7" x="3" y="14" rx="1"/>
           <rect width="5" height="7" x="16" y="14" rx="1"/>
+        </svg>
+      )
+    },
+    { 
+      type: 'myprojects', 
+      label: 'My Projects', 
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
       )
     },
@@ -679,6 +691,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return <TemplatesPanelG 
             projectId={projectId} 
             onSceneGenerated={handleSceneGenerated} 
+          />;
+        case 'myprojects':
+          return <MyProjectsPanelG 
+            currentProjectId={projectId} 
           />;
         default:
           return null;

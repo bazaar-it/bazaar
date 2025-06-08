@@ -1,469 +1,492 @@
+//src/app/admin/users/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import { api } from "~/trpc/react";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Badge } from "~/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
+import { Search, Filter, X, ChevronDown, ChevronUp, Users, Activity, Calendar, Folder, Shield } from "lucide-react";
 
-interface UserAnalytics {
-  id: string;
-  name: string | null;
-  email: string;
-  image: string | null;
-  isAdmin: boolean;
-  signupDate: Date;
-  oauthProvider: string | null;
-  totalProjects: number;
-  totalScenes: number;
-  totalMessages: number;
-  totalUserPrompts: number;
-  totalErrorMessages: number;
-  promptsWithImages: number;
-  totalImagesUploaded: number;
-  firstActivity: Date | null;
-  lastActivity: Date | null;
-  totalSceneIterations: number;
-  complexEdits: number;
-  creativeEdits: number;
-  surgicalEdits: number;
-  userPreferences: number;
+// Enhanced filter state type
+interface FilterState {
+  searchTerm: string;
+  authProvider: 'all' | 'google' | 'github' | 'unknown';
+  activityFilter: 'all' | 'today' | 'week' | 'month' | 'never';
+  signupDateFilter: 'all' | 'today' | 'week' | 'month' | 'older';
+  projectsFilter: 'all' | 'none' | 'low' | 'medium' | 'high';
+  adminFilter: 'all' | 'admin' | 'user';
+  sortBy: 'signup_date' | 'last_activity' | 'total_projects' | 'total_prompts';
+  sortOrder: 'asc' | 'desc';
 }
+
+const defaultFilters: FilterState = {
+  searchTerm: '',
+  authProvider: 'all',
+  activityFilter: 'all',
+  signupDateFilter: 'all',
+  projectsFilter: 'all',
+  adminFilter: 'all',
+  sortBy: 'signup_date',
+  sortOrder: 'desc',
+};
 
 export default function UsersAnalytics() {
   const { data: session, status } = useSession();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortBy, setSortBy] = useState<'signup_date' | 'last_activity' | 'total_projects' | 'total_prompts'>('last_activity');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const usersPerPage = 20;
+  const [currentPage, setCurrentPage] = useState(0);
+  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  
+  const pageSize = 20;
 
-  // Check admin access
-  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery();
-
-  // Debounce search term
+  // Redirect if not logged in
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-      setCurrentPage(1); // Reset to first page on search
-    }, 500);
+    if (status === "loading") return;
+    if (!session) {
+      redirect("/api/auth/signin");
+    }
+  }, [session, status]);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Count active filters
+  useEffect(() => {
+    const count = Object.entries(filters).filter(([key, value]) => {
+      if (key === 'sortBy' || key === 'sortOrder') return false;
+      if (key === 'searchTerm') return value.trim() !== '';
+      return value !== 'all';
+    }).length;
+    setActiveFiltersCount(count);
+  }, [filters]);
 
-  // Fetch user analytics with rich insights
+  // Enhanced user analytics query with all filters
   const { 
-    data: analyticsData, 
-    isLoading: analyticsLoading, 
-    error: analyticsError 
+    data: userAnalytics, 
+    isLoading, 
+    error,
+    refetch 
   } = api.admin.getUserAnalytics.useQuery({
-    limit: usersPerPage,
-    offset: (currentPage - 1) * usersPerPage,
-    sortBy,
-    sortOrder,
+    limit: pageSize,
+    offset: currentPage * pageSize,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    searchTerm: filters.searchTerm || undefined,
+    authProvider: filters.authProvider,
+    activityFilter: filters.activityFilter,
+    signupDateFilter: filters.signupDateFilter,
+    projectsFilter: filters.projectsFilter,
+    adminFilter: filters.adminFilter,
   });
 
-  // Fetch user activity timeline for selected user
-  const { 
-    data: activityData,
-    isLoading: activityLoading 
-  } = api.admin.getUserActivityTimeline.useQuery(
-    { userId: selectedUserId!, days: 30 },
-    { enabled: !!selectedUserId }
-  );
-
-  // Redirect if not authenticated
-  if (status === "loading") {
-    return <div className="flex justify-center items-center h-64">Loading...</div>;
-  }
-
-  if (!session?.user) {
-    redirect("/login");
-  }
-
-  // Check admin access
-  if (!adminCheck?.isAdmin) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-red-600 text-lg">Access denied. Admin privileges required.</div>
-      </div>
-    );
-  }
-
-  const formatDate = (date: Date | null) => {
-    if (!date) return 'Never';
-    return new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(new Date(date));
+  const updateFilter = (key: keyof FilterState, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(0); // Reset to first page when filters change
   };
 
-  const formatDaysAgo = (date: Date | null) => {
-    if (!date) return 'Never';
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - new Date(date).getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return 'Today';
-    if (diffDays === 2) return 'Yesterday';
-    if (diffDays <= 7) return `${diffDays-1} days ago`;
-    if (diffDays <= 30) return `${Math.floor(diffDays/7)} weeks ago`;
-    return `${Math.floor(diffDays/30)} months ago`;
+  const clearAllFilters = () => {
+    setFilters(defaultFilters);
+    setCurrentPage(0);
+  };
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return "Never";
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(date));
   };
 
   const getOAuthIcon = (provider: string | null) => {
     switch (provider) {
       case 'google':
-        return '🌐';
+        return '🟢';
       case 'github':
-        return '🐙';
+        return '⚫';
       default:
         return '❓';
     }
   };
 
-  // 🚨 REMOVED: User classification badges as per feedback
+  const getProjectCountBadge = (count: number) => {
+    if (count === 0) return <Badge variant="outline">No Projects</Badge>;
+    if (count <= 2) return <Badge variant="secondary">{count} Projects</Badge>;
+    if (count <= 10) return <Badge variant="default">{count} Projects</Badge>;
+    return <Badge variant="destructive">{count} Projects</Badge>;
+  };
 
-  if (analyticsError) {
+  const getActivityBadge = (lastActivity: Date | null) => {
+    if (!lastActivity) return <Badge variant="outline">Never Active</Badge>;
+    
+    const now = new Date();
+    const activity = new Date(lastActivity);
+    const diffHours = (now.getTime() - activity.getTime()) / (1000 * 60 * 60);
+    
+    if (diffHours < 24) return <Badge variant="default">Active Today</Badge>;
+    if (diffHours < 168) return <Badge variant="secondary">Active This Week</Badge>;
+    if (diffHours < 720) return <Badge variant="outline">Active This Month</Badge>;
+    return <Badge variant="destructive">Inactive</Badge>;
+  };
+
+  if (status === "loading") {
     return (
-      <div className="p-6">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          Error loading user analytics: {analyticsError.message}
+      <div className="container mx-auto p-6">
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-64" />
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-24" />
+            ))}
+          </div>
+          <Skeleton className="h-96" />
         </div>
       </div>
     );
   }
 
+  if (!session?.user) {
+    return null;
+  }
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Analytics Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Comprehensive insights into user behavior and engagement
-          </p>
+      <div className="flex flex-col space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">User Analytics</h1>
+            <p className="text-muted-foreground">
+              Monitor user engagement, activity patterns, and project metrics
+            </p>
+          </div>
         </div>
+
+        {/* Enhanced Filters Panel */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Filter className="h-5 w-5" />
+                <CardTitle className="text-lg">Filters</CardTitle>
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary">{activeFiltersCount} active</Badge>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                {activeFiltersCount > 0 && (
+                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                    <X className="h-4 w-4 mr-1" />
+                    Clear All
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  {showFilters ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          
+          {showFilters && (
+            <CardContent className="space-y-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={filters.searchTerm}
+                  onChange={(e) => updateFilter('searchTerm', e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+
+              {/* Filter Grid */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {/* Auth Provider Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Shield className="h-4 w-4 mr-1" />
+                    Auth Provider
+                  </label>
+                  <Select value={filters.authProvider} onValueChange={(value: any) => updateFilter('authProvider', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Providers</SelectItem>
+                      <SelectItem value="google">🟢 Google</SelectItem>
+                      <SelectItem value="github">⚫ GitHub</SelectItem>
+                      <SelectItem value="unknown">❓ Unknown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Activity Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Activity className="h-4 w-4 mr-1" />
+                    Activity
+                  </label>
+                  <Select value={filters.activityFilter} onValueChange={(value: any) => updateFilter('activityFilter', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Activity</SelectItem>
+                      <SelectItem value="today">Active Today</SelectItem>
+                      <SelectItem value="week">Active This Week</SelectItem>
+                      <SelectItem value="month">Active This Month</SelectItem>
+                      <SelectItem value="never">Never Active</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Signup Date Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    Signup Date
+                  </label>
+                  <Select value={filters.signupDateFilter} onValueChange={(value: any) => updateFilter('signupDateFilter', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Signups</SelectItem>
+                      <SelectItem value="today">Signed Up Today</SelectItem>
+                      <SelectItem value="week">Last 7 Days</SelectItem>
+                      <SelectItem value="month">Last 30 Days</SelectItem>
+                      <SelectItem value="older">Older than 30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Projects Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Folder className="h-4 w-4 mr-1" />
+                    Project Count
+                  </label>
+                  <Select value={filters.projectsFilter} onValueChange={(value: any) => updateFilter('projectsFilter', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Project Counts</SelectItem>
+                      <SelectItem value="none">No Projects</SelectItem>
+                      <SelectItem value="low">1-2 Projects</SelectItem>
+                      <SelectItem value="medium">3-10 Projects</SelectItem>
+                      <SelectItem value="high">10+ Projects</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Admin Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Users className="h-4 w-4 mr-1" />
+                    User Type
+                  </label>
+                  <Select value={filters.adminFilter} onValueChange={(value: any) => updateFilter('adminFilter', value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      <SelectItem value="admin">Admins Only</SelectItem>
+                      <SelectItem value="user">Regular Users</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Sort Options */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Sort By</label>
+                  <div className="flex space-x-2">
+                    <Select value={filters.sortBy} onValueChange={(value: any) => updateFilter('sortBy', value)}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="signup_date">Signup Date</SelectItem>
+                        <SelectItem value="last_activity">Last Activity</SelectItem>
+                        <SelectItem value="total_projects">Project Count</SelectItem>
+                        <SelectItem value="total_prompts">Prompt Count</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={filters.sortOrder} onValueChange={(value: any) => updateFilter('sortOrder', value)}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="desc">↓</SelectItem>
+                        <SelectItem value="asc">↑</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
       </div>
 
-      {/* Summary Cards */}
-      {analyticsData && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="text-2xl font-bold text-blue-600">{analyticsData.totalCount}</div>
-            <div className="text-sm text-gray-600">Total Users</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="text-2xl font-bold text-green-600">
-              {analyticsData.users.reduce((sum, u) => sum + Number(u.totalProjects || 0), 0)}
-            </div>
-            <div className="text-sm text-gray-600">Total Projects</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="text-2xl font-bold text-purple-600">
-              {analyticsData.users.reduce((sum, u) => sum + Number(u.totalUserPrompts || 0), 0)}
-            </div>
-            <div className="text-sm text-gray-600">Total Prompts</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="text-2xl font-bold text-orange-600">
-              {analyticsData.users.reduce((sum, u) => sum + Number(u.totalImagesUploaded || 0), 0)}
-            </div>
-            <div className="text-sm text-gray-600">Total Images</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow border">
-            <div className="text-2xl font-bold text-red-600">
-              {analyticsData.users.reduce((sum, u) => sum + Number(u.totalErrorMessages || 0), 0)}
-            </div>
-            <div className="text-sm text-gray-600">Error Messages</div>
-          </div>
+      {/* Results Summary */}
+      {userAnalytics && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {userAnalytics.users.length} of {userAnalytics.totalCount} users
+            {userAnalytics.appliedFilters && activeFiltersCount > 0 && (
+              <span className="ml-1">(filtered)</span>
+            )}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Refresh
+          </Button>
         </div>
       )}
-
-      {/* Controls */}
-      <div className="bg-white p-4 rounded-lg shadow border mb-6">
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="flex-1 min-w-64">
-            <input
-              type="text"
-              placeholder="Search users by name or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div className="flex gap-2">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="signup_date">Sign Up Date</option>
-              <option value="last_activity">Last Activity</option>
-              <option value="total_projects">Projects</option>
-              <option value="total_prompts">Prompts</option>
-            </select>
-            
-            <button
-              onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-              className="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {sortOrder === 'desc' ? '↓' : '↑'}
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Users Table */}
-      {analyticsLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading user analytics...</div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Auth Provider
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Activity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Projects & Content
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Engagement
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {analyticsData?.users.map((user) => {
-                  return (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            {user.image ? (
-                              <img className="h-10 w-10 rounded-full" src={user.image} alt="" />
-                            ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                <span className="text-gray-600 font-semibold">
-                                  {user.name?.charAt(0) || user.email.charAt(0)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                              {user.name || 'Unnamed User'}
-                              {user.isAdmin && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  Admin
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                            <div className="text-xs text-gray-400">
-                              Joined {formatDate(user.signupDate)}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="text-lg mr-2">{getOAuthIcon(user.oauthProvider)}</span>
-                          <div className="text-sm text-gray-900 capitalize">
-                            {user.oauthProvider || 'Unknown'}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <div>Last: {formatDaysAgo(user.lastActivity)}</div>
-                          <div className="text-xs text-gray-500">
-                            First: {formatDaysAgo(user.firstActivity)}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <div className="flex gap-4">
-                            <div>
-                              <span className="font-medium">{user.totalProjects}</span>
-                              <span className="text-gray-500 text-xs ml-1">projects</span>
-                            </div>
-                            <div>
-                              <span className="font-medium">{user.totalScenes}</span>
-                              <span className="text-gray-500 text-xs ml-1">scenes</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-4 mt-1">
-                            <div>
-                              <span className="font-medium">{user.totalUserPrompts}</span>
-                              <span className="text-gray-500 text-xs ml-1">prompts</span>
-                            </div>
-                            {user.promptsWithImages > 0 && (
-                              <div>
-                                <span className="font-medium text-orange-600">{user.promptsWithImages}</span>
-                                <span className="text-gray-500 text-xs ml-1">images</span>
-                              </div>
-                            )}
-                            {user.totalErrorMessages > 0 && (
-                              <div>
-                                <span className="font-medium text-red-600">{user.totalErrorMessages}</span>
-                                <span className="text-gray-500 text-xs ml-1">errors</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <div className="flex gap-2">
-                            {user.complexEdits > 0 && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                {user.complexEdits} complex
-                              </span>
-                            )}
-                            {user.creativeEdits > 0 && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                {user.creativeEdits} creative
-                              </span>
-                            )}
-                            {user.surgicalEdits > 0 && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {user.surgicalEdits} surgical
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
-                          <Link
-                            href={`/admin/users/${user.id}`}
-                            className="text-indigo-600 hover:text-indigo-900 text-sm"
-                          >
-                            Details
-                          </Link>
-                          {/* <button
-                            onClick={() => setSelectedUserId(user.id)}
-                            className="text-green-600 hover:text-green-900 text-sm"
-                          >
-                            Timeline
-                          </button> */}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {analyticsData && (
-            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
-              <div className="flex-1 flex justify-between">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-700">
-                    Page {currentPage} of {Math.ceil(analyticsData.totalCount / usersPerPage)}
-                  </span>
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-4">
+                  <div className="h-10 w-10 rounded-full" />
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 w-1/3" />
+                    <div className="h-3 w-1/2" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-20" />
+                    <div className="h-3 w-16" />
+                  </div>
                 </div>
-                
-                <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={!analyticsData.hasMore}
-                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Activity Timeline Modal */}
-      {selectedUserId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-96 overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">30-Day Activity Timeline</h3>
-                <button
-                  onClick={() => setSelectedUserId(null)}
-                  className="text-gray-400 hover:text-gray-600"
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center">
+              <p className="text-red-600">Error loading user analytics: {error.message}</p>
+              <Button onClick={() => refetch()} className="mt-2">
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              {userAnalytics?.users.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                 >
-                  ×
-                </button>
-              </div>
-              
-              {activityLoading ? (
-                <div className="text-center py-8">Loading timeline...</div>
-              ) : activityData && activityData.length > 0 ? (
-                <div className="space-y-3">
-                  {activityData.map((day, index) => (
-                    <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 rounded">
-                      <div className="w-20 text-sm font-medium text-gray-600">
-                        {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </div>
-                      <div className="flex-1 grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium">{day.userPrompts}</span>
-                          <span className="text-gray-500 ml-1">prompts</span>
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      {user.image ? (
+                        <img
+                          src={user.image}
+                          alt={user.name || "User"}
+                          className="h-10 w-10 rounded-full"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                          <Users className="h-5 w-5 text-muted-foreground" />
                         </div>
-                        <div>
-                          <span className="font-medium">{day.scenesCreated}</span>
-                          <span className="text-gray-500 ml-1">scenes</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">{day.imagesUploaded}</span>
-                          <span className="text-gray-500 ml-1">images</span>
-                        </div>
-                        <div>
-                          <span className="font-medium">{Math.round(day.avgSessionTime || 0)}</span>
-                          <span className="text-gray-500 ml-1">min session</span>
-                        </div>
-                      </div>
+                      )}
+                      {user.isAdmin && (
+                        <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border border-background" />
+                      )}
                     </div>
-                  ))}
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-medium">{user.name || "Unnamed User"}</h3>
+                        {user.isAdmin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
+                        <span className="text-lg">{getOAuthIcon(user.oauthProvider)}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-4 text-sm">
+                    <div className="text-right">
+                      <p className="font-medium">Joined {formatDate(user.signupDate)}</p>
+                      <p className="text-muted-foreground">Last active: {formatDate(user.lastActivity)}</p>
+                    </div>
+                    
+                    <div className="flex flex-col items-end space-y-1">
+                      {getProjectCountBadge(user.totalProjects)}
+                      {getActivityBadge(user.lastActivity)}
+                    </div>
+
+                    <div className="text-right space-y-1">
+                      <p className="text-xs text-muted-foreground">{user.totalUserPrompts} prompts</p>
+                      <p className="text-xs text-muted-foreground">{user.totalScenes} scenes</p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">No activity in the last 30 days</div>
+              ))}
+
+              {userAnalytics?.users.length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No users found matching your filters</p>
+                  {activeFiltersCount > 0 && (
+                    <Button variant="outline" onClick={clearAllFilters} className="mt-2">
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pagination */}
+      {userAnalytics && userAnalytics.totalCount > pageSize && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Page {currentPage + 1} of {Math.ceil(userAnalytics.totalCount / pageSize)}
+          </p>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+              disabled={currentPage === 0}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={!userAnalytics.hasMore}
+            >
+              Next
+            </Button>
           </div>
         </div>
       )}
     </div>
   );
-} 
+}

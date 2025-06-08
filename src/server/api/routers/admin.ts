@@ -1,9 +1,10 @@
-import { z } from "zod";
+// src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory } from "~/server/db/schema";
 import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 
 // Input schema for timeframe filtering
 const timeframeSchema = z.enum(['all', '30d', '24h']).default('all');
@@ -985,7 +986,7 @@ export const adminRouter = createTRPCRouter({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Image analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          message: `Image analysis failed: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
     }),
@@ -1084,12 +1085,72 @@ export default function GeneratedScene() {
       offset: z.number().min(0).default(0),
       sortBy: z.enum(['signup_date', 'last_activity', 'total_projects', 'total_prompts']).default('signup_date'),
       sortOrder: z.enum(['asc', 'desc']).default('desc'),
+      searchTerm: z.string().optional(),
+      authProvider: z.enum(['all', 'google', 'github', 'unknown']).default('all'),
+      activityFilter: z.enum(['all', 'today', 'week', 'month', 'never']).default('all'),
+      signupDateFilter: z.enum(['all', 'today', 'week', 'month', 'older']).default('all'),
+      projectsFilter: z.enum(['all', 'none', 'low', 'medium', 'high']).default('all'),
+      adminFilter: z.enum(['all', 'admin', 'user']).default('all'),
     }))
     .query(async ({ input }) => {
-      const { limit, offset, sortBy, sortOrder } = input;
+      const { 
+        limit, 
+        offset, 
+        sortBy, 
+        sortOrder, 
+        searchTerm, 
+        authProvider, 
+        activityFilter, 
+        signupDateFilter, 
+        projectsFilter,
+        adminFilter 
+      } = input;
 
-      // 🚨 COMPREHENSIVE USER ANALYTICS QUERY
-      const userAnalytics = await db
+      // Build WHERE conditions for filtering
+      const whereConditions = [];
+
+      // Search filter
+      if (searchTerm && searchTerm.trim()) {
+        whereConditions.push(
+          or(
+            like(users.name, `%${searchTerm}%`),
+            like(users.email, `%${searchTerm}%`)
+          )
+        );
+      }
+
+      // Admin status filter
+      if (adminFilter !== 'all') {
+        whereConditions.push(eq(users.isAdmin, adminFilter === 'admin'));
+      }
+
+      // Signup date filter
+      if (signupDateFilter !== 'all') {
+        const now = new Date();
+        let signupThreshold: Date;
+        
+        switch (signupDateFilter) {
+          case 'today':
+            signupThreshold = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            whereConditions.push(gte(users.createdAt, signupThreshold));
+            break;
+          case 'week':
+            signupThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            whereConditions.push(gte(users.createdAt, signupThreshold));
+            break;
+          case 'month':
+            signupThreshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            whereConditions.push(gte(users.createdAt, signupThreshold));
+            break;
+          case 'older':
+            signupThreshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            whereConditions.push(sql`${users.createdAt} < ${signupThreshold}`);
+            break;
+        }
+      }
+
+      // 🚨 COMPREHENSIVE USER ANALYTICS QUERY WITH ENHANCED FILTERING
+      const baseQuery = db
         .select({
           // Basic user info
           id: users.id,
@@ -1141,6 +1202,13 @@ export default function GeneratedScene() {
         .leftJoin(messages, eq(projects.id, messages.projectId))
         .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
         .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
+        .$dynamic();
+
+      // Execute the query with conditional WHERE clause, groupBy and ordering
+      let userAnalytics = await (whereConditions.length > 0 
+        ? baseQuery.where(and(...whereConditions))
+        : baseQuery
+      )
         .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
         .orderBy(
           sortOrder === 'desc' 
@@ -1156,20 +1224,80 @@ export default function GeneratedScene() {
                 sortBy === 'total_projects' ? sql`COUNT(DISTINCT ${projects.id})` :
                 sql`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`
               )
-        )
-        .limit(limit)
-        .offset(offset);
+        );
 
-      // Get total count for pagination
-      const totalCount = await db
-        .select({ count: sql<number>`COUNT(DISTINCT ${users.id})` })
-        .from(users)
-        .then(result => result[0]?.count || 0);
+      // Apply post-query filtering (since Drizzle doesn't support complex HAVING clauses well)
+      if (authProvider !== 'all') {
+        userAnalytics = userAnalytics.filter(user => {
+          if (authProvider === 'unknown') {
+            return !user.oauthProvider;
+          }
+          return user.oauthProvider === authProvider;
+        });
+      }
+
+      if (projectsFilter !== 'all') {
+        userAnalytics = userAnalytics.filter(user => {
+          const projectCount = user.totalProjects;
+          switch (projectsFilter) {
+            case 'none':
+              return projectCount === 0;
+            case 'low':
+              return projectCount >= 1 && projectCount <= 2;
+            case 'medium':
+              return projectCount >= 3 && projectCount <= 10;
+            case 'high':
+              return projectCount > 10;
+            default:
+              return true;
+          }
+        });
+      }
+
+      if (activityFilter !== 'all') {
+        const now = new Date();
+        userAnalytics = userAnalytics.filter(user => {
+          if (activityFilter === 'never') {
+            return !user.lastActivity;
+          }
+          
+          if (!user.lastActivity) return false;
+          
+          const lastActivity = new Date(user.lastActivity);
+          let threshold: Date;
+          
+          switch (activityFilter) {
+            case 'today':
+              threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              return lastActivity >= threshold;
+            case 'week':
+              threshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+              return lastActivity >= threshold;
+            case 'month':
+              threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+              return lastActivity >= threshold;
+            default:
+              return true;
+          }
+        });
+      }
+
+      // Apply pagination after filtering
+      const totalCount = userAnalytics.length;
+      const paginatedUsers = userAnalytics.slice(offset, offset + limit);
 
       return {
-        users: userAnalytics,
+        users: paginatedUsers,
         totalCount,
         hasMore: offset + limit < totalCount,
+        appliedFilters: {
+          searchTerm,
+          authProvider,
+          activityFilter,
+          signupDateFilter,
+          projectsFilter,
+          adminFilter,
+        },
       };
     }),
 

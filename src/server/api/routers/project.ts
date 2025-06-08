@@ -314,6 +314,63 @@ export const projectRouter = createTRPCRouter({
 
       return plans;
     }),
+    
+  delete: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // First check if the project exists and belongs to the user
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.id));
+        
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+        
+        // Ensure the user has access to this project
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+        
+        // Delete the project (this will cascade delete related data due to foreign key constraints)
+        const deleted = await ctx.db
+          .delete(projects)
+          .where(eq(projects.id, input.id))
+          .returning();
+          
+        if (!deleted[0]) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to delete project",
+          });
+        }
+        
+        return { 
+          success: true, 
+          deletedProject: deleted[0] 
+        };
+      } catch (error) {
+        console.error("Error deleting project:", error);
+        if (error instanceof TRPCError) {
+          throw error; // Re-throw TRPC errors
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete project",
+        });
+      }
+    }),
+    
   // New procedure for generating AI titles
   generateAITitle: protectedProcedure
     .input(z.object({
