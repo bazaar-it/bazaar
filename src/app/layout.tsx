@@ -8,7 +8,6 @@ import { Toaster } from "sonner";
 import { Analytics } from '@vercel/analytics/react';
 import { AnalyticsProvider } from '../client/components/AnalyticsProvider';
 import { ErrorBoundary } from '../client/components/ErrorBoundary';
-import { Footer } from "~/components/ui/Footer";
 import Script from 'next/script';
 import { siteConfig } from '~/config/site';
 import type { Metadata } from "next";
@@ -147,7 +146,6 @@ export default function RootLayout({
                       <main className="flex-1">
                         {children}
                       </main>
-                      <Footer />
                     </div>
                   </ErrorBoundary>
                 </AnalyticsProvider>
