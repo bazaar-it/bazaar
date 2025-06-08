@@ -102,6 +102,13 @@ export default function ChatPanelG({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // 🚨 NEW: Voice error dismissal state
+  const [showVoiceError, setShowVoiceError] = useState(false);
+  
+  // 🚨 NEW: Auto-expanding textarea state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [textareaHeight, setTextareaHeight] = useState('40px');
+  
   // Voice-to-text functionality (SIMPLIFIED: single voice system)
   const {
     recordingState,
@@ -416,6 +423,32 @@ export default function ChatPanelG({
     }
   }, [message, isGenerating]);
 
+  // Handle message input change
+  const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+  }, []);
+
+  // 🚨 NEW: Auto-resize textarea
+  const adjustTextareaHeight = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '40px'; // Reset to button height first
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const minHeight = 40; // Match button height
+      const lineHeight = 24; // Approximate line height
+      const maxLines = 6;
+      const maxHeight = lineHeight * maxLines;
+      
+      const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
+      textareaRef.current.style.height = `${newHeight}px`;
+      setTextareaHeight(`${newHeight}px`);
+    }
+  }, []);
+
+  // Auto-resize when message changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [message, adjustTextareaHeight]);
+
   // Handle microphone button click
   const handleMicrophoneClick = useCallback(() => {
     if (recordingState === 'idle') {
@@ -552,6 +585,13 @@ export default function ChatPanelG({
       toast.success(`Transcription complete: "${transcription.slice(0, 50)}${transcription.length > 50 ? '...' : ''}"`);
     }
   }, [transcription]);
+
+  // 🚨 NEW: Show voice error when it occurs
+  useEffect(() => {
+    if (voiceError) {
+      setShowVoiceError(true);
+    }
+  }, [voiceError]);
 
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
@@ -868,25 +908,17 @@ export default function ChatPanelG({
 
       {/* Input area */}
       <div className="p-4 border-t bg-gray-50/50">
-        {/* Voice recording feedback */}
-        {recordingState === 'recording' && (
-          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <span className="text-sm text-blue-700">Listening... {transcription && `"${transcription}"`}</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={stopRecording}
-              className="ml-auto text-blue-700 hover:bg-blue-100"
+        {/* Voice error with close button */}
+        {showVoiceError && voiceError && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center justify-between">
+            <span>Error: {voiceError}</span>
+            <button
+              onClick={() => setShowVoiceError(false)}
+              className="ml-2 text-red-500 hover:text-red-700 p-1"
+              aria-label="Close error"
             >
-              <StopCircle className="h-4 w-4" />
-              Stop
-            </Button>
-          </div>
-        )}
-        {voiceError && (
-          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            Error: {voiceError}
+              ✕
+            </button>
           </div>
         )}
 
@@ -968,25 +1000,66 @@ export default function ChatPanelG({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-2 items-stretch">
           <div className="flex-1 relative">
-            <Input
-              ref={inputRef}
+            <textarea
+              ref={textareaRef}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={handleMessageChange}
+              onKeyDown={handleKeyDown}
               placeholder={
                 selectedSceneId
                   ? "Describe changes to the selected scene..."
                   : "Describe your video or add a new scene..."
               }
               disabled={isGenerating || recordingState === 'recording'}
-              className={`flex-1 pr-20 ${isDragOver ? 'border-blue-500 bg-blue-50' : ''}`}
+              className={cn(
+                "w-full resize-none rounded-md border border-input bg-background",
+                "pl-16 pr-3 py-3 text-sm leading-5",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                isDragOver && "border-blue-500 bg-blue-50"
+              )}
+              style={{
+                height: textareaHeight,
+                minHeight: '40px', // Match button height
+                maxHeight: 24 * 6, // 6 lines
+                overflowY: "auto"
+              }}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             />
-            
-            {/* Hidden file input */}
+
+            <div className="absolute left-3 flex gap-1 items-center" style={{ bottom: '16px' }}>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-0.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                disabled={isGenerating}
+                aria-label="Upload images"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </button>
+
+              {isVoiceSupported && (
+                <button
+                  type="button"
+                  onClick={recordingState === 'recording' ? stopRecording : startRecording}
+                  className={cn(
+                    "p-0.5 rounded-full flex items-center justify-center",
+                    recordingState === 'recording'
+                      ? "text-red-500 bg-red-50 animate-pulse"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  )}
+                  disabled={isGenerating}
+                  aria-label={recordingState === 'recording' ? 'Stop recording' : 'Start voice recording'}
+                >
+                  <MicIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -995,54 +1068,20 @@ export default function ChatPanelG({
               onChange={handleFileSelect}
               className="hidden"
             />
-            
-            {/* Gallery icon button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-              disabled={isGenerating}
-              aria-label="Upload images"
-            >
-              <ImageIcon className="h-5 w-5" />
-            </button>
-
-            {/* Voice recording button */}
-            {isVoiceSupported && (
-              <button
-                type="button"
-                onClick={recordingState === 'recording' ? stopRecording : startRecording}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full ${
-                  recordingState === 'recording' 
-                    ? 'text-red-500 animate-pulse' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-                disabled={isGenerating}
-                aria-label={recordingState === 'recording' ? 'Stop recording' : 'Start voice recording'}
-              >
-                {recordingState === 'recording' ? (
-                  <Mic className="h-5 w-5" />
-                ) : (
-                  <MicIcon className="h-5 w-5" />
-                )}
-              </button>
-            )}
           </div>
-          <Button 
-            type="submit" 
+
+          <Button
+            type="submit"
             disabled={!message.trim() || isGenerating || recordingState === 'recording'}
-            className="min-w-[40px]"
+            className="w-10 h-10 flex-shrink-0"
+            style={{ minHeight: '44px' }}
           >
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
+
         {selectedSceneId && (
           <div className="text-xs text-muted-foreground mt-2 space-y-1">
-            {/* <p>📍 Scene selected: {selectedScene?.data?.name || `Scene ${scenes.findIndex(s => s.id === selectedSceneId) + 1}`}</p> */}
             <p className="opacity-75">💡 Our AI targets scenes automatically — you can also specify which scene, if dont trust the beta</p>
           </div>
         )}
