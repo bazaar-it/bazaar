@@ -42,7 +42,7 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
   // ✅ CONDITIONAL LOGIC AFTER HOOKS
   if (error) {
     return (
-      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-sm font-medium">Error Loading</div>
           <div className="text-gray-500 text-xs mt-1">Could not load project</div>
@@ -53,7 +53,7 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
 
   if (isLoading) {
     return (
-      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto mb-2" />
           <div className="text-gray-500 text-sm">Loading...</div>
@@ -64,7 +64,7 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
 
   if (!scenes || scenes.length === 0) {
     return (
-      <div className="w-full h-32 bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-200 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center p-4">
           <FolderIcon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
           <div className="text-gray-500 text-sm font-medium">Empty Project</div>
@@ -76,7 +76,7 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
 
   if (compilationError) {
     return (
-      <div className="w-full h-32 bg-orange-50 border-2 border-dashed border-orange-200 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-orange-50 border-2 border-dashed border-orange-200 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
           <div className="text-orange-600 text-sm font-medium">Scene Error</div>
           <div className="text-orange-500 text-xs mt-1">Failed to compile</div>
@@ -87,7 +87,7 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
 
   if (isCompiling || !component || !playerProps) {
     return (
-      <div className="w-full h-32 bg-blue-50 border-2 border-dashed border-blue-200 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-blue-50 border-2 border-dashed border-blue-200 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-6 w-6 animate-spin text-blue-400 mx-auto mb-2" />
           <div className="text-blue-600 text-sm">Compiling...</div>
