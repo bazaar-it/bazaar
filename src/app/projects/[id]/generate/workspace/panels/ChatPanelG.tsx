@@ -1000,7 +1000,7 @@ export default function ChatPanelG({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex gap-2 items-stretch">
+        <form onSubmit={handleSubmit} className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <textarea
               ref={textareaRef}
@@ -1073,8 +1073,8 @@ export default function ChatPanelG({
           <Button
             type="submit"
             disabled={!message.trim() || isGenerating || recordingState === 'recording'}
-            className="w-10 h-10 flex-shrink-0"
-            style={{ minHeight: '44px' }}
+            className="w-10 flex-shrink-0"
+            style={{ minHeight: '42px', marginBottom: '6px' }}
           >
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
