@@ -23,7 +23,7 @@ export default function HomePage() {
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       console.log("User is already logged in, redirecting to workspace...");
-      router.push("/projects/new");
+      router.push("/projects");
     }
   }, [status, session, router]);
 

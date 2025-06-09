@@ -23,7 +23,12 @@ export default async function ProjectsPage() {
     redirect("/projects/new");
   }
 
-  // Show projects dashboard (this should be implemented properly in the future)
-  // For now, redirect to create new project as the main flow
+  // If user has projects, redirect to the most recent one
+  const mostRecentProject = userProjects[0]; // getUserProjects likely returns them sorted by creation date
+  if (mostRecentProject?.id) {
+    redirect(`/projects/${mostRecentProject.id}/generate`);
+  }
+
+  // Fallback - this shouldn't normally be reached
   redirect("/projects/new");
 }

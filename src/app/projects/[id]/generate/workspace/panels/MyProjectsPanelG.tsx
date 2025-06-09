@@ -421,6 +421,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   const router = useRouter();
   
   // Fetch all projects
@@ -462,8 +463,14 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
           // Redirect to the first available project
           router.push(`/projects/${updatedProjects[0]!.id}/generate`);
         } else {
-          // No projects left, redirect to dashboard or create new project page
-          router.push('/dashboard');
+          // No projects left, redirect directly to create new project page
+          setIsCreatingNewProject(true);
+          router.push('/projects/new');
+          
+          // Invalidate cache after a short delay to ensure the new project appears in the list
+          setTimeout(async () => {
+            await utils.project.list.invalidate();
+          }, 1000);
         }
       }
       
@@ -608,6 +615,13 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
             <div className="text-center">
               <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto mb-2" />
               <div className="text-gray-500 text-sm">Loading projects...</div>
+            </div>
+          </div>
+        ) : isCreatingNewProject ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto mb-2" />
+              <div className="text-blue-600 text-sm font-medium">Creating new project...</div>
             </div>
           </div>
         ) : (
