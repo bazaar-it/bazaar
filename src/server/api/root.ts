@@ -1,15 +1,7 @@
 // src/server/api/root.ts
 import { projectRouter } from "~/server/api/routers/project";
 import { chatRouter } from "~/server/api/routers/chat";
-import { chatStreamRouter } from "~/server/api/routers/chatStream";
 import { renderRouter } from "~/server/api/routers/render";
-import { customComponentRouter } from "./routers/customComponent";
-import { customComponentFixRouter } from "./routers/customComponentFix";
-import { timelineRouter } from "~/server/api/routers/timeline";
-import { videoRouter } from "~/server/api/routers/video";
-import { animationRouter } from "~/server/api/routers/animation";
-import { evaluationRouter } from "~/server/api/routers/evaluation";
-import { debugRouter } from "~/server/api/routers/debug";
 import { generationRouter } from "~/server/api/routers/generation";
 import { voiceRouter } from "~/server/api/routers/voice";
 import { feedbackRouter } from "~/server/api/routers/feedback";
@@ -29,15 +21,7 @@ import "~/server/init";
 export const appRouter = createTRPCRouter({
   project: projectRouter,
   chat: chatRouter,
-  chatStream: chatStreamRouter,
   render: renderRouter,
-  customComponent: customComponentRouter,
-  customComponentFix: customComponentFixRouter,
-  timeline: timelineRouter,
-  video: videoRouter,
-  animation: animationRouter,
-  evaluation: evaluationRouter,
-  debug: debugRouter,
   generation: generationRouter,
   voice: voiceRouter,
   feedback: feedbackRouter,

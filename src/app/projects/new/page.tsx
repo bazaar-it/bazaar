@@ -5,7 +5,7 @@ import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq, and, like } from "drizzle-orm";
 import { analytics } from '~/lib/analytics';
-import { createDefaultProjectProps } from "~/types/remotion-constants";
+import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 
 /**
  * Special route that automatically creates a new project and redirects to it

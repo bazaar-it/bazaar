@@ -116,3 +116,5 @@ yarn-error.log*
 # Development database dumps
 *.dump
 *.sql.backup
+# Log agent compiled code
+src/scripts/log-agent/dist/

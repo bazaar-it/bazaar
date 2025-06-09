@@ -7,7 +7,7 @@ import { db } from "~/server/db";
 import { projects, scenes, sharedVideos } from "~/server/db/schema";
 import { TRPCError } from "@trpc/server";
 import { getShareUrl } from "~/lib/utils";
-import type { InputProps } from "~/types/input-props";
+import type { InputProps } from "~/lib/types/video/input-props";
 
 export const shareRouter = createTRPCRouter({
   // Create a shared video link

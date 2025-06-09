@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useVideoState } from '~/stores/videoState';
-import type { InputProps } from '~/types/input-props';
+import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
 import { RefreshCwIcon, CodeIcon, WrenchIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';

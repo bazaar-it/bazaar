@@ -3,7 +3,7 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import TimelineItem from './TimelineItem';
-import type { TimelineItemUnion } from '~/types/timeline';
+import type { TimelineItemUnion } from '~/lib/types/video/timeline';
 import { cn } from '~/lib/utils';
 import { ChevronDown, ChevronUp, Lock, Unlock, Eye, EyeOff, Plus } from 'lucide-react';
 import { useTimelineClick, useTimelineZoom, useTimeline, useTimelineDrag } from './TimelineContext';

@@ -14,7 +14,7 @@ import {
   type AudioItem,
   type TimelineContextState,
   type TimelineActions
-} from '~/types/timeline';
+} from '~/lib/types/video/timeline';
 import { useVideoState } from '~/stores/videoState';
 import {
   validateDuration,

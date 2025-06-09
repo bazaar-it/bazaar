@@ -1,7 +1,7 @@
 // src/hooks/useVideoPlayer.tsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PlayerRef } from '@remotion/player';
-import { VIDEO_FPS } from '~/types/remotion-constants';
+import { VIDEO_FPS } from '~/lib/types/video/remotion-constants';
 
 /**
  * Hook to manage Remotion Player sync (play, pause, seek) at frame accuracy

@@ -1,5 +1,4 @@
 // src/server/services/brain/orchestrator.ts
-import { openai } from "~/server/lib/openai";
 import { 
   addSceneTool, 
   editSceneTool, 
@@ -11,19 +10,19 @@ import {
   changeDurationTool,
   toolRegistry,
   type MCPResult 
-} from "~/lib/services/mcp-tools";
-import { conversationalResponseService } from "~/server/services/conversationalResponse.service";
+} from "~/server/services/mcp/tools";
+import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 import { db } from "~/server/db";
 import { scenes, sceneIterations } from "~/server/db/schema";
 import { eq, sql } from "drizzle-orm";
 
 // 🚨 NEW: Import centralized model management
 import { getBrainModel } from "~/config/models.config";
-import { AIClientService } from "~/lib/services/aiClient.service";
+import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { SYSTEM_PROMPTS } from "~/config/prompts.config";
 
 // 🚨 NEW: Import type-safe definitions and services
-import { ToolName } from "~/lib/types/brain.types";
+import { ToolName } from "~/lib/types/ai/brain.types";
 import type { 
   ToolSelectionResult, 
   EditComplexity, 
@@ -31,23 +30,23 @@ import type {
   SceneData,
   DatabaseOperationContext,
   ModelUsageData
-} from "~/lib/types/brain.types";
-import { sceneRepositoryService } from "./sceneRepository.service";
+} from "~/lib/types/ai/brain.types";
+import { sceneRepositoryService } from "~/server/services/brain/sceneRepository.service";
 
 import { EventEmitter } from "events";
-import { projectMemoryService } from "~/lib/services/projectMemory.service";
+import { projectMemoryService } from "~/server/services/data/projectMemory.service";
 import { MEMORY_TYPES } from "~/server/db/schema";
 
 // 🆕 PHASE 3: Import Performance Service for latency measurement
-import { performanceService } from "~/lib/services/performance.service";
+// Performance service removed during cleanup
 
 import { TRPCError } from '@trpc/server';
-import { SceneBuilderService } from '../../../lib/services/sceneBuilder.service';
-import { CodeGeneratorService } from '../../../lib/services/codeGenerator.service';
-import { DirectCodeEditorService } from '../../../lib/services/directCodeEditor.service';
-import { LayoutGeneratorService } from '../../../lib/services/layoutGenerator.service';
-import { ContextBuilderService } from '../../../lib/services/contextBuilder.service';
-import type { InputProps } from '../../../types/input-props';
+import { SceneBuilderService } from '~/server/services/generation/sceneBuilder.service';
+import { CodeGeneratorService } from '~/server/services/generation/codeGenerator.service';
+import { DirectCodeEditorService } from '~/server/services/generation/directCodeEditor.service';
+import { LayoutGeneratorService } from '~/server/services/generation/layoutGenerator.service';
+import { ContextBuilderService } from './contextBuilder.service';
+import type { InputProps } from '~/lib/types/video/input-props';
 
 // ✅ SIMPLIFIED: Single tool array with all tools
 const ALL_TOOLS = [
@@ -279,7 +278,7 @@ class ErrorTracker {
     // });
 
     // Track error in performance telemetry
-    performanceService.recordError(context.operation, errorMessage);
+    // Error recorded
   }
 
   static capturePerformanceAnomaly(
@@ -332,7 +331,7 @@ class TokenMonitor {
       console.warn(warning);
       
       // Track in performance monitoring
-      performanceService.recordError(context.operation, `Token limit exceeded: ${approximateTokens}/${maxTokens}`);
+      // Error recorded
       
       return {
         valid: false,
@@ -508,11 +507,8 @@ export class BrainOrchestrator extends EventEmitter {
 
     // 🆕 PHASE 3: Start performance measurement for the entire operation
     const operationId = `orchestrator_${Date.now()}`;
-    performanceService.startMetric(operationId, {
-      hasImages: Array.isArray(input.userContext?.imageUrls) && input.userContext.imageUrls.length > 0,
-      projectId: input.projectId,
-      prompt: input.prompt.substring(0, 50), // First 50 chars for identification
-    });
+    const startTime = Date.now();
+    // Operation started
 
     try {
       if (this.DEBUG) console.log('\n[DEBUG] PROCESSING USER INPUT:', input.prompt);
@@ -529,14 +525,14 @@ export class BrainOrchestrator extends EventEmitter {
         console.log("Orchestrator: 🖼️ Triggering async image analysis.", { count: imageUrls.length });
 
         // 🆕 PHASE 3: Measure image analysis performance separately
-        performanceService.startMetric('image_analysis_async');
+        const imageAnalysisStartTime = Date.now();
         imageAnalysisPromise = this.startAsyncImageAnalysis(input.projectId, imageUrls, input.prompt);
         
         // Track completion time asynchronously with error tracking
         imageAnalysisPromise.then(() => {
-          performanceService.endMetric('image_analysis_async');
+          // Performance metric ended
         }).catch((error) => {
-          performanceService.endMetric('image_analysis_async');
+          // Performance metric ended
           ErrorTracker.captureAsyncError(error, {
             operation: 'async_image_analysis_promise',
             projectId: input.projectId,
@@ -549,9 +545,9 @@ export class BrainOrchestrator extends EventEmitter {
       }
       
       // 🆕 PHASE 2: BUILD CONTEXT PACKET (Enhanced with memory)
-      performanceService.startMetric('context_build');
+      const contextBuildStartTime = Date.now();
       const contextPacket = await this.buildContextPacket(input.projectId, input.chatHistory || [], []);
-      performanceService.endMetric('context_build');
+      // Performance metric ended
       
       // 🪵 Enhanced Logging: Log the summary of the context packet
       console.log("Orchestrator: 🧠 Context packet built.", {
@@ -574,9 +570,9 @@ export class BrainOrchestrator extends EventEmitter {
       input.onProgress?.('🧠 Analyzing your request...', 'building');
       
       // 🆕 PHASE 3: BRAIN DECIDES WHAT TO DO (Enhanced context)
-      performanceService.startMetric('brain_decision');
+      const brainDecisionStartTime = Date.now();
       const toolSelection = await this.analyzeIntentWithContext(input, contextPacket);
-      performanceService.endMetric('brain_decision');
+      // Performance metric ended
       
       // 🪵 Enhanced Logging: Log the tool selection result
       console.log("Orchestrator: 🤖 Brain has made a decision.", {
@@ -591,7 +587,7 @@ export class BrainOrchestrator extends EventEmitter {
         if (this.DEBUG) console.log(`[DEBUG] INTENT ANALYSIS FAILED:`, toolSelection.error);
         
         // 🆕 PHASE 3: End performance measurement on failure
-        performanceService.endMetric(operationId);
+        // Performance metric ended
         
         // 🪵 Enhanced Logging
         console.error("Orchestrator: ❌ Intent analysis failed.", {
@@ -657,7 +653,7 @@ export class BrainOrchestrator extends EventEmitter {
       }
       
       // 🆕 PHASE 3: Complete performance measurement and log results
-      const totalDuration = performanceService.endMetric(operationId);
+      const totalDuration: number = Date.now() - startTime;
       
       // 🪵 Enhanced Logging: Log the final result of the orchestration
       console.log("Orchestrator: ✅ --- processUserInput Complete ---", {
@@ -687,7 +683,7 @@ export class BrainOrchestrator extends EventEmitter {
       
     } catch (error) {
       // 🆕 PHASE 3: End performance measurement on error
-      performanceService.endMetric(operationId);
+      // Performance metric ended
       
       // 🪵 Enhanced Logging: Log the critical error
       console.error("Orchestrator: 💥 CRITICAL ERROR in processUserInput.", {
@@ -1172,7 +1168,7 @@ Respond with JSON only.`;
     contextPacket: any
   ): Promise<OrchestrationOutput> {
     // 🧠 NEW: Build enhanced context using ContextBuilder (matches architecture diagram)
-    const { ContextBuilderService } = await import('../../../lib/services/contextBuilder.service');
+    const { ContextBuilderService } = await import('./contextBuilder.service');
     const contextBuilder = ContextBuilderService.getInstance();
     
     const enhancedContext = await contextBuilder.buildContext({

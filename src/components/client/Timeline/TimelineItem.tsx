@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem, type TimelineItemStatus } from '~/types/timeline';
+import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem, type TimelineItemStatus } from '~/lib/types/video/timeline';
 import { cn } from '~/lib/utils';
 import Image from 'next/image';
 import { useTimelineClick, useTimelineDrag } from './TimelineContext';

@@ -8,7 +8,7 @@ import type { DragEndEvent, DragStartEvent, DragOverEvent, DropAnimation } from 
 import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { XIcon, RefreshCwIcon } from 'lucide-react';
-import type { InputProps } from '~/types/input-props';
+import type { InputProps } from '~/lib/types/video/input-props';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 import ChatPanelG from './panels/ChatPanelG';

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dataLifecycleService } from '~/lib/services/dataLifecycle.service';
+import { dataLifecycleService } from '~/server/services/data/dataLifecycle.service';
 
 /**
  * Cron endpoint for automated data lifecycle cleanup

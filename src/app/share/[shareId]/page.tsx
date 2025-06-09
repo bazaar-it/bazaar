@@ -8,7 +8,7 @@ import { type Metadata } from "next";
 import { getBazaarUrl, getShareUrl } from "~/lib/utils";
 import ShareVideoPlayerClient from "./ShareVideoPlayerClient";
 import ShareButtons from "./SharePageClient";
-import type { InputProps, Scene } from "~/types/input-props";
+import type { InputProps, Scene } from "~/lib/types/video/input-props";
 import { format } from "date-fns";
 import AppHeader from "~/components/AppHeader";
 

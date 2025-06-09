@@ -4,8 +4,8 @@ import { uniqueIndex } from "drizzle-orm/pg-core";
 
 import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "@auth/core/adapters";
-import { type InputProps } from "~/types/input-props";
-import { type JsonPatch } from "~/types/json-patch";
+import { type InputProps } from "~/lib/types/video/input-props";
+import { type JsonPatch } from "~/lib/types/shared/json-patch";
 import { type InferSelectModel } from "drizzle-orm";
 
 // Import the InputProps type for the projects table

@@ -22,7 +22,7 @@ const Button: React.FC<{
 // Import API from your tRPC setup
 import { api } from "~/trpc/react";
 import { v4 as uuid } from "uuid";
-import type { JsonPatch } from "~/types/json-patch";
+import type { JsonPatch } from "~/lib/types/shared/json-patch";
 import { type TRPCClientErrorLike } from "@trpc/client";
 
 // Simple toast implementation

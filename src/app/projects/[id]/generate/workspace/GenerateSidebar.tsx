@@ -17,19 +17,11 @@ import {
   PlusIcon,
   ListIcon,
   FolderIcon,
-  BrainIcon,
   LayoutTemplateIcon,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
 
-type Project = {
-  id: string;
-  name: string;
-};
 
 interface GenerateSidebarProps {
-  projects: Project[];
-  currentProjectId: string;
   onAddPanel?: (panelType: PanelTypeG) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -61,55 +53,8 @@ const navItems: WorkspacePanelG[] = [
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
 ];
 
-const PANEL_OPTIONS: PanelOption[] = [
-  {
-    type: 'chat',
-    label: 'Chat',
-    description: 'Interactive chat for scene generation',
-    icon: <MessageSquareIcon className="h-5 w-5" />,
-    color: 'from-blue-500 to-blue-600',
-  },
-  {
-    type: 'preview',
-    label: 'Video Player',
-    description: 'Live preview of your video project',
-    icon: <PlayIcon className="h-5 w-5" />,
-    color: 'from-green-500 to-green-600',
-  },
-  {
-    type: 'templates',
-    label: 'Templates',
-    description: 'Professional pre-made templates',
-    icon: <LayoutTemplateIcon className="h-5 w-5" />,
-    badge: 'NEW',
-    color: 'from-pink-500 to-pink-600',
-  },
-  {
-    type: 'myprojects',
-    label: 'My Projects',
-    description: 'Browse and switch between your projects',
-    icon: <FolderIcon className="h-5 w-5" />,
-    color: 'from-purple-500 to-purple-600',
-  },
-  {
-    type: 'storyboard',
-    label: 'Storyboard',
-    description: 'Visual timeline of your scenes',
-    icon: <ListIcon className="h-5 w-5" />,
-    color: 'from-orange-500 to-orange-600',
-  },
-  {
-    type: 'code',
-    label: 'Code Editor',
-    description: 'Direct code editing and debugging',
-    icon: <Code2Icon className="h-5 w-5" />,
-    color: 'from-gray-500 to-gray-600',
-  },
-];
 
 export function GenerateSidebar({ 
-  projects, 
-  currentProjectId, 
   onAddPanel, 
   isCollapsed = false, 
   onToggleCollapse 

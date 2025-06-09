@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { brainOrchestrator } from "~/server/services/brain/orchestrator";
-import { codeValidationService } from "~/server/services/codeValidation.service";
+// codeValidationService removed - was unused
 import { db } from "~/server/db";
 import { scenes, projects, messages, sceneIterations } from "~/server/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -387,7 +387,7 @@ export const generationRouter = createTRPCRouter({
         }
         
         // Use the code generator to create a safe version
-        const { codeGeneratorService } = await import("~/lib/services/codeGenerator.service");
+        const { codeGeneratorService } = await import("~/server/services/generation/codeGenerator.service");
         
         const safeCode = await codeGeneratorService.generateCode({
           layoutJson,

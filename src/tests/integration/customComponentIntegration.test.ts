@@ -1,5 +1,5 @@
-import { type InputProps } from '~/types/input-props';
-import { type JsonPatch } from '~/types/json-patch';
+import { type InputProps } from '~/lib/types/video/input-props';
+import { type JsonPatch } from '~/lib/types/shared/json-patch';
 
 // Manual JSON patch applying function for tests
 function applyJsonPatch(document: any, patch: any[]): any {

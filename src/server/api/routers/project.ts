@@ -2,17 +2,15 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches, scenePlans } from "~/server/db/schema";
-import { eq, desc, like, count, and, ne } from "drizzle-orm";
+import { eq, desc, like, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { createDefaultProjectProps } from "~/types/remotion-constants";
-import { processUserMessageInProject } from "./chat";
-import { jsonPatchSchema, type JsonPatch } from "~/types/json-patch";
+import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
+import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/nameGenerator";
-import { generateTitle } from "~/server/services/titleGenerator.service";
-import { db, executeWithRetry } from "~/server/db";
-import { v4 } from "uuid";
+import { generateTitle } from "~/server/services/ai/titleGenerator.service";
+import { executeWithRetry } from "~/server/db";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -132,15 +130,8 @@ export const projectRouter = createTRPCRouter({
 
         // NO WELCOME MESSAGE CREATION - Let UI show the nice default instead
 
-        // If initialMessage is provided, trigger LLM/assistant processing asynchronously
-        if (input?.initialMessage && input.initialMessage.trim().length > 0) {
-          // Fire-and-forget – attach a catch to avoid unhandled rejection noise
-          processUserMessageInProject(ctx, insertResult.id, input.initialMessage)
-            .catch((error: unknown) => {
-              // Log but don't affect the response – project has already been created
-              console.error(`Error processing initial message for project ${insertResult.id}:`, error);
-            });
-        }
+        // TODO: Initial message processing now handled via generation router
+        // Legacy processUserMessageInProject removed during cleanup
         
         return { projectId: insertResult.id };
 
@@ -377,7 +368,7 @@ export const projectRouter = createTRPCRouter({
       prompt: z.string(),
       contextId: z.string().optional()
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       try {
         // Call the AI title generator service
         const result = await generateTitle({

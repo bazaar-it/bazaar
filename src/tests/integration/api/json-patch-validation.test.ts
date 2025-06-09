@@ -1,10 +1,10 @@
 //src/tests/integration/api/json-patch-validation.test.ts
 import { describe, it, expect, jest } from '@jest/globals';
 import * as fastJsonPatch from 'fast-json-patch';
-import type { JsonPatch, JsonPatchOperation } from '~/types/json-patch';
+import type { JsonPatch, JsonPatchOperation } from '~/lib/types/shared/json-patch';
 
 // Mock the actual schema and validation functions - adjust import paths as needed
-jest.mock('~/types/json-patch', () => ({
+jest.mock('~/lib/types/shared/json-patch', () => ({
   jsonPatchSchema: {
     safeParse: (data: any) => {
       // Mock implementation of schema validation
@@ -53,7 +53,7 @@ describe('JSON Patch Validation', () => {
     ];
     
     // Import the real schema to test
-    const { jsonPatchSchema } = jest.requireActual('~/types/json-patch') as { jsonPatchSchema: typeof import('~/types/json-patch').jsonPatchSchema };
+    const { jsonPatchSchema } = jest.requireActual('~/lib/types/shared/json-patch') as { jsonPatchSchema: typeof import('~/lib/types/shared/json-patch').jsonPatchSchema };
     
     validPatches.forEach(patch => {
       const result = jsonPatchSchema.safeParse(patch);
@@ -72,7 +72,7 @@ describe('JSON Patch Validation', () => {
     ];
     
     // Import the real schema to test
-    const { jsonPatchSchema } = jest.requireActual('~/types/json-patch') as { jsonPatchSchema: typeof import('~/types/json-patch').jsonPatchSchema };
+    const { jsonPatchSchema } = jest.requireActual('~/lib/types/shared/json-patch') as { jsonPatchSchema: typeof import('~/lib/types/shared/json-patch').jsonPatchSchema };
     
     invalidPatches.forEach(patch => {
       const result = jsonPatchSchema.safeParse(patch);

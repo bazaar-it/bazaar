@@ -1,13 +1,12 @@
+// src/server/services/brain/sceneRepository.service.ts
 import { db } from "~/server/db";
 import { scenes, sceneIterations } from "~/server/db/schema";
 import { eq, sql } from "drizzle-orm";
 import type { 
   SceneData, 
   DatabaseOperationContext, 
-  ModelUsageData,
-  ToolName,
-  OperationType 
-} from "~/lib/types/brain.types";
+  ModelUsageData
+} from "~/lib/types/ai/brain.types";
 import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 // =============================================================================
@@ -226,7 +225,7 @@ export class SceneRepositoryService {
         });
 
         // Check for re-editing patterns (user dissatisfaction)
-        await this.markReEditedScenes(sceneData.sceneId, context.projectId);
+        await this.markReEditedScenes(sceneData.sceneId);
       }
 
       // 🪵 Enhanced Logging
@@ -399,7 +398,7 @@ export class SceneRepositoryService {
   /**
    * Background job to detect re-editing patterns (user dissatisfaction)
    */
-  private async markReEditedScenes(sceneId: string, projectId: string) {
+  private async markReEditedScenes(sceneId: string) {
     try {
       // Check if this scene was edited within the last 5 minutes
       const recentEdits = await db

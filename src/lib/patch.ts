@@ -1,7 +1,7 @@
 // src/lib/patch.ts
 import type { Operation } from "fast-json-patch";
-import type { Scene } from "~/types/input-props";
-import type { InputProps } from "~/types/input-props";
+import type { Scene } from "~/lib/types/video/input-props";
+import type { InputProps } from "~/lib/types/video/input-props";
 import { nanoid } from "nanoid";
 
 /**

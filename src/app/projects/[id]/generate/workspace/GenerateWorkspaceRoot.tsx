@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useVideoState } from '~/stores/videoState';
 import { api } from "~/trpc/react";
 import AppHeader from "~/components/AppHeader";
-import type { InputProps } from '~/types/input-props';
+import type { InputProps } from '~/lib/types/video/input-props';
 import { GenerateSidebar } from "./GenerateSidebar";
 import WorkspaceContentAreaG from './WorkspaceContentAreaG';
 import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContentAreaG';

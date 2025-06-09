@@ -5,7 +5,7 @@ import { auth } from '~/server/auth';
 import { db } from '~/server/db';
 import { projects, scenes, messages } from '~/server/db/schema';
 import { eq, desc, sql } from 'drizzle-orm';
-import { sceneBuilderService } from '~/lib/services/sceneBuilder.service';
+import { sceneBuilderService } from '~/server/services/generation/sceneBuilder.service';
 
 export async function POST(req: Request) {
   try {

@@ -5,7 +5,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Player } from '@remotion/player';
 import { AbsoluteFill, Sequence } from 'remotion';
 import { transform } from 'sucrase';
-import type { InputProps } from '~/types/input-props';
+import type { InputProps } from '~/lib/types/video/input-props';
 
 interface ShareVideoPlayerClientProps {
   inputProps: InputProps;

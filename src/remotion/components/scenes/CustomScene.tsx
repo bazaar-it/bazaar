@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import { AbsoluteFill, continueRender, delayRender, staticFile, useVideoConfig, useCurrentFrame } from 'remotion';
 import { RemoteComponent } from '~/hooks/useRemoteComponent';
 import type { SceneProps } from '.';
-import type { AnimationDesignBrief } from '~/lib/schemas/animationDesignBrief.schema';
+import type { AnimationDesignBrief } from '~/lib/types/video/animationDesignBrief.schema';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Define component metadata interface
@@ -123,34 +123,9 @@ export const CustomScene: React.FC<CustomSceneProps> = ({ data }) => {
       setFetchedMetadata(metadata);
       console.log('[CustomScene fetchAdbData] Fetched metadata:', metadata);
 
-      if (metadata.adbId) {
-        console.log(`[CustomScene fetchAdbData] Fetching ADB data for ${metadata.adbId}`);
-        const adbTimestamp = Date.now();
-        const adbController = new AbortController();
-        timeoutId = setTimeout(() => {
-          adbController.abort();
-          console.error(`[CustomScene] ADB fetch timeout for ${metadata.adbId} after 5 seconds`);
-        }, 5000);
-        
-        const adbResponse = await fetch(`/api/adbs/${metadata.adbId}.json?t=${adbTimestamp}`, {
-            signal: adbController.signal,
-        });
-        
-        if (timeoutId) clearTimeout(timeoutId);
-        timeoutId = null;
-
-        if (!adbResponse.ok) {
-          console.error(`[CustomScene fetchAdbData] ADB fetch failed for ${metadata.adbId}. Status: ${adbResponse.status}, Text: ${adbResponse.statusText}`);
-          const errorText = await adbResponse.text().catch(() => 'Could not read error text');
-          throw new Error(`ADB fetch failed: ${adbResponse.statusText || adbResponse.status} - ${errorText}`);
-        }
-        const adb = await adbResponse.json();
-        setAdbData(adb.designBrief); // Assuming adb.json returns { designBrief: {...} }
-        console.log('[CustomScene fetchAdbData] Fetched ADB data:', adb.designBrief);
-      } else {
-        console.warn(`[CustomScene fetchAdbData] No adbId found in metadata for component ${componentId}.`);
-        setAdbData(null); // No ADB to fetch
-      }
+      // SIMPLIFIED: No animation design brief needed - components are self-contained
+      console.log(`[CustomScene] Skipping ADB fetch for ${componentId} - using simplified component loading`);
+      setAdbData(null);
     } catch (e: any) {
       if (timeoutId) clearTimeout(timeoutId);
       console.error(`[CustomScene fetchAdbData] Error during data fetching for ${componentId}:`, e);

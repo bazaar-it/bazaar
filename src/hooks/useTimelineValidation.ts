@@ -1,7 +1,7 @@
 // src/hooks/useTimelineValidation.ts
 "use client";
 
-import type { TimelineItemUnion } from '~/types/timeline';
+import type { TimelineItemUnion } from '~/lib/types/video/timeline';
 
 // Mirror server-side Zod rules from inputPropsSchema:
 const MIN_DURATION = 1;

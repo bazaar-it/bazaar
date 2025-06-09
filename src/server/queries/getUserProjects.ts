@@ -2,7 +2,7 @@
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq, desc } from "drizzle-orm";
-import type { Project } from "~/types/project";
+import type { Project } from "~/lib/types/database/project";
 
 /**
  * Fetches all projects for a given user ID, sorted by most recently updated

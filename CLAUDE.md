@@ -1,8 +1,42 @@
 # Bazaar-Vid: AI-Powered Video Creation Platform
 
+## Progress & TODO Guidelines (CRITICAL - READ FIRST)
+
+**All development work MUST follow these guidelines:**
+
+### Sprint-Based Workflow
+- **Current Sprint**: Sprint 34 (check `/memory-bank/sprints/sprint34/` for context)
+- **Documentation First**: For complex tasks, create analysis docs in sprint folder before coding
+- **Progress Tracking**: Update `/memory-bank/progress.md` AND sprint-specific progress files
+- **Memory Bank**: Always check relevant docs in `/memory-bank/` before starting work
+
+### TODO Organization Structure
+```
+/memory-bank/
+├── TODO-critical.md        # Immediate blockers & bugs
+├── TODO.md                 # General backlog
+├── sprints/sprint34/
+│   ├── TODO.md            # Sprint-specific tasks
+│   ├── progress.md        # Sprint progress log
+│   └── [analysis-docs]    # Technical analysis files
+└── progress.md            # Overall project progress
+```
+
+### Documentation Patterns
+1. **Before Complex Work**: Create analysis document in current sprint folder
+2. **During Work**: Update progress files continuously
+3. **After Work**: Document findings and next steps
+4. **Cross-Reference**: Link related docs and maintain memory bank connections
+
+### Work Approach
+- **Read First**: Check existing documentation before starting
+- **Document Everything**: Decisions, findings, and reasoning
+- **Progress Updates**: Real-time updates to progress files
+- **Sprint Focus**: Stay within current sprint scope unless critical
+
 ## Project Overview
 
-Bazaar-Vid is a sophisticated full-stack video creation platform that enables users to generate custom video content through natural language prompts. Built with Next.js, Remotion, and AI agents, it provides real-time collaboration and dynamic component generation for video production.
+Bazaar-Vid is a sophisticated full-stack video creation platform that enables users to generate custom video content through natural language prompts. Built with Next.js 15, Remotion, and AI services, it provides real-time collaboration and dynamic component generation.
 
 ## Quick Start
 
@@ -31,102 +65,80 @@ npm run db:studio    # View database
 - **Database**: PostgreSQL (Neon) + Drizzle ORM
 - **Storage**: Cloudflare R2
 - **Video**: Remotion for composition and rendering
-- **AI**: OpenAI GPT-4o-mini with multi-agent system
+- **AI**: OpenAI GPT-4o-mini with MCP tools
 - **Real-time**: SSE + JSON Patch for collaboration
 
-### Core Components
+### Organized File Structure (Single Source of Truth)
 
 ```
 src/
 ├── app/                    # Next.js App Router pages
 ├── server/                 # Backend services and APIs
-│   ├── agents/            # AI agent system (A2A)
+│   ├── api/routers/       # tRPC API endpoints
 │   ├── services/          # Business logic services
-│   └── db/                # Database schema and queries
+│   │   ├── ai/            # AI & LLM services  
+│   │   ├── generation/    # Code generation services
+│   │   ├── data/          # Data management
+│   │   ├── mcp/           # MCP tools for scene generation
+│   │   └── brain/         # Core orchestration
+│   ├── db/                # Database schema and queries
+│   └── auth/              # Authentication
+├── lib/                   # Shared libraries
+│   ├── types/             # TypeScript type definitions
+│   │   ├── api/           # API and communication types
+│   │   ├── video/         # Video and timeline types
+│   │   ├── ai/            # AI-related types
+│   │   └── shared/        # Shared utility types
+│   ├── services/client/   # Client-side only services
+│   ├── evals/             # Evaluation framework (CRITICAL)
+│   └── utils/             # Utility functions
 ├── components/            # Reusable UI components
 ├── remotion/              # Video composition components
 ├── hooks/                 # React hooks
-├── stores/                # State management
-└── types/                 # TypeScript definitions
+└── stores/                # State management (Zustand)
 ```
 
 ## Key Features
 
-### 1. Agent-to-Agent (A2A) System
-Multi-agent AI workflow for video generation:
-- **CoordinatorAgent**: Orchestrates overall process
-- **ScenePlannerAgent**: Creates structured scene plans
-- **BuilderAgent**: Generates React/Remotion code
-- **ErrorFixerAgent**: Debugs and repairs components
-- **R2StorageAgent**: Handles asset storage
+### 1. MCP Scene Generation System
+Modern AI pipeline for video generation:
+- **Brain Orchestrator**: Coordinates scene planning and generation
+- **MCP Tools**: Structured AI tools for scene creation
+- **Generation Router**: Manages component building and storage
+- **Evaluation System**: Tests and validates AI pipeline (`/src/lib/evals/`)
 
 ### 2. Video Generation Pipeline
 ```
-User Prompt → Scene Planning → Animation Design Brief → 
-Component Generation → Building → Storage → Preview
+User Prompt → Scene Planning → Component Generation → 
+Building → Storage → Preview → Chat Updates
 ```
 
 ### 3. Real-time Collaboration
 - SSE streaming for live updates
 - JSON Patch system for efficient state sync
-- tRPC subscriptions over WebSockets
+- tRPC subscriptions for chat and progress
 
 ### 4. Dynamic Component System
 - Built-in scenes: Text, images, shapes, animations
-- AI-generated custom components
+- AI-generated custom components via MCP tools
 - ESM loading from R2 storage
 
 ## Development Workflow
 
-### Testing
+### Essential Commands
 ```bash
-npm test                    # Run Jest tests
-npm run test:e2e           # End-to-end tests
-npm run test:component     # Component pipeline tests
-```
+# Development
+npm run dev                 # Start dev server
+npm run build              # Production build
+npm run test               # Run Jest tests
+npm run lint               # Linting
+npm run typecheck         # Type checking
 
-### Database Operations
-```bash
-npm run db:generate        # Generate new migrations
+# Database
+npm run db:generate        # Generate migrations
 npm run db:migrate         # Apply migrations
-npm run db:studio          # Open Drizzle Studio
-npm run db:seed            # Seed development data
+npm run db:studio          # Database UI
 ```
-
-### Debugging
-```bash
-# Component pipeline debugging
-npm run debug:components
-
-# A2A agent system debugging
-npm run debug:a2a
-
-# Scene planner testing
-npm run test:scene-planner
-```
-
-## Project Structure Deep Dive
-
-### Frontend Pages
-- `/` - Landing page
-- `/projects` - Project list and management
-- `/projects/[id]/edit` - Video editor interface
-- `/dashboard` - User dashboard
-- `/test/*` - Development testing pages
-
-### API Routes
-- `/api/components/*` - Component CRUD operations
-- `/api/a2a` - Agent-to-agent communication
-- `/api/trpc/*` - tRPC API endpoints
-- `/api/test/*` - Development testing endpoints
-
-### Database Schema
-Key tables:
-- `projects` - Video projects with metadata
-- `scenes` - Individual video segments
-- `messages` - Chat history and AI conversations
-- `customComponentJobs` - AI component generation tracking
-- `animationDesignBriefs` - Structured animation specs
 
 ### Configuration Files
 - `next.config.js` - Next.js configuration
@@ -134,60 +146,17 @@ Key tables:
 - `drizzle.config.ts` - Database configuration
 - `tailwind.config.ts` - Styling configuration
 
-## Memory Bank System
+## Memory Bank System (ESSENTIAL)
 
-The `memory-bank/` directory contains comprehensive project documentation:
+The `memory-bank/` directory contains ALL project documentation:
+- **Progress**: `/memory-bank/progress.md` + sprint-specific files
+- **Sprints**: `/memory-bank/sprints/sprint34/` (current)
 - **Architecture**: System design and patterns
-- **Sprints**: Development progress and plans
 - **API docs**: Service documentation
 - **Testing**: Test strategies and results
 - **Fixes**: Technical solutions and debugging
 
-Current sprint: **Sprint 26** - ESM component loading improvements
-
-## Development Guidelines
-
-### Code Style
-- TypeScript strict mode enabled
-- ESLint + Prettier for formatting
-- Tailwind for styling (no CSS modules)
-- tRPC for type-safe APIs
-
-### Testing Strategy
-- Unit tests with Jest
-- Integration tests for API routes
-- E2E tests for critical user flows
-- Component pipeline validation
-
-### Error Handling
-- Structured error logging with Winston
-- A2A agent error recovery system
-- Database transaction rollback
-- User-friendly error messages
-
-## Key Scripts
-
-```bash
-# Development
-npm run dev                 # Start dev server
-npm run build              # Production build
-npm run start              # Production server
-
-# Database
-npm run db:generate        # Generate migrations
-npm run db:migrate         # Apply migrations
-npm run db:studio          # Database UI
-
-# Testing
-npm test                   # Unit tests
-npm run test:e2e          # E2E tests
-npm run lint              # Linting
-npm run typecheck         # Type checking
-
-# Utilities
-npm run analyze           # Bundle analysis
-npm run debug:*           # Various debugging tools
-```
+**ALWAYS check memory bank before starting any work.**
 
 ## Environment Variables
 
@@ -210,45 +179,52 @@ AUTH_SECRET=...
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-## Deployment
+## Current Development Context
 
-The application is designed for deployment on:
-- **Vercel** (recommended for Next.js)
-- **Cloudflare Pages** 
-- Any Node.js hosting platform
+### Sprint 34 Focus
+- State management improvements
+- Scene generation reliability
+- User analytics and management
+- Production readiness
 
-Key considerations:
-- PostgreSQL database (Neon recommended)
-- Cloudflare R2 for asset storage
-- Environment variables configuration
-- Build optimization for large bundles
+### Critical Systems
+- **Evaluation Framework**: `/src/lib/evals/` - DO NOT DELETE
+- **MCP Tools**: `/src/server/services/mcp/` - Core AI pipeline
+- **Chat Router**: Simplified to essential endpoints only
+- **Generation Services**: Organized under `/src/server/services/generation/`
+
+## Contributing Guidelines
+
+1. **Read memory-bank documentation first**
+2. **Update progress files during work**
+3. **Create analysis docs for complex tasks**
+4. **Follow single source of truth patterns**
+5. **Test thoroughly with evaluation framework**
+6. **Document decisions and findings**
 
 ## Troubleshooting
 
 ### Common Issues
-1. **Component Loading Errors**: Check R2 storage configuration
-2. **Database Connection**: Verify DATABASE_URL and migrations
-3. **AI Agent Timeouts**: Check OPENAI_API_KEY and rate limits
-4. **Build Failures**: Review TypeScript errors and dependencies
+1. **Component Loading**: Check R2 storage and MCP tools
+2. **Database**: Verify migrations and connection
+3. **AI Pipeline**: Check OpenAI key and evaluation results
+4. **Build**: Review TypeScript errors and organized imports
 
-### Debug Tools
-- `/test/component-pipeline` - Component generation testing
-- `/test/a2a-integration` - Agent system testing
-- `npm run debug:*` - Various debugging scripts
+### Debug Resources
+- Memory bank documentation
+- Sprint-specific analysis files
+- `/src/lib/evals/` testing framework
 - Browser DevTools for real-time updates
-
-## Contributing
-
-1. Create feature branch from `allnighter`
-2. Follow TypeScript and ESLint guidelines
-3. Add tests for new functionality
-4. Update memory-bank documentation
-5. Submit PR with detailed description
 
 ## Resources
 
+- **Memory Bank**: Primary source of truth for project knowledge
+- **Sprint Docs**: Current sprint folder for active work context  
 - [Next.js Documentation](https://nextjs.org/docs)
 - [Remotion Documentation](https://remotion.dev/docs)
 - [Drizzle ORM](https://orm.drizzle.team/)
 - [tRPC Documentation](https://trpc.io/docs)
-- Project memory bank: `memory-bank/` directory
+
+---
+
+**Remember: Documentation first, memory bank always, progress tracking continuous.**

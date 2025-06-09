@@ -7,7 +7,7 @@ import { projects, scenes } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
 import { analytics } from '~/lib/analytics';
-import type { InputProps } from '~/types/input-props';
+import type { InputProps } from '~/lib/types/video/input-props';
 
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;

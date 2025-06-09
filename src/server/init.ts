@@ -1,9 +1,5 @@
 // src/server/init.ts
-import { startBuildWorker } from './cron/buildWorker';
-import { startCodeGenWorker, stopCodeGenWorker } from './cron/codeGenWorker';
-import { TaskProcessor } from '~/server/services/a2a/taskProcessor.service';
-import { a2aLogger } from '~/lib/logger';
-import { dataLifecycleService } from '~/lib/services/dataLifecycle.service';
+import { dataLifecycleService } from '~/server/services/data/dataLifecycle.service';
 
 // Create a global object for truly persisting state across HMR cycles
 declare global {
@@ -46,28 +42,6 @@ export function initializeServer() {
   }
 
   console.log('🚀 Initializing server background processes...');
-
-  // Start component build worker
-  const buildWorkerStopper = startBuildWorker();
-  if (buildWorkerStopper) {
-    workerCleanupFunctions.push(buildWorkerStopper);
-  }
-
-  // Start component code generation worker
-  const codeGenWorkerStopper = startCodeGenWorker();
-  if (codeGenWorkerStopper) {
-    workerCleanupFunctions.push(codeGenWorkerStopper);
-  }
-  
-  // Start A2A task processor
-  const taskProcessor = TaskProcessor.getInstance();
-  if (taskProcessor) {
-    taskProcessor.startPolling();
-    workerCleanupFunctions.push(() => taskProcessor.shutdown());
-    a2aLogger.info("lifecycle", '🤖 Started A2A task processor service');
-  } else {
-    a2aLogger.warn('lifecycle', 'ℹ️ A2A task processor is not available or disabled');
-  }
 
   // Start Data Lifecycle Management
   try {

@@ -4,12 +4,12 @@ import crypto from 'crypto';
 import type { EvalSuite, EvalPrompt, EvalResult, ServiceType } from './types';
 import { getActiveModelPack, MODEL_PACKS, listAvailablePacks } from '../../config/models.config';
 import type { ModelPack } from '../../config/models.config';
-import { AIClientService } from '../services/aiClient.service';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
 import { brainOrchestrator } from '../../server/services/brain/orchestrator';
 import { db } from "~/server/db";
 import { scenes, projects, users } from "~/server/db/schema";
 import { BrainOrchestrator } from "~/server/services/brain/orchestrator";
-import { createSceneFromImageTool } from "~/lib/services/mcp-tools/createSceneFromImage";
+import { createSceneFromImageTool } from "~/server/services/mcp/tools/createSceneFromImage";
 import { eq } from "drizzle-orm";
 
 export interface EvalRunConfig {
