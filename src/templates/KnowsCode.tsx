@@ -19,8 +19,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '120px',
-          lineHeight: '120px',
+          fontSize: '200px',
+          lineHeight: '200px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -45,8 +45,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '80px',
-          lineHeight: '80px',
+          fontSize: '140px',
+          lineHeight: '140px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -55,9 +55,9 @@ export default function KnowsCode() {
         <span
           style={{
             opacity: cursorVisible ? 1 : 0,
-            borderRight: '3px solid black',
-            marginLeft: '2px',
-            height: '80px',
+            borderRight: '5px solid black',
+            marginLeft: '4px',
+            height: '140px',
             display: 'inline-block',
           }}
         />
@@ -74,7 +74,15 @@ export default function KnowsCode() {
         justifyContent: 'center',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          width: '80%',
+          justifyContent: 'center',
+        }}
+      >
         <GradientBrace isLeft={true} scale={braceScale} />
         <TypewriterText text="Software is eating the world" startFrame={TEXT_START} />
         <GradientBrace isLeft={false} scale={braceScale} />
@@ -110,8 +118,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '120px',
-          lineHeight: '120px',
+          fontSize: '200px',
+          lineHeight: '200px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -136,8 +144,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '80px',
-          lineHeight: '80px',
+          fontSize: '140px',
+          lineHeight: '140px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -146,9 +154,9 @@ export default function KnowsCode() {
         <span
           style={{
             opacity: cursorVisible ? 1 : 0,
-            borderRight: '3px solid black',
-            marginLeft: '2px',
-            height: '80px',
+            borderRight: '5px solid black',
+            marginLeft: '4px',
+            height: '140px',
             display: 'inline-block',
           }}
         />
@@ -165,7 +173,15 @@ export default function KnowsCode() {
         justifyContent: 'center',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          width: '80%',
+          justifyContent: 'center',
+        }}
+      >
         <GradientBrace isLeft={true} scale={braceScale} />
         <TypewriterText text="Software is eating the world" startFrame={TEXT_START} />
         <GradientBrace isLeft={false} scale={braceScale} />

@@ -113,24 +113,128 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
   const anim = (delay: number) => spring({ frame: frame - delay, fps: 30, config: { damping: 12, stiffness: 200 } });
 
   return (
-    <div style={{ flex: 1, background: "linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%)", borderRadius: 16, opacity, position: "relative", overflow: "hidden", padding: 24, color: "white", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 56, marginBottom: 16, opacity: anim(0), textAlign: "center", fontWeight: 700 }}>AI Financial Insights</h1>
-      <p style={{ fontSize: 22, marginBottom: 32, color: "#AAA", opacity: anim(15), textAlign: "center" }}>Make smarter investments with predictive analytics.</p>
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <button style={{ background: "#3F64F3", color: "white", border: "none", borderRadius: 12, padding: "16px 36px", fontSize: 20, fontWeight: "bold", cursor: "pointer", opacity: anim(30) }}>Let's Go 🚀</button>
-      </div>
-      <div style={{ marginTop: 48, borderRadius: 12, padding: 20, background: "rgba(255,255,255,0.05)", opacity: anim(45) }}>
-        <h3>Portfolio Performance</h3>
-        <StockGraph />
-      </div>
-      <div style={{ display: "flex", gap: 24, marginTop: 24 }}>
-        <div style={{ flex: 1, background: "rgba(255,255,255,0.05)", padding: 16, borderRadius: 12, opacity: anim(60) }}>
-          <h4>Total Assets</h4>
-          <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
+    <div style={{ 
+      flex: 1, 
+      background: "linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%)", 
+      borderRadius: 16, 
+      opacity, 
+      position: "relative", 
+      overflow: "hidden", 
+      padding: 40,
+      color: "white", 
+      fontFamily: "sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      justifyContent: "space-between"
+    }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <h1 style={{ 
+          fontSize: 64,
+          marginBottom: 20,
+          opacity: anim(0), 
+          textAlign: "center", 
+          fontWeight: 700,
+          lineHeight: 1.1
+        }}>
+          AI Financial Insights
+        </h1>
+        <p style={{ 
+          fontSize: 26,
+          marginBottom: 32, 
+          color: "#AAA", 
+          opacity: anim(15), 
+          textAlign: "center",
+          lineHeight: 1.4
+        }}>
+          Make smarter investments with predictive analytics.
+        </p>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button style={{ 
+            background: "#3F64F3", 
+            color: "white", 
+            border: "none", 
+            borderRadius: 12, 
+            padding: "20px 48px",
+            fontSize: 22,
+            fontWeight: "bold", 
+            cursor: "pointer", 
+            opacity: anim(30),
+            boxShadow: "0 4px 20px rgba(63, 100, 243, 0.3)"
+          }}>
+            Let's Go 🚀
+          </button>
         </div>
-        <div style={{ flex: 1, background: "rgba(255,255,255,0.05)", padding: 16, borderRadius: 12, opacity: anim(75) }}>
-          <h4>AI ROI</h4>
-          <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
+      </div>
+
+      <div style={{ 
+        flex: 1, 
+        display: "flex", 
+        flexDirection: "column", 
+        marginBottom: 32 
+      }}>
+        <div style={{ 
+          borderRadius: 12, 
+          padding: 24,
+          background: "rgba(255,255,255,0.05)", 
+          opacity: anim(45),
+          flex: 1,
+          display: "flex",
+          flexDirection: "column"
+        }}>
+          <h3 style={{ 
+            fontSize: 24,
+            marginBottom: 20,
+            fontWeight: 600 
+          }}>
+            Portfolio Performance
+          </h3>
+          <div style={{ flex: 1 }}>
+            <StockGraph />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
+        <div style={{ 
+          flex: 1, 
+          background: "rgba(255,255,255,0.05)", 
+          padding: 24,
+          borderRadius: 12, 
+          opacity: anim(60),
+          textAlign: "center"
+        }}>
+          <h4 style={{ 
+            fontSize: 18, 
+            marginBottom: 12, 
+            color: "#AAA",
+            fontWeight: 500
+          }}>
+            Total Assets
+          </h4>
+          <div style={{ fontSize: 28, fontWeight: "bold" }}>
+            <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
+          </div>
+        </div>
+        <div style={{ 
+          flex: 1, 
+          background: "rgba(255,255,255,0.05)", 
+          padding: 24,
+          borderRadius: 12, 
+          opacity: anim(75),
+          textAlign: "center"
+        }}>
+          <h4 style={{ 
+            fontSize: 18, 
+            marginBottom: 12, 
+            color: "#AAA",
+            fontWeight: 500
+          }}>
+            AI ROI
+          </h4>
+          <div style={{ fontSize: 28, fontWeight: "bold" }}>
+            <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
+          </div>
         </div>
       </div>
     </div>
@@ -249,6 +353,169 @@ return (
 );
 };
 
+const AnimatedValue = ({ start, end, prefix = "", suffix = "", delay = 0 }) => {
+const frame = useCurrentFrame();
+const value = Math.floor(interpolate(frame - delay, [0, 60], [start, end], { extrapolateRight: "clamp" }));
+return <span style={{ fontWeight: "bold", fontFamily: "sans-serif", color: "#00FF9D" }}>{prefix}{value.toLocaleString()}{suffix}</span>;
+};
+
+const StockGraph = () => {
+const frame = useCurrentFrame();
+const points = Array.from({ length: 100 }, (_, i) => ({ x: i * 10, y: Math.sin(i / 10) * 30 + Math.sin(i / 5 + frame / 30) * 10 + 100 }));
+const pathD = points.reduce((acc, p, i) => {
+  if (i === 0) return \`M \${p.x} \${p.y}\`;
+  const prevPoint = points[i - 1];
+  if (!prevPoint) return acc;
+  return \`\${acc} C \${prevPoint.x + (p.x - prevPoint.x) / 3} \${prevPoint.y}, \${p.x - (p.x - prevPoint.x) / 3} \${p.y}, \${p.x} \${p.y}\`;
+}, "");
+
+return (
+  <svg width="100%" height="100%" viewBox="0 0 1000 200">
+    <defs>
+      <linearGradient id="graphGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stopColor="#3F64F3" stopOpacity="0.2" />
+        <stop offset="100%" stopColor="#3F64F3" stopOpacity="0" />
+      </linearGradient>
+    </defs>
+    <path d={\`\${pathD} L \${points[points.length - 1]?.x ?? 0} 200 L \${points[0]?.x ?? 0} 200 Z\`} fill="url(#graphGradient)" />
+    <path d={pathD} stroke="#3F64F3" strokeWidth="2" fill="none" />
+  </svg>
+);
+};
+
+const PreviewPanel = ({ opacity }) => {
+const frame = useCurrentFrame();
+const anim = (delay) => spring({ frame: frame - delay, fps: 30, config: { damping: 12, stiffness: 200 } });
+
+return (
+  <div style={{ 
+    flex: 1, 
+    background: "linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%)", 
+    borderRadius: 16, 
+    opacity, 
+    position: "relative", 
+    overflow: "hidden", 
+    padding: 40,
+    color: "white", 
+    fontFamily: "sans-serif",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    justifyContent: "space-between"
+  }}>
+    <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <h1 style={{ 
+        fontSize: 64,
+        marginBottom: 20,
+        opacity: anim(0), 
+        textAlign: "center", 
+        fontWeight: 700,
+        lineHeight: 1.1
+      }}>
+        AI Financial Insights
+      </h1>
+      <p style={{ 
+        fontSize: 26,
+        marginBottom: 32, 
+        color: "#AAA", 
+        opacity: anim(15), 
+        textAlign: "center",
+        lineHeight: 1.4
+      }}>
+        Make smarter investments with predictive analytics.
+      </p>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <button style={{ 
+          background: "#3F64F3", 
+          color: "white", 
+          border: "none", 
+          borderRadius: 12, 
+          padding: "20px 48px",
+          fontSize: 22,
+          fontWeight: "bold", 
+          cursor: "pointer", 
+          opacity: anim(30),
+          boxShadow: "0 4px 20px rgba(63, 100, 243, 0.3)"
+        }}>
+          Let's Go 🚀
+        </button>
+      </div>
+    </div>
+
+    <div style={{ 
+      flex: 1, 
+      display: "flex", 
+      flexDirection: "column", 
+      marginBottom: 32 
+    }}>
+      <div style={{ 
+        borderRadius: 12, 
+        padding: 24,
+        background: "rgba(255,255,255,0.05)", 
+        opacity: anim(45),
+        flex: 1,
+        display: "flex",
+        flexDirection: "column"
+      }}>
+        <h3 style={{ 
+          fontSize: 24,
+          marginBottom: 20,
+          fontWeight: 600 
+        }}>
+          Portfolio Performance
+        </h3>
+        <div style={{ flex: 1 }}>
+          <StockGraph />
+        </div>
+      </div>
+    </div>
+
+    <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
+      <div style={{ 
+        flex: 1, 
+        background: "rgba(255,255,255,0.05)", 
+        padding: 24,
+        borderRadius: 12, 
+        opacity: anim(60),
+        textAlign: "center"
+      }}>
+        <h4 style={{ 
+          fontSize: 18, 
+          marginBottom: 12, 
+          color: "#AAA",
+          fontWeight: 500
+        }}>
+          Total Assets
+        </h4>
+        <div style={{ fontSize: 28, fontWeight: "bold" }}>
+          <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
+        </div>
+      </div>
+      <div style={{ 
+        flex: 1, 
+        background: "rgba(255,255,255,0.05)", 
+        padding: 24,
+        borderRadius: 12, 
+        opacity: anim(75),
+        textAlign: "center"
+      }}>
+        <h4 style={{ 
+          fontSize: 18, 
+          marginBottom: 12, 
+          color: "#AAA",
+          fontWeight: 500
+        }}>
+          AI ROI
+        </h4>
+        <div style={{ fontSize: 28, fontWeight: "bold" }}>
+          <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+};
+
 export default function FintechUI() {
 const frame = useCurrentFrame();
 const progress = spring({ frame, fps: 30, config: { damping: 20, stiffness: 80 } });
@@ -270,13 +537,7 @@ return (
         <InputBar opacity={progress} />
       </div>
       <div style={{ width: "70%" }}>
-        <div style={{ flex: 1, background: "linear-gradient(135deg, #1E1E2E 0%, #2D2D44 100%)", borderRadius: 16, opacity: progress, position: "relative", overflow: "hidden", padding: 24, color: "white", fontFamily: "sans-serif" }}>
-          <h1 style={{ fontSize: 56, marginBottom: 16, textAlign: "center", fontWeight: 700 }}>AI Financial Insights</h1>
-          <p style={{ fontSize: 22, marginBottom: 32, color: "#AAA", textAlign: "center" }}>Make smarter investments with predictive analytics.</p>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <button style={{ background: "#3F64F3", color: "white", border: "none", borderRadius: 12, padding: "16px 36px", fontSize: 20, fontWeight: "bold", cursor: "pointer" }}>Let's Go 🚀</button>
-          </div>
-        </div>
+        <PreviewPanel opacity={progress} />
       </div>
     </div>
   </AbsoluteFill>
