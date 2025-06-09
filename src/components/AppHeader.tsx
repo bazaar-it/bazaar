@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -14,7 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { ShareDialog } from "~/components/ShareDialog";
+import { api } from "~/trpc/react";
+import { toast } from "sonner";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -66,7 +67,36 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
-  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+
+  // Create share mutation
+  const createShare = api.share.createShare.useMutation({
+    onSuccess: async (data) => {
+      // Auto-copy to clipboard
+      try {
+        await navigator.clipboard.writeText(data.shareUrl);
+        toast.success("Share link copied to clipboard!");
+      } catch (error) {
+        toast.error("Failed to copy link, but share was created");
+        console.error("Failed to copy to clipboard:", error);
+      }
+      setIsSharing(false);
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to create share link");
+      setIsSharing(false);
+    },
+  });
+
+  const handleShare = () => {
+    if (!projectId) return;
+    
+    setIsSharing(true);
+    createShare.mutate({
+      projectId,
+      title: projectTitle,
+    });
+  };
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
@@ -143,22 +173,21 @@ export default function AppHeader({
         ) : null}
       </div>
 
-      {/* Right: User info & Export button only */}
+      {/* Right: Share button and User info */}
       <div className="flex items-center gap-4 min-w-[180px] justify-end">
-        {/* Share button */}
-        {/*
+        {/* Share button - simplified auto-copy functionality */}
         {projectId && (
           <Button
             variant="outline"
             size="sm"
             className="gap-2 rounded-[15px] shadow-sm border-blue-200 text-blue-600 hover:bg-blue-50"
-            onClick={() => setShowShareDialog(true)}
+            onClick={handleShare}
+            disabled={isSharing}
           >
-            <ShareIcon className="h-4 w-4" />
-            Share
+            {isSharing ? <Copy className="h-4 w-4 animate-pulse" /> : <ShareIcon className="h-4 w-4" />}
+            {isSharing ? "Copied!" : "Share"}
           </Button>
         )}
-        */}
         
         {/* Export button temporarily disabled until export feature is ready */}
         {/*
@@ -201,18 +230,6 @@ export default function AppHeader({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        
-        {/* Share Dialog */}
-        {/*
-        {projectId && (
-          <ShareDialog
-            projectId={projectId}
-            projectTitle={projectTitle}
-            open={showShareDialog}
-            onOpenChange={setShowShareDialog}
-          />
-        )}
-        */}
       </div>
     </header>
   );

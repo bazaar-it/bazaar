@@ -142,17 +142,19 @@ export const shareRouter = createTRPCRouter({
         
       const allProjectScenes = sharedVideo.project.scenes;
       let currentStart = 0;
+      
+      // Map scenes to format compatible with DynamicVideo composition
       const formattedScenes = allProjectScenes.map((dbScene, index) => {
         const sceneDuration = dbScene.duration || 180; // Default if null
         const sceneToAdd = {
           id: dbScene.id,
-          type: 'custom' as const, // Assuming all are custom
+          type: 'custom' as const, // All database scenes are treated as custom TSX components
           start: currentStart,
           duration: sceneDuration,
           data: {
-            code: dbScene.tsxCode,
+            code: dbScene.tsxCode, // Include the TSX code directly
             name: dbScene.name || `Scene ${(dbScene.order ?? index) + 1}`,
-            componentId: dbScene.id, // For Remotion, often same as sceneId
+            componentId: dbScene.id, // Use scene ID as component ID
             props: dbScene.props || {},
           },
         };
