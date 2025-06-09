@@ -1,54 +1,75 @@
 //src/app/share/[shareId]/SharePageClient.tsx
 "use client";
 
-import { Share2 } from "lucide-react";
 import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Copy, Share2, Check } from "lucide-react";
 
-interface SharePageClientProps {
+interface ShareButtonsProps {
   shareUrl: string;
-  video: {
-    title?: string | null;
-    description?: string | null;
-  };
+  shareTitle: string;
+  shareDescription?: string;
 }
 
-export default function SharePageClient({ shareUrl, video }: SharePageClientProps) {
-  const [justCopied, setJustCopied] = useState(false);
+export default function ShareButtons({ shareUrl, shareTitle, shareDescription }: ShareButtonsProps) {
+  const [isCopied, setIsCopied] = useState(false);
 
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: video.title || "Amazing video",
-          text: video.description || "Check out this awesome video!",
-          url: shareUrl,
-        });
-      } catch (error) {
-        // User cancelled share or share failed, fallback to copy
-        await copyToClipboard();
-      }
-    } else {
-      await copyToClipboard();
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
     }
   };
 
-  const copyToClipboard = async () => {
+  const handleShare = async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setJustCopied(true);
-      setTimeout(() => setJustCopied(false), 2000);
+      if (navigator.share) {
+        await navigator.share({
+          title: shareTitle,
+          text: shareDescription || "Check out this video!",
+          url: shareUrl,
+        });
+      } else {
+        // Fallback to copy
+        await handleCopy();
+      }
     } catch (error) {
-      console.error("Failed to copy to clipboard:", error);
+      console.error('Failed to share:', error);
     }
   };
 
   return (
-    <button
-      onClick={handleShare}
-      className="flex items-center gap-2 px-4 py-2 text-white/80 hover:text-white transition-colors"
-    >
-      <Share2 size={16} />
-      {justCopied ? "Copied!" : "Share"}
-    </button>
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleCopy}
+        className="gap-2"
+      >
+        {isCopied ? (
+          <>
+            <Check className="h-4 w-4 text-green-600" />
+            Copied!
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4" />
+            Copy Link
+          </>
+        )}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleShare}
+        className="gap-2"
+      >
+        <Share2 className="h-4 w-4" />
+        Share
+      </Button>
+    </div>
   );
 }
