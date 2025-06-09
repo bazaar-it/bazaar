@@ -18,6 +18,37 @@ export default function HomePage() {
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
   const router = useRouter();
   const createProject = api.project.create.useMutation();
+
+  // Auto-redirect logged-in users to workspace
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      console.log("User is already logged in, redirecting to workspace...");
+      router.push("/projects/new");
+    }
+  }, [status, session, router]);
+
+  // Don't render the marketing page if user is authenticated
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "authenticated" && session?.user) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to workspace...</p>
+        </div>
+      </div>
+    );
+  }
   
   // Email subscription mutation
   const subscribeEmail = api.emailSubscriber.subscribe.useMutation({
