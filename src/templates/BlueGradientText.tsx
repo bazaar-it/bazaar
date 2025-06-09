@@ -9,7 +9,7 @@ export default function BlueGradientText() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const loopDuration = fps * 8;
+  const loopDuration = fps * 2;
   const hueShift = (frame % loopDuration) * (360 / loopDuration) * 1.5;
 
   return (
@@ -21,7 +21,7 @@ export default function BlueGradientText() {
         display: "flex"
       }}
     >
-      <svg width="1000" height="150" viewBox="0 0 1000 150">
+      <svg width="1400" height="200" viewBox="0 0 1400 200">
         <defs>
           <linearGradient
             id="blue-gradient"
@@ -41,34 +41,34 @@ export default function BlueGradientText() {
         </defs>
 
         <text
-          x="100"
-          y="100"
+          x="120"
+          y="125"
           fill="#000"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           Create
         </text>
 
         <text
-          x="370"
-          y="100"
+          x="480"
+          y="125"
           fill="url(#blue-gradient)"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           without
         </text>
 
         <text
-          x="655"
-          y="100"
+          x="880"
+          y="125"
           fill="#000"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           Limits
         </text>
@@ -81,52 +81,82 @@ export default function BlueGradientText() {
 export const templateConfig = {
   id: 'blue-gradient-text',
   name: 'Blue Gradient Text',
-  duration: 180, // 6 seconds
+  duration: 60,
   previewFrame: 30,
   getCode: () => `const {
 AbsoluteFill,
 useCurrentFrame,
-interpolate,
+useVideoConfig,
 } = window.Remotion;
 
 export default function BlueGradientText() {
 const frame = useCurrentFrame();
+const { fps } = useVideoConfig();
 
-const textOpacity = interpolate(frame, [0, 30], [0, 1], {
-  extrapolateLeft: "clamp",
-  extrapolateRight: "clamp",
-});
-
-const shimmer = interpolate(frame, [0, 120], [0, 100], {
-  extrapolateRight: "wrap",
-});
+const loopDuration = fps * 2;
+const hueShift = (frame % loopDuration) * (360 / loopDuration) * 1.5;
 
 return (
   <AbsoluteFill
     style={{
-      backgroundColor: "#0f0f23",
-      display: "flex",
-      alignItems: "center",
+      backgroundColor: "#ffffff",
       justifyContent: "center",
+      alignItems: "center",
+      display: "flex"
     }}
   >
-    <div
-      style={{
-        fontSize: "64px",
-        fontWeight: "900",
-        background: \`linear-gradient(90deg, #00d4ff, #ff00d4, #00d4ff)\`,
-        backgroundSize: "200% 100%",
-        backgroundPosition: \`\${shimmer}% 0\`,
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-        backgroundClip: "text",
-        opacity: textOpacity,
-        letterSpacing: "2px",
-        textShadow: "0 0 30px rgba(0, 212, 255, 0.5)",
-      }}
-    >
-      FUTURE TECH
-    </div>
+    <svg width="1400" height="200" viewBox="0 0 1400 200">
+      <defs>
+        <linearGradient
+          id="blue-gradient"
+          x1="0%"
+          y1="0%"
+          x2="100%"
+          y2="0%"
+          gradientTransform={\`rotate(\${360 - hueShift}, 0.5, 0.5)\`}
+        >
+          <stop offset="0%" stopColor="hsl(200, 100%, 60%)" />
+          <stop offset="20%" stopColor="hsl(210, 100%, 60%)" />
+          <stop offset="40%" stopColor="hsl(220, 100%, 60%)" />
+          <stop offset="60%" stopColor="hsl(230, 100%, 60%)" />
+          <stop offset="80%" stopColor="hsl(240, 100%, 60%)" />
+          <stop offset="100%" stopColor="hsl(200, 100%, 60%)" />
+        </linearGradient>
+      </defs>
+
+      <text
+        x="120"
+        y="125"
+        fill="#000"
+        fontFamily="Inter, sans-serif"
+        fontWeight="700"
+        fontSize="96"
+      >
+        Create
+      </text>
+
+      <text
+        x="480"
+        y="125"
+        fill="url(#blue-gradient)"
+        fontFamily="Inter, sans-serif"
+        fontWeight="700"
+        fontSize="96"
+      >
+        without
+      </text>
+
+      <text
+        x="880"
+        y="125"
+        fill="#000"
+        fontFamily="Inter, sans-serif"
+        fontWeight="700"
+        fontSize="96"
+      >
+        Limits
+      </text>
+    </svg>
   </AbsoluteFill>
 );
 }`

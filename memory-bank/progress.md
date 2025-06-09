@@ -529,72 +529,92 @@ The core video generation pipeline is **production-ready** with:
 
 ## 🚀 Current Status: Sprint 34 - TEMPLATE REFINEMENT & ENHANCEMENT
 
-### ✅ **COMPLETED: Comprehensive Template Enhancement** (2025-01-27)
+### ✅ **COMPLETED: CRITICAL TEMPLATE PREVIEW/VIDEO MISMATCH FIX** (2025-01-27)
 
-**FEATURE**: Major template refinements for improved visual impact and space utilization
+**MAJOR BUG RESOLVED**: Template preview thumbnails showing different content than actual generated videos
 
-#### **✅ Knows Code Template - 80% Width Enhancement (JUST COMPLETED)**
-- **Problem**: Template elements were too small and didn't utilize available screen space effectively
-- **Solution**: Increased all element sizes proportionally to fill 80% of display width
+#### **🔍 Root Cause Analysis - JUST COMPLETED**
+- **Problem**: Users reported seeing one animation in template thumbnails but completely different content in actual videos
+- **Discovery**: Major inconsistency between React components (used for previews) and `getCode()` functions (used for video generation)
+- **Impact**: This was causing user confusion and broken trust in the template system
+
+#### **🔧 Specific Issues Fixed**
+1. **BlueGradientText Template - CRITICAL MISMATCH**:
+   - **Preview**: White background, SVG "Create without Limits" with blue gradient
+   - **Video**: Dark background, HTML div "FUTURE TECH" with cyan/magenta shimmer
+   - **Fix**: Updated getCode() to match React component exactly
+
+2. **BubbleZoom/AI Coding Template - CRITICAL MISMATCH**:
+   - **Preview**: Black background, React code with syntax highlighting 
+   - **Video**: Blue gradient background, animated bubbles with "BUBBLE UNIVERSE"
+   - **Fix**: Updated getCode() to match React component with AI coding theme
+
+#### **✅ Solution Implemented**
+- **Template Audit**: Systematically checked React components vs getCode() functions
+- **Code Synchronization**: Updated getCode() functions to perfectly match their React counterparts
+- **Consistency Verification**: Ensured both preview and video generation use identical logic
+- **User Trust Restored**: What you see in thumbnail is now exactly what renders in video
+
+#### **📊 Impact Assessment**
+- **Templates Affected**: 2 critical templates fixed (BlueGradientText, BubbleZoom)  
+- **User Experience**: Eliminated confusion between preview and actual output
+- **System Reliability**: Restored trust in template preview system
+- **Quality Assurance**: Established process to verify template consistency going forward
+
+### ✅ **COMPLETED: Template Refinement Round 2 - User Feedback Implementation** (2025-01-27)
+
+**FEATURE**: Critical template improvements based on user testing and visual feedback
+
+#### **✅ Knows Code Template - Single Line Optimization (JUST COMPLETED)**
+- **Problem**: Full sentence "Software is eating the world" didn't fit on single line at current font sizes
+- **Solution**: Reduced font sizes for optimal single-line display within 80% width constraint
 - **Changes Made**:
-  - **Font Size Increases**: Braces from 120px → 200px, Text from 80px → 140px
-  - **Cursor Enhancement**: Border thickness from 3px → 5px, height from 80px → 140px
-  - **Layout Constraint**: Added 80% width container with centered justification
-  - **Spacing Improvements**: Increased gap between elements from 4px → 8px
-- **Result**: Template now has commanding presence that fills screen width appropriately
+  - **Brace Font Size**: 200px → 140px (30% reduction)
+  - **Text Font Size**: 140px → 100px (29% reduction)
+  - **Cursor Adjustment**: Border from 5px → 4px, height 140px → 100px
+  - **Proportional Scaling**: All elements maintain visual balance
+- **Result**: Complete sentence now displays beautifully on single line with proper spacing
 
-#### **✅ FinTech UI Template - Full Height Layout Fix (JUST COMPLETED)**
-- **Problem**: Right side of screen not utilizing full height, cramped layout
-- **Solution**: Complete restructure for full height utilization with better content organization
+#### **✅ Growth Graph Template - Professional Layout Enhancement (JUST COMPLETED)**
+- **Problem**: Graph animation caused bottom shifting, inconsistent font usage, poor spacing
+- **Solution**: Complete layout restructure with Inter font and fixed positioning
 - **Changes Made**:
-  - **Full Height Structure**: Added flex column with space-between for optimal distribution
-  - **Enhanced Header**: Title increased from 56px → 64px, subtitle from 22px → 26px
-  - **Improved CTA Button**: Padding increased to 20px×48px, font size 20px → 22px, added shadow
-  - **Portfolio Section**: Now uses flex: 1 for dynamic height expansion
-  - **Better Metrics**: Increased padding, font sizes, and spacing throughout
-  - **Professional Layout**: Center-aligned text, improved line heights, and visual hierarchy
-- **Technical Implementation**: Updated both component and getCode function with complete layout
-- **Result**: Right panel now properly utilizes full height with better visual balance
+  - **Font Standardization**: Changed from Arial to Inter sans-serif throughout
+  - **Fixed Layout Structure**: 20vh header + 50vh graph + 16vh bottom (90vh total)
+  - **Animation Stability**: Added `transformOrigin: "bottom center"` to prevent bottom shifting
+  - **Consistent Spacing**: Balanced padding (6vh top, 4vh bottom) and margins
+  - **Improved Bar Height**: Reduced max from 400px → 350px for better viewport fit
+- **Technical Implementation**: Three-section flex layout with fixed heights
+- **Result**: Professional chart with stable animation and consistent Inter typography
 
-#### **✅ Floating Elements Template - Complete Removal (JUST COMPLETED)**
-- **Action**: Removed template entirely as requested
+#### **✅ FinTech UI Template - Viewport Optimization & Jitter Fix (JUST COMPLETED)**
+- **Problem**: Total Assets/AI ROI numbers cut off, typewriter effect jittering vertically
+- **Solution**: Comprehensive layout optimization and typewriter stabilization
 - **Changes Made**:
-  - **File Deletion**: Removed `src/templates/FloatingElements.tsx` completely
-  - **Registry Cleanup**: Removed import and template registration from registry.ts
-  - **Clean Dependencies**: No orphaned imports or references remaining
-- **Result**: Template registry now has focused, high-quality templates only
-
-#### **✅ Growth Graph Template - 80% Height Enhancement (JUST COMPLETED)**
-- **Problem**: Chart elements were too small and didn't use available screen height
-- **Solution**: Proportional scaling to use 80% of screen height with prominent heading
-- **Changes Made**:
-  - **Container Structure**: Added 80vh height container with 10vh padding (80% usage)
-  - **Prominent Heading**: Font size increased from 48px → 84px with better line height
-  - **Larger Chart Elements**: 
-    - Bar width from 60px → 80px
-    - Chart height from 300px → 450px
-    - Bar heights scaled from 250px → 400px max
-  - **Enhanced Typography**: Value labels from 18px → 28px, quarter labels from 16px → 24px
-  - **Better Spacing**: Gaps increased from 20px → 32px, margins from 40px → 60px
-  - **Improved Effects**: Glow radius increased from 20px → 30px, border radius enhanced
-- **Result**: Chart now commands full screen presence with professional proportions
+  - **Viewport Fit**: Reduced padding from 40px → 24px, font sizes optimized throughout
+  - **Header Optimization**: Title 64px → 56px, subtitle 26px → 22px, button padding reduced
+  - **Portfolio Section**: Padding 24px → 20px, title 24px → 20px for better fit
+  - **Metrics Cards**: Padding 24px → 16px, titles 18px → 16px, values 28px → 24px
+  - **Typewriter Jitter Fix**: Changed input alignment from flex-start to center, added flex display
+  - **Cursor Stabilization**: Added alignSelf: "center" to prevent vertical movement
+  - **Input Bar Optimization**: Height 120px → 100px, border radius 24px → 20px
+- **Technical Fix**: Proper flex alignment prevents typewriter cursor from causing vertical jumps
+- **Result**: All content fits perfectly within viewport, smooth typewriter animation
 
 #### **✅ Technical Quality Assurance**
-- **Code Consistency**: All templates maintain proper TypeScript types and React patterns
-- **Performance**: Efficient animations and rendering optimizations preserved
-- **Registry Sync**: Both component exports and getCode functions updated consistently
-- **Error Prevention**: All changes tested for compilation and runtime stability
+- **Cross-Template Consistency**: All templates now use proper font constraints for Remotion
+- **Performance Optimized**: Reduced element sizes improve rendering performance
+- **Animation Stability**: Fixed positioning and transforms prevent unwanted movement
+- **Responsive Design**: All templates work within their designated viewport constraints
 
 **Files Modified**:
-- `src/templates/KnowsCode.tsx` - 80% width enhancement
-- `src/templates/FintechUI.tsx` - Full height layout restructure  
-- `src/templates/FloatingElements.tsx` - DELETED
-- `src/templates/GrowthGraph.tsx` - 80% height scaling
-- `src/templates/registry.ts` - Registry cleanup and updates
+- `src/templates/KnowsCode.tsx` - Font size optimization for single-line fit
+- `src/templates/GrowthGraph.tsx` - Inter font adoption and fixed positioning layout
+- `src/templates/FintechUI.tsx` - Viewport optimization and typewriter jitter elimination
 
-**Result**: Template system now provides much more impactful visual presentations with better space utilization, cleaner registry, and enhanced user experience. All templates scale appropriately to their designated screen percentages.
+**Result**: All three templates now provide professional, stable, and viewport-appropriate presentations with smooth animations and consistent typography.
 
-### ✅ **COMPLETED: Critical Database Connection Fix** (2025-01-27)
+### ✅ **COMPLETED: Comprehensive Template Enhancement** (2025-01-27)
 
 # Bazaar-Vid Progress Log
 
@@ -719,3 +739,35 @@ The core video generation pipeline is **production-ready** with:
 - ✅ Updated TypeScript interfaces and UI components
 
 **BUSINESS IMPACT**: Admin dashboard now shows only meaningful, accurate metrics for production use.
+
+## 2025-01-31 - Template System Fixes & Improvements
+
+### BubbleZoom → Coding Template Rename
+- **Renamed**: `BubbleZoom.tsx` → `Coding.tsx` with proper ID/name consistency
+- **Updated**: Template config to have `id: 'ai-coding'` and `name: 'AI Coding'`
+- **Fixed**: Registry import and removed name override for cleaner code
+- **Result**: Template now has consistent naming throughout the system
+
+### Template Click Handling Fix
+- **Issue**: AI Coding template in templates panel had faulty click handling - only black background areas were clickable
+- **Root Cause**: Remotion Player components were capturing click events and preventing bubbling to parent
+- **Solution**: Added `pointerEvents: 'none'` to Player components in `TemplateThumbnail` and `TemplateVideoPlayer`
+- **Result**: Entire template card is now clickable, improving UX
+
+### Growth Graph Template Spacing Improvements
+- **Fixed**: X-axis labels now stay static during animation (separated from scaling container)
+- **Improved**: Increased spacing between X-axis labels and bottom text (bottom: -50px → -80px)
+- **Structure**: Created separate containers for scaling elements vs static elements
+- **Consistency**: Updated both React component and getCode() function
+
+### Technical State
+- **Branch**: Jack-templates-9/6
+- **Server**: Running on localhost:3001
+- **Templates**: 10 active templates in registry
+- **Status**: All template preview/video consistency issues resolved
+
+### Files Modified
+- `src/templates/Coding.tsx` (renamed from BubbleZoom.tsx)
+- `src/templates/registry.ts`
+- `src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx`
+- `src/templates/GrowthGraph.tsx`

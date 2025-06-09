@@ -44,7 +44,6 @@ const InputBar = ({ opacity }: { opacity: number }) => {
   const frame = useCurrentFrame();
   const text = "These Bazaar animations are pretty sick, right?!";
   const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
   return (
     <div
@@ -53,12 +52,13 @@ const InputBar = ({ opacity }: { opacity: number }) => {
         background: "white",
         borderRadius: 20,
         display: "flex",
-        alignItems: "center",
+        flexDirection: "column",
         padding: 16,
         opacity,
         transform: `translateY(${interpolate(opacity, [0, 1], [20, 0])}px)`,
         boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
         border: "1px solid #E5E5E5",
+        position: "relative",
       }}
     >
       <div
@@ -69,21 +69,34 @@ const InputBar = ({ opacity }: { opacity: number }) => {
           fontSize: 16,
           lineHeight: 1.5,
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
+          paddingTop: 4,
         }}
       >
         <span>{text.slice(0, charCount)}</span>
-        {cursorVisible && (
-          <span 
-            style={{ 
-              borderRight: "2px solid #007AFF", 
-              marginLeft: 2, 
-              height: 20, 
-              display: "inline-block",
-              alignSelf: "center"
-            }} 
-          />
-        )}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginTop: 8,
+        }}
+      >
+        <button
+          style={{
+            background: "#000000",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            padding: "8px 16px",
+            fontSize: 14,
+            fontWeight: "600",
+            cursor: "pointer",
+            fontFamily: "sans-serif",
+          }}
+        >
+          Send
+        </button>
       </div>
     </div>
   );
@@ -330,7 +343,6 @@ const InputBar = ({ opacity }) => {
 const frame = useCurrentFrame();
 const text = "These Bazaar animations are pretty sick, right?!";
 const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
 return (
   <div
@@ -339,12 +351,13 @@ return (
       background: "white",
       borderRadius: 20,
       display: "flex",
-      alignItems: "center",
+      flexDirection: "column",
       padding: 16,
       opacity,
       transform: \`translateY(\${interpolate(opacity, [0, 1], [20, 0])}px)\`,
       boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
       border: "1px solid #E5E5E5",
+      position: "relative",
     }}
   >
     <div
@@ -355,21 +368,34 @@ return (
         fontSize: 16,
         lineHeight: 1.5,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
+        paddingTop: 4,
       }}
     >
       <span>{text.slice(0, charCount)}</span>
-      {cursorVisible && (
-        <span 
-          style={{ 
-            borderRight: "2px solid #007AFF", 
-            marginLeft: 2, 
-            height: 20, 
-            display: "inline-block",
-            alignSelf: "center"
-          }} 
-        />
-      )}
+    </div>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        marginTop: 8,
+      }}
+    >
+      <button
+        style={{
+          background: "#000000",
+          color: "white",
+          border: "none",
+          borderRadius: 8,
+          padding: "8px 16px",
+          fontSize: 14,
+          fontWeight: "600",
+          cursor: "pointer",
+          fontFamily: "sans-serif",
+        }}
+      >
+        Send
+      </button>
     </div>
   </div>
 );

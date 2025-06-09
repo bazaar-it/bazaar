@@ -37,7 +37,7 @@ export default function GrowthGraph() {
         alignItems: "center",
         fontFamily: "Inter, sans-serif",
         color: "#fff",
-        padding: "6vh 0 4vh 0",
+        padding: "6vh 0 8vh 0",
       }}
     >
       <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -61,14 +61,17 @@ export default function GrowthGraph() {
 
       <div 
         style={{ 
-          height: "50vh",
+          height: "45vh",
           display: "flex", 
           alignItems: "flex-end",
           justifyContent: "center",
           width: "100%",
-          marginBottom: "4vh",
+          marginBottom: "2vh",
+          marginTop: "2vh",
+          position: "relative",
         }}
       >
+        {/* Scaling container for bars and percentages only */}
         <div
           style={{
             display: "flex",
@@ -83,7 +86,7 @@ export default function GrowthGraph() {
             const barHeight = interpolate(
               frame,
               [60 + index * 15, 90 + index * 15],
-              [0, (bar.value / 140) * 350],
+              [0, (bar.value / 140) * 280],
               {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",
@@ -129,39 +132,42 @@ export default function GrowthGraph() {
                     boxShadow: `0 0 30px ${bar.color}50`,
                   }}
                 />
-                <div
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "500",
-                    opacity: interpolate(frame, [30, 60], [0, 1], {
-                      extrapolateLeft: "clamp",
-                      extrapolateRight: "clamp",
-                    }),
-                    fontFamily: "Inter, sans-serif",
-                  }}
-                >
-                  {bar.label}
-                </div>
               </div>
             );
           })}
         </div>
-      </div>
-
-      <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        
+        {/* Fixed X-axis labels positioned below the bars */}
         <div
           style={{
-            fontSize: 36,
-            fontWeight: "500",
-            opacity: interpolate(frame, [150, 180], [0, 1], {
-              extrapolateLeft: "clamp",
-              extrapolateRight: "clamp",
-            }),
-            textAlign: "center",
-            fontFamily: "Inter, sans-serif",
+            position: "absolute",
+            bottom: -80,
+            display: "flex",
+            alignItems: "center",
+            gap: 32,
+            left: "50%",
+            transform: "translateX(-50%)",
           }}
         >
-          🚀 Record Breaking Performance
+          {bars.map((bar, index) => (
+            <div
+              key={index}
+              style={{
+                width: 80,
+                display: "flex",
+                justifyContent: "center",
+                fontSize: 24,
+                fontWeight: "500",
+                opacity: interpolate(frame, [30, 60], [0, 1], {
+                  extrapolateLeft: "clamp",
+                  extrapolateRight: "clamp",
+                }),
+                fontFamily: "Inter, sans-serif",
+              }}
+            >
+              {bar.label}
+            </div>
+          ))}
         </div>
       </div>
     </AbsoluteFill>
@@ -212,7 +218,7 @@ return (
       alignItems: "center",
       fontFamily: "Inter, sans-serif",
       color: "#fff",
-      padding: "6vh 0 4vh 0",
+      padding: "6vh 0 8vh 0",
     }}
   >
     <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -236,14 +242,17 @@ return (
 
     <div 
       style={{ 
-        height: "50vh",
+        height: "45vh",
         display: "flex", 
         alignItems: "flex-end",
         justifyContent: "center",
         width: "100%",
-        marginBottom: "4vh",
+        marginBottom: "2vh",
+        marginTop: "2vh",
+        position: "relative",
       }}
     >
+      {/* Scaling container for bars and percentages only */}
       <div
         style={{
           display: "flex",
@@ -258,7 +267,7 @@ return (
           const barHeight = interpolate(
             frame,
             [60 + index * 15, 90 + index * 15],
-            [0, (bar.value / 140) * 350],
+            [0, (bar.value / 140) * 280],
             {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
@@ -304,42 +313,45 @@ return (
                   boxShadow: \`0 0 30px \${bar.color}50\`,
                 }}
               />
-              <div
-                style={{
-                  fontSize: 24,
-                  fontWeight: "500",
-                  opacity: interpolate(frame, [30, 60], [0, 1], {
-                    extrapolateLeft: "clamp",
-                    extrapolateRight: "clamp",
-                  }),
-                  fontFamily: "Inter, sans-serif",
-                }}
-              >
-                {bar.label}
-              </div>
             </div>
           );
         })}
       </div>
-    </div>
-
-    <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      
+      {/* Fixed X-axis labels positioned below the bars */}
       <div
         style={{
-          fontSize: 36,
-          fontWeight: "500",
-          opacity: interpolate(frame, [150, 180], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          }),
-          textAlign: "center",
-          fontFamily: "Inter, sans-serif",
+          position: "absolute",
+          bottom: -80,
+          display: "flex",
+          alignItems: "center",
+          gap: 32,
+          left: "50%",
+          transform: "translateX(-50%)",
         }}
       >
-        🚀 Record Breaking Performance
+        {bars.map((bar, index) => (
+          <div
+            key={index}
+            style={{
+              width: 80,
+              display: "flex",
+              justifyContent: "center",
+              fontSize: 24,
+              fontWeight: "500",
+              opacity: interpolate(frame, [30, 60], [0, 1], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+              }),
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            {bar.label}
+          </div>
+        ))}
       </div>
     </div>
   </AbsoluteFill>
 );
 }`
-}; 
+};
