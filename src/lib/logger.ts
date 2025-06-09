@@ -40,8 +40,8 @@ const fileFormat = format.combine(
   format.json()
 );
 
-// Track if A2A file transport has been initialized to prevent duplicates
-let a2aFileTransportInitialized = false;
+// Track if system file transport has been initialized to prevent duplicates
+let systemFileTransportInitialized = false;
 
 // Create either a server logger or a console logger
 let logger: Logger;
@@ -169,10 +169,8 @@ if (isServer) {
     transports: componentsTransports
   });
 
-  // Log the environment variables affecting a2aLogger console level
-  console.log(`[DEBUG_LOGGER] LOGGING_MODE: ${process.env.LOGGING_MODE}, LOG_LEVEL: ${process.env.LOG_LEVEL}`);
-
-  // We'll create the a2aLogger from the main logger later as a child
+  // Log the environment variables affecting logger console level
+  console.log(`[DEBUG_LOGGER] LOGGING_MODE: ${process.env.LOGGING_MODE}, LOG_LEVEL: ${process.env.LOG_LEVEL}`)
   
   console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
 
@@ -188,11 +186,11 @@ if (isServer) {
     ],
   });
 
-  // Create a separate A2A logger
-  const a2aLogger = createLogger({
+  // Create a separate system logger
+  const systemLogger = createLogger({
     level: 'info',
     format: fileFormat,
-    defaultMeta: { a2a: true },
+    defaultMeta: { system: true },
     transports: [
       new transports.Console({
         format: consoleFormat,
@@ -214,44 +212,43 @@ if (isServer) {
 
 }
 
-// Function to initialize the A2A file transport if requested
-export const initializeA2AFileTransport = (): void => {
+// Function to initialize system file transport if requested
+export const initializeSystemFileTransport = (): void => {
   // Skip file transport initialization in serverless production environments
   if (isServerlessProduction) {
-    console.log('[LOGGER] Skipping A2A file transport initialization in serverless environment');
-    a2aFileTransportInitialized = true;
+    console.log('[LOGGER] Skipping system file transport initialization in serverless environment');
+    systemFileTransportInitialized = true;
     return;
   }
 
-  if (a2aFileTransportInitialized) {
-    console.log('[LOGGER] A2A File transport already initialized, skipping...');
+  if (systemFileTransportInitialized) {
+    console.log('[LOGGER] System file transport already initialized, skipping...');
     return;
   }
 
-  const isTestMode = process.env.NODE_ENV === 'test' || process.env.A2A_TEST_MODE === 'true';
-  const a2aLogsDir = isTestMode 
-    ? path.join(process.cwd(), 'tmp', 'a2a-test-logs', 'a2a')
-    : (process.env.A2A_LOG_DIR || path.join(process.cwd(), 'logs', 'a2a'));
+  const isTestMode = process.env.NODE_ENV === 'test';
+  const systemLogsDir = isTestMode 
+    ? path.join(process.cwd(), 'tmp', 'system-test-logs')
+    : path.join(process.cwd(), 'logs', 'system');
   
   // Ensure directory exists - but only in non-serverless environments
   try {
-    if (!fs.existsSync(a2aLogsDir)) {
-      fs.mkdirSync(a2aLogsDir, { recursive: true });
-      console.log(`Created A2A log directory: ${a2aLogsDir}`);
+    if (!fs.existsSync(systemLogsDir)) {
+      fs.mkdirSync(systemLogsDir, { recursive: true });
+      console.log(`Created system log directory: ${systemLogsDir}`);
     }
   } catch (error) {
-    console.warn(`[LOGGER] Could not create A2A log directory: ${error}. Continuing without file logging.`);
-    a2aFileTransportInitialized = true;
+    console.warn(`[LOGGER] Could not create system log directory: ${error}. Continuing without file logging.`);
+    systemFileTransportInitialized = true;
     return;
   }
   
   // Add file transport to the logger
-  const a2aLogger = logger.child({ module: 'a2a' });
-  a2aLogger.add(
+  systemLogger.add(
     new transports.DailyRotateFile({
-      level: process.env.A2A_LOG_LEVEL || 'debug',
-      dirname: a2aLogsDir,
-      filename: 'a2a-%DATE%.log',
+      level: process.env.LOG_LEVEL || 'debug',
+      dirname: systemLogsDir,
+      filename: 'system-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',
       maxFiles: '14d',
@@ -259,15 +256,15 @@ export const initializeA2AFileTransport = (): void => {
     })
   );
   
-  a2aFileTransportInitialized = true;
+  systemFileTransportInitialized = true;
   
-  a2aLogger.info(`A2A File transport initialized in ${isTestMode ? 'TEST' : 'NORMAL'} mode`);
-  a2aLogger.info(`A2A File transport initialized with logs at: ${a2aLogsDir}`);
+  systemLogger.info(`System file transport initialized in ${isTestMode ? 'TEST' : 'NORMAL'} mode`);
+  systemLogger.info(`System file transport initialized with logs at: ${systemLogsDir}`);
 };
 
-// Allow TaskProcessor to explicitly check if the file transport is initialized
-export function isA2AFileTransportInitialized(): boolean {
-  return a2aFileTransportInitialized;
+// Allow processes to explicitly check if the file transport is initialized
+export function isSystemFileTransportInitialized(): boolean {
+  return systemFileTransportInitialized;
 }
 
 const chatLogger = logger.child({ module: 'chat' });
@@ -458,22 +455,19 @@ scenePlannerLogger.info = (messageOrInfo: string | object, ...args: any[]): Logg
   return scenePlannerLogger;
 };
 
-// Create a2aLogger as a child logger
-const a2aLogger = logger.child({ module: 'a2a' });
+// Create general system logger as a child logger
+const systemLogger = logger.child({ module: 'system' });
 
-// Now configure a2aLogger console transport level specifically
-console.log(`[DEBUG_LOGGER] Configuring a2aLogger console level. LOGGING_MODE: ${process.env.LOGGING_MODE}`);
-// Find the console transport in a2aLogger and set its level
-const a2aConsoleTransport = a2aLogger.transports.find(
+// Configure console transport level specifically
+console.log(`[DEBUG_LOGGER] Configuring system logger console level. LOGGING_MODE: ${process.env.LOGGING_MODE}`);
+const systemConsoleTransport = systemLogger.transports.find(
   (t) => t instanceof transports.Console
 );
-if (a2aConsoleTransport) {
-  a2aConsoleTransport.level = process.env.LOGGING_MODE === 'a2a' 
-    ? (process.env.LOG_LEVEL || 'info') 
-    : 'error'; // Suppress a2a console logs if not in 'a2a' mode
-  console.log(`[DEBUG_LOGGER] a2aLogger console level set to: ${a2aConsoleTransport.level}`);
+if (systemConsoleTransport) {
+  systemConsoleTransport.level = process.env.LOG_LEVEL || 'info';
+  console.log(`[DEBUG_LOGGER] System logger console level set to: ${systemConsoleTransport.level}`);
 } else {
-  console.log('[DEBUG_LOGGER] Could not find a2aLogger console transport to configure!');
+  console.log('[DEBUG_LOGGER] Could not find system logger console transport to configure!');
 }
 
 // Other child loggers
@@ -489,48 +483,17 @@ const modelsLogger = logger.child({ module: 'models' });
 const componentLogger = logger.child({ module: 'component' });
 const animationDesignerLogger = logger.child({ module: 'animationDesigner' });
 
-// A2A Logger standalone functions
-const origA2ADebug = a2aLogger.debug.bind(a2aLogger);
-const origA2AInfo = a2aLogger.info.bind(a2aLogger);
+// System Logger standalone functions
+const origSystemDebug = systemLogger.debug.bind(systemLogger);
+const origSystemInfo = systemLogger.info.bind(systemLogger);
 
-export const logA2ATaskCreate = (loggerInstance: Logger, taskId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.info(`[A2A:TASK_CREATE][TASK:${normalizedTaskId}] ${message}`, { ...meta, taskId: normalizedTaskId, a2a: true });
+export const logSystemProcess = (loggerInstance: Logger, processId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
+  const normalizedProcessId = processId || 'unknown-process';
+  loggerInstance.info(`[SYSTEM:PROCESS][ID:${normalizedProcessId}] ${message}`, { ...meta, processId: normalizedProcessId, system: true });
 };
 
-export const logA2ATaskStatusChange = (loggerInstance: Logger, taskId: StringOrNull, oldState: string, newState: string, message: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.info(`[A2A:TASK_STATUS][TASK:${normalizedTaskId}] State: ${oldState} -> ${newState}. ${message}`, { ...meta, taskId: normalizedTaskId, oldState, newState, a2a: true });
-};
-
-export const logA2AAgentReceive = (loggerInstance: Logger, agentName: string, taskId: StringOrNull, messageType: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.debug(`[A2A:AGENT_RECEIVE][AGENT:${agentName}][TASK:${normalizedTaskId}] Received ${messageType}`, { ...meta, agentName, taskId: normalizedTaskId, messageType, a2a: true });
-};
-
-export const logA2AAgentProcess = (loggerInstance: Logger, agentName: string, taskId: StringOrNull, step: string, message: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.debug(`[A2A:AGENT_PROCESS][AGENT:${agentName}][TASK:${normalizedTaskId}][STEP:${step}] ${message}`, { ...meta, agentName, taskId: normalizedTaskId, step, a2a: true });
-};
-
-export const logA2AAgentSend = (loggerInstance: Logger, agentName: string, taskId: StringOrNull, recipient: string, messageType: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.debug(`[A2A:AGENT_SEND][AGENT:${agentName}][TASK:${normalizedTaskId}] Sending ${messageType} to ${recipient}`, { ...meta, agentName, taskId: normalizedTaskId, recipient, messageType, a2a: true });
-};
-
-export const logA2AMessageBusDelivery = (loggerInstance: Logger, messageId: string, recipient: string, taskId: StringOrNull, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.debug(`[A2A:MESSAGE_BUS][MSG_ID:${messageId}][TASK:${normalizedTaskId}] Delivering message to ${recipient}`, { ...meta, messageId, recipient, taskId: normalizedTaskId, a2a: true });
-};
-
-export const logA2ASSEEventSent = (loggerInstance: Logger, taskId: StringOrNull, eventType: string, eventData: any, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.debug(`[A2A:SSE_EVENT][TASK:${normalizedTaskId}] Sent ${eventType}`, { ...meta, taskId: normalizedTaskId, eventType, eventPayload: eventData, a2a: true });
-};
-
-export const logA2ASSESubscription = (loggerInstance: Logger, taskId: StringOrNull, message: string, meta: Record<string, any> = {}) => {
-  const normalizedTaskId = taskId || 'unknown-task';
-  loggerInstance.info(`[A2A:SSE_SUB][TASK:${normalizedTaskId}] ${message}`, { ...meta, taskId: normalizedTaskId, a2a: true });
+export const logSystemEvent = (loggerInstance: Logger, eventType: string, eventData: any, meta: Record<string, any> = {}) => {
+  loggerInstance.debug(`[SYSTEM:EVENT] ${eventType}`, { ...meta, eventType, eventPayload: eventData, system: true });
 };
 
 // Initialize ChatLogger specific methods
@@ -616,7 +579,7 @@ export {
   buildLogger,
   scenePlannerLogger,
   chatLogger,
-  a2aLogger,
+  systemLogger,
   authLogger,
   pageLogger,
   apiLogger,

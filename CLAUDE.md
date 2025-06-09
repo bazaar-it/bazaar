@@ -15,7 +15,7 @@
 /memory-bank/
 ├── TODO-critical.md        # Immediate blockers & bugs
 ├── TODO.md                 # General backlog
-├── sprints/sprint34/
+├── sprints/sprintX/
 │   ├── TODO.md            # Sprint-specific tasks
 │   ├── progress.md        # Sprint progress log
 │   └── [analysis-docs]    # Technical analysis files
