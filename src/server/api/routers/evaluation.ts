@@ -8,6 +8,8 @@ import { and, gte, lt, eq, desc, count, avg, sql } from "drizzle-orm";
 import { openai } from "~/server/lib/openai";
 import { randomUUID } from "crypto";
 
+// whatsup
+
 // Input schemas - moved to top
 const EvalConfigSchema = z.object({
   model: z.enum(['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']),
