@@ -1,0 +1,61 @@
+{
+  "promptId": "edit-without-scene",
+  "prompt": {
+    "id": "edit-without-scene",
+    "name": "Edit Without Scene Context",
+    "type": "text",
+    "input": {
+      "text": "change the text color to blue"
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "which scene",
+        "select a scene",
+        "create a scene first"
+      ],
+      "complexity": "low"
+    }
+  },
+  "modelPack": "openai-pack",
+  "modelKey": "brain",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "output": "",
+  "actualOutput": "",
+  "codeOutput": "",
+  "imageAnalysis": "",
+  "toolsUsed": [],
+  "success": false,
+  "error": "Invalid tool name: needsClarification",
+  "metrics": {
+    "latency": 4930,
+    "cost": 0,
+    "timestamp": "2025-06-10T13:46:33.450Z"
+  },
+  "generatedCode": "",
+  "timingBreakdown": {
+    "brainThinking": 5937,
+    "toolExecution": 0,
+    "codeGeneration": 0,
+    "total": 5937
+  },
+  "promptDetails": {
+    "id": "edit-without-scene",
+    "name": "Edit Without Scene Context",
+    "type": "text",
+    "input": {
+      "text": "change the text color to blue"
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "which scene",
+        "select a scene",
+        "create a scene first"
+      ],
+      "complexity": "low"
+    }
+  },
+  "timestamp": "2025-06-10T13:46:33.450Z"
+}

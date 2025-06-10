@@ -1,0 +1,49 @@
+{
+  "prompt": {
+    "id": "ab-simple-scene",
+    "name": "Simple Scene Creation",
+    "type": "text",
+    "input": {
+      "text": "create a welcome scene with fade-in animation"
+    }
+  },
+  "variation": {
+    "id": "brain-baseline",
+    "name": "Current Brain Prompt",
+    "description": "Existing brain orchestrator prompt",
+    "systemPrompt": "You are the Brain Orchestrator for Bazaar-Vid, an AI video creation platform.\n\nYour job is to analyze user prompts and decide which MCP tool to call for video generation.\n\nAvailable MCP Tools:\n- addScene: Create new scenes from scratch\n- editScene: Modify existing scenes\n- deleteScene: Remove scenes\n- analyzeImage: Analyze screenshots/images for design extraction\n- createSceneFromImage: Generate scenes based on image analysis\n- editSceneWithImage: Modify scenes using image references\n- fixBrokenScene: Fix compilation errors in scenes\n- changeDuration: Modify scene timing\n\nRespond with JSON containing your decision:\n{\n  \"toolName\": \"addScene\",\n  \"reasoning\": \"User wants to create a new scene\",\n  \"needsClarification\": false,\n  \"parameters\": { /* tool-specific params */ }\n}\n\nBe decisive and choose the most appropriate tool. Ask for clarification only when the request is genuinely ambiguous.",
+    "temperature": 0.7
+  },
+  "result": {
+    "promptId": "ab-simple-scene",
+    "prompt": {
+      "id": "ab-simple-scene",
+      "name": "Simple Scene Creation",
+      "type": "text",
+      "input": {
+        "text": "create a welcome scene with fade-in animation"
+      }
+    },
+    "modelPack": "optimal-pack",
+    "modelKey": "brain",
+    "provider": "openai",
+    "model": "gpt-4.1",
+    "output": "I just created a welcoming scene featuring two text elements that fade in smoothly. It’s a warm introduction that sets a friendly tone for your project!",
+    "actualOutput": "I just created a welcoming scene featuring two text elements that fade in smoothly. It’s a warm introduction that sets a friendly tone for your project!",
+    "codeOutput": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_2d403e23() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Welcome text fade-in: starts at frame 0, duration 60 frames\n  const welcomeOpacity = interpolate(\n    frame,\n    [0, 60],\n    [0, 1],\n    {\n      extrapolateLeft: \"clamp\",\n      extrapolateRight: \"clamp\"\n    }\n  );\n\n  // Subtext fade-in: starts at frame 30, duration 60 frames\n  const subtextOpacity = interpolate(\n    frame,\n    [30, 90],\n    [0, 1],\n    {\n      extrapolateLeft: \"clamp\",\n      extrapolateRight: \"clamp\"\n    }\n  );\n\n  return (\n    <AbsoluteFill\n      style={{\n        backgroundColor: \"#ffffff\",\n        justifyContent: \"center\",\n        alignItems: \"center\",\n        display: \"flex\",\n        flexDirection: \"column\"\n      }}\n    >\n      <div\n        style={{\n          opacity: welcomeOpacity,\n          color: \"#333333\",\n          fontSize: \"4.5rem\",\n          fontWeight: \"700\",\n          fontFamily: \"Arial, sans-serif\",\n          marginBottom: \"1.5rem\",\n          textAlign: \"center\",\n          lineHeight: \"1.1\",\n          letterSpacing: \"0.01em\",\n          transform: \"translate(-50%, -50%) scale(1)\",\n          position: \"absolute\",\n          left: \"50%\",\n          top: \"40%\"\n        }}\n      >\n        Welcome!\n      </div>\n      <div\n        style={{\n          opacity: subtextOpacity,\n          color: \"#555555\",\n          fontSize: \"2.25rem\",\n          fontWeight: \"400\",\n          fontFamily: \"Arial, sans-serif\",\n          textAlign: \"center\",\n          lineHeight: \"1.3\",\n          letterSpacing: \"0.01em\",\n          transform: \"translate(-50%, -50%) scale(1)\",\n          position: \"absolute\",\n          left: \"50%\",\n          top: \"55%\"\n        }}\n      >\n        We're glad to have you here.\n      </div>\n    </AbsoluteFill>\n  );\n}",
+    "imageAnalysis": "",
+    "toolsUsed": [
+      "addScene"
+    ],
+    "success": true,
+    "metrics": {
+      "latency": 59660,
+      "cost": 0.00342,
+      "timestamp": "2025-06-10T12:50:49.538Z"
+    },
+    "promptVariationId": "brain-baseline",
+    "promptVariationName": "Current Brain Prompt",
+    "service": "brain"
+  },
+  "timestamp": "2025-06-10T12:50:49.539Z"
+}

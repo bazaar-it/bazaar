@@ -1,0 +1,63 @@
+{
+  "promptId": "delete-scene",
+  "prompt": {
+    "id": "delete-scene",
+    "name": "Delete Scene",
+    "type": "text",
+    "input": {
+      "text": "delete the scene",
+      "context": {
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "toolCalled": "deleteScene",
+      "complexity": "low"
+    }
+  },
+  "modelPack": "optimal-pack",
+  "modelKey": "brain",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "output": "There are no scenes in the storyboard to delete. Did you mean to delete a scene after creating one?",
+  "actualOutput": "There are no scenes in the storyboard to delete. Did you mean to delete a scene after creating one?",
+  "codeOutput": "",
+  "imageAnalysis": "",
+  "toolsUsed": [],
+  "reasoning": "The storyboard is empty, so there is no scene to delete.",
+  "success": true,
+  "metrics": {
+    "latency": 9440,
+    "cost": 0.00225,
+    "timestamp": "2025-06-10T13:24:09.716Z"
+  },
+  "contextUsed": {
+    "sceneId": "test-scene-1",
+    "sceneName": "Scene 1"
+  },
+  "generatedCode": "",
+  "timingBreakdown": {
+    "brainThinking": 11885,
+    "toolExecution": 0,
+    "codeGeneration": 0,
+    "total": 11886
+  },
+  "promptDetails": {
+    "id": "delete-scene",
+    "name": "Delete Scene",
+    "type": "text",
+    "input": {
+      "text": "delete the scene",
+      "context": {
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "toolCalled": "deleteScene",
+      "complexity": "low"
+    }
+  },
+  "timestamp": "2025-06-10T13:24:09.717Z"
+}

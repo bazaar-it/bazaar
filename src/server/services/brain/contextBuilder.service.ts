@@ -1,8 +1,8 @@
-//src/lib/services/contextBuilder.service.ts
+//src/server/services/brain/contextBuilder.service.ts
 
-import { SYSTEM_PROMPTS } from '~/config/prompts.config';
-import { MODEL_PACKS, getActiveModelPack } from '~/config/models.config';
-import type { InputProps } from '../../types/input-props';
+import { getAllPrompts } from '~/config/prompts.config';
+import { getActiveModelPack } from '~/config/models.config';
+import type { InputProps } from '~/lib/types/video/input-props';
 
 /**
  * 🧠 Context Builder Service
@@ -27,8 +27,8 @@ export interface SceneHistory {
 }
 
 export interface MemoryBankContent {
-  systemPrompts: typeof SYSTEM_PROMPTS;
-  modelConfigs: typeof MODEL_PACKS;
+  systemPrompts: ReturnType<typeof getAllPrompts>;
+  modelConfigs: ReturnType<typeof getActiveModelPack>;
   recentContext: any[];
   imageFacts: any[];
 }

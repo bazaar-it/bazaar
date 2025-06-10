@@ -45,6 +45,10 @@ export const ModelPackSchema = z.object({
     // Vision/Image Analysis
     visionAnalysis: ModelConfigSchema,
     imageDescription: ModelConfigSchema,
+    
+    // AI Services
+    titleGenerator: ModelConfigSchema,
+    conversationalResponse: ModelConfigSchema,
   }),
 });
 
@@ -81,7 +85,11 @@ const starterPack: ModelPack = {
     sceneBuilder: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
     visionAnalysis: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
-    imageDescription: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 }
+    imageDescription: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 150 }
   }
 };
 
@@ -106,15 +114,19 @@ const performancePack: ModelPack = {
     sceneBuilder: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
     layoutGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
     visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
-    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 150 }
   }
 };
 
 const mixedPack: ModelPack = {
   name: 'Mixed Pack',
-  description: 'O1-mini for brain, GPT-4o for vision, Claude Sonnet 4 for code',
+  description: 'GPT-4 for brain, GPT-4o for vision, Claude Sonnet 4 for code',
   models: {
-    brain: { provider: 'openai', model: 'o1-mini', temperature: 1 }, // O1 doesn't use temperature
+    brain: { provider: 'openai', model: 'gpt-4.1', temperature: 0.7 }, // GPT-4.1 for reasoning
     addScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
     editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     deleteScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
@@ -131,7 +143,11 @@ const mixedPack: ModelPack = {
     sceneBuilder: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
-    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.7, maxTokens: 150 }
   }
 };
 
@@ -156,7 +172,53 @@ const claudePack: ModelPack = {
     sceneBuilder: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
     visionAnalysis: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
-    imageDescription: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 }
+    imageDescription: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.7, maxTokens: 150 }
+  }
+};
+// 🎯 OPTIMAL PACK: Based on analysis for best speed/cost/quality balance
+const optimalPack: ModelPack = {
+  name: 'Optimal Pack',
+  description: 'Intelligent model selection for best speed/cost/quality balance',
+  models: {
+    // Brain: GPT-4.1 with lower temp for more consistent reasoning
+    brain: { provider: 'openai', model: 'gpt-4.1', temperature: 0.6 },
+    
+    // Scene operations: Claude Sonnet 4 excels at code generation
+    addScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    deleteScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 }, // Simple operation, cheap model
+    
+    // Vision: GPT-4o is best for image analysis
+    analyzeImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    createSceneFromImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 }, // Claude for code from vision
+    editSceneWithImage: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    
+    // Error handling: Claude with very low temp for surgical fixes
+    fixBrokenScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.2 },
+    
+    // Code generation: Claude Sonnet 4 is exceptional at React/Remotion code
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    directCodeEditor: {
+      surgical: { provider: 'openai', model: 'gpt-4.1-mini', temperature: 0.2, maxTokens: 8000 }, // Fast GPT-4.1-mini for simple edits
+      creative: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 }
+    },
+    
+    // Scene building: Claude for code quality
+    sceneBuilder: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5 },
+    layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    
+    // Vision analysis: GPT-4o specialized
+    visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 150 }
   }
 };
 
@@ -181,7 +243,11 @@ const haikuPack: ModelPack = {
     sceneBuilder: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.5 },
     layoutGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
     visionAnalysis: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
-    imageDescription: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 }
+    imageDescription: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.7, maxTokens: 150 }
   }
 };
 
@@ -219,7 +285,11 @@ const openaiPack: ModelPack = {
     
     // Vision analysis with GPT-4o
     visionAnalysis: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
-    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 }
+    imageDescription: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // AI Services: Fast models for simple text generation
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 150 }
   }
 };
 
@@ -231,6 +301,7 @@ export const MODEL_PACKS: Record<string, ModelPack> = {
   'mixed-pack': ModelPackSchema.parse(mixedPack),
   'claude-pack': ModelPackSchema.parse(claudePack),
   'haiku-pack': ModelPackSchema.parse(haikuPack),
+  'optimal-pack': ModelPackSchema.parse(optimalPack),
 };
 
 // =============================================================================
@@ -287,9 +358,13 @@ export function resolveDirectCodeEditorModel(
 // PROVIDER CLIENT REGISTRY
 // =============================================================================
 
-// Add Node.js shim for OpenAI in test environment
-if (typeof window === 'undefined' && process.env.NODE_ENV === 'test') {
-  require('openai/shims/node');
+// Add Node.js shim for OpenAI in Node.js environment
+if (typeof window === 'undefined') {
+  try {
+    require('openai/shims/node');
+  } catch (e) {
+    // Shim already imported
+  }
 }
 
 import OpenAI from 'openai';

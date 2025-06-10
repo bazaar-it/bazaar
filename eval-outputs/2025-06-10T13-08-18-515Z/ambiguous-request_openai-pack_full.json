@@ -1,0 +1,76 @@
+{
+  "promptId": "ambiguous-request",
+  "prompt": {
+    "id": "ambiguous-request",
+    "name": "Ambiguous Request Clarification",
+    "type": "text",
+    "input": {
+      "text": "make it better",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "what specific aspect",
+        "which part",
+        "how should I improve"
+      ],
+      "complexity": "low"
+    }
+  },
+  "modelPack": "openai-pack",
+  "modelKey": "brain",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "output": "Can you specify what you would like to improve in Scene 1? For example: colors, animation, layout, or content?",
+  "actualOutput": "Can you specify what you would like to improve in Scene 1? For example: colors, animation, layout, or content?",
+  "codeOutput": "",
+  "imageAnalysis": "",
+  "toolsUsed": [],
+  "reasoning": "The request is too vague to determine what specific aspect should be improved in the existing scene.",
+  "success": true,
+  "metrics": {
+    "latency": 4962,
+    "cost": 0.00252,
+    "timestamp": "2025-06-10T13:46:22.104Z"
+  },
+  "contextUsed": {
+    "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+    "sceneId": "test-scene-1",
+    "sceneName": "Scene 1"
+  },
+  "generatedCode": "",
+  "timingBreakdown": {
+    "brainThinking": 5907,
+    "toolExecution": 0,
+    "codeGeneration": 0,
+    "total": 5907
+  },
+  "promptDetails": {
+    "id": "ambiguous-request",
+    "name": "Ambiguous Request Clarification",
+    "type": "text",
+    "input": {
+      "text": "make it better",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "what specific aspect",
+        "which part",
+        "how should I improve"
+      ],
+      "complexity": "low"
+    }
+  },
+  "timestamp": "2025-06-10T13:46:22.104Z"
+}
