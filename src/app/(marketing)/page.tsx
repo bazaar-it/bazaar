@@ -16,10 +16,11 @@ export default function HomePage() {
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const createProject = api.project.create.useMutation();
   
-  // Email subscription mutation
+  // Email subscription mutation - MUST be before any conditional returns
   const subscribeEmail = api.emailSubscriber.subscribe.useMutation({
     onSuccess: (data) => {
       setEmailSubmitState('success');
@@ -127,6 +128,28 @@ export default function HomePage() {
     { name: "Twilio", path: "https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//twilio.svg" },
     { name: "Vercel", path: "https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//Vercel.svg" },
   ];
+
+  // Set mounted state to handle hydration
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Auto-redirect logged-in users to workspace
+  useEffect(() => {
+    if (mounted && status === "authenticated" && session?.user) {
+      console.log("User is already logged in, redirecting to workspace...");
+      router.push("/projects");
+    }
+  }, [mounted, status, session, router]);
+
+  // Handle loading states and redirects after all hooks
+  if (!mounted || status === "loading") {
+    return null; // Prevent hydration mismatch
+  }
+
+  if (status === "authenticated" && session?.user) {
+    return null; // Redirecting via useEffect
+  }
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
