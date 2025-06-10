@@ -16,41 +16,11 @@ export default function HomePage() {
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
   const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const createProject = api.project.create.useMutation();
-
-  // Auto-redirect logged-in users to workspace
-  useEffect(() => {
-    if (status === "authenticated" && session?.user) {
-      console.log("User is already logged in, redirecting to workspace...");
-      router.push("/projects");
-    }
-  }, [status, session, router]);
-
-  // Don't render the marketing page if user is authenticated
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "authenticated" && session?.user) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to workspace...</p>
-        </div>
-      </div>
-    );
-  }
   
-  // Email subscription mutation
+  // Email subscription mutation - MUST be before any conditional returns
   const subscribeEmail = api.emailSubscriber.subscribe.useMutation({
     onSuccess: (data) => {
       setEmailSubmitState('success');
@@ -159,6 +129,28 @@ export default function HomePage() {
     { name: "Vercel", path: "https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//Vercel.svg" },
   ];
 
+  // Set mounted state to handle hydration
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Auto-redirect logged-in users to workspace
+  useEffect(() => {
+    if (mounted && status === "authenticated" && session?.user) {
+      console.log("User is already logged in, redirecting to workspace...");
+      router.push("/projects");
+    }
+  }, [mounted, status, session, router]);
+
+  // Handle loading states and redirects after all hooks
+  if (!mounted || status === "loading") {
+    return null; // Prevent hydration mismatch
+  }
+
+  if (status === "authenticated" && session?.user) {
+    return null; // Redirecting via useEffect
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
@@ -173,14 +165,10 @@ export default function HomePage() {
           />
         </div>
         <div className="flex gap-4 items-center">
-          {status === "authenticated" ? (
-            <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
-          ) : (
-            <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
-            </>
-          )}
+          <>
+            <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
+            <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+          </>
         </div>
       </header>
 
