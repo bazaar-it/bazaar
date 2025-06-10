@@ -1,11 +1,21 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { unstable_e2e as e2e } from '@vercel/ai-utils';
-import { Observable } from 'observable-fns';
+// import { unstable_e2e as e2e } from '@vercel/ai-utils';
+// import { Observable } from 'observable-fns';
 import { performance } from 'perf_hooks';
+
+// Mock Observable for testing without external dependency
+class MockObservable {
+  constructor(private subscribeFn: (observer: any) => () => void) {}
+  
+  subscribe(observer: any) {
+    const cleanup = this.subscribeFn(observer);
+    return { unsubscribe: cleanup };
+  }
+}
 
 // Mock implementation of streamResponse procedure
 const mockStreamResponse = (input: { assistantMessageId: string; projectId: string }) => {
-  return new Observable((observer) => {
+  return new MockObservable((observer) => {
     // Initial status update - should be emitted within 150ms
     setTimeout(() => {
       observer.next({ type: 'status', status: 'thinking' });
@@ -143,7 +153,7 @@ describe('Chat Response Time Performance', () => {
   it('should gracefully handle slow responses with exponential backoff', async () => {
     // Mock implementation with delayed responses to simulate slow server
     const mockSlowStreamResponse = jest.fn().mockImplementation(() => {
-      return new Observable((observer) => {
+      return new MockObservable((observer) => {
         // Simulate a slow initial response
         setTimeout(() => {
           observer.next({ type: 'status', status: 'thinking' });

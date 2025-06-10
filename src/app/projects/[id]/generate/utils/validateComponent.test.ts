@@ -1,5 +1,7 @@
 //src/app/projects/[id]/generate/utils/validateComponent.test.ts
 
+import { describe, it, expect } from '@jest/globals';
+
 // Test cases for component validation
 const validateComponentCode = (code: string): { isValid: boolean; errors: string[] } => {
   const errors: string[] = [];
@@ -80,28 +82,17 @@ export function TestComponent() {
   }
 ];
 
-// Run tests
-console.log('🧪 Running Component Validation Tests\n');
-
-testCases.forEach((testCase, index) => {
-  const result = validateComponentCode(testCase.code);
-  const passed = result.isValid === testCase.expectedValid;
-  
-  console.log(`${index + 1}. ${testCase.name}: ${passed ? '✅ PASS' : '❌ FAIL'}`);
-  
-  if (!passed) {
-    console.log(`   Expected valid: ${testCase.expectedValid}, got: ${result.isValid}`);
-    console.log(`   Errors: ${result.errors.join(', ')}`);
-  }
-  
-  if (testCase.expectedErrors && !testCase.expectedValid) {
-    const errorsMatch = testCase.expectedErrors.every(expectedError => 
-      result.errors.includes(expectedError)
-    );
-    console.log(`   Error messages match: ${errorsMatch ? '✅' : '❌'}`);
-  }
-  
-  console.log('');
-});
-
-console.log('🎯 Test Summary: Component validation function is working correctly!'); 
+// Jest test suite
+describe('Component Validation', () => {
+  it.each(testCases)('$name', ({ code, expectedValid, expectedErrors }) => {
+    const result = validateComponentCode(code);
+    
+    expect(result.isValid).toBe(expectedValid);
+    
+    if (expectedErrors && !expectedValid) {
+      expectedErrors.forEach(expectedError => {
+        expect(result.errors).toContain(expectedError);
+      });
+    }
+  });
+}); 

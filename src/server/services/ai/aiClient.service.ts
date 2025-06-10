@@ -1,5 +1,6 @@
 // src/server/services/ai/aiClient.service.ts
 
+import 'openai/shims/node';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ModelConfig, ModelProvider } from '~/config/models.config';

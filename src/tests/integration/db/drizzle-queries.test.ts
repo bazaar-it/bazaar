@@ -3,7 +3,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { eq } from 'drizzle-orm';
 
 // Mock the database module
-jest.mock('~/db', () => {
+jest.mock('~/server/db', () => {
   const mockDb = {
     insert: jest.fn(),
     select: jest.fn(),

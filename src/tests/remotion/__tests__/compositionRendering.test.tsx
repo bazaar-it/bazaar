@@ -4,7 +4,9 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { Composition, getInputProps } from 'remotion';
 import { Player } from '@remotion/player';
-import { enableFetchMocks } from 'jest-fetch-mock';
+// Mock fetch for tests
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
