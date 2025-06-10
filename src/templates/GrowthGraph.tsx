@@ -35,112 +35,134 @@ export default function GrowthGraph() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "Arial, sans-serif",
+        fontFamily: "Inter, sans-serif",
         color: "#fff",
+        padding: "6vh 0 4vh 0",
       }}
     >
-      <h1
-        style={{
-          fontSize: 48,
-          fontWeight: "bold",
-          marginBottom: 40,
-          opacity: interpolate(frame, [0, 30], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          }),
-        }}
-      >
-        Growth Analytics
-      </h1>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "end",
-          gap: 20,
-          height: 300,
-          transform: `scale(${cameraProgress})`,
-        }}
-      >
-        {bars.map((bar, index) => {
-          const barHeight = interpolate(
-            frame,
-            [60 + index * 15, 90 + index * 15],
-            [0, (bar.value / 140) * 250],
-            {
+      <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <h1
+          style={{
+            fontSize: 84,
+            fontWeight: "bold",
+            margin: 0,
+            opacity: interpolate(frame, [0, 30], [0, 1], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
-            }
-          );
-
-          const valueOpacity = interpolate(
-            frame,
-            [90 + index * 15, 120 + index * 15],
-            [0, 1],
-            {
-              extrapolateLeft: "clamp",
-              extrapolateRight: "clamp",
-            }
-          );
-
-          return (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  opacity: valueOpacity,
-                }}
-              >
-                {bar.value}%
-              </div>
-              <div
-                style={{
-                  width: 60,
-                  height: barHeight,
-                  backgroundColor: bar.color,
-                  borderRadius: "4px 4px 0 0",
-                  boxShadow: `0 0 20px ${bar.color}50`,
-                }}
-              />
-              <div
-                style={{
-                  fontSize: 16,
-                  fontWeight: "500",
-                  opacity: interpolate(frame, [30, 60], [0, 1], {
-                    extrapolateLeft: "clamp",
-                    extrapolateRight: "clamp",
-                  }),
-                }}
-              >
-                {bar.label}
-              </div>
-            </div>
-          );
-        })}
+            }),
+            textAlign: "center",
+            lineHeight: 1.1,
+            fontFamily: "Inter, sans-serif",
+          }}
+        >
+          Growth Analytics
+        </h1>
       </div>
 
-      <div
-        style={{
-          marginTop: 40,
-          fontSize: 24,
-          fontWeight: "500",
-          opacity: interpolate(frame, [150, 180], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          }),
+      <div 
+        style={{ 
+          height: "50vh",
+          display: "flex", 
+          alignItems: "flex-end",
+          justifyContent: "center",
+          width: "100%",
+          marginBottom: "4vh",
         }}
       >
-        🚀 Record Breaking Performance
+        <div
+          style={{
+            display: "flex",
+            alignItems: "end",
+            gap: 32,
+            height: "100%",
+            transform: `scale(${cameraProgress})`,
+            transformOrigin: "bottom center",
+          }}
+        >
+          {bars.map((bar, index) => {
+            const barHeight = interpolate(
+              frame,
+              [60 + index * 15, 90 + index * 15],
+              [0, (bar.value / 140) * 350],
+              {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+              }
+            );
+
+            const valueOpacity = interpolate(
+              frame,
+              [90 + index * 15, 120 + index * 15],
+              [0, 1],
+              {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+              }
+            );
+
+            return (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 16,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 28,
+                    fontWeight: "bold",
+                    opacity: valueOpacity,
+                    fontFamily: "Inter, sans-serif",
+                  }}
+                >
+                  {bar.value}%
+                </div>
+                <div
+                  style={{
+                    width: 80,
+                    height: barHeight,
+                    backgroundColor: bar.color,
+                    borderRadius: "6px 6px 0 0",
+                    boxShadow: `0 0 30px ${bar.color}50`,
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "500",
+                    opacity: interpolate(frame, [30, 60], [0, 1], {
+                      extrapolateLeft: "clamp",
+                      extrapolateRight: "clamp",
+                    }),
+                    fontFamily: "Inter, sans-serif",
+                  }}
+                >
+                  {bar.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          style={{
+            fontSize: 36,
+            fontWeight: "500",
+            opacity: interpolate(frame, [150, 180], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            }),
+            textAlign: "center",
+            fontFamily: "Inter, sans-serif",
+          }}
+        >
+          🚀 Record Breaking Performance
+        </div>
       </div>
     </AbsoluteFill>
   );
@@ -188,114 +210,136 @@ return (
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      justifyContent: "center",
-      fontFamily: "Arial, sans-serif",
+      fontFamily: "Inter, sans-serif",
       color: "#fff",
+      padding: "6vh 0 4vh 0",
     }}
   >
-    <h1
-      style={{
-        fontSize: 48,
-        fontWeight: "bold",
-        marginBottom: 40,
-        opacity: interpolate(frame, [0, 30], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        }),
-      }}
-    >
-      Growth Analytics
-    </h1>
-
-    <div
-      style={{
-        display: "flex",
-        alignItems: "end",
-        gap: 20,
-        height: 300,
-        transform: \`scale(\${cameraProgress})\`,
-      }}
-    >
-      {bars.map((bar, index) => {
-        const barHeight = interpolate(
-          frame,
-          [60 + index * 15, 90 + index * 15],
-          [0, (bar.value / 140) * 250],
-          {
+    <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <h1
+        style={{
+          fontSize: 84,
+          fontWeight: "bold",
+          margin: 0,
+          opacity: interpolate(frame, [0, 30], [0, 1], {
             extrapolateLeft: "clamp",
             extrapolateRight: "clamp",
-          }
-        );
-
-        const valueOpacity = interpolate(
-          frame,
-          [90 + index * 15, 120 + index * 15],
-          [0, 1],
-          {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          }
-        );
-
-        return (
-          <div
-            key={index}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 10,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 18,
-                fontWeight: "bold",
-                opacity: valueOpacity,
-              }}
-            >
-              {bar.value}%
-            </div>
-            <div
-              style={{
-                width: 60,
-                height: barHeight,
-                backgroundColor: bar.color,
-                borderRadius: "4px 4px 0 0",
-                boxShadow: \`0 0 20px \${bar.color}50\`,
-              }}
-            />
-            <div
-              style={{
-                fontSize: 16,
-                fontWeight: "500",
-                opacity: interpolate(frame, [30, 60], [0, 1], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                }),
-              }}
-            >
-              {bar.label}
-            </div>
-          </div>
-        );
-      })}
+          }),
+          textAlign: "center",
+          lineHeight: 1.1,
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        Growth Analytics
+      </h1>
     </div>
 
-    <div
-      style={{
-        marginTop: 40,
-        fontSize: 24,
-        fontWeight: "500",
-        opacity: interpolate(frame, [150, 180], [0, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        }),
+    <div 
+      style={{ 
+        height: "50vh",
+        display: "flex", 
+        alignItems: "flex-end",
+        justifyContent: "center",
+        width: "100%",
+        marginBottom: "4vh",
       }}
     >
-      🚀 Record Breaking Performance
+      <div
+        style={{
+          display: "flex",
+          alignItems: "end",
+          gap: 32,
+          height: "100%",
+          transform: \`scale(\${cameraProgress})\`,
+          transformOrigin: "bottom center",
+        }}
+      >
+        {bars.map((bar, index) => {
+          const barHeight = interpolate(
+            frame,
+            [60 + index * 15, 90 + index * 15],
+            [0, (bar.value / 140) * 350],
+            {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            }
+          );
+
+          const valueOpacity = interpolate(
+            frame,
+            [90 + index * 15, 120 + index * 15],
+            [0, 1],
+            {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            }
+          );
+
+          return (
+            <div
+              key={index}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 16,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: "bold",
+                  opacity: valueOpacity,
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                {bar.value}%
+              </div>
+              <div
+                style={{
+                  width: 80,
+                  height: barHeight,
+                  backgroundColor: bar.color,
+                  borderRadius: "6px 6px 0 0",
+                  boxShadow: \`0 0 30px \${bar.color}50\`,
+                }}
+              />
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: "500",
+                  opacity: interpolate(frame, [30, 60], [0, 1], {
+                    extrapolateLeft: "clamp",
+                    extrapolateRight: "clamp",
+                  }),
+                  fontFamily: "Inter, sans-serif",
+                }}
+              >
+                {bar.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
-      </AbsoluteFill>
-  );
+
+    <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          fontSize: 36,
+          fontWeight: "500",
+          opacity: interpolate(frame, [150, 180], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          }),
+          textAlign: "center",
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        🚀 Record Breaking Performance
+      </div>
+    </div>
+  </AbsoluteFill>
+);
 }`
-}; 
+};
