@@ -168,8 +168,8 @@ export class ContextBuilderService {
     console.log('[ContextBuilder] 📚 Building Memory Bank with system prompts and model configs');
     
     return {
-      systemPrompts: SYSTEM_PROMPTS,
-      modelConfigs: MODEL_PACKS,
+      systemPrompts: getAllPrompts(),
+      modelConfigs: getActiveModelPack(),
       recentContext: [], // TODO: Add recent context from database
       imageFacts: [], // TODO: Add image facts from cache
     };

@@ -57,6 +57,8 @@ export const env = createEnv({
     ),
     // Log Agent URL for developer tools
     LOG_AGENT_URL: z.string().url().optional().default("http://localhost:3002"),
+    // Model pack selection for AI services
+    MODEL_PACK: z.string().optional().default("optimal-pack"),
   },
 
   /**
@@ -99,6 +101,7 @@ export const env = createEnv({
     USE_MESSAGE_BUS: process.env.USE_MESSAGE_BUS,
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
     LOG_AGENT_URL: process.env.LOG_AGENT_URL,
+    MODEL_PACK: process.env.MODEL_PACK,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
   },
