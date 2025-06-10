@@ -44,7 +44,6 @@ const InputBar = ({ opacity }: { opacity: number }) => {
   const frame = useCurrentFrame();
   const text = "These Bazaar animations are pretty sick, right?!";
   const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
   return (
     <div
@@ -59,6 +58,7 @@ const InputBar = ({ opacity }: { opacity: number }) => {
         transform: `translateY(${interpolate(opacity, [0, 1], [20, 0])}px)`,
         boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
         border: "1px solid #E5E5E5",
+        position: "relative",
       }}
     >
       <div
@@ -330,7 +330,6 @@ const InputBar = ({ opacity }) => {
 const frame = useCurrentFrame();
 const text = "These Bazaar animations are pretty sick, right?!";
 const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
 return (
   <div
@@ -345,6 +344,7 @@ return (
       transform: \`translateY(\${interpolate(opacity, [0, 1], [20, 0])}px)\`,
       boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
       border: "1px solid #E5E5E5",
+      position: "relative",
     }}
   >
     <div

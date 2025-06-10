@@ -2,7 +2,6 @@
 import KnowsCode, { templateConfig as knowsCodeConfig } from './KnowsCode';
 import PromptIntro, { templateConfig as promptIntroConfig } from './PromptIntro';
 import FintechUI, { templateConfig as fintechConfig } from './FintechUI';
-import FloatingElements, { templateConfig as floatingConfig } from './FloatingElements';
 import GrowthGraph, { templateConfig as growthConfig } from './GrowthGraph';
 import AppleSignIn, { templateConfig as appleSignInConfig } from './AppleSignIn';
 import GitHubSignIn, { templateConfig as githubSignInConfig } from './GitHubSignIn';
@@ -33,10 +32,6 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: FintechUI,
   },
   {
-    ...floatingConfig,
-    component: FloatingElements,
-  },
-  {
     ...growthConfig,
     component: GrowthGraph,
   },
@@ -56,4 +51,4 @@ export const TEMPLATES: TemplateDefinition[] = [
     ...codingConfig,
     component: Coding,
   }
-];
+]; 

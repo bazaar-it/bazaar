@@ -165,14 +165,10 @@ export default function HomePage() {
           />
         </div>
         <div className="flex gap-4 items-center">
-          {status === "authenticated" ? (
-            <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
-          ) : (
-            <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
-            </>
-          )}
+          <>
+            <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
+            <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+          </>
         </div>
       </header>
 

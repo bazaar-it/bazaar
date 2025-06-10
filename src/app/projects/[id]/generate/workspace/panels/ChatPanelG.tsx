@@ -109,6 +109,13 @@ export default function ChatPanelG({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // 🚨 NEW: Voice error dismissal state
+  const [showVoiceError, setShowVoiceError] = useState(false);
+  
+  // 🚨 NEW: Auto-expanding textarea state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [textareaHeight, setTextareaHeight] = useState('40px');
+  
   // Voice-to-text functionality (SIMPLIFIED: single voice system)
   const {
     recordingState,
@@ -469,6 +476,11 @@ export default function ChatPanelG({
     // Do nothing during transcribing state
   }, [recordingState, startRecording, stopRecording]);
 
+  // 🚨 NEW: Delete uploaded image function
+  const handleDeleteImage = useCallback((imageId: string) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+  }, []);
+
   // 🚨 NEW: Image upload functions
   const handleImageUpload = useCallback(async (files: File[]) => {
     const newImages: UploadedImage[] = files.map(file => ({
@@ -766,8 +778,6 @@ export default function ChatPanelG({
       window.removeEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
           };
     }, [handleAutoFix]);
-
-
 
   return (
     <div className="flex flex-col h-full">
@@ -1104,9 +1114,9 @@ export default function ChatPanelG({
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
+
         {selectedSceneId && (
           <div className="text-xs text-muted-foreground mt-2 space-y-1">
-            {/* <p>📍 Scene selected: {selectedScene?.data?.name || `Scene ${scenes.findIndex(s => s.id === selectedSceneId) + 1}`}</p> */}
             <p className="opacity-75">💡 Our AI targets scenes automatically — you can also specify which scene, if dont trust the beta</p>
           </div>
         )}
