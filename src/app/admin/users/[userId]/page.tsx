@@ -33,6 +33,15 @@ export default function UserDetailPage({ params }: UserDetailPageProps) {
     enabled: !!userId
   });
 
+  // Fetch user's projects
+  const { data: userProjects, isLoading: projectsLoading } = api.admin.getUserProjects.useQuery({
+    userId: userId,
+    limit: 20,
+    offset: 0,
+  }, {
+    enabled: !!userId
+  });
+
   // Handle authentication and admin check
   if (status === "loading") {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
@@ -181,6 +190,45 @@ export default function UserDetailPage({ params }: UserDetailPageProps) {
             <div className="text-sm text-red-600">This user has encountered errors</div>
           </div>
         )}
+
+        {/* User's Projects Section */}
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Projects</h2>
+          {projectsLoading ? (
+            <div className="text-center py-4">Loading projects...</div>
+          ) : userProjects?.projects.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">No projects found</div>
+          ) : (
+            <div className="space-y-4">
+              {userProjects?.projects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/admin/users/${userId}/projects/${project.id}`}
+                  className="block"
+                >
+                  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium text-gray-900">{project.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Created: {formatDate(project.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-gray-900">
+                          {project.totalScenes} scenes
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {project.totalUserPrompts} prompts
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div>

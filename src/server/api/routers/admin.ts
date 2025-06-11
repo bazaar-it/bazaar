@@ -1406,4 +1406,348 @@ export default function GeneratedScene() {
 
       return userDetails[0] || null;
     }),
+
+  // 🆕 NEW: Get detailed user projects with scenes and activity
+  getUserProjects: adminOnlyProcedure
+    .input(z.object({
+      userId: z.string(),
+      limit: z.number().min(1).max(50).default(20),
+      offset: z.number().min(0).default(0),
+    }))
+    .query(async ({ input }) => {
+      const { userId, limit, offset } = input;
+      
+      const userProjects = await db
+        .select({
+          // Project details
+          id: projects.id,
+          title: projects.title,
+          props: projects.props, // Use props instead of description
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+          
+          // Scene metrics for this project
+          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
+          
+          // Message metrics for this project
+          totalMessages: sql<number>`COUNT(DISTINCT ${messages.id})`.as('total_messages'),
+          totalUserPrompts: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`.as('total_user_prompts'),
+          
+          // Image usage in this project
+          promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
+          
+          // Activity metrics
+          firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
+          lastActivity: sql<Date>`MAX(${messages.createdAt})`.as('last_activity'),
+          
+          // Scene iterations for this project
+          totalIterations: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('total_iterations'),
+        })
+        .from(projects)
+        .leftJoin(scenes, eq(projects.id, scenes.projectId))
+        .leftJoin(messages, eq(projects.id, messages.projectId))
+        .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
+        .where(eq(projects.userId, userId))
+        .groupBy(projects.id, projects.title, projects.props, projects.createdAt, projects.updatedAt)
+        .orderBy(desc(projects.updatedAt))
+        .limit(limit)
+        .offset(offset);
+
+      // Get total count for pagination
+      const totalCountResult = await db
+        .select({ count: count() })
+        .from(projects)
+        .where(eq(projects.userId, userId));
+
+      return {
+        projects: userProjects,
+        totalCount: totalCountResult[0]?.count || 0,
+        hasMore: offset + limit < (totalCountResult[0]?.count || 0),
+      };
+    }),
+
+  // 🆕 NEW: Get full project details including scenes and complete chat history
+  getUserProjectDetails: adminOnlyProcedure
+    .input(z.object({
+      projectId: z.string(),
+      userId: z.string(), // For security - ensure project belongs to user
+    }))
+    .query(async ({ input }) => {
+      const { projectId, userId } = input;
+      
+      // Verify project belongs to user
+      const projectOwnership = await db
+        .select({ userId: projects.userId })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .limit(1);
+        
+      if (!projectOwnership[0] || projectOwnership[0].userId !== userId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found or doesn't belong to user",
+        });
+      }
+
+      // Get project details
+      const projectDetails = await db
+        .select({
+          id: projects.id,
+          title: projects.title,
+          props: projects.props, // Use props instead of description
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+        })
+        .from(projects)
+        .where(eq(projects.id, projectId))
+        .limit(1);
+
+      // Get all scenes for this project
+      const projectScenes = await db
+        .select({
+          id: scenes.id,
+          name: scenes.name,
+          tsxCode: scenes.tsxCode, // Use tsxCode instead of code
+          duration: scenes.duration,
+          createdAt: scenes.createdAt,
+          updatedAt: scenes.updatedAt,
+          // Iteration count for each scene
+          iterationCount: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('iteration_count'),
+        })
+        .from(scenes)
+        .leftJoin(sceneIterations, eq(scenes.id, sceneIterations.sceneId))
+        .where(eq(scenes.projectId, projectId))
+        .groupBy(scenes.id, scenes.name, scenes.tsxCode, scenes.duration, scenes.createdAt, scenes.updatedAt)
+        .orderBy(asc(scenes.createdAt));
+
+      // Get complete chat history for this project
+      const chatHistory = await db
+        .select({
+          id: messages.id,
+          role: messages.role,
+          content: messages.content,
+          imageUrls: messages.imageUrls,
+          status: messages.status,
+          createdAt: messages.createdAt,
+          // Additional metadata
+          originalTsxCode: messages.originalTsxCode,
+        })
+        .from(messages)
+        .where(eq(messages.projectId, projectId))
+        .orderBy(asc(messages.createdAt));
+
+      // Get scene iterations for detailed editing history (renamed variable)
+      const projectSceneIterations = await db
+        .select({
+          id: sceneIterations.id,
+          sceneId: sceneIterations.sceneId,
+          editComplexity: sceneIterations.editComplexity,
+          userPrompt: sceneIterations.userPrompt,
+          brainReasoning: sceneIterations.brainReasoning,
+          toolReasoning: sceneIterations.toolReasoning,
+          codeBefore: sceneIterations.codeBefore,
+          codeAfter: sceneIterations.codeAfter,
+          changesApplied: sceneIterations.changesApplied,
+          changesPreserved: sceneIterations.changesPreserved,
+          generationTimeMs: sceneIterations.generationTimeMs,
+          modelUsed: sceneIterations.modelUsed,
+          operationType: sceneIterations.operationType,
+          temperature: sceneIterations.temperature,
+          tokensUsed: sceneIterations.tokensUsed,
+          createdAt: sceneIterations.createdAt,
+        })
+        .from(sceneIterations)
+        .where(eq(sceneIterations.projectId, projectId))
+        .orderBy(asc(sceneIterations.createdAt));
+
+      // Get project memory for context
+      const projectMemoryEntries = await db
+        .select({
+          id: projectMemory.id,
+          memoryType: projectMemory.memoryType,
+          memoryValue: projectMemory.memoryValue, // Use memoryValue instead of content
+          createdAt: projectMemory.createdAt,
+        })
+        .from(projectMemory)
+        .where(eq(projectMemory.projectId, projectId))
+        .orderBy(desc(projectMemory.createdAt));
+
+      return {
+        project: projectDetails[0],
+        scenes: projectScenes,
+        chatHistory,
+        sceneIterations: projectSceneIterations, // Use renamed variable
+        projectMemory: projectMemoryEntries,
+        summary: {
+          totalScenes: projectScenes.length,
+          totalMessages: chatHistory.length,
+          totalUserPrompts: chatHistory.filter(msg => msg.role === 'user').length,
+          totalAssistantResponses: chatHistory.filter(msg => msg.role === 'assistant').length,
+          totalIterations: projectSceneIterations.length,
+          imagesUploaded: chatHistory.filter(msg => msg.imageUrls && Array.isArray(msg.imageUrls) && msg.imageUrls.length > 0).length,
+          firstActivity: chatHistory[0]?.createdAt || null,
+          lastActivity: chatHistory[chatHistory.length - 1]?.createdAt || null,
+        }
+      };
+    }),
+
+  // 🆕 NEW: Get all scenes created by a user across all projects
+  getUserScenes: adminOnlyProcedure
+    .input(z.object({
+      userId: z.string(),
+      limit: z.number().min(1).max(100).default(50),
+      offset: z.number().min(0).default(0),
+      sortBy: z.enum(['created_date', 'updated_date', 'project_name', 'scene_name', 'duration']).default('created_date'),
+      sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    }))
+    .query(async ({ input }) => {
+      const { userId, limit, offset, sortBy, sortOrder } = input;
+      
+      const sortColumn = 
+        sortBy === 'created_date' ? scenes.createdAt :
+        sortBy === 'updated_date' ? scenes.updatedAt :
+        sortBy === 'project_name' ? projects.title :
+        sortBy === 'scene_name' ? scenes.name :
+        scenes.duration;
+
+      const userScenes = await db
+        .select({
+          // Scene details
+          id: scenes.id,
+          name: scenes.name,
+          tsxCode: scenes.tsxCode, // Use tsxCode instead of code
+          duration: scenes.duration,
+          createdAt: scenes.createdAt,
+          updatedAt: scenes.updatedAt,
+          
+          // Project context
+          projectId: projects.id,
+          projectTitle: projects.title,
+          projectCreatedAt: projects.createdAt,
+          
+          // Scene activity metrics
+          iterationCount: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('iteration_count'),
+          lastIterationDate: sql<Date>`MAX(${sceneIterations.createdAt})`.as('last_iteration_date'),
+          
+          // Complexity breakdown
+          complexEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'structural' THEN ${sceneIterations.id} END)`.as('complex_edits'),
+          creativeEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'creative' THEN ${sceneIterations.id} END)`.as('creative_edits'),
+          surgicalEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'surgical' THEN ${sceneIterations.id} END)`.as('surgical_edits'),
+        })
+        .from(scenes)
+        .innerJoin(projects, eq(scenes.projectId, projects.id))
+        .leftJoin(sceneIterations, eq(scenes.id, sceneIterations.sceneId))
+        .where(eq(projects.userId, userId))
+        .groupBy(scenes.id, scenes.name, scenes.tsxCode, scenes.duration, scenes.createdAt, scenes.updatedAt, projects.id, projects.title, projects.createdAt)
+        .orderBy(sortOrder === 'desc' ? desc(sortColumn) : asc(sortColumn))
+        .limit(limit)
+        .offset(offset);
+
+      // Get total count for pagination
+      const totalCountResult = await db
+        .select({ count: count() })
+        .from(scenes)
+        .innerJoin(projects, eq(scenes.projectId, projects.id))
+        .where(eq(projects.userId, userId));
+
+      return {
+        scenes: userScenes,
+        totalCount: totalCountResult[0]?.count || 0,
+        hasMore: offset + limit < (totalCountResult[0]?.count || 0),
+        appliedSort: { sortBy, sortOrder },
+      };
+    }),
+
+  // 🆕 NEW: Get detailed scene information including iteration history
+  getSceneDetails: adminOnlyProcedure
+    .input(z.object({
+      sceneId: z.string(),
+      userId: z.string(), // For security verification
+    }))
+    .query(async ({ input }) => {
+      const { sceneId, userId } = input;
+      
+      // Verify scene belongs to user's project
+      const sceneOwnership = await db
+        .select({ 
+          userId: projects.userId,
+          projectId: scenes.projectId 
+        })
+        .from(scenes)
+        .innerJoin(projects, eq(scenes.projectId, projects.id))
+        .where(eq(scenes.id, sceneId))
+        .limit(1);
+        
+      if (!sceneOwnership[0] || sceneOwnership[0].userId !== userId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Scene not found or doesn't belong to user",
+        });
+      }
+
+      // Get scene details
+      const sceneDetails = await db
+        .select({
+          id: scenes.id,
+          name: scenes.name,
+          tsxCode: scenes.tsxCode, // Use tsxCode instead of code
+          duration: scenes.duration,
+          createdAt: scenes.createdAt,
+          updatedAt: scenes.updatedAt,
+          
+          // Project context
+          projectId: projects.id,
+          projectTitle: projects.title,
+        })
+        .from(scenes)
+        .innerJoin(projects, eq(scenes.projectId, projects.id))
+        .where(eq(scenes.id, sceneId))
+        .limit(1);
+
+      // Get all iterations for this scene
+      const iterations = await db
+        .select({
+          id: sceneIterations.id,
+          editComplexity: sceneIterations.editComplexity,
+          userPrompt: sceneIterations.userPrompt,
+          generationTimeMs: sceneIterations.generationTimeMs,
+          modelUsed: sceneIterations.modelUsed,
+          createdAt: sceneIterations.createdAt,
+        })
+        .from(sceneIterations)
+        .where(eq(sceneIterations.sceneId, sceneId))
+        .orderBy(asc(sceneIterations.createdAt));
+
+      // Get related messages from the project (context around scene creation)
+      const relatedMessages = await db
+        .select({
+          id: messages.id,
+          role: messages.role,
+          content: messages.content,
+          imageUrls: messages.imageUrls,
+          createdAt: messages.createdAt,
+        })
+        .from(messages)
+        .where(eq(messages.projectId, sceneOwnership[0].projectId))
+        .orderBy(asc(messages.createdAt));
+
+      return {
+        scene: sceneDetails[0],
+        iterations,
+        relatedMessages,
+        summary: {
+          totalIterations: iterations.length,
+          complexityBreakdown: {
+            structural: iterations.filter(i => i.editComplexity === 'structural').length,
+            creative: iterations.filter(i => i.editComplexity === 'creative').length,
+            surgical: iterations.filter(i => i.editComplexity === 'surgical').length,
+          },
+          averageGenerationTime: iterations.length > 0 
+            ? Math.round(iterations.reduce((sum, i) => sum + (i.generationTimeMs || 0), 0) / iterations.length)
+            : 0,
+          firstIteration: iterations[0]?.createdAt || null,
+          lastIteration: iterations[iterations.length - 1]?.createdAt || null,
+        }
+      };
+    }),
 });

@@ -15,7 +15,7 @@ export default function LoginPage() {
       analytics.betaUserSignup('reddit');
     }
     
-    signIn("github", { callbackUrl: "/projects/new" });
+    signIn("github", { callbackUrl: "/projects" });
   };
 
   const handleGoogleLogin = () => {
@@ -28,7 +28,7 @@ export default function LoginPage() {
       analytics.betaUserSignup('reddit');
     }
     
-    signIn("google", { callbackUrl: "/projects/new" });
+    signIn("google", { callbackUrl: "/projects" });
   };
 
   return (
