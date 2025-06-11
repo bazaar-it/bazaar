@@ -1111,12 +1111,6 @@ export default function ChatPanelG({
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
-
-        {selectedSceneId && (
-          <div className="text-xs text-muted-foreground mt-2 space-y-1">
-            <p className="opacity-75">💡 Our AI targets scenes automatically — you can also specify which scene, if dont trust the beta</p>
-          </div>
-        )}
       </div>
     </div>
   );
