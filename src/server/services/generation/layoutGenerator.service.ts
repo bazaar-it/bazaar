@@ -74,7 +74,22 @@ export class LayoutGeneratorService {
       // ---------- Minimal JSON parsing - let code generator handle whatever we get ----------
       let parsed;
       try {
-        parsed = JSON.parse(rawOutput);
+        // 🚨 FIX: Strip markdown code blocks if present
+        let cleanedOutput = rawOutput;
+        
+        // Remove ```json or ``` wrapping if present
+        if (cleanedOutput.startsWith('```')) {
+          const lines = cleanedOutput.split('\n');
+          if (lines[0].startsWith('```')) {
+            lines.shift(); // Remove first ```json or ```
+          }
+          if (lines[lines.length - 1].startsWith('```')) {
+            lines.pop(); // Remove last ```
+          }
+          cleanedOutput = lines.join('\n');
+        }
+        
+        parsed = JSON.parse(cleanedOutput);
       } catch (jsonError) {
         // If JSON parsing fails, create a basic fallback structure
         parsed = {

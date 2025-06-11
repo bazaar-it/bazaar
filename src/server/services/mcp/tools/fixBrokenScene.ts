@@ -340,6 +340,12 @@ ${fixedCode}
       const exportMatches = fixedCode.match(/export\s+default\s+/g);
       if (exportMatches && exportMatches.length > 1)
         errors.push('Duplicate export default statements found');
+      
+      // 🚨 NEW: Check for the incorrect export pattern
+      const incorrectExportPattern = /function\s+\w+\s*\([^)]*\)\s*{[\s\S]*}\s*export\s+default\s+\w+;?$/;
+      if (incorrectExportPattern.test(fixedCode.trim())) {
+        errors.push('Incorrect export pattern: function declaration should use export default function');
+      }
 
       // 🚨 NEW: Log the fixed code for debugging
       if (process.env.NODE_ENV === 'development' || errors.length > 0) {

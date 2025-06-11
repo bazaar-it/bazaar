@@ -177,6 +177,42 @@ useEffect(() => {
 
 ---
 
+## 🧠 CONTEXT BUILDING ARCHITECTURE (Updated Sprint 38)
+
+### Image Context System:
+The image context building has been moved from the orchestrator to the contextBuilder for better separation of concerns:
+
+#### Architecture Benefits:
+- **Centralized Context**: All context (preferences, scenes, images) built in one place
+- **Reusability**: Any service can access image context via contextBuilder
+- **AI Learning**: Image patterns can trigger preference learning
+- **Clean Code**: Orchestrator focuses on tool selection, not context building
+
+#### Image Context Flow:
+```
+ChatHistory → ContextBuilder.buildImageContext() → ImageContext {
+  conversationImages: Array of image positions and prompts
+  imagePatterns: AI-detected usage patterns
+  totalImageCount: Number of images in conversation
+  currentImageUrls: Current upload if any
+}
+```
+
+#### Image Reference Resolution:
+```typescript
+// User says "use the first image" or "the image I uploaded earlier"
+const imageRef = contextBuilder.extractImageReference(userPrompt);
+const imageUrls = contextBuilder.getImageUrlsFromReference(imageContext, imageRef);
+```
+
+#### Integration Points:
+1. **Orchestrator**: Passes chatHistory to contextBuilder, uses image context for decisions
+2. **MCP Tools**: Receive resolved image URLs directly, no need to parse references
+3. **Preference Learning**: Image patterns contribute to user preference extraction
+4. **Project Memory**: Image analysis results stored for long-term context
+
+---
+
 ## 🧭 HOW TO NAVIGATE THE CODEBASE
 
 ### Key Files to Understand:
@@ -184,8 +220,9 @@ useEffect(() => {
 2. **`coco_notes.md`** - Main functionality reference
 3. **`src/app/projects/[id]/generate/`** - Main video editor
 4. **`src/server/services/brain/orchestrator.ts`** - AI orchestration
-5. **`src/server/services/mcp/tools/`** - Production AI tools
-6. **`src/server/api/routers/generation.ts`** - Main API endpoint
+5. **`src/server/services/brain/contextBuilder.service.ts`** - Context building & image handling
+6. **`src/server/services/mcp/tools/`** - Production AI tools
+7. **`src/server/api/routers/generation.ts`** - Main API endpoint
 
 ### Main User Flow Files:
 ```
@@ -342,6 +379,7 @@ npm run evals              # Run evaluation system
 ### Important Context:
 - **Main flow is working** - ChatPanelG → generation → MCP tools
 - **State management simplified (Sprint 35)** - Direct updates only, no refetching
+- **Image context refactored (Sprint 38)** - Now centralized in contextBuilder
 - **A2A system was removed** - don't reference old agent system
 - **Evaluation system is critical** - don't break `src/lib/evals/`
 - **Database is production** - be careful with schema changes
@@ -417,4 +455,4 @@ git merge dev
 
 ---
 
-*Last Updated: 11.06.2025 After state management simplification (Sprint 35) - trust your state, no refetching!*
+*Last Updated: 11.06.2025 After image context refactoring (Sprint 38) - centralized in contextBuilder for better architecture!*

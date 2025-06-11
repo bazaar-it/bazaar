@@ -514,39 +514,16 @@ export class BrainOrchestrator extends EventEmitter {
       if (this.DEBUG) console.log('\n[DEBUG] PROCESSING USER INPUT:', input.prompt);
       if (this.DEBUG) console.log(`[DEBUG] PROJECT: ${input.projectId}, SCENES: ${input.storyboardSoFar?.length || 0}`);
       
-      // 🆕 PHASE 1: ASYNC IMAGE ANALYSIS (Fire-and-forget)
+      // 🖼️ PHASE 1: Extract image URLs for context (no async analysis)
       const imageUrls = input.userContext?.imageUrls as string[];
-      let imageAnalysisPromise: Promise<ImageFacts | null>;
       
       if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
-        if (this.DEBUG) console.log(`🖼️ Starting ASYNC image analysis for ${imageUrls.length} image(s)`);
-        
-        // 🪵 Enhanced Logging
-        console.log("Orchestrator: 🖼️ Triggering async image analysis.", { count: imageUrls.length });
-
-        // 🆕 PHASE 3: Measure image analysis performance separately
-        const imageAnalysisStartTime = Date.now();
-        imageAnalysisPromise = this.startAsyncImageAnalysis(input.projectId, imageUrls, input.prompt);
-        
-        // Track completion time asynchronously with error tracking
-        imageAnalysisPromise.then(() => {
-          // Performance metric ended
-        }).catch((error) => {
-          // Performance metric ended
-          ErrorTracker.captureAsyncError(error, {
-            operation: 'async_image_analysis_promise',
-            projectId: input.projectId,
-            userId: input.userId,
-            metadata: { imageCount: imageUrls.length }
-          });
-        });
-      } else {
-        imageAnalysisPromise = Promise.resolve(null);
+        console.log("Orchestrator: 🖼️ User uploaded images", { count: imageUrls.length });
       }
       
       // 🆕 PHASE 2: BUILD CONTEXT PACKET (Enhanced with memory)
       const contextBuildStartTime = Date.now();
-      const contextPacket = await this.buildContextPacket(input.projectId, input.chatHistory || [], []);
+      const contextPacket = await this.buildContextPacket(input.projectId, input.chatHistory || [], [], input.userContext);
       // Performance metric ended
       
       // 🪵 Enhanced Logging: Log the summary of the context packet
@@ -621,7 +598,7 @@ export class BrainOrchestrator extends EventEmitter {
           isAskSpecify: true,
         };
       } else if (toolSelection.workflow && toolSelection.workflow.length > 0) {
-        executionResult = await this.executeWorkflow(input, toolSelection.workflow, toolSelection.reasoning);
+        executionResult = await this.executeWorkflow(input, toolSelection.workflow, toolSelection.reasoning, contextPacket);
       } else if (toolSelection.toolName) {
         executionResult = await this.executeSingleTool(input, toolSelection, contextPacket);
       } else {
@@ -637,20 +614,8 @@ export class BrainOrchestrator extends EventEmitter {
       }
       
       // 🆕 PHASE 6: LATE-ARRIVING IMAGE FACTS HOOK-UP
-      if (imageAnalysisPromise) {
-        imageAnalysisPromise.then(imageFacts => {
-          if (imageFacts) {
-            this.handleLateArrivingImageFacts(input.projectId, imageFacts);
-          }
-        }).catch(error => {
-          ErrorTracker.captureAsyncError(error, {
-            operation: 'late_arriving_image_facts',
-            projectId: input.projectId,
-            userId: input.userId,
-            metadata: { imageUrls }
-          });
-        });
-      }
+      // Note: Async image analysis pattern has been removed per Phase 2 recommendations
+      // Images are now handled synchronously or directly by vision-enabled models
       
       // 🆕 PHASE 3: Complete performance measurement and log results
       const totalDuration: number = Date.now() - startTime;
@@ -700,6 +665,10 @@ export class BrainOrchestrator extends EventEmitter {
   /**
    * 🆕 PHASE 1: Start async image analysis (fire-and-forget)
    */
+  /**
+   * @deprecated This method is no longer used. We pass imageUrls directly to tools instead.
+   * Keeping for reference only - will be removed in future cleanup.
+   */
   async startAsyncImageAnalysis(
     projectId: string,
     imageUrls: string[],
@@ -747,6 +716,9 @@ export class BrainOrchestrator extends EventEmitter {
   }
   
   /**
+   * @deprecated This method is no longer used. We pass imageUrls directly to tools instead.
+   * Keeping for reference only - will be removed in future cleanup.
+   * 
    * 🆕 Perform actual image analysis using the analyzeImage tool
    */
   private async performImageAnalysis(
@@ -785,7 +757,8 @@ export class BrainOrchestrator extends EventEmitter {
   async buildContextPacket(
     projectId: string,
     conversationHistory: Array<{ role: string; content: string }>,
-    currentImageTraceIds: string[]
+    currentImageTraceIds: string[],
+    userContext?: Record<string, unknown>
   ): Promise<MemoryBankSummary> {
     // 🪵 Enhanced Logging
     console.log(`Orchestrator: 🏗️ Building context packet for project: ${projectId}`);
@@ -809,12 +782,14 @@ export class BrainOrchestrator extends EventEmitter {
         .where(eq(scenes.projectId, projectId));
 
       // 🚨 NEW: Build enhanced context using ContextBuilder
+      const currentImageUrls = (userContext?.imageUrls as string[]) || [];
       const contextBuilderResult = await this.contextBuilder.buildContext({
         projectId,
         userId,
         storyboardSoFar: storyboardSoFar as any, // Type cast for compatibility
         userMessage: conversationHistory[conversationHistory.length - 1]?.content,
-        imageUrls: [], // Will be populated with actual image URLs
+        imageUrls: currentImageUrls,
+        chatHistory: conversationHistory
       });
 
       console.log(`🧠 [Brain] ContextBuilder results:`, {
@@ -842,10 +817,8 @@ export class BrainOrchestrator extends EventEmitter {
         .from(scenes)
         .where(eq(scenes.projectId, projectId));
 
-      // 🚨 NEW: Extract MORE user preferences from chat history
-      const chatPreferences = this.extractUserPreferences(conversationHistory);
+      // User preferences are now extracted by AI-powered preferenceExtractor in contextBuilder
       
-      // 🚨 NEW: Merge all preference sources: database + chat + ContextBuilder
       // Convert ContextBuilder preferences to string format for compatibility
       const contextBuilderPrefs = Object.fromEntries(
         Object.entries(contextBuilderResult.userPreferences).map(([key, value]) => [
@@ -853,10 +826,11 @@ export class BrainOrchestrator extends EventEmitter {
           String(value)
         ])
       );
-      const allPreferences = { 
-        ...userPreferences, 
-        ...chatPreferences,
-        ...contextBuilderPrefs
+      
+      // Use preferences from contextBuilder (which includes AI-powered extraction)
+      const allPreferences = {
+        ...userPreferences,  // Legacy DB preferences
+        ...contextBuilderPrefs  // AI-extracted preferences (takes precedence)
       };
 
       // 🚨 NEW: Build rich context packet with REAL data
@@ -921,7 +895,7 @@ export class BrainOrchestrator extends EventEmitter {
       
       // 🚨 NEW: Fallback to stub implementation if database fails
       return {
-        userPreferences: this.extractUserPreferences(conversationHistory),
+        userPreferences: {},  // Preferences are now extracted by contextBuilder
         sceneHistory: [],
         imageAnalyses: [],
         conversationContext: this.summarizeConversation(conversationHistory),
@@ -932,40 +906,7 @@ export class BrainOrchestrator extends EventEmitter {
     }
   }
   
-  /**
-   * 🆕 Extract user preferences from chat history - conservative implementation
-   */
-  private extractUserPreferences(chatHistory: Array<{role: string, content: string}>): Record<string, string> {
-    const preferences: Record<string, string> = {};
-    
-    // Look for preference indicators in user messages
-    const userMessages = chatHistory.filter(msg => msg.role === 'user');
-    
-    for (const message of userMessages) {
-      const content = message.content.toLowerCase();
-      
-      // Duration preferences
-      if (content.includes('2 second') || content.includes('2-second')) {
-        preferences['duration'] = '2-second scenes';
-      }
-      if (content.includes('fast') || content.includes('quick')) {
-        preferences['pace'] = 'fast-paced content';
-      }
-      
-      // Style preferences
-      if (content.includes('modern')) {
-        preferences['style'] = 'modern style';
-      }
-      if (content.includes('neon') || content.includes('glow')) {
-        preferences['effects'] = 'neon/glow effects';
-      }
-      if (content.includes('minimal')) {
-        preferences['design'] = 'minimal design';
-      }
-    }
-    
-    return preferences;
-  }
+  // REMOVED: extractUserPreferences - now handled by AI-powered preferenceExtractor in contextBuilder
   
   /**
    * 🆕 Summarize conversation for context
@@ -1113,6 +1054,15 @@ export class BrainOrchestrator extends EventEmitter {
     // Build storyboard context
     let storyboardInfo = "No scenes yet";
     if (storyboardSoFar && storyboardSoFar.length > 0) {
+      // 🚨 DEBUG: Log scene ordering to diagnose numbering issues
+      console.log('[BrainOrchestrator] Scene ordering debug:', storyboardSoFar.map((scene, i) => ({
+        userFacingNumber: i + 1,
+        name: scene.name,
+        id: scene.id,
+        order: (scene as any).order || 'unknown',
+        createdAt: (scene as any).createdAt || 'unknown'
+      })));
+      
       storyboardInfo = storyboardSoFar.map((scene, i) => 
         `Scene ${i + 1}: "${scene.name}" (ID: ${scene.id})`
       ).join('\n');
@@ -1130,18 +1080,24 @@ export class BrainOrchestrator extends EventEmitter {
       memoryInfo = `\nMEMORY BANK: User preferences - ${contextPacket.memoryBankSummary.userPreferences.join(', ')}`;
     }
     
-    // Add image context
+    // Use image context from contextBuilder
     let imageInfo = "";
-    const imageUrls = input.userContext?.imageUrls;
-    if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
-      imageInfo = `\nIMAGES: ${imageUrls.length} uploaded`;
+    if (contextPacket.imageContext && contextPacket.imageContext.conversationImages.length > 0) {
+      const images = contextPacket.imageContext.conversationImages;
+      imageInfo = `\nIMAGES IN CONVERSATION:`;
+      images.forEach((img) => {
+        imageInfo += `\n${img.position}. "${img.userPrompt}" [${img.imageCount} image(s)]`;
+      });
+      imageInfo += `\n\nWhen user references images:
+- "the image" or "this image" → most recent image (position ${images.length})
+- "first/second/third image" → by position number
+- "image 1/2/3" → by position number
+- "earlier image" → previous images in conversation
+Use image-aware tools (createSceneFromImage, editSceneWithImage, analyzeImage) when working with images.`;
       
-      // Add any completed image analysis
-      if (contextPacket.memoryBankSummary?.imageAnalyses?.length > 0) {
-        const latestAnalysis = contextPacket.memoryBankSummary.imageAnalyses[contextPacket.memoryBankSummary.imageAnalyses.length - 1];
-        imageInfo += ` (Analysis available: ${latestAnalysis.palette.length} colors, mood: "${latestAnalysis.mood}")`;
-      } else {
-        imageInfo += ` (Analysis in progress...)`;
+      // Add image patterns if any
+      if (contextPacket.imageContext.imagePatterns.length > 0) {
+        imageInfo += `\n\nImage patterns: ${contextPacket.imageContext.imagePatterns.join(', ')}`;
       }
     }
     
@@ -1158,6 +1114,10 @@ ${storyboardInfo}${memoryInfo}${imageInfo}${chatInfo}
 
 Respond with JSON only.`;
   }
+
+  // REMOVED: extractImageReference - now handled by contextBuilder
+
+  // REMOVED: getImageUrlsFromHistory - now handled by contextBuilder
 
   /**
    * 🆕 PHASE 4: Execute a single tool with context
@@ -1220,7 +1180,7 @@ Respond with JSON only.`;
     const isFirstScene = !input.storyboardSoFar || input.storyboardSoFar.length === 0;
     
     // Execute single tool with enhanced context
-    const toolInput = await this.prepareToolInput(input, toolSelection);
+    const toolInput = await this.prepareToolInput(input, toolSelection, contextPacket);
 
     // 🚨 NEW: Pass first scene detection to addScene tool
     if (toolSelection.toolName === ToolName.AddScene) {
@@ -1352,7 +1312,8 @@ Respond with JSON only.`;
   private async executeWorkflow(
     input: OrchestrationInput, 
     workflow: Array<{toolName: string, context: string, dependencies?: string[], targetSceneId?: string}>,
-    reasoning?: string
+    reasoning?: string,
+    contextPacket?: any
   ): Promise<OrchestrationOutput> {
     if (this.DEBUG) console.log(`[BrainOrchestrator] Executing workflow with ${workflow.length} steps`);
     
@@ -1378,7 +1339,7 @@ Respond with JSON only.`;
         }
         
         // Prepare input with workflow context
-        const stepInput = await this.prepareWorkflowStepInput(input, step, workflowResults);
+        const stepInput = await this.prepareWorkflowStepInput(input, step, workflowResults, contextPacket);
         
         // Execute the tool
         const stepResult = await tool.run(stepInput);
@@ -1433,7 +1394,8 @@ Respond with JSON only.`;
   private async prepareWorkflowStepInput(
     originalInput: OrchestrationInput,
     step: {toolName: string, context: string, dependencies?: string[], targetSceneId?: string},
-    workflowResults: Record<string, any>
+    workflowResults: Record<string, any>,
+    contextPacket?: any
   ): Promise<Record<string, unknown>> {
     // Start with the original tool input preparation
     // 🚨 CRITICAL FIX: Extract targetSceneId from step definition and pass to prepareToolInput
@@ -1441,7 +1403,7 @@ Respond with JSON only.`;
       toolName: step.toolName,
       targetSceneId: step.targetSceneId // Pass targetSceneId from workflow step
     };
-    const baseInput = await this.prepareToolInput(originalInput, toolSelection);
+    const baseInput = await this.prepareToolInput(originalInput, toolSelection, contextPacket);
     
     // 🚨 CRITICAL FIX: Extract visionAnalysis from previous step results for addScene and editScene
     let visionAnalysis: any = undefined;
@@ -1539,6 +1501,10 @@ Respond with JSON only.`;
       case ToolName.ChangeDuration:
         // ChangeDuration is a special case - it just returns the result without database operations
         // since the tool handles the duration update internally
+        // 🚨 FIX: Add targetSceneId to the result so ChatPanelG knows which scene to update
+        if (toolSelection?.targetSceneId) {
+          result.data.targetSceneId = toolSelection.targetSceneId;
+        }
         break;
         
       default:
@@ -1957,7 +1923,8 @@ Respond with JSON only.`;
   
   private async prepareToolInput(
     input: OrchestrationInput, 
-    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string; clarificationNeeded?: string; editComplexity?: string; userFeedback?: string }
+    toolSelection: { toolName?: string; toolInput?: Record<string, unknown>; targetSceneId?: string; clarificationNeeded?: string; editComplexity?: string; userFeedback?: string },
+    contextPacket?: any
   ): Promise<Record<string, unknown>> {
     const baseInput = {
       userPrompt: input.prompt,
@@ -2060,28 +2027,54 @@ Respond with JSON only.`;
         };
         
       case "analyzeImage":
-        // analyzeImage requires image URLs from user context
-        const imageUrls = input.userContext?.imageUrls as string[];
-        if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
-          throw new Error("Image URLs required for analysis - user must have uploaded images");
-        }
+        // Get image URLs - either from current upload or conversation history
+        let analyzeImageUrls = input.userContext?.imageUrls as string[] | undefined;
         
-        // Generate trace ID for debugging (user's feedback)
-        const traceId = `img-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 5)}`;
+        // If no current upload, check if user is referencing a previous image
+        if (!analyzeImageUrls || analyzeImageUrls.length === 0) {
+          // Look for image references in the prompt using contextBuilder
+          if (contextPacket?.imageContext) {
+            const imageRef = this.contextBuilder.extractImageReference(input.prompt);
+            if (imageRef) {
+              analyzeImageUrls = this.contextBuilder.getImageUrlsFromReference(
+                contextPacket.imageContext,
+                imageRef
+              );
+            }
+          }
+          
+          if (!analyzeImageUrls || analyzeImageUrls.length === 0) {
+            throw new Error("No images found - user must upload an image or reference a previous one");
+          }
+        }
 
         return {
           ...baseInput,
-          imageUrls: imageUrls,
+          imageUrl: analyzeImageUrls[0], // analyzeImage tool expects single imageUrl property
           userPrompt: input.prompt,
           projectId: input.projectId,
-          traceId: traceId,
         };
         
       case "createSceneFromImage":
-        // createSceneFromImage requires image URLs from user context
-        const createImageUrls = input.userContext?.imageUrls as string[];
-        if (!createImageUrls || !Array.isArray(createImageUrls) || createImageUrls.length === 0) {
-          throw new Error("Image URLs required for scene creation - user must have uploaded images");
+        // Get image URLs - either from current upload or conversation history
+        let createImageUrls = input.userContext?.imageUrls as string[] | undefined;
+        
+        // If no current upload, check if user is referencing a previous image
+        if (!createImageUrls || createImageUrls.length === 0) {
+          // Look for image references in the prompt using contextBuilder
+          if (contextPacket?.imageContext) {
+            const imageRef = this.contextBuilder.extractImageReference(input.prompt);
+            if (imageRef) {
+              createImageUrls = this.contextBuilder.getImageUrlsFromReference(
+                contextPacket.imageContext,
+                imageRef
+              );
+            }
+          }
+          
+          if (!createImageUrls || createImageUrls.length === 0) {
+            throw new Error("No images found - user must upload an image or reference a previous one");
+          }
         }
         
         // Calculate proper scene number based on existing scenes
@@ -2096,10 +2089,25 @@ Respond with JSON only.`;
         };
         
       case "editSceneWithImage":
-        // editSceneWithImage requires both image URLs and existing scene data
-        const editImageUrls = input.userContext?.imageUrls as string[];
-        if (!editImageUrls || !Array.isArray(editImageUrls) || editImageUrls.length === 0) {
-          throw new Error("Image URLs required for image-guided editing - user must have uploaded images");
+        // Get image URLs - either from current upload or conversation history
+        let editImageUrls = input.userContext?.imageUrls as string[] | undefined;
+        
+        // If no current upload, check if user is referencing a previous image
+        if (!editImageUrls || editImageUrls.length === 0) {
+          // Look for image references in the prompt using contextBuilder
+          if (contextPacket?.imageContext) {
+            const imageRef = this.contextBuilder.extractImageReference(input.prompt);
+            if (imageRef) {
+              editImageUrls = this.contextBuilder.getImageUrlsFromReference(
+                contextPacket.imageContext,
+                imageRef
+              );
+            }
+          }
+          
+          if (!editImageUrls || editImageUrls.length === 0) {
+            throw new Error("No images found - user must upload an image or reference a previous one");
+          }
         }
         
         const editSceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
@@ -2226,18 +2234,8 @@ Respond with JSON only.`;
         });
       }
 
-      // 🚨 NEW: Extract and store any new user preferences from the interaction
-      const newPreferences = this.extractUserPreferencesFromResult(result);
-      for (const [key, value] of Object.entries(newPreferences)) {
-        await projectMemoryService.upsertMemory({
-          projectId,
-          memoryType: MEMORY_TYPES.USER_PREFERENCE,
-          memoryKey: key,
-          memoryValue: value,
-          confidence: 0.8,
-          sourcePrompt: result.reasoning,
-        });
-      }
+      // User preferences are now learned asynchronously by preferenceExtractor in contextBuilder
+      // No need to extract preferences here - they're handled during context building
 
       if (this.DEBUG) {
         console.log(`✅ [Brain] Memory bank updated successfully`);
@@ -2249,35 +2247,7 @@ Respond with JSON only.`;
     }
   }
 
-  /**
-   * 🆕 PHASE 3: Extract user preferences from orchestration result
-   */
-  private extractUserPreferencesFromResult(result: OrchestrationOutput): Record<string, string> {
-    const preferences: Record<string, string> = {};
-    
-    if (!result.reasoning) return preferences;
-    
-    const reasoning = result.reasoning.toLowerCase();
-    
-    // Extract preferences from reasoning text
-    if (reasoning.includes('modern') || reasoning.includes('contemporary')) {
-      preferences['style_preference'] = 'modern';
-    }
-    
-    if (reasoning.includes('fast') || reasoning.includes('quick') || reasoning.includes('2 second')) {
-      preferences['duration_preference'] = 'short_duration';
-    }
-    
-    if (reasoning.includes('colorful') || reasoning.includes('vibrant')) {
-      preferences['color_preference'] = 'vibrant';
-    }
-    
-    if (reasoning.includes('minimal') || reasoning.includes('simple')) {
-      preferences['design_preference'] = 'minimal';
-    }
-    
-    return preferences;
-  }
+  // REMOVED: extractUserPreferencesFromResult - preference learning now handled by AI in contextBuilder
 
   /**
    * 🆕 PHASE 3: Handle late-arriving image facts with REAL database persistence
