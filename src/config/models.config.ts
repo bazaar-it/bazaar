@@ -358,15 +358,7 @@ export function resolveDirectCodeEditorModel(
 // PROVIDER CLIENT REGISTRY
 // =============================================================================
 
-// Add Node.js shim for OpenAI in Node.js environment
-if (typeof window === 'undefined') {
-  try {
-    require('openai/shims/node');
-  } catch (e) {
-    // Shim already imported
-  }
-}
-
+import "openai/shims/node";
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 

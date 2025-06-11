@@ -63,8 +63,6 @@ interface VideoState {
   chatHistory: Record<string, ChatMessage[]>;
   refreshTokens: Record<string, number>;
   
-  // 🚨 NEW: Global refresh counter to force all components to re-render
-  globalRefreshCounter: number;
   
   // OPTIMIZATION #5: Scene selection state
   selectedScenes: Record<string, string | null>;
@@ -97,14 +95,12 @@ interface VideoState {
   // Legacy methods (for backward compatibility)
   getChatHistory: () => ChatMessage[];
   getProjectChatHistory: (projectId: string) => ChatMessage[]; // Added to interface
-  applyPatch: (projectId: string, patch: Operation[]) => void;
   addMessage: (projectId: string, message: string, isUser: boolean) => void;
   syncDbMessages: (projectId: string, dbMessages: DbMessage[]) => void;
   clearOptimisticMessages: (projectId: string) => void;
   clearProject: (projectId: string) => void;
   
   // Force refresh of preview components by generating a new refresh token
-  forceRefresh: (projectId: string) => void;
   
   // OPTIMIZATION #2: Add/update individual scenes without full refetch
   addScene: (projectId: string, scene: any) => void;
@@ -123,7 +119,6 @@ export const useVideoState = create<VideoState>((set, get) => ({
   chatHistory: {},
   refreshTokens: {},
   selectedScenes: {},
-  globalRefreshCounter: 0,
   lastSyncTime: 0,
   pendingDbSync: {},
   
@@ -173,95 +168,17 @@ export const useVideoState = create<VideoState>((set, get) => ({
       };
     }),
 
-  applyPatch: (projectId, patch) =>
-    set((state) => {
-      // Skip if project doesn't exist
-      if (!state.projects[projectId]) return state;
-      
-      // Debug logging
-      console.table(patch);
-      console.log(
-        "[applyPatch] scenes:",
-        state.projects[projectId].props.scenes.map((s) => ({
-          id: s.id,
-          start: s.start,
-          dur: s.duration,
-        }))
-      );
-      
-      try {
-        // Store original state for potential rollback
-        const originalProps = structuredClone(state.projects[projectId].props);
-
-        // Apply patch to create new props
-        const newProps = applyPatch(
-          structuredClone(originalProps), 
-          patch, 
-          /* validate */ true
-        ).newDocument;
-        
-        // Fire-and-forget persist to server
-        // Use fetch directly to avoid React dependencies in Zustand
-        fetch("/api/trpc/video.applyPatch", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ 
-            json: { // Wrap in json property for tRPC
-              projectId, 
-              patch 
-            }
-          }),
-        }).catch(() => {
-          // Rollback if server rejects
-          console.error("Server rejected patch, rolling back");
-          // Use a safer approach that preserves the full state structure
-          const currentState = get();
-          const projectState = currentState.projects[projectId];
-          
-          if (projectState) {
-            set({
-              projects: {
-                ...currentState.projects,
-                [projectId]: {
-                  ...projectState,
-                  props: originalProps
-                }
-              }
-            });
-          }
-        });
-        
-        // Return updated state
-        return {
-          ...state,
-          projects: {
-            ...state.projects,
-            [projectId]: {
-              ...state.projects[projectId],
-              props: newProps
-            }
-          }
-        };
-      } catch (error) {
-        console.error("Failed to apply patch:", error);
-        return state; // Return unchanged state on error
-      }
-    }),
 
   replace: (projectId, next) => 
     set((state) => {
-      // 🚨 CRITICAL FIX: Generate new refresh token and increment global counter
+      // 🚨 CRITICAL FIX: Generate new refresh token
       const newRefreshToken = Date.now().toString();
-      const newGlobalCounter = (state.globalRefreshCounter || 0) + 1;
       
       // If project exists, just update its props
       if (state.projects[projectId]) {
         return {
           ...state,
           currentProjectId: projectId,
-          globalRefreshCounter: newGlobalCounter, // ✅ Force all components to re-render
           projects: {
             ...state.projects,
             [projectId]: {
@@ -278,7 +195,6 @@ export const useVideoState = create<VideoState>((set, get) => ({
       return {
         ...state,
         currentProjectId: projectId,
-        globalRefreshCounter: newGlobalCounter,
         projects: {
           ...state.projects,
           [projectId]: {
@@ -508,26 +424,6 @@ export const useVideoState = create<VideoState>((set, get) => ({
       };
     }),
     
-  // Force refresh of preview components by generating a new refresh token
-  forceRefresh: (projectId) =>
-    set((state) => {
-      // Skip if project doesn't exist
-      if (!state.projects[projectId]) return state;
-      
-      // Generate a new refresh token
-      const newRefreshToken = Date.now().toString();
-      
-      return {
-        ...state,
-        projects: {
-          ...state.projects,
-          [projectId]: {
-            ...state.projects[projectId],
-            refreshToken: newRefreshToken
-          }
-        }
-      };
-    }),
     
   // OPTIMIZATION #2: Add/update individual scenes without full refetch
   addScene: (projectId: string, scene: any) =>
@@ -569,11 +465,19 @@ export const useVideoState = create<VideoState>((set, get) => ({
     
   updateScene: (projectId: string, sceneId: string, updatedScene: any) =>
     set((state) => {
+      console.log('[VideoState.updateScene] ⚡ Updating scene:', sceneId);
+      
       const project = state.projects[projectId];
-      if (!project) return state;
+      if (!project) {
+        console.log('[VideoState.updateScene] ❌ Project not found:', projectId);
+        return state;
+      }
       
       const sceneIndex = project.props.scenes.findIndex((s: any) => s.id === sceneId);
-      if (sceneIndex === -1) return state;
+      if (sceneIndex === -1) {
+        console.log('[VideoState.updateScene] ❌ Scene not found:', sceneId);
+        return state;
+      }
       
       const updatedScenes = [...project.props.scenes];
       const existingScene = updatedScenes[sceneIndex];
@@ -598,6 +502,14 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       };
       
+      // 🚨 DEBUG: Log what we're actually storing
+      console.log('[VideoState.updateScene] 🚨 STORED SCENE DATA:', {
+        sceneId,
+        codeLength: updatedScene.tsxCode?.length,
+        codeStart: updatedScenes[sceneIndex].data.code?.substring(0, 100),
+        hasRed: updatedScenes[sceneIndex].data.code?.includes('#ff0000')
+      });
+      
       // TIMELINE FIX: Recalculate start times for subsequent scenes
       if (durationChange !== 0) {
         for (let i = sceneIndex + 1; i < updatedScenes.length; i++) {
@@ -615,6 +527,14 @@ export const useVideoState = create<VideoState>((set, get) => ({
       // TOTAL DURATION FIX: Recalculate total video duration
       const totalDuration = updatedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
       
+      console.log('[VideoState.updateScene] ✅ Scene updated successfully - all panels should refresh now');
+      
+      // 🚨 CRITICAL FIX: Generate new refresh token (same as replace method)
+      const newRefreshToken = Date.now().toString();
+      
+      console.log('[VideoState.updateScene] 🔄 New refresh token:', newRefreshToken);
+      
+      
       return {
         ...state,
         projects: {
@@ -628,7 +548,9 @@ export const useVideoState = create<VideoState>((set, get) => ({
                 duration: totalDuration // Update total duration
               },
               scenes: updatedScenes
-            }
+            },
+            refreshToken: newRefreshToken, // ✅ Force preview panel re-render
+            lastUpdated: Date.now(), // ✅ Track when updated
           }
         }
       };
@@ -697,16 +619,13 @@ export const useVideoState = create<VideoState>((set, get) => ({
       try {
         const updatedProps = updater(project.props);
         const newRefreshToken = Date.now().toString();
-        const newGlobalCounter = (state.globalRefreshCounter || 0) + 1;
         
         console.log('[VideoState.updateAndRefresh] Generated new refresh token:', newRefreshToken);
-        console.log('[VideoState.updateAndRefresh] Global counter:', newGlobalCounter);
         
         // Update state with all necessary refresh triggers
         const newState = {
           ...state,
           currentProjectId: projectId,
-          globalRefreshCounter: newGlobalCounter,
           projects: {
             ...state.projects,
             [projectId]: {
@@ -718,18 +637,6 @@ export const useVideoState = create<VideoState>((set, get) => ({
           }
         };
         
-        // Dispatch custom event for components that need manual refresh
-        setTimeout(() => {
-          console.log('[VideoState.updateAndRefresh] Dispatching videostate-update event');
-          window.dispatchEvent(new CustomEvent('videostate-update', {
-            detail: { 
-              projectId, 
-              type: 'scenes-updated',
-              refreshToken: newRefreshToken,
-              globalCounter: newGlobalCounter
-            }
-          }));
-        }, 0);
         
         return newState;
       } catch (error) {

@@ -42,9 +42,9 @@ export default function RemotionPreview({
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
-    console.log('RemotionPreview rendering with props:', { durationInFrames, fps, width, height });
-    console.log('Input props for component:', inputProps);
-  }, [durationInFrames, fps, width, height, inputProps]);
+    console.log('RemotionPreview rendering with refreshToken:', refreshToken);
+    console.log('RemotionPreview props:', { durationInFrames, fps, width, height });
+  }, [durationInFrames, fps, width, height, refreshToken]);
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>

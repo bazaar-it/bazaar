@@ -32,6 +32,16 @@ Bazaar-Vid is a **sophisticated AI-powered video creation platform** that enable
 User Prompt → ChatPanelG → generation.generateScene → MCP Tools → sceneBuilder → Custom React Code → Video
 ```
 
+### State Management Flow (SIMPLIFIED - Sprint 35):
+```
+Backend Response → VideoState (Direct Update) → React Re-render → UI Updates Immediately
+
+NO database refetch after updates
+NO complex refresh mechanisms
+NO custom events
+JUST direct state updates
+```
+
 ---
 
 ## 📁 CODEBASE STRUCTURE (SINGLE SOURCE OF TRUTH)
@@ -74,7 +84,7 @@ src/
 ├── components/                   # Reusable UI components
 ├── remotion/                     # Video composition components
 ├── hooks/                        # React hooks
-├── stores/                       # State management
+├── stores/                       # State management (Zustand - SIMPLIFIED!)
 └── templates/                    # Pre-built animation templates
 ```
 
@@ -106,6 +116,64 @@ src/
 ### Database:
 - **Schema**: `src/server/db/schema.ts` (SINGLE FILE)
 - **Migrations**: Auto-generated in `drizzle/migrations/`
+
+---
+
+## 🎮 STATE MANAGEMENT (CRITICAL - Updated Sprint 35)
+
+### Core Principle: Trust Your State
+```typescript
+// ✅ CORRECT: Direct state update
+updateScene(projectId, sceneId, newSceneData);
+// Preview updates immediately via Zustand reactivity
+
+// ❌ WRONG: Don't refetch after updates
+updateScene(projectId, sceneId, newSceneData);
+await refetchFromDatabase(); // This causes race conditions!
+```
+
+### VideoState Store (`src/stores/videoState.ts`):
+- **Single Source of Truth** for all video project data
+- **Direct Updates Only** - no complex refresh mechanisms
+- **Zustand Reactivity** - components auto-update when state changes
+- **No Custom Events** - removed all window.dispatchEvent patterns
+
+### Key Methods:
+```typescript
+// Core update methods (use these!)
+updateScene(projectId, sceneId, scene)  // Edit existing scene
+addScene(projectId, scene)              // Add new scene
+deleteScene(projectId, sceneId)         // Remove scene
+setProject(projectId, props)            // Initial project load
+
+// REMOVED (don't use):
+forceRefresh()    // ❌ Removed - redundant
+applyPatch()      // ❌ Removed - unused
+globalRefreshCounter // ❌ Removed - overcomplicated
+```
+
+### Update Flow:
+1. User action in ChatPanelG
+2. Backend processes request
+3. Backend returns updated data
+4. Call updateScene() with fresh data
+5. PreviewPanelG auto-recompiles via Zustand subscription
+6. User sees update immediately
+
+### Common Patterns:
+```typescript
+// In ChatPanelG after backend response:
+updateScene(projectId, sceneId, transformedScene);
+// That's it! No refetch, no events, no refresh tokens
+
+// In PreviewPanelG:
+const scenes = currentProps?.scenes || [];
+useEffect(() => {
+  if (scenes.length > 0) {
+    compileMultiSceneComposition();
+  }
+}, [scenes]); // Simple direct watching
+```
 
 ---
 
@@ -273,6 +341,7 @@ npm run evals              # Run evaluation system
 
 ### Important Context:
 - **Main flow is working** - ChatPanelG → generation → MCP tools
+- **State management simplified (Sprint 35)** - Direct updates only, no refetching
 - **A2A system was removed** - don't reference old agent system
 - **Evaluation system is critical** - don't break `src/lib/evals/`
 - **Database is production** - be careful with schema changes
@@ -306,4 +375,4 @@ You now have the complete context for Bazaar-Vid development. Follow this struct
 
 ---
 
-*Last Updated: 09.14.2025 After comprehensive repository cleanup - single source of truth achieved!*
+*Last Updated: 11.06.2025 After state management simplification (Sprint 35) - trust your state, no refetching!*
