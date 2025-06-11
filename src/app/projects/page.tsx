@@ -7,7 +7,7 @@ import { NewProjectButton } from "~/components/client/NewProjectButton";
 
 /**
  * Projects dashboard that lists all projects for the logged-in user
- * This is now a fallback view for users with no projects or when direct access is needed
+ * Redirects to last project if user has projects, or shows project creation if they have none
  */
 export default async function ProjectsPage() {
   const session = await auth();
@@ -23,7 +23,23 @@ export default async function ProjectsPage() {
     redirect("/projects/new");
   }
 
-  // Show projects dashboard (this should be implemented properly in the future)
-  // For now, redirect to create new project as the main flow
+  // If user has exactly one project, redirect to it
+  if (userProjects.length === 1) {
+    redirect(`/projects/${userProjects[0]!.id}/generate`);
+  }
+
+  // If user has multiple projects, redirect to the most recently updated one
+  const mostRecentProject = userProjects
+    .sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    })[0];
+  
+  if (mostRecentProject) {
+    redirect(`/projects/${mostRecentProject.id}/generate`);
+  }
+
+  // Fallback (should never reach here)
   redirect("/projects/new");
 }
