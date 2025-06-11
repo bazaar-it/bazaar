@@ -1,3 +1,4 @@
+import "openai/shims/node";
 import OpenAI from "openai";
 import { env } from "~/env";
 
