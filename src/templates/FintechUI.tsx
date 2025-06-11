@@ -44,21 +44,21 @@ const InputBar = ({ opacity }: { opacity: number }) => {
   const frame = useCurrentFrame();
   const text = "These Bazaar animations are pretty sick, right?!";
   const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
   return (
     <div
       style={{
-        minHeight: 120,
+        minHeight: 100,
         background: "white",
-        borderRadius: 24,
+        borderRadius: 20,
         display: "flex",
-        alignItems: "flex-start",
-        padding: 20,
+        flexDirection: "column",
+        padding: 16,
         opacity,
         transform: `translateY(${interpolate(opacity, [0, 1], [20, 0])}px)`,
         boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
         border: "1px solid #E5E5E5",
+        position: "relative",
       }}
     >
       <div
@@ -68,11 +68,35 @@ const InputBar = ({ opacity }: { opacity: number }) => {
           fontFamily: "sans-serif",
           fontSize: 16,
           lineHeight: 1.5,
-          minHeight: 80,
+          display: "flex",
+          alignItems: "flex-start",
+          paddingTop: 4,
         }}
       >
-        {text.slice(0, charCount)}
-        {cursorVisible && <span style={{ borderRight: "2px solid #007AFF", marginLeft: 2, height: 20, display: "inline-block" }} />}
+        <span>{text.slice(0, charCount)}</span>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginTop: 8,
+        }}
+      >
+        <button
+          style={{
+            background: "#000000",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            padding: "8px 16px",
+            fontSize: 14,
+            fontWeight: "600",
+            cursor: "pointer",
+            fontFamily: "sans-serif",
+          }}
+        >
+          Send
+        </button>
       </div>
     </div>
   );
@@ -120,7 +144,7 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
       opacity, 
       position: "relative", 
       overflow: "hidden", 
-      padding: 40,
+      padding: 24,
       color: "white", 
       fontFamily: "sans-serif",
       display: "flex",
@@ -128,10 +152,10 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
       height: "100%",
       justifyContent: "space-between"
     }}>
-      <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
         <h1 style={{ 
-          fontSize: 64,
-          marginBottom: 20,
+          fontSize: 56,
+          marginBottom: 16,
           opacity: anim(0), 
           textAlign: "center", 
           fontWeight: 700,
@@ -140,8 +164,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
           AI Financial Insights
         </h1>
         <p style={{ 
-          fontSize: 26,
-          marginBottom: 32, 
+          fontSize: 22,
+          marginBottom: 24, 
           color: "#AAA", 
           opacity: anim(15), 
           textAlign: "center",
@@ -155,8 +179,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
             color: "white", 
             border: "none", 
             borderRadius: 12, 
-            padding: "20px 48px",
-            fontSize: 22,
+            padding: "16px 40px",
+            fontSize: 20,
             fontWeight: "bold", 
             cursor: "pointer", 
             opacity: anim(30),
@@ -171,11 +195,11 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
         flex: 1, 
         display: "flex", 
         flexDirection: "column", 
-        marginBottom: 32 
+        marginBottom: 20
       }}>
         <div style={{ 
           borderRadius: 12, 
-          padding: 24,
+          padding: 20,
           background: "rgba(255,255,255,0.05)", 
           opacity: anim(45),
           flex: 1,
@@ -183,8 +207,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
           flexDirection: "column"
         }}>
           <h3 style={{ 
-            fontSize: 24,
-            marginBottom: 20,
+            fontSize: 20,
+            marginBottom: 16,
             fontWeight: 600 
           }}>
             Portfolio Performance
@@ -195,44 +219,44 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
+      <div style={{ display: "flex", gap: 24, marginTop: 'auto' }}>
         <div style={{ 
           flex: 1, 
           background: "rgba(255,255,255,0.05)", 
-          padding: 24,
+          padding: 16,
           borderRadius: 12, 
           opacity: anim(60),
           textAlign: "center"
         }}>
           <h4 style={{ 
-            fontSize: 18, 
-            marginBottom: 12, 
+            fontSize: 16, 
+            marginBottom: 8, 
             color: "#AAA",
             fontWeight: 500
           }}>
             Total Assets
           </h4>
-          <div style={{ fontSize: 28, fontWeight: "bold" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold" }}>
             <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
           </div>
         </div>
         <div style={{ 
           flex: 1, 
           background: "rgba(255,255,255,0.05)", 
-          padding: 24,
+          padding: 16,
           borderRadius: 12, 
           opacity: anim(75),
           textAlign: "center"
         }}>
           <h4 style={{ 
-            fontSize: 18, 
-            marginBottom: 12, 
+            fontSize: 16, 
+            marginBottom: 8, 
             color: "#AAA",
             fontWeight: 500
           }}>
             AI ROI
           </h4>
-          <div style={{ fontSize: 28, fontWeight: "bold" }}>
+          <div style={{ fontSize: 24, fontWeight: "bold" }}>
             <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
           </div>
         </div>
@@ -319,21 +343,21 @@ const InputBar = ({ opacity }) => {
 const frame = useCurrentFrame();
 const text = "These Bazaar animations are pretty sick, right?!";
 const charCount = Math.floor(interpolate(frame, [0, 150], [0, text.length], { extrapolateRight: "clamp" }));
-const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 
 return (
   <div
     style={{
-      minHeight: 120,
+      minHeight: 100,
       background: "white",
-      borderRadius: 24,
+      borderRadius: 20,
       display: "flex",
-      alignItems: "flex-start",
-      padding: 20,
+      flexDirection: "column",
+      padding: 16,
       opacity,
       transform: \`translateY(\${interpolate(opacity, [0, 1], [20, 0])}px)\`,
       boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
       border: "1px solid #E5E5E5",
+      position: "relative",
     }}
   >
     <div
@@ -343,11 +367,35 @@ return (
         fontFamily: "sans-serif",
         fontSize: 16,
         lineHeight: 1.5,
-        minHeight: 80,
+        display: "flex",
+        alignItems: "flex-start",
+        paddingTop: 4,
       }}
     >
-      {text.slice(0, charCount)}
-      {cursorVisible && <span style={{ borderRight: "2px solid #007AFF", marginLeft: 2, height: 20, display: "inline-block" }} />}
+      <span>{text.slice(0, charCount)}</span>
+    </div>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        marginTop: 8,
+      }}
+    >
+      <button
+        style={{
+          background: "#000000",
+          color: "white",
+          border: "none",
+          borderRadius: 8,
+          padding: "8px 16px",
+          fontSize: 14,
+          fontWeight: "600",
+          cursor: "pointer",
+          fontFamily: "sans-serif",
+        }}
+      >
+        Send
+      </button>
     </div>
   </div>
 );
@@ -395,7 +443,7 @@ return (
     opacity, 
     position: "relative", 
     overflow: "hidden", 
-    padding: 40,
+    padding: 24,
     color: "white", 
     fontFamily: "sans-serif",
     display: "flex",
@@ -403,10 +451,10 @@ return (
     height: "100%",
     justifyContent: "space-between"
   }}>
-    <div style={{ textAlign: "center", marginBottom: 32 }}>
+    <div style={{ textAlign: "center", marginBottom: 20 }}>
       <h1 style={{ 
-        fontSize: 64,
-        marginBottom: 20,
+        fontSize: 56,
+        marginBottom: 16,
         opacity: anim(0), 
         textAlign: "center", 
         fontWeight: 700,
@@ -415,8 +463,8 @@ return (
         AI Financial Insights
       </h1>
       <p style={{ 
-        fontSize: 26,
-        marginBottom: 32, 
+        fontSize: 22,
+        marginBottom: 24, 
         color: "#AAA", 
         opacity: anim(15), 
         textAlign: "center",
@@ -430,8 +478,8 @@ return (
           color: "white", 
           border: "none", 
           borderRadius: 12, 
-          padding: "20px 48px",
-          fontSize: 22,
+          padding: "16px 40px",
+          fontSize: 20,
           fontWeight: "bold", 
           cursor: "pointer", 
           opacity: anim(30),
@@ -446,11 +494,11 @@ return (
       flex: 1, 
       display: "flex", 
       flexDirection: "column", 
-      marginBottom: 32 
+      marginBottom: 20
     }}>
       <div style={{ 
         borderRadius: 12, 
-        padding: 24,
+        padding: 20,
         background: "rgba(255,255,255,0.05)", 
         opacity: anim(45),
         flex: 1,
@@ -458,8 +506,8 @@ return (
         flexDirection: "column"
       }}>
         <h3 style={{ 
-          fontSize: 24,
-          marginBottom: 20,
+          fontSize: 20,
+          marginBottom: 16,
           fontWeight: 600 
         }}>
           Portfolio Performance
@@ -470,44 +518,44 @@ return (
       </div>
     </div>
 
-    <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
+    <div style={{ display: "flex", gap: 24, marginTop: 'auto' }}>
       <div style={{ 
         flex: 1, 
         background: "rgba(255,255,255,0.05)", 
-        padding: 24,
+        padding: 16,
         borderRadius: 12, 
         opacity: anim(60),
         textAlign: "center"
       }}>
         <h4 style={{ 
-          fontSize: 18, 
-          marginBottom: 12, 
+          fontSize: 16, 
+          marginBottom: 8, 
           color: "#AAA",
           fontWeight: 500
         }}>
           Total Assets
         </h4>
-        <div style={{ fontSize: 28, fontWeight: "bold" }}>
+        <div style={{ fontSize: 24, fontWeight: "bold" }}>
           <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
         </div>
       </div>
       <div style={{ 
         flex: 1, 
         background: "rgba(255,255,255,0.05)", 
-        padding: 24,
+        padding: 16,
         borderRadius: 12, 
         opacity: anim(75),
         textAlign: "center"
       }}>
         <h4 style={{ 
-          fontSize: 18, 
-          marginBottom: 12, 
+          fontSize: 16, 
+          marginBottom: 8, 
           color: "#AAA",
           fontWeight: 500
         }}>
           AI ROI
         </h4>
-        <div style={{ fontSize: 28, fontWeight: "bold" }}>
+        <div style={{ fontSize: 24, fontWeight: "bold" }}>
           <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
         </div>
       </div>
