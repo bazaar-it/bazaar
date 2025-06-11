@@ -374,5 +374,47 @@ You now have the complete context for Bazaar-Vid development. Follow this struct
 **Key Reminder**: This is a **video creation platform** where users describe videos in natural language and AI generates the React/Remotion components. The magic happens in the MCP tools and generation services!
 
 ---
+---
+
+*Last Updated: 11.06.2025 After state management simplification (Sprint 35) - trust your state, no refetching!*
+
+->
+
+---
+
+## 🌿 GIT WORKFLOW
+
+### Branch Strategy:
+- **`main`** - Production branch (DO NOT TOUCH during development)
+- **`dev`** - Development branch (our working branch)
+- **Feature branches** - Branch out from `dev` for all work
+
+### Workflow Process:
+1. **Always branch from `dev`**: `git checkout dev && git pull && git checkout -b feature/your-feature-name`
+2. **Make your changes** on your feature branch
+3. **Create PR from your feature branch → `dev`** (never directly to `main`)
+4. **After PR approval**: Merge into `dev`
+5. **Main branch is protected** - only releases/hotfixes touch `main`
+
+### Commands:
+```bash
+# Start new work
+git checkout dev
+git pull origin dev
+git checkout -b feature/your-feature-name
+
+# Push your work
+git push origin feature/your-feature-name
+# Then create PR: feature/your-feature-name → dev
+
+# Update your branch with latest dev
+git checkout dev && git pull
+git checkout feature/your-feature-name
+git merge dev
+```
+
+**CRITICAL**: Never push directly to `main` or create PRs to `main` during regular development work.
+
+---
 
 *Last Updated: 11.06.2025 After state management simplification (Sprint 35) - trust your state, no refetching!*
