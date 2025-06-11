@@ -45,8 +45,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '100px',
-          lineHeight: '100px',
+          fontSize: '70px',
+          lineHeight: '70px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -57,7 +57,7 @@ export default function KnowsCode() {
             opacity: cursorVisible ? 1 : 0,
             borderRight: '4px solid black',
             marginLeft: '4px',
-            height: '100px',
+            height: '70px',
             display: 'inline-block',
           }}
         />
@@ -144,8 +144,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '100px',
-          lineHeight: '100px',
+          fontSize: '70px',
+          lineHeight: '70px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -156,7 +156,7 @@ export default function KnowsCode() {
             opacity: cursorVisible ? 1 : 0,
             borderRight: '4px solid black',
             marginLeft: '4px',
-            height: '100px',
+            height: '70px',
             display: 'inline-block',
           }}
         />

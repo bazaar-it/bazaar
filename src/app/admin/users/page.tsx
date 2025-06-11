@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -396,55 +397,60 @@ export default function UsersAnalytics() {
           <CardContent className="p-6">
             <div className="space-y-4">
               {userAnalytics?.users.map((user) => (
-                <div
+                <Link
                   key={user.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  href={`/admin/users/${user.id}`}
+                  className="block"
                 >
-                  <div className="flex items-center space-x-4">
-                    <div className="relative">
-                      {user.image ? (
-                        <img
-                          src={user.image}
-                          alt={user.name || "User"}
-                          className="h-10 w-10 rounded-full"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                          <Users className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      {user.isAdmin && (
-                        <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border border-background" />
-                      )}
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-medium">{user.name || "Unnamed User"}</h3>
-                        {user.isAdmin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
-                        <span className="text-lg">{getOAuthIcon(user.oauthProvider)}</span>
+                  <div
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="relative">
+                        {user.image ? (
+                          <img
+                            src={user.image}
+                            alt={user.name || "User"}
+                            className="h-10 w-10 rounded-full"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                            <Users className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        {user.isAdmin && (
+                          <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border border-background" />
+                        )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-4 text-sm">
-                    <div className="text-right">
-                      <p className="font-medium">Joined {formatDate(user.signupDate)}</p>
-                      <p className="text-muted-foreground">Last active: {formatDate(user.lastActivity)}</p>
-                    </div>
-                    
-                    <div className="flex flex-col items-end space-y-1">
-                      {getProjectCountBadge(user.totalProjects)}
-                      {getActivityBadge(user.lastActivity)}
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-medium">{user.name || "Unnamed User"}</h3>
+                          {user.isAdmin && <Badge variant="destructive" className="text-xs">Admin</Badge>}
+                          <span className="text-lg">{getOAuthIcon(user.oauthProvider)}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </div>
                     </div>
 
-                    <div className="text-right space-y-1">
-                      <p className="text-xs text-muted-foreground">{user.totalUserPrompts} prompts</p>
-                      <p className="text-xs text-muted-foreground">{user.totalScenes} scenes</p>
+                    <div className="flex items-center space-x-4 text-sm">
+                      <div className="text-right">
+                        <p className="font-medium">Joined {formatDate(user.signupDate)}</p>
+                        <p className="text-muted-foreground">Last active: {formatDate(user.lastActivity)}</p>
+                      </div>
+                      
+                      <div className="flex flex-col items-end space-y-1">
+                        {getProjectCountBadge(user.totalProjects)}
+                        {getActivityBadge(user.lastActivity)}
+                      </div>
+
+                      <div className="text-right space-y-1">
+                        <p className="text-xs text-muted-foreground">{user.totalUserPrompts} prompts</p>
+                        <p className="text-xs text-muted-foreground">{user.totalScenes} scenes</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
 
               {userAnalytics?.users.length === 0 && (
