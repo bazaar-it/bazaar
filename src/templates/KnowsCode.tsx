@@ -19,8 +19,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '140px',
-          lineHeight: '140px',
+          fontSize: '200px',
+          lineHeight: '200px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -45,8 +45,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '100px',
-          lineHeight: '100px',
+          fontSize: '140px',
+          lineHeight: '140px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -55,9 +55,9 @@ export default function KnowsCode() {
         <span
           style={{
             opacity: cursorVisible ? 1 : 0,
-            borderRight: '4px solid black',
+            borderRight: '5px solid black',
             marginLeft: '4px',
-            height: '100px',
+            height: '140px',
             display: 'inline-block',
           }}
         />
@@ -118,8 +118,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '140px',
-          lineHeight: '140px',
+          fontSize: '200px',
+          lineHeight: '200px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -144,8 +144,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '100px',
-          lineHeight: '100px',
+          fontSize: '140px',
+          lineHeight: '140px',
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
         }}
@@ -154,9 +154,9 @@ export default function KnowsCode() {
         <span
           style={{
             opacity: cursorVisible ? 1 : 0,
-            borderRight: '4px solid black',
+            borderRight: '5px solid black',
             marginLeft: '4px',
-            height: '100px',
+            height: '140px',
             display: 'inline-block',
           }}
         />
@@ -189,4 +189,4 @@ export default function KnowsCode() {
     </AbsoluteFill>
   );
 }`
-};
+}; 

@@ -49,12 +49,12 @@ const InputBar = ({ opacity }: { opacity: number }) => {
   return (
     <div
       style={{
-        minHeight: 100,
+        minHeight: 120,
         background: "white",
-        borderRadius: 20,
+        borderRadius: 24,
         display: "flex",
-        alignItems: "center",
-        padding: 16,
+        alignItems: "flex-start",
+        padding: 20,
         opacity,
         transform: `translateY(${interpolate(opacity, [0, 1], [20, 0])}px)`,
         boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
@@ -68,22 +68,11 @@ const InputBar = ({ opacity }: { opacity: number }) => {
           fontFamily: "sans-serif",
           fontSize: 16,
           lineHeight: 1.5,
-          display: "flex",
-          alignItems: "center",
+          minHeight: 80,
         }}
       >
-        <span>{text.slice(0, charCount)}</span>
-        {cursorVisible && (
-          <span 
-            style={{ 
-              borderRight: "2px solid #007AFF", 
-              marginLeft: 2, 
-              height: 20, 
-              display: "inline-block",
-              alignSelf: "center"
-            }} 
-          />
-        )}
+        {text.slice(0, charCount)}
+        {cursorVisible && <span style={{ borderRight: "2px solid #007AFF", marginLeft: 2, height: 20, display: "inline-block" }} />}
       </div>
     </div>
   );
@@ -131,7 +120,7 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
       opacity, 
       position: "relative", 
       overflow: "hidden", 
-      padding: 24,
+      padding: 40,
       color: "white", 
       fontFamily: "sans-serif",
       display: "flex",
@@ -139,10 +128,10 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
       height: "100%",
       justifyContent: "space-between"
     }}>
-      <div style={{ textAlign: "center", marginBottom: 20 }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
         <h1 style={{ 
-          fontSize: 56,
-          marginBottom: 16,
+          fontSize: 64,
+          marginBottom: 20,
           opacity: anim(0), 
           textAlign: "center", 
           fontWeight: 700,
@@ -151,8 +140,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
           AI Financial Insights
         </h1>
         <p style={{ 
-          fontSize: 22,
-          marginBottom: 24, 
+          fontSize: 26,
+          marginBottom: 32, 
           color: "#AAA", 
           opacity: anim(15), 
           textAlign: "center",
@@ -166,8 +155,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
             color: "white", 
             border: "none", 
             borderRadius: 12, 
-            padding: "16px 40px",
-            fontSize: 20,
+            padding: "20px 48px",
+            fontSize: 22,
             fontWeight: "bold", 
             cursor: "pointer", 
             opacity: anim(30),
@@ -182,11 +171,11 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
         flex: 1, 
         display: "flex", 
         flexDirection: "column", 
-        marginBottom: 20
+        marginBottom: 32 
       }}>
         <div style={{ 
           borderRadius: 12, 
-          padding: 20,
+          padding: 24,
           background: "rgba(255,255,255,0.05)", 
           opacity: anim(45),
           flex: 1,
@@ -194,8 +183,8 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
           flexDirection: "column"
         }}>
           <h3 style={{ 
-            fontSize: 20,
-            marginBottom: 16,
+            fontSize: 24,
+            marginBottom: 20,
             fontWeight: 600 
           }}>
             Portfolio Performance
@@ -206,44 +195,44 @@ const PreviewPanel = ({ opacity }: { opacity: number }) => {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 24, marginTop: 'auto' }}>
+      <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
         <div style={{ 
           flex: 1, 
           background: "rgba(255,255,255,0.05)", 
-          padding: 16,
+          padding: 24,
           borderRadius: 12, 
           opacity: anim(60),
           textAlign: "center"
         }}>
           <h4 style={{ 
-            fontSize: 16, 
-            marginBottom: 8, 
+            fontSize: 18, 
+            marginBottom: 12, 
             color: "#AAA",
             fontWeight: 500
           }}>
             Total Assets
           </h4>
-          <div style={{ fontSize: 24, fontWeight: "bold" }}>
+          <div style={{ fontSize: 28, fontWeight: "bold" }}>
             <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
           </div>
         </div>
         <div style={{ 
           flex: 1, 
           background: "rgba(255,255,255,0.05)", 
-          padding: 16,
+          padding: 24,
           borderRadius: 12, 
           opacity: anim(75),
           textAlign: "center"
         }}>
           <h4 style={{ 
-            fontSize: 16, 
-            marginBottom: 8, 
+            fontSize: 18, 
+            marginBottom: 12, 
             color: "#AAA",
             fontWeight: 500
           }}>
             AI ROI
           </h4>
-          <div style={{ fontSize: 24, fontWeight: "bold" }}>
+          <div style={{ fontSize: 28, fontWeight: "bold" }}>
             <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
           </div>
         </div>
@@ -335,12 +324,12 @@ const cursorVisible = Math.floor(frame / 15) % 2 === 0;
 return (
   <div
     style={{
-      minHeight: 100,
+      minHeight: 120,
       background: "white",
-      borderRadius: 20,
+      borderRadius: 24,
       display: "flex",
-      alignItems: "center",
-      padding: 16,
+      alignItems: "flex-start",
+      padding: 20,
       opacity,
       transform: \`translateY(\${interpolate(opacity, [0, 1], [20, 0])}px)\`,
       boxShadow: "0 4px 24px rgba(0, 0, 0, 0.1)",
@@ -354,22 +343,11 @@ return (
         fontFamily: "sans-serif",
         fontSize: 16,
         lineHeight: 1.5,
-        display: "flex",
-        alignItems: "center",
+        minHeight: 80,
       }}
     >
-      <span>{text.slice(0, charCount)}</span>
-      {cursorVisible && (
-        <span 
-          style={{ 
-            borderRight: "2px solid #007AFF", 
-            marginLeft: 2, 
-            height: 20, 
-            display: "inline-block",
-            alignSelf: "center"
-          }} 
-        />
-      )}
+      {text.slice(0, charCount)}
+      {cursorVisible && <span style={{ borderRight: "2px solid #007AFF", marginLeft: 2, height: 20, display: "inline-block" }} />}
     </div>
   </div>
 );
@@ -417,7 +395,7 @@ return (
     opacity, 
     position: "relative", 
     overflow: "hidden", 
-    padding: 24,
+    padding: 40,
     color: "white", 
     fontFamily: "sans-serif",
     display: "flex",
@@ -425,10 +403,10 @@ return (
     height: "100%",
     justifyContent: "space-between"
   }}>
-    <div style={{ textAlign: "center", marginBottom: 20 }}>
+    <div style={{ textAlign: "center", marginBottom: 32 }}>
       <h1 style={{ 
-        fontSize: 56,
-        marginBottom: 16,
+        fontSize: 64,
+        marginBottom: 20,
         opacity: anim(0), 
         textAlign: "center", 
         fontWeight: 700,
@@ -437,8 +415,8 @@ return (
         AI Financial Insights
       </h1>
       <p style={{ 
-        fontSize: 22,
-        marginBottom: 24, 
+        fontSize: 26,
+        marginBottom: 32, 
         color: "#AAA", 
         opacity: anim(15), 
         textAlign: "center",
@@ -452,8 +430,8 @@ return (
           color: "white", 
           border: "none", 
           borderRadius: 12, 
-          padding: "16px 40px",
-          fontSize: 20,
+          padding: "20px 48px",
+          fontSize: 22,
           fontWeight: "bold", 
           cursor: "pointer", 
           opacity: anim(30),
@@ -468,11 +446,11 @@ return (
       flex: 1, 
       display: "flex", 
       flexDirection: "column", 
-      marginBottom: 20
+      marginBottom: 32 
     }}>
       <div style={{ 
         borderRadius: 12, 
-        padding: 20,
+        padding: 24,
         background: "rgba(255,255,255,0.05)", 
         opacity: anim(45),
         flex: 1,
@@ -480,8 +458,8 @@ return (
         flexDirection: "column"
       }}>
         <h3 style={{ 
-          fontSize: 20,
-          marginBottom: 16,
+          fontSize: 24,
+          marginBottom: 20,
           fontWeight: 600 
         }}>
           Portfolio Performance
@@ -492,44 +470,44 @@ return (
       </div>
     </div>
 
-    <div style={{ display: "flex", gap: 24, marginTop: 'auto' }}>
+    <div style={{ display: "flex", gap: 32, marginTop: 'auto' }}>
       <div style={{ 
         flex: 1, 
         background: "rgba(255,255,255,0.05)", 
-        padding: 16,
+        padding: 24,
         borderRadius: 12, 
         opacity: anim(60),
         textAlign: "center"
       }}>
         <h4 style={{ 
-          fontSize: 16, 
-          marginBottom: 8, 
+          fontSize: 18, 
+          marginBottom: 12, 
           color: "#AAA",
           fontWeight: 500
         }}>
           Total Assets
         </h4>
-        <div style={{ fontSize: 24, fontWeight: "bold" }}>
+        <div style={{ fontSize: 28, fontWeight: "bold" }}>
           <AnimatedValue start={100000} end={125000} prefix="$" delay={60} />
         </div>
       </div>
       <div style={{ 
         flex: 1, 
         background: "rgba(255,255,255,0.05)", 
-        padding: 16,
+        padding: 24,
         borderRadius: 12, 
         opacity: anim(75),
         textAlign: "center"
       }}>
         <h4 style={{ 
-          fontSize: 16, 
-          marginBottom: 8, 
+          fontSize: 18, 
+          marginBottom: 12, 
           color: "#AAA",
           fontWeight: 500
         }}>
           AI ROI
         </h4>
-        <div style={{ fontSize: 24, fontWeight: "bold" }}>
+        <div style={{ fontSize: 28, fontWeight: "bold" }}>
           <AnimatedValue start={65} end={89} suffix="% ROI" delay={75} />
         </div>
       </div>
@@ -565,4 +543,4 @@ return (
   </AbsoluteFill>
 );
 }`
-};
+}; 

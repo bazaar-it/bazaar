@@ -35,55 +35,52 @@ export default function GrowthGraph() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        fontFamily: "Inter, sans-serif",
+        justifyContent: "center",
+        fontFamily: "Arial, sans-serif",
         color: "#fff",
-        padding: "6vh 0 4vh 0",
+        padding: "10vh 0",
       }}
     >
-      <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          height: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+        }}
+      >
         <h1
           style={{
             fontSize: 84,
             fontWeight: "bold",
-            margin: 0,
+            marginBottom: 60,
             opacity: interpolate(frame, [0, 30], [0, 1], {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
             }),
             textAlign: "center",
             lineHeight: 1.1,
-            fontFamily: "Inter, sans-serif",
           }}
         >
           Growth Analytics
         </h1>
-      </div>
 
-      <div 
-        style={{ 
-          height: "50vh",
-          display: "flex", 
-          alignItems: "flex-end",
-          justifyContent: "center",
-          width: "100%",
-          marginBottom: "4vh",
-        }}
-      >
         <div
           style={{
             display: "flex",
             alignItems: "end",
             gap: 32,
-            height: "100%",
+            height: 450,
             transform: `scale(${cameraProgress})`,
-            transformOrigin: "bottom center",
           }}
         >
           {bars.map((bar, index) => {
             const barHeight = interpolate(
               frame,
               [60 + index * 15, 90 + index * 15],
-              [0, (bar.value / 140) * 350],
+              [0, (bar.value / 140) * 400],
               {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",
@@ -115,7 +112,6 @@ export default function GrowthGraph() {
                     fontSize: 28,
                     fontWeight: "bold",
                     opacity: valueOpacity,
-                    fontFamily: "Inter, sans-serif",
                   }}
                 >
                   {bar.value}%
@@ -137,7 +133,6 @@ export default function GrowthGraph() {
                       extrapolateLeft: "clamp",
                       extrapolateRight: "clamp",
                     }),
-                    fontFamily: "Inter, sans-serif",
                   }}
                 >
                   {bar.label}
@@ -146,11 +141,10 @@ export default function GrowthGraph() {
             );
           })}
         </div>
-      </div>
 
-      <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div
           style={{
+            marginTop: 60,
             fontSize: 36,
             fontWeight: "500",
             opacity: interpolate(frame, [150, 180], [0, 1], {
@@ -158,7 +152,6 @@ export default function GrowthGraph() {
               extrapolateRight: "clamp",
             }),
             textAlign: "center",
-            fontFamily: "Inter, sans-serif",
           }}
         >
           🚀 Record Breaking Performance
@@ -210,55 +203,52 @@ return (
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      fontFamily: "Inter, sans-serif",
+      justifyContent: "center",
+      fontFamily: "Arial, sans-serif",
       color: "#fff",
-      padding: "6vh 0 4vh 0",
+      padding: "10vh 0",
     }}
   >
-    <div style={{ height: "20vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div
+      style={{
+        height: "80vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: "100%",
+      }}
+    >
       <h1
         style={{
           fontSize: 84,
           fontWeight: "bold",
-          margin: 0,
+          marginBottom: 60,
           opacity: interpolate(frame, [0, 30], [0, 1], {
             extrapolateLeft: "clamp",
             extrapolateRight: "clamp",
           }),
           textAlign: "center",
           lineHeight: 1.1,
-          fontFamily: "Inter, sans-serif",
         }}
       >
         Growth Analytics
       </h1>
-    </div>
 
-    <div 
-      style={{ 
-        height: "50vh",
-        display: "flex", 
-        alignItems: "flex-end",
-        justifyContent: "center",
-        width: "100%",
-        marginBottom: "4vh",
-      }}
-    >
       <div
         style={{
           display: "flex",
           alignItems: "end",
           gap: 32,
-          height: "100%",
+          height: 450,
           transform: \`scale(\${cameraProgress})\`,
-          transformOrigin: "bottom center",
         }}
       >
         {bars.map((bar, index) => {
           const barHeight = interpolate(
             frame,
             [60 + index * 15, 90 + index * 15],
-            [0, (bar.value / 140) * 350],
+            [0, (bar.value / 140) * 400],
             {
               extrapolateLeft: "clamp",
               extrapolateRight: "clamp",
@@ -290,7 +280,6 @@ return (
                   fontSize: 28,
                   fontWeight: "bold",
                   opacity: valueOpacity,
-                  fontFamily: "Inter, sans-serif",
                 }}
               >
                 {bar.value}%
@@ -312,7 +301,6 @@ return (
                     extrapolateLeft: "clamp",
                     extrapolateRight: "clamp",
                   }),
-                  fontFamily: "Inter, sans-serif",
                 }}
               >
                 {bar.label}
@@ -321,11 +309,10 @@ return (
           );
         })}
       </div>
-    </div>
 
-    <div style={{ height: "16vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div
         style={{
+          marginTop: 60,
           fontSize: 36,
           fontWeight: "500",
           opacity: interpolate(frame, [150, 180], [0, 1], {
@@ -333,7 +320,6 @@ return (
             extrapolateRight: "clamp",
           }),
           textAlign: "center",
-          fontFamily: "Inter, sans-serif",
         }}
       >
         🚀 Record Breaking Performance
@@ -342,4 +328,4 @@ return (
   </AbsoluteFill>
 );
 }`
-};
+}; 
