@@ -1,0 +1,100 @@
+{
+  "promptId": "add-button-with-image",
+  "prompt": {
+    "id": "add-button-with-image",
+    "name": "Add Button with Image Reference",
+    "type": "image",
+    "input": {
+      "text": "recreate this button with hover animations and glow effects",
+      "image": "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Screenshot%202025-06-02%20at%2022.21.58.png",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "workflow": [
+        {
+          "toolName": "analyzeImage",
+          "context": "analyze button design"
+        },
+        {
+          "toolName": "editSceneWithImage",
+          "context": "add button to existing scene"
+        }
+      ],
+      "shouldAnalyzeImage": true,
+      "shouldModify": [
+        "button element",
+        "hover animations",
+        "glow effects"
+      ],
+      "complexity": "high"
+    }
+  },
+  "modelPack": "openai-pack",
+  "modelKey": "brain",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "output": "I just recreated the button in Scene 1 with some awesome hover animations and glow effects! I updated the colors, adjusted the layout to match your reference, and modified the typography for a polished look. Let me know if you need any more tweaks!",
+  "actualOutput": "I just recreated the button in Scene 1 with some awesome hover animations and glow effects! I updated the colors, adjusted the layout to match your reference, and modified the typography for a polished look. Let me know if you need any more tweaks!",
+  "codeOutput": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n\n  return (\n    <AbsoluteFill style={{\n      background: \"radial-gradient(ellipse at center, #181a23 0%, #000 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div\n        style={{\n          position: \"relative\",\n          display: \"flex\",\n          alignItems: \"center\",\n          padding: \"2.5rem 3.5rem 2.5rem 2.5rem\",\n          borderRadius: \"32px\",\n          background: \"linear-gradient(135deg, #36e4e4 0%, #a259e6 60%, #ff4ecd 100%)\",\n          boxShadow: \"0 0 40px 8px #a259e6, 0 0 0 8px rgba(162,89,230,0.15)\",\n          minWidth: 420,\n          minHeight: 200,\n          filter: \"drop-shadow(0 0 32px #a259e6)\",\n          transition: \"box-shadow 0.3s, filter 0.3s\",\n          cursor: \"pointer\"\n        }}\n        onMouseEnter={e => {\n          e.currentTarget.style.boxShadow = \"0 0 64px 16px #ff4ecd, 0 0 0 12px rgba(54,228,228,0.12)\";\n          e.currentTarget.style.filter = \"drop-shadow(0 0 48px #ff4ecd)\";\n        }}\n        onMouseLeave={e => {\n          e.currentTarget.style.boxShadow = \"0 0 40px 8px #a259e6, 0 0 0 8px rgba(162,89,230,0.15)\";\n          e.currentTarget.style.filter = \"drop-shadow(0 0 32px #a259e6)\";\n        }}\n      >\n        <div style={{\n          display: \"flex\",\n          flexDirection: \"column\",\n          justifyContent: \"center\",\n          zIndex: 2\n        }}>\n          <span style={{\n            fontSize: \"2.7rem\",\n            fontWeight: 800,\n            letterSpacing: \"0.02em\",\n            color: \"#fff\",\n            textShadow: \"0 2px 18px #000, 0 0 8px #36e4e4\"\n          }}>\n            HIPAA\n          </span>\n          <span style={{\n            fontSize: \"2.2rem\",\n            fontWeight: 700,\n            letterSpacing: \"0.01em\",\n            color: \"#fff\",\n            marginTop: \"0.2em\",\n            textShadow: \"0 2px 18px #000, 0 0 8px #a259e6\"\n          }}>\n            COMPLIANT\n          </span>\n        </div>\n        <div style={{\n          position: \"absolute\",\n          top: \"-38px\",\n          right: \"-54px\",\n          width: \"120px\",\n          height: \"120px\",\n          background: \"radial-gradient(circle at 60% 40%, rgba(255,78,205,0.18) 60%, transparent 100%)\",\n          borderRadius: \"50%\",\n          boxShadow: \"0 0 32px 8px #ff4ecd\",\n          display: \"flex\",\n          alignItems: \"center\",\n          justifyContent: \"center\",\n          zIndex: 3,\n          border: \"6px solid #a259e6\",\n          transition: \"box-shadow 0.3s\"\n        }}>\n          <div style={{\n            width: \"60px\",\n            height: \"60px\",\n            background: \"radial-gradient(circle at 60% 40%, #181a23 70%, #a259e6 100%)\",\n            borderRadius: \"50%\",\n            display: \"flex\",\n            alignItems: \"center\",\n            justifyContent: \"center\",\n            boxShadow: \"0 0 24px #a259e6\"\n          }}>\n            <svg width=\"38\" height=\"38\" viewBox=\"0 0 38 38\">\n              <polyline\n                points=\"10,22 18,29 28,13\"\n                fill=\"none\"\n                stroke=\"#a259e6\"\n                strokeWidth=\"5\"\n                strokeLinecap=\"round\"\n                strokeLinejoin=\"round\"\n                style={{\n                  filter: \"drop-shadow(0 0 8px #a259e6)\"\n                }}\n              />\n            </svg>\n          </div>\n        </div>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+  "imageAnalysis": "",
+  "toolsUsed": [
+    "editSceneWithImage"
+  ],
+  "success": true,
+  "metrics": {
+    "latency": 111869,
+    "cost": 0.00558,
+    "timestamp": "2025-06-10T13:27:48.120Z"
+  },
+  "contextUsed": {
+    "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+    "sceneId": "test-scene-1",
+    "sceneName": "Scene 1"
+  },
+  "generatedCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n\n  return (\n    <AbsoluteFill style={{\n      background: \"radial-gradient(ellipse at center, #181a23 0%, #000 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div\n        style={{\n          position: \"relative\",\n          display: \"flex\",\n          alignItems: \"center\",\n          padding: \"2.5rem 3.5rem 2.5rem 2.5rem\",\n          borderRadius: \"32px\",\n          background: \"linear-gradient(135deg, #36e4e4 0%, #a259e6 60%, #ff4ecd 100%)\",\n          boxShadow: \"0 0 40px 8px #a259e6, 0 0 0 8px rgba(162,89,230,0.15)\",\n          minWidth: 420,\n          minHeight: 200,\n          filter: \"drop-shadow(0 0 32px #a259e6)\",\n          transition: \"box-shadow 0.3s, filter 0.3s\",\n          cursor: \"pointer\"\n        }}\n        onMouseEnter={e => {\n          e.currentTarget.style.boxShadow = \"0 0 64px 16px #ff4ecd, 0 0 0 12px rgba(54,228,228,0.12)\";\n          e.currentTarget.style.filter = \"drop-shadow(0 0 48px #ff4ecd)\";\n        }}\n        onMouseLeave={e => {\n          e.currentTarget.style.boxShadow = \"0 0 40px 8px #a259e6, 0 0 0 8px rgba(162,89,230,0.15)\";\n          e.currentTarget.style.filter = \"drop-shadow(0 0 32px #a259e6)\";\n        }}\n      >\n        <div style={{\n          display: \"flex\",\n          flexDirection: \"column\",\n          justifyContent: \"center\",\n          zIndex: 2\n        }}>\n          <span style={{\n            fontSize: \"2.7rem\",\n            fontWeight: 800,\n            letterSpacing: \"0.02em\",\n            color: \"#fff\",\n            textShadow: \"0 2px 18px #000, 0 0 8px #36e4e4\"\n          }}>\n            HIPAA\n          </span>\n          <span style={{\n            fontSize: \"2.2rem\",\n            fontWeight: 700,\n            letterSpacing: \"0.01em\",\n            color: \"#fff\",\n            marginTop: \"0.2em\",\n            textShadow: \"0 2px 18px #000, 0 0 8px #a259e6\"\n          }}>\n            COMPLIANT\n          </span>\n        </div>\n        <div style={{\n          position: \"absolute\",\n          top: \"-38px\",\n          right: \"-54px\",\n          width: \"120px\",\n          height: \"120px\",\n          background: \"radial-gradient(circle at 60% 40%, rgba(255,78,205,0.18) 60%, transparent 100%)\",\n          borderRadius: \"50%\",\n          boxShadow: \"0 0 32px 8px #ff4ecd\",\n          display: \"flex\",\n          alignItems: \"center\",\n          justifyContent: \"center\",\n          zIndex: 3,\n          border: \"6px solid #a259e6\",\n          transition: \"box-shadow 0.3s\"\n        }}>\n          <div style={{\n            width: \"60px\",\n            height: \"60px\",\n            background: \"radial-gradient(circle at 60% 40%, #181a23 70%, #a259e6 100%)\",\n            borderRadius: \"50%\",\n            display: \"flex\",\n            alignItems: \"center\",\n            justifyContent: \"center\",\n            boxShadow: \"0 0 24px #a259e6\"\n          }}>\n            <svg width=\"38\" height=\"38\" viewBox=\"0 0 38 38\">\n              <polyline\n                points=\"10,22 18,29 28,13\"\n                fill=\"none\"\n                stroke=\"#a259e6\"\n                strokeWidth=\"5\"\n                strokeLinecap=\"round\"\n                strokeLinejoin=\"round\"\n                style={{\n                  filter: \"drop-shadow(0 0 8px #a259e6)\"\n                }}\n              />\n            </svg>\n          </div>\n        </div>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+  "timingBreakdown": {
+    "brainThinking": 112776,
+    "toolExecution": 0,
+    "codeGeneration": 0,
+    "total": 112776
+  },
+  "codeFileName": "add-button-with-image_openai-pack.tsx",
+  "promptDetails": {
+    "id": "add-button-with-image",
+    "name": "Add Button with Image Reference",
+    "type": "image",
+    "input": {
+      "text": "recreate this button with hover animations and glow effects",
+      "image": "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Screenshot%202025-06-02%20at%2022.21.58.png",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "workflow": [
+        {
+          "toolName": "analyzeImage",
+          "context": "analyze button design"
+        },
+        {
+          "toolName": "editSceneWithImage",
+          "context": "add button to existing scene"
+        }
+      ],
+      "shouldAnalyzeImage": true,
+      "shouldModify": [
+        "button element",
+        "hover animations",
+        "glow effects"
+      ],
+      "complexity": "high"
+    }
+  },
+  "timestamp": "2025-06-10T13:27:48.122Z"
+}

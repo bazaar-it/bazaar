@@ -1,6 +1,7 @@
 // src/server/services/generation/directCodeEditor.service.ts
 import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel, resolveDirectCodeEditorModel } from "~/config/models.config";
+import { getSystemPrompt } from "~/config/prompts.config";
 
 export interface DirectCodeEditInput {
   userPrompt: string;
@@ -90,13 +91,13 @@ export class DirectCodeEditorService {
       // Route to different editing strategies based on complexity
       switch (complexity) {
         case 'surgical':
-          return await this.surgicalEdit(input);
+          return await this.surgicalEditUnified(input);
         case 'creative':
-          return await this.creativeEdit(input);
+          return await this.creativeEditUnified(input);
         case 'structural':
-          return await this.structuralEdit(input);
+          return await this.structuralEditUnified(input);
         default:
-          return await this.surgicalEdit(input); // Fallback to surgical
+          return await this.surgicalEditUnified(input); // Fallback to unified surgical
       }
       
     } catch (error) {
@@ -148,6 +149,213 @@ export class DirectCodeEditorService {
   }
 
   /**
+   * SURGICAL EDIT UNIFIED: Single-call approach (3x faster)
+   * Combines analysis, modification, and duration detection in one LLM call
+   */
+  private async surgicalEditUnified(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
+    try {
+      console.log("[DirectCodeEditor] Unified surgical edit - single LLM call");
+      
+      const modelConfig = resolveDirectCodeEditorModel('surgical');
+      
+      const chatContext = input.chatHistory && input.chatHistory.length > 0
+        ? `\nCHAT HISTORY (for context):\n${input.chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`
+        : "";
+
+      const visionContext = this.buildVisionContextString(input.visionAnalysis);
+
+      // Use centralized system prompt instead of inline
+      const systemPrompt = getSystemPrompt('DIRECT_CODE_EDITOR_SURGICAL_UNIFIED');
+      
+      const userMessage = `EXISTING CODE:
+\`\`\`tsx
+${input.existingCode}
+\`\`\`
+
+USER REQUEST: "${input.userPrompt}"${chatContext}${visionContext}`;
+
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: userMessage }],
+        systemPrompt,
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const content = response.content;
+      if (!content) {
+        throw new Error("No response from unified surgical editor");
+      }
+
+      const parsed = this.extractJsonFromResponse(content);
+      
+      // Validate that we got valid code
+      if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
+        throw new Error(`Invalid code returned: ${parsed.code?.substring(0, 100)}`);
+      }
+
+      console.log(`[DirectCodeEditor] Unified surgical edit completed:`, {
+        changes: parsed.changes?.length || 0,
+        preserved: parsed.preserved?.length || 0,
+        reasoning: parsed.reasoning
+      });
+
+      return {
+        code: parsed.code,
+        changes: parsed.changes || [`Applied surgical edit: ${input.userPrompt}`],
+        preserved: parsed.preserved || ["All existing animations and structure"],
+        reasoning: parsed.reasoning || "Applied precise surgical modifications",
+        newDurationFrames: parsed.newDurationFrames,
+        debug: {
+          changeAnalysis: { modificationStrategy: "unified-surgical" },
+          modificationStrategy: "unified-surgical"
+        }
+      };
+      
+    } catch (error) {
+      console.error("[DirectCodeEditor] Unified surgical edit failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * CREATIVE EDIT UNIFIED: Single-call approach for creative improvements
+   * Combines analysis, modification, and duration detection in one LLM call
+   */
+  private async creativeEditUnified(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
+    try {
+      console.log("[DirectCodeEditor] Unified creative edit - single LLM call");
+      
+      const modelConfig = resolveDirectCodeEditorModel('creative');
+      
+      const chatContext = input.chatHistory && input.chatHistory.length > 0
+        ? `\nCHAT HISTORY (for context):\n${input.chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`
+        : "";
+
+      const visionContext = this.buildVisionContextString(input.visionAnalysis);
+
+      // Use centralized system prompt instead of inline
+      const systemPrompt = getSystemPrompt('DIRECT_CODE_EDITOR_CREATIVE_UNIFIED');
+      
+      const userMessage = `EXISTING CODE:
+\`\`\`tsx
+${input.existingCode}
+\`\`\`
+
+USER REQUEST: "${input.userPrompt}"${chatContext}${visionContext}`;
+
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: userMessage }],
+        systemPrompt,
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const content = response.content;
+      if (!content) {
+        throw new Error("No response from unified creative editor");
+      }
+
+      const parsed = this.extractJsonFromResponse(content);
+      
+      // Validate that we got valid code
+      if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
+        throw new Error(`Invalid code returned: ${parsed.code?.substring(0, 100)}`);
+      }
+
+      console.log(`[DirectCodeEditor] Unified creative edit completed:`, {
+        changes: parsed.changes?.length || 0,
+        preserved: parsed.preserved?.length || 0,
+        reasoning: parsed.reasoning
+      });
+
+      return {
+        code: parsed.code,
+        changes: parsed.changes || [`Applied creative improvements: ${input.userPrompt}`],
+        preserved: parsed.preserved || ["Core functionality and content"],
+        reasoning: parsed.reasoning || "Applied creative design enhancements",
+        newDurationFrames: parsed.newDurationFrames,
+        debug: {
+          changeAnalysis: { modificationStrategy: "unified-creative" },
+          modificationStrategy: "unified-creative"
+        }
+      };
+      
+    } catch (error) {
+      console.error("[DirectCodeEditor] Unified creative edit failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * STRUCTURAL EDIT UNIFIED: Single-call approach for structural changes
+   * Combines analysis, modification, and duration detection in one LLM call
+   */
+  private async structuralEditUnified(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
+    try {
+      console.log("[DirectCodeEditor] Unified structural edit - single LLM call");
+      
+      const modelConfig = resolveDirectCodeEditorModel('structural');
+      
+      const chatContext = input.chatHistory && input.chatHistory.length > 0
+        ? `\nCHAT HISTORY (for context):\n${input.chatHistory.map(msg => `${msg.role}: ${msg.content}`).join('\n')}`
+        : "";
+
+      const visionContext = this.buildVisionContextString(input.visionAnalysis);
+
+      // Use centralized system prompt instead of inline
+      const systemPrompt = getSystemPrompt('DIRECT_CODE_EDITOR_STRUCTURAL_UNIFIED');
+      
+      const userMessage = `EXISTING CODE:
+\`\`\`tsx
+${input.existingCode}
+\`\`\`
+
+USER REQUEST: "${input.userPrompt}"${chatContext}${visionContext}`;
+
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: userMessage }],
+        systemPrompt,
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const content = response.content;
+      if (!content) {
+        throw new Error("No response from unified structural editor");
+      }
+
+      const parsed = this.extractJsonFromResponse(content);
+      
+      // Validate that we got valid code
+      if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
+        throw new Error(`Invalid code returned: ${parsed.code?.substring(0, 100)}`);
+      }
+
+      console.log(`[DirectCodeEditor] Unified structural edit completed:`, {
+        changes: parsed.changes?.length || 0,
+        preserved: parsed.preserved?.length || 0,
+        reasoning: parsed.reasoning
+      });
+
+      return {
+        code: parsed.code,
+        changes: parsed.changes || [`Applied structural changes: ${input.userPrompt}`],
+        preserved: parsed.preserved || ["All content and core functionality"],
+        reasoning: parsed.reasoning || "Applied structural layout modifications",
+        newDurationFrames: parsed.newDurationFrames,
+        debug: {
+          changeAnalysis: { modificationStrategy: "unified-structural" },
+          modificationStrategy: "unified-structural"
+        }
+      };
+      
+    } catch (error) {
+      console.error("[DirectCodeEditor] Unified structural edit failed:", error);
+      throw error;
+    }
+  }
+
+  /**
    * CREATIVE EDIT: More flexible, multi-element changes
    */
   private async creativeEdit(input: DirectCodeEditInput): Promise<DirectCodeEditOutput> {
@@ -157,50 +365,21 @@ export class DirectCodeEditorService {
       // 🚨 NEW: Get model configuration for creative editing
       const modelConfig = resolveDirectCodeEditorModel('creative');
       
-      // Skip analysis phase - go directly to creative modification
-      const prompt = `You are making CREATIVE improvements to existing React/Remotion code.
-
-EXISTING CODE:
+      // Use centralized system prompt instead of inline
+      const systemPrompt = getSystemPrompt('DIRECT_CODE_EDITOR_CREATIVE');
+      
+      const userMessage = `EXISTING CODE:
 \`\`\`tsx
 ${input.existingCode}
 \`\`\`
 
-USER REQUEST: "${input.userPrompt}"
-
-CREATIVE EDITING RULES:
-🎨 CREATIVE FREEDOM ALLOWED:
-- Update fonts, colors, spacing, shadows, gradients
-- Improve visual design and aesthetics  
-- Add modern effects and animations
-- Enhance the overall look and feel
-- Modify multiple elements if needed for cohesion
-
-✅ PRESERVE CORE FUNCTIONALITY:
-- Keep the same component structure
-- Maintain existing content (text, data)
-- Preserve animation timing patterns
-- Keep the same Remotion imports and patterns
-
-🚨 IMPORT RESTRICTIONS - NEVER VIOLATE:
-- NEVER add external library imports
-- ONLY use: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-- Use ONLY basic HTML elements and Tailwind classes
-
-RESPONSE FORMAT (JSON):
-{
-  "code": "Complete modified code with creative improvements",
-  "changes": ["List of creative changes made"],
-  "preserved": ["List of core functionality preserved"],
-  "reasoning": "Explanation of creative improvements applied"
-}
-
-Apply creative improvements while preserving core functionality.`;
+USER REQUEST: "${input.userPrompt}"`;
 
       // 🚨 NEW: Use centralized AI client
       const response = await AIClientService.generateResponse(
         modelConfig,
-        [{ role: "user", content: input.userPrompt }],
-        { role: "system", content: prompt },
+        [{ role: "user", content: userMessage }],
+        systemPrompt,
         { responseFormat: { type: "json_object" } }
       );
 
@@ -258,54 +437,21 @@ Apply creative improvements while preserving core functionality.`;
       // 🚨 NEW: Get model configuration for structural editing
       const modelConfig = resolveDirectCodeEditorModel('structural');
       
-      const prompt = `You are making STRUCTURAL changes to React/Remotion code layout and element organization.
-
-EXISTING CODE:
+      // Use centralized system prompt instead of inline
+      const systemPrompt = getSystemPrompt('DIRECT_CODE_EDITOR_STRUCTURAL');
+      
+      const userMessage = `EXISTING CODE:
 \`\`\`tsx
 ${input.existingCode}
 \`\`\`
 
-USER REQUEST: "${input.userPrompt}"
-
-STRUCTURAL EDITING RULES:
-🏗️ STRUCTURAL FREEDOM ALLOWED:
-- Rearrange element positioning and layout
-- Move elements up/down, left/right in the visual hierarchy
-- Change flex/grid layouts and positioning
-- Reorganize content structure and flow
-- Coordinate animations between multiple elements
-- Adjust timing and sequencing of animations
-
-✅ STILL PRESERVE:
-- All existing content (text, data, media)
-- Core Remotion patterns and component structure
-- Same imports and overall framework
-
-🚨 COMPLEX CHANGES - USE MULTI-STEP APPROACH:
-1. First, reorganize the layout structure
-2. Then, adjust animations to fit new layout
-3. Finally, ensure proper timing coordination
-
-🚨 IMPORT RESTRICTIONS - NEVER VIOLATE:
-- NEVER add external library imports
-- ONLY use: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-- Use ONLY basic HTML elements and Tailwind classes
-
-RESPONSE FORMAT (JSON):
-{
-  "code": "Complete restructured code with layout changes",
-  "changes": ["List of structural changes made"],
-  "preserved": ["List of content and functionality preserved"],
-  "reasoning": "Explanation of structural modifications applied"
-}
-
-Apply structural modifications while preserving all content.`;
+USER REQUEST: "${input.userPrompt}"`;
 
       // 🚨 NEW: Use centralized AI client
       const response = await AIClientService.generateResponse(
         modelConfig,
-        [{ role: "user", content: input.userPrompt }],
-        { role: "system", content: prompt },
+        [{ role: "user", content: userMessage }],
+        systemPrompt,
         { responseFormat: { type: "json_object" } }
       );
 

@@ -1,6 +1,7 @@
 // src/server/services/ai/conversationalResponse.service.ts
 import { AIClientService, type AIMessage } from '~/server/services/ai/aiClient.service';
-import type { ModelConfig } from '~/config/models.config';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
 import { db } from "~/server/db";
 import { messages } from "~/server/db/schema";
 import { emitSceneEvent } from "~/lib/events/sceneEvents";
@@ -35,20 +36,20 @@ export class ConversationalResponseService {
    * Generate contextual chat response for completed operations
    */
   async generateContextualResponse(input: ConversationalResponseInput): Promise<string> {
-    const systemPrompt = this.buildResponsePrompt(input.operation);
-    
     try {
-      const modelConfig: ModelConfig = {
-        provider: 'openai',
-        model: "gpt-4o-mini",
-        maxTokens: 150,
-        temperature: 0.7,
-      };
+      // Use centralized model and prompt configuration
+      const modelConfig = getModel('conversationalResponse');
+      const systemPromptConfig = getSystemPrompt('CONVERSATIONAL_RESPONSE');
+      
       const messagesForAI: AIMessage[] = [
-        { role: "system", content: systemPrompt },
         { role: "user", content: this.buildResponseContext(input) }
       ];
-      const aiResponse = await AIClientService.generateResponse(modelConfig, messagesForAI);
+      
+      const aiResponse = await AIClientService.generateResponse(
+        modelConfig, 
+        messagesForAI, 
+        systemPromptConfig
+      );
       return aiResponse.content || "Operation completed!";
     } catch (error) {
       console.error('Failed to generate conversational response:', error);
@@ -65,33 +66,28 @@ export class ConversationalResponseService {
     ambiguityType: 'scene-selection' | 'action-unclear' | 'parameter-missing' | 'duration_intent';
     context?: Record<string, any>;
   }): Promise<string> {
-    const systemPrompt = `You are a helpful motion graphics assistant. The user's request is ambiguous and you need to ask a specific clarification question.
-
-TONE: Friendly, conversational, helpful
-LENGTH: 1-2 sentences maximum
-STYLE: Natural question, not robotic
-
-AMBIGUITY TYPE: ${input.ambiguityType}
-
-${input.availableScenes && input.availableScenes.length > 0 ? `
-AVAILABLE SCENES:
-${input.availableScenes.map(scene => `- Scene ${scene.number || scene.id}: ${scene.name}`).join('\n')}
-` : ''}
-
-Generate a specific question to clarify the user's intent.`;
-
     try {
-      const modelConfigClarification: ModelConfig = {
-        provider: 'openai',
-        model: "gpt-4o-mini",
-        maxTokens: 100,
-        temperature: 0.7,
-      };
+      // Use centralized model and prompt configuration
+      const modelConfig = getModel('conversationalResponse');
+      const systemPromptConfig = getSystemPrompt('CLARIFICATION_QUESTION');
+      
+      let userContent = `User said: "${input.userPrompt}"\n\nAmbiguity type: ${input.ambiguityType}`;
+      
+      if (input.availableScenes && input.availableScenes.length > 0) {
+        userContent += `\n\nAvailable scenes:\n${input.availableScenes.map(scene => `- Scene ${scene.number || scene.id}: ${scene.name}`).join('\n')}`;
+      }
+      
+      userContent += `\n\nWhat clarification question should I ask?`;
+      
       const messagesForClarification: AIMessage[] = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `User said: "${input.userPrompt}"\n\nWhat clarification question should I ask?` }
+        { role: "user", content: userContent }
       ];
-      const aiResponse = await AIClientService.generateResponse(modelConfigClarification, messagesForClarification);
+      
+      const aiResponse = await AIClientService.generateResponse(
+        modelConfig, 
+        messagesForClarification, 
+        systemPromptConfig
+      );
       return aiResponse.content || "Could you please clarify what you'd like me to do?";
     } catch (error) {
       console.error('Failed to generate clarification question:', error);
@@ -127,44 +123,6 @@ Generate a specific question to clarify the user's intent.`;
     }
   }
 
-  /**
-   * Build response prompt based on operation type
-   */
-  private buildResponsePrompt(operation: string): string {
-    const basePrompt = `You are a helpful motion graphics assistant. Generate a brief, friendly response about the operation you just completed.
-
-TONE: Conversational, helpful, specific
-LENGTH: 1-2 sentences maximum
-STYLE: Natural, not robotic
-
-`;
-
-    switch (operation) {
-      case 'addScene':
-        return basePrompt + `You just created a new scene. Mention what you created and highlight key visual elements or animations.`;
-      
-      case 'editScene':
-        return basePrompt + `You just modified an existing scene. Mention what you changed specifically.`;
-      
-      case 'deleteScene':
-        return basePrompt + `You just deleted a scene. Confirm the deletion briefly and mention what's remaining.`;
-      
-      case 'askSpecify':
-        return basePrompt + `You need clarification. Ask a specific question to help understand what the user wants.`;
-      
-      case 'fixBrokenScene':
-        return basePrompt + `You need to fix a broken scene. Mention the specific issue and the steps you'll take to fix it.`;
-      
-      case 'createSceneFromImage':
-        return basePrompt + `You just created a scene by analyzing uploaded images. Mention what you recreated from the images and highlight key visual elements.`;
-      
-      case 'editSceneWithImage':
-        return basePrompt + `You just modified a scene using an image reference for styling. Mention what styling changes you made based on the image.`;
-      
-      default:
-        return basePrompt + `You completed an operation. Briefly describe what happened.`;
-    }
-  }
 
   /**
    * Build context for response generation

@@ -1,19 +1,32 @@
 import { basicPromptsSuite, codeGenerationSuite, visionTestSuite, remotionSceneSuite } from './suites/basic-prompts';
 import { bazaarVidPipelineSuite } from './suites/bazaar-vid-pipeline';
+import { 
+  modelPackPerformanceSuite, 
+  promptOptimizationSuite, 
+  imageToCodePipelineSuite,
+  performanceBenchmarkSuite 
+} from './suites/model-pack-performance';
 import type { EvalSuite } from './types';
 
 export const evalRegistry: Record<string, EvalSuite> = {
+  // 🎯 Core evaluation suites
   'basic-prompts': basicPromptsSuite,
   'bazaar-vid-pipeline': bazaarVidPipelineSuite,
   'code-generation': codeGenerationSuite,
   'vision-analysis': visionTestSuite,
   'remotion-scenes': remotionSceneSuite,
   
-  // Placeholder suites (not implemented yet)
+  // 🚀 Performance evaluation suites
+  'model-pack-performance': modelPackPerformanceSuite,
+  'prompt-optimization': promptOptimizationSuite,
+  'image-to-code-pipeline': imageToCodePipelineSuite,
+  'performance-benchmark': performanceBenchmarkSuite,
+  
+  // 📊 Legacy placeholder suites (replaced by performance suites above)
   'model-comparison': {
     id: 'model-comparison',
-    name: 'Model Performance Comparison',
-    description: 'Compare different model packs across various tasks',
+    name: 'Model Performance Comparison (Legacy)',
+    description: 'Use "model-pack-performance" suite instead',
     prompts: [],
     modelPacks: ['claude-pack', 'performance-pack', 'starter-pack-1'],
     services: ['brain', 'codeGenerator']
@@ -21,8 +34,8 @@ export const evalRegistry: Record<string, EvalSuite> = {
   
   'vision-testing': {
     id: 'vision-testing', 
-    name: 'Vision Analysis Testing',
-    description: 'Test image analysis and scene creation from images',
+    name: 'Vision Analysis Testing (Legacy)',
+    description: 'Use "image-to-code-pipeline" suite instead',
     prompts: [],
     modelPacks: ['claude-pack', 'performance-pack'],
     services: ['analyzeImage', 'createSceneFromImage', 'editSceneWithImage']

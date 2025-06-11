@@ -87,8 +87,8 @@ describe('Model Management System', () => {
   describe('Active Model Pack', () => {
     test('getActiveModelPack returns correct pack from environment', () => {
       const pack = getActiveModelPack();
-      expect(pack.name).toBe('Claude Pack');
-      expect(pack.models.brain.provider).toBe('anthropic');
+      expect(pack.name).toBe('OpenAI Pack');
+      expect(pack.models.brain.provider).toBe('openai');
     });
 
     test('getActiveModelPack falls back to claude-pack when MODEL_PACK is invalid', () => {

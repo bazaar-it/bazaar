@@ -308,94 +308,58 @@ export default function ChatPanelG({
         scrollToBottom();
       }, 100);
       
+      // 🚀 OPTIMIZED: Direct state update without excessive refetching
       try {
-        // ✅ CRITICAL FIX: Force refresh scene data after successful operation
-        console.log('[ChatPanelG] ♻️ CRITICAL: Starting forced state refresh...');
+        console.log('[ChatPanelG] ♻️ Starting optimized state update...');
         
-        // STEP 1: Invalidate all related caches
-        await utils.generation.getProjectScenes.invalidate({ projectId });
-        await utils.generation.invalidate(); // Invalidate entire generation namespace
-        
-        console.log('[ChatPanelG] 🔄 CRITICAL: Fetching fresh scenes from database...');
-        
-        // STEP 2: Force refetch with error handling
-        let updatedScenes;
-        try {
-          updatedScenes = await refetchScenes();
-        } catch (refetchError) {
-          console.error('[ChatPanelG] ❌ CRITICAL: refetchScenes failed, trying direct query...', refetchError);
-          // Fallback: Try to refetch manually
-          updatedScenes = await utils.generation.getProjectScenes.fetch({ projectId });
-        }
-        
-        console.log('[ChatPanelG] 📊 CRITICAL: Raw scenes data:', updatedScenes);
-        
-        if (updatedScenes) {
-          // Handle different response formats from tRPC query
-          const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
-          console.log('[ChatPanelG] ✅ CRITICAL: Fetched updated scenes from database:', scenesArray?.length || 0);
+        // If we have an updated scene from the backend, use it directly
+        if (result.scene && result.operation === 'editScene') {
+          console.log('[ChatPanelG] ✅ Using scene data from backend response');
           
-          if (scenesArray && scenesArray.length > 0) {
-            const updatedProps = convertDbScenesToInputProps(scenesArray);
-            console.log('[ChatPanelG] ✅ CRITICAL: Converted scenes to InputProps format:', updatedProps);
+          // Update the specific scene in VideoState directly
+          const currentProps = getVideoProps(projectId);
+          if (currentProps && currentProps.scenes) {
+            const updatedScenes = currentProps.scenes.map(scene => 
+              scene.id === result.scene.id ? result.scene : scene
+            );
             
-            console.log('[ChatPanelG] 🚀 CRITICAL: Forcing VideoState update with updateAndRefresh...');
-            updateAndRefresh(projectId, () => updatedProps);
-            
-            console.log('[ChatPanelG] 🎬 CRITICAL: VideoState updated - all panels should refresh NOW');
-            
-            // STEP 3: Also force global VideoState refresh
-            console.log('[ChatPanelG] 🔄 CRITICAL: Forcing VideoState global refresh...');
-            useVideoState.getState().forceRefresh(projectId);
-            
-            // STEP 4: Manual dispatch of update event as backup
-            console.log('[ChatPanelG] 📡 CRITICAL: Manually dispatching videostate-update event...');
-            window.dispatchEvent(new CustomEvent('videostate-update', {
-              detail: { 
-                projectId,
-                type: 'scenes-updated',
-                refreshToken: Date.now().toString(),
-                sceneCount: scenesArray?.length || 0
-              }
+            // Single state update with the new scene data
+            updateProps(projectId, (props) => ({
+              ...props,
+              scenes: updatedScenes
             }));
             
-            console.log('[ChatPanelG] ✅ CRITICAL: All refresh operations completed successfully');
-            
-          } else {
-            console.error('[ChatPanelG] ❌ CRITICAL: No scenes in updated data - something is wrong');
+            console.log('[ChatPanelG] ✅ Scene updated directly in VideoState');
           }
-        } else {
-          console.error('[ChatPanelG] ❌ CRITICAL: No scenes data returned from database query');
-          
-          // Last resort: Force reload the page after a short delay
-          console.log('[ChatPanelG] 🚨 LAST RESORT: Will force page reload in 2 seconds if state sync failed');
-          setTimeout(() => {
-            console.log('[ChatPanelG] 🔄 FORCING PAGE RELOAD due to state sync failure');
-            window.location.reload();
-          }, 2000);
-        }
-      } catch (refreshError) {
-        console.error('[ChatPanelG] ❌ CRITICAL: Refresh failed, but chat will continue:', refreshError);
-        
-        // 🚨 FALLBACK: Even if refresh fails, still try to notify other panels
-        try {
-          console.log('[ChatPanelG] 🔧 CRITICAL: Attempting fallback refresh...');
-          useVideoState.getState().forceRefresh(projectId);
-          
-          // Force a manual event dispatch as last resort
-          window.dispatchEvent(new CustomEvent('videostate-update', {
-            detail: { 
-              projectId,
-              type: 'emergency-refresh',
-              error: refreshError,
-              timestamp: Date.now()
-            }
+        } else if (result.scene && result.operation === 'addScene') {
+          // For new scenes, add to the end
+          updateProps(projectId, (props) => ({
+            ...props,
+            scenes: [...(props.scenes || []), result.scene]
           }));
           
-          console.log('[ChatPanelG] ✅ CRITICAL: Fallback refresh completed');
-        } catch (fallbackError) {
-          console.error('[ChatPanelG] 💥 CRITICAL: Even fallback refresh failed:', fallbackError);
+          console.log('[ChatPanelG] ✅ New scene added to VideoState');
+        } else {
+          // Only refetch if we don't have scene data in the response
+          console.log('[ChatPanelG] 🔄 No scene in response, fetching from database...');
+          const updatedScenes = await refetchScenes();
+          
+          if (updatedScenes) {
+            const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
+            if (scenesArray && scenesArray.length > 0) {
+              const updatedProps = convertDbScenesToInputProps(scenesArray);
+              updateProps(projectId, () => updatedProps);
+            }
+          }
         }
+        
+        // Single cache invalidation for background sync
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+        
+        console.log('[ChatPanelG] ✅ State update completed');
+      } catch (refreshError) {
+        console.error('[ChatPanelG] ⚠️ State refresh error:', refreshError);
+        // Continue anyway - the operation succeeded on the backend
       }
 
       // Handle callbacks

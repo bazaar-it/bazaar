@@ -1,0 +1,78 @@
+{
+  "promptId": "ambiguous-request",
+  "prompt": {
+    "id": "ambiguous-request",
+    "name": "Ambiguous Request Clarification",
+    "type": "text",
+    "input": {
+      "text": "make it better",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "what specific aspect",
+        "which part",
+        "how should I improve"
+      ],
+      "complexity": "low"
+    }
+  },
+  "modelPack": "optimal-pack",
+  "modelKey": "brain",
+  "provider": "openai",
+  "model": "gpt-4.1",
+  "output": "I just refined Scene 1 to enhance its overall impact by adjusting the timing of the transitions and fine-tuning the color grading for better visual appeal. Let me know if there's anything else you'd like to tweak!",
+  "actualOutput": "I just refined Scene 1 to enhance its overall impact by adjusting the timing of the transitions and fine-tuning the color grading for better visual appeal. Let me know if there's anything else you'd like to tweak!",
+  "codeOutput": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Fade-in for the whole scene\n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\"\n  });\n\n  // Spring pop for the headline\n  const headlineScale = spring({\n    frame: frame - Math.floor(fps * 0.3),\n    fps,\n    from: 0.7,\n    to: 1,\n    config: { damping: 10, mass: 0.8 }\n  });\n\n  // Subheadline slide up\n  const subTextY = interpolate(\n    frame,\n    [fps * 0.5, fps * 1.2],\n    [40, 0],\n    { extrapolateLeft: \"clamp\", extrapolateRight: \"clamp\" }\n  );\n  const subTextOpacity = interpolate(\n    frame,\n    [fps * 0.7, fps * 1.2],\n    [0, 1],\n    { extrapolateLeft: \"clamp\", extrapolateRight: \"clamp\" }\n  );\n\n  // Animated gradient background\n  const bgAngle = interpolate(frame, [0, fps * 2], [135, 165], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"extend\"\n  });\n  const bg = `linear-gradient(${bgAngle}deg, #43e97b 0%, #38f9d7 50%, #667eea 100%)`;\n\n  return (\n    <AbsoluteFill\n      style={{\n        background: bg,\n        display: \"flex\",\n        justifyContent: \"center\",\n        alignItems: \"center\",\n        fontFamily: \"'Poppins', 'Inter', sans-serif\",\n        opacity: fadeIn,\n        transition: \"background 1s\"\n      }}\n    >\n      <div\n        style={{\n          textAlign: \"center\",\n          color: \"#fff\",\n          padding: \"2.5rem 2rem 2rem 2rem\",\n          background: \"rgba(20, 20, 40, 0.16)\",\n          borderRadius: \"2rem\",\n          boxShadow: \"0 8px 32px 0 rgba(31, 38, 135, 0.25)\",\n          border: \"1.5px solid rgba(255,255,255,0.18)\",\n          backdropFilter: \"blur(6px)\",\n          WebkitBackdropFilter: \"blur(6px)\",\n          maxWidth: 520,\n        }}\n      >\n        <h1\n          style={{\n            fontSize: \"3.6rem\",\n            fontWeight: 800,\n            margin: \"0 0 1.1rem 0\",\n            letterSpacing: \"-0.03em\",\n            textShadow: \"0 6px 32px rgba(80,180,255,0.20), 0 2px 12px rgba(0,0,0,0.15)\",\n            background: \"linear-gradient(90deg, #fff 60%, #c0f6ff 100%)\",\n            WebkitBackgroundClip: \"text\",\n            WebkitTextFillColor: \"transparent\",\n            transform: `scale(${headlineScale})`,\n            transition: \"transform 0.4s cubic-bezier(.77,0,.18,1)\",\n            filter: \"drop-shadow(0 2px 8px #2ee59d88)\",\n          }}\n        >\n          Welcome to Bazaar\n        </h1>\n        <p\n          style={{\n            fontSize: \"1.35rem\",\n            fontWeight: 500,\n            color: \"#eafffa\",\n            opacity: subTextOpacity,\n            margin: 0,\n            letterSpacing: \"0.01em\",\n            transform: `translateY(${subTextY}px)`,\n            transition: \"opacity 0.4s, transform 0.4s\",\n            textShadow: \"0 1px 8px #1f5e5e44\"\n          }}\n        >\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}\n",
+  "imageAnalysis": "",
+  "toolsUsed": [
+    "editScene"
+  ],
+  "success": true,
+  "metrics": {
+    "latency": 104011,
+    "cost": 0.00486,
+    "timestamp": "2025-06-10T13:46:16.195Z"
+  },
+  "contextUsed": {
+    "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+    "sceneId": "test-scene-1",
+    "sceneName": "Scene 1"
+  },
+  "generatedCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Fade-in for the whole scene\n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\"\n  });\n\n  // Spring pop for the headline\n  const headlineScale = spring({\n    frame: frame - Math.floor(fps * 0.3),\n    fps,\n    from: 0.7,\n    to: 1,\n    config: { damping: 10, mass: 0.8 }\n  });\n\n  // Subheadline slide up\n  const subTextY = interpolate(\n    frame,\n    [fps * 0.5, fps * 1.2],\n    [40, 0],\n    { extrapolateLeft: \"clamp\", extrapolateRight: \"clamp\" }\n  );\n  const subTextOpacity = interpolate(\n    frame,\n    [fps * 0.7, fps * 1.2],\n    [0, 1],\n    { extrapolateLeft: \"clamp\", extrapolateRight: \"clamp\" }\n  );\n\n  // Animated gradient background\n  const bgAngle = interpolate(frame, [0, fps * 2], [135, 165], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"extend\"\n  });\n  const bg = `linear-gradient(${bgAngle}deg, #43e97b 0%, #38f9d7 50%, #667eea 100%)`;\n\n  return (\n    <AbsoluteFill\n      style={{\n        background: bg,\n        display: \"flex\",\n        justifyContent: \"center\",\n        alignItems: \"center\",\n        fontFamily: \"'Poppins', 'Inter', sans-serif\",\n        opacity: fadeIn,\n        transition: \"background 1s\"\n      }}\n    >\n      <div\n        style={{\n          textAlign: \"center\",\n          color: \"#fff\",\n          padding: \"2.5rem 2rem 2rem 2rem\",\n          background: \"rgba(20, 20, 40, 0.16)\",\n          borderRadius: \"2rem\",\n          boxShadow: \"0 8px 32px 0 rgba(31, 38, 135, 0.25)\",\n          border: \"1.5px solid rgba(255,255,255,0.18)\",\n          backdropFilter: \"blur(6px)\",\n          WebkitBackdropFilter: \"blur(6px)\",\n          maxWidth: 520,\n        }}\n      >\n        <h1\n          style={{\n            fontSize: \"3.6rem\",\n            fontWeight: 800,\n            margin: \"0 0 1.1rem 0\",\n            letterSpacing: \"-0.03em\",\n            textShadow: \"0 6px 32px rgba(80,180,255,0.20), 0 2px 12px rgba(0,0,0,0.15)\",\n            background: \"linear-gradient(90deg, #fff 60%, #c0f6ff 100%)\",\n            WebkitBackgroundClip: \"text\",\n            WebkitTextFillColor: \"transparent\",\n            transform: `scale(${headlineScale})`,\n            transition: \"transform 0.4s cubic-bezier(.77,0,.18,1)\",\n            filter: \"drop-shadow(0 2px 8px #2ee59d88)\",\n          }}\n        >\n          Welcome to Bazaar\n        </h1>\n        <p\n          style={{\n            fontSize: \"1.35rem\",\n            fontWeight: 500,\n            color: \"#eafffa\",\n            opacity: subTextOpacity,\n            margin: 0,\n            letterSpacing: \"0.01em\",\n            transform: `translateY(${subTextY}px)`,\n            transition: \"opacity 0.4s, transform 0.4s\",\n            textShadow: \"0 1px 8px #1f5e5e44\"\n          }}\n        >\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}\n",
+  "timingBreakdown": {
+    "brainThinking": 105060,
+    "toolExecution": 0,
+    "codeGeneration": 0,
+    "total": 105060
+  },
+  "codeFileName": "ambiguous-request_optimal-pack.tsx",
+  "promptDetails": {
+    "id": "ambiguous-request",
+    "name": "Ambiguous Request Clarification",
+    "type": "text",
+    "input": {
+      "text": "make it better",
+      "context": {
+        "existingCode": "const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;\n\nexport default function Scene1_12345() {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  const fadeIn = interpolate(frame, [0, fps * 1], [0, 1], { \n    extrapolateLeft: \"clamp\", \n    extrapolateRight: \"clamp\" \n  });\n  \n  return (\n    <AbsoluteFill style={{\n      background: \"linear-gradient(135deg, #667eea 0%, #764ba2 100%)\",\n      display: \"flex\",\n      justifyContent: \"center\",\n      alignItems: \"center\",\n      fontFamily: \"Inter, sans-serif\",\n      opacity: fadeIn\n    }}>\n      <div style={{\n        textAlign: \"center\",\n        color: \"white\",\n        padding: \"2rem\"\n      }}>\n        <h1 style={{\n          fontSize: \"3rem\",\n          fontWeight: \"700\",\n          margin: \"0 0 1rem 0\",\n          textShadow: \"0 2px 10px rgba(0,0,0,0.3)\"\n        }}>\n          Welcome to Bazaar\n        </h1>\n        <p style={{\n          fontSize: \"1.2rem\",\n          opacity: \"0.9\",\n          margin: \"0\"\n        }}>\n          Create amazing motion graphics\n        </p>\n      </div>\n    </AbsoluteFill>\n  );\n}",
+        "sceneId": "test-scene-1",
+        "sceneName": "Scene 1"
+      }
+    },
+    "expectedBehavior": {
+      "needsClarification": true,
+      "shouldAsk": [
+        "what specific aspect",
+        "which part",
+        "how should I improve"
+      ],
+      "complexity": "low"
+    }
+  },
+  "timestamp": "2025-06-10T13:46:16.196Z"
+}

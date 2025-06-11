@@ -1,7 +1,8 @@
 // src/server/services/ai/titleGenerator.service.ts
 import logger from '~/lib/logger';
 import { AIClientService, type AIMessage } from '~/server/services/ai/aiClient.service';
-import type { ModelConfig } from '~/config/models.config';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
 
 // Create a logger for title generation
 const titleLogger = {
@@ -50,36 +51,25 @@ export async function generateTitle(
   titleLogger.start(contextId, `Generating title for prompt: "${prompt.substring(0, 50)}..."`);
 
   try {
-    // Prepare the system prompt to request JSON output
-    const systemPrompt = `You are a video project title generator. 
-Generate a concise, descriptive title (2-6 words) for a video project based on the user's prompt.
-The title should capture the essence of what the video is about.
-Do not include words like "Video", "Project", or "Presentation" in the title unless they are essential.
-Respond ONLY with a valid JSON object containing 'title' (string, 2-6 words) and an optional 'reasoning' (string).
-Example: {"title": "My Awesome Video", "reasoning": "Captures the main theme."}`;    
+    // Use centralized model and prompt configuration
+    const titleModelConfig = getModel('titleGenerator');
+    const systemPromptConfig = getSystemPrompt('TITLE_GENERATOR');
 
     titleLogger.prompt(contextId, "Sending title generation prompt to LLM", {
-      promptLength: prompt.length
+      promptLength: prompt.length,
+      model: `${titleModelConfig.provider}/${titleModelConfig.model}`
     });
     
     const llmStartTime = Date.now();
 
-    const titleModelConfig: ModelConfig = {
-      provider: 'openai',
-      model: 'gpt-4o-mini', // Using the model string directly
-      maxTokens: 100, 
-      temperature: 0.5,
-    };
-
     const messages: AIMessage[] = [
-      { role: "system", content: systemPrompt },
       { role: "user", content: prompt }
     ];
 
     const aiResponse = await AIClientService.generateResponse(
       titleModelConfig,
       messages,
-      undefined, // System prompt is part of messages array
+      systemPromptConfig,
       { responseFormat: { type: "json_object" } }
     );
     

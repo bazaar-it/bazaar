@@ -1,7 +1,7 @@
 //src/tests/integration/api/error-handling.test.ts
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { TRPCError } from '@trpc/server';
-import { createTRPCContext } from '~/trpc/trpc';
+import { createTRPCContext } from '~/server/api/trpc';
 
 // Mock the appRouter
 jest.mock('~/server/api/root', () => {
