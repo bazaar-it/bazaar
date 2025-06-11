@@ -20,6 +20,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStartTime?: number;
   executionTimeSeconds?: number | null;
+  imageUrls?: string[]; // Added to support image persistence
   imageUrls?: string[]; // 🚨 NEW: Support for uploaded images
 }
 

@@ -26,6 +26,15 @@ export const chatRouter = createTRPCRouter({
                 where: eq(messages.projectId, input.projectId),
                 orderBy: [desc(messages.createdAt)],
                 limit: input.limit,
+                columns: {
+                    id: true,
+                    projectId: true,
+                    content: true,
+                    role: true,
+                    kind: true,
+                    imageUrls: true,
+                    createdAt: true,
+                },
             });
             return messageHistory.reverse();
         }),

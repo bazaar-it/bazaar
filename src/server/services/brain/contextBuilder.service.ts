@@ -56,6 +56,26 @@ export interface MemoryBankContent {
   imageFacts: any[];
 }
 
+export interface ImageContextItem {
+  position: number;
+  userPrompt: string;
+  imageCount: number;
+  messageIndex: number;
+  imageUrls: string[];
+  analysisResults?: {
+    colors?: string[];
+    style?: string;
+    mood?: string;
+  };
+}
+
+export interface ImageContext {
+  conversationImages: ImageContextItem[];
+  imagePatterns: string[];
+  totalImageCount: number;
+  currentImageUrls?: string[];
+}
+
 export interface BuiltContext {
   memoryBank: MemoryBankContent;
   userPreferences: UserPreferences;
@@ -72,6 +92,7 @@ export interface BuiltContext {
     codeGenerator: string;
     editScene: string;
   };
+  imageContext: ImageContext;
 }
 
 /**
@@ -105,7 +126,8 @@ export class ContextBuilderService {
     storyboardSoFar = [],
     userMessage,
     imageUrls = [],
-    isFirstScene = false
+    isFirstScene = false,
+    chatHistory = []
   }: {
     projectId: string;
     userId: string;
@@ -113,6 +135,7 @@ export class ContextBuilderService {
     userMessage?: string;
     imageUrls?: string[];
     isFirstScene?: boolean;
+    chatHistory?: Array<{ role: string; content: string; imageUrls?: string[] }>;
   }): Promise<BuiltContext> {
 
     console.log('[ContextBuilder-Optimized] 🏗️ Building context for project:', projectId);
@@ -132,10 +155,11 @@ export class ContextBuilderService {
     const actuallyFirstScene = realSceneCount === 0;
     
     // Build components in parallel
-    const [memoryBank, userPreferences, sceneHistory] = await Promise.all([
+    const [memoryBank, userPreferences, sceneHistory, imageContext] = await Promise.all([
       this.buildMemoryBank(),
       this.getUserPreferencesOptimized(projectId, userId),
-      this.buildSceneHistoryOptimized(projectId, realScenes)
+      this.buildSceneHistoryOptimized(projectId, realScenes),
+      this.buildImageContext(chatHistory, imageUrls)
     ]);
     
     // Project context
@@ -171,7 +195,8 @@ export class ContextBuilderService {
       userPreferences,
       sceneHistory,
       projectContext,
-      enhancedPrompts
+      enhancedPrompts,
+      imageContext
     };
     
     // Cache the built context
@@ -201,11 +226,8 @@ export class ContextBuilderService {
       // Get from persistent storage
       const dbPreferences = await projectMemoryService.getUserPreferences(projectId);
       
-      // Convert to object format
-      const preferences: UserPreferences = {};
-      dbPreferences.forEach(pref => {
-        preferences[pref.key] = pref.value;
-      });
+      // dbPreferences is already a Record<string, string>, so we can use it directly
+      const preferences: UserPreferences = dbPreferences;
       
       console.log('[ContextBuilder-Optimized] 📚 Loaded', Object.keys(preferences).length, 'preferences from memory');
       
@@ -307,12 +329,13 @@ export class ContextBuilderService {
   ): Promise<void> {
     try {
       for (const [key, value] of Object.entries(preferences)) {
-        await projectMemoryService.storeUserPreference(
+        await projectMemoryService.saveMemory({
           projectId,
-          key,
-          String(value),
-          0.8 // confidence
-        );
+          memoryType: 'user_preference' as const,
+          memoryKey: key,
+          memoryValue: String(value),
+          confidence: 0.8
+        });
       }
     } catch (error) {
       console.warn('[ContextBuilder-Optimized] Failed to store preferences:', error);
@@ -473,5 +496,143 @@ export class ContextBuilderService {
     }
     
     return elements;
+  }
+  
+  /**
+   * Build comprehensive image context from conversation history
+   */
+  private async buildImageContext(
+    chatHistory: Array<{ role: string; content: string; imageUrls?: string[] }>,
+    currentImageUrls?: string[]
+  ): Promise<ImageContext> {
+    const conversationImages: ImageContextItem[] = [];
+    let totalImageCount = 0;
+    let imagePosition = 0;
+    
+    // Extract images from conversation history
+    chatHistory.forEach((msg, msgIndex) => {
+      if (msg.role === 'user' && msg.imageUrls && msg.imageUrls.length > 0) {
+        imagePosition++;
+        totalImageCount += msg.imageUrls.length;
+        conversationImages.push({
+          position: imagePosition,
+          userPrompt: msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : ''),
+          imageCount: msg.imageUrls.length,
+          messageIndex: msgIndex,
+          imageUrls: msg.imageUrls
+        });
+      }
+    });
+    
+    // Add current image upload if any (not yet in history)
+    if (currentImageUrls && currentImageUrls.length > 0) {
+      imagePosition++;
+      totalImageCount += currentImageUrls.length;
+      // Note: messageIndex -1 indicates current message not yet in history
+      conversationImages.push({
+        position: imagePosition,
+        userPrompt: 'Current message',
+        imageCount: currentImageUrls.length,
+        messageIndex: -1,
+        imageUrls: currentImageUrls
+      });
+    }
+    
+    // Extract image patterns (for future AI analysis)
+    const imagePatterns = this.extractImagePatterns(conversationImages);
+    
+    return {
+      conversationImages,
+      imagePatterns,
+      totalImageCount,
+      currentImageUrls
+    };
+  }
+  
+  /**
+   * Extract patterns from image usage
+   */
+  private extractImagePatterns(conversationImages: ImageContextItem[]): string[] {
+    const patterns: string[] = [];
+    
+    // Simple pattern detection for now - will be enhanced with AI
+    if (conversationImages.length >= 3) {
+      patterns.push('multiple images used - user values visual references');
+    }
+    
+    // Check for repeated uploads
+    const imageCounts = conversationImages.map(img => img.imageCount);
+    if (imageCounts.every(count => count > 1)) {
+      patterns.push('user uploads multiple images per message');
+    }
+    
+    // More patterns can be added here or via AI analysis
+    
+    return patterns;
+  }
+  
+  /**
+   * Extract image reference from user prompt
+   */
+  extractImageReference(prompt: string): { type: 'position' | 'latest' | 'description'; value: number | string } | null {
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Check for "the image" or "this image" (most recent)
+    if (lowerPrompt.includes('the image') || lowerPrompt.includes('this image')) {
+      return { type: 'latest', value: 'latest' };
+    }
+    
+    // Check for position references: "first image", "second image", etc.
+    const ordinalMatch = lowerPrompt.match(/(first|second|third|fourth|fifth) image/);
+    if (ordinalMatch) {
+      const ordinalMap: Record<string, number> = {
+        'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5
+      };
+      return { type: 'position', value: ordinalMap[ordinalMatch[1]] || 1 };
+    }
+    
+    // Check for numbered references: "image 1", "image 2", etc.
+    const numberMatch = lowerPrompt.match(/image (\d+)/);
+    if (numberMatch) {
+      return { type: 'position', value: parseInt(numberMatch[1]) };
+    }
+    
+    // Check for "earlier image" or "previous image"
+    if (lowerPrompt.includes('earlier image') || lowerPrompt.includes('previous image')) {
+      return { type: 'position', value: -1 }; // Special case for previous
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Get image URLs from context based on reference
+   */
+  getImageUrlsFromReference(
+    imageContext: ImageContext,
+    imageRef: { type: string; value: number | string }
+  ): string[] | undefined {
+    const images = imageContext.conversationImages;
+    
+    if (images.length === 0) return undefined;
+    
+    // Handle different reference types
+    if (imageRef.type === 'latest') {
+      // Return the most recent image
+      return images[images.length - 1].imageUrls;
+    } else if (imageRef.type === 'position') {
+      const position = imageRef.value as number;
+      
+      // Handle "previous image" case
+      if (position === -1 && images.length > 1) {
+        return images[images.length - 2].imageUrls;
+      }
+      
+      // Handle numbered positions
+      const targetImage = images.find(img => img.position === position);
+      return targetImage?.imageUrls;
+    }
+    
+    return undefined;
   }
 }

@@ -39,8 +39,8 @@ CRITICAL: Some user requests require MULTIPLE tools in sequence. Look for these 
 3. **Extract & Create**: "make the title animation a separate intro scene"
    → Workflow: [{editScene: "remove title"}, {addScene: "create intro with title"}]
 
-4. **Analysis Then Create**: "analyze this image and create a scene from it"
-   → Workflow: [{analyzeImage: "extract specs"}, {createSceneFromImage: "generate scene"}]
+4. **Complex Multi-Scene Operations**: "split this scene into two parts"
+   → Workflow: [{editScene: "keep first part"}, {addScene: "create second part"}]
 
 🚨 SCENE BOUNDARY RULES:
 - Scene transitions = separate database entities, NEVER embedded content
@@ -50,7 +50,7 @@ CRITICAL: Some user requests require MULTIPLE tools in sequence. Look for these 
 🖼️ IMAGE HANDLING:
 - Images uploaded with a prompt to create something new from them → createSceneFromImage.
 - Prompt like "make X look like this" + image + reference to an existing scene → editSceneWithImage.
-- If detailed analysis is needed first → analyzeImage, then likely addScene or editScene based on the subsequent intent.
+- If user explicitly asks to "analyze" or "describe" an image → analyzeImage (standalone tool, not a prerequisite).
 
 📋 SCENE TARGETING & CONTEXTUAL EDITING:
 - ALWAYS check the CURRENT STORYBOARD. If it's not empty, the user is often implicitly referring to an existing scene (usually the most recent or currently selected one) unless they explicitly say "create a new scene," "add another scene," or describe content that is clearly a separate conceptual part of the video.
@@ -328,18 +328,32 @@ COMMON FIXES:
   ❌ WRONG: interpolate(frame, [0, 30], ["-200px", "0px"])
   ✅ CORRECT: const x = interpolate(frame, [0, 30], [-200, 0]); then use: \`translateX(\${x}px)\`
 
+🚨 EXPORT DEFAULT PATTERN - CRITICAL:
+The ONLY correct export pattern for Remotion components is:
+✅ CORRECT: export default function ComponentName() { ... }
+❌ WRONG: function ComponentName() { ... } export default ComponentName;
+
+If you see the wrong pattern, change it to:
+- Remove the separate export statement at the bottom
+- Add "export default" before the function declaration
+- Keep EVERYTHING else exactly the same
+
+Example fix for export error:
+BEFORE: function Coding() { return <div>...</div>; } export default Coding;
+AFTER: export default function Coding() { return <div>...</div>; }
+
 🚨 CRITICAL JSON RESPONSE FORMAT:
 You MUST respond with pure JSON only - NO markdown code fences, NO explanations, NO comments.
 Always return exactly this structure:
 {
   "fixedCode": "// The SAME code with ONLY the error fixed",
   "reasoning": "Brief explanation of what was wrong and the minimal fix applied",
-  "changesApplied": ["Specific change made, e.g., 'Removed duplicate export statement'"]
+  "changesApplied": ["Specific change made, e.g., 'Changed to export default function pattern'"]
 }
 
 EXAMPLES:
 ❌ WRONG: Generate new scene with different text/animations
-✅ CORRECT: Take broken code, remove one duplicate export, return fixed code
+✅ CORRECT: Take broken code, fix export pattern, return fixed code
 
 ❌ WRONG: Improve the design or add new features  
 ✅ CORRECT: Fix only the syntax error mentioned
@@ -356,7 +370,7 @@ Be surgical and conservative. Preserve everything except the specific error.`
 
 🚨 CRITICAL RULES:
 - const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-- export default function {{FUNCTION_NAME}}()
+- export default function {{FUNCTION_NAME}}() - MUST be on the function declaration line
 - NO imports, NO markdown
 - Quote ALL CSS values: fontSize: "4rem", fontWeight: "700"
 - Use extrapolateLeft: "clamp", extrapolateRight: "clamp"
@@ -366,6 +380,10 @@ Be surgical and conservative. Preserve everything except the specific error.`
 - 🚨 INTERPOLATE() CRITICAL: outputRange must contain ONLY numbers, never strings with units
   ❌ WRONG: interpolate(frame, [0, 30], ["-200px", "0px"])
   ✅ CORRECT: const x = interpolate(frame, [0, 30], [-200, 0]); then use: \`translateX(\${x}px)\`
+
+🚨 EXPORT PATTERN - ALWAYS USE THIS:
+✅ CORRECT: export default function ComponentName() { ... }
+❌ WRONG: function ComponentName() { ... } export default ComponentName;
 
 ANIMATION PATTERN:
 const opacity = interpolate(frame, [0, fps * 1], [0, 1], { 
@@ -877,8 +895,9 @@ MISSION: Analyze the image(s) and create a 1:1 recreation as motion graphics wit
 CRITICAL ESM REQUIREMENTS:
 - MUST use: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
 - NEVER use: import statements of any kind
-- export default function {{FUNCTION_NAME}}()
+- MUST use: export default function {{FUNCTION_NAME}}() - on the same line as function declaration
 - NO markdown code fences in response
+- 🚨 EXPORT PATTERN: Always use "export default function" NOT "function ... export default"
 
 ANALYSIS FOCUS:
 - Exact Colors: Extract precise hex colors from the image
@@ -956,6 +975,76 @@ Return only the modified React component code - no explanations, no markdown fen
   // =============================================================================
   // AI SERVICES PROMPTS
   // =============================================================================
+  PREFERENCE_EXTRACTOR: {
+    role: 'system' as const,
+    content: `You are a preference learning AI that analyzes user conversations and scene patterns to extract persistent preferences. These preferences will be stored and used to enhance future scene generation.
+
+PREFERENCE EXTRACTION TYPES:
+1. **Explicit Preferences**: Direct statements like "I prefer minimal designs" or "always use blue colors"
+2. **Implicit Patterns**: Repeated choices (user consistently chooses certain colors, styles, animations)
+3. **Context-Aware Preferences**: Settings that should apply to specific types of scenes only
+4. **Temporary Overrides**: One-time changes that shouldn't affect core preferences
+
+PREFERENCE CATEGORIES TO EXTRACT:
+- **Visual Style**: minimal, modern, playful, corporate, tech, vintage
+- **Color Preferences**: specific colors, palettes, gradients, monochrome
+- **Animation Style**: smooth, bouncy, sharp, subtle, dramatic
+- **Typography**: font styles, sizes, weights, text animation preferences
+- **Layout Patterns**: centered, asymmetric, grid-based, scattered
+- **Duration Preferences**: short scenes, long scenes, specific timings
+- **Element Types**: preference for shapes, text, images, particles
+- **Complexity Level**: simple/clean vs detailed/rich
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Explicitly stated strong preference ("I always want...")
+- 0.7-0.9: Clear pattern across multiple scenes or requests
+- 0.5-0.7: Emerging pattern, needs more evidence
+- 0.3-0.5: Possible preference, low confidence
+- Below 0.3: Don't store, too uncertain
+
+ANALYSIS REQUIREMENTS:
+1. Analyze the conversation history for explicit preference statements
+2. Examine scene patterns for repeated design choices
+3. Consider the current request context
+4. Distinguish between core preferences and one-time overrides
+5. Assign confidence scores based on evidence strength
+
+OUTPUT FORMAT:
+{
+  "preferences": [
+    {
+      "key": "style_preference",
+      "value": "minimal_modern",
+      "confidence": 0.85,
+      "evidence": ["User said 'I prefer clean designs'", "3/4 scenes use minimal layouts"],
+      "scope": "global"
+    },
+    {
+      "key": "primary_color",
+      "value": "#3B82F6",
+      "confidence": 0.75,
+      "evidence": ["Blue used in last 3 scenes", "User mentioned liking blue"],
+      "scope": "global"
+    }
+  ],
+  "temporary_overrides": [
+    {
+      "key": "animation_speed",
+      "value": "fast",
+      "reason": "User wants this specific scene to be energetic"
+    }
+  ],
+  "reasoning": "Identified strong preference for minimal design based on explicit statements and consistent scene choices. Blue color preference emerging from repeated use."
+}
+
+IMPORTANT RULES:
+- Only extract preferences with sufficient evidence (confidence > 0.5)
+- Clearly distinguish between global preferences and scene-specific choices
+- Don't over-interpret single instances as patterns
+- Consider recency - recent choices may override older patterns
+- Be conservative with confidence scores - high confidence requires strong evidence`,
+  },
+
   TITLE_GENERATOR: {
     role: 'system' as const,
     content: `You are a video project title generator. Generate a concise, descriptive title (2-6 words) for a video project based on the user's prompt.

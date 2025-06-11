@@ -106,6 +106,7 @@ export const generationRouter = createTRPCRouter({
           content: userMessage,
           role: "user",
           createdAt: new Date(),
+          imageUrls: (userContext?.imageUrls as string[]) || [],
         });
 
         // Process user message through brain orchestrator

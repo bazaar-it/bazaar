@@ -2,22 +2,29 @@
 
 import { AIClientService } from '~/server/services/ai/aiClient.service';
 import { projectMemoryService } from '../data/projectMemory.service';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
 import type { ChatMessage } from '~/lib/types/api';
 
-export interface ExtractedPreference {
+// Types from the prompt output format
+interface ExtractedPreference {
   key: string;
   value: string;
   confidence: number;
-  reasoning: string;
   evidence: string[];
+  scope: 'global' | 'scene-specific';
+}
+
+interface TemporaryOverride {
+  key: string;
+  value: string;
+  reason: string;
 }
 
 export interface PreferenceExtractionResult {
   preferences: ExtractedPreference[];
-  deprecatedPreferences: Array<{
-    key: string;
-    reason: string;
-  }>;
+  temporaryOverrides: TemporaryOverride[];
+  reasoning: string;
 }
 
 export class PreferenceExtractorService {
@@ -41,63 +48,15 @@ export class PreferenceExtractorService {
   }): Promise<PreferenceExtractionResult> {
     
     // Only analyze if we have enough context
-    if (params.conversationHistory.length < 3) {
-      return { preferences: [], deprecatedPreferences: [] };
+    if (params.conversationHistory.length < 2) {
+      return { preferences: [], temporaryOverrides: [], reasoning: 'Not enough conversation history' };
     }
     
     // Get existing preferences
     const existingPrefs = await projectMemoryService.getUserPreferences(params.projectId);
     
-    const systemPrompt = `You are an intelligent preference learning system for a video creation platform.
-
-Your task is to identify PERSISTENT USER PREFERENCES from conversations, not one-time instructions.
-
-PREFERENCES TO IDENTIFY:
-- Visual style (minimal, detailed, modern, vintage, corporate, playful)
-- Color preferences (specific colors, warm/cool tones, monochrome, vibrant)
-- Animation style (fast, smooth, bouncy, subtle, dramatic)
-- Typography (bold, elegant, playful, minimal)
-- Effects (particles, gradients, shadows, neon, 3D)
-- Layout (centered, asymmetric, grid, dynamic)
-- Content tone (professional, casual, energetic, calm)
-
-CRITICAL RULES:
-1. Only extract PERSISTENT preferences, not one-time requests
-   ❌ "Make this text red" = ONE-TIME instruction
-   ✅ "I prefer red accents" = PREFERENCE
-   ✅ "I always like smooth animations" = PREFERENCE
-   ✅ Pattern: User chose blue in 4 out of 5 scenes = PREFERENCE
-
-2. Confidence scoring:
-   - Explicit preference statements: 0.9-1.0
-   - Repeated patterns (3+ times): 0.7-0.8
-   - Inferred from 2 instances: 0.5-0.6
-   - Single instance: DON'T EXTRACT
-
-3. Look for:
-   - Patterns across multiple requests
-   - Adjectives that describe style preferences
-   - Corrections that indicate preferences ("make it less X, more Y")
-   - Emotional responses that indicate preferences
-
-4. Return JSON with:
-{
-  "preferences": [
-    {
-      "key": "style_preference",
-      "value": "minimal_modern",
-      "confidence": 0.85,
-      "reasoning": "User consistently requests clean, minimal designs",
-      "evidence": ["requested 'clean design' in scene 1", "said 'keep it minimal' in scene 3"]
-    }
-  ],
-  "deprecatedPreferences": [
-    {
-      "key": "animation_speed",
-      "reason": "User said 'actually, make animations slower' - preference changed"
-    }
-  ]
-}`;
+    // Get system prompt from config
+    const systemPrompt = getSystemPrompt('PREFERENCE_EXTRACTOR');
 
     const contextMessage = `CONVERSATION HISTORY:
 ${params.conversationHistory.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n')}
@@ -112,18 +71,21 @@ ${params.scenePatterns ? `PATTERNS IN CREATED SCENES:\n${params.scenePatterns.jo
 Analyze the conversation and extract any persistent preferences. Focus on patterns and explicit preference statements, not one-time instructions.`;
 
     try {
+      // Use model from config
+      const model = getModel('FAST_EDIT');
+      
       const response = await AIClientService.generateResponse(
-        { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+        { ...model, temperature: 0.3 },
         [{ role: "user", content: contextMessage }],
-        systemPrompt,
+        systemPrompt.content,
         { responseFormat: { type: "json_object" } }
       );
       
       const result = JSON.parse(response.content || '{}') as PreferenceExtractionResult;
       
-      // Store high-confidence preferences
+      // Store high-confidence preferences (threshold from prompt: > 0.5)
       for (const pref of result.preferences) {
-        if (pref.confidence >= 0.7) {
+        if (pref.confidence > 0.5) {
           await projectMemoryService.storeUserPreference(
             params.projectId,
             pref.key,
@@ -132,7 +94,9 @@ Analyze the conversation and extract any persistent preferences. Focus on patter
           );
           
           console.log(`[PreferenceExtractor] 🧠 Learned: ${pref.key} = ${pref.value} (${pref.confidence} confidence)`);
-          console.log(`  Reasoning: ${pref.reasoning}`);
+          if (pref.evidence?.length > 0) {
+            console.log(`  Evidence: ${pref.evidence[0]}`);
+          }
         }
       }
       
@@ -140,7 +104,7 @@ Analyze the conversation and extract any persistent preferences. Focus on patter
       
     } catch (error) {
       console.error('[PreferenceExtractor] Failed to extract preferences:', error);
-      return { preferences: [], deprecatedPreferences: [] };
+      return { preferences: [], temporaryOverrides: [], reasoning: 'Failed to extract preferences' };
     }
   }
   

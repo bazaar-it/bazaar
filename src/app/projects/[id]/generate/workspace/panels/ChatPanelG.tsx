@@ -120,7 +120,7 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene } = useVideoState();
+  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, addScene } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -356,11 +356,95 @@ export default function ChatPanelG({
           updateScene(projectId, sceneData.id, transformedScene);
           console.log('[ChatPanelG] ⚡ VideoState updated - all panels should refresh immediately');
           
+        } else if (result.operation === 'createSceneFromImage') {
+          // TEMPORARY WORKAROUND: createSceneFromImage doesn't return the scene ID
+          // We need to refresh from database to get the newly created scene
+          console.log('[ChatPanelG] 🔄 createSceneFromImage detected - refreshing from database');
+          console.log('[ChatPanelG] 🐛 Response missing scene ID, using updateAndRefresh workaround');
+          
+          // The scene was created in the database, but we don't have its ID
+          // So we must refresh to see it
+          await updateAndRefresh();
+          
+          console.log('[ChatPanelG] ✅ Refreshed after createSceneFromImage');
+          
+          // Skip the rest of the update flow
+          setGenerationComplete(true);
+          return;
+          
         } else if (result.scene && (result.operation === 'addScene' || result.operation === 'unknown')) {
           // For new scenes, trust the backend response directly
           console.log('[ChatPanelG] 🆕 New scene detected, using backend data directly');
           sceneData = result.scene.scene || result.scene;
-          // No refetch needed - the addScene call above already updated VideoState
+          
+          // ✅ FIX: Transform and add the scene properly
+          if (sceneData) {
+            // Get current scenes to calculate start time
+            const currentScenes = getCurrentProps()?.scenes || [];
+            const lastScene = currentScenes[currentScenes.length - 1];
+            const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
+            
+            // Transform database format to InputProps format
+            const transformedScene = {
+              id: sceneData.id,
+              type: 'custom' as const,
+              start: startTime,
+              duration: sceneData.duration || 180,
+              data: {
+                code: sceneData.tsxCode,
+                name: sceneData.name || 'Generated Scene',
+                componentId: sceneData.id,
+                props: sceneData.props || {}
+              }
+            };
+            
+            // Use replace to update the entire scenes array
+            const updatedScenes = [...currentScenes, transformedScene];
+            const updatedProps = {
+              ...getCurrentProps(),
+              scenes: updatedScenes,
+              meta: {
+                ...getCurrentProps()?.meta,
+                duration: updatedScenes.reduce((sum, s) => sum + s.duration, 0)
+              }
+            };
+            
+            replace(projectId, updatedProps);
+            
+            console.log('[ChatPanelG] ✅ Added transformed scene to VideoState:', {
+              sceneId: transformedScene.id,
+              start: transformedScene.start,
+              duration: transformedScene.duration,
+              totalScenes: updatedScenes.length,
+              operation: result.operation
+            });
+          }
+        } else if (result.scene && result.operation === 'changeDuration') {
+          // ✅ FIX: Handle duration changes
+          console.log('[ChatPanelG] ⏱️ Duration change detected');
+          
+          const durationData = result.scene;
+          const targetSceneId = durationData.targetSceneId;
+          
+          if (targetSceneId && durationData.newDurationFrames) {
+            // Find the scene and update its duration
+            const scene = scenes.find(s => s.id === targetSceneId);
+            if (scene) {
+              console.log('[ChatPanelG] 🔄 Updating scene duration:', {
+                sceneId: targetSceneId,
+                oldDuration: durationData.oldDurationFrames,
+                newDuration: durationData.newDurationFrames
+              });
+              
+              // Update the scene with new duration
+              updateScene(projectId, targetSceneId, {
+                ...scene,
+                duration: durationData.newDurationFrames
+              });
+              
+              console.log('[ChatPanelG] ✅ Scene duration updated in VideoState');
+            }
+          }
         } else {
           console.log('[ChatPanelG] 🔄 No scene data or unhandled operation:', result.operation);
         }
@@ -591,27 +675,41 @@ export default function ChatPanelG({
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
-  // 🚨 NEW: Error fix state
-  const [hasSceneError, setHasSceneError] = useState(false);
-  const [sceneErrorDetails, setSceneErrorDetails] = useState<{
-    sceneId: string;
+  // 🚨 IMPROVED: Track multiple scene errors
+  const [sceneErrors, setSceneErrors] = useState<Map<string, {
     sceneName: string;
     errorMessage: string;
-  } | null>(null);
+    timestamp: number;
+  }>>(new Map());
 
-  // 🚨 NEW: Auto-fix function (moved before useEffect that uses it)
-  const handleAutoFix = useCallback(async () => {
-    if (!sceneErrorDetails) {
-      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: No sceneErrorDetails available');
+  // 🚨 IMPROVED: Auto-fix function with specific scene targeting
+  const handleAutoFix = useCallback(async (sceneId: string) => {
+    const errorDetails = sceneErrors.get(sceneId);
+    if (!errorDetails) {
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: No error details for scene:', sceneId);
       return;
     }
     
-    const fixPrompt = `🔧 AUTO-FIX: Scene "${sceneErrorDetails.sceneName}" has a Remotion error: "${sceneErrorDetails.errorMessage}". Please analyze and fix this scene automatically.`;
+    // Check if scene still exists
+    const sceneStillExists = scenes.some(s => s.id === sceneId);
+    if (!sceneStillExists) {
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Scene no longer exists:', sceneId);
+      // Clean up the error
+      setSceneErrors(prev => {
+        const next = new Map(prev);
+        next.delete(sceneId);
+        return next;
+      });
+      return;
+    }
+    
+    // More explicit prompt for brain orchestrator
+    const fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". This scene needs to be fixed using the fixBrokenScene tool. The broken code is in the scene with ID ${sceneId}.`;
     
     console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Starting autofix flow:', {
-      sceneId: sceneErrorDetails.sceneId,
-      sceneName: sceneErrorDetails.sceneName,
-      errorMessage: sceneErrorDetails.errorMessage,
+      sceneId: sceneId,
+      sceneName: errorDetails.sceneName,
+      errorMessage: errorDetails.errorMessage,
       fixPrompt: fixPrompt
     });
     
@@ -674,10 +772,15 @@ export default function ChatPanelG({
       });
     } finally {
       setIsGenerating(false);
-      setSceneErrorDetails(null);
+      // Clean up the error for this scene after successful fix
+      setSceneErrors(prev => {
+        const next = new Map(prev);
+        next.delete(sceneId);
+        return next;
+      });
       activeAssistantMessageIdRef.current = null;
     }
-  }, [sceneErrorDetails, projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, addUserMessage, addAssistantMessage, updateMessage, activeAssistantMessageIdRef, setIsGenerating, setHasSceneError]);
+  }, [sceneErrors, scenes, projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, addUserMessage, addAssistantMessage, updateMessage]);
 
   // 🚨 ENHANCED: Listen for preview panel errors with better debugging
   useEffect(() => {
@@ -691,15 +794,18 @@ export default function ChatPanelG({
         fullEvent: event.detail 
       });
       
-      // 🚨 IMMEDIATE: Set error state to show autofix button
-      setHasSceneError(true);
-      setSceneErrorDetails({
-        sceneId,
-        sceneName,
-        errorMessage: error?.message || String(error)
+      // 🚨 IMPROVED: Track scene error with Map
+      setSceneErrors(prev => {
+        const next = new Map(prev);
+        next.set(sceneId, {
+          sceneName,
+          errorMessage: error?.message || String(error),
+          timestamp: Date.now()
+        });
+        return next;
       });
 
-      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Error state updated, autofix button should appear');
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Error state updated for scene:', sceneId);
       
       // 🚨 ENHANCED: Also show a toast notification for immediate feedback
       toast.error(`Scene "${sceneName}" has an error - AutoFix available!`, {
@@ -707,8 +813,8 @@ export default function ChatPanelG({
         action: {
           label: "Auto-Fix",
           onClick: () => {
-            console.log('[ChatPanelG] 🔧 AUTOFIX: Toast action clicked');
-            // The autofix button will handle this
+            console.log('[ChatPanelG] 🔧 AUTOFIX: Toast action clicked for scene:', sceneId);
+            handleAutoFix(sceneId);
           }
         }
       });
@@ -724,28 +830,47 @@ export default function ChatPanelG({
       });
       
       // Set error state and immediately trigger autofix
-      setSceneErrorDetails({
-        sceneId,
-        sceneName,
-        errorMessage: error?.message || String(error)
+      setSceneErrors(prev => {
+        const next = new Map(prev);
+        next.set(sceneId, {
+          sceneName,
+          errorMessage: error?.message || String(error),
+          timestamp: Date.now()
+        });
+        return next;
       });
       
       // Immediately trigger autofix without waiting for button click
       setTimeout(() => {
-        handleAutoFix();
+        handleAutoFix(sceneId);
       }, 100);
+    };
+
+    // 🚨 NEW: Clean up stale errors when scenes are removed
+    const handleSceneDeleted = (event: CustomEvent) => {
+      const { sceneId } = event.detail;
+      console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Scene deleted, cleaning up error state:', sceneId);
+      
+      setSceneErrors(prev => {
+        if (!prev.has(sceneId)) return prev;
+        const next = new Map(prev);
+        next.delete(sceneId);
+        return next;
+      });
     };
 
     console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Setting up preview-scene-error listener');
     window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
     window.addEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
+    window.addEventListener('scene-deleted', handleSceneDeleted as EventListener);
     
     return () => {
       console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Removing preview-scene-error listener');
       window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
       window.removeEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
-          };
-    }, [handleAutoFix]);
+      window.removeEventListener('scene-deleted', handleSceneDeleted as EventListener);
+    };
+  }, [handleAutoFix, scenes]);
 
 
 
@@ -918,24 +1043,29 @@ export default function ChatPanelG({
         )}
 
         {/* Auto-fix error banner */}
-        {hasSceneError && sceneErrorDetails && (
-          <div className="mb-3 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                  <span className="text-red-600 text-sm">⚠</span>
+        {sceneErrors.size > 0 && Array.from(sceneErrors.entries()).map(([sceneId, errorDetails]) => {
+          // Check if scene still exists
+          const sceneStillExists = scenes.some(s => s.id === sceneId);
+          if (!sceneStillExists) return null;
+          
+          return (
+            <div key={sceneId} className="mb-3 p-4 bg-white border border-gray-200 rounded-lg shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-red-600 text-sm">⚠</span>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">
+                      Scene Compilation Error
+                    </span>
+                    <p className="text-xs text-gray-500">{errorDetails.sceneName}</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-900">
-                    Scene Compilation Error
-                  </span>
-                  <p className="text-xs text-gray-500">{sceneErrorDetails.sceneName}</p>
-                </div>
-              </div>
-              <Button
-                onClick={handleAutoFix}
-                disabled={isGenerating}
-                size="sm"
+                <Button
+                  onClick={() => handleAutoFix(sceneId)}
+                  disabled={isGenerating}
+                  size="sm"
                 className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 font-medium"
               >
                 {isGenerating ? (
@@ -964,10 +1094,11 @@ export default function ChatPanelG({
             </div>
             
             <div className="text-xs text-gray-500">
-              <span className="font-medium">Error:</span> {sceneErrorDetails.errorMessage.substring(0, 120)}...
+              <span className="font-medium">Error:</span> {errorDetails.errorMessage.substring(0, 120)}...
             </div>
           </div>
-        )}
+          );
+        })}
 
         {/* 🚨 NEW: Compact image preview area (only when images are uploading/uploaded) */}
         {uploadedImages.length > 0 && (
