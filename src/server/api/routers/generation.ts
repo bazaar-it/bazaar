@@ -166,6 +166,7 @@ export const generationRouter = createTRPCRouter({
           operation: result.toolUsed || 'unknown',
           scene: result.result,
           chatResponse: result.chatResponse,
+          databaseWriteFailed: result.databaseWriteFailed, // 🚨 NEW: Pass through database failure flag
           // editComplexity: result.editComplexity, // TODO: Add to OrchestrationOutput interface
           debug: result.debug,
         };

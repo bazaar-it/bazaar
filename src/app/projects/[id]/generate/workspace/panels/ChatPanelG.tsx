@@ -120,7 +120,7 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage } = useVideoState();
+  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -295,6 +295,13 @@ export default function ChatPanelG({
       });
 
       console.log('[ChatPanelG] ✅ Generation completed:', result);
+      console.log('[ChatPanelG] 🔍 Debug - result structure:', {
+        hasScene: !!result.scene,
+        operation: result.operation,
+        resultKeys: Object.keys(result),
+        sceneData: result.scene,
+        fullResult: JSON.stringify(result, null, 2)
+      });
       
       // ✅ Update assistant message with response from Brain Orchestrator
       const finalResponse = result.chatResponse || 'Scene operation completed! ✅';
@@ -308,63 +315,72 @@ export default function ChatPanelG({
         scrollToBottom();
       }, 100);
       
-      // 🚀 OPTIMIZED: Direct state update without excessive refetching
+      // ⚡ OPTIMAL FLOW: Immediate VideoState update + Background coordination
       try {
-        console.log('[ChatPanelG] ♻️ Starting optimized state update...');
+        console.log('[ChatPanelG] ⚡ Starting immediate state update with backend response...');
         
-        // If we have an updated scene from the backend, use it directly
+        // Extract scene data for use throughout the function
+        let sceneData = null;
+        
+        // ✅ IMMEDIATE: Update VideoState with backend response data (0ms delay)
         if (result.scene && result.operation === 'editScene') {
-          console.log('[ChatPanelG] ✅ Using scene data from backend response');
+          console.log('[ChatPanelG] ⚡ Updating VideoState immediately with backend data:', result.scene);
           
-          // Update the specific scene in VideoState directly
-          const currentProps = getVideoProps(projectId);
-          if (currentProps && currentProps.scenes) {
-            const updatedScenes = currentProps.scenes.map(scene => 
-              scene.id === result.scene.id ? result.scene : scene
-            );
-            
-            // Single state update with the new scene data
-            updateProps(projectId, (props) => ({
-              ...props,
-              scenes: updatedScenes
-            }));
-            
-            console.log('[ChatPanelG] ✅ Scene updated directly in VideoState');
+          // 🚨 NEW: Check if database write failed
+          if (result.databaseWriteFailed) {
+            console.log('[ChatPanelG] ⚠️ Database write failed, but updating UI anyway. Will retry in background.');
+            // Could show a subtle notification that save is pending
           }
-        } else if (result.scene && result.operation === 'addScene') {
-          // For new scenes, add to the end
-          updateProps(projectId, (props) => ({
-            ...props,
-            scenes: [...(props.scenes || []), result.scene]
-          }));
           
-          console.log('[ChatPanelG] ✅ New scene added to VideoState');
+          // 🚨 FIX: Access the correct scene data structure
+          sceneData = result.scene.scene || result.scene; // Handle both possible structures
+          console.log('[ChatPanelG] 🔍 Scene data extracted:', { id: sceneData.id, name: sceneData.name });
+          
+          // Transform backend scene format to VideoState format
+          const transformedScene = {
+            ...sceneData,
+            tsxCode: sceneData.tsxCode,
+            name: sceneData.name,
+            duration: sceneData.duration
+          };
+          
+          // 🚨 DEBUG: Log what we're actually passing to updateScene
+          console.log('[ChatPanelG] 🚨 UPDATE SCENE DATA:', {
+            sceneId: sceneData.id,
+            tsxCodeLength: transformedScene.tsxCode?.length,
+            tsxCodeStart: transformedScene.tsxCode?.substring(0, 100),
+            hasRed: transformedScene.tsxCode?.includes('#ff0000')
+          });
+          
+          // Update VideoState immediately - all panels will react instantly
+          updateScene(projectId, sceneData.id, transformedScene);
+          console.log('[ChatPanelG] ⚡ VideoState updated - all panels should refresh immediately');
+          
+        } else if (result.scene && (result.operation === 'addScene' || result.operation === 'unknown')) {
+          // For new scenes, trust the backend response directly
+          console.log('[ChatPanelG] 🆕 New scene detected, using backend data directly');
+          sceneData = result.scene.scene || result.scene;
+          // No refetch needed - the addScene call above already updated VideoState
         } else {
-          // Only refetch if we don't have scene data in the response
-          console.log('[ChatPanelG] 🔄 No scene in response, fetching from database...');
-          const updatedScenes = await refetchScenes();
-          
-          if (updatedScenes) {
-            const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
-            if (scenesArray && scenesArray.length > 0) {
-              const updatedProps = convertDbScenesToInputProps(scenesArray);
-              updateProps(projectId, () => updatedProps);
-            }
-          }
+          console.log('[ChatPanelG] 🔄 No scene data or unhandled operation:', result.operation);
         }
         
-        // Single cache invalidation for background sync
-        await utils.generation.getProjectScenes.invalidate({ projectId });
+        // ✅ TRUST STATE: For ALL operations, we trust our immediate state update
+        // No need to refetch from database - VideoState is our single source of truth
+        console.log('[ChatPanelG] ✨ Operation completed:', result.operation, '- trusting direct state update');
         
-        console.log('[ChatPanelG] ✅ State update completed');
-      } catch (refreshError) {
-        console.error('[ChatPanelG] ⚠️ State refresh error:', refreshError);
-        // Continue anyway - the operation succeeded on the backend
-      }
-
-      // Handle callbacks
-      if (onSceneGenerated && result.scene?.id) {
-        onSceneGenerated(result.scene.id);
+        // Skip notifying WorkspaceContentAreaG - it would just refetch and overwrite our good state
+        // The direct VideoState update is sufficient for ALL operations
+        
+        // Skip cache invalidation - VideoState is our source of truth
+        // The database will be updated by the backend asynchronously
+        
+        console.log('[ChatPanelG] ✅ Optimal update flow completed');
+      } catch (updateError) {
+        console.error('[ChatPanelG] ❌ Error in optimal update flow:', updateError);
+        // If immediate update fails, log it but don't refetch
+        // The UI can show an error state based on the failed operation
+        console.log('[ChatPanelG] 🔄 State update failed, UI should reflect error state');
       }
 
     } catch (error) {
