@@ -9,7 +9,7 @@ export default function GradientText() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const loopDuration = fps * 8;
+  const loopDuration = fps * 2;
   const hueBase = (frame % loopDuration) * (360 / loopDuration);
   const getHue = (offset: number) => `hsl(${(hueBase + offset) % 360}, 100%, 60%)`;
 
@@ -22,7 +22,7 @@ export default function GradientText() {
         display: "flex",
       }}
     >
-      <svg width="1000" height="150" viewBox="0 0 1000 150">
+      <svg width="1400" height="200" viewBox="0 0 1400 200">
         <defs>
           <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={getHue(0)} />
@@ -35,34 +35,34 @@ export default function GradientText() {
         </defs>
 
         <text
-          x="100"
-          y="100"
+          x="120"
+          y="125"
           fill="#000"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           Design
         </text>
 
         <text
-          x="370"
-          y="100"
+          x="480"
+          y="125"
           fill="url(#text-gradient)"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           without
         </text>
 
         <text
-          x="655"
-          y="100"
+          x="880"
+          y="125"
           fill="#000"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
-          fontSize="72"
+          fontSize="96"
         >
           Limits
         </text>
@@ -75,7 +75,7 @@ export default function GradientText() {
 export const templateConfig = {
   id: 'gradient-text',
   name: 'Gradient Text',
-  duration: 240, // 8 seconds
+  duration: 60,
   previewFrame: 30,
   getCode: () => `const {
 AbsoluteFill,
@@ -87,7 +87,7 @@ export default function GradientText() {
 const frame = useCurrentFrame();
 const { fps } = useVideoConfig();
 
-const loopDuration = fps * 8;
+const loopDuration = fps * 2;
 const hueBase = (frame % loopDuration) * (360 / loopDuration);
 const getHue = (offset) => \`hsl(\${(hueBase + offset) % 360}, 100%, 60%)\`;
 
@@ -100,7 +100,7 @@ return (
       display: "flex",
     }}
   >
-    <svg width="1000" height="150" viewBox="0 0 1000 150">
+    <svg width="1400" height="200" viewBox="0 0 1400 200">
       <defs>
         <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor={getHue(0)} />
@@ -113,34 +113,34 @@ return (
       </defs>
 
       <text
-        x="100"
-        y="100"
+        x="120"
+        y="125"
         fill="#000"
         fontFamily="Inter, sans-serif"
         fontWeight="700"
-        fontSize="72"
+        fontSize="96"
       >
         Design
       </text>
 
       <text
-        x="370"
-        y="100"
+        x="480"
+        y="125"
         fill="url(#text-gradient)"
         fontFamily="Inter, sans-serif"
         fontWeight="700"
-        fontSize="72"
+        fontSize="96"
       >
         without
       </text>
 
       <text
-        x="655"
-        y="100"
+        x="880"
+        y="125"
         fill="#000"
         fontFamily="Inter, sans-serif"
         fontWeight="700"
-        fontSize="72"
+        fontSize="96"
       >
         Limits
       </text>

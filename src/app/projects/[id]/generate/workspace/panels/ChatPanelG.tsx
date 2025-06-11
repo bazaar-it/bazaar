@@ -94,13 +94,6 @@ export default function ChatPanelG({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isFirstMessageRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  // 🚨 NEW: Voice error dismissal state
-  const [showVoiceError, setShowVoiceError] = useState(false);
-  
-  // 🚨 NEW: Auto-expanding textarea state
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [textareaHeight, setTextareaHeight] = useState('40px');
   const [progressStage, setProgressStage] = useState<string | null>(null);
   const [editComplexityFeedback, setEditComplexityFeedback] = useState<string | null>(null);
   
@@ -108,6 +101,13 @@ export default function ChatPanelG({
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 🚨 NEW: Voice error dismissal state
+  const [showVoiceError, setShowVoiceError] = useState(false);
+  
+  // 🚨 NEW: Auto-expanding textarea state
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [textareaHeight, setTextareaHeight] = useState('40px');
   
   // Voice-to-text functionality (SIMPLIFIED: single voice system)
   const {
@@ -120,7 +120,7 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene } = useVideoState();
+  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -193,15 +193,15 @@ export default function ChatPanelG({
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom();
-  }, [componentMessages, scrollToBottom]);
+    if (!generationComplete) {
+      scrollToBottom();
+    }
+  }, [componentMessages, scrollToBottom, generationComplete]);
 
-  // Auto-scroll after generation completes
+  // Separate effect for completion scroll
   useEffect(() => {
     if (generationComplete) {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 100);
+      scrollToBottom();
     }
   }, [generationComplete, scrollToBottom]);
 
@@ -295,13 +295,6 @@ export default function ChatPanelG({
       });
 
       console.log('[ChatPanelG] ✅ Generation completed:', result);
-      console.log('[ChatPanelG] 🔍 Debug - result structure:', {
-        hasScene: !!result.scene,
-        operation: result.operation,
-        resultKeys: Object.keys(result),
-        sceneData: result.scene,
-        fullResult: JSON.stringify(result, null, 2)
-      });
       
       // ✅ Update assistant message with response from Brain Orchestrator
       const finalResponse = result.chatResponse || 'Scene operation completed! ✅';
@@ -315,72 +308,99 @@ export default function ChatPanelG({
         scrollToBottom();
       }, 100);
       
-      // ⚡ OPTIMAL FLOW: Immediate VideoState update + Background coordination
       try {
-        console.log('[ChatPanelG] ⚡ Starting immediate state update with backend response...');
+        // ✅ CRITICAL FIX: Force refresh scene data after successful operation
+        console.log('[ChatPanelG] ♻️ CRITICAL: Starting forced state refresh...');
         
-        // Extract scene data for use throughout the function
-        let sceneData = null;
+        // STEP 1: Invalidate all related caches
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+        await utils.generation.invalidate(); // Invalidate entire generation namespace
         
-        // ✅ IMMEDIATE: Update VideoState with backend response data (0ms delay)
-        if (result.scene && result.operation === 'editScene') {
-          console.log('[ChatPanelG] ⚡ Updating VideoState immediately with backend data:', result.scene);
-          
-          // 🚨 NEW: Check if database write failed
-          if (result.databaseWriteFailed) {
-            console.log('[ChatPanelG] ⚠️ Database write failed, but updating UI anyway. Will retry in background.');
-            // Could show a subtle notification that save is pending
-          }
-          
-          // 🚨 FIX: Access the correct scene data structure
-          sceneData = result.scene.scene || result.scene; // Handle both possible structures
-          console.log('[ChatPanelG] 🔍 Scene data extracted:', { id: sceneData.id, name: sceneData.name });
-          
-          // Transform backend scene format to VideoState format
-          const transformedScene = {
-            ...sceneData,
-            tsxCode: sceneData.tsxCode,
-            name: sceneData.name,
-            duration: sceneData.duration
-          };
-          
-          // 🚨 DEBUG: Log what we're actually passing to updateScene
-          console.log('[ChatPanelG] 🚨 UPDATE SCENE DATA:', {
-            sceneId: sceneData.id,
-            tsxCodeLength: transformedScene.tsxCode?.length,
-            tsxCodeStart: transformedScene.tsxCode?.substring(0, 100),
-            hasRed: transformedScene.tsxCode?.includes('#ff0000')
-          });
-          
-          // Update VideoState immediately - all panels will react instantly
-          updateScene(projectId, sceneData.id, transformedScene);
-          console.log('[ChatPanelG] ⚡ VideoState updated - all panels should refresh immediately');
-          
-        } else if (result.scene && (result.operation === 'addScene' || result.operation === 'unknown')) {
-          // For new scenes, trust the backend response directly
-          console.log('[ChatPanelG] 🆕 New scene detected, using backend data directly');
-          sceneData = result.scene.scene || result.scene;
-          // No refetch needed - the addScene call above already updated VideoState
-        } else {
-          console.log('[ChatPanelG] 🔄 No scene data or unhandled operation:', result.operation);
+        console.log('[ChatPanelG] 🔄 CRITICAL: Fetching fresh scenes from database...');
+        
+        // STEP 2: Force refetch with error handling
+        let updatedScenes;
+        try {
+          updatedScenes = await refetchScenes();
+        } catch (refetchError) {
+          console.error('[ChatPanelG] ❌ CRITICAL: refetchScenes failed, trying direct query...', refetchError);
+          // Fallback: Try to refetch manually
+          updatedScenes = await utils.generation.getProjectScenes.fetch({ projectId });
         }
         
-        // ✅ TRUST STATE: For ALL operations, we trust our immediate state update
-        // No need to refetch from database - VideoState is our single source of truth
-        console.log('[ChatPanelG] ✨ Operation completed:', result.operation, '- trusting direct state update');
+        console.log('[ChatPanelG] 📊 CRITICAL: Raw scenes data:', updatedScenes);
         
-        // Skip notifying WorkspaceContentAreaG - it would just refetch and overwrite our good state
-        // The direct VideoState update is sufficient for ALL operations
+        if (updatedScenes) {
+          // Handle different response formats from tRPC query
+          const scenesArray = Array.isArray(updatedScenes) ? updatedScenes : updatedScenes.data;
+          console.log('[ChatPanelG] ✅ CRITICAL: Fetched updated scenes from database:', scenesArray?.length || 0);
+          
+          if (scenesArray && scenesArray.length > 0) {
+            const updatedProps = convertDbScenesToInputProps(scenesArray);
+            console.log('[ChatPanelG] ✅ CRITICAL: Converted scenes to InputProps format:', updatedProps);
+            
+            console.log('[ChatPanelG] 🚀 CRITICAL: Forcing VideoState update with updateAndRefresh...');
+            updateAndRefresh(projectId, () => updatedProps);
+            
+            console.log('[ChatPanelG] 🎬 CRITICAL: VideoState updated - all panels should refresh NOW');
+            
+            // STEP 3: Also force global VideoState refresh
+            console.log('[ChatPanelG] 🔄 CRITICAL: Forcing VideoState global refresh...');
+            useVideoState.getState().forceRefresh(projectId);
+            
+            // STEP 4: Manual dispatch of update event as backup
+            console.log('[ChatPanelG] 📡 CRITICAL: Manually dispatching videostate-update event...');
+            window.dispatchEvent(new CustomEvent('videostate-update', {
+              detail: { 
+                projectId,
+                type: 'scenes-updated',
+                refreshToken: Date.now().toString(),
+                sceneCount: scenesArray?.length || 0
+              }
+            }));
+            
+            console.log('[ChatPanelG] ✅ CRITICAL: All refresh operations completed successfully');
+            
+          } else {
+            console.error('[ChatPanelG] ❌ CRITICAL: No scenes in updated data - something is wrong');
+          }
+        } else {
+          console.error('[ChatPanelG] ❌ CRITICAL: No scenes data returned from database query');
+          
+          // Last resort: Force reload the page after a short delay
+          console.log('[ChatPanelG] 🚨 LAST RESORT: Will force page reload in 2 seconds if state sync failed');
+          setTimeout(() => {
+            console.log('[ChatPanelG] 🔄 FORCING PAGE RELOAD due to state sync failure');
+            window.location.reload();
+          }, 2000);
+        }
+      } catch (refreshError) {
+        console.error('[ChatPanelG] ❌ CRITICAL: Refresh failed, but chat will continue:', refreshError);
         
-        // Skip cache invalidation - VideoState is our source of truth
-        // The database will be updated by the backend asynchronously
-        
-        console.log('[ChatPanelG] ✅ Optimal update flow completed');
-      } catch (updateError) {
-        console.error('[ChatPanelG] ❌ Error in optimal update flow:', updateError);
-        // If immediate update fails, log it but don't refetch
-        // The UI can show an error state based on the failed operation
-        console.log('[ChatPanelG] 🔄 State update failed, UI should reflect error state');
+        // 🚨 FALLBACK: Even if refresh fails, still try to notify other panels
+        try {
+          console.log('[ChatPanelG] 🔧 CRITICAL: Attempting fallback refresh...');
+          useVideoState.getState().forceRefresh(projectId);
+          
+          // Force a manual event dispatch as last resort
+          window.dispatchEvent(new CustomEvent('videostate-update', {
+            detail: { 
+              projectId,
+              type: 'emergency-refresh',
+              error: refreshError,
+              timestamp: Date.now()
+            }
+          }));
+          
+          console.log('[ChatPanelG] ✅ CRITICAL: Fallback refresh completed');
+        } catch (fallbackError) {
+          console.error('[ChatPanelG] 💥 CRITICAL: Even fallback refresh failed:', fallbackError);
+        }
+      }
+
+      // Handle callbacks
+      if (onSceneGenerated && result.scene?.id) {
+        onSceneGenerated(result.scene.id);
       }
 
     } catch (error) {
@@ -448,6 +468,11 @@ export default function ChatPanelG({
     }
     // Do nothing during transcribing state
   }, [recordingState, startRecording, stopRecording]);
+
+  // 🚨 NEW: Delete uploaded image function
+  const handleDeleteImage = useCallback((imageId: string) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
+  }, []);
 
   // 🚨 NEW: Image upload functions
   const handleImageUpload = useCallback(async (files: File[]) => {
@@ -533,11 +558,6 @@ export default function ChatPanelG({
     }
   }, [handleImageUpload]);
 
-  // 🚨 NEW: Delete image function
-  const handleDeleteImage = useCallback((imageId: string) => {
-    setUploadedImages(prev => prev.filter(img => img.id !== imageId));
-  }, []);
-
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
     // Clear optimistic messages when switching projects
@@ -575,9 +595,6 @@ export default function ChatPanelG({
           : transcription;
         return newMessage;
       });
-      
-      // Optional: Show success toast
-      toast.success(`Transcription complete: "${transcription.slice(0, 50)}${transcription.length > 50 ? '...' : ''}"`);
     }
   }, [transcription]);
 
@@ -747,8 +764,6 @@ export default function ChatPanelG({
           };
     }, [handleAutoFix]);
 
-
-
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
@@ -844,7 +859,7 @@ export default function ChatPanelG({
                     : "bg-muted"
                 }`}
               >
-                <CardContent className="px-3">
+                <CardContent className="px-3"> 
                   <div className="space-y-1">
                     {/* 🚨 NEW: Show uploaded images for user messages */}
                     {msg.isUser && msg.imageUrls && msg.imageUrls.length > 0 && (
@@ -1055,12 +1070,24 @@ export default function ChatPanelG({
                     "p-0.5 rounded-full flex items-center justify-center",
                     recordingState === 'recording'
                       ? "text-red-500 bg-red-50 animate-pulse"
+                      : recordingState === 'transcribing'
+                      ? "text-gray-500 bg-gray-100"
                       : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                   )}
-                  disabled={isGenerating}
-                  aria-label={recordingState === 'recording' ? 'Stop recording' : 'Start voice recording'}
+                  disabled={isGenerating || recordingState === 'transcribing'}
+                  aria-label={
+                    recordingState === 'recording' 
+                      ? 'Stop recording' 
+                      : recordingState === 'transcribing'
+                      ? 'Transcribing audio...'
+                      : 'Start voice recording'
+                  }
                 >
-                  <MicIcon className="h-4 w-4" />
+                  {recordingState === 'transcribing' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MicIcon className="h-4 w-4" />
+                  )}
                 </button>
               )}
             </div>
@@ -1084,9 +1111,9 @@ export default function ChatPanelG({
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </form>
+
         {selectedSceneId && (
           <div className="text-xs text-muted-foreground mt-2 space-y-1">
-            {/* <p>📍 Scene selected: {selectedScene?.data?.name || `Scene ${scenes.findIndex(s => s.id === selectedSceneId) + 1}`}</p> */}
             <p className="opacity-75">💡 Our AI targets scenes automatically — you can also specify which scene, if dont trust the beta</p>
           </div>
         )}

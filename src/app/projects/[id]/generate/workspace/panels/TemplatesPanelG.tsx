@@ -52,7 +52,7 @@ const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
         showVolumeControls={false}
         autoPlay={false}
         initialFrame={safeInitialFrame}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
       />
     </div>
   );
@@ -75,7 +75,7 @@ const TemplateVideoPlayer = ({ template }: { template: TemplateDefinition }) => 
         showVolumeControls={false}
         autoPlay={true}
         loop={true}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
       />
     </div>
   );
