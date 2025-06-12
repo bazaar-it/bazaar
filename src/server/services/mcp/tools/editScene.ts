@@ -2,7 +2,6 @@
 import { z } from "zod";
 import { BaseMCPTool } from "~/server/services/mcp/tools/base";
 import { directCodeEditorService } from "~/server/services/generation/directCodeEditor.service";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 
 const editSceneInputSchema = z.object({
   userPrompt: z.string().describe("User's description of how to modify the scene"),
@@ -78,23 +77,6 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         }
       }
 
-      // Generate conversational response for user
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'editScene',
-        userPrompt,
-        result: {
-          sceneName: displayName,
-          duration: newDuration,
-          changes: result.changes,
-          preserved: result.preserved
-        },
-        context: {
-          sceneName: displayName,
-          sceneCount: storyboardSoFar?.length || 1,
-          projectId
-        }
-      });
-
       console.log(`[EditScene] Surgical edit completed:`, {
         changes: result.changes.length,
         preserved: result.preserved.length,
@@ -109,24 +91,12 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         changes: result.changes,
         preserved: result.preserved,
         debug: result.debug,
-        chatResponse
+        chatResponse: undefined // Brain will generate this if needed
       };
       
     } catch (error) {
       console.error("[EditScene] Surgical edit failed:", error);
       
-      // Generate error response for user
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'editScene',
-        userPrompt,
-        result: { error: String(error) },
-        context: {
-          sceneName: displayName,
-          sceneCount: storyboardSoFar?.length || 1,
-          projectId
-        }
-      });
-
       return {
         sceneCode: existingCode, // Return original code on error
         sceneName: displayName,
@@ -135,7 +105,7 @@ export class EditSceneTool extends BaseMCPTool<EditSceneInput, EditSceneOutput> 
         changes: [],
         preserved: ["Everything (edit failed)"],
         debug: { error: String(error) },
-        chatResponse: errorResponse
+        chatResponse: undefined // Brain will handle error messaging
       };
     }
   }

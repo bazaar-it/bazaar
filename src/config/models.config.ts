@@ -293,6 +293,46 @@ const openaiPack: ModelPack = {
   }
 };
 
+// 🚀 OPTIMAL NEW PACK: Streamlined for simplified architecture
+const optimalNewPack: ModelPack = {
+  name: 'Optimal New Pack',
+  description: 'Streamlined model selection for simplified 3-method architecture',
+  models: {
+    // Core reasoning
+    brain: { provider: 'openai', model: 'gpt-4.1', temperature: 0.6 },
+    
+    // Scene creation pipeline (2-step)
+    layoutGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3 },
+    
+    // Vision operations
+    createSceneFromImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.5 },
+    editSceneWithImage: { provider: 'openai', model: 'gpt-4o', temperature: 0.3 },
+    
+    // Edit operations (simplified to just surgical and creative)
+    directCodeEditor: {
+      surgical: { provider: 'openai', model: 'gpt-4.1-mini', temperature: 0.2, maxTokens: 8000 },
+      creative: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.4, maxTokens: 16000 },
+      structural: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 }  // Kept for compatibility
+    },
+    
+    // Error fixing (specialized prompt, low temperature)
+    fixBrokenScene: { provider: 'openai', model: 'gpt-4.1-mini', temperature: 0.2, maxTokens: 8000 },
+    
+    // DEPRECATED - Not used in new architecture but kept for compatibility
+    addScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
+    editScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+    deleteScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
+    analyzeImage: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+    sceneBuilder: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5 },
+    fixBrokenScene: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2 },
+    visionAnalysis: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+    imageDescription: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.3 },
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 },
+    conversationalResponse: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 150 }
+  }
+};
+
 // Validate all packs at runtime
 export const MODEL_PACKS: Record<string, ModelPack> = {
   'openai-pack': ModelPackSchema.parse(openaiPack),
@@ -302,6 +342,7 @@ export const MODEL_PACKS: Record<string, ModelPack> = {
   'claude-pack': ModelPackSchema.parse(claudePack),
   'haiku-pack': ModelPackSchema.parse(haikuPack),
   'optimal-pack': ModelPackSchema.parse(optimalPack),
+  'optimal-new': ModelPackSchema.parse(optimalNewPack),
 };
 
 // =============================================================================

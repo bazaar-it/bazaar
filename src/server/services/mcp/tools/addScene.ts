@@ -2,7 +2,6 @@
 import { z } from "zod";
 import { BaseMCPTool } from "~/server/services/mcp/tools/base";
 import { sceneBuilderService } from "~/server/services/generation/sceneBuilder.service";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 import { db } from "~/server/db";
 import { scenes } from "~/server/db/schema";
 import { eq, desc } from "drizzle-orm";
@@ -78,33 +77,8 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
         visionAnalysis: input.visionAnalysis,
       });
 
-      // 🎯 PROGRESS UPDATE: Generating conversational response
-      this.onProgress?.('💬 Preparing response...', 'building');
-
-      // STEP 3: Generate conversational response with ACTUAL scene content
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'addScene',
-        userPrompt,
-        result: { 
-          sceneName: result.name, 
-          duration: result.duration,
-          sceneType: result.layoutJson.sceneType,
-          elements: result.layoutJson.elements || [],
-          background: result.layoutJson.background,
-          animations: Object.keys(result.layoutJson.animations || {}),
-          elementCount: result.layoutJson.elements?.length || 0
-        },
-        context: { 
-          sceneCount: (storyboardSoFar?.length || 0) + 1, 
-          projectId,
-          actualElements: result.layoutJson.elements?.map((el: any) => ({
-            type: el.type,
-            text: el.text || '',
-            color: el.color || '',
-            fontSize: el.fontSize || ''
-          })) || []
-        }
-      });
+      // 🎯 PROGRESS UPDATE: Scene generation complete
+      this.onProgress?.('✅ Scene generated successfully!', 'building');
 
       return {
         sceneCode: result.code,
@@ -112,31 +86,19 @@ export class AddSceneTool extends BaseMCPTool<AddSceneInput, AddSceneOutput> {
         duration: result.duration,
         layoutJson: JSON.stringify(result.layoutJson), // Store JSON spec
         reasoning: result.reasoning,
-        chatResponse,
+        chatResponse: undefined, // Brain will generate this if needed
         debug: result.debug
       };
     } catch (error) {
       console.error("[AddScene] Error:", error);
       
-      // Generate error response for user
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'addScene',
-        userPrompt,
-        result: { error: String(error) },
-        context: {
-          sceneName: "Failed Scene",
-          sceneCount: storyboardSoFar?.length || 0,
-          projectId
-        }
-      });
-
       return {
         sceneCode: "",
         sceneName: "",
         duration: 0,
         reasoning: "Failed to generate scene code",
         debug: { error: String(error) },
-        chatResponse: errorResponse,
+        chatResponse: undefined, // Brain will handle error messaging
         replacedWelcomeScene: false
       };
     }

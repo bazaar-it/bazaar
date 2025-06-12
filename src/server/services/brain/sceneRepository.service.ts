@@ -261,6 +261,19 @@ export class SceneRepositoryService {
   }
 
   /**
+   * Get a scene by ID
+   */
+  async getSceneById(sceneId: string) {
+    try {
+      const [scene] = await db.select().from(scenes).where(eq(scenes.id, sceneId));
+      return scene;
+    } catch (error) {
+      console.error(`Failed to get scene ${sceneId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Delete a scene from the database
    */
   async deleteScene(

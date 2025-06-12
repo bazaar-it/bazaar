@@ -1,16 +1,13 @@
 // src/server/services/brain/orchestrator.ts
+// Using simplified tools architecture
 import { 
   addSceneTool, 
   editSceneTool, 
   deleteSceneTool, 
-  fixBrokenSceneTool,
   analyzeImageTool,
-  createSceneFromImageTool,
-  editSceneWithImageTool,
-  changeDurationTool,
   toolRegistry,
   type MCPResult 
-} from "~/server/services/mcp/tools";
+} from "~/server/services/mcp/tools/index.simplified";
 import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 import { db } from "~/server/db";
 import { scenes, sceneIterations } from "~/server/db/schema";
@@ -48,16 +45,12 @@ import { LayoutGeneratorService } from '~/server/services/generation/layoutGener
 import { ContextBuilderService } from './contextBuilder.service';
 import type { InputProps } from '~/lib/types/video/input-props';
 
-// ✅ SIMPLIFIED: Single tool array with all tools
+// ✅ SIMPLIFIED: Single tool array with simplified tools
 const ALL_TOOLS = [
-  addSceneTool, 
-  editSceneTool, 
-  deleteSceneTool, 
-  fixBrokenSceneTool, 
-  changeDurationTool,
-  analyzeImageTool, 
-  createSceneFromImageTool, 
-  editSceneWithImageTool
+  addSceneTool,      // Handles both text and image creation
+  editSceneTool,     // Handles all edit types including duration
+  deleteSceneTool,   // Simple deletion
+  analyzeImageTool   // Still needed for image analysis
 ];
 
 // ✅ SIMPLIFIED: Module-level singleton initialization
@@ -1558,6 +1551,66 @@ Respond with JSON only.`;
     if (result.data && typeof result.data === 'object' && 'chatResponse' in result.data) {
       chatResponse = (result.data as any).chatResponse;
     }
+    
+    // 🚨 PHASE 1 FIX: Generate chat response if tool didn't provide one
+    if (!chatResponse && result.success) {
+      try {
+        // Prepare result data for response generation
+        const resultData: any = {};
+        
+        // Extract relevant data based on tool type
+        switch (toolName) {
+          case ToolName.AddScene:
+          case ToolName.CreateSceneFromImage:
+            resultData.sceneName = result.data?.sceneName;
+            resultData.duration = result.data?.duration;
+            resultData.approach = toolName === ToolName.CreateSceneFromImage ? "image recreation" : "generation";
+            break;
+            
+          case ToolName.EditScene:
+          case ToolName.EditSceneWithImage:
+            resultData.sceneName = result.data?.sceneName;
+            resultData.changes = result.data?.changes || ["Scene updated"];
+            resultData.approach = toolName === ToolName.EditSceneWithImage ? "image-guided editing" : "editing";
+            break;
+            
+          case ToolName.FixBrokenScene:
+            resultData.sceneName = result.data?.sceneName;
+            resultData.fixMethod = result.data?.debug?.method || "auto-fix";
+            resultData.changesApplied = result.data?.changesApplied || ["Scene repaired"];
+            break;
+            
+          case ToolName.DeleteScene:
+            resultData.sceneName = result.data?.deletedSceneName;
+            break;
+            
+          case ToolName.ChangeDuration:
+            resultData.oldDurationSeconds = result.data?.oldDurationSeconds;
+            resultData.newDurationSeconds = result.data?.newDurationSeconds;
+            break;
+        }
+        
+        // Generate contextual response
+        chatResponse = await conversationalResponseService.generateContextualResponse({
+          operation: toolName,
+          userPrompt: input.prompt,
+          result: resultData,
+          context: {
+            projectId: input.projectId,
+            sceneName: resultData.sceneName || "Scene",
+            sceneCount: input.storyboardSoFar?.length || 0
+          }
+        });
+        
+        if (this.DEBUG) {
+          console.log(`[BrainOrchestrator] Generated fallback chat response for ${toolName}`);
+        }
+      } catch (error) {
+        console.error(`[BrainOrchestrator] Failed to generate fallback chat response:`, error);
+        // Provide a simple fallback message
+        chatResponse = this.getSimpleFallbackMessage(toolName, result.data);
+      }
+    }
 
     // 🚨 NEW: Propagate debug info if present
     let debug = undefined;
@@ -2357,6 +2410,30 @@ Respond with JSON only.`;
       }
     }
     return undefined;
+  }
+  
+  // 🚨 PHASE 1: Simple fallback messages when AI response generation fails
+  private getSimpleFallbackMessage(toolName: ToolName, data: any): string {
+    switch (toolName) {
+      case ToolName.AddScene:
+        return `✅ Created "${data?.sceneName || 'new scene'}"!`;
+      case ToolName.EditScene:
+        return `✏️ Updated "${data?.sceneName || 'scene'}"!`;
+      case ToolName.DeleteScene:
+        return `🗑️ Deleted "${data?.deletedSceneName || 'scene'}"!`;
+      case ToolName.FixBrokenScene:
+        return `🔧 Fixed "${data?.sceneName || 'scene'}"!`;
+      case ToolName.ChangeDuration:
+        return `⏱️ Changed duration to ${data?.newDurationSeconds || '?'} seconds!`;
+      case ToolName.CreateSceneFromImage:
+        return `🖼️ Created scene from image!`;
+      case ToolName.EditSceneWithImage:
+        return `🎨 Updated scene with image styling!`;
+      case ToolName.AnalyzeImage:
+        return `🔍 Image analyzed successfully!`;
+      default:
+        return `✅ Operation completed successfully!`;
+    }
   }
 
 

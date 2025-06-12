@@ -2,7 +2,6 @@
 import { z } from "zod";
 import { BaseMCPTool } from "~/server/services/mcp/tools/base";
 import { codeGeneratorService } from "~/server/services/generation/codeGenerator.service";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 
 const createSceneFromImageInputSchema = z.object({
   imageUrls: z.array(z.string()).describe("Array of image URLs to recreate as motion graphics"),
@@ -47,22 +46,8 @@ export class CreateSceneFromImageTool extends BaseMCPTool<CreateSceneFromImageIn
         visionAnalysis,
       });
 
-      // Generate conversational response
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'createSceneFromImage',
-        userPrompt,
-        result: { 
-          sceneName: result.name,
-          duration: result.duration,
-          imageCount: imageUrls.length,
-          approach: "direct image recreation"
-        },
-        context: { 
-          sceneCount: (sceneNumber || 1),
-          projectId,
-          imageUrls: imageUrls.length
-        }
-      });
+      // Brain will generate chat response if needed
+      const chatResponse = undefined;
 
       console.log(`[CreateSceneFromImage] ✅ Direct image-to-code generation completed: ${result.name}`);
 
@@ -77,18 +62,8 @@ export class CreateSceneFromImageTool extends BaseMCPTool<CreateSceneFromImageIn
     } catch (error) {
       console.error("[CreateSceneFromImage] Error:", error);
       
-      // Generate error response
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'createSceneFromImage',
-        userPrompt,
-        result: { error: String(error) },
-        context: {
-          sceneName: "Image Recreation Failed",
-          sceneCount: sceneNumber || 1,
-          projectId,
-          imageUrls: imageUrls.length
-        }
-      });
+      // Brain will handle error messaging
+      const errorResponse = undefined;
 
       return {
         sceneCode: "",

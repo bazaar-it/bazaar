@@ -2,7 +2,6 @@
 import { z } from "zod";
 import { BaseMCPTool } from "~/server/services/mcp/tools/base";
 import { codeGeneratorService } from "~/server/services/generation/codeGenerator.service";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 
 const editSceneWithImageInputSchema = z.object({
   imageUrls: z.array(z.string()).describe("Array of image URLs to use as styling reference"),
@@ -58,25 +57,8 @@ export class EditSceneWithImageTool extends BaseMCPTool<EditSceneWithImageInput,
       const changes = this.analyzeChanges(existingCode, result.code);
       const preserved = ["Scene structure", "Existing animations", "Component hierarchy"];
 
-      // Generate conversational response
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'editSceneWithImage',
-        userPrompt,
-        result: {
-          sceneName: displayName,
-          duration: existingDuration,
-          changes: changes,
-          imageCount: imageUrls.length,
-          approach: "image-guided styling"
-        },
-        context: {
-          sceneName: displayName,
-          changes: changes,
-          projectId,
-          imageCount: imageUrls.length,
-          approach: "image-guided styling"
-        }
-      });
+      // Brain will generate chat response if needed
+      const chatResponse = undefined;
 
       console.log(`[EditSceneWithImage] ✅ Image-guided editing completed for "${displayName}"`);
 
@@ -93,17 +75,8 @@ export class EditSceneWithImageTool extends BaseMCPTool<EditSceneWithImageInput,
     } catch (error) {
       console.error("[EditSceneWithImage] Error:", error);
       
-      // Generate error response
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'editSceneWithImage',
-        userPrompt,
-        result: { error: String(error) },
-        context: {
-          sceneName: displayName,
-          projectId,
-          imageCount: imageUrls.length
-        }
-      });
+      // Brain will handle error messaging
+      const errorResponse = undefined;
 
       return {
         sceneCode: existingCode, // Return original code on error

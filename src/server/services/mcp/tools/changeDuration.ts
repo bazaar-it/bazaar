@@ -20,7 +20,7 @@ interface ChangeDurationOutput {
   oldDurationSeconds: number;
   newDurationSeconds: number;
   reasoning: string;
-  chatResponse: string;
+  chatResponse?: string;
 }
 
 export class ChangeDurationTool extends BaseMCPTool<ChangeDurationInput, ChangeDurationOutput> {
@@ -62,7 +62,8 @@ export class ChangeDurationTool extends BaseMCPTool<ChangeDurationInput, ChangeD
       
       const reasoning = `Updated scene duration from ${oldDurationSeconds}s (${oldDurationFrames} frames) to ${durationSeconds}s (${newDurationFrames} frames). Animation code unchanged.`;
       
-      const chatResponse = `✅ Scene duration changed to ${durationSeconds} seconds! The animation code stays exactly the same - I just updated how long the scene plays in your timeline.`;
+      // Brain will generate chat response if needed
+      const chatResponse = undefined;
 
       console.log(`[ChangeDuration] Successfully changed duration: ${oldDurationFrames} → ${newDurationFrames} frames`);
 
@@ -86,7 +87,7 @@ export class ChangeDurationTool extends BaseMCPTool<ChangeDurationInput, ChangeD
         oldDurationSeconds: 0,
         newDurationSeconds: 0,
         reasoning: `Failed to change duration: ${error}`,
-        chatResponse: `❌ Sorry, I couldn't change the scene duration. Error: ${error}`
+        chatResponse: undefined // Brain will handle error messaging
       };
     }
   }

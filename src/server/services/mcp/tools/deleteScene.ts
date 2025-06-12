@@ -1,7 +1,6 @@
 // src/server/services/mcp/tools/deleteScene.ts
 import { z } from "zod";
 import { BaseMCPTool } from "~/server/services/mcp/tools/base";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 
 const deleteSceneInputSchema = z.object({
   sceneId: z.string().describe("ID of scene to delete"),
@@ -36,52 +35,24 @@ export class DeleteSceneTool extends BaseMCPTool<DeleteSceneInput, DeleteSceneOu
 
     try {
       // Note: Actual deletion logic would be handled by the orchestrator
-      // This tool just provides the intent and conversational response
+      // This tool just provides the intent
       
-      // Generate conversational response for user
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'deleteScene',
-        userPrompt: `Delete scene: ${displayName}`, // ✅ FIXED: Use display name
-        result: {
-          deletedScene: displayName, // ✅ FIXED: Use display name
-          remainingCount: remainingScenes?.length || 0
-        },
-        context: {
-          sceneName: displayName, // ✅ FIXED: Use display name
-          sceneCount: remainingScenes?.length || 0,
-          availableScenes: remainingScenes || [],
-          projectId
-        }
-      });
-
       return {
         success: true,
         deletedSceneId: sceneId,
         deletedSceneName: displayName, // ✅ FIXED: Return display name
         reasoning: `Scene "${displayName}" marked for deletion`, // ✅ FIXED: Use display name
-        chatResponse // NEW: Include conversational response
+        chatResponse: undefined // Brain will generate this if needed
       };
     } catch (error) {
       console.error("[DeleteScene] Error:", error);
       
-      // Generate error response for user
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'deleteScene',
-        userPrompt: `Delete scene: ${displayName}`, // ✅ FIXED: Use display name
-        result: { error: String(error) },
-        context: {
-          sceneName: displayName, // ✅ FIXED: Use display name
-          sceneCount: remainingScenes?.length || 0,
-          projectId
-        }
-      });
-
       return {
         success: false,
         deletedSceneId: sceneId,
         deletedSceneName: displayName, // ✅ FIXED: Return display name
         reasoning: "Failed to delete scene",
-        chatResponse: errorResponse
+        chatResponse: undefined // Brain will handle error messaging
       };
     }
   }

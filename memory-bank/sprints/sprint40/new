@@ -1,0 +1,267 @@
+You're absolutely right! The current system is overcomplicated. Let me propose a simplified architecture:
+
+  Simplified Service Architecture
+
+  Current (Overcomplicated):
+
+  - 5+ generation services
+  - Multiple code paths
+  - Confusing service names
+  - Unclear responsibilities
+
+  Proposed (Simple):
+
+  // Just ONE main service that handles all scene operations
+  class SceneService extends StandardSceneService {
+
+    // CREATE operations
+    async createScene(input: {
+      projectId: string;
+      prompt: string;
+      imageUrls?: string[];
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      if (input.imageUrls?.length) {
+        // Path 1: Create from image
+        return this.createFromImage(input);
+      } else {
+        // Path 2: Create from scratch (layout + code)
+        return this.createFromPrompt(input);
+      }
+    }
+
+    // UPDATE operations
+    async updateScene(input: {
+      sceneId: string;
+      prompt: string;
+      editType: 'surgical' | 'creative' | 'structural';
+      imageUrls?: string[];
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      const scene = await this.getScene(input.sceneId);
+
+      switch (input.editType) {
+        case 'surgical':
+          return this.surgicalEdit(scene, input);
+        case 'creative':
+          return this.creativeEdit(scene, input);
+        case 'structural':
+          return this.structuralEdit(scene, input);
+      }
+    }
+
+    // DELETE operations
+    async deleteScene(input: {
+      sceneId: string;
+    }): Promise<StandardApiResponse<DeleteOperationResponse>> {
+      // Simple delete
+      return this.removeScene(input.sceneId);
+    }
+
+    // Private helper methods
+    private async createFromPrompt(input) { /* layout + code generation */ }
+    private async createFromImage(input) { /* direct code from image */ }
+    private async surgicalEdit(scene, input) { /* targeted edits */ }
+    private async creativeEdit(scene, input) { /* rewrite sections */ }
+    private async structuralEdit(scene, input) { /* change structure */ }
+  }
+
+  Benefits of Simplification:
+
+  1. One Service to Rule Them All
+    - Single SceneService handles all scene operations
+    - Clear methods: createScene(), updateScene(), deleteScene()
+  2. Clear Operation Types
+  CREATE → from prompt OR from image
+  UPDATE → surgical OR creative OR structural (with/without image)
+  DELETE → just delete
+  3. No More Service Maze
+    - Remove: SceneBuilderService, CodeGeneratorService, DirectCodeEditorService
+    - Keep: One unified SceneService
+    - Helper services: LayoutGenerator, AIClient (as utilities)
+  4. Simplified MCP Tools
+  // Tools just call the one service
+  addScene → sceneService.createScene()
+  editScene → sceneService.updateScene()
+  deleteScene → sceneService.deleteScene()
+  createSceneFromImage → sceneService.createScene({ imageUrls })
+  editSceneWithImage → sceneService.updateScene({ imageUrls })
+
+  Migration Path:
+
+  1. Create new SceneService with all operations
+  2. Move logic from existing services into private methods
+  3. Update all MCP tools to use the single service
+  4. Delete the old services
+
+  Would you like me to create this simplified SceneService that consolidates all the operations?
+  ⏺ Absolutely! You're right - we can make it even simpler and still use different models for different operations. Here's the improved design:
+
+  Ultra-Simplified Scene Service
+
+  class SceneService extends StandardSceneService {
+
+    // Just THREE public methods!
+
+    async addScene(input: {
+      projectId: string;
+      prompt: string;
+      imageUrls?: string[];
+      order?: number;
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      // Automatically detect operation type
+      if (input.imageUrls?.length) {
+        // Use Vision model (e.g., GPT-4o)
+        return this.createFromImage(input);
+      } else {
+        // Use Sonnet-4 for creative generation
+        return this.createFromPrompt(input);
+      }
+    }
+
+    async editScene(input: {
+      sceneId: string;
+      prompt: string;
+      editType: 'surgical' | 'creative' | 'structural';
+      imageUrls?: string[];
+      duration?: number;  // ✅ Duration edits handled here!
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      const scene = await this.getScene(input.sceneId);
+
+      // Just changing duration? Quick operation
+      if (input.duration && !input.prompt) {
+        return this.updateDuration(scene, input.duration);
+      }
+
+      // Route to appropriate edit method with right model
+      if (input.imageUrls?.length) {
+        // Vision-based edit (GPT-4o)
+        return this.editWithImage(scene, input);
+      }
+
+      switch (input.editType) {
+        case 'surgical':
+          // Use GPT-4o-mini for targeted edits
+          return this.surgicalEdit(scene, input);
+        case 'creative':
+          // Use Sonnet-4 for creative rewrites
+          return this.creativeEdit(scene, input);
+        case 'structural':
+          // Use GPT-4o-mini for structural changes
+          return this.structuralEdit(scene, input);
+      }
+    }
+
+    async deleteScene(input: {
+      sceneId: string;
+    }): Promise<StandardApiResponse<DeleteOperationResponse>> {
+      return this.removeScene(input.sceneId);
+    }
+
+    // Private methods with specific models/prompts
+
+    private async createFromPrompt(input) {
+      // Uses: Sonnet-4 + layout-prompt + code-prompt
+      const layout = await this.generateLayout(input, 'sonnet-4');
+      const code = await this.generateCode(layout, 'sonnet-4');
+      return this.buildResponse(code);
+    }
+
+    private async createFromImage(input) {
+      // Uses: GPT-4o with vision
+      const code = await aiClient.generateVisionResponse({
+        model: 'gpt-4o',
+        prompt: '@image-to-code-prompt.md',
+        images: input.imageUrls
+      });
+      return this.buildResponse(code);
+    }
+
+    private async surgicalEdit(scene, input) {
+      // Uses: GPT-4o-mini for efficiency
+      const result = await aiClient.generateResponse({
+        model: 'gpt-4o-mini',
+        prompt: '@surgical-edit-prompt.md',
+        context: { scene, request: input.prompt }
+      });
+      return this.buildResponse(result);
+    }
+
+    private async creativeEdit(scene, input) {
+      // Uses: Sonnet-4 for creativity
+      const result = await aiClient.generateResponse({
+        model: 'claude-3-5-sonnet-20241022',
+        prompt: '@creative-edit-prompt.md',
+        context: { scene, request: input.prompt }
+      });
+      return this.buildResponse(result);
+    }
+  }
+
+  Model Strategy Configuration
+
+  // config/modelStrategy.ts
+  export const MODEL_STRATEGY = {
+    // Creation
+    CREATE_FROM_PROMPT: {
+      layout: 'claude-3-5-sonnet-20241022',  // Creative
+      code: 'claude-3-5-sonnet-20241022'      // Creative
+    },
+    CREATE_FROM_IMAGE: {
+      model: 'gpt-4o',  // Vision capabilities
+      prompt: '@image-to-code-prompt.md'
+    },
+
+    // Edits
+    SURGICAL_EDIT: {
+      model: 'gpt-4o-mini',  // Fast & cheap
+      prompt: '@surgical-edit-prompt.md'
+    },
+    CREATIVE_EDIT: {
+      model: 'claude-3-5-sonnet-20241022',  // Creative
+      prompt: '@creative-edit-prompt.md'
+    },
+    STRUCTURAL_EDIT: {
+      model: 'gpt-4o-mini',  // Fast
+      prompt: '@structural-edit-prompt.md'
+    },
+    EDIT_WITH_IMAGE: {
+      model: 'gpt-4o',  // Vision
+      prompt: '@edit-with-image-prompt.md'
+    },
+
+    // Simple operations
+    DURATION_CHANGE: null,  // No AI needed
+  }
+
+  Performance Benefits
+
+  1. Fewer Service Calls
+    - Before: Tool → Service1 → Service2 → Service3
+    - After: Tool → SceneService (that's it!)
+  2. Smart Model Selection
+    - Cheap models (GPT-4o-mini) for simple edits
+    - Premium models (Sonnet-4) only when needed
+    - No AI calls for duration changes
+  3. Simplified MCP Tools
+  // Super simple tools!
+  addScene({ prompt, imageUrls? }) → sceneService.addScene()
+  editScene({ sceneId, prompt, editType, imageUrls?, duration? }) → sceneService.editScene()
+  deleteScene({ sceneId }) → sceneService.deleteScene()
+
+  // No more separate tools for:
+  // - createSceneFromImage (just addScene with images)
+  // - editSceneWithImage (just editScene with images)
+  // - changeDuration (just editScene with duration)
+  4. Caching Opportunities
+    - One service = easier to cache
+    - Reuse AI responses for similar requests
+
+  Implementation Benefits
+
+  - 3 public methods instead of 15+
+  - Automatic routing based on input
+  - Model flexibility via configuration
+  - Same performance (or better due to simplification)
+  - Easier to test (one service to mock)
+  - Clearer mental model for developers
+
+  Want me to implement this ultra-simplified SceneService?

@@ -5,7 +5,6 @@ import { BaseMCPTool } from "~/server/services/mcp/tools/base";
 import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getFixBrokenSceneModel } from "~/config/models.config";
 import { getSystemPrompt } from "~/config/prompts.config";
-import { conversationalResponseService } from "~/server/services/ai/conversationalResponse.service";
 import { transform } from "sucrase";
 
 const fixBrokenSceneInputSchema = z.object({
@@ -136,20 +135,8 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
         // @ts-ignore - Safe: fallbackResult null-checked above and has guaranteed return type
         const fallbackCode = fallbackResult.fixedCode!;
         
-        const chatResponse = await conversationalResponseService.generateContextualResponse({
-          operation: 'fixBrokenScene',
-          userPrompt: `Auto-fix ${displayName}`,
-          result: {
-            sceneName: displayName,
-            fixMethod: 'fallback',
-            originalError: errorMessage,
-            changesApplied: fallbackChanges
-          },
-          context: {
-            sceneName: displayName,
-            projectId
-          }
-        });
+        // Brain will generate chat response if needed
+        const chatResponse = undefined;
 
         return {
           fixedCode: fallbackCode,
@@ -168,21 +155,8 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
       const reasoning = fixResult.reasoning!;
       const changesApplied = fixResult.changesApplied!;
       
-      // Generate conversational response
-      const chatResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'fixBrokenScene',
-        userPrompt: `Auto-fix ${displayName}`,
-        result: {
-          sceneName: displayName,
-          fixMethod: 'smart',
-          originalError: errorMessage,
-          changesApplied: changesApplied
-        },
-        context: {
-          sceneName: displayName,
-          projectId
-        }
-      });
+      // Brain will generate chat response if needed
+      const chatResponse = undefined;
 
       console.log(`[FixBrokenScene] ✅ Successfully fixed "${displayName}"`);
 
@@ -200,16 +174,8 @@ export class FixBrokenSceneTool extends BaseMCPTool<FixBrokenSceneInput, FixBrok
     } catch (error) {
       console.error("[FixBrokenScene] Auto-fix failed:", error);
       
-      // Generate error response for user
-      const errorResponse = await conversationalResponseService.generateContextualResponse({
-        operation: 'fixBrokenScene',
-        userPrompt: `Auto-fix ${displayName}`,
-        result: { error: String(error) },
-        context: {
-          sceneName: displayName,
-          projectId
-        }
-      });
+      // Brain will handle error messaging
+      const errorResponse = undefined;
 
       // Return a basic working scene as last resort
       const emergencyFix = this.generateEmergencyFix(sceneName);
