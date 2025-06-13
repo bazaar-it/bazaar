@@ -31,9 +31,10 @@ export class Orchestrator {
           error: toolSelection.error ?? 'Failed to understand request' 
         };
       }
-
+      console.log('==================== toolSelection started:');
       // 3. Execute selected tool(s)
       const result = await this.toolExecutor.executeTools(input, toolSelection, contextPacket);
+      console.log('==================== toolExecutor finished:', result);
 
       return result;
 

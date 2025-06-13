@@ -1,24 +1,13 @@
 // Tool executor for running selected tools
 
-import { 
-  addSceneTool, 
-  editSceneTool, 
-  deleteSceneTool, 
-  fixBrokenSceneTool,
-  analyzeImageTool,
-  createSceneFromImageTool,
-  editSceneWithImageTool,
-  changeDurationTool,
-  toolRegistry,
-} from "~/server/services/mcp/tools";
-import { sceneRepositoryService } from "~/server/services/brain/sceneRepository.service";
+import { sceneBuilderNEW } from "~/tools/sceneBuilderNEW";
 import { getModel } from "~/brain/config/models.config";
 import type { 
-  DatabaseOperationContext as DbOpContext,
-  ModelUsageData as ModelUsage,
-  SceneData as SceneDataType,
-  ToolName
-} from "~/lib/types/ai/brain.types";
+  AddToolInput,
+  EditToolInput,
+  DeleteToolInput,
+  BaseToolOutput
+} from "~/tools/helpers/types";
 import type { 
   OrchestrationInput, 
   OrchestrationOutput, 
@@ -26,33 +15,8 @@ import type {
   ContextPacket
 } from "./types";
 
-// Initialize tools
-const ALL_TOOLS = [
-  addSceneTool, 
-  editSceneTool, 
-  deleteSceneTool, 
-  fixBrokenSceneTool, 
-  changeDurationTool,
-  analyzeImageTool, 
-  createSceneFromImageTool, 
-  editSceneWithImageTool
-];
-
-let toolsInitialized = false;
-
-function initializeTools() {
-  if (!toolsInitialized) {
-    ALL_TOOLS.forEach(tool => toolRegistry.register(tool));
-    toolsInitialized = true;
-  }
-}
-
 export class ToolExecutor {
   private modelConfig = getModel('brain');
-
-  constructor() {
-    initializeTools();
-  }
 
   async executeTools(
     input: OrchestrationInput,
@@ -92,34 +56,52 @@ export class ToolExecutor {
     contextPacket: ContextPacket
   ): Promise<OrchestrationOutput> {
     
-    const tool = toolRegistry.get(toolSelection.toolName!);
-    if (!tool) {
-      return {
-        success: false,
-        error: `Tool ${toolSelection.toolName} not found`,
-      };
-    }
-
     // Progress update
     input.onProgress?.('⚙️ Processing...', 'building');
 
     // Prepare tool input
     const toolInput = await this.prepareToolInput(input, toolSelection, contextPacket);
 
-    // Execute tool
-    const result = await tool.run(toolInput);
+    // Execute tool using sceneBuilderNEW
+    let result: BaseToolOutput;
     
-    if (result.success) {
-      input.onProgress?.('💾 Saving...', 'building');
+    try {
+      switch (toolSelection.toolName) {
+        case "addScene":
+        case "createSceneFromImage":
+          result = await sceneBuilderNEW.addScene(toolInput as AddToolInput);
+          break;
+          
+        case "editScene":
+        case "editSceneWithImage":
+        case "fixBrokenScene":
+          result = await sceneBuilderNEW.editScene(toolInput as EditToolInput);
+          break;
+          
+        case "deleteScene":
+          result = await sceneBuilderNEW.deleteScene(toolInput as DeleteToolInput);
+          break;
+          
+        default:
+          return {
+            success: false,
+            error: `Tool ${toolSelection.toolName} not supported`,
+          };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: `Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        toolUsed: toolSelection.toolName,
+      };
     }
     
-    // Process result and handle database operations
-    return await this.processToolResult(result, toolSelection.toolName!, input, {
-      targetSceneId: toolSelection.targetSceneId,
-      editComplexity: toolSelection.editComplexity,
-      reasoning: toolSelection.reasoning,
-      requestedDurationSeconds: toolSelection.requestedDurationSeconds,
-    });
+    if (result.success) {
+      input.onProgress?.('✅ Complete!', 'success');
+    }
+    
+    // Convert result to OrchestrationOutput format
+    return this.convertToOrchestrationOutput(result, toolSelection.toolName!);
   }
 
   private async executeWorkflow(
@@ -140,27 +122,41 @@ export class ToolExecutor {
       }
       
       try {
-        const tool = toolRegistry.get(step.toolName);
-        if (!tool) {
-          throw new Error(`Tool ${step.toolName} not found in workflow step ${i + 1}`);
-        }
+        input.onProgress?.(`⚙️ Step ${i + 1}/${workflow.length}: ${step.context}`, 'building');
         
         const stepInput = await this.prepareWorkflowStepInput(input, step, workflowResults, contextPacket);
-        const stepResult = await tool.run(stepInput);
+        let stepResult: BaseToolOutput;
         
-        const processedResult = await this.processToolResult(stepResult, step.toolName as any, input, {
-          reasoning: `Workflow step ${i + 1}: ${step.context}`,
-          targetSceneId: step.targetSceneId,
-        });
-        
-        workflowResults[`step${i + 1}_result`] = processedResult;
-        
-        if (processedResult.chatResponse) {
-          combinedChatResponse += processedResult.chatResponse + " ";
+        // Execute step using sceneBuilderNEW
+        switch (step.toolName) {
+          case "addScene":
+          case "createSceneFromImage":
+            stepResult = await sceneBuilderNEW.addScene(stepInput as AddToolInput);
+            break;
+            
+          case "editScene":
+          case "editSceneWithImage":
+          case "fixBrokenScene":
+            stepResult = await sceneBuilderNEW.editScene(stepInput as EditToolInput);
+            break;
+            
+          case "deleteScene":
+            stepResult = await sceneBuilderNEW.deleteScene(stepInput as DeleteToolInput);
+            break;
+            
+          default:
+            throw new Error(`Tool ${step.toolName} not supported in workflow`);
         }
         
-        if (processedResult.success) {
-          finalResult = processedResult.result;
+        const processedResult = this.convertToOrchestrationOutput(stepResult, step.toolName);
+        workflowResults[`step${i + 1}_result`] = processedResult;
+        
+        if (stepResult.chatResponse) {
+          combinedChatResponse += stepResult.chatResponse + " ";
+        }
+        
+        if (stepResult.success) {
+          finalResult = stepResult;
         }
         
       } catch (stepError) {
@@ -171,6 +167,8 @@ export class ToolExecutor {
         };
       }
     }
+    
+    input.onProgress?.('✅ Workflow complete!', 'success');
     
     return {
       success: true,
@@ -185,39 +183,41 @@ export class ToolExecutor {
     input: OrchestrationInput,
     toolSelection: ToolSelectionResult,
     contextPacket: ContextPacket
-  ): Promise<Record<string, unknown>> {
+  ): Promise<AddToolInput | EditToolInput | DeleteToolInput> {
     
     const baseInput = {
       userPrompt: input.prompt,
-      sessionId: input.projectId,
+      projectId: input.projectId,
       userId: input.userId,
-      userContext: input.userContext || {},
     };
     
-    // Tool-specific input preparation (simplified)
+    // Tool-specific input preparation
     switch (toolSelection.toolName) {
       case "addScene":
+      case "createSceneFromImage":
         return {
           ...baseInput,
-          projectId: input.projectId,
-          storyboardSoFar: input.storyboardSoFar || [],
           sceneNumber: (input.storyboardSoFar?.length || 0) + 1,
-        };
+          storyboardSoFar: input.storyboardSoFar || [],
+          visionAnalysis: this.extractVisionAnalysis(contextPacket),
+          imageUrls: this.extractImageUrls(contextPacket),
+        } as AddToolInput;
         
       case "editScene":
+      case "editSceneWithImage":
+      case "fixBrokenScene":
         const sceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
         const scene = input.storyboardSoFar?.find(s => s.id === sceneId);
         
         return {
           ...baseInput,
-          projectId: input.projectId,
-          sceneId: sceneId,
+          sceneId: sceneId as string,
           existingCode: scene?.tsxCode || "",
-          existingName: scene?.name || "Untitled Scene",
-          existingDuration: scene?.duration || 180,
-          storyboardSoFar: input.storyboardSoFar || [],
-          editComplexity: toolSelection.editComplexity,
-        };
+          editType: this.mapEditComplexity(toolSelection.editComplexity, toolSelection.toolName),
+          visionAnalysis: this.extractVisionAnalysis(contextPacket),
+          imageUrls: this.extractImageUrls(contextPacket),
+          errorDetails: toolSelection.toolName === "fixBrokenScene" ? "Scene has errors that need fixing" : undefined,
+        } as EditToolInput;
         
       case "deleteScene":
         const deleteSceneId = toolSelection.targetSceneId || input.userContext?.sceneId;
@@ -225,13 +225,13 @@ export class ToolExecutor {
         
         return {
           ...baseInput,
-          sceneId: deleteSceneId,
+          sceneId: deleteSceneId as string,
           sceneName: sceneToDelete?.name || "Untitled Scene",
-          projectId: input.projectId,
-        };
+          confirmDeletion: true, // Auto-confirm since user already requested deletion
+        } as DeleteToolInput;
         
       default:
-        return baseInput;
+        throw new Error(`Unknown tool: ${toolSelection.toolName}`);
     }
   }
 
@@ -240,171 +240,76 @@ export class ToolExecutor {
     step: {toolName: string, context: string, dependencies?: string[], targetSceneId?: string},
     workflowResults: Record<string, any>,
     contextPacket?: ContextPacket
-  ): Promise<Record<string, unknown>> {
+  ): Promise<AddToolInput | EditToolInput | DeleteToolInput> {
     
     const toolSelection: ToolSelectionResult = { 
       success: true,
       toolName: step.toolName,
       targetSceneId: step.targetSceneId
     };
+    
     const baseInput = await this.prepareToolInput(originalInput, toolSelection, contextPacket!);
     
+    // Add workflow context to the input
     return {
       ...baseInput,
-      workflowContext: step.context,
-      workflowStep: step.toolName,
-      previousResults: workflowResults,
+      userPrompt: `${originalInput.prompt} (Workflow step: ${step.context})`,
     };
   }
 
-  private async processToolResult(
-    result: any, 
-    toolName: string, 
-    input: OrchestrationInput, 
-    toolSelection?: { 
-      targetSceneId?: string; 
-      editComplexity?: any; 
-      reasoning?: string;
-      requestedDurationSeconds?: number;
-    }
-  ): Promise<OrchestrationOutput> {
-    
-    if (!result.success) {
-      return {
-        success: false,
-        error: result.error?.message || "Tool execution failed",
-        toolUsed: toolName,
-        reasoning: result.reasoning || "Tool operation failed",
-      };
-    }
-
-    // Handle database operations for scene tools
-    const modelUsage: ModelUsage = {
-      model: this.modelConfig.model,
-      temperature: this.modelConfig.temperature ?? 0.3,
-      generationTimeMs: 0,
-      sessionId: input.userId,
-    };
-
-    const operationContext: DbOpContext = {
-      operationType: this.getOperationType(toolName),
-      toolName: toolName as ToolName,
-      editComplexity: toolSelection?.editComplexity,
-      projectId: input.projectId,
-      userId: input.userId,
-      userPrompt: input.prompt,
-      reasoning: toolSelection?.reasoning,
-    };
-
-    let sceneOperationResult;
-    
-    switch (toolName) {
-      case 'addScene':
-      case 'createSceneFromImage':
-        sceneOperationResult = await this.handleSceneCreation(result.data, operationContext, modelUsage);
-        break;
-        
-      case 'editScene':
-      case 'editSceneWithImage':
-      case 'fixBrokenScene':
-        sceneOperationResult = await this.handleSceneUpdate(result.data, toolSelection?.targetSceneId, operationContext, modelUsage);
-        break;
-        
-      case 'deleteScene':
-        sceneOperationResult = await this.handleSceneDeletion(result.data, operationContext, modelUsage);
-        break;
-        
-      default:
-        // Non-scene operations don't need database handling
-        break;
-    }
-
-    // Extract chat response and debug info
-    let chatResponse: string | undefined;
-    if (result.data && typeof result.data === 'object' && 'chatResponse' in result.data) {
-      chatResponse = (result.data as any).chatResponse;
-    }
-
-    let debug = undefined;
-    if (result.data && typeof result.data === 'object' && 'debug' in result.data) {
-      debug = (result.data as any).debug;
-    }
-
+  private convertToOrchestrationOutput(result: BaseToolOutput, toolName: string): OrchestrationOutput {
     return {
-      success: true,
-      result: sceneOperationResult ? { ...result.data, scene: sceneOperationResult.scene } : result.data,
+      success: result.success,
+      result: result,
       toolUsed: toolName,
       reasoning: result.reasoning,
-      chatResponse,
-      debug,
+      error: result.error,
+      chatResponse: result.chatResponse,
+      debug: result.debug,
     };
   }
 
-  private getOperationType(toolName: string): 'create' | 'edit' | 'delete' {
-    switch (toolName) {
-      case 'addScene':
-      case 'createSceneFromImage':
-        return 'create';
-      case 'editScene':
-      case 'editSceneWithImage':
-      case 'fixBrokenScene':
-      case 'changeDuration':
-        return 'edit';
-      case 'deleteScene':
-        return 'delete';
-      default:
-        return 'create';
-    }
+  private extractVisionAnalysis(contextPacket: ContextPacket): any {
+    // Extract vision analysis from the latest image analysis
+    const latestAnalysis = contextPacket.imageAnalyses?.[0];
+    return latestAnalysis ? {
+      palette: latestAnalysis.palette,
+      typography: latestAnalysis.typography,
+      mood: latestAnalysis.mood,
+      layoutJson: latestAnalysis.layoutJson,
+    } : undefined;
   }
 
-  private async handleSceneCreation(sceneData: any, context: DbOpContext, modelUsage: ModelUsage) {
-    if (!sceneData?.sceneCode || !sceneData?.sceneName) {
-      return null;
-    }
-
-    const standardizedData: SceneDataType = {
-      sceneName: sceneData.sceneName,
-      sceneCode: sceneData.sceneCode,
-      duration: sceneData.duration || 180,
-      layoutJson: sceneData.layoutJson,
-      reasoning: sceneData.reasoning,
-      chatResponse: sceneData.chatResponse,
-    };
-
-    return await sceneRepositoryService.createScene(standardizedData, context, modelUsage);
-  }
-
-  private async handleSceneUpdate(sceneData: any, targetSceneId: string | undefined, context: DbOpContext, modelUsage: ModelUsage) {
-    const sceneId = targetSceneId || sceneData?.sceneId;
-    const code = context.toolName === 'fixBrokenScene' ? sceneData?.fixedCode : sceneData?.sceneCode;
-
-    if (!sceneId || !code || !sceneData?.sceneName) { 
-      return null;
-    }
-
-    const standardizedData: SceneDataType = {
-      sceneId,
-      sceneName: sceneData.sceneName,
-      sceneCode: code,
-      duration: sceneData.duration || 180,
-      layoutJson: sceneData.layoutJson,
-      reasoning: sceneData.reasoning,
-      changes: sceneData.changes,
-      preserved: sceneData.preserved,
-      chatResponse: sceneData.chatResponse,
-    };
-
-    return await sceneRepositoryService.updateScene(standardizedData, context, modelUsage);
-  }
-
-  private async handleSceneDeletion(deleteData: any, context: DbOpContext, modelUsage: ModelUsage) {
-    const sceneId = deleteData?.deletedSceneId;
-    const sceneName = deleteData?.deletedSceneName;
+  private extractImageUrls(contextPacket: ContextPacket): string[] | undefined {
+    // Extract image URLs from context
+    const imageUrls: string[] = [];
     
-    if (!sceneId) {
-      return null;
-    }
+    // From image analyses
+    contextPacket.imageAnalyses?.forEach(analysis => {
+      imageUrls.push(...analysis.imageUrls);
+    });
+    
+    // From conversation context
+    contextPacket.imageContext?.conversationImages?.forEach(img => {
+      imageUrls.push(...img.imageUrls);
+    });
+    
+    return imageUrls.length > 0 ? imageUrls : undefined;
+  }
 
-    return await sceneRepositoryService.deleteScene(sceneId, sceneName || sceneId, context, modelUsage);
+  private mapEditComplexity(complexity?: string, toolName?: string): 'creative' | 'surgical' | 'error-fix' {
+    if (toolName === "fixBrokenScene") {
+      return 'error-fix';
+    }
+    
+    switch (complexity) {
+      case 'surgical':
+        return 'surgical';
+      case 'creative':
+      case 'structural':
+        return 'creative';
+      default:
+        return 'creative';
+    }
   }
 } 
