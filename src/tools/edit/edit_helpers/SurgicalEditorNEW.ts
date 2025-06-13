@@ -25,7 +25,7 @@ export class SurgicalEditor {
   async executeEdit(input: SurgicalEditInput): Promise<CodeGenerationOutput> {
     try {
       console.log('==================== surgicalEditor reached:');
-      const functionName = this.extractFunctionName(input.existingCode);
+      const functionName = this.extractFunctionName(input.tsxCode);
       
       if (this.DEBUG) {
         console.log(`[SurgicalEditor] Starting surgical edit for: ${functionName}`);
@@ -33,7 +33,7 @@ export class SurgicalEditor {
 
       const result = await this.surgicalEditUnified({
         userPrompt: input.userPrompt,
-        existingCode: input.existingCode,
+        existingCode: input.tsxCode,  // ✓ Using correct field name
         existingName: functionName,
         editComplexity: 'surgical',
       });

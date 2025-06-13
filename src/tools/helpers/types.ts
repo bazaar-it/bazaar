@@ -1,37 +1,32 @@
 import { z } from "zod";
 
 // ============================================================================
-// SHARED TOOL INTERFACES
+// TOOL INTERFACES - Pure Functions Only (Sprint 42)
 // ============================================================================
 
 /**
  * Base input that all tools receive
+ * Tools are PURE FUNCTIONS - no side effects, no database access
  */
 export interface BaseToolInput {
   userPrompt: string;
-  projectId: string;
-  userId?: string;
-  sessionId?: string;
+  projectId: string;  // For context only, not DB access
+  userId?: string;    // For context only, not DB access
 }
 
 /**
  * Base output that all tools return
- * Updated to match database field names (Sprint 41)
+ * MUST match database field names exactly
  */
 export interface BaseToolOutput {
   success: boolean;
-  tsxCode?: string;      // Changed from sceneCode
-  name?: string;         // Changed from sceneName
-  duration?: number;
+  tsxCode?: string;      // ✓ Correct field name (was sceneCode)
+  name?: string;         // ✓ Correct field name (was sceneName)
+  duration?: number;     // Always in frames
   reasoning: string;
   chatResponse?: string;
   error?: string;
   debug?: Record<string, unknown>;
-  metadata?: {
-    executionTime: number;
-    toolName: string;
-    timestamp: string;
-  };
 }
 
 // ============================================================================
@@ -40,15 +35,20 @@ export interface BaseToolOutput {
 
 export interface AddToolInput extends BaseToolInput {
   sceneNumber?: number;
-  storyboardSoFar?: any[];
-  replaceWelcomeScene?: boolean;
-  visionAnalysis?: any;
+  previousSceneContext?: {
+    tsxCode: string;
+    style?: string;
+  };
   imageUrls?: string[];
+  visionAnalysis?: any;
 }
 
 export interface AddToolOutput extends BaseToolOutput {
+  tsxCode: string;       // Required for new scenes
+  name: string;          // Required for new scenes
+  duration: number;      // Required for new scenes
   layoutJson?: string;
-  replacedWelcomeScene?: boolean;
+  props?: Record<string, any>;
 }
 
 // ============================================================================
@@ -56,8 +56,9 @@ export interface AddToolOutput extends BaseToolOutput {
 // ============================================================================
 
 export interface EditToolInput extends BaseToolInput {
-  sceneId: string;
-  existingCode: string;
+  sceneId: string;       // Just for reference
+  tsxCode: string;       // ✓ FIXED: Was existingCode
+  currentDuration?: number;
   editType: 'creative' | 'surgical' | 'error-fix';
   imageUrls?: string[];
   visionAnalysis?: any;
@@ -65,8 +66,9 @@ export interface EditToolInput extends BaseToolInput {
 }
 
 export interface EditToolOutput extends BaseToolOutput {
-  originalCode?: string;
-  editType?: string;
+  tsxCode: string;       // Updated code
+  duration?: number;     // Only if changed
+  props?: Record<string, any>;
   changesApplied?: string[];
 }
 
@@ -75,15 +77,13 @@ export interface EditToolOutput extends BaseToolOutput {
 // ============================================================================
 
 export interface DeleteToolInput extends BaseToolInput {
-  sceneId: string;
-  sceneName?: string;
+  sceneId: string;       // Which scene to delete
   confirmDeletion?: boolean;
 }
 
 export interface DeleteToolOutput extends BaseToolOutput {
-  deletedSceneId?: string;
-  deletedSceneName?: string;
-  remainingSceneCount?: number;
+  deletedSceneId: string;
+  // No content generation needed for delete
 }
 
 // ============================================================================
@@ -147,7 +147,7 @@ export interface ImageToCodeInput {
  */
 export interface CreativeEditInput {
   userPrompt: string;
-  existingCode: string;
+  tsxCode: string;        // ✓ FIXED: Was existingCode
   functionName: string;
   imageUrls?: string[];
   visionAnalysis?: any;
@@ -158,7 +158,7 @@ export interface CreativeEditInput {
  */
 export interface SurgicalEditInput {
   userPrompt: string;
-  existingCode: string;
+  tsxCode: string;        // ✓ FIXED: Was existingCode
   functionName: string;
   targetElement?: string;
 }
@@ -167,9 +167,8 @@ export interface SurgicalEditInput {
  * Error fixing input
  */
 export interface ErrorFixInput {
-  existingCode: string;
+  tsxCode: string;        // ✓ FIXED: Was existingCode
   errorDetails: string;
-  functionName: string;
   userPrompt?: string;
 }
 
@@ -179,22 +178,24 @@ export interface ErrorFixInput {
 
 export const baseToolInputSchema = z.object({
   userPrompt: z.string().describe("User's description of what they want"),
-  projectId: z.string().describe("Project ID"),
-  userId: z.string().optional().describe("User ID"),
-  sessionId: z.string().optional().describe("Session ID"),
+  projectId: z.string().describe("Project ID for context only"),
+  userId: z.string().optional().describe("User ID for context only"),
 });
 
 export const addToolInputSchema = baseToolInputSchema.extend({
   sceneNumber: z.number().optional().describe("Optional scene number/position"),
-  storyboardSoFar: z.array(z.any()).optional().describe("Existing scenes for context"),
-  replaceWelcomeScene: z.boolean().optional().describe("Whether to replace the welcome scene"),
+  previousSceneContext: z.object({
+    tsxCode: z.string(),
+    style: z.string().optional(),
+  }).optional().describe("Previous scene for style consistency"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
 });
 
 export const editToolInputSchema = baseToolInputSchema.extend({
-  sceneId: z.string().describe("ID of the scene to edit"),
-  existingCode: z.string().describe("Current scene code"),
+  sceneId: z.string().describe("ID of the scene to edit (reference only)"),
+  tsxCode: z.string().describe("Current scene TSX code"),
+  currentDuration: z.number().optional().describe("Current duration in frames"),
   editType: z.enum(['creative', 'surgical', 'error-fix']).describe("Type of edit to perform"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
@@ -203,7 +204,6 @@ export const editToolInputSchema = baseToolInputSchema.extend({
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({
   sceneId: z.string().describe("ID of the scene to delete"),
-  sceneName: z.string().optional().describe("Name of the scene to delete"),
   confirmDeletion: z.boolean().optional().describe("Confirmation flag for deletion"),
 });
 

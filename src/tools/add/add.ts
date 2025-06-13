@@ -2,54 +2,50 @@ import { BaseMCPTool } from "~/tools/helpers/base";
 import { layoutGenerator } from "./add_helpers/layoutGeneratorNEW";
 import { codeGenerator } from "./add_helpers/CodeGeneratorNEW";
 import { imageToCodeGenerator } from "./add_helpers/ImageToCodeGeneratorNEW";
-import { db } from "~/server/db";
-import { scenes } from "~/server/db/schema";
-import { eq, desc } from "drizzle-orm";
 import type { AddToolInput, AddToolOutput } from "~/tools/helpers/types";
 import { addToolInputSchema } from "~/tools/helpers/types";
 
 /**
- * ADD Tool - Creates new scenes from text or image prompts
- * Supports both text-based and image-based scene creation
+ * ADD Tool - Pure function that generates scene content
+ * NO DATABASE ACCESS - only generation
+ * Sprint 42: Refactored to pure function
  */
 export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
   name = "ADD";
-  description = "Create new motion graphics scenes from text descriptions or images";
+  description = "Generate new motion graphics scene content";
   inputSchema = addToolInputSchema;
 
   protected async execute(input: AddToolInput): Promise<AddToolOutput> {
     try {
       // Handle image-based scene creation
       if (input.imageUrls && input.imageUrls.length > 0) {
-        return await this.createSceneFromImages(input);
+        return await this.generateFromImages(input);
       }
       
       // Handle text-based scene creation
-      return await this.createSceneFromText(input);
+      return await this.generateFromText(input);
     } catch (error) {
       return {
         success: false,
-        sceneCode: "",
-        sceneName: "",
-        duration: 0,
-        reasoning: `ADD tool failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        reasoning: `Failed to generate scene: ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: error instanceof Error ? error.message : 'Unknown error',
-      };
+      } as AddToolOutput;
     }
   }
 
   /**
-   * Create scene from text prompt using two-step pipeline
+   * Generate scene from text prompt
+   * PURE FUNCTION - no side effects
    */
-  private async createSceneFromText(input: AddToolInput): Promise<AddToolOutput> {
-    // Generate function name
+  private async generateFromText(input: AddToolInput): Promise<AddToolOutput> {
+    // Generate function name (deterministic based on input)
     const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
     
     // Step 1: Generate layout JSON
     const layoutResult = await layoutGenerator.generateLayout({
       userPrompt: input.userPrompt,
       projectId: input.projectId,
-      previousSceneJson: await this.getPreviousSceneJson(input.projectId),
+      previousSceneJson: input.previousSceneContext?.style,
       visionAnalysis: input.visionAnalysis,
     });
 
@@ -61,40 +57,32 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       projectId: input.projectId,
     });
 
-    // Step 3: Save to database
-    const savedScene = await this.saveSceneToDatabase({
-      projectId: input.projectId,
-      code: codeResult.code,
-      name: codeResult.name,
-      duration: codeResult.duration,
-      userPrompt: input.userPrompt,
-      layoutJson: JSON.stringify(layoutResult.layoutJson),
-    });
-
+    // Return generated content - NO DATABASE!
     return {
       success: true,
-      tsxCode: codeResult.code,
+      tsxCode: codeResult.code,         // ✓ Correct field name
       name: codeResult.name,
-      duration: codeResult.duration,
+      duration: codeResult.duration,    // In frames
       layoutJson: JSON.stringify(layoutResult.layoutJson),
-      reasoning: `Text-based scene created: ${codeResult.reasoning}`,
+      props: codeResult.props,
+      reasoning: `Generated ${codeResult.name}: ${codeResult.reasoning}`,
+      chatResponse: `I've created ${codeResult.name} with ${codeResult.elements?.length || 0} elements`,
       debug: {
         layoutGeneration: layoutResult.debug,
         codeGeneration: codeResult.debug,
-        databaseSave: { sceneId: savedScene?.id || 'unknown' },
       },
     };
   }
 
   /**
-   * Create scene directly from images
+   * Generate scene from images
+   * PURE FUNCTION - no side effects
    */
-  private async createSceneFromImages(input: AddToolInput): Promise<AddToolOutput> {
+  private async generateFromImages(input: AddToolInput): Promise<AddToolOutput> {
     if (!input.imageUrls || input.imageUrls.length === 0) {
-      throw new Error("No images provided for image-based scene creation");
+      throw new Error("No images provided");
     }
 
-    // Generate function name
     const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
 
     // Generate code directly from images
@@ -105,86 +93,28 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       visionAnalysis: input.visionAnalysis,
     });
 
-    // Save to database
-    const savedScene = await this.saveSceneToDatabase({
-      projectId: input.projectId,
-      code: codeResult.code,
-      name: codeResult.name,
-      duration: codeResult.duration,
-      userPrompt: input.userPrompt,
-    });
-
+    // Return generated content - NO DATABASE!
     return {
       success: true,
-      tsxCode: codeResult.code,
+      tsxCode: codeResult.code,         // ✓ Correct field name
       name: codeResult.name,
-      duration: codeResult.duration,
-      reasoning: `Image-based scene created: ${codeResult.reasoning}`,
+      duration: codeResult.duration,    // In frames
+      reasoning: `Generated from ${input.imageUrls.length} image(s): ${codeResult.reasoning}`,
+      chatResponse: `I've created ${codeResult.name} based on your image(s)`,
       debug: {
         imageGeneration: codeResult.debug,
-        databaseSave: { sceneId: savedScene?.id || 'unknown' },
       },
     };
   }
 
   /**
-   * Generate a unique function name for the scene
+   * Generate deterministic function name
    */
   private generateFunctionName(projectId: string, sceneNumber?: number): string {
-    const timestamp = Date.now().toString().slice(-6);
-    const sceneNum = sceneNumber || Math.floor(Math.random() * 1000);
-    return `Scene${sceneNum}_${timestamp}`;
-  }
-
-  /**
-   * Get the previous scene's JSON for style consistency
-   */
-  private async getPreviousSceneJson(projectId: string): Promise<string | undefined> {
-    try {
-      const sceneResults = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
-        orderBy: [desc(scenes.order)],
-        limit: 1,
-      });
-      
-      return sceneResults[0]?.layoutJson || undefined;
-    } catch (error) {
-      console.warn('[AddTool] Could not fetch previous scene JSON:', error);
-      return undefined;
-    }
-  }
-
-  /**
-   * Save scene to database
-   */
-  private async saveSceneToDatabase(input: {
-    projectId: string;
-    code: string;
-    name: string;
-    duration: number;
-    userPrompt: string;
-    layoutJson?: string;
-  }) {
-    try {
-      const [savedScene] = await db.insert(scenes).values({
-        projectId: input.projectId,
-        name: input.name,
-        tsxCode: input.code,
-        duration: input.duration,
-        layoutJson: input.layoutJson,
-        order: 0,
-      }).returning();
-
-      return savedScene;
-    } catch (error) {
-      console.error('[AddTool] Failed to save scene to database:', error);
-      return {
-        id: 'failed-save',
-        name: input.name,
-        tsxCode: input.code,
-        duration: input.duration,
-      };
-    }
+    // Use projectId hash for consistency
+    const projectHash = projectId.slice(-6);
+    const sceneNum = sceneNumber || 1;
+    return `Scene${sceneNum}_${projectHash}`;
   }
 }
 

@@ -15,7 +15,7 @@ export class CreativeEditor extends BaseEditor {
   async executeEdit(input: CreativeEditInput): Promise<CodeGenerationOutput> {
     try {
       console.log('==================== creativeEditor reached:');
-      const functionName = this.extractFunctionName(input.existingCode);
+      const functionName = this.extractFunctionName(input.tsxCode);
       
       if (this.DEBUG) {
         console.log(`[CreativeEditor] Starting creative edit for: ${functionName}`);
@@ -25,7 +25,7 @@ export class CreativeEditor extends BaseEditor {
       // Use unified creative editing approach
       const result = await this.creativeEditUnified({
         userPrompt: input.userPrompt,
-        existingCode: input.existingCode,
+        existingCode: input.tsxCode,  // ✓ Using correct field name
         existingName: functionName,
         editComplexity: 'creative',
         visionAnalysis: input.visionAnalysis,
