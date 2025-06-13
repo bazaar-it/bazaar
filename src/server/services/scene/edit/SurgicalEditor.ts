@@ -1,9 +1,9 @@
 // src/server/services/scene/edit/SurgicalEditor.ts
 import { BaseEditor } from './BaseEditor';
-import { StandardApiResponse, SceneOperationResponse, Scene } from '@/lib/types/api/golden-rule-contracts';
-import { analyzeDuration } from '@/lib/utils/codeDurationExtractor';
-import { db } from '@/server/db';
-import { scenes } from '@/server/db/schema';
+import { StandardApiResponse, SceneOperationResponse, Scene } from '~/lib/types/api/golden-rule-contracts';
+import { analyzeDuration } from '~/lib/utils/codeDurationExtractor';
+import { db } from '~/server/db';
+import { scenes } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**

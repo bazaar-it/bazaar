@@ -1,12 +1,12 @@
 // src/server/services/scene/add/CodeGenerator.ts
-import { StandardSceneService } from '@/server/services/base/StandardSceneService';
-import { StandardApiResponse, SceneOperationResponse } from '@/lib/types/api/golden-rule-contracts';
-import { aiClient } from '@/server/services/ai/aiClient.service';
-import { getModel } from '@/config/models.config';
-import { getPrompt } from '@/config/prompts.config';
-import { analyzeDuration } from '@/lib/utils/codeDurationExtractor';
-import { db } from '@/server/db';
-import { scenes } from '@/server/db/schema';
+import { StandardSceneService } from '~/server/services/base/StandardSceneService';
+import { StandardApiResponse, SceneOperationResponse } from '~/lib/types/api/golden-rule-contracts';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
+import { analyzeDuration } from '~/lib/utils/codeDurationExtractor';
+import { db } from '~/server/db';
+import { scenes } from '~/server/db/schema';
 
 /**
  * Code Generator Service
@@ -14,6 +14,12 @@ import { scenes } from '@/server/db/schema';
  * This is step 2 of the 2-step scene creation pipeline
  */
 export class CodeGenerator extends StandardSceneService {
+  private aiClient: AIClientService;
+  
+  constructor() {
+    super();
+    this.aiClient = new AIClientService();
+  }
   
   /**
    * Generate React/Remotion code from a JSON layout
@@ -30,10 +36,10 @@ export class CodeGenerator extends StandardSceneService {
     
     // Get model and prompt configuration
     const model = getModel('codeGenerator');
-    const systemPrompt = getPrompt('code-generator');
+    const systemPrompt = getSystemPrompt('CODE_GENERATOR');
     
     // Generate code from layout
-    const response = await aiClient.generateResponse({
+    const response = await this.aiClient.generateResponse({
       model: model.model,
       temperature: model.temperature,
       systemPrompt: systemPrompt,

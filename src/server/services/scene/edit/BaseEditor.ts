@@ -1,13 +1,19 @@
 // src/server/services/scene/edit/BaseEditor.ts
-import { StandardSceneEditService } from '@/server/services/base/StandardSceneService';
-import { aiClient } from '@/server/services/ai/aiClient.service';
-import { getModel, resolveDirectCodeEditorModel } from '@/config/models.config';
-import { getPrompt } from '@/config/prompts.config';
+import { StandardSceneEditService } from '~/server/services/base/StandardSceneService';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import { getModel, resolveDirectCodeEditorModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
 
 /**
  * Base class for edit services with shared image/text handling logic
  */
 export abstract class BaseEditor extends StandardSceneEditService {
+  protected aiClient: AIClientService;
+  
+  constructor() {
+    super();
+    this.aiClient = new AIClientService();
+  }
   
   /**
    * Get appropriate model and prompt based on edit type and presence of images
@@ -16,13 +22,13 @@ export abstract class BaseEditor extends StandardSceneEditService {
     if (hasImages) {
       return {
         model: getModel('editSceneWithImage'),
-        prompt: getPrompt('edit-scene-with-image')
+        prompt: getSystemPrompt('EDIT_SCENE_WITH_IMAGE')
       };
     }
     
     return {
       model: resolveDirectCodeEditorModel(editType),
-      prompt: getPrompt(`direct-code-editor-${editType}`)
+      prompt: getSystemPrompt(editType === 'surgical' ? 'DIRECT_CODE_EDITOR_SURGICAL' : 'DIRECT_CODE_EDITOR_CREATIVE')
     };
   }
   
@@ -50,7 +56,7 @@ export abstract class BaseEditor extends StandardSceneEditService {
         messagesWithType[0].content.editType = params.editType;
       }
       
-      return await aiClient.generateVisionResponse({
+      return await this.aiClient.generateVisionResponse({
         model: params.model.model,
         temperature: params.model.temperature,
         systemPrompt: params.systemPrompt,
@@ -60,7 +66,7 @@ export abstract class BaseEditor extends StandardSceneEditService {
       });
     }
     
-    return await aiClient.generateResponse({
+    return await this.aiClient.generateResponse({
       model: params.model.model,
       temperature: params.model.temperature,
       maxTokens: params.model.maxTokens,

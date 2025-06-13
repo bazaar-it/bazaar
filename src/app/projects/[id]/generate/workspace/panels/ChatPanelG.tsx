@@ -327,7 +327,7 @@ export default function ChatPanelG({
           }
           
           // 🚨 FIX: Access the correct scene data structure
-          sceneData = result.scene.scene || result.scene; // Handle both possible structures
+          const sceneData = result.scene.scene || result.scene; // Handle both possible structures
           console.log('[ChatPanelG] 🔍 Scene data extracted:', { id: sceneData.id, name: sceneData.name });
           
           // Transform backend scene format to VideoState format
@@ -369,7 +369,7 @@ export default function ChatPanelG({
         } else if (result.scene && (result.operation === 'addScene' || result.operation === 'unknown')) {
           // For new scenes, trust the backend response directly
           console.log('[ChatPanelG] 🆕 New scene detected, using backend data directly');
-          sceneData = result.scene.scene || result.scene;
+          const sceneData = result.scene.scene || result.scene;
           
           // ✅ FIX: Transform and add the scene properly
           if (sceneData) {

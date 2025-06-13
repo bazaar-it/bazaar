@@ -1,4 +1,4 @@
-import { StandardApiResponse, SceneOperationResponse, Scene } from '@/lib/types/api/golden-rule-contracts';
+import { StandardApiResponse, SceneOperationResponse, Scene } from '~/lib/types/api/golden-rule-contracts';
 import { nanoid } from 'nanoid';
 
 /**

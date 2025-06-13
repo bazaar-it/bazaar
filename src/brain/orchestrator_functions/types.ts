@@ -92,8 +92,8 @@ export interface ModelUsageData {
 
 export interface SceneData {
   sceneId?: string;
-  sceneName: string;
-  sceneCode: string;
+  name: string;          // Changed from sceneName
+  tsxCode: string;       // Changed from sceneCode
   duration: number;
   layoutJson?: any;
   reasoning?: string;

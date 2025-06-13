@@ -1,11 +1,11 @@
 // src/server/services/scene/edit/ErrorFixer.ts
-import { StandardSceneEditService } from '@/server/services/base/StandardSceneService';
-import { StandardApiResponse, SceneOperationResponse, Scene } from '@/lib/types/api/golden-rule-contracts';
-import { aiClient } from '@/server/services/ai/aiClient.service';
-import { getModel } from '@/config/models.config';
-import { getPrompt } from '@/config/prompts.config';
-import { db } from '@/server/db';
-import { scenes } from '@/server/db/schema';
+import { StandardSceneEditService } from '~/server/services/base/StandardSceneService';
+import { StandardApiResponse, SceneOperationResponse, Scene } from '~/lib/types/api/golden-rule-contracts';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
+import { db } from '~/server/db';
+import { scenes } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -14,6 +14,12 @@ import { eq } from 'drizzle-orm';
  * Uses specialized prompt and low temperature for precise fixes
  */
 export class ErrorFixer extends StandardSceneEditService {
+  private aiClient: AIClientService;
+  
+  constructor() {
+    super();
+    this.aiClient = new AIClientService();
+  }
   
   /**
    * Fix errors in a broken scene
@@ -24,10 +30,10 @@ export class ErrorFixer extends StandardSceneEditService {
   }): Promise<StandardApiResponse<SceneOperationResponse>> {
     // Get model and prompt configuration
     const model = getModel('fixBrokenScene');
-    const systemPrompt = getPrompt('fix-broken-scene');
+    const systemPrompt = getSystemPrompt('FIX_BROKEN_SCENE');
     
     // Generate fix using AI with specialized prompt
-    const response = await aiClient.generateResponse({
+    const response = await this.aiClient.generateResponse({
       model: model.model,
       temperature: model.temperature || 0.2, // Very low temperature for precise fixes
       maxTokens: model.maxTokens,

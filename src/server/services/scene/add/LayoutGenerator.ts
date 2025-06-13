@@ -1,9 +1,9 @@
 // src/server/services/scene/add/LayoutGenerator.ts
-import { StandardSceneService } from '@/server/services/base/StandardSceneService';
-import { StandardApiResponse, SceneOperationResponse } from '@/lib/types/api/golden-rule-contracts';
-import { aiClient } from '@/server/services/ai/aiClient.service';
-import { getModel } from '@/config/models.config';
-import { getPrompt } from '@/config/prompts.config';
+import { StandardSceneService } from '~/server/services/base/StandardSceneService';
+import { StandardApiResponse, SceneOperationResponse } from '~/lib/types/api/golden-rule-contracts';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
 
 /**
  * Layout Generator Service
@@ -11,6 +11,12 @@ import { getPrompt } from '@/config/prompts.config';
  * This is step 1 of the 2-step scene creation pipeline
  */
 export class LayoutGenerator extends StandardSceneService {
+  private aiClient: AIClientService;
+  
+  constructor() {
+    super();
+    this.aiClient = new AIClientService();
+  }
   
   /**
    * Generate a JSON layout from user prompt
@@ -28,10 +34,10 @@ export class LayoutGenerator extends StandardSceneService {
     
     // Get model and prompt configuration
     const model = getModel('layoutGenerator');
-    const systemPrompt = getPrompt('layout-generator');
+    const systemPrompt = getSystemPrompt('LAYOUT_GENERATOR');
     
     // Generate layout using AI
-    const response = await aiClient.generateResponse({
+    const response = await this.aiClient.generateResponse({
       model: model.model,
       temperature: model.temperature,
       systemPrompt: systemPrompt,

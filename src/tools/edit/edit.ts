@@ -65,8 +65,8 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
 
       return {
         success: true,
-        sceneCode: result.code,
-        sceneName: result.name,
+        tsxCode: result.code,
+        name: result.name,
         duration: result.duration,
         originalCode: input.existingCode,
         editType: input.editType,
@@ -76,8 +76,8 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
     } catch (error) {
       return {
         success: false,
-        sceneCode: input.existingCode, // Return original code on error
-        sceneName: this.extractFunctionName(input.existingCode),
+        tsxCode: input.existingCode, // Return original code on error
+        name: this.extractFunctionName(input.existingCode),
         duration: 180,
         reasoning: `Edit failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: error instanceof Error ? error.message : 'Unknown error',

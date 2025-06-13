@@ -1,12 +1,12 @@
 // src/server/services/scene/add/ImageToCodeGenerator.ts
-import { StandardSceneService } from '@/server/services/base/StandardSceneService';
-import { StandardApiResponse, SceneOperationResponse } from '@/lib/types/api/golden-rule-contracts';
-import { aiClient } from '@/server/services/ai/aiClient.service';
-import { getModel } from '@/config/models.config';
-import { getPrompt } from '@/config/prompts.config';
-import { analyzeDuration } from '@/lib/utils/codeDurationExtractor';
-import { db } from '@/server/db';
-import { scenes } from '@/server/db/schema';
+import { StandardSceneService } from '~/server/services/base/StandardSceneService';
+import { StandardApiResponse, SceneOperationResponse } from '~/lib/types/api/golden-rule-contracts';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import { getModel } from '~/config/models.config';
+import { getSystemPrompt } from '~/config/prompts.config';
+import { analyzeDuration } from '~/lib/utils/codeDurationExtractor';
+import { db } from '~/server/db';
+import { scenes } from '~/server/db/schema';
 import crypto from 'crypto';
 
 /**
@@ -15,6 +15,12 @@ import crypto from 'crypto';
  * Bypasses the layout step for direct visual-to-code generation
  */
 export class ImageToCodeGenerator extends StandardSceneService {
+  private aiClient: AIClientService;
+  
+  constructor() {
+    super();
+    this.aiClient = new AIClientService();
+  }
   
   /**
    * Generate scene code directly from images
@@ -33,10 +39,10 @@ export class ImageToCodeGenerator extends StandardSceneService {
     
     // Get model and prompt configuration
     const model = getModel('createSceneFromImage');
-    const systemPrompt = getPrompt('create-scene-from-image');
+    const systemPrompt = getSystemPrompt('CREATE_SCENE_FROM_IMAGE');
     
     // Generate code directly from images
-    const response = await aiClient.generateVisionResponse({
+    const response = await this.aiClient.generateVisionResponse({
       model: model.model,
       temperature: model.temperature,
       systemPrompt: systemPrompt,

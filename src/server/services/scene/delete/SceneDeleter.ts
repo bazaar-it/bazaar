@@ -1,7 +1,7 @@
 // src/server/services/scene/delete/SceneDeleter.ts
-import { StandardApiResponse, DeleteOperationResponse, Scene } from '@/lib/types/api/golden-rule-contracts';
-import { db } from '@/server/db';
-import { scenes } from '@/server/db/schema';
+import { StandardApiResponse, DeleteOperationResponse, Scene } from '~/lib/types/api/golden-rule-contracts';
+import { db } from '~/server/db';
+import { scenes } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 /**

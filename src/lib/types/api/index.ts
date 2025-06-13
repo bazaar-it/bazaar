@@ -2,19 +2,15 @@
 
 /**
  * Central export for all API-related types
- * Simplified 3-tool architecture
+ * Sprint 41 Architecture
  */
 
-// Export golden rule contracts (primary)
+// Export golden rule contracts (still used by legacy services)
 export * from './golden-rule-contracts';
 
-// Export simplified tool contracts (new architecture)
-export * from './tool-contracts.simplified';
+// Export brain decision types (Sprint 41)
+export * from './brain-decision';
 
-// Export service contracts
-export * from './service-contracts';
-
-// Export legacy contracts (being phased out)
-export * from './tool-contracts';
+// Export field mapping utilities
 export * from './field-mapping';
 EOF < /dev/null

@@ -1,8 +1,7 @@
-// Simplified & Modular Orchestrator
+// Simplified & Modular Orchestrator - Decision Only (Sprint 41)
 
 import { ContextBuilder } from "./orchestrator_functions/contextBuilder";
 import { IntentAnalyzer } from "./orchestrator_functions/intentAnalyzer";
-import { ToolExecutor } from "./orchestrator_functions/toolExecutor";
 import type { 
   OrchestrationInput, 
   OrchestrationOutput 
@@ -11,7 +10,6 @@ import type {
 export class Orchestrator {
   private contextBuilder = new ContextBuilder();
   private intentAnalyzer = new IntentAnalyzer();
-  private toolExecutor = new ToolExecutor();
 
   async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
     try {
@@ -28,15 +26,30 @@ export class Orchestrator {
       if (!toolSelection.success) {
         return { 
           success: false, 
-          error: toolSelection.error ?? 'Failed to understand request' 
+          error: toolSelection.error ?? 'Failed to understand request',
+          chatResponse: "I couldn't understand your request. Could you please rephrase it?"
         };
       }
-      console.log('==================== toolSelection started:');
-      // 3. Execute selected tool(s)
-      const result = await this.toolExecutor.executeTools(input, toolSelection, contextPacket);
-      console.log('==================== toolExecutor finished:', result);
-
-      return result;
+      
+      // 3. Return decision (NO EXECUTION!)
+      return {
+        success: true,
+        toolUsed: toolSelection.toolName,
+        reasoning: toolSelection.reasoning,
+        chatResponse: toolSelection.userFeedback || toolSelection.reasoning, // Use AI-generated feedback
+        // Pass along the tool selection details for execution in generation.ts
+        result: {
+          toolName: toolSelection.toolName,
+          toolContext: {
+            userPrompt: input.prompt,
+            targetSceneId: toolSelection.targetSceneId,
+            editComplexity: toolSelection.editComplexity,
+            imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
+            requestedDurationSeconds: toolSelection.requestedDurationSeconds,
+          },
+          workflow: toolSelection.workflow,
+        }
+      };
 
     } catch (error) {
       console.error('[Orchestrator] Error:', error);
@@ -47,6 +60,7 @@ export class Orchestrator {
       };
     }
   }
+
 }
 
 // Singleton export

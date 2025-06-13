@@ -6,7 +6,28 @@
 **Current Sprint**: Sprint 40 (In Progress)  
 **Next Focus**: State Management Optimization & Performance
 
-## 🚀 Sprint 40 Updates
+## 🚀 Sprint 41 Updates (Current - June 13, 2025)
+
+### Architecture Consolidation & Alignment
+- **Status**: Planning & Analysis Phase
+- **Goal**: Align architecture with Sprint 40's original vision
+- **Key Issue**: Tool execution belongs in generation.ts, not in brain
+- **Branch**: mark-12 (merged with restructure_brain)
+
+### Completed Sprint 41 Tasks:
+- ✅ Merged restructure_brain into mark-12
+- ✅ Analyzed current architecture vs Sprint 40 vision
+- ✅ Documented Sprint 41 goals and migration plan
+- ✅ Identified key architectural misalignment (tool execution location)
+
+### Next Steps:
+1. Move tool execution from brain to generation.ts
+2. Fix field naming (sceneCode → tsxCode)
+3. Integrate normalized VideoState
+4. Simplify prompts to 30-50 words
+5. Clean up duplicate implementations
+
+## 🚀 Sprint 40 Updates (Partially Complete)
 
 ### Phase 1: ConversationalResponse Removal ✅ COMPLETE
 - Removed ConversationalResponse service from all 7 MCP tools

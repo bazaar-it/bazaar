@@ -1,6 +1,6 @@
 // src/server/services/scene/scene.service.ts
-import { StandardSceneService } from '@/server/services/base/StandardSceneService';
-import { StandardApiResponse, SceneOperationResponse, DeleteOperationResponse } from '@/lib/types/api/golden-rule-contracts';
+import { StandardSceneService } from '~/server/services/base/StandardSceneService';
+import { StandardApiResponse, SceneOperationResponse, DeleteOperationResponse } from '~/lib/types/api/golden-rule-contracts';
 
 // Add scene services
 import { LayoutGenerator } from './add/LayoutGenerator';
@@ -16,7 +16,7 @@ import { ErrorFixer } from './edit/ErrorFixer';
 import { SceneDeleter } from './delete/SceneDeleter';
 
 // Database service
-import { sceneRepositoryService } from '@/server/services/brain/sceneRepository.service';
+import { sceneRepositoryService } from '~/server/services/brain/sceneRepository.service';
 
 /**
  * Scene Service - Coordinator for all scene operations

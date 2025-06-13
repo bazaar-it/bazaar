@@ -5,12 +5,10 @@ import type { EvalSuite, EvalPrompt, EvalResult, ServiceType } from './types';
 import { getActiveModelPack, MODEL_PACKS, listAvailablePacks } from '../../config/models.config';
 import type { ModelPack } from '../../config/models.config';
 import { AIClientService } from '~/server/services/ai/aiClient.service';
-import { brainOrchestrator } from '../../server/services/brain/orchestrator';
 import { db } from "~/server/db";
 import { scenes, projects, users } from "~/server/db/schema";
-import { BrainOrchestrator } from "~/server/services/brain/orchestrator";
-import { createSceneFromImageTool } from "~/server/services/mcp/tools/createSceneFromImage";
 import { eq } from "drizzle-orm";
+// TODO: Update eval runner to use new tool architecture
 
 export interface EvalRunConfig {
   suiteId: string;
@@ -277,7 +275,9 @@ export class EvaluationRunner {
         const imageUrl = prompt.input.image;
         console.log(`    🖼️  Processing image: ${imageUrl.substring(0, 50)}...`);
         
-        // Call brain orchestrator with image
+        // TODO: Update to use new orchestratorNEW and generation.ts
+        throw new Error("Eval runner needs to be updated to use new architecture");
+        /*
         response = await brainOrchestrator.processUserInput({
           prompt: prompt.input.text || '',
           projectId,
@@ -293,8 +293,12 @@ export class EvaluationRunner {
         if (response.result?.imageAnalysis) {
           imageAnalysis = response.result.imageAnalysis;
         }
+        */
       } else {
         // Text-based prompts
+        // TODO: Update to use new orchestratorNEW and generation.ts
+        throw new Error("Eval runner needs to be updated to use new architecture");
+        /*
         response = await brainOrchestrator.processUserInput({
           prompt: prompt.input.text || '',
           projectId,
@@ -303,6 +307,7 @@ export class EvaluationRunner {
           storyboardSoFar: context.storyboardSoFar || [],
           chatHistory: context.chatHistory || []
         });
+        */
       }
 
       if (response.toolUsed) {
@@ -797,7 +802,9 @@ export async function runEvaluation(scenario: any): Promise<any> {
     context = await prepareEvaluationContext(scenario);
     
     // Create orchestrator instance
-    const orchestrator = new BrainOrchestrator();
+    // TODO: Update to use new orchestratorNEW
+    // const orchestrator = new BrainOrchestrator();
+    throw new Error("Eval runner needs to be updated to use new architecture");
     
     // Execute the brain orchestrator
     const response = await orchestrator.processUserInput({

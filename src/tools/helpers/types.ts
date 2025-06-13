@@ -16,11 +16,12 @@ export interface BaseToolInput {
 
 /**
  * Base output that all tools return
+ * Updated to match database field names (Sprint 41)
  */
 export interface BaseToolOutput {
   success: boolean;
-  sceneCode?: string;
-  sceneName?: string;
+  tsxCode?: string;      // Changed from sceneCode
+  name?: string;         // Changed from sceneName
   duration?: number;
   reasoning: string;
   chatResponse?: string;

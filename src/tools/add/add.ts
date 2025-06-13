@@ -73,8 +73,8 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
 
     return {
       success: true,
-      sceneCode: codeResult.code,
-      sceneName: codeResult.name,
+      tsxCode: codeResult.code,
+      name: codeResult.name,
       duration: codeResult.duration,
       layoutJson: JSON.stringify(layoutResult.layoutJson),
       reasoning: `Text-based scene created: ${codeResult.reasoning}`,
@@ -116,8 +116,8 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
 
     return {
       success: true,
-      sceneCode: codeResult.code,
-      sceneName: codeResult.name,
+      tsxCode: codeResult.code,
+      name: codeResult.name,
       duration: codeResult.duration,
       reasoning: `Image-based scene created: ${codeResult.reasoning}`,
       debug: {
