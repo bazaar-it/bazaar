@@ -42,12 +42,12 @@ export class SceneRepositoryService {
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
     // 🪵 Enhanced Logging
-    console.log(`SceneRepository: ➕ Creating scene "${sceneData.sceneName}" for project ${context.projectId}`);
+    //  // console.log(`SceneRepository: ➕ Creating scene "${sceneData.sceneName}" for project ${context.projectId}`);
     const startTime = Date.now();
 
     try {
       if (this.DEBUG) {
-        console.log(`[SceneRepository] Creating scene: ${sceneData.sceneName}`);
+        // // console.log(`[SceneRepository] Creating scene: ${sceneData.sceneName}`);
       }
 
       // Calculate actual duration from code
@@ -56,12 +56,12 @@ export class SceneRepositoryService {
         try {
           const analysis = analyzeDuration(sceneData.sceneCode);
           actualDuration = analysis.frames;
-          if (this.DEBUG) console.log(`[SceneRepository] Analyzed duration for create: ${actualDuration} frames`);
+          // if (this.DEBUG) // console.log(`[SceneRepository] Analyzed duration for create: ${actualDuration} frames`);
         } catch (e) {
-          if (this.DEBUG) console.warn(`[SceneRepository] analyzeDuration failed for new scene, using ${actualDuration}f fallback:`, e);
+          // if (this.DEBUG) // console.warn(`[SceneRepository] analyzeDuration failed for new scene, using ${actualDuration}f fallback:`, e);
         }
       } else {
-        if (this.DEBUG) console.warn(`[SceneRepository] No sceneCode for new scene, using ${actualDuration}f fallback.`);
+        // if (this.DEBUG) // console.warn(`[SceneRepository] No sceneCode for new scene, using ${actualDuration}f fallback.`);
       }
 
       // Get next order for the scene
@@ -86,7 +86,7 @@ export class SceneRepositoryService {
         .returning();
 
       if (this.DEBUG) {
-        console.log(`[SceneRepository] Scene created successfully: ${newScene?.id}`);
+        // console.log(`[SceneRepository] Scene created successfully: ${newScene?.id}`);
       }
 
       // Log scene iteration for tracking
@@ -104,7 +104,7 @@ export class SceneRepositoryService {
       }
 
       // 🪵 Enhanced Logging
-      console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" created successfully with ID ${newScene?.id}`);
+      // console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" created successfully with ID ${newScene?.id}`);
 
       return {
         success: true,
@@ -120,13 +120,13 @@ export class SceneRepositoryService {
 
     } catch (dbError) {
       // 🪵 Enhanced Logging
-      console.error(`SceneRepository: ❌ Error creating scene "${sceneData.sceneName}" for project ${context.projectId}`, {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        stack: dbError instanceof Error ? dbError.stack : undefined,
-      });
+      // console.error(`SceneRepository: ❌ Error creating scene "${sceneData.sceneName}" for project ${context.projectId}`, {
+      // error: dbError instanceof Error ? dbError.message : String(dbError),
+      //  stack: dbError instanceof Error ? dbError.stack : undefined,
+      //});
 
       if (this.DEBUG) {
-        console.error(`[SceneRepository] Failed to create scene:`, dbError);
+        // console.error(`[SceneRepository] Failed to create scene:`, dbError);
       }
       return {
         success: false,
@@ -144,7 +144,7 @@ export class SceneRepositoryService {
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
     // 🪵 Enhanced Logging
-    console.log(`SceneRepository: ✏️ Updating scene "${sceneData.sceneName}" (${sceneData.sceneId}) for project ${context.projectId}`);
+    // console.log(`SceneRepository: ✏️ Updating scene "${sceneData.sceneName}" (${sceneData.sceneId}) for project ${context.projectId}`);
     const startTime = Date.now();
 
     if (!sceneData.sceneId) {
@@ -156,12 +156,12 @@ export class SceneRepositoryService {
 
     try {
       if (this.DEBUG) {
-        console.log(`[SceneRepository] Updating scene: ${sceneData.sceneName} (${sceneData.sceneId})`);
+        // console.log(`[SceneRepository] Updating scene: ${sceneData.sceneName} (${sceneData.sceneId})`);
         if (sceneData.changes) {
-          console.log(`[SceneRepository] Applied changes: ${sceneData.changes.join(', ')}`);
+          // console.log(`[SceneRepository] Applied changes: ${sceneData.changes.join(', ')}`);
         }
         if (sceneData.preserved) {
-          console.log(`[SceneRepository] Preserved: ${sceneData.preserved.join(', ')}`);
+          // console.log(`[SceneRepository] Preserved: ${sceneData.preserved.join(', ')}`);
         }
       }
 
@@ -176,12 +176,12 @@ export class SceneRepositoryService {
         try {
           const analysis = analyzeDuration(sceneData.sceneCode);
           actualDuration = analysis.frames;
-          if (this.DEBUG) console.log(`[SceneRepository] Analyzed duration for update: ${actualDuration} frames`);
+          // if (this.DEBUG) // console.log(`[SceneRepository] Analyzed duration for update: ${actualDuration} frames`);
         } catch (e) {
-          if (this.DEBUG) console.warn(`[SceneRepository] analyzeDuration failed for update, using ${actualDuration}f fallback:`, e);
+          // if (this.DEBUG) // console.warn(`[SceneRepository] analyzeDuration failed for update, using ${actualDuration}f fallback:`, e);
         }
       } else {
-         if (this.DEBUG) console.warn(`[SceneRepository] No sceneCode for update, using ${actualDuration}f fallback.`);
+         // if (this.DEBUG) // console.warn(`[SceneRepository] No sceneCode for update, using ${actualDuration}f fallback.`);
       }
 
       // Prepare data for update, ensuring type safety and conditional inclusion of layoutJson
@@ -197,8 +197,8 @@ export class SceneRepositoryService {
       }
 
       if (this.DEBUG) {
-        console.log('[SceneRepository] ATTEMPTING TO SAVE TSX CODE (first 100 chars):', finalUpdateData.tsxCode?.substring(0, 100));
-        console.log('[SceneRepository] ATTEMPTING TO SAVE FULL finalUpdateData:', JSON.stringify(finalUpdateData, null, 2));
+        // console.log('[SceneRepository] ATTEMPTING TO SAVE TSX CODE (first 100 chars):', finalUpdateData.tsxCode?.substring(0, 100));
+        // console.log('[SceneRepository] ATTEMPTING TO SAVE FULL finalUpdateData:', JSON.stringify(finalUpdateData, null, 2));
       }
 
       const [updatedScene] = await db.update(scenes)
@@ -207,8 +207,8 @@ export class SceneRepositoryService {
         .returning();
 
       if (this.DEBUG) {
-        console.log(`[SceneRepository] Scene updated successfully: ${updatedScene?.id}`);
-        console.log('[SceneRepository] RETURNED TSX CODE (first 100 chars):', updatedScene?.tsxCode?.substring(0, 100));
+        // console.log(`[SceneRepository] Scene updated successfully: ${updatedScene?.id}`);
+        // console.log('[SceneRepository] RETURNED TSX CODE (first 100 chars):', updatedScene?.tsxCode?.substring(0, 100));
       }
 
       // Log scene iteration for tracking
@@ -229,7 +229,7 @@ export class SceneRepositoryService {
       }
 
       // 🪵 Enhanced Logging
-      console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" updated successfully.`);
+      // console.log(`SceneRepository: ✅ Scene "${sceneData.sceneName}" updated successfully.`);
 
       return {
         success: true,
@@ -245,13 +245,13 @@ export class SceneRepositoryService {
 
     } catch (dbError) {
       // 🪵 Enhanced Logging
-      console.error(`SceneRepository: ❌ Error updating scene "${sceneData.sceneName}" (${sceneData.sceneId})`, {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        stack: dbError instanceof Error ? dbError.stack : undefined,
-      });
+      // console.error(`SceneRepository: ❌ Error updating scene "${sceneData.sceneName}" (${sceneData.sceneId})`, {
+      //  error: dbError instanceof Error ? dbError.message : String(dbError),
+      //  stack: dbError instanceof Error ? dbError.stack : undefined,
+      //});
 
       if (this.DEBUG) {
-        console.error(`[SceneRepository] Failed to update scene:`, dbError);
+        // console.error(`[SceneRepository] Failed to update scene:`, dbError);
       }
       return {
         success: false,
@@ -270,7 +270,7 @@ export class SceneRepositoryService {
     modelUsage: ModelUsageData
   ): Promise<SceneOperationResult> {
     // 🪵 Enhanced Logging
-    console.log(`SceneRepository: 🗑️ Deleting scene "${sceneName}" (${sceneId}) from project ${context.projectId}`);
+    // console.log(`SceneRepository: 🗑️ Deleting scene "${sceneName}" (${sceneId}) from project ${context.projectId}`);
     const startTime = Date.now();
 
     try {
@@ -278,7 +278,7 @@ export class SceneRepositoryService {
       const displayName = sceneName?.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1') || sceneName || sceneId;
 
       if (this.DEBUG) {
-        console.log(`[SceneRepository] Deleting scene: ${displayName} (${sceneId})`);
+        // console.log(`[SceneRepository] Deleting scene: ${displayName} (${sceneId})`);
       }
 
       // Get the scene before deletion for tracking
@@ -293,7 +293,7 @@ export class SceneRepositoryService {
 
       if (deletedScenes.length > 0) {
         if (this.DEBUG) {
-          console.log(`[SceneRepository] Scene deleted successfully: ${deletedScenes[0]?.name}`);
+          // console.log(`[SceneRepository] Scene deleted successfully: ${deletedScenes[0]?.name}`);
         }
 
         // Log scene iteration for tracking
@@ -321,7 +321,7 @@ export class SceneRepositoryService {
         };
       } else {
         if (this.DEBUG) {
-          console.warn(`[SceneRepository] No scene found to delete with ID: ${sceneId}`);
+          // console.warn(`[SceneRepository] No scene found to delete with ID: ${sceneId}`);
         }
         return {
           success: false,
@@ -331,13 +331,13 @@ export class SceneRepositoryService {
 
     } catch (dbError) {
       // 🪵 Enhanced Logging
-      console.error(`SceneRepository: ❌ Error deleting scene "${sceneName}" (${sceneId})`, {
-        error: dbError instanceof Error ? dbError.message : String(dbError),
-        stack: dbError instanceof Error ? dbError.stack : undefined,
-      });
+      // console.error(`SceneRepository: ❌ Error deleting scene "${sceneName}" (${sceneId})`, {
+      //  error: dbError instanceof Error ? dbError.message : String(dbError),
+      //  stack: dbError instanceof Error ? dbError.stack : undefined,
+      //});
 
       if (this.DEBUG) {
-        console.error(`[SceneRepository] Failed to delete scene:`, dbError);
+        // console.error(`[SceneRepository] Failed to delete scene:`, dbError);
       }
       return {
         success: false,
@@ -379,17 +379,17 @@ export class SceneRepositoryService {
       });
 
       if (this.DEBUG) {
-        console.log(`[SceneIterationTracker] 📊 Logged ${input.context.operationType} operation:`, {
-          sceneId: input.sceneId,
-          complexity: input.context.editComplexity,
-          timeMs: input.modelUsage.generationTimeMs,
-          model: input.modelUsage.model,
-          promptLength: input.context.userPrompt.length,
-        });
+        // console.log(`[SceneIterationTracker] 📊 Logged ${input.context.operationType} operation:`, {
+        //  sceneId: input.sceneId,
+        //  complexity: input.context.editComplexity,
+        //  timeMs: input.modelUsage.generationTimeMs,
+        //  model: input.modelUsage.model,
+        //  promptLength: input.context.userPrompt.length,
+        //});
       }
     } catch (error) {
       if (this.DEBUG) {
-        console.error('[SceneIterationTracker] ❌ Failed to log iteration:', error);
+        // console.error('[SceneIterationTracker] ❌ Failed to log iteration:', error);
       }
       // Don't throw - tracking failure shouldn't break the main operation
     }
@@ -421,12 +421,12 @@ export class SceneRepositoryService {
         }
 
         if (this.DEBUG) {
-          console.log(`[SceneIterationTracker] 📈 Marked ${editsToMark.length} iterations as re-edited (user dissatisfaction signal)`);
+          // console.log(`[SceneIterationTracker] 📈 Marked ${editsToMark.length} iterations as re-edited (user dissatisfaction signal)`);
         }
       }
     } catch (error) {
       if (this.DEBUG) {
-        console.error('[SceneIterationTracker] ❌ Failed to mark re-edited scenes:', error);
+        // console.error('[SceneIterationTracker] ❌ Failed to mark re-edited scenes:', error);
       }
     }
   }

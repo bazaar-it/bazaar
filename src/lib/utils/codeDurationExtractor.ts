@@ -198,19 +198,19 @@ export function extractDurationFromCode(code: string): number {
         // 🧠 SMART DURATION: Add intelligent buffer based on animation complexity
         const smartDuration = calculateSmartDuration(rawAnimationDuration, code, ranges);
         
-        console.log(`[CodeDurationExtractor] Raw animation: ${rawAnimationDuration} frames → Smart duration: ${smartDuration} frames from ${ranges.length} range(s)`);
-        console.log(`[CodeDurationExtractor] Ranges found:`, ranges);
+        // console.log(`[CodeDurationExtractor] Raw animation: ${rawAnimationDuration} frames → Smart duration: ${smartDuration} frames from ${ranges.length} range(s)`);
+        //console.log(`[CodeDurationExtractor] Ranges found:`, ranges);
         return smartDuration;
       } else {
-        console.warn(`[CodeDurationExtractor] Extracted duration ${rawAnimationDuration} frames is outside valid range (${MIN_ANIMATION_DURATION}-${MAX_DURATION}), using default`);
+        // console.warn(`[CodeDurationExtractor] Extracted duration ${rawAnimationDuration} frames is outside valid range (${MIN_ANIMATION_DURATION}-${MAX_DURATION}), using default`);
       }
     }
     
-    console.warn(`[CodeDurationExtractor] No valid animation ranges found in code, using default ${DEFAULT_DURATION} frames`);
+    //  console.warn(`[CodeDurationExtractor] No valid animation ranges found in code, using default ${DEFAULT_DURATION} frames`);
     return DEFAULT_DURATION;
     
   } catch (error) {
-    console.error('[CodeDurationExtractor] Error parsing code:', error);
+    // console.error('[CodeDurationExtractor] Error parsing code:', error);
     return DEFAULT_DURATION;
   }
 }

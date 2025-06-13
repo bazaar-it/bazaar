@@ -49,18 +49,18 @@ let logger: Logger;
 // Safe directory creation function
 const safeCreateDir = (dir: string): boolean => {
   if (isServerlessProduction) {
-    console.log(`[LOGGER] Skipping directory creation in serverless environment: ${dir}`);
+    // console.log(`[LOGGER] Skipping directory creation in serverless environment: ${dir}`);
     return false;
   }
   
   try {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created log directory: ${dir}`);
+      // console.log(`Created log directory: ${dir}`);
     }
     return true;
   } catch (error) {
-    console.warn(`[LOGGER] Could not create directory ${dir}: ${error}. Continuing without file logging.`);
+    // console.warn(`[LOGGER] Could not create directory ${dir}: ${error}. Continuing without file logging.`);
     return false;
   }
 };
@@ -74,7 +74,7 @@ if (isServer) {
   const componentsLogsDir = process.env.COMPONENTS_LOG_DIR || logsDir;
 
   // Log the directories being used
-  console.log(`Logger initialization with: LOG_DIR=${logsDir}, ERROR_DIR=${errorLogsDir}`);
+  // console.log(`Logger initialization with: LOG_DIR=${logsDir}, ERROR_DIR=${errorLogsDir}`);
 
   // Create base transports (always include console)
   const baseTransports: any[] = [
@@ -170,9 +170,9 @@ if (isServer) {
   });
 
   // Log the environment variables affecting logger console level
-  console.log(`[DEBUG_LOGGER] LOGGING_MODE: ${process.env.LOGGING_MODE}, LOG_LEVEL: ${process.env.LOG_LEVEL}`)
+  // console.log(`[DEBUG_LOGGER] LOGGING_MODE: ${process.env.LOGGING_MODE}, LOG_LEVEL: ${process.env.LOG_LEVEL}`)
   
-  console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
+  // console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
 
 } else {
   // Simple console logger for client-side
@@ -216,13 +216,13 @@ if (isServer) {
 export const initializeSystemFileTransport = (): void => {
   // Skip file transport initialization in serverless production environments
   if (isServerlessProduction) {
-    console.log('[LOGGER] Skipping system file transport initialization in serverless environment');
+    // console.log('[LOGGER] Skipping system file transport initialization in serverless environment');
     systemFileTransportInitialized = true;
     return;
   }
 
   if (systemFileTransportInitialized) {
-    console.log('[LOGGER] System file transport already initialized, skipping...');
+    // console.log('[LOGGER] System file transport already initialized, skipping...');
     return;
   }
 
@@ -235,10 +235,10 @@ export const initializeSystemFileTransport = (): void => {
   try {
     if (!fs.existsSync(systemLogsDir)) {
       fs.mkdirSync(systemLogsDir, { recursive: true });
-      console.log(`Created system log directory: ${systemLogsDir}`);
+      // console.log(`Created system log directory: ${systemLogsDir}`);
     }
   } catch (error) {
-    console.warn(`[LOGGER] Could not create system log directory: ${error}. Continuing without file logging.`);
+    // console.warn(`[LOGGER] Could not create system log directory: ${error}. Continuing without file logging.`);
     systemFileTransportInitialized = true;
     return;
   }
@@ -459,15 +459,15 @@ scenePlannerLogger.info = (messageOrInfo: string | object, ...args: any[]): Logg
 const systemLogger = logger.child({ module: 'system' });
 
 // Configure console transport level specifically
-console.log(`[DEBUG_LOGGER] Configuring system logger console level. LOGGING_MODE: ${process.env.LOGGING_MODE}`);
+// console.log(`[DEBUG_LOGGER] Configuring system logger console level. LOGGING_MODE: ${process.env.LOGGING_MODE}`);
 const systemConsoleTransport = systemLogger.transports.find(
   (t) => t instanceof transports.Console
 );
 if (systemConsoleTransport) {
   systemConsoleTransport.level = process.env.LOG_LEVEL || 'info';
-  console.log(`[DEBUG_LOGGER] System logger console level set to: ${systemConsoleTransport.level}`);
+  // console.log(`[DEBUG_LOGGER] System logger console level set to: ${systemConsoleTransport.level}`);
 } else {
-  console.log('[DEBUG_LOGGER] Could not find system logger console transport to configure!');
+  // console.log('[DEBUG_LOGGER] Could not find system logger console transport to configure!');
 }
 
 // Other child loggers

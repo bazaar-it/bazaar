@@ -40,16 +40,20 @@ export class SceneBuilderService {
     // ✅ USER-FRIENDLY: Simple display name for users
     const displayName = `Scene ${sceneNumber}`;
     
-    if (this.DEBUG) console.log(`[SceneBuilder] 🚀 Two-step pipeline starting`);
-    if (this.DEBUG) console.log(`[SceneBuilder] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
-    if (this.DEBUG) console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
-    if (this.DEBUG) console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
-    if (this.DEBUG) console.log(`[SceneBuilder] 📊 Scene number: ${sceneNumber}`);
-    if (this.DEBUG) console.log(`[SceneBuilder] 🎨 Has previous scene: ${input.previousSceneJson ? 'YES' : 'NO'}`);
+    if (this.DEBUG) {
+      // console.log(`[SceneBuilder] 🚀 Two-step pipeline starting`);
+      // console.log(`[SceneBuilder] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
+      // console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
+      // console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
+      // console.log(`[SceneBuilder] 📊 Scene number: ${sceneNumber}`);
+      // console.log(`[SceneBuilder] 🎨 Has previous scene: ${input.previousSceneJson ? 'YES' : 'NO'}`);
+    }
     
     try {
       // STEP 1: Generate JSON layout using @style-json-prompt.md
-      if (this.DEBUG) console.log(`[SceneBuilder] 📋 STEP 1: LayoutGenerator`);
+      if (this.DEBUG) {
+        // console.log(`[SceneBuilder] 📋 STEP 1: LayoutGenerator`);
+      }
       const layoutResult = await layoutGeneratorService.generateLayout({
         userPrompt: input.userPrompt,
         projectId: input.projectId,
@@ -58,18 +62,22 @@ export class SceneBuilderService {
         visionAnalysis: input.visionAnalysis,
       });
       
-      if (this.DEBUG) console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);
+      if (this.DEBUG) {
+        // console.log(`[SceneBuilder] ✅ STEP 1 completed: ${layoutResult.layoutJson.sceneType} with ${layoutResult.layoutJson.elements?.length || 0} elements`);
+      }
       
       // ✅ NEW: Log the JSON handoff between steps
       if (this.DEBUG) {
-        console.log(`\n[SceneBuilder] 🔄 PIPELINE HANDOFF:`);
-        console.log(`[SceneBuilder] ✅ Layout Generator produced: ${layoutResult.layoutJson.sceneType || 'unknown'} scene`);
-        console.log(`[SceneBuilder] ⚡ Passing ${JSON.stringify(layoutResult.layoutJson).length} char JSON to Code Generator`);
-        console.log(`[SceneBuilder] 🎯 Target function: ${uniqueFunctionName}\n`);
+        // console.log(`\n[SceneBuilder] 🔄 PIPELINE HANDOFF:`);
+        // console.log(`[SceneBuilder] ✅ Layout Generator produced: ${layoutResult.layoutJson.sceneType || 'unknown'} scene`);
+        // console.log(`[SceneBuilder] ⚡ Passing ${JSON.stringify(layoutResult.layoutJson).length} char JSON to Code Generator`);
+        // console.log(`[SceneBuilder] 🎯 Target function: ${uniqueFunctionName}\n`);
       }
       
       // STEP 2: Generate React/Remotion code from JSON
-      if (this.DEBUG) console.log(`[SceneBuilder] 🎬 STEP 2: CodeGenerator for ${layoutResult.layoutJson.sceneType} scene`);
+      if (this.DEBUG) {
+        // console.log(`[SceneBuilder] 🎬 STEP 2: CodeGenerator for ${layoutResult.layoutJson.sceneType} scene`);
+      }
       const codeResult = await codeGeneratorService.generateCode({
         layoutJson: layoutResult.layoutJson,
         userPrompt: input.userPrompt,
@@ -77,18 +85,20 @@ export class SceneBuilderService {
       });
       
       const generationTime = Date.now() - startTime;
-      if (this.DEBUG) console.log(`[SceneBuilder] ✅ Two-step pipeline completed successfully in ${generationTime}ms`);
-      if (this.DEBUG) console.log(`[SceneBuilder] 📊 Final result: ${codeResult.code.length} chars of code generated`);
+      if (this.DEBUG) {
+        // console.log(`[SceneBuilder] ✅ Two-step pipeline completed successfully in ${generationTime}ms`);
+        // console.log(`[SceneBuilder] 📊 Final result: ${codeResult.code.length} chars of code generated`);
+      }
       
       // ✅ NEW: Log the complete pipeline result
       if (this.DEBUG) {
-        console.log(`\n[SceneBuilder] 🎉 PIPELINE COMPLETE:`);
-        console.log(`[SceneBuilder] ⏱️  Total time: ${generationTime}ms`);
-        console.log(`[SceneBuilder] 📝 Generated code: ${codeResult.code.length} characters`);
-        console.log(`[SceneBuilder] 🎬 Scene duration: ${codeResult.duration} frames`);
-        console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
-        console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
-        console.log(`[SceneBuilder] 🎨 Scene type: ${layoutResult.layoutJson.sceneType || 'unknown'}\n`);
+        // console.log(`\n[SceneBuilder] 🎉 PIPELINE COMPLETE:`);
+        // console.log(`[SceneBuilder] ⏱️  Total time: ${generationTime}ms`);
+        // console.log(`[SceneBuilder] 📝 Generated code: ${codeResult.code.length} characters`);
+        // console.log(`[SceneBuilder] 🎬 Scene duration: ${codeResult.duration} frames`);
+        // console.log(`[SceneBuilder] 🎯 Function name: ${uniqueFunctionName}`);
+        // console.log(`[SceneBuilder] 👤 Display name: ${displayName}`);
+        // console.log(`[SceneBuilder] 🎨 Scene type: ${layoutResult.layoutJson.sceneType || 'unknown'}\n`);
       }
       
       return {
@@ -106,7 +116,9 @@ export class SceneBuilderService {
       };
       
     } catch (error) {
-      if (this.DEBUG) console.error("[SceneBuilder] Pipeline error:", error);
+      if (this.DEBUG) {
+        // console.error("[SceneBuilder] Pipeline error:", error);
+      }
       
       // Complete fallback (no schema)
       const fallbackLayout = {

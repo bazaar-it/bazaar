@@ -1,13 +1,10 @@
 // src/server/api/routers/generation.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { brainOrchestrator } from "~/server/services/brain/orchestrator";
-// codeValidationService removed - was unused
+import { orchestrator } from "~/brain/orchestratorNEW";
 import { db } from "~/server/db";
-import { scenes, projects, messages, sceneIterations } from "~/server/db/schema";
+import { scenes, projects, messages } from "~/server/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import crypto from "crypto";
-import { analytics } from '~/lib/analytics';
 import { analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 
 export const generationRouter = createTRPCRouter({
@@ -61,7 +58,7 @@ export const generationRouter = createTRPCRouter({
         
         if (project.isWelcome) {
           // This is the first real user prompt - clear welcome flag and provide empty storyboard
-          console.log(`[Generation] First real scene - clearing welcome flag for project ${projectId}`);
+          // console.log(`[Generation] First real scene - clearing welcome flag for project ${projectId}`);
           
           await db.update(projects)
             .set({ isWelcome: false })
@@ -110,7 +107,7 @@ export const generationRouter = createTRPCRouter({
         });
 
         // Process user message through brain orchestrator
-        const result = await brainOrchestrator.processUserInput({
+        const result = await orchestrator.processUserInput({
           prompt: userMessage,
           projectId,
           userId,
@@ -141,11 +138,11 @@ export const generationRouter = createTRPCRouter({
           });
           
           // 🪵 Enhanced Logging
-          console.error("[GenerationRouter] Orchestration failed:", {
-            projectId,
-            userId,
-            error: result.error,
-          });
+          // console.error("[GenerationRouter] Orchestration failed:", {
+          //  projectId,
+          //  userId,
+          //  error: result.error,
+          //});
           throw new Error(result.error || "Scene generation failed");
         }
 
@@ -167,19 +164,17 @@ export const generationRouter = createTRPCRouter({
           operation: result.toolUsed || 'unknown',
           scene: result.result,
           chatResponse: result.chatResponse,
-          databaseWriteFailed: result.databaseWriteFailed, // 🚨 NEW: Pass through database failure flag
-          // editComplexity: result.editComplexity, // TODO: Add to OrchestrationOutput interface
           debug: result.debug,
         };
 
       } catch (error) {
         // 🪵 Enhanced Logging
-        console.error("[GenerationRouter] Critical error in generateScene mutation:", {
-          errorMessage: error instanceof Error ? error.message : "Unknown error",
-          stack: error instanceof Error ? error.stack : "No stack available",
-          projectId,
-          userId,
-        });
+        // console.error("[GenerationRouter] Critical error in generateScene mutation:", {
+        //  errorMessage: error instanceof Error ? error.message : "Unknown error",
+        //  stack: error instanceof Error ? error.stack : "No stack available",
+        //  projectId,
+        //  userId,
+        //});
 
         // Store error message in chat
         const errorMessage = `Oops! I'm in beta and something went wrong. Let me fix this for you... 🔧\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -211,7 +206,7 @@ export const generationRouter = createTRPCRouter({
       const { projectId, sceneId } = input;
       const userId = ctx.session.user.id;
 
-      console.log(`[Generation] Scene removal started:`, { projectId, sceneId, userId });
+      // console.log(`[Generation] Scene removal started:`, { projectId, sceneId, userId });
 
       try {
         // Verify project ownership
@@ -246,7 +241,7 @@ export const generationRouter = createTRPCRouter({
           )
         );
 
-        console.log(`[Generation] Scene removed successfully:`, { sceneId, sceneName: scene.name });
+        // console.log(`[Generation] Scene removed successfully:`, { sceneId, sceneName: scene.name });
 
         return {
           success: true,
@@ -255,7 +250,7 @@ export const generationRouter = createTRPCRouter({
         };
 
       } catch (error) {
-        console.error("[Generation] Scene removal failed:", error);
+        //console.error("[Generation] Scene removal failed:", error);
         throw new Error(`Scene removal failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
@@ -339,7 +334,7 @@ export const generationRouter = createTRPCRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       try {
-        console.log(`[sceneRollback] Rolling back scene ${input.sceneId} in project ${input.projectId}`);
+        // console.log(`[sceneRollback] Rolling back scene ${input.sceneId} in project ${input.projectId}`);
         
         // Get scene versions from database (you'll need to add a scene_versions table)
         // For now, we'll implement a simple "undo last change" mechanism
@@ -354,7 +349,7 @@ export const generationRouter = createTRPCRouter({
         }
         
         // For MVP: Simple approach - regenerate scene with "fix the errors" instruction
-        console.log(`[sceneRollback] Attempting to fix broken scene: ${currentScene.name}`);
+        // console.log(`[sceneRollback] Attempting to fix broken scene: ${currentScene.name}`);
         
         // Get the layout JSON to regenerate a safe version
         let layoutJson = currentScene.layoutJson as any;
@@ -406,7 +401,7 @@ export const generationRouter = createTRPCRouter({
           .where(eq(scenes.id, input.sceneId))
           .returning();
         
-        console.log(`[sceneRollback] Scene successfully fixed: ${updatedScene?.name}`);
+        // console.log(`[sceneRollback] Scene successfully fixed: ${updatedScene?.name}`);
         
         return {
           success: true,
@@ -420,7 +415,7 @@ export const generationRouter = createTRPCRouter({
         };
         
       } catch (error) {
-        console.error("[sceneRollback] Error:", error);
+        // console.error("[sceneRollback] Error:", error);
         throw new Error(`Failed to rollback scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
@@ -441,13 +436,13 @@ export const generationRouter = createTRPCRouter({
       const { projectId, templateId, templateName, templateCode, templateDuration } = input;
       const userId = ctx.session.user.id;
 
-      console.log(`[Generation] Direct template addition:`, {
-        projectId,
-        templateId,
-        templateName,
-        templateDuration,
-        userId
-      });
+      // console.log(`[Generation] Direct template addition:`, {
+      //  projectId,
+      //  templateId,
+      //  templateName,
+      //  templateDuration,
+      //  userId
+      //});
 
       try {
         // Verify project ownership
@@ -496,16 +491,16 @@ export const generationRouter = createTRPCRouter({
 
 
 
-        console.log(`[Generation] Template scene created successfully:`, {
-          sceneId: newScene.id,
-          name: newScene.name,
-          order: newScene.order,
-          duration: newScene.duration
-        });
+        // console.log(`[Generation] Template scene created successfully:`, {
+        //  sceneId: newScene.id,
+        //  name: newScene.name,
+        //  order: newScene.order,
+        //  duration: newScene.duration
+        //});
 
         // 🚨 CRITICAL FIX: Clear welcome flag when template is added
         if (project.isWelcome) {
-          console.log(`[Generation] Clearing welcome flag - template addition counts as real content`);
+          // console.log(`[Generation] Clearing welcome flag - template addition counts as real content`);
           await db.update(projects)
             .set({ isWelcome: false })
             .where(eq(projects.id, projectId));
@@ -521,7 +516,7 @@ export const generationRouter = createTRPCRouter({
           createdAt: new Date(),
         });
 
-        console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
+        // console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
 
         return {
           success: true,
@@ -536,7 +531,7 @@ export const generationRouter = createTRPCRouter({
         };
 
       } catch (error) {
-        console.error(`[Generation] Template addition failed:`, error);
+        // console.error(`[Generation] Template addition failed:`, error);
         throw new Error(`Failed to add template: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
@@ -554,11 +549,11 @@ export const generationRouter = createTRPCRouter({
       const { projectId, sceneName } = input;
       const userId = ctx.session.user.id;
 
-      console.log(`[Generation] Direct scene addition:`, {
-        projectId,
-        sceneName,
-        userId
-      });
+      // console.log(`[Generation] Direct scene addition:`, {
+      //  projectId,
+      //  sceneName,
+      //  userId
+      //});
 
       try {
         // Verify project ownership
@@ -639,16 +634,16 @@ export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
           throw new Error("Failed to create new scene");
         }
 
-        console.log(`[Generation] New scene created successfully:`, {
-          sceneId: newScene.id,
-          name: newScene.name,
-          order: newScene.order,
-          duration: newScene.duration
-        });
+        // console.log(`[Generation] New scene created successfully:`, {
+        //  sceneId: newScene.id,
+        //  name: newScene.name,
+        //  order: newScene.order,
+        //  duration: newScene.duration
+        //});
 
         // Clear welcome flag when scene is added
         if (project.isWelcome) {
-          console.log(`[Generation] Clearing welcome flag - scene addition counts as real content`);
+          // console.log(`[Generation] Clearing welcome flag - scene addition counts as real content`);
           await db.update(projects)
             .set({ isWelcome: false })
             .where(eq(projects.id, projectId));
@@ -664,7 +659,7 @@ export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
           createdAt: new Date(),
         });
 
-        console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
+        // console.log(`[Generation] Added context message for Brain LLM:`, contextMessage);
 
         return {
           success: true,
@@ -679,7 +674,7 @@ export default function ${defaultSceneName.replace(/[^a-zA-Z0-9]/g, '')}() {
         };
 
       } catch (error) {
-        console.error(`[Generation] Scene addition failed:`, error);
+        // console.error(`[Generation] Scene addition failed:`, error);
         throw new Error(`Failed to add scene: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }),
