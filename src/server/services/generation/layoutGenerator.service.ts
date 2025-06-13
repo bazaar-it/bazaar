@@ -35,21 +35,21 @@ export class LayoutGeneratorService {
     const modelConfig = getLayoutGeneratorModel();
     const prompt = this.buildLayoutPrompt(input);
     
-    this.DEBUG && console.log(`[LayoutGenerator] 🎯 Starting layout generation`);
-    this.DEBUG && console.log(`[LayoutGenerator] 🤖 Using model: ${modelConfig.provider}/${modelConfig.model}`);
-    this.DEBUG && console.log(`[LayoutGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
-    this.DEBUG && console.log(`[LayoutGenerator] 🆕 Is first scene: ${input.isFirstScene}`);
-    this.DEBUG && console.log(`[LayoutGenerator] 🎨 Has previous scene JSON: ${input.previousSceneJson ? 'YES' : 'NO'}`);
-    this.DEBUG && console.log(`[LayoutGenerator] 🖼️ Has vision analysis: ${input.visionAnalysis ? 'YES' : 'NO'}`);
+    // this.DEBUG && console.log(`[LayoutGenerator] 🎯 Starting layout generation`);
+    // this.DEBUG && console.log(`[LayoutGenerator] 🤖 Using model: ${modelConfig.provider}/${modelConfig.model}`);
+    // this.DEBUG && console.log(`[LayoutGenerator] 📝 User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
+    // this.DEBUG && console.log(`[LayoutGenerator] 🆕 Is first scene: ${input.isFirstScene}`);
+    // this.DEBUG && console.log(`[LayoutGenerator] 🎨 Has previous scene JSON: ${input.previousSceneJson ? 'YES' : 'NO'}`);
+    // this.DEBUG && //console.log(`[LayoutGenerator] 🖼️ Has vision analysis: ${input.visionAnalysis ? 'YES' : 'NO'}`);
     
     if (input.visionAnalysis && this.DEBUG) {
-      console.log(`[LayoutGenerator] 🎨 Vision palette: ${input.visionAnalysis.palette?.join(', ') || 'None'}`);
-      console.log(`[LayoutGenerator] 🎭 Vision mood: ${input.visionAnalysis.mood || 'None'}`);
-      console.log(`[LayoutGenerator] ✍️ Vision typography: ${input.visionAnalysis.typography || 'None'}`);
+      // console.log(`[LayoutGenerator] 🎨 Vision palette: ${input.visionAnalysis.palette?.join(', ') || 'None'}`);
+      // console.log(`[LayoutGenerator] 🎭 Vision mood: ${input.visionAnalysis.mood || 'None'}`);
+      // console.log(`[LayoutGenerator] ✍️ Vision typography: ${input.visionAnalysis.typography || 'None'}`);
     }
     
     try {
-      this.DEBUG && console.log(`[LayoutGenerator] 🚀 Calling ${modelConfig.provider} LLM for JSON layout...`);
+      // this.DEBUG && console.log(`[LayoutGenerator] 🚀 Calling ${modelConfig.provider} LLM for JSON layout...`);
       
       // 🚨 NEW: Use centralized AI client instead of direct OpenAI calls
       const response = await AIClientService.generateResponse(
@@ -64,7 +64,7 @@ export class LayoutGeneratorService {
         throw new Error("No response from LayoutGenerator LLM");
       }
       
-      this.DEBUG && console.log(`[LayoutGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
+      // this.DEBUG && console.log(`[LayoutGenerator] 📤 Raw LLM response length: ${rawOutput.length} chars`);
       
       // 🚨 NEW: Log model usage for debugging
       if (this.DEBUG) {
@@ -103,17 +103,17 @@ export class LayoutGeneratorService {
       
       const layoutJson = parsed; // ✅ No schema casting - accept any JSON
       
-      this.DEBUG && console.log(`[LayoutGenerator] ✅ Layout generation successful`);
-      this.DEBUG && console.log(`[LayoutGenerator] 🎨 Scene type: ${layoutJson.sceneType || 'unknown'}`);
-      this.DEBUG && console.log(`[LayoutGenerator] 📊 Elements count: ${layoutJson.elements?.length || 0}`);
+      // this.DEBUG && console.log(`[LayoutGenerator] ✅ Layout generation successful`);
+      // this.DEBUG && console.log(`[LayoutGenerator] 🎨 Scene type: ${layoutJson.sceneType || 'unknown'}`);
+      // this.DEBUG && console.log(`[LayoutGenerator] 📊 Elements count: ${layoutJson.elements?.length || 0}`);
       
       // ✅ NEW: Log the complete generated JSON for debugging
       if (this.DEBUG) {
-        console.log(`\n[LayoutGenerator] 🔍 FULL GENERATED JSON:`);
-        console.log('='.repeat(80));
-        console.log(JSON.stringify(layoutJson, null, 2));
-        console.log('='.repeat(80));
-        console.log(`[LayoutGenerator] 📏 JSON size: ${JSON.stringify(layoutJson).length} characters\n`);
+        // console.log(`\n[LayoutGenerator] 🔍 FULL GENERATED JSON:`);
+        // console.log('='.repeat(80));
+        // console.log(JSON.stringify(layoutJson, null, 2));
+        // console.log('='.repeat(80));
+        //  console.log(`[LayoutGenerator] 📏 JSON size: ${JSON.stringify(layoutJson).length} characters\n`);
       }
       
       return {

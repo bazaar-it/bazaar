@@ -103,10 +103,10 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   const executionTime = end - start;
   
   if (shouldLog) {
-    console.log(`[TRPC] ${path} took ${executionTime}ms to execute`);
+    // console.log(`[TRPC] ${path} took ${executionTime}ms to execute`);
   } else if (executionTime > 3000) {
     // Only log very slow requests (>3s) with a different prefix so they don't get filtered
-    console.log(`⚠️ Slow procedure: ${path} took ${executionTime}ms to execute`);
+    // console.log(`⚠️ Slow procedure: ${path} took ${executionTime}ms to execute`);
   }
 
   return result;

@@ -54,24 +54,28 @@ export class CodeGeneratorService {
     const config = getModel('codeGenerator');
     const prompt = this.buildCodePrompt(input);
     
-    this.DEBUG && console.log(`[CodeGenerator] Starting code generation for: ${input.functionName}`);
-    this.DEBUG && console.log(`[CodeGenerator] User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
-    this.DEBUG && console.log(`[CodeGenerator] Scene type: ${input.layoutJson.sceneType || 'unknown'}`);
-    this.DEBUG && console.log(`[CodeGenerator] Elements count: ${input.layoutJson.elements?.length || 0}`);
-    this.DEBUG && console.log(`[CodeGenerator] Using model: ${config.provider}/${config.model}`);
+    if (this.DEBUG) {
+      // console.log(`[CodeGenerator] Starting code generation for: ${input.functionName}`);
+      // console.log(`[CodeGenerator] User prompt: "${input.userPrompt.substring(0, 100)}${input.userPrompt.length > 100 ? '...' : ''}"`);
+      // console.log(`[CodeGenerator] Scene type: ${input.layoutJson.sceneType || 'unknown'}`);
+      // console.log(`[CodeGenerator] Elements count: ${input.layoutJson.elements?.length || 0}`);
+      // console.log(`[CodeGenerator] Using model: ${config.provider}/${config.model}`);
+    }
     
     // NEW: Log the received JSON for debugging
     if (this.DEBUG) {
-      console.log(`\n[CodeGenerator] RECEIVED LAYOUT JSON:`);
-      console.log('='.repeat(80));
-      console.log(JSON.stringify(input.layoutJson, null, 2));
-      console.log('='.repeat(80));
-      console.log(`[CodeGenerator] JSON size: ${JSON.stringify(input.layoutJson).length} characters`);
-      console.log(`[CodeGenerator] Will combine this JSON with user prompt: "${input.userPrompt.substring(0, 50)}..."\n`);
+      // console.log(`\n[CodeGenerator] RECEIVED LAYOUT JSON:`);
+      // console.log('='.repeat(80));
+      // console.log(JSON.stringify(input.layoutJson, null, 2));
+      // console.log('='.repeat(80));
+      // console.log(`[CodeGenerator] JSON size: ${JSON.stringify(input.layoutJson).length} characters`);
+      // console.log(`[CodeGenerator] Will combine this JSON with user prompt: "${input.userPrompt.substring(0, 50)}..."\n`);
     }
     
     try {
-      this.DEBUG && console.log(`[CodeGenerator] Calling ${config.provider} LLM...`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Calling ${config.provider} LLM...`);
+      }
       
       const messages = [
         { role: 'user' as const, content: prompt.user }
@@ -88,7 +92,9 @@ export class CodeGeneratorService {
         throw new Error("No response from CodeGenerator LLM");
       }
       
-      this.DEBUG && console.log(`[CodeGenerator] Raw LLM response length: ${rawOutput.length} chars`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Raw LLM response length: ${rawOutput.length} chars`);
+      }
       
       // CRITICAL FIX: Remove markdown code fences if present
       let cleanCode = rawOutput.trim();
@@ -96,7 +102,9 @@ export class CodeGeneratorService {
       
       // CRITICAL FIX: Ensure single export default only
       if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
-        this.DEBUG && console.warn(`[CodeGenerator] Detected wrapper function pattern - extracting scene function only`);
+        if (this.DEBUG) {
+          // console.warn(`[CodeGenerator] Detected wrapper function pattern - extracting scene function only`);
+        }
         const sceneMatch = cleanCode.match(/const \{[^}]+\} = window\.Remotion;[\s\S]*?export default function \w+\(\)[^{]*\{[\s\S]*?\n\}/);
         if (sceneMatch) {
           cleanCode = sceneMatch[0];
@@ -106,9 +114,11 @@ export class CodeGeneratorService {
       // NEW: Extract actual duration from generated code instead of hardcoding 180
       const durationAnalysis = analyzeDuration(cleanCode);
       
-      this.DEBUG && console.log(`[CodeGenerator] Code generation completed for ${input.functionName}`);
-      this.DEBUG && console.log(`[CodeGenerator] Extracted duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence} from ${durationAnalysis.source}`);
-      this.DEBUG && console.log(`[CodeGenerator] If code has issues, auto-fix will handle it (better than fallback)`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Code generation completed for ${input.functionName}`);
+        // console.log(`[CodeGenerator] Extracted duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence} from ${durationAnalysis.source}`);
+        // console.log(`[CodeGenerator] If code has issues, auto-fix will handle it (better than fallback)`);
+      }
       
       return {
         code: cleanCode,
@@ -126,7 +136,9 @@ export class CodeGeneratorService {
         },
       };
     } catch (error) {
-      this.DEBUG && console.error("[CodeGenerator] Error:", error);
+      if (this.DEBUG) {
+        // console.error("[CodeGenerator] Error:", error);
+      }
       
       // NEW: Even on error, return something that auto-fix can work with
       const errorCode = `const { AbsoluteFill } = window.Remotion;
@@ -177,16 +189,19 @@ export default function ${input.functionName}() {
   async generateCodeFromImage(input: CodeGeneratorFromImageInput): Promise<CodeGeneratorOutput> {
     const { imageUrls, userPrompt, functionName, visionAnalysis } = input;
     
-    this.DEBUG && console.log(`[CodeGenerator] Direct image-to-code generation for: ${functionName}`);
-    this.DEBUG && console.log(`[CodeGenerator] Processing ${imageUrls.length} image(s)`);
-    this.DEBUG && console.log(`[CodeGenerator] User context: "${userPrompt.substring(0, 100)}..."`);
+    if (this.DEBUG) {
+      // console.log(`[CodeGenerator] Direct image-to-code generation for: ${functionName}`);
+      // console.log(`[CodeGenerator] Processing ${imageUrls.length} image(s)`);
+      // console.log(`[CodeGenerator] User context: "${userPrompt.substring(0, 100)}..."`);
+    }
+    
     if (visionAnalysis && this.DEBUG) {
-      console.log(`[CodeGenerator] Using pre-computed vision analysis:`, {
-        palette: visionAnalysis.palette?.join(', '),
-        mood: visionAnalysis.mood,
-        typography: visionAnalysis.typography,
-        layoutHighlights: visionAnalysis.layoutJson ? Object.keys(visionAnalysis.layoutJson).slice(0,3).join(', ') : 'N/A',
-      });
+      // console.log(`[CodeGenerator] Using pre-computed vision analysis:`, {
+      //   palette: visionAnalysis.palette?.join(', '),
+      //   mood: visionAnalysis.mood,
+      //   typography: visionAnalysis.typography,
+      //   layoutHighlights: visionAnalysis.layoutJson ? Object.keys(visionAnalysis.layoutJson).slice(0,3).join(', ') : 'N/A',
+      // });
     }
     
     try {
@@ -194,7 +209,9 @@ export default function ${input.functionName}() {
       const config = getModel('codeGenerator');
       const prompt = this.buildImageToCodePrompt(userPrompt, functionName, visionAnalysis);
       
-      this.DEBUG && console.log(`[CodeGenerator] Using centralized vision API with ${config.provider}/${config.model}`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Using centralized vision API with ${config.provider}/${config.model}`);
+      }
       
       // Use centralized vision API
       // prompt is a string from this.buildImageToCodePrompt
@@ -216,10 +233,12 @@ export default function ${input.functionName}() {
         // systemPrompt?: string, // Optional: Add if a separate system prompt is required
       );
 
-      this.DEBUG && console.log(`[CodeGenerator] Vision response length: ${response.content.length} chars`);
-      // Log model usage if available and needed, e.g., response.usage
-      if (this.DEBUG && response.usage) {
-        console.log('[CodeGenerator] Vision Model Usage:', response.usage);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Vision response length: ${response.content.length} chars`);
+        // Log model usage if available and needed, e.g., response.usage
+        if (response.usage) {
+          // console.log('[CodeGenerator] Vision Model Usage:', response.usage);
+        }
       }
       
       // Clean up code (remove markdown fences)
@@ -229,8 +248,10 @@ export default function ${input.functionName}() {
       // Extract actual duration from image-generated code
       const durationAnalysis = analyzeDuration(cleanCode);
       
-      this.DEBUG && console.log(`[CodeGenerator] Direct image-to-code completed for ${functionName}`);
-      this.DEBUG && console.log(`[CodeGenerator] Image-generated duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Direct image-to-code completed for ${functionName}`);
+        // console.log(`[CodeGenerator] Image-generated duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
+      }
       
       return {
         code: cleanCode,
@@ -244,7 +265,9 @@ export default function ${input.functionName}() {
         },
       };
     } catch (error) {
-      this.DEBUG && console.error("[CodeGenerator] Image-to-code error:", error);
+      if (this.DEBUG) {
+        // console.error("[CodeGenerator] Image-to-code error:", error);
+      }
       
       const errorCode = `const { AbsoluteFill } = window.Remotion;
 // Image-to-code generation error: ${error instanceof Error ? error.message : 'Unknown error'}
@@ -283,16 +306,20 @@ export default function ${functionName}() {
   async editCodeWithImage(input: CodeGeneratorEditWithImageInput): Promise<CodeGeneratorOutput> {
     const { imageUrls, userPrompt, functionName, existingCode } = input;
     
-    this.DEBUG && console.log(`[CodeGenerator] Image-guided code editing for: ${functionName}`);
-    this.DEBUG && console.log(`[CodeGenerator] Using ${imageUrls.length} reference image(s)`);
-    this.DEBUG && console.log(`[CodeGenerator] Edit request: "${userPrompt.substring(0, 100)}..."`);
+    if (this.DEBUG) {
+      // console.log(`[CodeGenerator] Image-guided code editing for: ${functionName}`);
+      // console.log(`[CodeGenerator] Using ${imageUrls.length} reference image(s)`);
+      // console.log(`[CodeGenerator] Edit request: "${userPrompt.substring(0, 100)}..."`);
+    }
     
     try {
       // 🚨 NEW: Use centralized vision API instead of direct OpenAI calls
       const config = getModel('codeGenerator');
       const prompt = this.buildImageGuidedEditPrompt(userPrompt, functionName, existingCode);
       
-      this.DEBUG && console.log(`[CodeGenerator] Using centralized vision API for editing with ${config.provider}/${config.model}`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Using centralized vision API for editing with ${config.provider}/${config.model}`);
+      }
       
       // Use centralized vision API
       const response = await AIClientService.generateCodeFromImages(
@@ -302,11 +329,10 @@ export default function ${functionName}() {
         undefined // No separate system prompt for vision
       );
       
-      this.DEBUG && console.log(`[CodeGenerator] Vision edit response length: ${response.content.length} chars`);
-      
-      // 🚨 NEW: Log model usage for debugging
       if (this.DEBUG) {
-        AIClientService.logModelUsage(config, response.usage);
+        // console.log(`[CodeGenerator] Vision edit response length: ${response.content.length} chars`);
+        // 🚨 NEW: Log model usage for debugging
+        // AIClientService.logModelUsage(config, response.usage);
       }
       
       // Clean up code
@@ -316,8 +342,10 @@ export default function ${functionName}() {
       // Extract duration from edited code
       const durationAnalysis = analyzeDuration(cleanCode);
       
-      this.DEBUG && console.log(`[CodeGenerator] Image-guided editing completed for ${functionName}`);
-      this.DEBUG && console.log(`[CodeGenerator] Edited code duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
+      if (this.DEBUG) {
+        // console.log(`[CodeGenerator] Image-guided editing completed for ${functionName}`);
+        // console.log(`[CodeGenerator] Edited code duration: ${durationAnalysis.frames} frames (${durationAnalysis.seconds}s) - confidence: ${durationAnalysis.confidence}`);
+      }
       
       return {
         code: cleanCode,
@@ -331,7 +359,9 @@ export default function ${functionName}() {
         },
       };
     } catch (error) {
-      this.DEBUG && console.error("[CodeGenerator] Image-guided edit error:", error);
+      if (this.DEBUG) {
+        // console.error("[CodeGenerator] Image-guided edit error:", error);
+      }
       
       // Return original code on error with its actual duration
       const originalDuration = extractDurationFromCode(existingCode);

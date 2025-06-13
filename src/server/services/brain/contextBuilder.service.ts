@@ -138,14 +138,14 @@ export class ContextBuilderService {
     chatHistory?: Array<{ role: string; content: string; imageUrls?: string[] }>;
   }): Promise<BuiltContext> {
 
-    console.log('[ContextBuilder-Optimized] 🏗️ Building context for project:', projectId);
+    // console.log('[ContextBuilder-Optimized] 🏗️ Building context for project:', projectId);
     
     // Check cache first
     const cacheKey = `${projectId}-${userId}-${storyboardSoFar.length}`;
     const cached = this.contextCache.get(cacheKey);
     
     if (cached && !userMessage) {
-      console.log('[ContextBuilder-Optimized] ✨ Using cached context (5min TTL)');
+      // console.log('[ContextBuilder-Optimized] ✨ Using cached context (5min TTL)');
       return cached;
     }
     
@@ -202,13 +202,13 @@ export class ContextBuilderService {
     // Cache the built context
     this.contextCache.set(cacheKey, context);
     
-    console.log('[ContextBuilder-Optimized] ✅ Context built (and cached)');
+    // console.log('[ContextBuilder-Optimized] ✅ Context built (and cached)');
     
     // Fire-and-forget AI preference learning
     if (userMessage && realScenes.length >= 2) {
       this.triggerAsyncPreferenceLearning(projectId, userId, userMessage, realScenes)
         .catch(error => {
-          console.error('[ContextBuilder-Optimized] Preference learning failed:', error);
+          // console.error('[ContextBuilder-Optimized] Preference learning failed:', error);
         });
     }
     
@@ -229,11 +229,11 @@ export class ContextBuilderService {
       // dbPreferences is already a Record<string, string>, so we can use it directly
       const preferences: UserPreferences = dbPreferences;
       
-      console.log('[ContextBuilder-Optimized] 📚 Loaded', Object.keys(preferences).length, 'preferences from memory');
+      // console.log('[ContextBuilder-Optimized] 📚 Loaded', Object.keys(preferences).length, 'preferences from memory');
       
       return preferences;
     } catch (error) {
-      console.warn('[ContextBuilder-Optimized] Failed to load preferences:', error);
+      // console.warn('[ContextBuilder-Optimized] Failed to load preferences:', error);
       return {};
     }
   }
@@ -250,7 +250,7 @@ export class ContextBuilderService {
     const cachedAnalysis = this.sceneAnalysisCache.get(analysisKey);
     
     if (cachedAnalysis) {
-      console.log('[ContextBuilder-Optimized] ✨ Using cached scene analysis');
+      // console.log('[ContextBuilder-Optimized] ✨ Using cached scene analysis');
       return {
         previousScenes: realScenes,
         commonElements: cachedAnalysis.commonElements,
@@ -338,7 +338,7 @@ export class ContextBuilderService {
         });
       }
     } catch (error) {
-      console.warn('[ContextBuilder-Optimized] Failed to store preferences:', error);
+      // console.warn('[ContextBuilder-Optimized] Failed to store preferences:', error);
     }
   }
   
@@ -446,7 +446,7 @@ export class ContextBuilderService {
     realScenes: SceneData[]
   ): Promise<void> {
     try {
-      console.log('[ContextBuilder-Optimized] 🧠 Starting async preference learning...');
+      // console.log('[ContextBuilder-Optimized] 🧠 Starting async preference learning...');
       
       // Build conversation history (simplified for now)
       const conversationHistory = [
@@ -467,14 +467,14 @@ export class ContextBuilderService {
         scenePatterns
       });
       
-      console.log('[ContextBuilder-Optimized] 🧠 AI extracted', result.preferences.length, 'preferences');
+      // console.log('[ContextBuilder-Optimized] 🧠 AI extracted', result.preferences.length, 'preferences');
       
       // The preferenceExtractor already stores high-confidence preferences
       // So we don't need to do anything else here
       
     } catch (error) {
       // This is async, so just log the error
-      console.error('[ContextBuilder-Optimized] AI preference extraction failed:', error);
+      // console.error('[ContextBuilder-Optimized] AI preference extraction failed:', error);
     }
   }
   

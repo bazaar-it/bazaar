@@ -45,7 +45,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     }
 
     // 🚨 CRITICAL FIX: Check for existing scenes FIRST to avoid welcome video override
-    console.log('[GeneratePage] Checking for existing scenes in database...');
+    // console.log('[GeneratePage] Checking for existing scenes in database...');
     const existingScenes = await db.query.scenes.findMany({
       where: eq(scenes.projectId, projectId),
       orderBy: [scenes.order],
@@ -55,7 +55,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     
     if (existingScenes.length > 0) {
       // ✅ HAS REAL SCENES: Convert database scenes to props format
-      console.log('[GeneratePage] Found', existingScenes.length, 'existing scenes, building props from database');
+      // console.log('[GeneratePage] Found', existingScenes.length, 'existing scenes, building props from database');
       
       let currentStart = 0;
       const convertedScenes = existingScenes.map((dbScene) => {
@@ -85,10 +85,10 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         scenes: convertedScenes
       };
       
-      console.log('[GeneratePage] ✅ Built initial props from', convertedScenes.length, 'database scenes');
+      // console.log('[GeneratePage] ✅ Built initial props from', convertedScenes.length, 'database scenes');
     } else {
       // ✅ NEW PROJECT: Use stored props (welcome video for new projects)
-      console.log('[GeneratePage] No existing scenes found, using stored project props (welcome video)');
+      // console.log('[GeneratePage] No existing scenes found, using stored project props (welcome video)');
       actualInitialProps = projectResult.props;
     }
 
@@ -103,7 +103,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
       />
     );
   } catch (error) {
-    console.error("Error loading project:", error);
+    // console.error("Error loading project:", error);
     notFound();
   }
 } 
