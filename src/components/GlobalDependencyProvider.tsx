@@ -4,7 +4,6 @@
 import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import * as Remotion from 'remotion';
-import { BazAnimations } from '~/lib/animations';
 
 export function GlobalDependencyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -12,8 +11,7 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       (window as any).React = React;
       (window as any).ReactDOM = ReactDOM;
       (window as any).Remotion = Remotion;
-      (window as any).BazAnimations = BazAnimations;
-      console.log('React, ReactDOM, Remotion, and BazAnimations exposed on window object.');
+      console.log('React, ReactDOM, Remotion exposed on window object.');
     }
   }, []);
 

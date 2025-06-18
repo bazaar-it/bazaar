@@ -183,6 +183,13 @@
       "when": 1748975153814,
       "tag": "0025_add_image_urls_to_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1750150181439,
+      "tag": "0026_naive_kingpin",
+      "breakpoints": true
     }
   ]
 }

@@ -181,6 +181,11 @@ export const scenes = createTable(
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
     layoutJson: d.text("layout_json"), // NEW: Store JSON specification for two-step pipeline
+    // Metadata for better scene targeting
+    slug: d.varchar({ length: 255 }), // Auto-generated slug for identification
+    dominantColors: d.jsonb(), // Array of dominant colors ["#000000", "#3B82F6"]
+    firstH1Text: d.text(), // First H1 text content for easy identification
+    lastFocused: d.boolean().default(false), // Track which scene user is working on
   }),
   (t) => [
     index("scene_project_idx").on(t.projectId),

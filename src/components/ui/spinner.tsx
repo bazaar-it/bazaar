@@ -1,6 +1,6 @@
 //src/components/ui/spinner.tsx
 import React from "react";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 /**
  * Spinner component for loading states

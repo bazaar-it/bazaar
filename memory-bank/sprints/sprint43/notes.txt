@@ -1,0 +1,891 @@
+⏺ YES! This is exactly right. You've nailed the modern agent architecture. Let me add
+  some implementation details to make this concrete:
+
+  🧠 The Perfect Brain/Planner Implementation
+
+  // src/brain/planner.ts
+  interface SceneMetadata {
+    id: string;
+    slug: string;              // "smarter-finance-intro"
+    createdAt: Date;
+    promptOriginal: string;    // "Create a finance dashboard intro"
+    codeHash: string;          // SHA-256 of tsx code
+    dominantColors: string[];  // ["#000000", "#3B82F6"]
+    durationMs: number;        // 6000
+    lastFocused: boolean;      // true if most recently edited
+    firstH1Text?: string;      // "Smarter Finance. Powered by AI"
+  }
+
+  interface PlannerDecision {
+    actions?: Action[];
+    clarify?: string;
+  }
+
+  export class Planner {
+    async plan(input: PlannerInput): Promise<PlannerDecision> {
+      const systemPrompt = `You are a video editing planner. Output JSON only.
+
+  Your job: Read user request + scene metadata → return action list.
+
+  Actions: [{tool: "add|edit|delete", targetScene?: number|string, args: {...}}]
+
+  Scene targeting rules:
+  - Explicit: "scene 2" → targetScene: 2
+  - Slug match: "intro scene" → find slug containing "intro"
+  - Recent: No match → use lastFocused scene
+  - Ambiguous: Return {clarify: "Which scene..."}`;
+
+      const userPrompt = `
+  User: "${input.prompt}"
+
+  Scenes:
+  ${input.scenes.map((s, i) => 
+    `${i+1}. ${s.slug} - "${s.firstH1Text || s.promptOriginal.slice(0,30)}"
+     Colors: ${s.dominantColors.join(', ')} | Duration: ${s.durationMs/1000}s
+     ${s.lastFocused ? '[CURRENTLY FOCUSED]' : ''}`
+  ).join('\n')}`;
+
+      const response = await gpt4oMini.complete(systemPrompt, userPrompt, {
+        responseFormat: { type: "json_object" }
+      });
+
+      return JSON.parse(response);
+    }
+  }
+
+  🔄 Streaming Multi-Step Execution
+
+  // src/api/generation.ts
+  export async function* executeWithStreaming(
+    plan: PlannerDecision,
+    context: ExecutionContext
+  ): AsyncGenerator<ProgressUpdate> {
+
+    if (plan.clarify) {
+      yield { type: 'clarification', message: plan.clarify };
+      return;
+    }
+
+    // Announce the plan
+    yield {
+      type: 'plan_start',
+      message: `I'll ${plan.actions.map(a => getActionDescription(a)).join(', then 
+  ')}`,
+      totalSteps: plan.actions.length
+    };
+
+    // Execute each action
+    for (let i = 0; i < plan.actions.length; i++) {
+      const action = plan.actions[i];
+
+      yield {
+        type: 'step_start',
+        step: i + 1,
+        total: plan.actions.length,
+        description: getActionDescription(action)
+      };
+
+      try {
+        const result = await tools[action.tool].execute({
+          ...action.args,
+          targetScene: resolveTargetScene(action.targetScene, context.scenes),
+          scenes: context.scenes
+        });
+
+        yield {
+          type: 'step_complete',
+          step: i + 1,
+          result: result,
+          preview: await renderDraftFrame(result) // 480p instant preview
+        };
+
+        // Update context for next action
+        updateContextAfterAction(context, action, result);
+
+      } catch (error) {
+        yield {
+          type: 'step_error',
+          step: i + 1,
+          error: error.message
+        };
+        break;
+      }
+    }
+  }
+
+  💬 React Chat Component with Streaming
+
+  // src/components/ChatPanel.tsx
+  export function ChatPanel() {
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [executing, setExecuting] = useState(false);
+
+    async function handleSubmit(prompt: string) {
+      // Add user message
+      addMessage({ role: 'user', content: prompt });
+      setExecuting(true);
+
+      try {
+        // Get plan from brain
+        const plan = await planner.plan({ prompt, scenes: videoState.scenes });
+
+        // Stream execution
+        for await (const update of executeWithStreaming(plan, { scenes:
+  videoState.scenes })) {
+          switch (update.type) {
+            case 'clarification':
+              addMessage({
+                role: 'assistant',
+                content: update.message,
+                type: 'clarification'
+              });
+              break;
+
+            case 'plan_start':
+              addMessage({
+                role: 'assistant',
+                content: update.message,
+                type: 'plan',
+                steps: update.totalSteps
+              });
+              break;
+
+            case 'step_complete':
+              // Update video preview immediately
+              if (update.result.scene) {
+                videoState.updateScene(update.result.scene);
+              }
+
+              // Show progress
+              addMessage({
+                role: 'assistant',
+                content: `✅ Step ${update.step}/${update.total} complete`,
+                type: 'progress'
+              });
+              break;
+          }
+        }
+      } finally {
+        setExecuting(false);
+      }
+    }
+
+    return (
+      <div className="chat-panel">
+        {messages.map(msg => (
+          <ChatMessage key={msg.id} {...msg} />
+        ))}
+        {executing && <ExecutionIndicator />}
+      </div>
+    );
+  }
+
+  🎯 Auto-Generated Scene Metadata
+
+  // src/services/metadata.ts
+  export function generateSceneMetadata(
+    tsxCode: string, 
+    userPrompt: string,
+    order: number
+  ): SceneMetadata {
+    // Extract first H1 or prominent text
+    const h1Match = tsxCode.match(/<h1[^>]*>([^<]+)<\/h1>/);
+    const firstH1Text = h1Match?.[1] || extractFirstText(tsxCode);
+
+    // Generate slug from H1 or prompt
+    const slugSource = firstH1Text || userPrompt.split(' ').slice(0, 4).join(' ');
+    const slug = slugify(slugSource);
+
+    // Extract dominant colors
+    const colorMatches = tsxCode.matchAll(/["']#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})["']/g);
+    const dominantColors = [...new Set([...colorMatches].map(m => m[0]))].slice(0, 3);
+
+    // Extract duration if specified
+    const durationMatch = tsxCode.match(/duration[:\s]*(\d+)/);
+    const durationMs = durationMatch ? parseInt(durationMatch[1]) * 1000 / 30 : 6000;
+
+    return {
+      id: generateId(),
+      slug: `${slug}-${order}`,
+      createdAt: new Date(),
+      promptOriginal: userPrompt,
+      codeHash: sha256(tsxCode),
+      dominantColors,
+      durationMs,
+      lastFocused: true, // New scenes get focus
+      firstH1Text
+    };
+  }
+
+  🚀 Why This Architecture Wins
+
+  1. Two LLM calls only: Planner (fast) + Tool (capable)
+  2. Rich metadata: No user naming needed
+  3. Streaming UX: Users see progress immediately
+  4. Clarification path: Handles ambiguity gracefully
+  5. Simple & testable: Each component has one job
+
+  This is exactly how modern AI products work - from Cursor to V0 to Claude Artifacts.
+  You've captured the essence perfectly!
+
+
+> Okay, so are we landing on the system? Yes. Are we landing on the context in each 
+  add-flash-edit system file versus having a separate kind of project memory service or
+   like a context service?
+
+
+⏺ Looking at the architecture we've designed, I think we should KEEP your projectMemory
+   service but make it simpler and more focused.
+
+  Here's why:
+
+  🎯 Context Strategy: Hybrid Approach
+
+  1. Keep ProjectMemory Service (but simplified)
+
+  // src/server/services/data/projectMemory.service.ts
+  export class ProjectMemoryService {
+    // ONLY store what's expensive to recompute
+    async getEssentialContext(projectId: string) {
+      return {
+        scenes: await this.getSceneMetadata(projectId),  // Rich metadata only
+        recentChat: await this.getRecentMessages(projectId, 5),
+        lastEditedSceneId: await this.getLastFocus(projectId),
+      };
+    }
+
+    // Fast lookups
+    async findSceneBySlug(projectId: string, slugHint: string) {
+      // Use vector similarity or fuzzy match
+    }
+
+    // Update focus tracking
+    async updateSceneFocus(projectId: string, sceneId: string) {
+      // Mark this scene as lastFocused
+    }
+  }
+
+  2. Tools Fetch Their Own Specific Needs
+
+  // src/tools/edit.ts
+  export const editTool = {
+    async execute(input: EditToolInput) {
+      // Tool fetches ONLY what it needs
+      const sceneCode = await db.scenes.findUnique({
+        where: { id: input.targetSceneId },
+        select: { tsxCode: true }  // Just the code!
+      });
+
+      // Direct to LLM
+      const prompt = `
+        Current code: ${sceneCode.tsxCode}
+        User wants: ${input.prompt}
+        Make the requested changes.
+      `;
+
+      return await sonnet.generate(prompt);
+    }
+  };
+
+  🤔 Why This Hybrid Works Best
+
+  Use ProjectMemory for:
+  - Scene metadata (computed once, used often)
+  - Recent chat context (needed by brain)
+  - Focus tracking (lastFocused scene)
+  - Fuzzy scene matching
+
+  Let Tools fetch:
+  - Actual TSX code (only when needed)
+  - Full scene details (specific to operation)
+  - User preferences (if relevant)
+
+  📊 Performance Impact
+
+  // ❌ BAD: Fetching everything upfront
+  const fullContext = await projectMemory.getEverything(); // 500ms, 50KB
+  brain.decide(fullContext); // Uses 5% of it
+
+  // ✅ GOOD: Fetch only what's needed
+  const metadata = await projectMemory.getEssentialContext(); // 50ms, 5KB
+  const decision = brain.decide(metadata);
+  const code = await tools[decision.tool].fetchSpecificData(); // 100ms, 10KB
+
+  🏗️ Final Architecture
+
+  User Input
+      ↓
+  Brain/Planner (uses ProjectMemory for metadata)
+      ↓
+  Tool Decision
+      ↓
+  Tool fetches its specific needs (DB direct)
+      ↓
+  LLM generates code
+      ↓
+  Stream results to user
+
+  💡 Rule of Thumb
+
+  - Metadata lives in memory/context service (lightweight, reusable)
+  - Actual data fetched by tools (heavyweight, specific)
+  - No "god context" object (anti-pattern)
+
+  This gives you the best of both worlds: fast decisions with rich metadata, but tools
+  only fetch what they actually need. It's how Cursor and GitHub Copilot work -
+  metadata for routing, specific fetches for execution.
+
+=========================== Previous Conversation Compacted ===========================
+⏺ Compact summary
+  ⎿ This session is being continued from a previous conversation that ran out of
+    context. The conversation is summarized below:
+    Analysis:
+    Let me chronologically analyze this conversation about Bazaar-Vid architecture
+    optimization:
+
+    1. **Initial Context**: User provided an overview.md file explaining Bazaar-Vid -
+    an AI-powered motion graphics video generator using React/Remotion. Key problems
+    identified:
+       - 2-minute generation time (unacceptable)
+       - 40+ system prompts with unclear usage
+       - Team doesn't understand how it works ("works by luck")
+       - Overly complex architecture with too many abstractions
+
+    2. **Architecture Analysis Phase**: I examined multiple files to understand the
+    current system:
+       - orchestratorNEW.ts - The brain that decides which tool to use
+       - intentAnalyzer.ts - Analyzes user intent and selects tools
+       - prompts.config.ts - Contains all 40+ system prompts
+       - generation.universal.ts - The main API router
+       - add.ts - The AddScene tool implementation
+
+    3. **Key Findings**:
+       - Current flow: User → Brain → Context Builder → Intent Analyzer → Tool
+    Selection → Tool Execution
+       - Two-step process for AddScene: Layout JSON generation → Code generation
+    (taking 75 seconds)
+       - Using expensive models (GPT-4.1 for brain, Sonnet 4 for code generation)
+       - Sequential operations instead of parallel
+       - Only 12 out of 40 prompts are actively used
+
+    4. **User Feedback and Iterations**:
+       - User pushed back on my initial "too radical" simplification suggestion
+       - User emphasized need for intelligent brain that can handle multi-step
+    operations
+       - User pointed out pattern matching won't work because users spend 30+ prompts
+    on single scenes
+       - User required streaming multi-step operations with live updates
+       - User questioned if we need layout JSON step and surgical vs creative edit
+    distinctions
+
+    5. **Final Architecture Convergence**:
+       - Brain/Planner as single LLM call for tool selection
+       - Rich auto-generated scene metadata (slug, colors, firstH1Text, etc.)
+       - Streaming multi-step execution with live updates
+       - Tools fetch their own specific context
+       - Hybrid approach: ProjectMemory for metadata, tools fetch actual data
+
+    6. **Performance Optimization Strategy**:
+       - Remove layout JSON step (except possibly for first scene)
+       - Remove edit complexity types
+       - Use faster models for brain (GPT-4o-mini)
+       - Parallel operations where possible
+       - Async database operations
+       - Target: <15 seconds instead of 2 minutes
+
+    Summary:
+    1. **Primary Request and Intent:**
+       - Understand why Bazaar-Vid takes 2 minutes to generate videos and optimize it
+    to <30 seconds
+       - Simplify the architecture while maintaining functionality for multi-step
+    operations
+       - Create a system where the team actually understands how it works
+       - Design proper context management strategy
+       - Implement streaming for multi-step operations
+       - Question whether layout JSON and edit complexity types are needed
+       - Create a "perfect" implementation of brain orchestrator, tools, and context
+    management
+
+    2. **Key Technical Concepts:**
+       - React/Remotion for motion graphics generation
+       - Brain/Orchestrator pattern for tool selection
+       - MCP (Model Context Protocol) tools pattern
+       - Two-step generation process (Layout JSON → Code)
+       - Multimodal LLMs (Sonnet 4) for direct image processing
+       - Streaming multi-step operations
+       - Auto-generated scene metadata vs user-named scenes
+       - Pattern matching vs LLM-based intent detection
+       - Context management strategies (centralized vs tool-specific)
+
+    3. **Files and Code Sections:**
+       - `/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/brain/orchestrato
+    rNEW.ts`
+         - Current brain implementation that decides tools
+         - Uses ContextBuilder and IntentAnalyzer
+         - Returns decision without execution
+         ```typescript
+         async processUserInput(input: OrchestrationInput):
+    Promise<OrchestrationOutput> {
+           // 1. Build context
+           const contextPacket = await this.contextBuilder.buildContext(input);
+           // 2. Analyze intent and select tool
+           const toolSelection = await this.intentAnalyzer.analyzeIntent(input,
+    contextPacket);
+           // 3. Return decision (NO EXECUTION!)
+         }
+         ```
+
+       - `/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/config/prompts.co
+    nfig.ts`
+         - Contains 40+ system prompts but only 12 actively used
+         - Identified BRAIN_ORCHESTRATOR, CODE_GENERATOR, DIRECT_CODE_EDITOR variants
+    as key prompts
+         - Many legacy MCP tool prompts unused
+
+       - `/Users/markushogne/Documents/APPS/bazaar-vid/bazaar-vid/src/tools/add/add.ts`
+         - Current AddScene implementation with 2-step process
+         - Shows layout generation followed by code generation
+         ```typescript
+         if (input.previousSceneContext?.tsxCode) {
+           // Skip layout, use reference
+           return codeGenerator.generateCodeWithReference();
+         } else {
+           // Two-step: layout → code
+           const layoutResult = await layoutGenerator.generateLayout();
+           const codeResult = await codeGenerator.generateCode();
+         }
+         ```
+
+       - Created documentation files:
+         - `/memory-bank/sprints/sprint42/system-prompts-documentation.md` - Cataloging
+     all prompts
+         - `/memory-bank/sprints/sprint42/2-MINUTE-PIPELINE-ANALYSIS.md` - Performance
+    analysis
+         - `/memory-bank/sprints/sprint42/SIMPLIFIED-ARCHITECTURE-DESIGN.md` - New
+    architecture proposal
+
+    4. **Errors and Fixes:**
+       - No runtime errors encountered
+       - User feedback: Initial suggestion was "too stupid/radical" - needed more
+    intelligent brain
+       - User correction: Pattern matching won't work for scene targeting (users do 30+
+     prompts per scene)
+       - User requirement: Must support multi-step operations with streaming updates
+
+    5. **Problem Solving:**
+       - Identified 2-minute bottleneck: Sequential LLM calls + layout JSON step
+       - Proposed removal of intermediate layout JSON generation
+       - Suggested consolidating 40+ prompts to ~5 essential ones
+       - Designed rich auto-generated metadata for scene identification
+       - Created streaming architecture for multi-step operations
+
+    6. **All User Messages:**
+       - "what are we building. what are we doing. and why."
+       - "hahah no, you suggested systsem is 'too' stupid. to radical. we are not soo
+    desperate.. but i like some of the ideas. for exmaple async and caching.. what do u
+     think of this approach?"
+       - "but you are not taking my prompt seriously. // Only use layout JSON for first
+     scene --- i want to reason aorund this. do we need it? surgical versus creative
+    edit .do we need the difference?"
+       - "okei so. how is a perfect chatpanel. a perfect generation,ts , perfect brian
+    orc. both implentnion and system pormpt. perfect addscene. perfect edtis cene.
+    perfect tools implemention, prfect service implemention. perfect cotext manaemenr.
+    perfect video state management?"
+       - "That is a valid point, but I don't think that we can rely so much on actually
+     having recognition inside the brain..." [long message about multi-step operations
+    and scene targeting]
+       - "I have a question. Can you clarify exactly what would be in the metadata for
+    each scene array?"
+       - "okei so do u agree with this: ? Modern agent stacks identify targets with
+    rich, auto-generated metadata..."
+       - "Okay, so are we landing on the system? Yes. Are we landing on the context in
+    each add-flash-edit system file versus having a separate kind of project memory
+    service or like a context service?"
+
+    7. **Pending Tasks:**
+       - Test direct code generation without layout JSON step
+       - Remove edit complexity types (surgical/creative/structural)
+       - Consolidate 40+ system prompts to 5 essential ones
+       - Implement simple pattern matching for brain decisions
+       - Add caching layer for common operations
+       - Make database operations async
+       - Create benchmarks to measure improvements
+
+    8. **Current Work:**
+       We just finalized the architecture design with a hybrid context approach:
+       - ProjectMemory service for lightweight metadata (scene slugs, colors, recent
+    chat)
+       - Tools fetch their own specific data (actual TSX code) when needed
+       - Brain uses metadata for fast decisions
+       - No "god context" object pattern
+
+       Final architecture agreed upon:
+       ```
+       User Input → Brain/Planner (uses ProjectMemory for metadata) → Tool Decision →
+    Tool fetches specific needs → LLM generates code → Stream results
+       ```
+
+    9. **Optional Next Step:**
+       Based on the user's question "are we landing on the system?" and my confirmation
+     of the hybrid approach, the immediate next step would be to create a concrete
+    implementation plan showing how to refactor the current system to this new
+    architecture, starting with the Brain/Planner implementation that uses the
+    simplified context approach we've agreed upon..
+
+  ⎿  Read memory-bank/sprints/sprint42/SIMPLE-AI-AGENT-ARCHITECTURE.md (592 lines)
+  ⎿  Read memory-bank/sprints/sprint42/2-MINUTE-PIPELINE-ANALYSIS.md (293 lines)
+  ⎿  Read memory-bank/sprints/sprint42/OPTIMIZED_ASYNC_ARCHITECTURE.md (352 lines)
+  ⎿  Read src/tools/add/add.ts (164 lines)
+  ⎿  Read src/brain/orchestrator_functions/intentAnalyzer.ts (185 lines)
+  ⎿  Todo list read (7 items)
+
+  │ Ready to code?                                                                           │
+│                                                                                          │
+│ Here is Claude's plan:                                                                   │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Bazaar-Vid Architecture Refactoring Plan (Sprint 43)                                 │ │
+│ │                                                                                      │ │
+│ │ Core Principles                                                                      │ │
+│ │                                                                                      │ │
+│ │ 1. Keep the brain intelligent - LLM-based decision making, not pattern matching      │ │
+│ │ 2. Simplify file structure - One place for each concept                              │ │
+│ │ 3. Multi-step operations - Streaming execution with progress updates                 │ │
+│ │ 4. Clear tool/service separation - Tools are pure functions, services handle         │ │
+│ │ infrastructure                                                                       │ │
+│ │                                                                                      │ │
+│ │ Phase 1: File Structure Cleanup (Days 1-3)                                           │ │
+│ │                                                                                      │ │
+│ │ 1.1 Delete Duplicate/Orphaned Directories                                            │ │
+│ │                                                                                      │ │
+│ │ # Remove duplicate brain implementations                                             │ │
+│ │ rm -rf src/app/projects/[id]/generate/agents/  # Old brain location                  │ │
+│ │ rm -rf src/server/services/brain/  # Duplicate brain services                        │ │
+│ │                                                                                      │ │
+│ │ # Remove duplicate utils                                                             │ │
+│ │ rm -rf src/server/utils/  # Keep only src/lib/utils/                                 │ │
+│ │ rm -rf src/utils/  # Move needed functions to src/lib/utils/                         │ │
+│ │                                                                                      │ │
+│ │ # Remove old MCP structure                                                           │ │
+│ │ rm -rf src/server/services/mcp/  # Legacy MCP implementation                         │ │
+│ │                                                                                      │ │
+│ │ # Clean up scripts                                                                   │ │
+│ │ mkdir scripts/  # Top-level scripts only                                             │ │
+│ │ mv src/scripts/* scripts/                                                            │ │
+│ │ rm -rf src/scripts/                                                                  │ │
+│ │                                                                                      │ │
+│ │ 1.2 New Clean Structure                                                              │ │
+│ │                                                                                      │ │
+│ │ src/                                                                                 │ │
+│ │ ├── app/              # Next.js pages only                                           │ │
+│ │ ├── brain/            # Single brain location                                        │ │
+│ │ │   └── planner.ts    # Intelligent multi-step planner                               │ │
+│ │ ├── tools/            # Pure function tools                                          │ │
+│ │ │   ├── add.ts                                                                       │ │
+│ │ │   ├── edit.ts                                                                      │ │
+│ │ │   └── delete.ts                                                                    │ │
+│ │ ├── services/         # Infrastructure services                                      │ │
+│ │ │   ├── ai.service.ts      # LLM client wrapper                                      │ │
+│ │ │   ├── db.service.ts      # Database operations                                     │ │
+│ │ │   ├── memory.service.ts  # ProjectMemory (metadata only)                           │ │
+│ │ │   └── storage.service.ts # R2/file storage                                         │ │
+│ │ ├── api/              # tRPC routers                                                 │ │
+│ │ │   └── generation.ts # Main generation endpoint                                     │ │
+│ │ ├── lib/              # Shared utilities                                             │ │
+│ │ │   ├── types/                                                                       │ │
+│ │ │   ├── utils/                                                                       │ │
+│ │ │   └── constants/                                                                   │ │
+│ │ └── config/           # All configuration                                            │ │
+│ │     ├── prompts.ts    # 5 essential prompts only                                     │ │
+│ │     └── models.ts     # Model selection config                                       │ │
+│ │                                                                                      │ │
+│ │ Phase 2: Intelligent Brain Implementation (Days 3-5)                                 │ │
+│ │                                                                                      │ │
+│ │ 2.1 Brain/Planner with Rich Metadata                                                 │ │
+│ │                                                                                      │ │
+│ │ // src/brain/planner.ts                                                              │ │
+│ │ interface SceneMetadata {                                                            │ │
+│ │   id: string;                                                                        │ │
+│ │   slug: string;              // "smarter-finance-intro"                              │ │
+│ │   createdAt: Date;                                                                   │ │
+│ │   promptOriginal: string;    // "Create a finance dashboard intro"                   │ │
+│ │   dominantColors: string[];  // ["#000000", "#3B82F6"]                               │ │
+│ │   durationMs: number;        // 6000                                                 │ │
+│ │   lastFocused: boolean;      // true if most recently edited                         │ │
+│ │   firstH1Text?: string;      // "Smarter Finance. Powered by AI"                     │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ export class Planner {                                                               │ │
+│ │   async plan(input: PlannerInput): Promise<PlannerDecision> {                        │ │
+│ │     // Get lightweight metadata from ProjectMemory                                   │ │
+│ │     const metadata = await memoryService.getSceneMetadata(input.projectId);          │ │
+│ │                                                                                      │ │
+│ │     // Use GPT-4o-mini for fast, intelligent decisions                               │ │
+│ │     const systemPrompt = `You are an intelligent video editing planner.              │ │
+│ │                                                                                      │ │
+│ │ Your task: Analyze the user request and current scenes to create an action plan.     │ │
+│ │                                                                                      │ │
+│ │ Scene targeting rules:                                                               │ │
+│ │ - Explicit: "scene 2" → targetScene: 2                                               │ │
+│ │ - Content match: "the intro" → find scene with matching content                      │ │
+│ │ - Recent context: No match → use lastFocused scene                                   │ │
+│ │ - Ambiguous: Return clarification                                                    │ │
+│ │                                                                                      │ │
+│ │ Multi-step detection:                                                                │ │
+│ │ - "add X then create new scene" → [{edit}, {add}]                                    │ │
+│ │ - "move X from scene A to B" → [{edit: remove}, {add: with X}]                       │ │
+│ │ - "split scene into two" → [{edit: first half}, {add: second half}]                  │ │
+│ │                                                                                      │ │
+│ │ Output JSON: {actions: [...] OR clarify: "question"}`;                               │ │
+│ │                                                                                      │ │
+│ │     const response = await ai.complete({                                             │ │
+│ │       model: 'gpt-4o-mini',  // Fast, smart enough                                   │ │
+│ │       systemPrompt,                                                                  │ │
+│ │       userPrompt: formatUserPrompt(input, metadata),                                 │ │
+│ │       responseFormat: { type: "json_object" }                                        │ │
+│ │     });                                                                              │ │
+│ │                                                                                      │ │
+│ │     return JSON.parse(response);                                                     │ │
+│ │   }                                                                                  │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ 2.2 Remove Layout JSON Step                                                          │ │
+│ │                                                                                      │ │
+│ │ // src/tools/add.ts - Direct code generation                                         │ │
+│ │ export const addTool = {                                                             │ │
+│ │   async execute(input: AddToolInput): Promise<ToolOutput> {                          │ │
+│ │     // For first scene: Generate with good defaults                                  │ │
+│ │     if (input.sceneNumber === 1) {                                                   │ │
+│ │       const prompt = `Create a Remotion scene: ${input.userPrompt}                   │ │
+│ │                                                                                      │ │
+│ │ Style guidelines:                                                                    │ │
+│ │ - Modern, clean design                                                               │ │
+│ │ - High contrast for readability                                                      │ │
+│ │ - Smooth animations                                                                  │ │
+│ │ - Professional typography`;                                                          │ │
+│ │                                                                                      │ │
+│ │       return await generateCode(prompt);                                             │ │
+│ │     }                                                                                │ │
+│ │                                                                                      │ │
+│ │     // For additional scenes: Use previous as reference                              │ │
+│ │     const previousCode = await db.getLastSceneCode(input.projectId);                 │ │
+│ │     const prompt = `Create a new scene: ${input.userPrompt}                          │ │
+│ │                                                                                      │ │
+│ │ Match this style:                                                                    │ │
+│ │ ${previousCode}`;                                                                    │ │
+│ │                                                                                      │ │
+│ │     return await generateCode(prompt);                                               │ │
+│ │   }                                                                                  │ │
+│ │ };                                                                                   │ │
+│ │                                                                                      │ │
+│ │ Phase 3: Multi-Step Streaming (Days 5-7)                                             │ │
+│ │                                                                                      │ │
+│ │ 3.1 Streaming Execution Engine                                                       │ │
+│ │                                                                                      │ │
+│ │ // src/api/generation.ts                                                             │ │
+│ │ export async function* executeWithStreaming(                                         │ │
+│ │   plan: PlannerDecision,                                                             │ │
+│ │   context: ExecutionContext                                                          │ │
+│ │ ): AsyncGenerator<ProgressUpdate> {                                                  │ │
+│ │                                                                                      │ │
+│ │   // Handle clarifications                                                           │ │
+│ │   if (plan.clarify) {                                                                │ │
+│ │     yield { type: 'clarification', message: plan.clarify };                          │ │
+│ │     return;                                                                          │ │
+│ │   }                                                                                  │ │
+│ │                                                                                      │ │
+│ │   // Announce the plan                                                               │ │
+│ │   yield {                                                                            │ │
+│ │     type: 'plan_start',                                                              │ │
+│ │     message: `I'll ${describeActions(plan.actions)}`,                                │ │
+│ │     totalSteps: plan.actions.length                                                  │ │
+│ │   };                                                                                 │ │
+│ │                                                                                      │ │
+│ │   // Execute each action with progress                                               │ │
+│ │   for (let i = 0; i < plan.actions.length; i++) {                                    │ │
+│ │     const action = plan.actions[i];                                                  │ │
+│ │                                                                                      │ │
+│ │     yield {                                                                          │ │
+│ │       type: 'step_start',                                                            │ │
+│ │       step: i + 1,                                                                   │ │
+│ │       description: `${action.tool}: ${action.description}`                           │ │
+│ │     };                                                                               │ │
+│ │                                                                                      │ │
+│ │     try {                                                                            │ │
+│ │       // Tools fetch their own data                                                  │ │
+│ │       const result = await tools[action.tool].execute({                              │ │
+│ │         ...action.args,                                                              │ │
+│ │         projectId: context.projectId                                                 │ │
+│ │       });                                                                            │ │
+│ │                                                                                      │ │
+│ │       yield {                                                                        │ │
+│ │         type: 'step_complete',                                                       │ │
+│ │         step: i + 1,                                                                 │ │
+│ │         result,                                                                      │ │
+│ │         preview: result.tsxCode // Instant preview                                   │ │
+│ │       };                                                                             │ │
+│ │                                                                                      │ │
+│ │       // Update context for next action                                              │ │
+│ │       if (action.tool === 'add') {                                                   │ │
+│ │         context.lastSceneId = result.sceneId;                                        │ │
+│ │       }                                                                              │ │
+│ │                                                                                      │ │
+│ │     } catch (error) {                                                                │ │
+│ │       yield {                                                                        │ │
+│ │         type: 'step_error',                                                          │ │
+│ │         step: i + 1,                                                                 │ │
+│ │         error: error.message                                                         │ │
+│ │       };                                                                             │ │
+│ │       break;                                                                         │ │
+│ │     }                                                                                │ │
+│ │   }                                                                                  │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ Phase 4: Tool/Service Architecture (Days 7-8)                                        │ │
+│ │                                                                                      │ │
+│ │ 4.1 Tools as Pure Functions                                                          │ │
+│ │                                                                                      │ │
+│ │ // Tools don't initialize services - they receive them                               │ │
+│ │ interface ToolContext {                                                              │ │
+│ │   ai: AIService;                                                                     │ │
+│ │   db: DatabaseService;                                                               │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ // src/tools/edit.ts                                                                 │ │
+│ │ export function createEditTool(context: ToolContext) {                               │ │
+│ │   return {                                                                           │ │
+│ │     async execute(input: EditToolInput): Promise<ToolOutput> {                       │ │
+│ │       // Tool fetches only what it needs                                             │ │
+│ │       const scene = await context.db.getScene(input.targetSceneId);                  │ │
+│ │                                                                                      │ │
+│ │       // Direct to AI - no complex orchestration                                     │ │
+│ │       const result = await context.ai.generateCode({                                 │ │
+│ │         model: 'claude-3-sonnet',                                                    │ │
+│ │         prompt: `Edit this scene: ${scene.tsxCode}\n\nChanges: ${input.prompt}`      │ │
+│ │       });                                                                            │ │
+│ │                                                                                      │ │
+│ │       return {                                                                       │ │
+│ │         success: true,                                                               │ │
+│ │         tsxCode: result.code,                                                        │ │
+│ │         sceneId: input.targetSceneId                                                 │ │
+│ │       };                                                                             │ │
+│ │     }                                                                                │ │
+│ │   };                                                                                 │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ 4.2 Service Layer (Infrastructure Only)                                              │ │
+│ │                                                                                      │ │
+│ │ // src/services/memory.service.ts                                                    │ │
+│ │ export class ProjectMemoryService {                                                  │ │
+│ │   // Lightweight metadata only                                                       │ │
+│ │   async getSceneMetadata(projectId: string): Promise<SceneMetadata[]> {              │ │
+│ │     return db.query.scenes.findMany({                                                │ │
+│ │       where: eq(scenes.projectId, projectId),                                        │ │
+│ │       columns: {                                                                     │ │
+│ │         id: true,                                                                    │ │
+│ │         slug: true,                                                                  │ │
+│ │         dominantColors: true,                                                        │ │
+│ │         firstH1Text: true,                                                           │ │
+│ │         lastFocused: true,                                                           │ │
+│ │         durationMs: true                                                             │ │
+│ │       }                                                                              │ │
+│ │     });                                                                              │ │
+│ │   }                                                                                  │ │
+│ │                                                                                      │ │
+│ │   // Smart scene targeting                                                           │ │
+│ │   async findSceneByHint(projectId: string, hint: string): Promise<string | null> {   │ │
+│ │     const scenes = await this.getSceneMetadata(projectId);                           │ │
+│ │     // Fuzzy matching logic                                                          │ │
+│ │     return bestMatch(scenes, hint);                                                  │ │
+│ │   }                                                                                  │ │
+│ │ }                                                                                    │ │
+│ │                                                                                      │ │
+│ │ Phase 5: Consolidate System Prompts (Day 8)                                          │ │
+│ │                                                                                      │ │
+│ │ 5.1 From 40+ to 5 Essential Prompts                                                  │ │
+│ │                                                                                      │ │
+│ │ // src/config/prompts.ts                                                             │ │
+│ │ export const PROMPTS = {                                                             │ │
+│ │   // 1. Brain/Planner                                                                │ │
+│ │   PLANNER: `Intelligent video planner prompt...`,                                    │ │
+│ │                                                                                      │ │
+│ │   // 2. Code Generation (Add)                                                        │ │
+│ │   CODE_GENERATOR: `Generate Remotion React code...`,                                 │ │
+│ │                                                                                      │ │
+│ │   // 3. Code Editing                                                                 │ │
+│ │   CODE_EDITOR: `Edit existing Remotion code...`,                                     │ │
+│ │                                                                                      │ │
+│ │   // 4. Error Fixing                                                                 │ │
+│ │   ERROR_FIXER: `Fix broken Remotion scenes...`,                                      │ │
+│ │                                                                                      │ │
+│ │   // 5. Image Analysis                                                               │ │
+│ │   IMAGE_ANALYZER: `Analyze image for animation...`                                   │ │
+│ │ };                                                                                   │ │
+│ │                                                                                      │ │
+│ │ // Delete all others!                                                                │ │
+│ │                                                                                      │ │
+│ │ Implementation Timeline                                                              │ │
+│ │                                                                                      │ │
+│ │ Week 1: Foundation                                                                   │ │
+│ │                                                                                      │ │
+│ │ - Day 1-3: File structure cleanup                                                    │ │
+│ │ - Day 3-5: Implement intelligent planner                                             │ │
+│ │ - Day 5-7: Multi-step streaming                                                      │ │
+│ │                                                                                      │ │
+│ │ Week 2: Optimization                                                                 │ │
+│ │                                                                                      │ │
+│ │ - Day 8: Tool/service refactoring                                                    │ │
+│ │ - Day 9-10: Remove layout JSON step                                                  │ │
+│ │ - Day 11-12: Performance testing                                                     │ │
+│ │                                                                                      │ │
+│ │ Week 3: Polish                                                                       │ │
+│ │                                                                                      │ │
+│ │ - Consolidate prompts                                                                │ │
+│ │ - Add monitoring                                                                     │ │
+│ │ - Documentation                                                                      │ │
+│ │                                                                                      │ │
+│ │ Success Metrics                                                                      │ │
+│ │                                                                                      │ │
+│ │ Performance                                                                          │ │
+│ │                                                                                      │ │
+│ │ - Generation time: 2 min → <30s                                                      │ │
+│ │ - Brain decision: 15s → <3s                                                          │ │
+│ │ - Cost per generation: $0.065 → <$0.02                                               │ │
+│ │                                                                                      │ │
+│ │ Code Quality                                                                         │ │
+│ │                                                                                      │ │
+│ │ - Files: 500+ → ~200                                                                 │ │
+│ │ - System prompts: 40+ → 5                                                            │ │
+│ │ - Clear single responsibility                                                        │ │
+│ │                                                                                      │ │
+│ │ Developer Experience                                                                 │ │
+│ │                                                                                      │ │
+│ │ - Team understands the flow                                                          │ │
+│ │ - Easy to trace requests                                                             │ │
+│ │ - Simple to add features                                                             │ │
+│ │                                                                                      │ │
+│ │ Key Decisions                                                                        │ │
+│ │                                                                                      │ │
+│ │ 1. Brain stays intelligent                                                           │ │
+│ │                                                                                      │ │
+│ │ - Use GPT-4o-mini for fast, smart decisions                                          │ │
+│ │ - Rich metadata for scene targeting                                                  │ │
+│ │ - Handle multi-step operations                                                       │ │
+│ │                                                                                      │ │
+│ │ 2. Tools vs Services                                                                 │ │
+│ │                                                                                      │ │
+│ │ - Tools: Pure functions that generate/edit code                                      │ │
+│ │ - Services: Infrastructure (DB, AI client, storage)                                  │ │
+│ │ - Tools receive services via dependency injection                                    │ │
+│ │                                                                                      │ │
+│ │ 3. Context strategy                                                                  │ │
+│ │                                                                                      │ │
+│ │ - ProjectMemory: Lightweight metadata only                                           │ │
+│ │ - Tools: Fetch specific data as needed                                               │ │
+│ │ - No god context object                                                              │ │
+│ │                                                                                      │ │
+│ │ 4. First scene quality                                                               │ │
+│ │                                                                                      │ │
+│ │ - Trust the AI with clear guidelines                                                 │ │
+│ │ - "System is as good as the prompt"                                                  │ │
+│ │ - Simple style rules in prompt                                                       │ │
+│ ╰───────────────────────────────────

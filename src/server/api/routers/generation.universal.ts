@@ -9,11 +9,12 @@ import { orchestrator } from "~/brain/orchestratorNEW";
 import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
+import { trimTool } from "~/tools/trim/trim";
 import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import type { BrainDecision } from "~/lib/types/api/brain-decision";
-import type { AddToolInput, EditToolInput, DeleteToolInput, BaseToolOutput } from "~/tools/helpers/types";
+import type { BrainDecision } from "~/lib/types/ai/brain.types";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, BaseToolOutput } from "~/tools/helpers/types";
 
 // Import universal response types and helpers
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
@@ -21,19 +22,19 @@ import type { UniversalResponse, SceneCreateResponse, SceneDeleteResponse } from
 import { ErrorCode } from "~/lib/types/api/universal";
 import type { SceneEntity } from "~/generated/entities";
 
-// Helper function for tool execution (same as before)
+// Helper function for tool execution and database save
 async function executeToolFromDecision(
   decision: BrainDecision,
   projectId: string,
   userId: string,
   storyboard: any[]
-): Promise<{ success: boolean; scene?: any }> {
+): Promise<{ success: boolean; scene?: SceneEntity }> {
   
   if (!decision.toolName || !decision.toolContext) {
     throw new Error("Invalid decision - missing tool name or context");
   }
 
-  let toolInput: AddToolInput | EditToolInput | DeleteToolInput;
+  let toolInput: AddToolInput | EditToolInput | DeleteToolInput | TrimToolInput;
   let result: BaseToolOutput;
 
   // Prepare tool input based on tool type
@@ -50,11 +51,54 @@ async function executeToolFromDecision(
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
-      if (!addResult.success) {
+      console.log('📥 [ROUTER] Received from ADD tool:', {
+        success: addResult.success,
+        hasData: !!addResult.data,
+        dataKeys: addResult.data ? Object.keys(addResult.data) : [],
+        name: addResult.data?.name,
+        codeLength: addResult.data?.tsxCode?.length,
+      });
+      
+      if (!addResult.success || !addResult.data) {
         throw new Error(addResult.error?.message || 'Add operation failed');
       }
-      result = addResult.data!;
-      break;
+      
+      // Trust the duration from the ADD tool - it already analyzes the code
+      let addFinalDuration = addResult.data.duration || 150;
+      
+      // Save to database
+      console.log('💾 [ROUTER] Saving to database:', {
+        projectId,
+        name: addResult.data.name,
+        order: storyboard.length,
+        duration: addFinalDuration,
+      });
+      
+      const [newScene] = await db.insert(scenes).values({
+        projectId,
+        name: addResult.data.name,
+        tsxCode: addResult.data.tsxCode,
+        duration: addFinalDuration || 150,
+        order: storyboard.length,
+        props: addResult.data.props || {},
+        layoutJson: addResult.data.layoutJson || null,
+      }).returning();
+      
+      if (!newScene) {
+        throw new Error('Failed to save scene to database');
+      }
+      
+      console.log('✅ [ROUTER] Scene saved to database:', {
+        id: newScene.id,
+        name: newScene.name,
+        duration: newScene.duration,
+        order: newScene.order,
+      });
+      
+      return {
+        success: true,
+        scene: newScene as any  // Cast to any to avoid props type issue
+      };
 
     case 'editScene':
       if (!decision.toolContext.targetSceneId) {
@@ -74,17 +118,113 @@ async function executeToolFromDecision(
         projectId,
         userId,
         sceneId: decision.toolContext.targetSceneId,
-        existingCode: sceneToEdit.tsxCode, // This will be fixed in TICKET-003
+        tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
+        currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
+        errorDetails: decision.toolContext.errorDetails,
       } as EditToolInput;
       
-      const editResult = await editTool.run(toolInput);
-      if (!editResult.success) {
-        throw new Error(editResult.error?.message || 'Edit operation failed');
+      const editResult = await editTool.run(toolInput as EditToolInput);
+      console.log('📥 [ROUTER] Received from EDIT tool:', {
+        success: editResult.success,
+        hasData: !!editResult.data,
+        dataKeys: editResult.data ? Object.keys(editResult.data) : [],
+        error: editResult.error,
+      });
+      
+      if (!editResult.success || !editResult.data || !editResult.data.tsxCode) {
+        const errorMessage = typeof editResult.error === 'string' 
+          ? editResult.error 
+          : editResult.error?.message || 'Edit operation failed - no code returned';
+        throw new Error(errorMessage);
       }
-      result = editResult.data!;
-      break;
+      
+      // Use duration from edit result if provided, otherwise keep existing
+      let editFinalDuration = editResult.data.duration;
+      
+      // Update database
+      console.log('💾 [ROUTER] Updating scene in database:', {
+        sceneId: decision.toolContext.targetSceneId,
+        codeChanged: editResult.data.tsxCode !== sceneToEdit.tsxCode,
+        durationChanged: editFinalDuration && editFinalDuration !== sceneToEdit.duration,
+      });
+      
+      const [updatedScene] = await db.update(scenes)
+        .set({
+          tsxCode: editResult.data.tsxCode,
+          duration: editFinalDuration || sceneToEdit.duration,
+          props: editResult.data.props || sceneToEdit.props,
+          updatedAt: new Date(),
+        })
+        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .returning();
+      
+      if (!updatedScene) {
+        throw new Error('Failed to update scene in database');
+      }
+      
+      return {
+        success: true,
+        scene: updatedScene as any  // Cast to any to avoid props type issue
+      };
+
+    case 'trimScene':
+      if (!decision.toolContext.targetSceneId) {
+        throw new Error("No target scene ID for trim operation");
+      }
+      
+      const sceneToTrim = await db.query.scenes.findFirst({
+        where: eq(scenes.id, decision.toolContext.targetSceneId),
+      });
+      
+      if (!sceneToTrim) {
+        throw new Error("Scene not found for trimming");
+      }
+      
+      toolInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        sceneId: decision.toolContext.targetSceneId,
+        currentDuration: sceneToTrim.duration,
+      } as TrimToolInput;
+      
+      const trimResult = await trimTool.run(toolInput as TrimToolInput);
+      console.log('📥 [ROUTER] Received from TRIM tool:', {
+        success: trimResult.success,
+        hasData: !!trimResult.data,
+        newDuration: trimResult.data?.duration,
+        trimmedFrames: trimResult.data?.trimmedFrames,
+      });
+      
+      if (!trimResult.success || !trimResult.data || !trimResult.data.duration) {
+        throw new Error(trimResult.error?.message || 'Trim operation failed');
+      }
+      
+      // Update only the duration in database
+      console.log('💾 [ROUTER] Updating scene duration in database:', {
+        sceneId: decision.toolContext.targetSceneId,
+        oldDuration: sceneToTrim.duration,
+        newDuration: trimResult.data.duration,
+      });
+      
+      const [trimmedScene] = await db.update(scenes)
+        .set({
+          duration: trimResult.data.duration,
+          updatedAt: new Date(),
+        })
+        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .returning();
+      
+      if (!trimmedScene) {
+        throw new Error('Failed to update scene duration in database');
+      }
+      
+      return {
+        success: true,
+        scene: trimmedScene as any
+      };
 
     case 'deleteScene':
       if (!decision.toolContext.targetSceneId) {
@@ -97,21 +237,34 @@ async function executeToolFromDecision(
         sceneId: decision.toolContext.targetSceneId,
       } as DeleteToolInput;
       
-      const deleteResult = await deleteTool.run(toolInput);
+      // For delete, get the scene first for the response
+      const sceneToDelete = await db.query.scenes.findFirst({
+        where: eq(scenes.id, decision.toolContext.targetSceneId),
+      });
+      
+      if (!sceneToDelete) {
+        throw new Error("Scene not found for deletion");
+      }
+      
+      const deleteResult = await deleteTool.run(toolInput as DeleteToolInput);
       if (!deleteResult.success) {
         throw new Error(deleteResult.error?.message || 'Delete operation failed');
       }
-      result = deleteResult.data!;
-      break;
+      
+      // Delete from database
+      await db.delete(scenes).where(eq(scenes.id, decision.toolContext.targetSceneId));
+      
+      return {
+        success: true,
+        scene: sceneToDelete as any // Cast to any to avoid props type issue
+      };
 
     default:
       throw new Error(`Unknown tool: ${decision.toolName}`);
   }
 
-  return {
-    success: true,
-    scene: result.scene
-  };
+  // This should never be reached now
+  throw new Error('Invalid tool execution path');
 }
 
 export const generationUniversalRouter = createTRPCRouter({
@@ -148,7 +301,7 @@ export const generationUniversalRouter = createTRPCRouter({
             "Project not found or access denied",
             'scene.create',
             'scene'
-          );
+          ) as any as SceneCreateResponse;
         }
 
         // 2. Build storyboard context
@@ -160,21 +313,36 @@ export const generationUniversalRouter = createTRPCRouter({
           tsxCode: string;
         }> = [];
         
-        if (project.isWelcome) {
+        // Get existing scenes first
+        const existingScenes = await db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+          orderBy: [scenes.order],
+        });
+        
+        if (project.isWelcome && existingScenes.length === 0) {
           // First real scene - clear welcome flag
+          console.log(`[${response.getRequestId()}] First real scene - clearing welcome flag`);
           await db.update(projects)
             .set({ isWelcome: false })
             .where(eq(projects.id, projectId));
-            
-          await db.delete(scenes).where(eq(scenes.projectId, projectId));
-          storyboardForBrain = [];
-        } else {
-          // Get existing scenes
-          const existingScenes = await db.query.scenes.findMany({
-            where: eq(scenes.projectId, projectId),
-            orderBy: [scenes.order],
-          });
           
+          storyboardForBrain = [];
+        } else if (project.isWelcome && existingScenes.length > 0) {
+          // Welcome project but has scenes already - just clear the flag
+          console.log(`[${response.getRequestId()}] Welcome project with scenes - clearing flag only`);
+          await db.update(projects)
+            .set({ isWelcome: false })
+            .where(eq(projects.id, projectId));
+          
+          storyboardForBrain = existingScenes.map(scene => ({
+            id: scene.id,
+            name: scene.name,
+            duration: scene.duration,
+            order: scene.order,
+            tsxCode: scene.tsxCode,
+          }));
+        } else {
+          // Normal project with scenes
           storyboardForBrain = existingScenes.map(scene => ({
             id: scene.id,
             name: scene.name,
@@ -207,28 +375,33 @@ export const generationUniversalRouter = createTRPCRouter({
 
         // 5. Get decision from brain
         console.log(`[${response.getRequestId()}] Getting decision from brain...`);
-        const orchestratorResponse = await orchestrator.orchestrate({
-          userPrompt: userMessage,
-          projectContext: {
-            projectId,
-            storyboard: storyboardForBrain,
-            chatHistory,
-          },
+        const orchestratorResponse = await orchestrator.processUserInput({
+          prompt: userMessage,
+          projectId,
+          userId,
+          storyboardSoFar: storyboardForBrain,
+          chatHistory,
           userContext: {
             imageUrls: userContext?.imageUrls,
           },
         });
 
-        if (!orchestratorResponse.decision) {
+        if (!orchestratorResponse.success || !orchestratorResponse.result) {
           return response.error(
             ErrorCode.AI_ERROR,
-            "Failed to get decision from brain",
+            orchestratorResponse.error || "Failed to get decision from brain",
             'scene.create',
             'scene'
-          );
+          ) as any as SceneCreateResponse;
         }
 
-        const decision = orchestratorResponse.decision;
+        const decision: BrainDecision = {
+          success: true,
+          toolName: orchestratorResponse.result.toolName,
+          toolContext: orchestratorResponse.result.toolContext,
+          reasoning: orchestratorResponse.reasoning,
+          chatResponse: orchestratorResponse.chatResponse,
+        };
 
         // 6. Execute the tool
         console.log(`[${response.getRequestId()}] Executing tool: ${decision.toolName}`);
@@ -238,12 +411,19 @@ export const generationUniversalRouter = createTRPCRouter({
           userId,
           storyboardForBrain
         );
+        
+        console.log(`[${response.getRequestId()}] Tool execution result:`, {
+          success: toolResult.success,
+          hasScene: !!toolResult.scene,
+          sceneId: toolResult.scene?.id,
+          sceneName: toolResult.scene?.name,
+        });
 
         // 7. Store assistant's response AFTER execution
-        if (orchestratorResponse.chatResponse && toolResult.success) {
+        if (decision.chatResponse && toolResult.success) {
           await db.insert(messages).values({
             projectId,
-            content: orchestratorResponse.chatResponse,
+            content: decision.chatResponse,
             role: "assistant",
             createdAt: new Date(),
           });
@@ -256,32 +436,32 @@ export const generationUniversalRouter = createTRPCRouter({
             "Tool execution succeeded but no scene was created",
             'scene.create',
             'scene'
-          );
+          ) as any as SceneCreateResponse;
         }
 
-        const sceneEntity: SceneEntity = {
-          id: toolResult.scene.id,
-          projectId: toolResult.scene.projectId,
-          name: toolResult.scene.name,
-          tsxCode: toolResult.scene.tsxCode,
-          duration: toolResult.scene.duration,
-          order: toolResult.scene.order,
-          props: toolResult.scene.props,
-          layoutJson: toolResult.scene.layoutJson,
-          publishedUrl: toolResult.scene.publishedUrl || null,
-          publishedHash: toolResult.scene.publishedHash || null,
-          publishedAt: toolResult.scene.publishedAt || null,
-          createdAt: toolResult.scene.createdAt || new Date(),
-          updatedAt: toolResult.scene.updatedAt || new Date(),
-        };
-
-        return response
-          .success(sceneEntity, 'scene.create', 'scene', [sceneEntity.id])
-          .withContext({
+        // Scene is already a proper SceneEntity from the database
+        // Determine the correct operation based on the tool used
+        const operation = decision.toolName === 'editScene' ? 'scene.update' : 
+                         decision.toolName === 'trimScene' ? 'scene.update' :
+                         decision.toolName === 'deleteScene' ? 'scene.delete' : 
+                         'scene.create';
+        
+        const successResponse = response.success(
+          toolResult.scene, 
+          operation, 
+          'scene', 
+          [toolResult.scene.id]
+        );
+        
+        // Add context to the response
+        return {
+          ...successResponse,
+          context: {
             reasoning: decision.reasoning,
             chatResponse: decision.chatResponse,
             suggestions: ['Edit the scene', 'Add another scene', 'Preview your video']
-          });
+          }
+        };
 
       } catch (error) {
         console.error(`[${response.getRequestId()}] Generation error:`, error);
@@ -303,7 +483,7 @@ export const generationUniversalRouter = createTRPCRouter({
           'scene.create',
           'scene',
           error
-        );
+        ) as unknown as SceneCreateResponse;
       }
     }),
 
@@ -337,7 +517,7 @@ export const generationUniversalRouter = createTRPCRouter({
             "Project not found or access denied",
             'scene.delete',
             'scene'
-          );
+          ) as any as SceneDeleteResponse;
         }
 
         // Verify scene exists and belongs to project
@@ -354,7 +534,7 @@ export const generationUniversalRouter = createTRPCRouter({
             "Scene not found",
             'scene.delete',
             'scene'
-          );
+          ) as any as SceneDeleteResponse;
         }
 
         // Delete the scene
@@ -384,7 +564,143 @@ export const generationUniversalRouter = createTRPCRouter({
           'scene.delete',
           'scene',
           error
-        );
+        ) as any as SceneDeleteResponse;
+      }
+    }),
+
+  /**
+   * GET PROJECT SCENES
+   */
+  getProjectScenes: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { projectId } = input;
+      const userId = ctx.session.user.id;
+
+      // Verify project ownership
+      const project = await db.query.projects.findFirst({
+        where: and(
+          eq(projects.id, projectId),
+          eq(projects.userId, userId)
+        ),
+      });
+
+      if (!project) {
+        throw new Error("Project not found or access denied");
+      }
+
+      // Get scenes
+      const projectScenes = await db.query.scenes.findMany({
+        where: eq(scenes.projectId, projectId),
+        orderBy: [scenes.order],
+      });
+
+      return projectScenes;
+    }),
+
+  /**
+   * ADD TEMPLATE - Direct template addition without AI pipeline
+   */
+  addTemplate: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      templateId: z.string(),
+      templateName: z.string(),
+      templateCode: z.string(),
+      templateDuration: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const response = new ResponseBuilder();
+      const { projectId, templateId, templateName, templateCode, templateDuration } = input;
+      const userId = ctx.session.user.id;
+
+      console.log(`[${response.getRequestId()}] Adding template`, { projectId, templateId, templateName });
+
+      try {
+        // 1. Verify project ownership
+        const project = await db.query.projects.findFirst({
+          where: and(
+            eq(projects.id, projectId),
+            eq(projects.userId, userId)
+          ),
+        });
+
+        if (!project) {
+          return {
+            success: false,
+            message: "Project not found or access denied",
+          };
+        }
+
+        // 2. Get current scene count for order
+        const existingScenes = await db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+        });
+
+        const sceneOrder = existingScenes.length;
+
+        // 3. Generate a unique scene name
+        const sceneName = `${templateName}-${Date.now().toString(36)}`;
+
+        // 4. Save template as a new scene
+        console.log(`[${response.getRequestId()}] Saving template to database`, {
+          name: sceneName,
+          order: sceneOrder,
+          duration: templateDuration,
+        });
+
+        const [newScene] = await db.insert(scenes).values({
+          projectId,
+          name: sceneName,
+          tsxCode: templateCode,
+          duration: templateDuration,
+          order: sceneOrder,
+          props: {},
+          layoutJson: null,
+        }).returning();
+
+        if (!newScene) {
+          return {
+            success: false,
+            message: "Failed to save template to database",
+          };
+        }
+
+        console.log(`[${response.getRequestId()}] Template saved successfully`, {
+          sceneId: newScene.id,
+          name: newScene.name,
+        });
+
+        // 5. Clear welcome flag if this is the first scene
+        if (project.isWelcome && existingScenes.length === 0) {
+          await db.update(projects)
+            .set({ isWelcome: false })
+            .where(eq(projects.id, projectId));
+        }
+
+        // 6. Add chat message for context
+        await db.insert(messages).values({
+          projectId,
+          content: `Added template: ${templateName}`,
+          role: "assistant",
+          createdAt: new Date(),
+        });
+
+        return {
+          success: true,
+          message: `Added ${templateName} template`,
+          scene: newScene as any, // Cast to avoid props type issue
+        };
+
+      } catch (error) {
+        console.error(`[${response.getRequestId()}] Template addition error:`, error);
+        
+        return {
+          success: false,
+          message: error instanceof Error ? error.message : 'Failed to add template',
+        };
       }
     }),
 });

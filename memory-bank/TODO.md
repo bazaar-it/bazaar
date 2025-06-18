@@ -1,6 +1,42 @@
 # Main TODO List
 
 
+================================================================================================================================================
+
+--------
+delete   1. componentErrors - Only defined in schema, no active usage
+  2. sceneSpecs - MCP architecture remnant, not implemented
+  3. componentTestCases - Evaluation system uses hardcoded tests instead
+  4. componentEvaluationMetrics - Not used by evaluation framework
+  5. agentMessages - A2A protocol feature never implemented 
+  from the database
+-----
+
+================================================================================================================================================
+
+⏺ Summary:
+
+  2. Brain Types Consolidation (Do Later)
+
+  - BrainDecision is used by 3 generation routers
+  - Can be migrated to use ToolSelectionResult from brain.types.ts
+  - Would improve type safety with enums instead of string literals
+  - Requires updating the generation routers to map the orchestrator output properly
+
+  3. Database Types Migration (Do Later)
+
+  - The manual Project type in /src/lib/types/database/ is barely used (only 1 import)
+  - But there's a local Project type defined in MyProjectsPanelG.tsx
+  - The generated entities already have ProjectEntity that could replace both
+  - Migration would ensure types stay in sync with database schema
+
+  Both of these are good improvements to make later for better type safety and
+  consistency. The manual types can get out of sync with the database, and the string
+  literals in BrainDecision are less type-safe than the enums in brain.types.ts.
+
+================================================================================================================================================
+
+
 
 Critical 1:
 Alright, so there's a small problem with the duration of the scenes. So, every scene that our system is making is default 6 seconds. So, you can see that now, and the code that was just generated, very good code, very nice. The problem, however, is that the scene code is 3 seconds. You can see that clearly in the code. It's 3 seconds long. But the scene itself in the motion player is 6 seconds. Because for some reason, it's like a default 6 seconds. We need a way to actually change the duration of the scene. Not within the code, but in the video state of the duration of that scene, such that it matches what the code says. Because now I even asked for 3 seconds long animation. And yeah, so like the code itself was like an animation for 3 seconds. But the scene was, the duration of the scene is still 6 seconds. Can you please help me find out why we always, for some reason, have that default of 6 seconds instead of actually adjusting correctly of the actual duration in the scene? Thank you.

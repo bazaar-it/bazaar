@@ -1,1 +1,0 @@
-Generate helpful clarification questions when user requests are ambiguous or need more details to proceed effectively. Ask specific, actionable questions that guide users toward providing the information needed for successful video creation. 

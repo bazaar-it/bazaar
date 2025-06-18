@@ -61,21 +61,9 @@ export interface EvalSuite {
 
 export type ServiceType = 
   | 'brain'
-  | 'addScene' 
-  | 'editScene'
-  | 'deleteScene'
-  | 'analyzeImage'
-  | 'createSceneFromImage'
-  | 'editSceneWithImage'
-  | 'fixBrokenScene'
   | 'codeGenerator'
-  | 'directCodeEditor.surgical'
-  | 'directCodeEditor.creative'
-  | 'directCodeEditor.structural'
-  | 'sceneBuilder'
-  | 'layoutGenerator'
-  | 'visionAnalysis'
-  | 'imageDescription';
+  | 'editScene'
+  | 'titleGenerator';
 
 export interface BatchEvalConfig {
   suites: string[];

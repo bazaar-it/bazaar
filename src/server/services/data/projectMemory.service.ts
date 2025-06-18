@@ -254,6 +254,38 @@ export class ProjectMemoryService {
     // when we have more specific requirements for expiration handling
     return 0;
   }
+
+  /**
+   * Start async image analysis for context building only
+   * This does NOT affect tool selection - tools are multimodal
+   * Analysis results are used for understanding references like "the first image"
+   */
+  async startAsyncImageAnalysis(params: {
+    projectId: string;
+    imageUrls: string[];
+    userPrompt: string;
+  }): Promise<string> {
+    // Generate a trace ID for this analysis
+    const traceId = `img-analysis-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Fire and forget - analysis happens in background
+    // In a real implementation, this would queue a job for image analysis
+    // For now, we'll just log it
+    console.log('[ProjectMemory] Queued async image analysis:', {
+      traceId,
+      projectId: params.projectId,
+      imageCount: params.imageUrls.length,
+      prompt: params.userPrompt.substring(0, 50) + '...'
+    });
+    
+    // In production, this would:
+    // 1. Queue an analysis job with the trace ID
+    // 2. The job would analyze images for colors, mood, style
+    // 3. Results would be saved via saveImageFacts()
+    // 4. Context builder can retrieve via getProjectImageAnalyses()
+    
+    return traceId;
+  }
 }
 
 // Export singleton instance

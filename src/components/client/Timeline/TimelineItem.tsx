@@ -3,7 +3,7 @@
 
 import React, { useMemo } from 'react';
 import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem, type TimelineItemStatus } from '~/lib/types/video/timeline';
-import { cn } from '~/lib/utils';
+import { cn } from '~/lib/cn';
 import Image from 'next/image';
 import { useTimelineClick, useTimelineDrag } from './TimelineContext';
 import { AlertCircle, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';

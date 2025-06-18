@@ -8,7 +8,7 @@ import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants"
 import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
-import { generateNameFromPrompt } from "~/lib/nameGenerator";
+import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
 

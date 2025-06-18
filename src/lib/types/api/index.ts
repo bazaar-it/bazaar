@@ -2,15 +2,12 @@
 
 /**
  * Central export for all API-related types
- * Sprint 41 Architecture
  */
 
-// Export golden rule contracts (still used by legacy services)
-export * from './golden-rule-contracts';
+// Brain types moved to ~/lib/types/ai/brain.types.ts
 
-// Export brain decision types (Sprint 41)
-export * from './brain-decision';
+// Export universal response types (Sprint 42)
+export * from './universal';
 
-// Export field mapping utilities
-export * from './field-mapping';
-EOF < /dev/null
+// Export chat types
+export * from './chat';

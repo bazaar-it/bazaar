@@ -4,7 +4,7 @@ import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
 import { eq, and, like } from "drizzle-orm";
-import { analytics } from '~/lib/analytics';
+import { analytics } from '~/lib/utils/analytics';
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 
 /**

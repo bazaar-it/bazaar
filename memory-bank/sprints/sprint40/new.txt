@@ -1,0 +1,463 @@
+You're absolutely right! The current system is overcomplicated. Let me propose a simplified architecture:
+
+  Simplified Service Architecture
+
+  Current (Overcomplicated):
+
+  - 5+ generation services
+  - Multiple code paths
+  - Confusing service names
+  - Unclear responsibilities
+
+  Proposed (Simple):
+
+  // Just ONE main service that handles all scene operations
+  class SceneService extends StandardSceneService {
+
+    // CREATE operations
+    async createScene(input: {
+      projectId: string;
+      prompt: string;
+      imageUrls?: string[];
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      if (input.imageUrls?.length) {
+        // Path 1: Create from image
+        return this.createFromImage(input);
+      } else {
+        // Path 2: Create from scratch (layout + code)
+        return this.createFromPrompt(input);
+      }
+    }
+
+    // UPDATE operations
+    async updateScene(input: {
+      sceneId: string;
+      prompt: string;
+      editType: 'surgical' | 'creative' | 'structural';
+      imageUrls?: string[];
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      const scene = await this.getScene(input.sceneId);
+
+      switch (input.editType) {
+        case 'surgical':
+          return this.surgicalEdit(scene, input);
+        case 'creative':
+          return this.creativeEdit(scene, input);
+        case 'structural':
+          return this.structuralEdit(scene, input);
+      }
+    }
+
+    // DELETE operations
+    async deleteScene(input: {
+      sceneId: string;
+    }): Promise<StandardApiResponse<DeleteOperationResponse>> {
+      // Simple delete
+      return this.removeScene(input.sceneId);
+    }
+
+    // Private helper methods
+    private async createFromPrompt(input) { /* layout + code generation */ }
+    private async createFromImage(input) { /* direct code from image */ }
+    private async surgicalEdit(scene, input) { /* targeted edits */ }
+    private async creativeEdit(scene, input) { /* rewrite sections */ }
+    private async structuralEdit(scene, input) { /* change structure */ }
+  }
+
+  Benefits of Simplification:
+
+  1. One Service to Rule Them All
+    - Single SceneService handles all scene operations
+    - Clear methods: createScene(), updateScene(), deleteScene()
+  2. Clear Operation Types
+  CREATE → from prompt OR from image
+  UPDATE → surgical OR creative OR structural (with/without image)
+  DELETE → just delete
+  3. No More Service Maze
+    - Remove: SceneBuilderService, CodeGeneratorService, DirectCodeEditorService
+    - Keep: One unified SceneService
+    - Helper services: LayoutGenerator, AIClient (as utilities)
+  4. Simplified MCP Tools
+  // Tools just call the one service
+  addScene → sceneService.createScene()
+  editScene → sceneService.updateScene()
+  deleteScene → sceneService.deleteScene()
+  createSceneFromImage → sceneService.createScene({ imageUrls })
+  editSceneWithImage → sceneService.updateScene({ imageUrls })
+
+  Migration Path:
+
+  1. Create new SceneService with all operations
+  2. Move logic from existing services into private methods
+  3. Update all MCP tools to use the single service
+  4. Delete the old services
+
+  Would you like me to create this simplified SceneService that consolidates all the operations?
+  ⏺ Absolutely! You're right - we can make it even simpler and still use different models for different operations. Here's the improved design:
+
+  Ultra-Simplified Scene Service
+
+  class SceneService extends StandardSceneService {
+
+    // Just THREE public methods!
+
+    async addScene(input: {
+      projectId: string;
+      prompt: string;
+      imageUrls?: string[];
+      order?: number;
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      // Automatically detect operation type
+      if (input.imageUrls?.length) {
+        // Use Vision model (e.g., GPT-4o)
+        return this.createFromImage(input);
+      } else {
+        // Use Sonnet-4 for creative generation
+        return this.createFromPrompt(input);
+      }
+    }
+
+    async editScene(input: {
+      sceneId: string;
+      prompt: string;
+      editType: 'surgical' | 'creative' | 'structural';
+      imageUrls?: string[];
+      duration?: number;  // ✅ Duration edits handled here!
+    }): Promise<StandardApiResponse<SceneOperationResponse>> {
+      const scene = await this.getScene(input.sceneId);
+
+      // Just changing duration? Quick operation
+      if (input.duration && !input.prompt) {
+        return this.updateDuration(scene, input.duration);
+      }
+
+      // Route to appropriate edit method with right model
+      if (input.imageUrls?.length) {
+        // Vision-based edit (GPT-4o)
+        return this.editWithImage(scene, input);
+      }
+
+      switch (input.editType) {
+        case 'surgical':
+          // Use GPT-4o-mini for targeted edits
+          return this.surgicalEdit(scene, input);
+        case 'creative':
+          // Use Sonnet-4 for creative rewrites
+          return this.creativeEdit(scene, input);
+        case 'structural':
+          // Use GPT-4o-mini for structural changes
+          return this.structuralEdit(scene, input);
+      }
+    }
+
+    async deleteScene(input: {
+      sceneId: string;
+    }): Promise<StandardApiResponse<DeleteOperationResponse>> {
+      return this.removeScene(input.sceneId);
+    }
+
+    // Private methods with specific models/prompts
+
+    private async createFromPrompt(input) {
+      // Uses: Sonnet-4 + layout-prompt + code-prompt
+      const layout = await this.generateLayout(input, 'sonnet-4');
+      const code = await this.generateCode(layout, 'sonnet-4');
+      return this.buildResponse(code);
+    }
+
+    private async createFromImage(input) {
+      // Uses: GPT-4o with vision
+      const code = await aiClient.generateVisionResponse({
+        model: 'gpt-4o',
+        prompt: '@image-to-code-prompt.md',
+        images: input.imageUrls
+      });
+      return this.buildResponse(code);
+    }
+
+    private async surgicalEdit(scene, input) {
+      // Uses: GPT-4o-mini for efficiency
+      const result = await aiClient.generateResponse({
+        model: 'gpt-4o-mini',
+        prompt: '@surgical-edit-prompt.md',
+        context: { scene, request: input.prompt }
+      });
+      return this.buildResponse(result);
+    }
+
+    private async creativeEdit(scene, input) {
+      // Uses: Sonnet-4 for creativity
+      const result = await aiClient.generateResponse({
+        model: 'claude-3-5-sonnet-20241022',
+        prompt: '@creative-edit-prompt.md',
+        context: { scene, request: input.prompt }
+      });
+      return this.buildResponse(result);
+    }
+  }
+
+  Model Strategy Configuration
+
+  // config/modelStrategy.ts
+  export const MODEL_STRATEGY = {
+    // Creation
+    CREATE_FROM_PROMPT: {
+      layout: 'claude-3-5-sonnet-20241022',  // Creative
+      code: 'claude-3-5-sonnet-20241022'      // Creative
+    },
+    CREATE_FROM_IMAGE: {
+      model: 'gpt-4o',  // Vision capabilities
+      prompt: '@image-to-code-prompt.md'
+    },
+
+    // Edits
+    SURGICAL_EDIT: {
+      model: 'gpt-4o-mini',  // Fast & cheap
+      prompt: '@surgical-edit-prompt.md'
+    },
+    CREATIVE_EDIT: {
+      model: 'claude-3-5-sonnet-20241022',  // Creative
+      prompt: '@creative-edit-prompt.md'
+    },
+    STRUCTURAL_EDIT: {
+      model: 'gpt-4o-mini',  // Fast
+      prompt: '@structural-edit-prompt.md'
+    },
+    EDIT_WITH_IMAGE: {
+      model: 'gpt-4o',  // Vision
+      prompt: '@edit-with-image-prompt.md'
+    },
+
+    // Simple operations
+    DURATION_CHANGE: null,  // No AI needed
+  }
+
+  Performance Benefits
+
+  1. Fewer Service Calls
+    - Before: Tool → Service1 → Service2 → Service3
+    - After: Tool → SceneService (that's it!)
+  2. Smart Model Selection
+    - Cheap models (GPT-4o-mini) for simple edits
+    - Premium models (Sonnet-4) only when needed
+    - No AI calls for duration changes
+  3. Simplified MCP Tools
+  // Super simple tools!
+  addScene({ prompt, imageUrls? }) → sceneService.addScene()
+  editScene({ sceneId, prompt, editType, imageUrls?, duration? }) → sceneService.editScene()
+  deleteScene({ sceneId }) → sceneService.deleteScene()
+
+  // No more separate tools for:
+  // - createSceneFromImage (just addScene with images)
+  // - editSceneWithImage (just editScene with images)
+  // - changeDuration (just editScene with duration)
+  4. Caching Opportunities
+    - One service = easier to cache
+    - Reuse AI responses for similar requests
+
+  Implementation Benefits
+
+  - 3 public methods instead of 15+
+  - Automatic routing based on input
+  - Model flexibility via configuration
+  - Same performance (or better due to simplification)
+  - Easier to test (one service to mock)
+  - Clearer mental model for developers
+
+  Want me to implement this ultra-simplified SceneService?
+
+  I've created the simplified SceneService that:
+
+  1. Uses Your Existing Config System:
+    - Models from models.config.ts (respects your MODEL_PACK)
+    - Prompts from prompts.config.ts
+    - No new configuration needed!
+  2. Just 3 Public Methods:
+    - addScene() - Handles both text and image creation
+    - editScene() - Handles all edit types + duration
+    - deleteScene() - Simple deletion
+  3. Automatic Model Selection:
+  // Examples from your optimal pack:
+  - Text creation: layoutGenerator (Sonnet-4) + codeGenerator (Sonnet-4)
+  - Image creation: createSceneFromImage (Sonnet-4)
+  - Surgical edits: directCodeEditor.surgical (GPT-4.1-mini)
+  - Creative edits: directCodeEditor.creative (Sonnet-4)
+  - Duration changes: No AI needed!
+  4. Simplified MCP Tools:
+    - Before: 7 tools (addScene, createSceneFromImage, editScene, editSceneWithImage, changeDuration, etc.)
+    - After: 3 tools (addScene, editScene, deleteScene)
+  5. Same Performance, Better Organization:
+    - Uses same models as before
+    - Fewer service calls
+    - Cleaner code
+    - Easier to maintain
+
+  The service automatically routes to the right operation based on inputs, while still respecting your sophisticated model configuration system!
+
+  You're absolutely right! Let me refine this:
+
+  Context Caching & Smart Context Building
+
+  You make an excellent point - we don't need fresh context for everything, and context requirements vary by operation type.
+
+  Refined Architecture:
+
+  // brain/orchestrator.ts
+  export async function orchestrate(input: BrainInput): Promise<BrainDecision> {
+    // 1. Get context (can be cached/incremental)
+    const context = await contextBuilder.getContext(input.projectId, {
+      includeChat: true,        // Always needed for understanding
+      includeStoryboard: true,  // Always needed for tool selection
+      includePreferences: true, // Always needed for style consistency
+      forceRefresh: input.forceRefresh ?? false
+    });
+
+    // 2. Understand intent (this determines how much context tools need)
+    const intent = await intentAnalyzer.analyze(input.prompt, context);
+
+    // 3. Choose tool(s) based on intent
+    const toolSelection = await toolSelector.select(intent, context);
+
+    // 4. Generate tool-specific reasoning & context
+    const toolPackage = prepareToolPackage(toolSelection, intent, context);
+
+    return {
+      tool: toolSelection.tool,
+      reasoning: toolPackage.reasoning,  // "Keep everything, only change button to green"
+      context: toolPackage.context,      // Minimal or full based on operation
+      intent: intent
+    };
+  }
+
+  Smart Context Preparation:
+
+  // brain/orchestrator_functions/contextPreparer.ts
+  export function prepareToolPackage(tool: string, intent: Intent, fullContext: Context) {
+    // Duration edit - minimal context
+    if (intent.type === 'duration_change') {
+      return {
+        reasoning: `Change duration to ${intent.durationSeconds} seconds`,
+        context: {
+          sceneId: intent.targetSceneId,
+          duration: intent.durationFrames
+        }
+      };
+    }
+
+    // Surgical edit - include specific reasoning
+    if (tool === 'editScene' && intent.editType === 'surgical') {
+      return {
+        reasoning: intent.specificChange, // "User wants button green, keep everything else"
+        context: {
+          sceneId: intent.targetSceneId,
+          existingCode: fullContext.targetScene.tsxCode,
+          prompt: intent.refinedPrompt,
+          editType: 'surgical'
+        }
+      };
+    }
+
+    // Add scene - needs full context
+    if (tool === 'addScene') {
+      return {
+        reasoning: intent.sceneDescription,
+        context: {
+          projectId: fullContext.projectId,
+          previousSceneJson: fullContext.lastScene?.layoutJson,
+          storyboardSoFar: fullContext.scenes.map(s => ({
+            name: s.name,
+            duration: s.duration,
+            description: s.description
+          })),
+          imageUrls: intent.imageUrls,
+          userPreferences: fullContext.preferences
+        }
+      };
+    }
+
+    // Delete - minimal
+    if (tool === 'deleteScene') {
+      return {
+        reasoning: `Delete ${fullContext.targetScene.name}`,
+        context: {
+          sceneId: intent.targetSceneId
+        }
+      };
+    }
+  }
+
+  Context Builder with Caching:
+
+  // brain/orchestrator_functions/contextBuilder.ts
+  class ContextBuilder {
+    private cache = new Map<string, CachedContext>();
+
+    async getContext(projectId: string, options: ContextOptions) {
+      const cacheKey = `${projectId}`;
+      const cached = this.cache.get(cacheKey);
+
+      // Use cache if available and not forcing refresh
+      if (cached && !options.forceRefresh && this.isCacheValid(cached)) {
+        // Just update with latest message if needed
+        return this.incrementalUpdate(cached, projectId);
+      }
+
+      // Build full context
+      const context = {
+        projectId,
+        chatHistory: options.includeChat ? await this.getChatHistory(projectId) : [],
+        scenes: options.includeStoryboard ? await this.getStoryboard(projectId) : [],
+        preferences: options.includePreferences ? await this.getPreferences(projectId) : {},
+        timestamp: Date.now()
+      };
+
+      this.cache.set(cacheKey, context);
+      return context;
+    }
+
+    private isCacheValid(cached: CachedContext): boolean {
+      // Cache valid for 5 minutes
+      return Date.now() - cached.timestamp < 5 * 60 * 1000;
+    }
+  }
+
+  Intent Analyzer - The Key Intelligence:
+
+  // brain/orchestrator_functions/intentAnalyzer.ts
+  export async function analyze(prompt: string, context: Context): Promise<Intent> {
+    // This is where we determine:
+    // 1. What exactly the user wants
+    // 2. How specific/surgical vs creative the change is
+    // 3. What context the tool will need
+
+    const analysis = await aiClient.chat({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'system',
+        content: `Analyze user intent and generate specific instructions for tools.
+        
+        For SURGICAL edits, be very specific about what to preserve:
+        "User wants button green" → "Change button color to green, preserve all animations, layout, and other styles"
+        
+        For CREATIVE edits, give creative freedom:
+        "Make it more modern" → "Modernize the design while keeping core content and functionality"
+        
+        For DURATION changes, just extract the number:
+        "Make it 3 seconds" → duration: 90 frames`
+      }, {
+        role: 'user',
+        content: `Context: ${JSON.stringify(context.scenes)}
+        User says: "${prompt}"`
+      }]
+    });
+
+    return parseIntentResponse(analysis);
+  }
+
+  This way:
+  - Brain makes smart decisions about tool selection AND provides specific reasoning
+  - Context is efficiently cached and reused
+  - Each tool gets exactly what it needs, nothing more
+  - The reasoning helps tools understand the user's specific intent
+
+  Does this better match what you're envisioning?

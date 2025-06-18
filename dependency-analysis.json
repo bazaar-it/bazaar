@@ -1,0 +1,4435 @@
+{
+  "timestamp": "2025-06-14T08:48:32.904Z",
+  "summary": {
+    "total": 344,
+    "active": 118,
+    "transitional": 27,
+    "orphaned": 173,
+    "tests": 25,
+    "generated": 1
+  },
+  "categories": {
+    "ACTIVE": [
+      "app/(marketing)/layout.tsx",
+      "app/(marketing)/login/page.tsx",
+      "app/(marketing)/page.tsx",
+      "app/(marketing)/privacy/page.tsx",
+      "app/(marketing)/terms/page.tsx",
+      "app/admin/analytics/page.tsx",
+      "app/admin/feedback/page.tsx",
+      "app/admin/layout.tsx",
+      "app/admin/page.tsx",
+      "app/admin/testing/page.tsx",
+      "app/admin/users/[userId]/edit/page.tsx",
+      "app/admin/users/[userId]/page.tsx",
+      "app/admin/users/[userId]/projects/[projectId]/page.tsx",
+      "app/admin/users/page.tsx",
+      "app/api/admin/run-live-test/route.ts",
+      "app/api/admin/test-stream/route.ts",
+      "app/api/animation-design-briefs/[id]/route.ts",
+      "app/api/auth/[...nextauth]/route.ts",
+      "app/api/components/[componentId]/metadata/route.ts",
+      "app/api/components/[componentId]/route.ts",
+      "app/api/cron/data-lifecycle-cleanup/route.ts",
+      "app/api/health/models/route.ts",
+      "app/api/r2-presign/route.ts",
+      "app/api/transcribe/route.ts",
+      "app/api/trpc/[trpc]/route.ts",
+      "app/api/upload/route.ts",
+      "app/dashboard/page.tsx",
+      "app/layout.tsx",
+      "app/projects/[id]/generate/components/RemotionPreview.tsx",
+      "app/projects/[id]/generate/page.tsx",
+      "app/projects/generate/new/page.tsx",
+      "app/projects/new/page.tsx",
+      "app/projects/page.tsx",
+      "app/share/[shareId]/SharePageClient.tsx",
+      "app/share/[shareId]/ShareVideoPlayerClient.tsx",
+      "app/share/[shareId]/page.tsx",
+      "client/components/AnalyticsProvider.tsx",
+      "client/components/ErrorBoundary.tsx",
+      "components/AdminSidebar.tsx",
+      "components/AppHeader.tsx",
+      "components/GlobalDependencyProvider.tsx",
+      "components/client/NewProjectButton.tsx",
+      "components/theme-provider.tsx",
+      "components/ui/FeedbackModal.tsx",
+      "components/ui/Footer.tsx",
+      "components/ui/SidebarFeedbackButton.tsx",
+      "components/ui/badge.tsx",
+      "components/ui/button.tsx",
+      "components/ui/card.tsx",
+      "components/ui/dialog.tsx",
+      "components/ui/dropdown-menu.tsx",
+      "components/ui/icons.tsx",
+      "components/ui/input.tsx",
+      "components/ui/label.tsx",
+      "components/ui/progress.tsx",
+      "components/ui/select.tsx",
+      "components/ui/separator.tsx",
+      "components/ui/skeleton.tsx",
+      "components/ui/tabs.tsx",
+      "components/ui/textarea.tsx",
+      "components/ui/tooltip.tsx",
+      "config/models.config.ts",
+      "config/prompts.config.ts",
+      "config/site.ts",
+      "hooks/useVoiceToText.ts",
+      "lib/analytics.ts",
+      "lib/animations.tsx",
+      "lib/api/response-helpers.ts",
+      "lib/logger.ts",
+      "lib/nameGenerator.ts",
+      "lib/types/api/index.ts",
+      "lib/types/api/universal.ts",
+      "lib/types/database/project.ts",
+      "lib/types/shared/json-patch.ts",
+      "lib/types/video/input-props.ts",
+      "lib/types/video/remotion-constants.ts",
+      "lib/utils.ts",
+      "lib/utils/codeDurationExtractor.ts",
+      "server/api/root.ts",
+      "server/api/routers/admin.ts",
+      "server/api/routers/chat.ts",
+      "server/api/routers/emailSubscriber.ts",
+      "server/api/routers/feedback.ts",
+      "server/api/routers/generation.clean.ts",
+      "server/api/routers/project.ts",
+      "server/api/routers/render.ts",
+      "server/api/routers/scenes.ts",
+      "server/api/routers/share.ts",
+      "server/api/routers/voice.ts",
+      "server/api/services/background.service.ts",
+      "server/api/services/database.service.ts",
+      "server/api/trpc.ts",
+      "server/auth/config.ts",
+      "server/auth/index.ts",
+      "server/db/index.ts",
+      "server/db/schema.ts",
+      "server/init.ts",
+      "server/lib/openai.ts",
+      "server/queries/getUserProjects.ts",
+      "server/services/ai/aiClient.service.ts",
+      "server/services/ai/titleGenerator.service.ts",
+      "server/services/data/dataLifecycle.service.ts",
+      "server/services/data/projectMemory.service.ts",
+      "stores/videoState.ts",
+      "templates/AppleSignIn.tsx",
+      "templates/BlueGradientText.tsx",
+      "templates/Coding.tsx",
+      "templates/FintechUI.tsx",
+      "templates/GitHubSignIn.tsx",
+      "templates/GoogleSignIn.tsx",
+      "templates/GradientText.tsx",
+      "templates/GrowthGraph.tsx",
+      "templates/KnowsCode.tsx",
+      "templates/PromptIntro.tsx",
+      "templates/registry.ts",
+      "trpc/query-client.ts",
+      "trpc/react.tsx",
+      "trpc/server.ts"
+    ],
+    "TRANSITIONAL": [
+      "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+      "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+      "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+      "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+      "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+      "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+      "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+      "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+      "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+      "brain/orchestratorNEW.ts",
+      "brain/orchestrator_functions/contextBuilder.ts",
+      "brain/orchestrator_functions/intentAnalyzer.ts",
+      "brain/orchestrator_functions/types.ts",
+      "server/services/brain/contextBuilder.service.ts",
+      "server/services/brain/preferenceExtractor.service.ts",
+      "tools/add/add.ts",
+      "tools/add/add_helpers/CodeGeneratorNEW.ts",
+      "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts",
+      "tools/add/add_helpers/layoutGeneratorNEW.ts",
+      "tools/delete/delete.ts",
+      "tools/edit/edit.ts",
+      "tools/edit/edit_helpers/BaseEditorNEW.ts",
+      "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+      "tools/edit/edit_helpers/ErrorFixerNEW.ts",
+      "tools/edit/edit_helpers/SurgicalEditorNEW.ts",
+      "tools/helpers/base.ts",
+      "tools/helpers/types.ts"
+    ],
+    "ORPHANED": [
+      "__mocks__/~/server/lib/openai/client.ts",
+      "app/projects/[id]/generate/agents/assetAgent.ts",
+      "app/projects/[id]/generate/agents/codeGenerator.ts",
+      "app/projects/[id]/generate/agents/index.ts",
+      "app/projects/[id]/generate/agents/interfaces.ts",
+      "app/projects/[id]/generate/agents/promptOrchestrator.ts",
+      "app/projects/[id]/generate/agents/sceneAgent.ts",
+      "app/projects/[id]/generate/agents/styleAgent.ts",
+      "app/projects/[id]/generate/components/GenerationProgress.tsx",
+      "app/projects/[id]/generate/components/PromptForm.tsx",
+      "app/projects/[id]/generate/components/RemotionLoader.tsx",
+      "app/projects/[id]/generate/components/SceneEditor.tsx",
+      "app/projects/[id]/generate/components/StoryboardViewer.tsx",
+      "app/projects/[id]/generate/types/storyboard.ts",
+      "app/projects/[id]/generate/utils/animationTemplates.ts",
+      "app/projects/[id]/generate/utils/getTemplateSnippet.ts",
+      "app/projects/[id]/generate/utils/promptInspector.ts",
+      "app/projects/[id]/generate/utils/textRatioTest.ts",
+      "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+      "app/projects/[projectId]/components/CustomComponentsPanelEnhancement.tsx",
+      "app/projects/[projectId]/components/FixableComponentsPanel.tsx",
+      "app/sitemap.ts",
+      "brain/config/models.config.ts",
+      "brain/config/prompts.config.ts",
+      "components/DeleteConfirmationDialog.tsx",
+      "components/InsertCustomComponentButton.tsx",
+      "components/RenameComponentDialog.tsx",
+      "components/ShareDialog.tsx",
+      "components/admin/AdminVideoPlayer.tsx",
+      "components/client/Timeline/SelectedSceneContext.tsx",
+      "components/client/Timeline/Timeline.tsx",
+      "components/client/Timeline/TimelineContext.tsx",
+      "components/client/Timeline/TimelineGrid.tsx",
+      "components/client/Timeline/TimelineHeader.tsx",
+      "components/client/Timeline/TimelineItem.tsx",
+      "components/client/Timeline/TimelineMarker.tsx",
+      "components/ui/FeedbackButton.tsx",
+      "components/ui/ThinkingAnimation.tsx",
+      "components/ui/accordion.tsx",
+      "components/ui/alert.tsx",
+      "components/ui/calendar.tsx",
+      "components/ui/checkbox.tsx",
+      "components/ui/popover.tsx",
+      "components/ui/sheet.tsx",
+      "components/ui/slider.tsx",
+      "components/ui/spinner.tsx",
+      "components/ui/switch.tsx",
+      "config/feedbackFeatures.ts",
+      "config/prompts.simplified.ts",
+      "hooks/useDebounce.ts",
+      "hooks/useImageAnalysis.ts",
+      "hooks/useLocalStorage.ts",
+      "hooks/useRemoteComponent.tsx",
+      "hooks/useTimelineDragAndDrop.tsx",
+      "hooks/useTimelineEventHandlers.tsx",
+      "hooks/useTimelinePositioning.tsx",
+      "hooks/useTimelineState.tsx",
+      "hooks/useTimelineValidation.ts",
+      "hooks/useTimelineZoom.tsx",
+      "hooks/useVideoPlayer.tsx",
+      "instrumentation.ts",
+      "lib/api/client.ts",
+      "lib/client/sceneUpdater.ts",
+      "lib/cn.ts",
+      "lib/evals/enhanced-runner.ts",
+      "lib/evals/performance-runner.ts",
+      "lib/evals/prompt-optimizer.ts",
+      "lib/evals/registry.ts",
+      "lib/evals/runner.ts",
+      "lib/evals/suites/basic-prompts.ts",
+      "lib/evals/suites/bazaar-vid-pipeline.ts",
+      "lib/evals/suites/model-pack-performance.ts",
+      "lib/evals/types.ts",
+      "lib/events/sceneEvents.ts",
+      "lib/metrics.ts",
+      "lib/patch.ts",
+      "lib/simpleLogger.ts",
+      "lib/types/ai/brain.types.ts",
+      "lib/types/ai/index.ts",
+      "lib/types/api/a2a.ts",
+      "lib/types/api/brain-decision.ts",
+      "lib/types/api/chat-events.ts",
+      "lib/types/api/chat.ts",
+      "lib/types/api/enhanced-a2a.ts",
+      "lib/types/api/evaluation.ts",
+      "lib/types/api/field-mapping.ts",
+      "lib/types/api/golden-rule-contracts.ts",
+      "lib/types/database/index.ts",
+      "lib/types/index.ts",
+      "lib/types/shared/global.d.ts",
+      "lib/types/shared/index.ts",
+      "lib/types/shared/scene.types.ts",
+      "lib/types/video/animationDesignBrief.schema.ts",
+      "lib/types/video/index.ts",
+      "lib/types/video/sceneLayout.ts",
+      "lib/types/video/storyboard.ts",
+      "lib/types/video/timeline.ts",
+      "lib/unregister-service-worker.ts",
+      "lib/utils/timeline.ts",
+      "lib/utils/welcomeSceneUtils.ts",
+      "remotion/Root.tsx",
+      "remotion/components/CustomScene.tsx",
+      "remotion/components/scenes/CustomScene.tsx",
+      "remotion/components/scenes/index.ts",
+      "remotion/compositions/DynamicVideo.tsx",
+      "remotion/compositions/TestCustomScene.tsx",
+      "remotion/index.ts",
+      "scripts/lib/db-direct.ts",
+      "scripts/log-tools/log-ask.ts",
+      "scripts/log-tools/log-issues.ts",
+      "scripts/log-tools/log-raw.ts",
+      "scripts/log-tools/log-refresh.ts",
+      "scripts/migrate-component-recovery.ts",
+      "scripts/migrate-schema.ts",
+      "server/api/routers/generation.old.ts",
+      "server/api/routers/generation.simplified.ts",
+      "server/api/routers/generation.ts",
+      "server/api/routers/generation.universal.ts",
+      "server/constants/chat.ts",
+      "server/constants/runtime-dependencies.ts",
+      "server/db/schema/index.ts",
+      "server/lib/r2.ts",
+      "server/services/ai/conversationalResponse.service.ts",
+      "server/services/ai/index.ts",
+      "server/services/base/StandardSceneService.ts",
+      "server/services/brain/sceneRepository.service.ts",
+      "server/services/data/index.ts",
+      "server/services/data/versionHistory.service.ts",
+      "server/services/generation/codeGenerator.service.ts",
+      "server/services/generation/componentGenerator/adapters/flowbite.ts",
+      "server/services/generation/componentGenerator/sceneSpecGenerator.ts",
+      "server/services/generation/directCodeEditor.service.ts",
+      "server/services/generation/index.ts",
+      "server/services/generation/layoutGenerator.service.ts",
+      "server/services/generation/sceneAnalyzer.service.ts",
+      "server/services/generation/sceneBuilder.service.ts",
+      "server/services/generation/sceneBuilder.service.updated.ts",
+      "server/services/mcp/index.ts",
+      "server/services/scene/add/CodeGenerator.ts",
+      "server/services/scene/add/ImageToCodeGenerator.ts",
+      "server/services/scene/add/LayoutGenerator.ts",
+      "server/services/scene/delete/SceneDeleter.ts",
+      "server/services/scene/edit/BaseEditor.ts",
+      "server/services/scene/edit/CreativeEditor.ts",
+      "server/services/scene/edit/ErrorFixer.ts",
+      "server/services/scene/edit/SurgicalEditor.ts",
+      "server/services/scene/scene.service.ts",
+      "server/utils/tsxPreprocessor.ts",
+      "shared/modules/index.ts",
+      "shared/modules/registry.ts",
+      "shared/modules/versions.ts",
+      "stores/videoState-hybrid.ts",
+      "stores/videoState-simple.ts",
+      "stores/videoState.normalized.ts",
+      "templates/AICoding.tsx",
+      "templates/AIDialogue.tsx",
+      "templates/Code.tsx",
+      "templates/CpuArchitecture.tsx",
+      "templates/DotRipple.tsx",
+      "templates/FloatingElements.tsx",
+      "templates/FloatingParticles.tsx",
+      "templates/GlitchText.tsx",
+      "templates/HeroTemplate.tsx",
+      "templates/LogoTemplate.tsx",
+      "templates/ParticleExplosion.tsx",
+      "templates/PulsingCircles.tsx",
+      "templates/TypingTemplate.tsx",
+      "templates/WaveAnimation.tsx",
+      "templates/templateUtils.ts",
+      "tests/remotion/__mocks__/MockPlayer.tsx",
+      "tools/helpers/index.ts",
+      "utils/finnhubDataFormatter.ts",
+      "utils/retryWithBackoff.ts"
+    ],
+    "TESTS": [
+      "__tests__/config/models.config.test.ts",
+      "app/__tests__/handleStreamEvents.test.ts",
+      "app/__tests__/simple.test.ts",
+      "app/projects/[id]/generate/utils/promptInspector.spec.ts",
+      "app/projects/[id]/generate/utils/smoke302.test.ts",
+      "app/projects/[id]/generate/utils/validateComponent.test.ts",
+      "hooks/__tests__/useRemoteComponent.simple.test.tsx",
+      "lib/api/__tests__/universal-response.test.ts",
+      "remotion/components/scenes/__tests__/CustomScene.test.tsx",
+      "server/api/routers/__tests__/generation.test.ts",
+      "server/services/__tests__/simpleServices.test.ts",
+      "server/services/base/__tests__/StandardSceneService.test.ts",
+      "server/services/brain/__tests__/orchestrator.test.ts",
+      "server/services/generation/__tests__/sceneBuilder.test.ts",
+      "stores/__tests__/videoState.test.ts",
+      "tests/architecture-verification.test.ts",
+      "tests/integration/api/error-handling.test.ts",
+      "tests/integration/api/json-patch-validation.test.ts",
+      "tests/integration/api/simple-json-patch.test.ts",
+      "tests/integration/customComponentIntegration.test.ts",
+      "tests/integration/db/drizzle-queries.test.ts",
+      "tests/integration/db/simple-drizzle-queries.test.ts",
+      "tests/performance/responseTime.test.ts",
+      "tests/remotion/__tests__/compositionRendering.test.tsx",
+      "tests/remotion/__tests__/playerIntegration.test.tsx"
+    ],
+    "GENERATED": [
+      "generated/entities.ts"
+    ]
+  },
+  "files": {
+    "__mocks__/~/server/lib/openai/client.ts": {
+      "path": "__mocks__/~/server/lib/openai/client.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "__tests__/config/models.config.test.ts": {
+      "path": "__tests__/config/models.config.test.ts",
+      "imports": [
+        "config/models.config.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/(marketing)/layout.tsx": {
+      "path": "app/(marketing)/layout.tsx",
+      "imports": [
+        "components/ui/Footer.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/(marketing)/login/page.tsx": {
+      "path": "app/(marketing)/login/page.tsx",
+      "imports": [
+        "lib/analytics.ts"
+      ],
+      "importedBy": [
+        "app/(marketing)/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/(marketing)/page.tsx": {
+      "path": "app/(marketing)/page.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "app/(marketing)/login/page.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/(marketing)/privacy/page.tsx": {
+      "path": "app/(marketing)/privacy/page.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/(marketing)/terms/page.tsx": {
+      "path": "app/(marketing)/terms/page.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/__tests__/handleStreamEvents.test.ts": {
+      "path": "app/__tests__/handleStreamEvents.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/__tests__/simple.test.ts": {
+      "path": "app/__tests__/simple.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/admin/analytics/page.tsx": {
+      "path": "app/admin/analytics/page.tsx",
+      "imports": [
+        "trpc/react.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/feedback/page.tsx": {
+      "path": "app/admin/feedback/page.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/card.tsx",
+        "components/ui/button.tsx",
+        "components/ui/select.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/layout.tsx": {
+      "path": "app/admin/layout.tsx",
+      "imports": [
+        "components/AdminSidebar.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/page.tsx": {
+      "path": "app/admin/page.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/AdminSidebar.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/testing/page.tsx": {
+      "path": "app/admin/testing/page.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "components/ui/label.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/select.tsx",
+        "components/ui/card.tsx",
+        "components/ui/tabs.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/progress.tsx",
+        "components/ui/separator.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/users/[userId]/edit/page.tsx": {
+      "path": "app/admin/users/[userId]/edit/page.tsx",
+      "imports": [
+        "trpc/react.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/users/[userId]/page.tsx": {
+      "path": "app/admin/users/[userId]/page.tsx",
+      "imports": [
+        "trpc/react.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/users/[userId]/projects/[projectId]/page.tsx": {
+      "path": "app/admin/users/[userId]/projects/[projectId]/page.tsx",
+      "imports": [
+        "trpc/react.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/admin/users/page.tsx": {
+      "path": "app/admin/users/page.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "components/ui/select.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/card.tsx",
+        "components/ui/skeleton.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/admin/run-live-test/route.ts": {
+      "path": "app/api/admin/run-live-test/route.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/admin/test-stream/route.ts": {
+      "path": "app/api/admin/test-stream/route.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/animation-design-briefs/[id]/route.ts": {
+      "path": "app/api/animation-design-briefs/[id]/route.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/auth/[...nextauth]/route.ts": {
+      "path": "app/api/auth/[...nextauth]/route.ts",
+      "imports": [
+        "server/auth/index.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/components/[componentId]/metadata/route.ts": {
+      "path": "app/api/components/[componentId]/metadata/route.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/components/[componentId]/route.ts": {
+      "path": "app/api/components/[componentId]/route.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/cron/data-lifecycle-cleanup/route.ts": {
+      "path": "app/api/cron/data-lifecycle-cleanup/route.ts",
+      "imports": [
+        "server/services/data/dataLifecycle.service.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/health/models/route.ts": {
+      "path": "app/api/health/models/route.ts",
+      "imports": [
+        "config/models.config.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/r2-presign/route.ts": {
+      "path": "app/api/r2-presign/route.ts",
+      "imports": [
+        "server/auth/index.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/transcribe/route.ts": {
+      "path": "app/api/transcribe/route.ts",
+      "imports": [
+        "server/lib/openai.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/trpc/[trpc]/route.ts": {
+      "path": "app/api/trpc/[trpc]/route.ts",
+      "imports": [
+        "server/api/root.ts",
+        "server/api/trpc.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/api/upload/route.ts": {
+      "path": "app/api/upload/route.ts",
+      "imports": [
+        "server/auth/index.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/dashboard/page.tsx": {
+      "path": "app/dashboard/page.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/layout.tsx": {
+      "path": "app/layout.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/theme-provider.tsx",
+        "components/GlobalDependencyProvider.tsx",
+        "client/components/AnalyticsProvider.tsx",
+        "client/components/ErrorBoundary.tsx",
+        "config/site.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/projects/[id]/generate/agents/assetAgent.ts": {
+      "path": "app/projects/[id]/generate/agents/assetAgent.ts",
+      "imports": [
+        "app/projects/[id]/generate/agents/interfaces.ts",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/codeGenerator.ts": {
+      "path": "app/projects/[id]/generate/agents/codeGenerator.ts",
+      "imports": [
+        "app/projects/[id]/generate/agents/interfaces.ts",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/index.ts": {
+      "path": "app/projects/[id]/generate/agents/index.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/agents/promptOrchestrator.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/interfaces.ts": {
+      "path": "app/projects/[id]/generate/agents/interfaces.ts",
+      "imports": [
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/agents/assetAgent.ts",
+        "app/projects/[id]/generate/agents/codeGenerator.ts",
+        "app/projects/[id]/generate/agents/sceneAgent.ts",
+        "app/projects/[id]/generate/agents/styleAgent.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/promptOrchestrator.ts": {
+      "path": "app/projects/[id]/generate/agents/promptOrchestrator.ts",
+      "imports": [
+        "app/projects/[id]/generate/agents/index.ts",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/sceneAgent.ts": {
+      "path": "app/projects/[id]/generate/agents/sceneAgent.ts",
+      "imports": [
+        "app/projects/[id]/generate/agents/interfaces.ts",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/agents/styleAgent.ts": {
+      "path": "app/projects/[id]/generate/agents/styleAgent.ts",
+      "imports": [
+        "app/projects/[id]/generate/agents/interfaces.ts",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/components/GenerationProgress.tsx": {
+      "path": "app/projects/[id]/generate/components/GenerationProgress.tsx",
+      "imports": [
+        "components/ui/card.tsx",
+        "components/ui/progress.tsx",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/components/PromptForm.tsx": {
+      "path": "app/projects/[id]/generate/components/PromptForm.tsx",
+      "imports": [
+        "components/ui/button.tsx",
+        "components/ui/card.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/label.tsx",
+        "components/ui/tabs.tsx",
+        "trpc/react.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/components/RemotionLoader.tsx": {
+      "path": "app/projects/[id]/generate/components/RemotionLoader.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/components/RemotionPreview.tsx": {
+      "path": "app/projects/[id]/generate/components/RemotionPreview.tsx",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx"
+    },
+    "app/projects/[id]/generate/components/SceneEditor.tsx": {
+      "path": "app/projects/[id]/generate/components/SceneEditor.tsx",
+      "imports": [
+        "components/ui/input.tsx",
+        "components/ui/label.tsx",
+        "components/ui/button.tsx",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/components/StoryboardViewer.tsx": {
+      "path": "app/projects/[id]/generate/components/StoryboardViewer.tsx",
+      "imports": [
+        "components/ui/card.tsx",
+        "components/ui/button.tsx",
+        "components/ui/tabs.tsx",
+        "app/projects/[id]/generate/types/storyboard.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/page.tsx": {
+      "path": "app/projects/[id]/generate/page.tsx",
+      "imports": [
+        "server/auth/index.ts",
+        "server/queries/getUserProjects.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "lib/analytics.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/projects/[id]/generate/types/storyboard.ts": {
+      "path": "app/projects/[id]/generate/types/storyboard.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/agents/assetAgent.ts",
+        "app/projects/[id]/generate/agents/codeGenerator.ts",
+        "app/projects/[id]/generate/agents/interfaces.ts",
+        "app/projects/[id]/generate/agents/promptOrchestrator.ts",
+        "app/projects/[id]/generate/agents/sceneAgent.ts",
+        "app/projects/[id]/generate/agents/styleAgent.ts",
+        "app/projects/[id]/generate/components/GenerationProgress.tsx",
+        "app/projects/[id]/generate/components/SceneEditor.tsx",
+        "app/projects/[id]/generate/components/StoryboardViewer.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/utils/animationTemplates.ts": {
+      "path": "app/projects/[id]/generate/utils/animationTemplates.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/utils/getTemplateSnippet.ts": {
+      "path": "app/projects/[id]/generate/utils/getTemplateSnippet.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/utils/smoke302.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/utils/promptInspector.spec.ts": {
+      "path": "app/projects/[id]/generate/utils/promptInspector.spec.ts",
+      "imports": [
+        "app/projects/[id]/generate/utils/promptInspector.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/projects/[id]/generate/utils/promptInspector.ts": {
+      "path": "app/projects/[id]/generate/utils/promptInspector.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/utils/promptInspector.spec.ts",
+        "app/projects/[id]/generate/utils/smoke302.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/utils/smoke302.test.ts": {
+      "path": "app/projects/[id]/generate/utils/smoke302.test.ts",
+      "imports": [
+        "app/projects/[id]/generate/utils/promptInspector.ts",
+        "app/projects/[id]/generate/utils/getTemplateSnippet.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/projects/[id]/generate/utils/textRatioTest.ts": {
+      "path": "app/projects/[id]/generate/utils/textRatioTest.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/utils/validateComponent.test.ts": {
+      "path": "app/projects/[id]/generate/utils/validateComponent.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "app/projects/[id]/generate/workspace/GenerateSidebar.tsx": {
+      "path": "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+      "imports": [
+        "components/client/NewProjectButton.tsx",
+        "trpc/react.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "components/ui/button.tsx",
+        "components/ui/tooltip.tsx",
+        "components/ui/SidebarFeedbackButton.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx": {
+      "path": "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+      "imports": [
+        "stores/videoState.ts",
+        "trpc/react.tsx",
+        "components/AppHeader.tsx",
+        "lib/types/video/input-props.ts",
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/page.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+      "imports": [
+        "lib/types/video/input-props.ts",
+        "stores/videoState.ts",
+        "trpc/react.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+      "imports": [
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "trpc/react.tsx",
+        "stores/videoState.ts",
+        "hooks/useVoiceToText.ts",
+        "components/ui/card.tsx",
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+      "imports": [
+        "components/theme-provider.tsx",
+        "stores/videoState.ts",
+        "components/ui/button.tsx",
+        "components/ui/select.tsx",
+        "trpc/react.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+      "imports": [
+        "components/ui/input.tsx",
+        "components/ui/card.tsx",
+        "components/ui/button.tsx",
+        "components/ui/dialog.tsx",
+        "trpc/react.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+      "imports": [
+        "app/projects/[id]/generate/components/RemotionPreview.tsx",
+        "components/ui/button.tsx",
+        "trpc/react.tsx",
+        "lib/types/index.ts",
+        "stores/videoState-simple.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+      "imports": [
+        "stores/videoState.ts",
+        "lib/types/video/input-props.ts",
+        "components/ui/button.tsx",
+        "app/projects/[id]/generate/components/RemotionPreview.tsx",
+        "trpc/react.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+      "imports": [
+        "stores/videoState.ts",
+        "trpc/react.tsx",
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "components/ui/tabs.tsx",
+        "components/ui/separator.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx": {
+      "path": "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+      "imports": [
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "components/ui/card.tsx",
+        "trpc/react.tsx",
+        "templates/registry.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "app/projects/[projectId]/components/CustomComponentsPanelEnhancement.tsx": {
+      "path": "app/projects/[projectId]/components/CustomComponentsPanelEnhancement.tsx",
+      "imports": [
+        "app/projects/[projectId]/components/FixableComponentsPanel.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/[projectId]/components/FixableComponentsPanel.tsx": {
+      "path": "app/projects/[projectId]/components/FixableComponentsPanel.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/button.tsx",
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/projects/[projectId]/components/CustomComponentsPanelEnhancement.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "app/projects/generate/new/page.tsx": {
+      "path": "app/projects/generate/new/page.tsx",
+      "imports": [
+        "server/auth/index.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/projects/new/page.tsx": {
+      "path": "app/projects/new/page.tsx",
+      "imports": [
+        "server/auth/index.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/analytics.ts",
+        "lib/types/video/remotion-constants.ts"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/projects/page.tsx": {
+      "path": "app/projects/page.tsx",
+      "imports": [
+        "server/auth/index.ts",
+        "server/queries/getUserProjects.ts",
+        "components/client/NewProjectButton.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/share/[shareId]/SharePageClient.tsx": {
+      "path": "app/share/[shareId]/SharePageClient.tsx",
+      "imports": [
+        "components/ui/button.tsx"
+      ],
+      "importedBy": [
+        "app/share/[shareId]/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/share/[shareId]/page.tsx"
+    },
+    "app/share/[shareId]/ShareVideoPlayerClient.tsx": {
+      "path": "app/share/[shareId]/ShareVideoPlayerClient.tsx",
+      "imports": [
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "app/share/[shareId]/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/share/[shareId]/page.tsx"
+    },
+    "app/share/[shareId]/page.tsx": {
+      "path": "app/share/[shareId]/page.tsx",
+      "imports": [
+        "trpc/server.ts",
+        "components/ui/button.tsx",
+        "lib/utils.ts",
+        "app/share/[shareId]/ShareVideoPlayerClient.tsx",
+        "app/share/[shareId]/SharePageClient.tsx",
+        "lib/types/video/input-props.ts",
+        "components/AppHeader.tsx"
+      ],
+      "importedBy": [],
+      "category": "ACTIVE",
+      "reason": "Entry point"
+    },
+    "app/sitemap.ts": {
+      "path": "app/sitemap.ts",
+      "imports": [
+        "config/site.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "brain/config/models.config.ts": {
+      "path": "brain/config/models.config.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "brain/config/prompts.config.ts": {
+      "path": "brain/config/prompts.config.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "brain/orchestratorNEW.ts": {
+      "path": "brain/orchestratorNEW.ts",
+      "imports": [
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "brain/orchestrator_functions/intentAnalyzer.ts",
+        "brain/orchestrator_functions/types.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.old.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "brain/orchestrator_functions/contextBuilder.ts": {
+      "path": "brain/orchestrator_functions/contextBuilder.ts",
+      "imports": [
+        "server/services/brain/contextBuilder.service.ts",
+        "server/services/data/projectMemory.service.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "brain/orchestrator_functions/types.ts"
+      ],
+      "importedBy": [
+        "brain/orchestratorNEW.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "brain/orchestrator_functions/intentAnalyzer.ts": {
+      "path": "brain/orchestrator_functions/intentAnalyzer.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "brain/orchestrator_functions/types.ts"
+      ],
+      "importedBy": [
+        "brain/orchestratorNEW.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "brain/orchestrator_functions/types.ts": {
+      "path": "brain/orchestrator_functions/types.ts",
+      "imports": [],
+      "importedBy": [
+        "brain/orchestratorNEW.ts",
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "brain/orchestrator_functions/intentAnalyzer.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "client/components/AnalyticsProvider.tsx": {
+      "path": "client/components/AnalyticsProvider.tsx",
+      "imports": [
+        "lib/analytics.ts"
+      ],
+      "importedBy": [
+        "app/layout.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/layout.tsx"
+    },
+    "client/components/ErrorBoundary.tsx": {
+      "path": "client/components/ErrorBoundary.tsx",
+      "imports": [
+        "lib/analytics.ts"
+      ],
+      "importedBy": [
+        "app/layout.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/layout.tsx"
+    },
+    "components/AdminSidebar.tsx": {
+      "path": "components/AdminSidebar.tsx",
+      "imports": [],
+      "importedBy": [
+        "app/admin/layout.tsx",
+        "app/admin/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/layout.tsx"
+    },
+    "components/AppHeader.tsx": {
+      "path": "components/AppHeader.tsx",
+      "imports": [
+        "components/ui/button.tsx",
+        "components/ui/input.tsx",
+        "components/ui/dropdown-menu.tsx",
+        "trpc/react.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "app/share/[shareId]/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx"
+    },
+    "components/DeleteConfirmationDialog.tsx": {
+      "path": "components/DeleteConfirmationDialog.tsx",
+      "imports": [
+        "components/ui/dialog.tsx",
+        "components/ui/button.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/GlobalDependencyProvider.tsx": {
+      "path": "components/GlobalDependencyProvider.tsx",
+      "imports": [
+        "lib/animations.tsx"
+      ],
+      "importedBy": [
+        "app/layout.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/layout.tsx"
+    },
+    "components/InsertCustomComponentButton.tsx": {
+      "path": "components/InsertCustomComponentButton.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "lib/types/shared/json-patch.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/RenameComponentDialog.tsx": {
+      "path": "components/RenameComponentDialog.tsx",
+      "imports": [
+        "components/ui/dialog.tsx",
+        "components/ui/button.tsx",
+        "components/ui/input.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ShareDialog.tsx": {
+      "path": "components/ShareDialog.tsx",
+      "imports": [
+        "components/ui/button.tsx",
+        "components/ui/dialog.tsx",
+        "components/ui/input.tsx",
+        "components/ui/label.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/switch.tsx",
+        "trpc/react.tsx",
+        "config/site.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/admin/AdminVideoPlayer.tsx": {
+      "path": "components/admin/AdminVideoPlayer.tsx",
+      "imports": [
+        "components/ui/card.tsx",
+        "components/ui/button.tsx",
+        "components/ui/badge.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/NewProjectButton.tsx": {
+      "path": "components/client/NewProjectButton.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/button.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "app/projects/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/GenerateSidebar.tsx"
+    },
+    "components/client/Timeline/SelectedSceneContext.tsx": {
+      "path": "components/client/Timeline/SelectedSceneContext.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/Timeline.tsx": {
+      "path": "components/client/Timeline/Timeline.tsx",
+      "imports": [
+        "components/client/Timeline/TimelineContext.tsx",
+        "components/client/Timeline/TimelineGrid.tsx",
+        "components/client/Timeline/TimelineMarker.tsx",
+        "components/client/Timeline/TimelineHeader.tsx",
+        "lib/utils.ts",
+        "stores/videoState.ts",
+        "lib/types/video/timeline.ts",
+        "lib/types/video/timeline.ts",
+        "lib/patch.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/TimelineContext.tsx": {
+      "path": "components/client/Timeline/TimelineContext.tsx",
+      "imports": [
+        "lib/types/video/timeline.ts",
+        "stores/videoState.ts",
+        "hooks/useTimelineValidation.ts"
+      ],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx",
+        "components/client/Timeline/TimelineGrid.tsx",
+        "components/client/Timeline/TimelineItem.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/TimelineGrid.tsx": {
+      "path": "components/client/Timeline/TimelineGrid.tsx",
+      "imports": [
+        "components/client/Timeline/TimelineItem.tsx",
+        "lib/types/video/timeline.ts",
+        "lib/utils.ts",
+        "components/client/Timeline/TimelineContext.tsx"
+      ],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/TimelineHeader.tsx": {
+      "path": "components/client/Timeline/TimelineHeader.tsx",
+      "imports": [],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/TimelineItem.tsx": {
+      "path": "components/client/Timeline/TimelineItem.tsx",
+      "imports": [
+        "lib/types/video/timeline.ts",
+        "lib/utils.ts",
+        "components/client/Timeline/TimelineContext.tsx"
+      ],
+      "importedBy": [
+        "components/client/Timeline/TimelineGrid.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/client/Timeline/TimelineMarker.tsx": {
+      "path": "components/client/Timeline/TimelineMarker.tsx",
+      "imports": [],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/theme-provider.tsx": {
+      "path": "components/theme-provider.tsx",
+      "imports": [],
+      "importedBy": [
+        "app/layout.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/layout.tsx"
+    },
+    "components/ui/FeedbackButton.tsx": {
+      "path": "components/ui/FeedbackButton.tsx",
+      "imports": [
+        "components/ui/FeedbackModal.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/FeedbackModal.tsx": {
+      "path": "components/ui/FeedbackModal.tsx",
+      "imports": [
+        "trpc/react.tsx",
+        "components/ui/button.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/label.tsx",
+        "server/api/root.ts"
+      ],
+      "importedBy": [
+        "components/ui/FeedbackButton.tsx",
+        "components/ui/SidebarFeedbackButton.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by components/ui/SidebarFeedbackButton.tsx"
+    },
+    "components/ui/Footer.tsx": {
+      "path": "components/ui/Footer.tsx",
+      "imports": [],
+      "importedBy": [
+        "app/(marketing)/layout.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/(marketing)/layout.tsx"
+    },
+    "components/ui/SidebarFeedbackButton.tsx": {
+      "path": "components/ui/SidebarFeedbackButton.tsx",
+      "imports": [
+        "components/ui/icons.tsx",
+        "components/ui/tooltip.tsx",
+        "components/ui/button.tsx",
+        "components/ui/FeedbackModal.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/GenerateSidebar.tsx"
+    },
+    "components/ui/ThinkingAnimation.tsx": {
+      "path": "components/ui/ThinkingAnimation.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/accordion.tsx": {
+      "path": "components/ui/accordion.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/alert.tsx": {
+      "path": "components/ui/alert.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/badge.tsx": {
+      "path": "components/ui/badge.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/feedback/page.tsx",
+        "app/admin/testing/page.tsx",
+        "app/admin/users/page.tsx",
+        "components/admin/AdminVideoPlayer.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/feedback/page.tsx"
+    },
+    "components/ui/button.tsx": {
+      "path": "components/ui/button.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/feedback/page.tsx",
+        "app/admin/testing/page.tsx",
+        "app/admin/users/page.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "app/projects/[id]/generate/components/SceneEditor.tsx",
+        "app/projects/[id]/generate/components/StoryboardViewer.tsx",
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+        "app/projects/[projectId]/components/FixableComponentsPanel.tsx",
+        "app/share/[shareId]/SharePageClient.tsx",
+        "app/share/[shareId]/page.tsx",
+        "components/AppHeader.tsx",
+        "components/DeleteConfirmationDialog.tsx",
+        "components/RenameComponentDialog.tsx",
+        "components/ShareDialog.tsx",
+        "components/admin/AdminVideoPlayer.tsx",
+        "components/client/NewProjectButton.tsx",
+        "components/ui/FeedbackModal.tsx",
+        "components/ui/SidebarFeedbackButton.tsx",
+        "components/ui/calendar.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/feedback/page.tsx"
+    },
+    "components/ui/calendar.tsx": {
+      "path": "components/ui/calendar.tsx",
+      "imports": [
+        "lib/utils.ts",
+        "components/ui/button.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/card.tsx": {
+      "path": "components/ui/card.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/feedback/page.tsx",
+        "app/admin/testing/page.tsx",
+        "app/admin/users/page.tsx",
+        "app/projects/[id]/generate/components/GenerationProgress.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "app/projects/[id]/generate/components/StoryboardViewer.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+        "components/admin/AdminVideoPlayer.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/feedback/page.tsx"
+    },
+    "components/ui/checkbox.tsx": {
+      "path": "components/ui/checkbox.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/dialog.tsx": {
+      "path": "components/ui/dialog.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "components/DeleteConfirmationDialog.tsx",
+        "components/RenameComponentDialog.tsx",
+        "components/ShareDialog.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx"
+    },
+    "components/ui/dropdown-menu.tsx": {
+      "path": "components/ui/dropdown-menu.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "components/AppHeader.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by components/AppHeader.tsx"
+    },
+    "components/ui/icons.tsx": {
+      "path": "components/ui/icons.tsx",
+      "imports": [],
+      "importedBy": [
+        "components/ui/SidebarFeedbackButton.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by components/ui/SidebarFeedbackButton.tsx"
+    },
+    "components/ui/input.tsx": {
+      "path": "components/ui/input.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/admin/users/page.tsx",
+        "app/projects/[id]/generate/components/SceneEditor.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+        "components/AppHeader.tsx",
+        "components/RenameComponentDialog.tsx",
+        "components/ShareDialog.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/label.tsx": {
+      "path": "components/ui/label.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "app/projects/[id]/generate/components/SceneEditor.tsx",
+        "components/ShareDialog.tsx",
+        "components/ui/FeedbackModal.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/popover.tsx": {
+      "path": "components/ui/popover.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/progress.tsx": {
+      "path": "components/ui/progress.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/projects/[id]/generate/components/GenerationProgress.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/select.tsx": {
+      "path": "components/ui/select.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/feedback/page.tsx",
+        "app/admin/testing/page.tsx",
+        "app/admin/users/page.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/feedback/page.tsx"
+    },
+    "components/ui/separator.tsx": {
+      "path": "components/ui/separator.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/sheet.tsx": {
+      "path": "components/ui/sheet.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/skeleton.tsx": {
+      "path": "components/ui/skeleton.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/users/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/users/page.tsx"
+    },
+    "components/ui/slider.tsx": {
+      "path": "components/ui/slider.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/spinner.tsx": {
+      "path": "components/ui/spinner.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/switch.tsx": {
+      "path": "components/ui/switch.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "components/ShareDialog.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "components/ui/tabs.tsx": {
+      "path": "components/ui/tabs.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "app/projects/[id]/generate/components/StoryboardViewer.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/textarea.tsx": {
+      "path": "components/ui/textarea.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/admin/testing/page.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "components/ShareDialog.tsx",
+        "components/ui/FeedbackModal.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/admin/testing/page.tsx"
+    },
+    "components/ui/tooltip.tsx": {
+      "path": "components/ui/tooltip.tsx",
+      "imports": [
+        "lib/utils.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "components/ui/SidebarFeedbackButton.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/GenerateSidebar.tsx"
+    },
+    "config/feedbackFeatures.ts": {
+      "path": "config/feedbackFeatures.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "config/models.config.ts": {
+      "path": "config/models.config.ts",
+      "imports": [],
+      "importedBy": [
+        "__tests__/config/models.config.test.ts",
+        "app/api/health/models/route.ts",
+        "brain/orchestrator_functions/intentAnalyzer.ts",
+        "lib/evals/performance-runner.ts",
+        "lib/evals/performance-runner.ts",
+        "lib/evals/runner.ts",
+        "lib/evals/runner.ts",
+        "server/services/ai/aiClient.service.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/ai/titleGenerator.service.ts",
+        "server/services/brain/contextBuilder.service.ts",
+        "server/services/brain/preferenceExtractor.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "server/services/generation/directCodeEditor.service.ts",
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/edit/BaseEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/add/add_helpers/layoutGeneratorNEW.ts",
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+        "tools/edit/edit_helpers/SurgicalEditorNEW.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/ai/aiClient.service.ts"
+    },
+    "config/prompts.config.ts": {
+      "path": "config/prompts.config.ts",
+      "imports": [],
+      "importedBy": [
+        "brain/orchestrator_functions/intentAnalyzer.ts",
+        "server/services/ai/aiClient.service.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/ai/titleGenerator.service.ts",
+        "server/services/brain/contextBuilder.service.ts",
+        "server/services/brain/preferenceExtractor.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "server/services/generation/directCodeEditor.service.ts",
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/edit/BaseEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/add/add_helpers/layoutGeneratorNEW.ts",
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+        "tools/edit/edit_helpers/SurgicalEditorNEW.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/ai/aiClient.service.ts"
+    },
+    "config/prompts.simplified.ts": {
+      "path": "config/prompts.simplified.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "config/site.ts": {
+      "path": "config/site.ts",
+      "imports": [],
+      "importedBy": [
+        "app/layout.tsx",
+        "app/sitemap.ts",
+        "components/ShareDialog.tsx",
+        "lib/utils.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by lib/utils.ts"
+    },
+    "generated/entities.ts": {
+      "path": "generated/entities.ts",
+      "imports": [],
+      "importedBy": [
+        "lib/types/api/universal.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.universal.ts",
+        "server/api/services/background.service.ts",
+        "server/api/services/database.service.ts"
+      ],
+      "category": "GENERATED",
+      "reason": "Auto-generated file"
+    },
+    "hooks/__tests__/useRemoteComponent.simple.test.tsx": {
+      "path": "hooks/__tests__/useRemoteComponent.simple.test.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "hooks/useDebounce.ts": {
+      "path": "hooks/useDebounce.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useImageAnalysis.ts": {
+      "path": "hooks/useImageAnalysis.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useLocalStorage.ts": {
+      "path": "hooks/useLocalStorage.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useRemoteComponent.tsx": {
+      "path": "hooks/useRemoteComponent.tsx",
+      "imports": [],
+      "importedBy": [
+        "remotion/components/CustomScene.tsx",
+        "remotion/components/scenes/CustomScene.tsx",
+        "remotion/components/scenes/__tests__/CustomScene.test.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelineDragAndDrop.tsx": {
+      "path": "hooks/useTimelineDragAndDrop.tsx",
+      "imports": [
+        "stores/videoState.ts",
+        "lib/patch.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelineEventHandlers.tsx": {
+      "path": "hooks/useTimelineEventHandlers.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelinePositioning.tsx": {
+      "path": "hooks/useTimelinePositioning.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelineState.tsx": {
+      "path": "hooks/useTimelineState.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelineValidation.ts": {
+      "path": "hooks/useTimelineValidation.ts",
+      "imports": [
+        "lib/types/video/timeline.ts"
+      ],
+      "importedBy": [
+        "components/client/Timeline/TimelineContext.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useTimelineZoom.tsx": {
+      "path": "hooks/useTimelineZoom.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useVideoPlayer.tsx": {
+      "path": "hooks/useVideoPlayer.tsx",
+      "imports": [
+        "lib/types/video/remotion-constants.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "hooks/useVoiceToText.ts": {
+      "path": "hooks/useVoiceToText.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx"
+    },
+    "instrumentation.ts": {
+      "path": "instrumentation.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/analytics.ts": {
+      "path": "lib/analytics.ts",
+      "imports": [],
+      "importedBy": [
+        "app/(marketing)/login/page.tsx",
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/new/page.tsx",
+        "client/components/AnalyticsProvider.tsx",
+        "client/components/ErrorBoundary.tsx",
+        "server/api/routers/__tests__/generation.test.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/(marketing)/login/page.tsx"
+    },
+    "lib/animations.tsx": {
+      "path": "lib/animations.tsx",
+      "imports": [],
+      "importedBy": [
+        "components/GlobalDependencyProvider.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by components/GlobalDependencyProvider.tsx"
+    },
+    "lib/api/__tests__/universal-response.test.ts": {
+      "path": "lib/api/__tests__/universal-response.test.ts",
+      "imports": [
+        "lib/api/response-helpers.ts",
+        "lib/api/client.ts",
+        "lib/types/api/universal.ts",
+        "lib/types/api/universal.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "lib/api/client.ts": {
+      "path": "lib/api/client.ts",
+      "imports": [
+        "lib/types/api/universal.ts",
+        "lib/types/api/universal.ts"
+      ],
+      "importedBy": [
+        "lib/api/__tests__/universal-response.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/api/response-helpers.ts": {
+      "path": "lib/api/response-helpers.ts",
+      "imports": [
+        "lib/types/api/universal.ts"
+      ],
+      "importedBy": [
+        "lib/api/__tests__/universal-response.test.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/generation.clean.ts"
+    },
+    "lib/client/sceneUpdater.ts": {
+      "path": "lib/client/sceneUpdater.ts",
+      "imports": [
+        "lib/types/api/golden-rule-contracts.ts",
+        "stores/videoState.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/cn.ts": {
+      "path": "lib/cn.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/enhanced-runner.ts": {
+      "path": "lib/evals/enhanced-runner.ts",
+      "imports": [
+        "lib/evals/runner.ts",
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/performance-runner.ts": {
+      "path": "lib/evals/performance-runner.ts",
+      "imports": [
+        "lib/evals/runner.ts",
+        "config/models.config.ts",
+        "config/models.config.ts",
+        "lib/evals/suites/model-pack-performance.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/prompt-optimizer.ts": {
+      "path": "lib/evals/prompt-optimizer.ts",
+      "imports": [
+        "lib/evals/runner.ts",
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/registry.ts": {
+      "path": "lib/evals/registry.ts",
+      "imports": [
+        "lib/evals/suites/basic-prompts.ts",
+        "lib/evals/suites/bazaar-vid-pipeline.ts",
+        "lib/evals/suites/model-pack-performance.ts",
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/runner.ts": {
+      "path": "lib/evals/runner.ts",
+      "imports": [
+        "lib/evals/types.ts",
+        "config/models.config.ts",
+        "config/models.config.ts",
+        "server/services/ai/aiClient.service.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "lib/evals/enhanced-runner.ts",
+        "lib/evals/performance-runner.ts",
+        "lib/evals/prompt-optimizer.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/suites/basic-prompts.ts": {
+      "path": "lib/evals/suites/basic-prompts.ts",
+      "imports": [
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [
+        "lib/evals/registry.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/suites/bazaar-vid-pipeline.ts": {
+      "path": "lib/evals/suites/bazaar-vid-pipeline.ts",
+      "imports": [
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [
+        "lib/evals/registry.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/suites/model-pack-performance.ts": {
+      "path": "lib/evals/suites/model-pack-performance.ts",
+      "imports": [
+        "lib/evals/types.ts"
+      ],
+      "importedBy": [
+        "lib/evals/performance-runner.ts",
+        "lib/evals/registry.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/evals/types.ts": {
+      "path": "lib/evals/types.ts",
+      "imports": [],
+      "importedBy": [
+        "lib/evals/enhanced-runner.ts",
+        "lib/evals/prompt-optimizer.ts",
+        "lib/evals/registry.ts",
+        "lib/evals/runner.ts",
+        "lib/evals/suites/basic-prompts.ts",
+        "lib/evals/suites/bazaar-vid-pipeline.ts",
+        "lib/evals/suites/model-pack-performance.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/events/sceneEvents.ts": {
+      "path": "lib/events/sceneEvents.ts",
+      "imports": [],
+      "importedBy": [
+        "server/services/ai/conversationalResponse.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/logger.ts": {
+      "path": "lib/logger.ts",
+      "imports": [],
+      "importedBy": [
+        "app/api/animation-design-briefs/[id]/route.ts",
+        "app/api/components/[componentId]/metadata/route.ts",
+        "app/api/components/[componentId]/route.ts",
+        "scripts/migrate-component-recovery.ts",
+        "server/api/routers/voice.ts",
+        "server/lib/r2.ts",
+        "server/services/ai/titleGenerator.service.ts",
+        "server/services/generation/sceneAnalyzer.service.ts",
+        "server/utils/tsxPreprocessor.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/ai/titleGenerator.service.ts"
+    },
+    "lib/metrics.ts": {
+      "path": "lib/metrics.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/nameGenerator.ts": {
+      "path": "lib/nameGenerator.ts",
+      "imports": [],
+      "importedBy": [
+        "server/api/routers/project.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/project.ts"
+    },
+    "lib/patch.ts": {
+      "path": "lib/patch.ts",
+      "imports": [
+        "lib/types/video/input-props.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx",
+        "hooks/useTimelineDragAndDrop.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/simpleLogger.ts": {
+      "path": "lib/simpleLogger.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/ai/brain.types.ts": {
+      "path": "lib/types/ai/brain.types.ts",
+      "imports": [],
+      "importedBy": [
+        "server/services/brain/__tests__/orchestrator.test.ts",
+        "server/services/brain/sceneRepository.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/ai/index.ts": {
+      "path": "lib/types/ai/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/a2a.ts": {
+      "path": "lib/types/api/a2a.ts",
+      "imports": [],
+      "importedBy": [
+        "lib/types/api/enhanced-a2a.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/brain-decision.ts": {
+      "path": "lib/types/api/brain-decision.ts",
+      "imports": [],
+      "importedBy": [
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/chat-events.ts": {
+      "path": "lib/types/api/chat-events.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/chat.ts": {
+      "path": "lib/types/api/chat.ts",
+      "imports": [
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/generation/sceneAnalyzer.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/enhanced-a2a.ts": {
+      "path": "lib/types/api/enhanced-a2a.ts",
+      "imports": [
+        "lib/types/api/a2a.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/evaluation.ts": {
+      "path": "lib/types/api/evaluation.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/field-mapping.ts": {
+      "path": "lib/types/api/field-mapping.ts",
+      "imports": [
+        "lib/types/api/index.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/golden-rule-contracts.ts": {
+      "path": "lib/types/api/golden-rule-contracts.ts",
+      "imports": [],
+      "importedBy": [
+        "lib/client/sceneUpdater.ts",
+        "server/api/routers/generation.simplified.ts",
+        "server/services/base/StandardSceneService.ts",
+        "server/services/generation/sceneBuilder.service.updated.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/delete/SceneDeleter.ts",
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "server/services/scene/edit/SurgicalEditor.ts",
+        "server/services/scene/scene.service.ts",
+        "stores/videoState.normalized.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/api/index.ts": {
+      "path": "lib/types/api/index.ts",
+      "imports": [],
+      "importedBy": [
+        "lib/types/api/field-mapping.ts",
+        "server/services/brain/preferenceExtractor.service.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/brain/preferenceExtractor.service.ts"
+    },
+    "lib/types/api/universal.ts": {
+      "path": "lib/types/api/universal.ts",
+      "imports": [
+        "generated/entities.ts"
+      ],
+      "importedBy": [
+        "lib/api/__tests__/universal-response.test.ts",
+        "lib/api/__tests__/universal-response.test.ts",
+        "lib/api/client.ts",
+        "lib/api/client.ts",
+        "lib/api/response-helpers.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.universal.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by lib/api/response-helpers.ts"
+    },
+    "lib/types/database/index.ts": {
+      "path": "lib/types/database/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/database/project.ts": {
+      "path": "lib/types/database/project.ts",
+      "imports": [],
+      "importedBy": [
+        "server/queries/getUserProjects.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/queries/getUserProjects.ts"
+    },
+    "lib/types/index.ts": {
+      "path": "lib/types/index.ts",
+      "imports": [],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+        "stores/videoState-simple.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/shared/global.d.ts": {
+      "path": "lib/types/shared/global.d.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/shared/index.ts": {
+      "path": "lib/types/shared/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/shared/json-patch.ts": {
+      "path": "lib/types/shared/json-patch.ts",
+      "imports": [],
+      "importedBy": [
+        "components/InsertCustomComponentButton.tsx",
+        "server/api/routers/project.ts",
+        "server/db/schema.ts",
+        "tests/integration/api/json-patch-validation.test.ts",
+        "tests/integration/customComponentIntegration.test.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/db/schema.ts"
+    },
+    "lib/types/shared/scene.types.ts": {
+      "path": "lib/types/shared/scene.types.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/video/animationDesignBrief.schema.ts": {
+      "path": "lib/types/video/animationDesignBrief.schema.ts",
+      "imports": [],
+      "importedBy": [
+        "remotion/components/scenes/CustomScene.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/video/index.ts": {
+      "path": "lib/types/video/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/video/input-props.ts": {
+      "path": "lib/types/video/input-props.ts",
+      "imports": [
+        "lib/types/video/remotion-constants.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+        "app/share/[shareId]/ShareVideoPlayerClient.tsx",
+        "app/share/[shareId]/page.tsx",
+        "lib/patch.ts",
+        "lib/patch.ts",
+        "lib/types/video/remotion-constants.ts",
+        "remotion/Root.tsx",
+        "remotion/Root.tsx",
+        "remotion/compositions/DynamicVideo.tsx",
+        "remotion/compositions/DynamicVideo.tsx",
+        "server/api/routers/share.ts",
+        "server/db/schema.ts",
+        "server/services/brain/contextBuilder.service.ts",
+        "tests/integration/customComponentIntegration.test.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/db/schema.ts"
+    },
+    "lib/types/video/remotion-constants.ts": {
+      "path": "lib/types/video/remotion-constants.ts",
+      "imports": [
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "app/projects/new/page.tsx",
+        "hooks/useVideoPlayer.tsx",
+        "lib/types/video/input-props.ts",
+        "server/api/routers/project.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by lib/types/video/input-props.ts"
+    },
+    "lib/types/video/sceneLayout.ts": {
+      "path": "lib/types/video/sceneLayout.ts",
+      "imports": [],
+      "importedBy": [
+        "server/services/generation/codeGenerator.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/video/storyboard.ts": {
+      "path": "lib/types/video/storyboard.ts",
+      "imports": [],
+      "importedBy": [
+        "server/services/generation/componentGenerator/sceneSpecGenerator.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/types/video/timeline.ts": {
+      "path": "lib/types/video/timeline.ts",
+      "imports": [],
+      "importedBy": [
+        "components/client/Timeline/Timeline.tsx",
+        "components/client/Timeline/Timeline.tsx",
+        "components/client/Timeline/TimelineContext.tsx",
+        "components/client/Timeline/TimelineGrid.tsx",
+        "components/client/Timeline/TimelineItem.tsx",
+        "hooks/useTimelineValidation.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/unregister-service-worker.ts": {
+      "path": "lib/unregister-service-worker.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/utils/codeDurationExtractor.ts": {
+      "path": "lib/utils/codeDurationExtractor.ts",
+      "imports": [],
+      "importedBy": [
+        "server/api/routers/__tests__/generation.test.ts",
+        "server/api/routers/generation.old.ts",
+        "server/services/brain/sceneRepository.service.ts",
+        "server/services/generation/__tests__/sceneBuilder.test.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "server/services/generation/sceneBuilder.service.ts",
+        "server/services/generation/sceneBuilder.service.updated.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/SurgicalEditor.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by tools/add/add_helpers/CodeGeneratorNEW.ts"
+    },
+    "lib/utils/timeline.ts": {
+      "path": "lib/utils/timeline.ts",
+      "imports": [],
+      "importedBy": [
+        "stores/videoState.normalized.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/utils/welcomeSceneUtils.ts": {
+      "path": "lib/utils/welcomeSceneUtils.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "lib/utils.ts": {
+      "path": "lib/utils.ts",
+      "imports": [
+        "config/site.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[projectId]/components/FixableComponentsPanel.tsx",
+        "app/share/[shareId]/page.tsx",
+        "components/client/Timeline/Timeline.tsx",
+        "components/client/Timeline/TimelineGrid.tsx",
+        "components/client/Timeline/TimelineItem.tsx",
+        "components/ui/ThinkingAnimation.tsx",
+        "components/ui/accordion.tsx",
+        "components/ui/alert.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/button.tsx",
+        "components/ui/calendar.tsx",
+        "components/ui/card.tsx",
+        "components/ui/checkbox.tsx",
+        "components/ui/dialog.tsx",
+        "components/ui/dropdown-menu.tsx",
+        "components/ui/input.tsx",
+        "components/ui/label.tsx",
+        "components/ui/popover.tsx",
+        "components/ui/progress.tsx",
+        "components/ui/select.tsx",
+        "components/ui/separator.tsx",
+        "components/ui/sheet.tsx",
+        "components/ui/skeleton.tsx",
+        "components/ui/slider.tsx",
+        "components/ui/spinner.tsx",
+        "components/ui/switch.tsx",
+        "components/ui/tabs.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/tooltip.tsx",
+        "server/api/routers/share.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/share.ts"
+    },
+    "remotion/Root.tsx": {
+      "path": "remotion/Root.tsx",
+      "imports": [
+        "remotion/compositions/DynamicVideo.tsx",
+        "lib/types/video/input-props.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "remotion/index.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/components/CustomScene.tsx": {
+      "path": "remotion/components/CustomScene.tsx",
+      "imports": [
+        "hooks/useRemoteComponent.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/components/scenes/CustomScene.tsx": {
+      "path": "remotion/components/scenes/CustomScene.tsx",
+      "imports": [
+        "hooks/useRemoteComponent.tsx",
+        "remotion/components/scenes/index.ts",
+        "lib/types/video/animationDesignBrief.schema.ts"
+      ],
+      "importedBy": [
+        "remotion/components/scenes/__tests__/CustomScene.test.tsx",
+        "remotion/components/scenes/__tests__/CustomScene.test.tsx",
+        "remotion/components/scenes/index.ts",
+        "remotion/compositions/TestCustomScene.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/components/scenes/__tests__/CustomScene.test.tsx": {
+      "path": "remotion/components/scenes/__tests__/CustomScene.test.tsx",
+      "imports": [
+        "remotion/components/scenes/CustomScene.tsx",
+        "remotion/components/scenes/CustomScene.tsx",
+        "hooks/useRemoteComponent.tsx"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "remotion/components/scenes/index.ts": {
+      "path": "remotion/components/scenes/index.ts",
+      "imports": [
+        "remotion/components/scenes/CustomScene.tsx"
+      ],
+      "importedBy": [
+        "remotion/components/scenes/CustomScene.tsx",
+        "remotion/compositions/DynamicVideo.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/compositions/DynamicVideo.tsx": {
+      "path": "remotion/compositions/DynamicVideo.tsx",
+      "imports": [
+        "lib/types/video/input-props.ts",
+        "remotion/components/scenes/index.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "remotion/Root.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/compositions/TestCustomScene.tsx": {
+      "path": "remotion/compositions/TestCustomScene.tsx",
+      "imports": [
+        "remotion/components/scenes/CustomScene.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "remotion/index.ts": {
+      "path": "remotion/index.ts",
+      "imports": [
+        "remotion/Root.tsx"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/lib/db-direct.ts": {
+      "path": "scripts/lib/db-direct.ts",
+      "imports": [
+        "server/db/schema.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/log-tools/log-ask.ts": {
+      "path": "scripts/log-tools/log-ask.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/log-tools/log-issues.ts": {
+      "path": "scripts/log-tools/log-issues.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/log-tools/log-raw.ts": {
+      "path": "scripts/log-tools/log-raw.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/log-tools/log-refresh.ts": {
+      "path": "scripts/log-tools/log-refresh.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/migrate-component-recovery.ts": {
+      "path": "scripts/migrate-component-recovery.ts",
+      "imports": [
+        "server/db/index.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "scripts/migrate-schema.ts": {
+      "path": "scripts/migrate-schema.ts",
+      "imports": [
+        "server/db/index.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/api/root.ts": {
+      "path": "server/api/root.ts",
+      "imports": [
+        "server/api/routers/project.ts",
+        "server/api/routers/chat.ts",
+        "server/api/routers/render.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/voice.ts",
+        "server/api/routers/feedback.ts",
+        "server/api/routers/emailSubscriber.ts",
+        "server/api/routers/scenes.ts",
+        "server/api/routers/share.ts",
+        "server/api/routers/admin.ts",
+        "server/api/trpc.ts",
+        "server/init.ts"
+      ],
+      "importedBy": [
+        "app/api/trpc/[trpc]/route.ts",
+        "components/ui/FeedbackModal.tsx",
+        "trpc/react.tsx",
+        "trpc/server.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by trpc/react.tsx"
+    },
+    "server/api/routers/__tests__/generation.test.ts": {
+      "path": "server/api/routers/__tests__/generation.test.ts",
+      "imports": [
+        "server/api/routers/generation.ts",
+        "server/db/index.ts",
+        "lib/analytics.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "server/api/routers/admin.ts": {
+      "path": "server/api/routers/admin.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/chat.ts": {
+      "path": "server/api/routers/chat.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/emailSubscriber.ts": {
+      "path": "server/api/routers/emailSubscriber.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/feedback.ts": {
+      "path": "server/api/routers/feedback.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/generation.clean.ts": {
+      "path": "server/api/routers/generation.clean.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "brain/orchestratorNEW.ts",
+        "tools/add/add.ts",
+        "tools/edit/edit.ts",
+        "tools/delete/delete.ts",
+        "server/api/services/database.service.ts",
+        "server/api/services/background.service.ts",
+        "lib/api/response-helpers.ts",
+        "lib/types/api/universal.ts",
+        "lib/types/api/universal.ts",
+        "generated/entities.ts",
+        "tools/helpers/types.ts",
+        "server/services/data/projectMemory.service.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/generation.old.ts": {
+      "path": "server/api/routers/generation.old.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "brain/orchestratorNEW.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/api/routers/generation.simplified.ts": {
+      "path": "server/api/routers/generation.simplified.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/services/scene/scene.service.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/types/api/golden-rule-contracts.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/api/routers/generation.ts": {
+      "path": "server/api/routers/generation.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "brain/orchestratorNEW.ts",
+        "tools/add/add.ts",
+        "tools/edit/edit.ts",
+        "tools/delete/delete.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/types/api/brain-decision.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/__tests__/generation.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/api/routers/generation.universal.ts": {
+      "path": "server/api/routers/generation.universal.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "brain/orchestratorNEW.ts",
+        "tools/add/add.ts",
+        "tools/edit/edit.ts",
+        "tools/delete/delete.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/types/api/brain-decision.ts",
+        "tools/helpers/types.ts",
+        "lib/api/response-helpers.ts",
+        "lib/types/api/universal.ts",
+        "lib/types/api/universal.ts",
+        "generated/entities.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/api/routers/project.ts": {
+      "path": "server/api/routers/project.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/schema.ts",
+        "lib/types/video/remotion-constants.ts",
+        "lib/types/shared/json-patch.ts",
+        "lib/nameGenerator.ts",
+        "server/services/ai/titleGenerator.service.ts",
+        "server/db/index.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/render.ts": {
+      "path": "server/api/routers/render.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/scenes.ts": {
+      "path": "server/api/routers/scenes.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/share.ts": {
+      "path": "server/api/routers/share.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/utils.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/routers/voice.ts": {
+      "path": "server/api/routers/voice.ts",
+      "imports": [
+        "server/api/trpc.ts",
+        "server/lib/openai.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/api/services/background.service.ts": {
+      "path": "server/api/services/background.service.ts",
+      "imports": [
+        "generated/entities.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/generation.clean.ts"
+    },
+    "server/api/services/database.service.ts": {
+      "path": "server/api/services/database.service.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "generated/entities.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/generation.clean.ts"
+    },
+    "server/api/trpc.ts": {
+      "path": "server/api/trpc.ts",
+      "imports": [
+        "server/auth/index.ts",
+        "server/db/index.ts"
+      ],
+      "importedBy": [
+        "app/api/trpc/[trpc]/route.ts",
+        "server/api/root.ts",
+        "server/api/routers/admin.ts",
+        "server/api/routers/chat.ts",
+        "server/api/routers/emailSubscriber.ts",
+        "server/api/routers/feedback.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.old.ts",
+        "server/api/routers/generation.simplified.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts",
+        "server/api/routers/project.ts",
+        "server/api/routers/render.ts",
+        "server/api/routers/scenes.ts",
+        "server/api/routers/share.ts",
+        "server/api/routers/voice.ts",
+        "tests/integration/api/error-handling.test.ts",
+        "trpc/server.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/project.ts"
+    },
+    "server/auth/config.ts": {
+      "path": "server/auth/config.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/auth/index.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/auth/index.ts"
+    },
+    "server/auth/index.ts": {
+      "path": "server/auth/index.ts",
+      "imports": [
+        "server/auth/config.ts"
+      ],
+      "importedBy": [
+        "app/api/auth/[...nextauth]/route.ts",
+        "app/api/r2-presign/route.ts",
+        "app/api/upload/route.ts",
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/generate/new/page.tsx",
+        "app/projects/new/page.tsx",
+        "app/projects/page.tsx",
+        "server/api/trpc.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/trpc.ts"
+    },
+    "server/constants/chat.ts": {
+      "path": "server/constants/chat.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/constants/runtime-dependencies.ts": {
+      "path": "server/constants/runtime-dependencies.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/db/index.ts": {
+      "path": "server/db/index.ts",
+      "imports": [
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "app/api/animation-design-briefs/[id]/route.ts",
+        "app/api/components/[componentId]/metadata/route.ts",
+        "app/api/components/[componentId]/route.ts",
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/generate/new/page.tsx",
+        "app/projects/new/page.tsx",
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "lib/evals/runner.ts",
+        "lib/metrics.ts",
+        "lib/utils/welcomeSceneUtils.ts",
+        "scripts/migrate-component-recovery.ts",
+        "scripts/migrate-schema.ts",
+        "server/api/routers/__tests__/generation.test.ts",
+        "server/api/routers/admin.ts",
+        "server/api/routers/emailSubscriber.ts",
+        "server/api/routers/feedback.ts",
+        "server/api/routers/generation.old.ts",
+        "server/api/routers/generation.simplified.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts",
+        "server/api/routers/project.ts",
+        "server/api/routers/share.ts",
+        "server/api/services/database.service.ts",
+        "server/api/trpc.ts",
+        "server/auth/config.ts",
+        "server/queries/getUserProjects.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/brain/sceneRepository.service.ts",
+        "server/services/data/dataLifecycle.service.ts",
+        "server/services/data/projectMemory.service.ts",
+        "server/services/data/versionHistory.service.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/delete/SceneDeleter.ts",
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "server/services/scene/edit/SurgicalEditor.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/auth/config.ts"
+    },
+    "server/db/schema/index.ts": {
+      "path": "server/db/schema/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/db/schema.ts": {
+      "path": "server/db/schema.ts",
+      "imports": [
+        "lib/types/video/input-props.ts",
+        "lib/types/shared/json-patch.ts"
+      ],
+      "importedBy": [
+        "app/api/animation-design-briefs/[id]/route.ts",
+        "app/api/components/[componentId]/metadata/route.ts",
+        "app/api/components/[componentId]/route.ts",
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/generate/new/page.tsx",
+        "app/projects/new/page.tsx",
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "lib/evals/runner.ts",
+        "lib/metrics.ts",
+        "lib/types/api/chat.ts",
+        "lib/utils/welcomeSceneUtils.ts",
+        "scripts/lib/db-direct.ts",
+        "server/api/routers/admin.ts",
+        "server/api/routers/chat.ts",
+        "server/api/routers/emailSubscriber.ts",
+        "server/api/routers/feedback.ts",
+        "server/api/routers/generation.old.ts",
+        "server/api/routers/generation.simplified.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts",
+        "server/api/routers/project.ts",
+        "server/api/routers/render.ts",
+        "server/api/routers/scenes.ts",
+        "server/api/routers/share.ts",
+        "server/api/services/database.service.ts",
+        "server/auth/config.ts",
+        "server/db/index.ts",
+        "server/queries/getUserProjects.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/brain/sceneRepository.service.ts",
+        "server/services/data/dataLifecycle.service.ts",
+        "server/services/data/projectMemory.service.ts",
+        "server/services/data/versionHistory.service.ts",
+        "server/services/data/versionHistory.service.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/delete/SceneDeleter.ts",
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "server/services/scene/edit/SurgicalEditor.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/db/index.ts"
+    },
+    "server/init.ts": {
+      "path": "server/init.ts",
+      "imports": [
+        "server/services/data/dataLifecycle.service.ts"
+      ],
+      "importedBy": [
+        "server/api/root.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/root.ts"
+    },
+    "server/lib/openai.ts": {
+      "path": "server/lib/openai.ts",
+      "imports": [],
+      "importedBy": [
+        "app/api/transcribe/route.ts",
+        "server/api/routers/voice.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/voice.ts"
+    },
+    "server/lib/r2.ts": {
+      "path": "server/lib/r2.ts",
+      "imports": [
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/queries/getUserProjects.ts": {
+      "path": "server/queries/getUserProjects.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/types/database/project.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/page.tsx",
+        "app/projects/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/page.tsx"
+    },
+    "server/services/__tests__/simpleServices.test.ts": {
+      "path": "server/services/__tests__/simpleServices.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "server/services/ai/aiClient.service.ts": {
+      "path": "server/services/ai/aiClient.service.ts",
+      "imports": [
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [
+        "brain/orchestrator_functions/intentAnalyzer.ts",
+        "lib/evals/runner.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/ai/titleGenerator.service.ts",
+        "server/services/brain/__tests__/orchestrator.test.ts",
+        "server/services/brain/preferenceExtractor.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "server/services/generation/directCodeEditor.service.ts",
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/edit/BaseEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/add/add_helpers/layoutGeneratorNEW.ts",
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+        "tools/edit/edit_helpers/SurgicalEditorNEW.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/ai/titleGenerator.service.ts"
+    },
+    "server/services/ai/conversationalResponse.service.ts": {
+      "path": "server/services/ai/conversationalResponse.service.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/events/sceneEvents.ts"
+      ],
+      "importedBy": [
+        "server/services/brain/__tests__/orchestrator.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/ai/index.ts": {
+      "path": "server/services/ai/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/ai/titleGenerator.service.ts": {
+      "path": "server/services/ai/titleGenerator.service.ts",
+      "imports": [
+        "lib/logger.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/project.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/api/routers/project.ts"
+    },
+    "server/services/base/StandardSceneService.ts": {
+      "path": "server/services/base/StandardSceneService.ts",
+      "imports": [
+        "lib/types/api/golden-rule-contracts.ts"
+      ],
+      "importedBy": [
+        "server/services/base/__tests__/StandardSceneService.test.ts",
+        "server/services/generation/sceneBuilder.service.updated.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/edit/BaseEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/base/__tests__/StandardSceneService.test.ts": {
+      "path": "server/services/base/__tests__/StandardSceneService.test.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "server/services/brain/__tests__/orchestrator.test.ts": {
+      "path": "server/services/brain/__tests__/orchestrator.test.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "server/services/ai/conversationalResponse.service.ts",
+        "server/services/brain/sceneRepository.service.ts",
+        "server/services/data/projectMemory.service.ts",
+        "server/services/brain/contextBuilder.service.ts",
+        "lib/types/ai/brain.types.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "server/services/brain/contextBuilder.service.ts": {
+      "path": "server/services/brain/contextBuilder.service.ts",
+      "imports": [
+        "config/prompts.config.ts",
+        "config/models.config.ts",
+        "server/services/data/projectMemory.service.ts",
+        "server/services/brain/preferenceExtractor.service.ts",
+        "lib/types/video/input-props.ts"
+      ],
+      "importedBy": [
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "server/services/brain/__tests__/orchestrator.test.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "server/services/brain/preferenceExtractor.service.ts": {
+      "path": "server/services/brain/preferenceExtractor.service.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "server/services/data/projectMemory.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "lib/types/api/index.ts"
+      ],
+      "importedBy": [
+        "server/services/brain/contextBuilder.service.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "server/services/brain/sceneRepository.service.ts": {
+      "path": "server/services/brain/sceneRepository.service.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "lib/types/ai/brain.types.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [
+        "server/services/brain/__tests__/orchestrator.test.ts",
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/data/dataLifecycle.service.ts": {
+      "path": "server/services/data/dataLifecycle.service.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "app/api/cron/data-lifecycle-cleanup/route.ts",
+        "server/init.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/init.ts"
+    },
+    "server/services/data/index.ts": {
+      "path": "server/services/data/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/data/projectMemory.service.ts": {
+      "path": "server/services/data/projectMemory.service.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "brain/orchestrator_functions/contextBuilder.ts",
+        "server/api/routers/generation.clean.ts",
+        "server/services/brain/__tests__/orchestrator.test.ts",
+        "server/services/brain/contextBuilder.service.ts",
+        "server/services/brain/preferenceExtractor.service.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by server/services/brain/contextBuilder.service.ts"
+    },
+    "server/services/data/versionHistory.service.ts": {
+      "path": "server/services/data/versionHistory.service.ts",
+      "imports": [
+        "server/db/index.ts",
+        "server/db/schema.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/__tests__/sceneBuilder.test.ts": {
+      "path": "server/services/generation/__tests__/sceneBuilder.test.ts",
+      "imports": [
+        "server/services/generation/sceneBuilder.service.ts",
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "server/services/generation/codeGenerator.service.ts": {
+      "path": "server/services/generation/codeGenerator.service.ts",
+      "imports": [
+        "lib/types/video/sceneLayout.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [
+        "server/services/generation/__tests__/sceneBuilder.test.ts",
+        "server/services/generation/sceneBuilder.service.ts",
+        "server/services/generation/sceneBuilder.service.updated.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/componentGenerator/adapters/flowbite.ts": {
+      "path": "server/services/generation/componentGenerator/adapters/flowbite.ts",
+      "imports": [],
+      "importedBy": [
+        "server/services/generation/componentGenerator/sceneSpecGenerator.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/componentGenerator/sceneSpecGenerator.ts": {
+      "path": "server/services/generation/componentGenerator/sceneSpecGenerator.ts",
+      "imports": [
+        "lib/types/video/storyboard.ts",
+        "server/services/generation/componentGenerator/adapters/flowbite.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/directCodeEditor.service.ts": {
+      "path": "server/services/generation/directCodeEditor.service.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/index.ts": {
+      "path": "server/services/generation/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/layoutGenerator.service.ts": {
+      "path": "server/services/generation/layoutGenerator.service.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [
+        "server/services/generation/__tests__/sceneBuilder.test.ts",
+        "server/services/generation/sceneBuilder.service.ts",
+        "server/services/generation/sceneBuilder.service.updated.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/sceneAnalyzer.service.ts": {
+      "path": "server/services/generation/sceneAnalyzer.service.ts",
+      "imports": [
+        "lib/types/api/chat.ts",
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/sceneBuilder.service.ts": {
+      "path": "server/services/generation/sceneBuilder.service.ts",
+      "imports": [
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [
+        "server/services/generation/__tests__/sceneBuilder.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/generation/sceneBuilder.service.updated.ts": {
+      "path": "server/services/generation/sceneBuilder.service.updated.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/generation/layoutGenerator.service.ts",
+        "server/services/generation/codeGenerator.service.ts",
+        "lib/utils/codeDurationExtractor.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/mcp/index.ts": {
+      "path": "server/services/mcp/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/add/CodeGenerator.ts": {
+      "path": "server/services/scene/add/CodeGenerator.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "lib/utils/codeDurationExtractor.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/add/ImageToCodeGenerator.ts": {
+      "path": "server/services/scene/add/ImageToCodeGenerator.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "lib/utils/codeDurationExtractor.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/add/LayoutGenerator.ts": {
+      "path": "server/services/scene/add/LayoutGenerator.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/delete/SceneDeleter.ts": {
+      "path": "server/services/scene/delete/SceneDeleter.ts",
+      "imports": [
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/edit/BaseEditor.ts": {
+      "path": "server/services/scene/edit/BaseEditor.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/SurgicalEditor.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/edit/CreativeEditor.ts": {
+      "path": "server/services/scene/edit/CreativeEditor.ts",
+      "imports": [
+        "server/services/scene/edit/BaseEditor.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "lib/utils/codeDurationExtractor.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/edit/ErrorFixer.ts": {
+      "path": "server/services/scene/edit/ErrorFixer.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/edit/SurgicalEditor.ts": {
+      "path": "server/services/scene/edit/SurgicalEditor.ts",
+      "imports": [
+        "server/services/scene/edit/BaseEditor.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "lib/utils/codeDurationExtractor.ts",
+        "server/db/index.ts",
+        "server/db/schema.ts"
+      ],
+      "importedBy": [
+        "server/services/scene/scene.service.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/services/scene/scene.service.ts": {
+      "path": "server/services/scene/scene.service.ts",
+      "imports": [
+        "server/services/base/StandardSceneService.ts",
+        "lib/types/api/golden-rule-contracts.ts",
+        "server/services/scene/add/LayoutGenerator.ts",
+        "server/services/scene/add/CodeGenerator.ts",
+        "server/services/scene/add/ImageToCodeGenerator.ts",
+        "server/services/scene/edit/SurgicalEditor.ts",
+        "server/services/scene/edit/CreativeEditor.ts",
+        "server/services/scene/edit/ErrorFixer.ts",
+        "server/services/scene/delete/SceneDeleter.ts",
+        "server/services/brain/sceneRepository.service.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.simplified.ts",
+        "tests/architecture-verification.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "server/utils/tsxPreprocessor.ts": {
+      "path": "server/utils/tsxPreprocessor.ts",
+      "imports": [
+        "lib/logger.ts"
+      ],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "shared/modules/index.ts": {
+      "path": "shared/modules/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "shared/modules/registry.ts": {
+      "path": "shared/modules/registry.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "shared/modules/versions.ts": {
+      "path": "shared/modules/versions.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "stores/__tests__/videoState.test.ts": {
+      "path": "stores/__tests__/videoState.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "stores/videoState-hybrid.ts": {
+      "path": "stores/videoState-hybrid.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "stores/videoState-simple.ts": {
+      "path": "stores/videoState-simple.ts",
+      "imports": [
+        "lib/types/index.ts"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "stores/videoState.normalized.ts": {
+      "path": "stores/videoState.normalized.ts",
+      "imports": [
+        "lib/types/api/golden-rule-contracts.ts",
+        "lib/utils/timeline.ts"
+      ],
+      "importedBy": [
+        "tests/architecture-verification.test.ts"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "stores/videoState.ts": {
+      "path": "stores/videoState.ts",
+      "imports": [
+        "trpc/react.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+        "components/client/Timeline/Timeline.tsx",
+        "components/client/Timeline/TimelineContext.tsx",
+        "hooks/useTimelineDragAndDrop.tsx",
+        "lib/client/sceneUpdater.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx"
+    },
+    "templates/AICoding.tsx": {
+      "path": "templates/AICoding.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/AIDialogue.tsx": {
+      "path": "templates/AIDialogue.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/AppleSignIn.tsx": {
+      "path": "templates/AppleSignIn.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/BlueGradientText.tsx": {
+      "path": "templates/BlueGradientText.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/Code.tsx": {
+      "path": "templates/Code.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/Coding.tsx": {
+      "path": "templates/Coding.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/CpuArchitecture.tsx": {
+      "path": "templates/CpuArchitecture.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/DotRipple.tsx": {
+      "path": "templates/DotRipple.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/FintechUI.tsx": {
+      "path": "templates/FintechUI.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/FloatingElements.tsx": {
+      "path": "templates/FloatingElements.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/FloatingParticles.tsx": {
+      "path": "templates/FloatingParticles.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/GitHubSignIn.tsx": {
+      "path": "templates/GitHubSignIn.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/GlitchText.tsx": {
+      "path": "templates/GlitchText.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/GoogleSignIn.tsx": {
+      "path": "templates/GoogleSignIn.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/GradientText.tsx": {
+      "path": "templates/GradientText.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/GrowthGraph.tsx": {
+      "path": "templates/GrowthGraph.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/HeroTemplate.tsx": {
+      "path": "templates/HeroTemplate.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/KnowsCode.tsx": {
+      "path": "templates/KnowsCode.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/LogoTemplate.tsx": {
+      "path": "templates/LogoTemplate.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/ParticleExplosion.tsx": {
+      "path": "templates/ParticleExplosion.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/PromptIntro.tsx": {
+      "path": "templates/PromptIntro.tsx",
+      "imports": [],
+      "importedBy": [
+        "templates/registry.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by templates/registry.ts"
+    },
+    "templates/PulsingCircles.tsx": {
+      "path": "templates/PulsingCircles.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/TypingTemplate.tsx": {
+      "path": "templates/TypingTemplate.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/WaveAnimation.tsx": {
+      "path": "templates/WaveAnimation.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "templates/registry.ts": {
+      "path": "templates/registry.ts",
+      "imports": [
+        "templates/KnowsCode.tsx",
+        "templates/PromptIntro.tsx",
+        "templates/FintechUI.tsx",
+        "templates/GrowthGraph.tsx",
+        "templates/AppleSignIn.tsx",
+        "templates/GitHubSignIn.tsx",
+        "templates/GoogleSignIn.tsx",
+        "templates/Coding.tsx",
+        "templates/BlueGradientText.tsx",
+        "templates/GradientText.tsx"
+      ],
+      "importedBy": [
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx"
+    },
+    "templates/templateUtils.ts": {
+      "path": "templates/templateUtils.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "tests/architecture-verification.test.ts": {
+      "path": "tests/architecture-verification.test.ts",
+      "imports": [
+        "server/services/scene/scene.service.ts",
+        "stores/videoState.normalized.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/api/error-handling.test.ts": {
+      "path": "tests/integration/api/error-handling.test.ts",
+      "imports": [
+        "server/api/trpc.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/api/json-patch-validation.test.ts": {
+      "path": "tests/integration/api/json-patch-validation.test.ts",
+      "imports": [
+        "lib/types/shared/json-patch.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/api/simple-json-patch.test.ts": {
+      "path": "tests/integration/api/simple-json-patch.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/customComponentIntegration.test.ts": {
+      "path": "tests/integration/customComponentIntegration.test.ts",
+      "imports": [
+        "lib/types/video/input-props.ts",
+        "lib/types/shared/json-patch.ts"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/db/drizzle-queries.test.ts": {
+      "path": "tests/integration/db/drizzle-queries.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/integration/db/simple-drizzle-queries.test.ts": {
+      "path": "tests/integration/db/simple-drizzle-queries.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/performance/responseTime.test.ts": {
+      "path": "tests/performance/responseTime.test.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/remotion/__mocks__/MockPlayer.tsx": {
+      "path": "tests/remotion/__mocks__/MockPlayer.tsx",
+      "imports": [],
+      "importedBy": [
+        "tests/remotion/__tests__/playerIntegration.test.tsx"
+      ],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "tests/remotion/__tests__/compositionRendering.test.tsx": {
+      "path": "tests/remotion/__tests__/compositionRendering.test.tsx",
+      "imports": [],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tests/remotion/__tests__/playerIntegration.test.tsx": {
+      "path": "tests/remotion/__tests__/playerIntegration.test.tsx",
+      "imports": [
+        "tests/remotion/__mocks__/MockPlayer.tsx"
+      ],
+      "importedBy": [],
+      "category": "TESTS",
+      "reason": "Test file"
+    },
+    "tools/add/add.ts": {
+      "path": "tools/add/add.ts",
+      "imports": [
+        "tools/helpers/base.ts",
+        "tools/add/add_helpers/layoutGeneratorNEW.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts",
+        "tools/helpers/types.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/add/add_helpers/CodeGeneratorNEW.ts": {
+      "path": "tools/add/add_helpers/CodeGeneratorNEW.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "lib/utils/codeDurationExtractor.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/add/add.ts",
+        "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts": {
+      "path": "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts",
+      "imports": [
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/add/add.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/add/add_helpers/layoutGeneratorNEW.ts": {
+      "path": "tools/add/add_helpers/layoutGeneratorNEW.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/add/add.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/delete/delete.ts": {
+      "path": "tools/delete/delete.ts",
+      "imports": [
+        "tools/helpers/base.ts",
+        "tools/helpers/types.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/edit/edit.ts": {
+      "path": "tools/edit/edit.ts",
+      "imports": [
+        "tools/helpers/base.ts",
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+        "tools/edit/edit_helpers/SurgicalEditorNEW.ts",
+        "tools/edit/edit_helpers/ErrorFixerNEW.ts",
+        "tools/helpers/types.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/edit/edit_helpers/BaseEditorNEW.ts": {
+      "path": "tools/edit/edit_helpers/BaseEditorNEW.ts",
+      "imports": [
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/edit/edit_helpers/CreativeEditorNEW.ts": {
+      "path": "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "tools/edit/edit_helpers/BaseEditorNEW.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/edit/edit.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/edit/edit_helpers/ErrorFixerNEW.ts": {
+      "path": "tools/edit/edit_helpers/ErrorFixerNEW.ts",
+      "imports": [
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/edit/edit.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/edit/edit_helpers/SurgicalEditorNEW.ts": {
+      "path": "tools/edit/edit_helpers/SurgicalEditorNEW.ts",
+      "imports": [
+        "server/services/ai/aiClient.service.ts",
+        "config/models.config.ts",
+        "config/prompts.config.ts",
+        "tools/helpers/types.ts"
+      ],
+      "importedBy": [
+        "tools/edit/edit.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/helpers/base.ts": {
+      "path": "tools/helpers/base.ts",
+      "imports": [],
+      "importedBy": [
+        "tools/add/add.ts",
+        "tools/delete/delete.ts",
+        "tools/edit/edit.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "tools/helpers/index.ts": {
+      "path": "tools/helpers/index.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "tools/helpers/types.ts": {
+      "path": "tools/helpers/types.ts",
+      "imports": [],
+      "importedBy": [
+        "server/api/routers/generation.clean.ts",
+        "server/api/routers/generation.ts",
+        "server/api/routers/generation.universal.ts",
+        "tools/add/add.ts",
+        "tools/add/add.ts",
+        "tools/add/add_helpers/CodeGeneratorNEW.ts",
+        "tools/add/add_helpers/ImageToCodeGeneratorNEW.ts",
+        "tools/add/add_helpers/layoutGeneratorNEW.ts",
+        "tools/delete/delete.ts",
+        "tools/delete/delete.ts",
+        "tools/edit/edit.ts",
+        "tools/edit/edit.ts",
+        "tools/edit/edit_helpers/BaseEditorNEW.ts",
+        "tools/edit/edit_helpers/CreativeEditorNEW.ts",
+        "tools/edit/edit_helpers/ErrorFixerNEW.ts",
+        "tools/edit/edit_helpers/SurgicalEditorNEW.ts"
+      ],
+      "category": "TRANSITIONAL",
+      "reason": "Part of Sprint 42 migration"
+    },
+    "trpc/query-client.ts": {
+      "path": "trpc/query-client.ts",
+      "imports": [],
+      "importedBy": [
+        "trpc/react.tsx",
+        "trpc/server.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by trpc/react.tsx"
+    },
+    "trpc/react.tsx": {
+      "path": "trpc/react.tsx",
+      "imports": [
+        "server/api/root.ts",
+        "trpc/query-client.ts"
+      ],
+      "importedBy": [
+        "app/(marketing)/page.tsx",
+        "app/admin/analytics/page.tsx",
+        "app/admin/feedback/page.tsx",
+        "app/admin/page.tsx",
+        "app/admin/testing/page.tsx",
+        "app/admin/users/[userId]/edit/page.tsx",
+        "app/admin/users/[userId]/page.tsx",
+        "app/admin/users/[userId]/projects/[projectId]/page.tsx",
+        "app/admin/users/page.tsx",
+        "app/layout.tsx",
+        "app/projects/[id]/generate/components/PromptForm.tsx",
+        "app/projects/[id]/generate/workspace/GenerateSidebar.tsx",
+        "app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx",
+        "app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx",
+        "app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/CodePanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG-simple.tsx",
+        "app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/StoryboardPanelG.tsx",
+        "app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx",
+        "app/projects/[projectId]/components/FixableComponentsPanel.tsx",
+        "components/AppHeader.tsx",
+        "components/InsertCustomComponentButton.tsx",
+        "components/ShareDialog.tsx",
+        "components/client/NewProjectButton.tsx",
+        "components/ui/FeedbackModal.tsx",
+        "stores/videoState.ts"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/(marketing)/page.tsx"
+    },
+    "trpc/server.ts": {
+      "path": "trpc/server.ts",
+      "imports": [
+        "server/api/root.ts",
+        "server/api/trpc.ts",
+        "trpc/query-client.ts"
+      ],
+      "importedBy": [
+        "app/share/[shareId]/page.tsx"
+      ],
+      "category": "ACTIVE",
+      "reason": "Imported by app/share/[shareId]/page.tsx"
+    },
+    "utils/finnhubDataFormatter.ts": {
+      "path": "utils/finnhubDataFormatter.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    },
+    "utils/retryWithBackoff.ts": {
+      "path": "utils/retryWithBackoff.ts",
+      "imports": [],
+      "importedBy": [],
+      "category": "ORPHANED",
+      "reason": "No imports found"
+    }
+  }
+}

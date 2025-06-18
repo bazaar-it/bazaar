@@ -5,7 +5,7 @@ import { Calendar, User, Eye } from "lucide-react";
 import { api } from "~/trpc/server";
 import { Button } from "~/components/ui/button";
 import { type Metadata } from "next";
-import { getBazaarUrl, getShareUrl } from "~/lib/utils";
+import { getBazaarUrl, getShareUrl } from "~/lib/utils/url";
 import ShareVideoPlayerClient from "./ShareVideoPlayerClient";
 import ShareButtons from "./SharePageClient";
 import type { InputProps, Scene } from "~/lib/types/video/input-props";
@@ -13,12 +13,12 @@ import { format } from "date-fns";
 import AppHeader from "~/components/AppHeader";
 
 interface PageProps {
-  params: { shareId: string };
+  params: Promise<{ shareId: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   try {
-    const { shareId } = params;
+    const { shareId } = await params;
     const videoShareRecord = await api.share.getSharedVideo({ shareId });
 
     const videoTitle = videoShareRecord.project?.inputProps?.meta?.title || videoShareRecord.title || "Shared Video";
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function SharePage({ params }: PageProps) {
-  const { shareId } = params;
+  const { shareId } = await params;
   const shareData = await api.share.getSharedVideo({ shareId });
 
   if (!shareData || !shareData.project) {

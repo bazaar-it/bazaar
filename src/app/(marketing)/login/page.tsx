@@ -2,7 +2,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { analytics } from "~/lib/analytics";
+import { analytics } from "~/lib/utils/analytics";
 
 export default function LoginPage() {
   const handleGitHubLogin = () => {

@@ -1,6 +1,6 @@
 //src/components/ui/skeleton.tsx
 
-import { cn } from "~/lib/utils"
+import { cn } from "~/lib/cn"
 
 function Skeleton({
   className,

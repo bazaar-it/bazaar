@@ -1,7 +1,7 @@
 import { BaseMCPTool } from "~/tools/helpers/base";
-import { creativeEditor } from "./edit_helpers/CreativeEditorNEW";
-import { surgicalEditor } from "./edit_helpers/SurgicalEditorNEW";
-import { errorFixer } from "./edit_helpers/ErrorFixerNEW";
+import { AIClientService } from "~/server/services/ai/aiClient.service";
+import { getModel } from "~/config/models.config";
+import { getSystemPrompt } from "~/config/prompts.config";
 import type { EditToolInput, EditToolOutput } from "~/tools/helpers/types";
 import { editToolInputSchema } from "~/tools/helpers/types";
 
@@ -22,27 +22,18 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
         throw new Error("No scene code provided");
       }
 
-      let result: EditToolOutput;
+      console.log('✏️ [EDIT TOOL] Executing edit:', {
+        prompt: input.userPrompt,
+        hasErrorDetails: !!input.errorDetails,
+        codeLength: input.tsxCode.length
+      });
 
-      switch (input.editType) {
-        case 'creative':
-          result = await this.creativeEdit(input);
-          break;
-          
-        case 'surgical':
-          result = await this.surgicalEdit(input);
-          break;
-          
-        case 'error-fix':
-          result = await this.fixErrors(input);
-          break;
-          
-        default:
-          throw new Error(`Unknown edit type: ${input.editType}`);
-      }
-
-      return result;
+      // Just edit the code - one unified approach
+      console.log('✏️ [EDIT TOOL] Processing edit request');
+      return await this.performEdit(input);
+      
     } catch (error) {
+      console.error('✏️ [EDIT TOOL] Error:', error);
       return {
         success: false,
         reasoning: `Edit failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -51,61 +42,113 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
     }
   }
 
-  private async creativeEdit(input: EditToolInput): Promise<EditToolOutput> {
-    const functionName = this.extractFunctionName(input.tsxCode);
-    
-    const result = await creativeEditor.executeEdit({
-      userPrompt: input.userPrompt,
-      tsxCode: input.tsxCode,           // ✓ Correct field name
-      functionName: functionName,
-      imageUrls: input.imageUrls,
-      visionAnalysis: input.visionAnalysis,
-    });
+  private async performEdit(input: EditToolInput): Promise<EditToolOutput> {
+    try {
+      const functionName = this.extractFunctionName(input.tsxCode);
+      
+      // Build context for the AI
+      let context = `USER REQUEST: "${input.userPrompt}"`;
+      
+      if (input.errorDetails) {
+        context += `\n\nERROR TO FIX:\n${input.errorDetails}`;
+      }
+      
+      if (input.imageUrls?.length) {
+        context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
+      }
+      
+      if (input.visionAnalysis) {
+        context += `\n\nVISION ANALYSIS:\n${JSON.stringify(input.visionAnalysis, null, 2)}`;
+      }
 
-    return {
-      success: true,
-      tsxCode: result.code,              // ✓ Correct field name
-      duration: result.duration,         // Only if changed
-      props: result.props,
-      reasoning: result.reasoning,
-      chatResponse: `I've updated the scene: ${result.changes?.join(', ') || 'Made creative improvements'}`,
-      changesApplied: result.changes,
-    };
-  }
+      // Build message content based on whether we have images
+      let messageContent: any;
+      
+      if (input.imageUrls?.length) {
+        // Build vision content array for image-based edits
+        messageContent = [
+          { 
+            type: 'text', 
+            text: `${context}
 
-  private async surgicalEdit(input: EditToolInput): Promise<EditToolOutput> {
-    const functionName = this.extractFunctionName(input.tsxCode);
-    
-    const result = await surgicalEditor.executeEdit({
-      userPrompt: input.userPrompt,
-      tsxCode: input.tsxCode,           // ✓ Correct field name
-      functionName: functionName,
-      targetElement: this.extractTargetElement(input.userPrompt),
-    });
+EXISTING CODE:
+\`\`\`tsx
+${input.tsxCode}
+\`\`\`
 
-    return {
-      success: true,
-      tsxCode: result.code,              // ✓ Correct field name
-      reasoning: result.reasoning,
-      chatResponse: `Made precise edit: ${result.changeDescription}`,
-      changesApplied: [result.changeDescription],
-    };
-  }
+IMPORTANT: Look at the provided image(s) and recreate the visual elements from the image in the scene code. Match colors, layout, text, and visual hierarchy as closely as possible. Return the complete modified code.`
+          }
+        ];
+        
+        // Add each image
+        for (const imageUrl of input.imageUrls) {
+          messageContent.push({
+            type: 'image_url',
+            image_url: { url: imageUrl }
+          });
+        }
+      } else {
+        // Text-only edit
+        messageContent = `${context}
 
-  private async fixErrors(input: EditToolInput): Promise<EditToolOutput> {
-    const result = await errorFixer.fixErrors({
-      tsxCode: input.tsxCode,           // ✓ Correct field name
-      errorDetails: input.errorDetails || 'Unknown error',
-      userPrompt: input.userPrompt,
-    });
+EXISTING CODE:
+\`\`\`tsx
+${input.tsxCode}
+\`\`\`
 
-    return {
-      success: true,
-      tsxCode: result.code,              // ✓ Correct field name
-      reasoning: result.reasoning,
-      chatResponse: `Fixed errors: ${result.fixesApplied?.join(', ') || 'Corrected issues'}`,
-      changesApplied: result.fixesApplied,
-    };
+Please edit the code according to the user request. Return the complete modified code.`;
+      }
+
+      console.log('🔍 [EDIT TOOL] Making edit with context:', {
+        userPrompt: input.userPrompt,
+        hasError: !!input.errorDetails,
+        hasImages: !!input.imageUrls?.length,
+        codeLength: input.tsxCode.length,
+        codePreview: input.tsxCode.substring(0, 200)
+      });
+
+      // Use the AI to edit the code
+      const modelConfig = getModel('editScene');
+      const systemPrompt = getSystemPrompt('CODE_EDITOR');
+      
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [{ role: "user", content: messageContent }],
+        { role: 'system', content: systemPrompt },
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const content = response?.content;
+      if (!content) {
+        throw new Error("No response from AI editor");
+      }
+
+      const parsed = this.extractJsonFromResponse(content);
+      
+      // Validate that we got valid code
+      if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
+        throw new Error(`Invalid code returned`);
+      }
+
+      console.log('✅ [EDIT TOOL] Edit completed:', {
+        originalLength: input.tsxCode.length,
+        newLength: parsed.code.length,
+        changed: parsed.code !== input.tsxCode
+      });
+
+      return {
+        success: true,
+        tsxCode: parsed.code,
+        duration: parsed.newDurationFrames || undefined,
+        reasoning: parsed.reasoning || `Applied edit: ${input.userPrompt}`,
+        chatResponse: parsed.reasoning || `I've updated the scene as requested`,
+        changesApplied: parsed.changes || [`Applied edit: ${input.userPrompt}`],
+      };
+      
+    } catch (error) {
+      console.error('[EDIT TOOL] Edit failed:', error);
+      throw error;
+    }
   }
 
   private extractFunctionName(tsxCode: string): string {
@@ -113,11 +156,28 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
     return match?.[1] || match?.[2] || 'Scene';
   }
 
-  private extractTargetElement(prompt: string): string | undefined {
-    // Simple extraction logic
-    const match = prompt.match(/(?:the|change|update|edit)\s+(\w+)/i);
-    return match?.[1];
+
+  private extractJsonFromResponse(content: string): any {
+    try {
+      // Try direct JSON parse first
+      return JSON.parse(content);
+    } catch {
+      // Try to extract JSON from markdown code blocks
+      const jsonMatch = content.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
+      if (jsonMatch?.[1]) {
+        return JSON.parse(jsonMatch[1]);
+      }
+      
+      // Try to find JSON object in the content
+      const objectMatch = content.match(/{[\s\S]*}/);
+      if (objectMatch?.[0]) {
+        return JSON.parse(objectMatch[0]);
+      }
+      
+      throw new Error('Could not extract JSON from response');
+    }
   }
+
 }
 
 // Export singleton instance

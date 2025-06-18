@@ -5,7 +5,7 @@
 **All development work MUST follow these guidelines:**
 
 ### Sprint-Based Workflow
-- **Current Sprint**: Sprint 34 (check `/memory-bank/sprints/sprint34/` for context)
+- **Current Sprint**: Sprint 43 (check `/memory-bank/sprints/sprint43/` for context)
 - **Documentation First**: For complex tasks, create analysis docs in sprint folder before coding
 - **Progress Tracking**: Update `/memory-bank/progress.md` AND sprint-specific progress files
 - **Memory Bank**: Always check relevant docs in `/memory-bank/` before starting work

@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { applyPatch } from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
-import type { InputProps } from "../types/input-props";
+import type { InputProps } from "~/lib/types/video/input-props";
 import { api } from "~/trpc/react";
 
 // Define chat message types
@@ -20,8 +20,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStartTime?: number;
   executionTimeSeconds?: number | null;
-  imageUrls?: string[]; // Added to support image persistence
-  imageUrls?: string[]; // 🚨 NEW: Support for uploaded images
+  imageUrls?: string[]; // Support for uploaded images
 }
 
 // Define message update parameters for streaming support
@@ -504,11 +503,12 @@ export const useVideoState = create<VideoState>((set, get) => ({
       };
       
       // 🚨 DEBUG: Log what we're actually storing
+      const sceneData = updatedScenes[sceneIndex]?.data || {};
       console.log('[VideoState.updateScene] 🚨 STORED SCENE DATA:', {
         sceneId,
         codeLength: updatedScene.tsxCode?.length,
-        codeStart: updatedScenes[sceneIndex].data.code?.substring(0, 100),
-        hasRed: updatedScenes[sceneIndex].data.code?.includes('#ff0000')
+        codeStart: typeof sceneData.code === 'string' ? sceneData.code.substring(0, 100) : 'N/A',
+        hasRed: typeof sceneData.code === 'string' ? sceneData.code.includes('#ff0000') : false
       });
       
       // TIMELINE FIX: Recalculate start times for subsequent scenes

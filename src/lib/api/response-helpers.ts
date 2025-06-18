@@ -1,4 +1,5 @@
-import { UniversalResponse, Operation, Entity, ErrorCode } from '~/lib/types/api/universal';
+import type { UniversalResponse, Operation, Entity } from '~/lib/types/api/universal';
+import { ErrorCode } from '~/lib/types/api/universal';
 
 // Generate request IDs using built-in crypto
 const generateRequestId = (): string => {

@@ -7,16 +7,21 @@ import { redirect, useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface UserDetailPageProps {
-  params: {
+  params: Promise<{
     userId: string;
-  };
+  }>;
 }
 
-export default function UserDetailPage({ params }: UserDetailPageProps) {
+export default async function UserDetailPage({ params }: UserDetailPageProps) {
+  const resolvedParams = await params;
+  
+  return <UserDetailPageContent userId={resolvedParams.userId} />;
+}
+
+function UserDetailPageContent({ userId }: { userId: string }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const { userId } = params;
 
   // Fetch user details
   const { data: userDetails, isLoading: userLoading } = api.admin.getUserDetails.useQuery({

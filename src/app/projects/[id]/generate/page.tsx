@@ -6,7 +6,7 @@ import { db } from "~/server/db";
 import { projects, scenes } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
-import { analytics } from '~/lib/analytics';
+import { analytics } from '~/lib/utils/analytics';
 import type { InputProps } from '~/lib/types/video/input-props';
 
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
@@ -24,12 +24,17 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
   }
 
   try {
+    console.log('Fetching project and user projects...');
     const [projectResult, userProjects] = await Promise.all([
       db.query.projects.findFirst({ where: eq(projects.id, projectId) }),
       getUserProjects(session.user.id),
     ]); 
 
+    console.log('Project result:', projectResult ? 'found' : 'null');
+    console.log('User projects count:', userProjects?.length || 0);
+
     if (!projectResult) {
+      console.log('Project not found, calling notFound()');
       notFound();
     }
 
@@ -103,7 +108,8 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
       />
     );
   } catch (error) {
-    // console.error("Error loading project:", error);
+    console.error("Error loading project:", error);
+    console.error("Error details:", error instanceof Error ? error.message : 'Unknown error');
     notFound();
   }
 } 

@@ -54,6 +54,9 @@
     "**/__tests__/**", 
     "src/server/workers",
     "src/scripts/log-agent/dist",
-    "src/scripts"
+    "src/scripts",
+    "memory-bank/**/*",
+    "drizzle/**/*",
+    "src/tools/edit/deprecated/**/*"
   ]
 }

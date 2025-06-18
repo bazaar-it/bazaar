@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '~/server/db';
 import { customComponentJobs } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
-import logger from '~/lib/logger';
+import logger from '~/lib/utils/logger';
 
 // Helper functions for component code processing
 

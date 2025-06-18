@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { CheckCircle, XCircle } from "lucide-react";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 interface ThinkingAnimationProps {
   messages: string[];

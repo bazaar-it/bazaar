@@ -24,98 +24,18 @@ Bazaar-Vid is a **sophisticated AI-powered video creation platform** that enable
 - **Database**: PostgreSQL (Neon) + Drizzle ORM
 - **Storage**: Cloudflare R2 for assets
 - **Video**: Remotion for composition and rendering
-- **AI**: OpenAI GPT-4o-mini with multi-agent system
+- **AI**: OpenAI GPT-4o-mini with multi-agent system, Claude sonnet 4 for codegen. 
 - **Real-time**: Server-Sent Events + JSON Patch for collaboration
 
 ### Production Flow (CRITICAL TO UNDERSTAND):
 ```
-User Prompt → ChatPanelG → generation.generateScene → MCP Tools → sceneBuilder → Custom React Code → Video
+User Prompt → ChatPanelG → generation.generateScene → MCP Tools  → Custom React Code → Video
 ```
 
 ### State Management Flow (SIMPLIFIED - Sprint 35):
 ```
 Backend Response → VideoState (Direct Update) → React Re-render → UI Updates Immediately
 
-NO database refetch after updates
-NO complex refresh mechanisms
-NO custom events
-JUST direct state updates
-```
-
----
-
-## 📁 CODEBASE STRUCTURE (SINGLE SOURCE OF TRUTH)
-
-### Root Directory:
-```
-├── src/                          # All application code
-├── scripts/                      # Essential production scripts ONLY
-├── drizzle/                      # Database migrations (canonical)
-├── memory-bank/                  # Project documentation & history
-├── package.json                  # Dependencies & scripts
-├── CLAUDE.md                     # Project instructions (READ THIS!)
-└── TEAM-CONTEXT.md              # This file
-```
-
-### Core Application Structure:
-```
-src/
-├── app/                          # Next.js App Router pages
-│   ├── projects/[id]/generate/   # Main video editor interface
-│   ├── admin/                    # Admin dashboard
-│   └── api/                      # API route handlers
-├── server/                       # Backend services & APIs
-│   ├── services/                 # Business logic (ORGANIZED!)
-│   │   ├── ai/                   # AI client & title generation
-│   │   ├── brain/                # Orchestrator & scene repository  
-│   │   ├── data/                 # Data lifecycle & project memory
-│   │   ├── generation/           # Code generation & scene building
-│   │   └── mcp/                  # MCP tools (PRODUCTION SYSTEM)
-│   ├── api/routers/              # tRPC API endpoints
-│   └── db/                       # Database schema & queries
-├── lib/                          # Shared utilities & types
-│   ├── types/                    # TypeScript definitions (ORGANIZED!)
-│   │   ├── ai/                   # AI & brain types
-│   │   ├── api/                  # API & chat types  
-│   │   ├── database/             # Database types
-│   │   ├── shared/               # Shared utilities
-│   │   └── video/                # Video & remotion types
-│   └── evals/                    # Evaluation system (CRITICAL!)
-├── components/                   # Reusable UI components
-├── remotion/                     # Video composition components
-├── hooks/                        # React hooks
-├── stores/                       # State management (Zustand - SIMPLIFIED!)
-└── templates/                    # Pre-built animation templates
-```
-
----
-
-## 🎯 WHERE TO CREATE NEW FILES
-
-### Frontend Components:
-- **UI Components**: `src/components/ui/`
-- **Client Components**: `src/components/client/`
-- **Page Components**: `src/app/[route]/`
-
-### Backend Services:
-- **AI Services**: `src/server/services/ai/`
-- **Generation Services**: `src/server/services/generation/`
-- **Data Services**: `src/server/services/data/`
-- **MCP Tools**: `src/server/services/mcp/tools/`
-
-### API Routes:
-- **tRPC Routers**: `src/server/api/routers/`
-- **REST Endpoints**: `src/app/api/`
-
-### Types:
-- **AI Types**: `src/lib/types/ai/`
-- **API Types**: `src/lib/types/api/`
-- **Video Types**: `src/lib/types/video/`
-- **Shared Types**: `src/lib/types/shared/`
-
-### Database:
-- **Schema**: `src/server/db/schema.ts` (SINGLE FILE)
-- **Migrations**: Auto-generated in `drizzle/migrations/`
 
 ---
 

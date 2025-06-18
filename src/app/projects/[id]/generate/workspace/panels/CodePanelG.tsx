@@ -14,7 +14,7 @@ import * as Sucrase from 'sucrase';
 
 interface Scene {
   id: string;
-  type: "image" | "custom" | "text" | "background-color" | "shape" | "simple-shape" | "gradient" | "particles" | "text-animation" | "split-screen" | "zoom-pan" | "svg-animation" | "simple-colored-shape";
+  type: "custom";  // Only custom type now
   start: number;
   duration: number;
   data: Record<string, unknown>;
@@ -134,10 +134,10 @@ export function CodePanelG({
     ? scenes.find((s: Scene) => s.id === selectedSceneId) 
     : scenes[0];
 
-  // Get scene display name
+  // Get scene display name - position based numbering
   const getSceneName = (scene: Scene, index: number) => {
-    const baseName = scene.data?.name || scene.props?.name || `Scene ${index + 1}`;
-    return baseName.replace(/^Scene(\d+)_[a-f0-9]+$/, 'Scene $1');
+    // Always use position-based numbering for consistency
+    return `Scene ${index + 1}`;
   };
 
   // Update local code when scene changes
@@ -200,28 +200,28 @@ export function CodePanelG({
     }
   });
 
-  // Add scene mutation
-  const addSceneMutation = api.generation.addScene.useMutation({
+  // Add scene mutation - use chat generation
+  const addSceneMutation = api.generation.generateScene.useMutation({
     onSuccess: (result) => {
-      toast.success(result.message);
+      toast.success("Scene added successfully!");
       
       // Invalidate caches to refresh scenes
       utils.generation.getProjectScenes.invalidate({ projectId });
-      utils.generation.getChatMessages.invalidate({ projectId });
+      utils.chat.getMessages.invalidate({ projectId });
       
       // Update VideoState store immediately to ensure scene is available
-      if (result.scene) {
+      if (result.data) {
         // Add the new scene to VideoState store
         const newScene = {
-          id: result.scene.id,
+          id: result.data.id,
           type: "custom" as const,
           start: 0, // New scenes start at the end, will be calculated properly
-          duration: result.scene.duration || 150,
+          duration: result.data.duration || 150,
           data: {
-            name: result.scene.name,
-            code: result.scene.tsxCode || "",
+            name: result.data.name,
+            code: result.data.tsxCode || "",
           },
-          tsxCode: result.scene.tsxCode || "",
+          tsxCode: result.data.tsxCode || "",
           props: {} // Empty props for new scenes
         };
         
@@ -231,7 +231,7 @@ export function CodePanelG({
           scenes: [...props.scenes, newScene],
           meta: {
             ...props.meta,
-            duration: props.scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0) + (newScene.duration || 150)
+            duration: props.scenes.reduce((sum: number, scene: Scene) => sum + (scene.duration || 150), 0) + (newScene.duration || 150)
           }
         }));
       }
@@ -242,8 +242,8 @@ export function CodePanelG({
       }
       
       // Select the newly added scene
-      if (result.scene && onSceneSelect) {
-        onSceneSelect(result.scene.id);
+      if (result.data && onSceneSelect) {
+        onSceneSelect(result.data.id);
       }
     },
     onError: (error: any) => {
@@ -263,7 +263,8 @@ export function CodePanelG({
     try {
       await addSceneMutation.mutateAsync({
         projectId,
-        sceneName: undefined // Let the backend generate a default name
+        userMessage: "add a new scene", // Simple prompt to add a scene
+        userContext: {}
       });
     } catch (error) {
       console.error('[CodePanelG] Add scene failed:', error);

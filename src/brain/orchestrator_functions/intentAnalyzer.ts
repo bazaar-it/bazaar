@@ -3,12 +3,15 @@
 import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel } from "~/config/models.config";
 import { SYSTEM_PROMPTS } from "~/config/prompts.config";
-import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "./types";
+import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "~/lib/types/ai/brain.types";
 
 export class IntentAnalyzer {
   private modelConfig = getModel("brain");
   
   async analyzeIntent(input: OrchestrationInput, contextPacket: ContextPacket): Promise<ToolSelectionResult> {
+    console.log('\n🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===');
+    console.log('🎯 [NEW INTENT ANALYZER] User prompt:', input.prompt.substring(0, 50) + '...');
+    
     try {
       const systemPrompt = SYSTEM_PROMPTS.BRAIN_ORCHESTRATOR.content;
       const userPrompt = this.buildUserPrompt(input, contextPacket);
@@ -23,15 +26,22 @@ export class IntentAnalyzer {
         { responseFormat: { type: "json_object" } }
       );
 
-      console.log('==================== IntentAnalyzer function reached:');
-
       const rawOutput = response.content;
       if (!rawOutput) {
         throw new Error("No response from Brain LLM");
       }
 
+      console.log('🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...');
       const parsed = this.extractJsonFromResponse(rawOutput);
-      return this.processBrainDecision(parsed, input);
+      const result = this.processBrainDecision(parsed, input);
+      
+      console.log('🎯 [NEW INTENT ANALYZER] Decision:', {
+        toolName: result.toolName,
+        success: result.success,
+        reasoning: result.reasoning?.substring(0, 50) + '...'
+      });
+      
+      return result;
 
     } catch (error) {
       console.error('[IntentAnalyzer] Error:', error);
@@ -45,16 +55,24 @@ export class IntentAnalyzer {
   private buildUserPrompt(input: OrchestrationInput, contextPacket: ContextPacket): string {
     const { prompt, storyboardSoFar } = input;
     
-    // Build storyboard context
+    // Build storyboard context with clear ordering and recency
     let storyboardInfo = "No scenes yet";
     if (storyboardSoFar && storyboardSoFar.length > 0) {
-      storyboardInfo = storyboardSoFar.map((scene, i) => 
-        `Scene ${i + 1}: "${scene.name}" (ID: ${scene.id})`
-      ).join('\n');
+      storyboardInfo = storyboardSoFar.map((scene, i) => {
+        const sceneNum = i + 1;
+        const isNewest = i === storyboardSoFar.length - 1;
+        const isFirst = i === 0;
+        return `Scene ${sceneNum}: "${scene.name}" (ID: ${scene.id})${isNewest ? ' [NEWEST/LAST ADDED]' : ''}${isFirst ? ' [FIRST]' : ''}`;
+      }).join('\n');
+      
+      // Add helpful context about recent actions
+      if (storyboardSoFar.length > 0) {
+        storyboardInfo += `\n\nIMPORTANT: When user says "it" or "the scene" right after adding content, they usually mean the NEWEST scene (Scene ${storyboardSoFar.length}).`;
+      }
       
       if (input.userContext?.sceneId) {
         const selected = storyboardSoFar.find(s => s.id === input.userContext?.sceneId);
-        if (selected) storyboardInfo += `\nSELECTED: "${selected.name}"`;
+        if (selected) storyboardInfo += `\nUSER SELECTED: "${selected.name}"`;
       }
     }
     
@@ -71,13 +89,33 @@ export class IntentAnalyzer {
 - "first/second/third image" → by position number
 - "image 1/2/3" → by position number
 - "earlier image" → previous images in conversation
-Use image-aware tools (createSceneFromImage, editSceneWithImage, analyzeImage) when working with images.`;
+
+NOTE: All tools are multimodal. When images are referenced, include them in the tool's imageUrls parameter.`;
     }
     
-    // Add conversation context
+    // Check if current prompt has images  
+    const currentImageUrls = (input.userContext?.imageUrls as string[]) || [];
+    if (currentImageUrls.length > 0) {
+      imageInfo += `\n\nCURRENT MESSAGE: Includes ${currentImageUrls.length} image(s) uploaded with this request.`;
+    }
+    
+    // Add conversation context with recent action detection
     let chatInfo = "";
     if (contextPacket.conversationContext !== 'New conversation') {
       chatInfo = `\nCONVERSATION: ${contextPacket.conversationContext}`;
+      
+      // Check if last message indicates we just added a scene
+      const lastMessages = contextPacket.last5Messages || [];
+      if (lastMessages.length >= 2) {
+        const lastAssistantMsg = [...lastMessages].reverse().find(m => m.role === 'assistant');
+        if (lastAssistantMsg && (
+          lastAssistantMsg.content.includes('added') || 
+          lastAssistantMsg.content.includes('created') ||
+          lastAssistantMsg.content.includes('I\'ve added')
+        )) {
+          chatInfo += `\nRECENT: Just added a new scene (likely Scene ${storyboardSoFar?.length || 'latest'})`;
+        }
+      }
     }
 
     return `USER: "${prompt}"
@@ -140,9 +178,7 @@ Respond with JSON only.`;
       success: true,
       toolName: parsed.toolName,
       reasoning: parsed.reasoning,
-      toolInput: parsed.toolInput || {},
       targetSceneId: parsed.targetSceneId,
-      editComplexity: parsed.editComplexity,
       userFeedback: parsed.userFeedback,
     };
 

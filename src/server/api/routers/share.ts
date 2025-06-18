@@ -6,7 +6,7 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "~/server/
 import { db } from "~/server/db";
 import { projects, scenes, sharedVideos } from "~/server/db/schema";
 import { TRPCError } from "@trpc/server";
-import { getShareUrl } from "~/lib/utils";
+import { getShareUrl } from "~/lib/utils/url";
 import type { InputProps } from "~/lib/types/video/input-props";
 
 export const shareRouter = createTRPCRouter({

@@ -12,6 +12,143 @@ export class CodeGeneratorService {
   private readonly DEBUG = process.env.NODE_ENV === 'development';
 
   /**
+   * Generate code directly from prompt (FASTEST PATH - no layout)
+   */
+  async generateCodeDirect(input: {
+    userPrompt: string;
+    functionName: string;
+    projectId: string;
+  }): Promise<CodeGenerationOutput> {
+    const config = getModel('codeGenerator');
+    
+    console.log('⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only');
+    
+    try {
+      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+        FUNCTION_NAME: input.functionName
+      });
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+FUNCTION NAME: ${input.functionName}
+
+Generate a complete Remotion component based on the user's request.
+- Create engaging motion graphics
+- Use modern animations with Framer Motion
+- Ensure it's a complete, self-contained component
+- Default duration: 5 seconds (150 frames at 30fps)`;
+
+      const messages = [
+        { role: 'user' as const, content: userPrompt }
+      ];
+      
+      const response = await AIClientService.generateResponse(
+        config,
+        messages,
+        { role: 'system', content: systemPrompt.content }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from CodeGenerator LLM");
+      }
+      
+      // Clean and process code
+      let cleanCode = rawOutput.trim();
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Extract duration
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
+      return {
+        code: cleanCode,
+        name: "Scene", // Simple display name, UI will show position-based numbering
+        duration: durationAnalysis.frames,
+        reasoning: `Generated scene directly from prompt (${durationAnalysis.frames} frames)`,
+        debug: {
+          method: 'direct',
+          promptLength: userPrompt.length,
+          responseLength: rawOutput.length,
+          durationAnalysis
+        }
+      };
+    } catch (error) {
+      console.error('[CODE GENERATOR] Direct path failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate code using previous scene as reference (FAST PATH)
+   */
+  async generateCodeWithReference(input: {
+    userPrompt: string;
+    functionName: string;
+    projectId: string;
+    previousSceneCode: string;
+  }): Promise<CodeGenerationOutput> {
+    const config = getModel('codeGenerator');
+    
+    console.log('🚀 [CODE GENERATOR] FAST PATH: Using previous scene as reference');
+    
+    try {
+      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+        FUNCTION_NAME: input.functionName
+      });
+      const userPrompt = `PREVIOUS SCENE CODE:
+\`\`\`tsx
+${input.previousSceneCode}
+\`\`\`
+
+USER REQUEST: "${input.userPrompt}"
+
+FUNCTION NAME: ${input.functionName}
+
+Generate a NEW scene based on the user's request, using the previous scene's code as a style reference. 
+- Keep the same visual style, colors, fonts, and animation patterns
+- Create NEW content based on the user's request
+- Ensure it's a complete, self-contained Remotion component`;
+
+      const messages = [
+        { role: 'user' as const, content: userPrompt }
+      ];
+      
+      const response = await AIClientService.generateResponse(
+        config,
+        messages,
+        { role: 'system', content: systemPrompt.content }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from CodeGenerator LLM");
+      }
+      
+      // Clean and process code
+      let cleanCode = rawOutput.trim();
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Extract duration
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
+      return {
+        code: cleanCode,
+        name: "Scene", // Simple display name, UI will show position-based numbering
+        duration: durationAnalysis.frames,
+        reasoning: `Generated new scene using previous scene style (${durationAnalysis.frames} frames)`,
+        debug: {
+          method: 'withReference',
+          promptLength: userPrompt.length,
+          responseLength: rawOutput.length,
+          durationAnalysis
+        }
+      };
+    } catch (error) {
+      console.error('[CODE GENERATOR] Fast path failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generate React code from layout JSON
    */
   async generateCode(input: CodeGenerationInput): Promise<CodeGenerationOutput> {
@@ -54,7 +191,7 @@ export class CodeGeneratorService {
       
       return {
         code: cleanCode,
-        name: input.functionName,
+        name: "Scene", // Simple display name, UI will show position-based numbering
         duration: durationAnalysis.frames,
         reasoning: `Code generated with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence from ${durationAnalysis.source})`,
         debug: {
@@ -86,7 +223,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: input.functionName,
+        name: "Scene", // Simple display name, UI will show position-based numbering
         duration: fallbackDuration,
         reasoning: "CodeGenerator encountered an error - auto-fix can restore from layout JSON",
         debug: { 
@@ -102,13 +239,24 @@ export default function ${input.functionName}() {
   async generateCodeFromImage(input: ImageToCodeInput): Promise<CodeGenerationOutput> {
     try {
       const config = getModel('codeGenerator');
-      const prompt = this.buildImageToCodePrompt(input.userPrompt, input.functionName, input.visionAnalysis);
       
       console.log('==================== codeGenerator reached:');
       console.log('==================== generateCodeFromImage reached:');
-      // Use centralized vision API
+      
+      // Get the IMAGE_CODE_GENERATOR prompt specifically for image-based generation
+      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+        FUNCTION_NAME: input.functionName
+      });
+      
+      // Build user message for vision API - include the actual user prompt!
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+IMPORTANT: Recreate the UI/layout shown in the image as accurately as possible. Match colors, text, positioning, and visual hierarchy exactly. Then add appropriate animations based on the user's request.
+${input.visionAnalysis ? `Vision analysis: ${JSON.stringify(input.visionAnalysis, null, 2)}` : ''}`;
+      
+      // Use centralized vision API with proper message format
       const visionMessagesContent: AIMessage['content'] = [
-        { type: 'text', text: prompt }
+        { type: 'text', text: userPrompt }
       ];
 
       for (const url of input.imageUrls) {
@@ -118,9 +266,10 @@ export default function ${input.functionName}() {
         });
       }
 
-      const response = await AIClientService.generateVisionResponse(
+      const response = await AIClientService.generateResponse(
         config,
-        visionMessagesContent
+        [{ role: 'user', content: visionMessagesContent }],
+        { role: 'system', content: systemPrompt.content }
       );
 
       // Clean up code
@@ -132,7 +281,7 @@ export default function ${input.functionName}() {
       
       return {
         code: cleanCode,
-        name: input.functionName,
+        name: "Scene", // Simple display name, UI will show position-based numbering
         duration: durationAnalysis.frames,
         reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
         debug: {
@@ -162,7 +311,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: input.functionName,
+        name: "Scene", // Simple display name, UI will show position-based numbering
         duration: fallbackDuration,
         reasoning: "Image-to-code generation failed - auto-fix available",
         debug: { 
@@ -188,16 +337,7 @@ export default function ${input.functionName}() {
     return { system: systemPrompt.content, user };
   }
 
-  private buildImageToCodePrompt(userPrompt: string, functionName: string, visionAnalysis?: any): string {
-    return `Generate React/Remotion motion graphics code directly from the provided images.
-
-Function name: ${functionName}
-User request: "${userPrompt}"
-${visionAnalysis ? `Vision analysis: ${JSON.stringify(visionAnalysis, null, 2)}` : ''}
-
-Create professional motion graphics code that brings the images to life with smooth animations.
-Use React/Remotion components and ensure the code is complete and executable.`;
-  }
+  // Removed buildImageToCodePrompt - now using centralized IMAGE_CODE_GENERATOR prompt
 }
 
 // Export singleton instance

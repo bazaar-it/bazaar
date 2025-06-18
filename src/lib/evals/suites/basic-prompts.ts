@@ -6,7 +6,7 @@ export const basicPromptsSuite: EvalSuite = {
   id: 'basic-prompts',
   name: 'Basic Text Prompts',
   description: 'Simple text generation prompts to test model quality and consistency',
-  modelPacks: ['claude-pack', 'starter-pack-1', 'performance-pack'],
+  modelPacks: ['optimal-pack', 'anthropic-pack', 'openai-pack'],
   services: ['brain', 'codeGenerator'],
   prompts: [
     {
@@ -60,8 +60,8 @@ export const codeGenerationSuite: EvalSuite = {
   id: 'code-generation',
   name: 'Code Generation Tests',
   description: 'Tests for code generation quality and accuracy',
-  modelPacks: ['claude-pack', 'mixed-pack', 'performance-pack'],
-  services: ['codeGenerator', 'directCodeEditor.surgical', 'directCodeEditor.creative'],
+  modelPacks: ['optimal-pack', 'anthropic-pack', 'openai-pack'],
+  services: ['codeGenerator', 'editScene'],
   prompts: [
     {
       id: 'react-component',

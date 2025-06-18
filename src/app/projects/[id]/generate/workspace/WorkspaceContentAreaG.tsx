@@ -18,7 +18,7 @@ import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {

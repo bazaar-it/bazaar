@@ -3,7 +3,7 @@ import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals
 import { generationRouter } from '../generation';
 import { brainOrchestrator } from '~/server/services/brain/orchestrator';
 import { db } from '~/server/db';
-import { analytics } from '~/lib/analytics';
+import { analytics } from '~/lib/utils/analytics';
 import { analyzeDuration } from '~/lib/utils/codeDurationExtractor';
 import { TRPCError } from '@trpc/server';
 import type { OrchestrationOutput } from '~/server/services/brain/orchestrator';
@@ -36,7 +36,7 @@ jest.mock('~/server/db', () => ({
     transaction: jest.fn().mockImplementation(async (cb) => cb(db))
   }
 }));
-jest.mock('~/lib/analytics');
+jest.mock('~/lib/utils/analytics');
 jest.mock('~/lib/utils/codeDurationExtractor');
 
 // Helper to create mock context

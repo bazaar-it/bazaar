@@ -4,7 +4,9 @@ import 'openai/shims/node';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ModelConfig, ModelProvider } from '~/config/models.config';
-import type { SystemPromptConfig } from '~/config/prompts.config';
+import { SYSTEM_PROMPTS } from '~/config/prompts.config';
+
+type SystemPromptConfig = typeof SYSTEM_PROMPTS[keyof typeof SYSTEM_PROMPTS];
 
 // =============================================================================
 // AI CLIENT FACTORY
@@ -152,20 +154,45 @@ export class AIClientService {
       const systemMessage = messages.find(m => m.role === 'system');
       const conversationMessages = messages.filter(m => m.role !== 'system');
 
-      // 🚨 CRITICAL: Anthropic doesn't support vision - ensure text-only content
-      const textOnlyMessages = conversationMessages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
-        content: typeof msg.content === 'string' 
-          ? msg.content 
-          : Array.isArray(msg.content) 
-            ? msg.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
-            : String(msg.content)
-      }));
+      // Handle messages - Claude Sonnet 4 supports vision
+      const processedMessages = conversationMessages.map(msg => {
+        if (typeof msg.content === 'string') {
+          return {
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content
+          };
+        } else if (Array.isArray(msg.content)) {
+          // Convert OpenAI format to Claude format for vision content
+          const claudeContent = msg.content.map(item => {
+            if (item.type === 'text') {
+              return { type: 'text' as const, text: item.text || '' };
+            } else if (item.type === 'image_url' && item.image_url?.url) {
+              return {
+                type: 'image' as const,
+                source: {
+                  type: 'url' as const,
+                  url: item.image_url.url
+                }
+              };
+            }
+            return null;
+          }).filter(Boolean);
+          
+          return {
+            role: msg.role as 'user' | 'assistant',
+            content: claudeContent.length > 0 ? claudeContent : ''
+          };
+        }
+        return {
+          role: msg.role as 'user' | 'assistant',
+          content: String(msg.content)
+        };
+      });
 
       const response = await client.messages.create({
         model: config.model,
         system: typeof systemMessage?.content === 'string' ? systemMessage.content : undefined,
-        messages: textOnlyMessages,
+        messages: processedMessages as any,
         temperature: config.temperature ?? 0.7,
         max_tokens: config.maxTokens ?? 4096,
       });

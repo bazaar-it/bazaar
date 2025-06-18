@@ -1,5 +1,5 @@
 // src/server/services/ai/titleGenerator.service.ts
-import logger from '~/lib/logger';
+import logger from '~/lib/utils/logger';
 import { AIClientService, type AIMessage } from '~/server/services/ai/aiClient.service';
 import { getModel } from '~/config/models.config';
 import { getSystemPrompt } from '~/config/prompts.config';

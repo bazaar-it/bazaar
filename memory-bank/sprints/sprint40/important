@@ -1,0 +1,142 @@
+⏺ Critical Analysis - The Architecture is NOT Perfect
+
+  1. Type Safety Issues ❌
+
+  // BAD: Using 'any' everywhere!
+  const context = decision.context as any;
+  result = await sceneService.addScene({...});
+  Should be:
+  const context = decision.context as AddSceneContext;
+  // Or better: use discriminated unions
+
+  2. VideoState Problems ❌
+
+  - Not normalized! Still using nested structure
+  - No single update method as promised in golden rules
+  - Mixing concerns: Chat messages with scenes
+  - No proper sync status tracking
+
+  3. Missing Error Boundaries ❌
+
+  The brain has ONE try-catch that returns a fallback. What about:
+  - Network errors?
+  - Partial failures?
+  - Retry logic?
+  - Error recovery?
+
+  4. Context Caching Issues ⚠️
+
+  // Cache for 5 minutes - but what if:
+  // - User A edits scene
+  // - User B's cache is stale
+  // - Conflicts?
+
+  5. No Optimistic UI in New Architecture ❌
+
+  The simplified generation router waits for everything before updating UI:
+  // Current: Wait for brain → tool → database → then update
+  // Missing: Immediate optimistic updates
+
+  6. Intent Analyzer Limitations ⚠️
+
+  // What about:
+  // "Fix the error and make it 3 seconds"  // Multiple intents
+  // "Delete all scenes"                     // Bulk operations
+  // "Undo"                                  // No history support
+
+  7. Poor Discriminated Unions ❌
+
+  // Using type + casting instead of proper unions
+  switch (decision.tool) {
+    case 'addScene': {
+      const context = decision.context as any; // BAD!
+
+  8. Missing Workflow Support ❌
+
+  Brain can only return ONE tool, but user might want:
+  - "Add intro, then add outro"
+  - "Fix all scenes"
+  - Multi-step operations
+
+  9. No Progress/Streaming ❌
+
+  - No progress callbacks
+  - No streaming responses
+  - User waits with "Processing..." for everything
+
+  10. VideoState Not Following Golden Rules ❌
+
+  // Current VideoState:
+  projects: Record<string, ProjectState>  // Nested!
+  scenes inside props                     // Double nested!
+
+  // Should be:
+  scenes: Record<string, Scene>          // Flat, normalized
+  messages: Record<string, Message>      // Flat, normalized
+
+  The CORRECT Architecture Should Be:
+
+  1. Properly Typed Brain
+
+  interface BrainDecision {
+    tool: 'addScene';
+    context: AddSceneContext;
+  } | {
+    tool: 'editScene';
+    context: EditSceneContext;
+  } | {
+    tool: 'deleteScene';
+    context: DeleteSceneContext;
+  }
+
+  2. Normalized VideoState
+
+  interface VideoState {
+    // Entities (flat)
+    scenes: Record<string, Scene & SyncStatus>;
+    messages: Record<string, Message>;
+
+    // Relationships
+    projectScenes: Record<string, string[]>;
+
+    // Single update method
+    handleApiResponse: (response: StandardApiResponse) => void;
+  }
+
+  3. Optimistic Flow
+
+  // 1. Optimistic update
+  videoState.updateSceneOptimistic(sceneId, predicted);
+
+  // 2. Call API
+  const result = await api.generation.generateScene();
+
+  // 3. Reconcile
+  videoState.reconcile(sceneId, result);
+
+  4. Multi-Tool Support
+
+  interface BrainDecision {
+    workflow: Tool[];  // Support multiple tools
+    reasoning: string;
+  }
+
+  5. Streaming Support
+
+  // Stream progress
+  for await (const update of brain.stream(input)) {
+    videoState.updateProgress(update);
+  }
+
+  Verdict: The Architecture Needs Work!
+
+  Good ideas, but execution has issues:
+  - ✅ Clean separation of concerns
+  - ✅ Modular structure
+  - ❌ Poor type safety
+  - ❌ VideoState not normalized
+  - ❌ No optimistic UI
+  - ❌ Missing error handling
+  - ❌ No multi-tool workflows
+
+  Should we fix these issues before switching to the new architecture?

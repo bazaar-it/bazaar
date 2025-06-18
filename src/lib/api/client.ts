@@ -34,19 +34,21 @@ export function handleUniversalResponse<T>(
 
   // Handle error case
   if (isErrorResponse(response)) {
-    console.error(`[API Error ${response.meta.requestId}]`, response.error);
-    options?.onError?.(response.error, response);
+    // TypeScript should narrow here, but we'll help it
+    const errorResponse = response as UniversalResponse<T> & { error: NonNullable<UniversalResponse<T>['error']> };
+    console.error(`[API Error ${errorResponse.meta.requestId}]`, errorResponse.error);
+    options?.onError?.(errorResponse.error, errorResponse);
     
-    if (response.error.retryable) {
-      console.info(`[API ${response.meta.requestId}] This error is retryable`);
+    if (errorResponse.error.retryable) {
+      console.info(`[API ${errorResponse.meta.requestId}] This error is retryable`);
     }
     
     if (options?.throwOnError !== false) {
-      const error = new Error(response.error.message);
-      (error as any).code = response.error.code;
-      (error as any).details = response.error.details;
-      (error as any).retryable = response.error.retryable;
-      (error as any).requestId = response.meta.requestId;
+      const error = new Error(errorResponse.error.message);
+      (error as any).code = errorResponse.error.code;
+      (error as any).details = errorResponse.error.details;
+      (error as any).retryable = errorResponse.error.retryable;
+      (error as any).requestId = errorResponse.meta.requestId;
       throw error;
     }
   }

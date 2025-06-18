@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc';
 import { openai } from '~/server/lib/openai';
 import { toFile } from 'openai/uploads';
-import { logger } from '~/lib/logger';
+import { logger } from '~/lib/utils/logger';
 
 // Define possible response types from Whisper API
 interface TranscriptionResponseObject {

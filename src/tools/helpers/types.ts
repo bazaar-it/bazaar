@@ -27,6 +27,7 @@ export interface BaseToolOutput {
   chatResponse?: string;
   error?: string;
   debug?: Record<string, unknown>;
+  scene?: any;           // Scene object for database operations
 }
 
 // ============================================================================
@@ -59,7 +60,6 @@ export interface EditToolInput extends BaseToolInput {
   sceneId: string;       // Just for reference
   tsxCode: string;       // ✓ FIXED: Was existingCode
   currentDuration?: number;
-  editType: 'creative' | 'surgical' | 'error-fix';
   imageUrls?: string[];
   visionAnalysis?: any;
   errorDetails?: string;
@@ -84,6 +84,23 @@ export interface DeleteToolInput extends BaseToolInput {
 export interface DeleteToolOutput extends BaseToolOutput {
   deletedSceneId: string;
   // No content generation needed for delete
+}
+
+// ============================================================================
+// TRIM TOOL TYPES
+// ============================================================================
+
+export interface TrimToolInput extends BaseToolInput {
+  sceneId: string;          // Which scene to trim
+  currentDuration: number;  // Current duration in frames
+  newDuration?: number;     // New duration in frames
+  trimFrames?: number;      // Frames to add (positive) or remove (negative)
+  trimType?: 'start' | 'end'; // Where to trim from
+}
+
+export interface TrimToolOutput extends BaseToolOutput {
+  duration: number;         // New duration
+  trimmedFrames: number;    // How many frames were trimmed
 }
 
 // ============================================================================
@@ -196,15 +213,22 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   sceneId: z.string().describe("ID of the scene to edit (reference only)"),
   tsxCode: z.string().describe("Current scene TSX code"),
   currentDuration: z.number().optional().describe("Current duration in frames"),
-  editType: z.enum(['creative', 'surgical', 'error-fix']).describe("Type of edit to perform"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
-  errorDetails: z.string().optional().describe("Error details for error-fix type"),
+  errorDetails: z.string().optional().describe("Error details if fixing errors"),
 });
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({
   sceneId: z.string().describe("ID of the scene to delete"),
   confirmDeletion: z.boolean().optional().describe("Confirmation flag for deletion"),
+});
+
+export const trimToolInputSchema = baseToolInputSchema.extend({
+  sceneId: z.string().describe("ID of the scene to trim"),
+  currentDuration: z.number().describe("Current duration in frames"),
+  newDuration: z.number().optional().describe("Target duration in frames"),
+  trimFrames: z.number().optional().describe("Frames to add (positive) or remove (negative)"),
+  trimType: z.enum(['start', 'end']).optional().default('end').describe("Where to trim from"),
 });
 
 // ============================================================================

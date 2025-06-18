@@ -1,1 +1,0 @@
-Generate engaging, creative titles based on the scene content and context. Create titles that are concise, memorable, and relevant to the video content. 

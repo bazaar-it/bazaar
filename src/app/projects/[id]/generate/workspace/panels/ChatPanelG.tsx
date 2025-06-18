@@ -11,7 +11,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import { Loader2, CheckCircleIcon, XCircleIcon, Send, Mic, StopCircle, MicIcon, Plus, Edit, Trash2, RefreshCwIcon, ImageIcon } from 'lucide-react';
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 // Define UploadedImage interface for image uploads
 interface UploadedImage {
@@ -97,6 +97,9 @@ export default function ChatPanelG({
   const [progressStage, setProgressStage] = useState<string | null>(null);
   const [editComplexityFeedback, setEditComplexityFeedback] = useState<string | null>(null);
   
+  // 🚀 [TICKET-006] New state for loading feedback
+  const [currentOperation, setCurrentOperation] = useState<string>('');
+  
   // 🚨 NEW: State for image uploads
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -120,12 +123,12 @@ export default function ChatPanelG({
   } = useVoiceToText();
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, forceRefresh, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, addScene } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, addScene } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
   // 🚨 SIMPLIFIED: Scene context logic - let Brain LLM handle scene targeting
-  const selectedScene = selectedSceneId ? scenes.find(s => s.id === selectedSceneId) : null;
+  const selectedScene = selectedSceneId ? scenes.find((s: any) => s.id === selectedSceneId) : null;
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
   const messages = getProjectChatHistory(projectId);
@@ -209,6 +212,23 @@ export default function ChatPanelG({
   const formatTimestamp = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+  
+  // 🚀 [TICKET-006] Retry logic with exponential backoff
+  const retryWithBackoff = async <T,>(
+    fn: () => Promise<T>,
+    retries = 3,
+    delay = 1000
+  ): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      if (retries === 0) throw error;
+      
+      console.log(`[ChatPanelG] 🔄 Retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * 2);
+    }
+  };
 
   // 🎯 NEW: Edit Complexity Feedback Messages
   const getComplexityFeedback = (complexity: string) => {
@@ -268,7 +288,29 @@ export default function ChatPanelG({
     // ✅ SIMPLE: Add assistant loading message  
     const assistantMessageId = `assistant-${Date.now()}`;
     activeAssistantMessageIdRef.current = assistantMessageId;
-    addAssistantMessage(projectId, assistantMessageId, "🧠 Processing your request...");
+    
+    // 🚀 [TICKET-006] More engaging loading messages
+    const loadingMessages = [
+      "🧠 Analyzing your request...",
+      "🎨 Getting creative with your vision...",
+      "✨ Crafting something special...",
+      "🚀 Generating your scene...",
+      "🎯 Almost there..."
+    ];
+    
+    addAssistantMessage(projectId, assistantMessageId, loadingMessages[0]!);
+    
+    // Update loading message periodically
+    let messageIndex = 0;
+    const messageInterval = setInterval(() => {
+      if (messageIndex < loadingMessages.length - 1) {
+        messageIndex++;
+        updateMessage(projectId, assistantMessageId, {
+          content: loadingMessages[messageIndex]!,
+          status: 'pending'
+        });
+      }
+    }, 2000);
     
     // 🚨 NEW: Immediately scroll to bottom after adding messages
     setTimeout(() => {
@@ -279,25 +321,81 @@ export default function ChatPanelG({
     // 🚨 NEW: Clear uploaded images after submission (as per user feedback)
     setUploadedImages([]);
     setIsGenerating(true);
+    
+    // Check if this is a welcome project that needs its welcome scene removed
+    const currentScenes = getCurrentProps()?.scenes || [];
+    const isFirstRealScene = currentScenes.length === 1 && 
+      currentScenes[0]?.data?.name === 'WelcomeScene';
+    
+    if (isFirstRealScene) {
+      console.log('[ChatPanelG] 🎬 First real scene generation - removing welcome scene immediately');
+      // Clear the welcome scene from state right away
+      const currentProps = getCurrentProps();
+      if (!currentProps) return; // Safety check
+      
+      const clearedProps = {
+        ...currentProps,
+        scenes: [],
+        meta: {
+          ...currentProps.meta,
+          duration: 0
+        }
+      };
+      replace(projectId, clearedProps);
+    }
+    
+    // 🚀 [TICKET-006] Set initial operation state
+    setCurrentOperation('Analyzing your request...');
+    
+    // 🚀 [TICKET-006] Track performance
+    const startTime = performance.now();
 
     try {
       console.log('[ChatPanelG] 🚀 Starting generation via Brain Orchestrator...');
       
+      // 🚀 [TICKET-006] Show operation progress
+      if (imageUrls.length > 0) {
+        setCurrentOperation('Processing images and analyzing request...');
+      }
+      
       // ✅ CORRECT: Use generation endpoint that goes through Brain Orchestrator
-      const result = await generateSceneMutation.mutateAsync({
-        projectId,
-        userMessage: trimmedMessage,
-        sceneId: selectedSceneId || undefined,
-        userContext: {
-          sceneId: selectedSceneId || undefined,
-          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        }
-      });
+      // 🚀 [TICKET-006] Add retry logic for resilience
+      const result = await retryWithBackoff(
+        () => generateSceneMutation.mutateAsync({
+          projectId,
+          userMessage: trimmedMessage,
+          userContext: {
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+          }
+        }),
+        3, // max retries
+        1000 // initial delay
+      );
 
       console.log('[ChatPanelG] ✅ Generation completed:', result);
       
+      // 🚀 [TICKET-006] Clear loading message interval
+      clearInterval(messageInterval);
+      
+      // 🚀 [TICKET-006] Calculate performance
+      const endTime = performance.now();
+      const duration = ((endTime - startTime) / 1000).toFixed(1);
+      
       // ✅ Update assistant message with response from Brain Orchestrator
-      const finalResponse = result.chatResponse || 'Scene operation completed! ✅';
+      // Handle UniversalResponse format
+      console.log('[ChatPanelG] 📦 Raw result structure:', {
+        hasData: !!result.data,
+        hasNestedData: !!(result as any).data?.data,
+        hasMeta: !!(result as any).meta,
+        operation: (result as any).meta?.operation,
+        hasContext: !!(result as any).context
+      });
+      
+      // UniversalResponse structure: { data: scene, meta: { operation }, context: { chatResponse } }
+      const responseData = result as any;
+      const baseResponse = responseData.context?.chatResponse || responseData.chatResponse || responseData.message || 'Scene operation completed!';
+      const finalResponse = `${baseResponse} ⚡ (${duration}s)`;
+      
       updateMessage(projectId, assistantMessageId, {
         content: finalResponse,
         status: 'success'
@@ -315,19 +413,27 @@ export default function ChatPanelG({
         // STEP 1: Invalidate all related caches
         await utils.generation.getProjectScenes.invalidate({ projectId });
         await utils.generation.invalidate(); // Invalidate entire generation namespace
+        await utils.project.getById.invalidate({ id: projectId }); // Also invalidate project to get fresh isWelcome status
+        
+        // Extract the actual scene data from UniversalResponse structure
+        // UniversalResponse: { data: T, meta: {...}, context?: {...} }
+        const actualScene = responseData.data; // This is the actual scene from result.data
+        const operation = responseData.meta?.operation; // This is from result.meta.operation
+        
+        console.log('[ChatPanelG] 🎯 Extracted data:', {
+          hasActualScene: !!actualScene,
+          operation: operation,
+          sceneId: actualScene?.id,
+          sceneName: actualScene?.name,
+          tsxCodeLength: actualScene?.tsxCode?.length
+        });
         
         // ✅ IMMEDIATE: Update VideoState with backend response data (0ms delay)
-        if (result.scene && result.operation === 'editScene') {
-          console.log('[ChatPanelG] ⚡ Updating VideoState immediately with backend data:', result.scene);
-          
-          // 🚨 NEW: Check if database write failed
-          if (result.databaseWriteFailed) {
-            console.log('[ChatPanelG] ⚠️ Database write failed, but updating UI anyway. Will retry in background.');
-            // Could show a subtle notification that save is pending
-          }
+        if (actualScene && operation === 'scene.update') {
+          console.log('[ChatPanelG] ⚡ Updating VideoState immediately with backend data:', actualScene);
           
           // 🚨 FIX: Access the correct scene data structure
-          const sceneData = result.scene.scene || result.scene; // Handle both possible structures
+          const sceneData = actualScene;
           console.log('[ChatPanelG] 🔍 Scene data extracted:', { id: sceneData.id, name: sceneData.name });
           
           // Transform backend scene format to VideoState format
@@ -350,7 +456,7 @@ export default function ChatPanelG({
           updateScene(projectId, sceneData.id, transformedScene);
           console.log('[ChatPanelG] ⚡ VideoState updated - all panels should refresh immediately');
           
-        } else if (result.operation === 'createSceneFromImage') {
+        } else if (responseData.operation === 'createSceneFromImage') {
           // TEMPORARY WORKAROUND: createSceneFromImage doesn't return the scene ID
           // We need to refresh from database to get the newly created scene
           console.log('[ChatPanelG] 🔄 createSceneFromImage detected - refreshing from database');
@@ -358,7 +464,7 @@ export default function ChatPanelG({
           
           // The scene was created in the database, but we don't have its ID
           // So we must refresh to see it
-          await updateAndRefresh();
+          await updateAndRefresh(projectId, (props) => props || getCurrentProps()!);
           
           console.log('[ChatPanelG] ✅ Refreshed after createSceneFromImage');
           
@@ -366,10 +472,52 @@ export default function ChatPanelG({
           setGenerationComplete(true);
           return;
           
-        } else if (result.scene && (result.operation === 'addScene' || result.operation === 'unknown')) {
+        } else if (operation === 'scene.delete' && actualScene) {
+          // Handle scene deletion
+          console.log('[ChatPanelG] 🗑️ Scene deletion detected:', actualScene.id);
+          
+          // Get current scenes and filter out the deleted one
+          const currentScenes = getCurrentProps()?.scenes || [];
+          const updatedScenes = currentScenes.filter((scene: any) => scene.id !== actualScene.id);
+          
+          // Recalculate start times
+          let currentStart = 0;
+          const reorderedScenes = updatedScenes.map((scene: any) => {
+            const updatedScene = {
+              ...scene,
+              start: currentStart
+            };
+            currentStart += scene.duration;
+            return updatedScene;
+          });
+          
+          // Update the props with the filtered scenes
+          const currentPropsData = getCurrentProps();
+          if (!currentPropsData) return;
+          
+          const updatedProps = {
+            ...currentPropsData,
+            scenes: reorderedScenes,
+            meta: {
+              ...currentPropsData.meta,
+              duration: reorderedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+              title: currentPropsData.meta?.title || 'New Project'
+            }
+          };
+          
+          // Replace the entire state
+          replace(projectId, updatedProps);
+          
+          console.log('[ChatPanelG] ✅ Scene deleted from VideoState:', {
+            deletedSceneId: actualScene.id,
+            remainingScenes: reorderedScenes.length,
+            newDuration: updatedProps.meta?.duration
+          });
+          
+        } else if (actualScene && (operation === 'scene.create' || operation === 'addScene' || operation === 'unknown')) {
           // For new scenes, trust the backend response directly
           console.log('[ChatPanelG] 🆕 New scene detected, using backend data directly');
-          const sceneData = result.scene.scene || result.scene;
+          const sceneData = actualScene;
           
           // ✅ FIX: Transform and add the scene properly
           if (sceneData) {
@@ -392,14 +540,25 @@ export default function ChatPanelG({
               }
             };
             
-            // Use replace to update the entire scenes array
-            const updatedScenes = [...currentScenes, transformedScene];
+            // Check if this is a welcome project (only has default scene)
+            const isWelcomeProject = currentScenes.length === 1 && 
+              currentScenes[0]?.data?.name === 'WelcomeScene';
+            
+            // If welcome project, replace the welcome scene; otherwise append
+            const updatedScenes = isWelcomeProject 
+              ? [transformedScene]  // Replace welcome scene
+              : [...currentScenes, transformedScene];  // Append to existing
+              
+            const currentPropsData = getCurrentProps();
+            if (!currentPropsData) return;
+            
             const updatedProps = {
-              ...getCurrentProps(),
+              ...currentPropsData,
               scenes: updatedScenes,
               meta: {
-                ...getCurrentProps()?.meta,
-                duration: updatedScenes.reduce((sum, s) => sum + s.duration, 0)
+                ...currentPropsData.meta,
+                duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+                title: currentPropsData.meta?.title || 'New Project'
               }
             };
             
@@ -410,19 +569,20 @@ export default function ChatPanelG({
               start: transformedScene.start,
               duration: transformedScene.duration,
               totalScenes: updatedScenes.length,
-              operation: result.operation
+              operation: responseData.operation,
+              replacedWelcome: isWelcomeProject
             });
           }
-        } else if (result.scene && result.operation === 'changeDuration') {
+        } else if (responseData.scene && responseData.operation === 'changeDuration') {
           // ✅ FIX: Handle duration changes
           console.log('[ChatPanelG] ⏱️ Duration change detected');
           
-          const durationData = result.scene;
+          const durationData = responseData.scene;
           const targetSceneId = durationData.targetSceneId;
           
           if (targetSceneId && durationData.newDurationFrames) {
             // Find the scene and update its duration
-            const scene = scenes.find(s => s.id === targetSceneId);
+            const scene = scenes.find((s: any) => s.id === targetSceneId);
             if (scene) {
               console.log('[ChatPanelG] 🔄 Updating scene duration:', {
                 sceneId: targetSceneId,
@@ -440,12 +600,12 @@ export default function ChatPanelG({
             }
           }
         } else {
-          console.log('[ChatPanelG] 🔄 No scene data or unhandled operation:', result.operation);
+          console.log('[ChatPanelG] 🔄 No scene data or unhandled operation:', responseData.operation);
         }
         
         // ✅ TRUST STATE: For ALL operations, we trust our immediate state update
         // No need to refetch from database - VideoState is our single source of truth
-        console.log('[ChatPanelG] ✨ Operation completed:', result.operation, '- trusting direct state update');
+        console.log('[ChatPanelG] ✨ Operation completed:', responseData.operation, '- trusting direct state update');
         
         // Skip notifying WorkspaceContentAreaG - it would just refetch and overwrite our good state
         // The direct VideoState update is sufficient for ALL operations
@@ -459,20 +619,33 @@ export default function ChatPanelG({
       }
 
       // Handle callbacks
-      if (onSceneGenerated && result.scene?.id) {
-        onSceneGenerated(result.scene.id);
+      const sceneId = responseData.scene?.id || responseData.sceneId;
+      if (onSceneGenerated && sceneId) {
+        onSceneGenerated(sceneId);
       }
 
     } catch (error) {
       console.error('[ChatPanelG] ❌ Chat flow failed:', error);
+      
+      // 🚀 [TICKET-006] Clear loading message interval
+      clearInterval(messageInterval);
       
       // Update message with error status
       updateMessage(projectId, assistantMessageId, {
         content: `❌ Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         status: 'error'
       });
+      
+      // 🚀 [TICKET-006] Show retry option
+      toast.error("Failed to generate scene", {
+        action: {
+          label: "Retry",
+          onClick: () => handleSubmit(new Event('submit') as any)
+        }
+      });
     } finally {
       setIsGenerating(false);
+      setCurrentOperation('');
       activeAssistantMessageIdRef.current = null;
       setGenerationComplete(true);
     }
@@ -534,6 +707,47 @@ export default function ChatPanelG({
     setUploadedImages(prev => prev.filter(img => img.id !== imageId));
   }, []);
 
+  // 🚀 [TICKET-006] Image compression utility
+  const compressImage = async (file: File): Promise<File> => {
+    // Only compress if larger than 1MB
+    if (file.size < 1024 * 1024) return file;
+    
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d')!;
+          
+          // Max 1920px width/height
+          let { width, height } = img;
+          const maxSize = 1920;
+          
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width *= ratio;
+            height *= ratio;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob(
+            (blob) => {
+              resolve(new File([blob!], file.name, { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            0.85 // 85% quality
+          );
+        };
+        img.src = e.target!.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   // 🚨 NEW: Image upload functions
   const handleImageUpload = useCallback(async (files: File[]) => {
     const newImages: UploadedImage[] = files.map(file => ({
@@ -547,8 +761,12 @@ export default function ChatPanelG({
     // Upload each image to R2
     for (const image of newImages) {
       try {
+        // 🚀 [TICKET-006] Compress image before upload
+        const compressedFile = await compressImage(image.file);
+        console.log(`[ChatPanelG] 🖼️ Image compressed: ${image.file.size} → ${compressedFile.size} bytes`);
+        
         const formData = new FormData();
-        formData.append('file', image.file);
+        formData.append('file', compressedFile);
         formData.append('projectId', projectId);
 
         const response = await fetch('/api/upload', {
@@ -715,7 +933,6 @@ export default function ChatPanelG({
     addAssistantMessage(projectId, assistantMessageId, '🔧 Analyzing and fixing scene error...');
     
     setIsGenerating(true);
-    setHasSceneError(false);
     
     console.log('[ChatPanelG] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
     
@@ -723,17 +940,14 @@ export default function ChatPanelG({
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: fixPrompt,
-        sceneId: sceneErrorDetails.sceneId,
         userContext: {
-          sceneId: sceneErrorDetails.sceneId,
-          errorMessage: sceneErrorDetails.errorMessage,
-          sceneName: sceneErrorDetails.sceneName,
-          isAutoFix: true
+          imageUrls: undefined
         }
       });
 
       // ✅ CRITICAL: Force complete state refresh after successful fix
-      if (result.success) {
+      const responseData = result as any;
+      if (responseData.data || responseData.meta?.success) {
         console.log('[ChatPanelG] 🔧 Auto-fix successful, force refreshing all state...');
         
         // ✅ STEP 1: Invalidate tRPC cache FIRST
@@ -990,7 +1204,7 @@ export default function ChatPanelG({
                       msg.kind === "status" ? "text-blue-700 font-medium" : ""
                     }`}>
                       {msg.content}
-                      {msg.status === "building" && (
+                      {(msg.status === "building" || msg.status === "pending") && (
                         <div className="flex space-x-1">
                           <div className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                           <div className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -1036,7 +1250,7 @@ export default function ChatPanelG({
         {/* Auto-fix error banner */}
         {sceneErrors.size > 0 && Array.from(sceneErrors.entries()).map(([sceneId, errorDetails]) => {
           // Check if scene still exists
-          const sceneStillExists = scenes.some(s => s.id === sceneId);
+          const sceneStillExists = scenes.some((s: any) => s.id === sceneId);
           if (!sceneStillExists) return null;
           
           return (
@@ -1127,6 +1341,14 @@ export default function ChatPanelG({
           </div>
         )}
 
+        {/* 🚀 [TICKET-006] Show current operation */}
+        {isGenerating && currentOperation && (
+          <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+            <span className="text-sm text-blue-700">{currentOperation}</span>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
           <div className="flex-1 relative">
             <textarea

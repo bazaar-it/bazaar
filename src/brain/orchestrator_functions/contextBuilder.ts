@@ -1,18 +1,17 @@
 // Context builder for the modular orchestrator
 
-import { ContextBuilderService } from "~/server/services/brain/contextBuilder.service";
 import { projectMemoryService } from "~/server/services/data/projectMemory.service";
 import { db } from "~/server/db";
-import { scenes } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
-import type { OrchestrationInput, ContextPacket } from "./types";
+import { scenes, messages } from "~/server/db/schema";
+import { eq, desc } from "drizzle-orm";
+import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 
 export class ContextBuilder {
-  private contextBuilder = ContextBuilderService.getInstance();
 
   async buildContext(input: OrchestrationInput): Promise<ContextPacket> {
-
-    console.log('==================== ContextBuilder function reached:');
+    console.log('\n📚 [NEW CONTEXT BUILDER] === BUILDING CONTEXT ===');
+    console.log('📚 [NEW CONTEXT BUILDER] Project:', input.projectId);
+    console.log('📚 [NEW CONTEXT BUILDER] Has images:', !!(input.userContext?.imageUrls as string[])?.length);
     
     try {
       
@@ -22,38 +21,17 @@ export class ContextBuilder {
         .from(scenes)
         .where(eq(scenes.projectId, input.projectId));
 
-      // Build enhanced context using ContextBuilder service
-      const currentImageUrls = (input.userContext?.imageUrls as string[]) || [];
-      const contextBuilderResult = await this.contextBuilder.buildContext({
-        projectId: input.projectId,
-        userId: input.userId,
-        storyboardSoFar: input.storyboardSoFar as any,
-        userMessage: input.prompt,
-        imageUrls: currentImageUrls,
-        chatHistory: input.chatHistory || []
-      });
-
       // Get user preferences and image analyses
       const [userPreferences, imageAnalyses] = await Promise.all([
         projectMemoryService.getUserPreferences(input.projectId),
         projectMemoryService.getProjectImageAnalyses(input.projectId)
       ]);
 
-      // Convert ContextBuilder preferences to string format
-      const contextBuilderPrefs = Object.fromEntries(
-        Object.entries(contextBuilderResult.userPreferences).map(([key, value]) => [
-          key, String(value)
-        ])
-      );
-
-      // Combine preferences
-      const allPreferences = {
-        ...userPreferences,
-        ...contextBuilderPrefs
-      };
+      // Build image context from conversation history
+      const imageContext = await this.buildImageContext(input);
       
       return {
-        userPreferences: allPreferences,
+        userPreferences: userPreferences,
         sceneHistory: currentScenes.map(scene => ({
           id: scene.id,
           name: scene.name || 'Untitled Scene',
@@ -76,7 +54,7 @@ export class ContextBuilder {
           name: scene.name || 'Untitled Scene'
         })),
         pendingImageIds: [],
-        imageContext: contextBuilderResult.imageContext
+        imageContext: imageContext
       };
 
     } catch (error) {
@@ -117,5 +95,35 @@ export class ContextBuilder {
     
     const uniqueTopics = [...new Set(topics)];
     return uniqueTopics.length > 0 ? `Conversation about: ${uniqueTopics.join(', ')}` : 'General conversation';
+  }
+
+  private async buildImageContext(input: OrchestrationInput) {
+    // Get recent messages to find image references
+    const recentMessages = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.projectId, input.projectId))
+      .orderBy(desc(messages.createdAt))
+      .limit(20);
+
+    const conversationImages: any[] = [];
+    let position = 1;
+
+    for (const msg of recentMessages.reverse()) {
+      if (msg.metadata && typeof msg.metadata === 'object' && 'imageUrls' in msg.metadata) {
+        const imageUrls = (msg.metadata as any).imageUrls;
+        if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+          conversationImages.push({
+            position,
+            userPrompt: msg.content,
+            imageCount: imageUrls.length,
+            imageUrls
+          });
+          position++;
+        }
+      }
+    }
+
+    return { conversationImages };
   }
 } 
