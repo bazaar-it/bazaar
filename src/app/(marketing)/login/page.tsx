@@ -3,9 +3,20 @@
 
 import { signIn } from "next-auth/react";
 import { analytics } from "~/lib/utils/analytics";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+interface LoginPageProps {
+  redirectTo?: string;
+}
+
+function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
+  const searchParams = useSearchParams();
+  // Check for redirect parameter, then prop, default to /projects
+  const redirectTo = searchParams.get('redirect') || redirectToProp || '/projects';
+  
   const handleGitHubLogin = () => {
+    console.log('[LoginPage] GitHub login clicked, redirecting to:', redirectTo);
     // Track OAuth login attempt
     analytics.userLogin('github');
     
@@ -15,10 +26,11 @@ export default function LoginPage() {
       analytics.betaUserSignup('reddit');
     }
     
-    signIn("github", { callbackUrl: "/projects" });
+    signIn("github", { callbackUrl: redirectTo });
   };
 
   const handleGoogleLogin = () => {
+    console.log('[LoginPage] Google login clicked, redirecting to:', redirectTo);
     // Track OAuth login attempt
     analytics.userLogin('google');
     
@@ -28,7 +40,7 @@ export default function LoginPage() {
       analytics.betaUserSignup('reddit');
     }
     
-    signIn("google", { callbackUrl: "/projects" });
+    signIn("google", { callbackUrl: redirectTo });
   };
 
   return (
@@ -109,5 +121,25 @@ function GoogleIcon({ className }: { className?: string }) {
         d="M43.6 20.5h-2.1V20H24v8h11.3c-.7 2.1-2 4-3.7 5.5l.1.1 6.5 5.4c-.5.5 1.1-.8 1.6-1.3 2.6-2.8 4.3-6.6 4.3-10.7 0-1.3-.1-2.7-.4-4z"
       />
     </svg>
+  );
+}
+
+export default function LoginPage(props: LoginPageProps) {
+  return (
+    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-100 to-indigo-100">
+      <Suspense fallback={
+        <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto mb-6"></div>
+            <div className="space-y-4">
+              <div className="h-10 bg-gray-200 rounded"></div>
+              <div className="h-10 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      }>
+        <LoginContent {...props} />
+      </Suspense>
+    </div>
   );
 } 

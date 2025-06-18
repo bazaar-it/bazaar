@@ -9,6 +9,10 @@ import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
 import { analytics } from '~/lib/utils/analytics';
 import type { InputProps } from '~/lib/types/video/input-props';
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id: projectId } = params;
@@ -50,11 +54,12 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     }
 
     // 🚨 CRITICAL FIX: Check for existing scenes FIRST to avoid welcome video override
-    // console.log('[GeneratePage] Checking for existing scenes in database...');
+    console.log('[GeneratePage] Checking for existing scenes in database...');
     const existingScenes = await db.query.scenes.findMany({
       where: eq(scenes.projectId, projectId),
       orderBy: [scenes.order],
     });
+    console.log('[GeneratePage] Found scenes:', existingScenes.length, existingScenes.map(s => ({ id: s.id, name: s.name })));
     
     let actualInitialProps: InputProps;
     

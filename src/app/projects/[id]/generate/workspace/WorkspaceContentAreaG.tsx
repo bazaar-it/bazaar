@@ -347,6 +347,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Helper function to convert database scenes to InputProps format
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
+      // CRITICAL: If we have real scenes from DB, we should NOT include the welcome scene
+      // The welcome scene only exists in video state, not in DB
+      // When DB returns scenes, it means we have real content now
+      
       let currentStart = 0;
       const scenes = dbScenes.map((dbScene, index) => {
         const sceneDuration = dbScene.duration || 150; // Use stored duration, fallback to 150 frames (5s)
@@ -370,10 +374,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         meta: {
           // Preserve the original project title from initialProps instead of generating new ones
           title: initialProps?.meta?.title || 'New Project',
-          duration: currentStart, // Total duration is sum of all scene durations
+          duration: currentStart || 150, // Ensure minimum duration even if no scenes
           backgroundColor: initialProps?.meta?.backgroundColor || '#000000'
         },
-        scenes
+        scenes // This will REPLACE all scenes, including any welcome scene
       };
     }, [initialProps]);
     
@@ -477,6 +481,16 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           console.log('[WorkspaceContentAreaG] ✅ Converted to InputProps format:', updatedProps.scenes.length, 'scenes');
           console.log('[WorkspaceContentAreaG] Total video duration:', updatedProps.meta.duration, 'frames');
           
+          // Log to verify welcome scene removal
+          const currentProps = getCurrentProps();
+          const hadWelcomeScene = currentProps?.scenes?.some((s: any) => s.type === 'welcome' || s.data?.isWelcomeScene);
+          console.log('[WorkspaceContentAreaG] 🎯 Welcome scene check:', {
+            hadWelcomeScene,
+            oldSceneCount: currentProps?.scenes?.length || 0,
+            newSceneCount: updatedProps.scenes.length,
+            replacing: hadWelcomeScene ? 'YES - Welcome scene will be removed' : 'NO - No welcome scene found'
+          });
+          
           // 🚨 CRITICAL FIX: Use updateAndRefresh instead of replace for guaranteed UI updates
           console.log('[WorkspaceContentAreaG] 🚀 Using updateAndRefresh for guaranteed state sync...');
           updateAndRefresh(projectId, () => updatedProps);
@@ -499,6 +513,15 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // 🚨 SIMPLIFIED: Initialization now handled by page.tsx, just set the props once
     useEffect(() => {
+      // Check if VideoState already has data for this project
+      const existingProps = getCurrentProps();
+      if (existingProps && existingProps.scenes && existingProps.scenes.length > 0) {
+        console.log('[WorkspaceContentAreaG] VideoState already has data for project:', projectId);
+        console.log('[WorkspaceContentAreaG] Existing scenes count:', existingProps.scenes.length);
+        // Don't re-initialize if we already have scene data
+        return;
+      }
+      
       // Only initialize once per project
       if (initializationAttemptedRef.current.has(projectId)) {
         console.log('[WorkspaceContentAreaG] Initialization already attempted for project:', projectId);
@@ -519,7 +542,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       } else {
         console.warn('[WorkspaceContentAreaG] No initial props provided - this should not happen');
       }
-    }, [projectId, initialProps, updateAndRefresh]);
+    }, [projectId, initialProps, updateAndRefresh, getCurrentProps]);
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);

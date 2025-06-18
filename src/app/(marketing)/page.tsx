@@ -17,6 +17,7 @@ export default function HomePage() {
   const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
   const [mounted, setMounted] = useState(false);
+  const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   const router = useRouter();
   const createProject = api.project.create.useMutation();
   
@@ -52,6 +53,7 @@ export default function HomePage() {
         router.push(`/projects/${project.projectId}/generate`);
       }
     } else {
+      setIntendedAction('try-for-free');
       setShowLogin(true);
     }
   };
@@ -444,7 +446,7 @@ export default function HomePage() {
                 <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <LoginPage />
+            <LoginPage redirectTo={intendedAction === 'try-for-free' ? '/projects/new' : '/projects'} />
           </div>
         </div>
       )}

@@ -210,8 +210,19 @@ export class AIClientService {
           totalTokens: response.usage.input_tokens + response.usage.output_tokens,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Anthropic API Error:', error);
+      
+      // Check for image download timeout specifically
+      if (error?.error?.message?.includes('timed out while trying to download the file')) {
+        throw new Error('Image download timeout - The AI couldn\'t fetch the uploaded image. Please try again in a moment.');
+      }
+      
+      // Check for other timeout errors
+      if (error?.error?.message?.includes('timeout') || error?.message?.includes('timeout')) {
+        throw new Error('Request timeout - The AI service is temporarily slow. Please try again.');
+      }
+      
       throw new Error(`Anthropic API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

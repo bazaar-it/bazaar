@@ -243,6 +243,13 @@ export const useVideoState = create<VideoState>((set, get) => ({
       // Skip if project doesn't exist
       if (!state.projects[projectId]) return state;
       
+      // Check if this message ID already exists
+      const existingMessage = state.projects[projectId].chatHistory.find(msg => msg.id === messageId);
+      if (existingMessage) {
+        console.warn('[VideoState] Assistant message with ID already exists, skipping:', messageId);
+        return state;
+      }
+      
       // Create new message with the server-provided ID
       const newMessage: ChatMessage = {
         id: messageId, // Use the server-provided ID
@@ -252,6 +259,8 @@ export const useVideoState = create<VideoState>((set, get) => ({
         status: 'pending',
         kind: 'status'
       };
+      
+      console.log('[VideoState] Adding assistant message:', { id: messageId, content: initialContent.substring(0, 50) + '...' });
       
       // Return updated state with new message and track it as the active streaming message
       return {
@@ -343,42 +352,71 @@ export const useVideoState = create<VideoState>((set, get) => ({
         jobId: null // DB messages don't have jobId
       }));
       
-      // Create a Set of synced message IDs for quick lookups
-      const syncedMessageIds = new Set(syncedMessages.map(msg => msg.id));
+      // Helper function to check if two messages are duplicates
+      const isDuplicateMessage = (msg1: ChatMessage, msg2: ChatMessage) => {
+        // Same role/type
+        if (msg1.isUser !== msg2.isUser) return false;
+        
+        // Same content (trimmed and compared)
+        const content1 = msg1.message.trim();
+        const content2 = msg2.message.trim();
+        
+        // For exact matches
+        if (content1 === content2) return true;
+        
+        // For partial matches (one message might be truncated)
+        if (content1.length > 50 && content2.length > 50) {
+          // Check if beginning of messages match (at least 50 chars)
+          return content1.substring(0, 50) === content2.substring(0, 50);
+        }
+        
+        return false;
+      };
       
-      // Find messages in the current state that are NOT in the DB yet
-      // These are either optimistic updates or messages being streamed
-      const unsyncedClientMessages = state.projects[projectId].chatHistory.filter(clientMsg => {
-        // Keep messages that are not in the DB yet OR the active streaming message
-        // (which might have more up-to-date content than the DB version)
-        return !syncedMessageIds.has(clientMsg.id) || clientMsg.id === activeStreamingMessageId;
+      // Get current client messages
+      const currentClientMessages = state.projects[projectId].chatHistory;
+      
+      // Use database messages as the base (they have proper UUIDs)
+      const deduplicatedHistory: ChatMessage[] = [];
+      const processedContents = new Set<string>();
+      
+      // Add all DB messages first
+      syncedMessages.forEach(dbMsg => {
+        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}`;
+        if (!processedContents.has(contentKey)) {
+          deduplicatedHistory.push(dbMsg);
+          processedContents.add(contentKey);
+        }
       });
       
-      // Combine messages: Start with all synced DB messages
-      const combinedHistory = [...syncedMessages];
-      
-      // Then add any unsynced client messages (optimistic ones) 
-      unsyncedClientMessages.forEach(clientMsg => {
-        if (!syncedMessageIds.has(clientMsg.id)) {
-          // This message isn't in DB yet, add it
-          combinedHistory.push(clientMsg);
-        } else if (clientMsg.id === activeStreamingMessageId) {
-          // If this is the active streaming message and it exists in DB,
-          // use our client version which might be more up-to-date
-          const index = combinedHistory.findIndex(m => m.id === activeStreamingMessageId);
-          if (index !== -1) combinedHistory[index] = clientMsg;
+      // Check for any client-only messages that aren't duplicates
+      currentClientMessages.forEach(clientMsg => {
+        // Skip if this message is a duplicate of any DB message
+        const isDuplicate = deduplicatedHistory.some(existingMsg => 
+          isDuplicateMessage(clientMsg, existingMsg)
+        );
+        
+        if (!isDuplicate) {
+          // This is a new message not yet in DB (e.g., still being processed)
+          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}`;
+          if (!processedContents.has(contentKey)) {
+            deduplicatedHistory.push(clientMsg);
+            processedContents.add(contentKey);
+          }
         }
       });
       
       // Sort messages by timestamp to maintain chronological order
-      combinedHistory.sort((a, b) => a.timestamp - b.timestamp);
+      deduplicatedHistory.sort((a, b) => a.timestamp - b.timestamp);
+      
+      console.log('[videoState.syncDbMessages] Deduplication complete. Client:', currentClientMessages.length, 'DB:', syncedMessages.length, 'Final:', deduplicatedHistory.length);
       
       return {
         projects: {
           ...state.projects,
           [projectId]: {
             ...state.projects[projectId],
-            chatHistory: (console.log('[videoState.syncDbMessages] Combined history after sync:', JSON.stringify(combinedHistory).substring(0,300) + '...'), combinedHistory),
+            chatHistory: (console.log('[videoState.syncDbMessages] Combined history after sync:', JSON.stringify(deduplicatedHistory).substring(0,300) + '...'), deduplicatedHistory),
             dbMessagesLoaded: true
           }
         }
@@ -431,18 +469,26 @@ export const useVideoState = create<VideoState>((set, get) => ({
       const project = state.projects[projectId];
       if (!project) return state;
       
-      const newScenes = [...project.props.scenes, {
+      // Calculate the correct start position based on existing scenes' actual durations
+      const currentTotalDuration = project.props.scenes.reduce((sum, s) => sum + (s.duration || 150), 0);
+      
+      const newScene = {
         id: scene.id,
         type: 'custom' as const,
-        start: project.props.scenes.length * 150,
-        duration: 150,
+        start: currentTotalDuration, // Start after all existing scenes
+        duration: scene.duration || 150, // Use scene's actual duration
         data: {
           code: scene.tsxCode,
           name: scene.name || 'Generated Scene',
           componentId: scene.id,
           props: scene.props || {}
         }
-      }];
+      };
+      
+      const newScenes = [...project.props.scenes, newScene];
+      
+      // Calculate total duration properly
+      const totalDuration = currentTotalDuration + newScene.duration;
       
       return {
         ...state,
@@ -454,7 +500,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
               ...project.props,
               meta: {
                 ...project.props.meta,
-                duration: newScenes.length * 150
+                duration: totalDuration
               },
               scenes: newScenes
             }
@@ -585,6 +631,16 @@ export const useVideoState = create<VideoState>((set, get) => ({
       const project = state.projects[projectId];
       if (!project) return state;
       
+      // Check for duplicate messages in the last 2 seconds
+      const recentMessages = project.chatHistory.filter(
+        msg => msg.isUser && Date.now() - msg.timestamp < 2000
+      );
+      
+      if (recentMessages.some(msg => msg.message === content)) {
+        console.warn('[VideoState] Duplicate user message detected, skipping:', content);
+        return state;
+      }
+      
       const newMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         message: content,
@@ -593,6 +649,8 @@ export const useVideoState = create<VideoState>((set, get) => ({
         status: 'success',
         imageUrls: imageUrls // 🚨 NEW: Include uploaded images with message
       };
+      
+      console.log('[VideoState] Adding user message:', { id: newMessage.id, content: content.substring(0, 50) + '...' });
       
       return {
         ...state,

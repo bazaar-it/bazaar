@@ -95,10 +95,7 @@ export default function ChatPanelG({
   const isFirstMessageRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const [progressStage, setProgressStage] = useState<string | null>(null);
-  const [editComplexityFeedback, setEditComplexityFeedback] = useState<string | null>(null);
   
-  // 🚀 [TICKET-006] New state for loading feedback
-  const [currentOperation, setCurrentOperation] = useState<string>('');
   
   // 🚨 NEW: State for image uploads
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
@@ -132,6 +129,13 @@ export default function ChatPanelG({
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
   const messages = getProjectChatHistory(projectId);
+  
+  // Debug: Log messages to check for duplicates
+  console.log('[ChatPanelG] Messages from VideoState:', messages.length, messages.map(m => ({
+    id: m.id,
+    content: m.message.substring(0, 50) + '...',
+    isUser: m.isUser
+  })));
   
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = messages.map(msg => ({
@@ -230,40 +234,9 @@ export default function ChatPanelG({
     }
   };
 
-  // 🎯 NEW: Edit Complexity Feedback Messages
-  const getComplexityFeedback = (complexity: string) => {
-    const feedbackMap = {
-      surgical: [
-        "⚡ Quick fix coming up!",
-        "🎯 Making that precise change...",
-        "✂️ Surgical precision mode activated!",
-        "🔧 Simple tweak in progress...",
-        "⚡ Lightning-fast edit incoming!"
-      ],
-      creative: [
-        "🎨 Let me work some creative magic...",
-        "✨ Enhancing the design aesthetics...",
-        "🎪 Time for some creative flair!",
-        "🌟 Polishing this to perfection...",
-        "🎭 Adding some artistic touches..."
-      ],
-      structural: [
-        "🏗️ This is a bigger change — restructuring the layout...",
-        "🔨 Doing some heavy lifting here...",
-        "🏗️ Rebuilding the foundation...",
-        "⚙️ Major reconstruction in progress...",
-        "🏗️ Architectural changes incoming..."
-      ]
-    };
-
-    const messages = feedbackMap[complexity as keyof typeof feedbackMap] || [];
-    return messages[Math.floor(Math.random() * messages.length)] || "⚙️ Processing your request...";
-  };
-
-  // 🎯 NEW: Listen for edit complexity from Brain LLM (would come from mutation result)
-  const handleEditComplexityDetected = (complexity: string) => {
-    const feedback = getComplexityFeedback(complexity);
-    setEditComplexityFeedback(feedback);
+  // Simple, honest loading message
+  const getInitialLoadingMessage = () => {
+    return "Processing your request...";
   };
 
   // ✅ SIMPLIFIED: Single message submission handler
@@ -283,34 +256,19 @@ export default function ChatPanelG({
     }
     
     // ✅ SIMPLE: Add user message to VideoState
+    console.log('[ChatPanelG] Adding user message:', trimmedMessage);
     addUserMessage(projectId, trimmedMessage, imageUrls.length > 0 ? imageUrls : undefined);
     
     // ✅ SIMPLE: Add assistant loading message  
     const assistantMessageId = `assistant-${Date.now()}`;
     activeAssistantMessageIdRef.current = assistantMessageId;
     
-    // 🚀 [TICKET-006] More engaging loading messages
-    const loadingMessages = [
-      "🧠 Analyzing your request...",
-      "🎨 Getting creative with your vision...",
-      "✨ Crafting something special...",
-      "🚀 Generating your scene...",
-      "🎯 Almost there..."
-    ];
+    // Simple loading message - no randomness
+    const initialMessage = getInitialLoadingMessage();
     
-    addAssistantMessage(projectId, assistantMessageId, loadingMessages[0]!);
+    addAssistantMessage(projectId, assistantMessageId, initialMessage);
     
-    // Update loading message periodically
-    let messageIndex = 0;
-    const messageInterval = setInterval(() => {
-      if (messageIndex < loadingMessages.length - 1) {
-        messageIndex++;
-        updateMessage(projectId, assistantMessageId, {
-          content: loadingMessages[messageIndex]!,
-          status: 'pending'
-        });
-      }
-    }, 2000);
+    // No more cycling messages - just keep the simple loading message
     
     // 🚨 NEW: Immediately scroll to bottom after adding messages
     setTimeout(() => {
@@ -325,27 +283,16 @@ export default function ChatPanelG({
     // Check if this is a welcome project that needs its welcome scene removed
     const currentScenes = getCurrentProps()?.scenes || [];
     const isFirstRealScene = currentScenes.length === 1 && 
-      currentScenes[0]?.data?.name === 'WelcomeScene';
+      (currentScenes[0]?.data?.name === 'Welcome Scene' || // Check with space
+       currentScenes[0]?.data?.isWelcomeScene === true ||  // Check flag
+       currentScenes[0]?.type === 'welcome');              // Check type
     
+    // Don't remove welcome scene immediately - let it stay until new content is ready
     if (isFirstRealScene) {
-      console.log('[ChatPanelG] 🎬 First real scene generation - removing welcome scene immediately');
-      // Clear the welcome scene from state right away
-      const currentProps = getCurrentProps();
-      if (!currentProps) return; // Safety check
-      
-      const clearedProps = {
-        ...currentProps,
-        scenes: [],
-        meta: {
-          ...currentProps.meta,
-          duration: 0
-        }
-      };
-      replace(projectId, clearedProps);
+      console.log('[ChatPanelG] 🎬 First real scene generation - welcome scene will be replaced when new content is ready');
     }
     
-    // 🚀 [TICKET-006] Set initial operation state
-    setCurrentOperation('Analyzing your request...');
+    // Operation state no longer needed - messages handle this
     
     // 🚀 [TICKET-006] Track performance
     const startTime = performance.now();
@@ -353,10 +300,7 @@ export default function ChatPanelG({
     try {
       console.log('[ChatPanelG] 🚀 Starting generation via Brain Orchestrator...');
       
-      // 🚀 [TICKET-006] Show operation progress
-      if (imageUrls.length > 0) {
-        setCurrentOperation('Processing images and analyzing request...');
-      }
+      // Images are being processed - no need for special state
       
       // ✅ CORRECT: Use generation endpoint that goes through Brain Orchestrator
       // 🚀 [TICKET-006] Add retry logic for resilience
@@ -374,32 +318,43 @@ export default function ChatPanelG({
 
       console.log('[ChatPanelG] ✅ Generation completed:', result);
       
-      // 🚀 [TICKET-006] Clear loading message interval
-      clearInterval(messageInterval);
+      // No interval to clear anymore
       
       // 🚀 [TICKET-006] Calculate performance
       const endTime = performance.now();
       const duration = ((endTime - startTime) / 1000).toFixed(1);
       
-      // ✅ Update assistant message with response from Brain Orchestrator
-      // Handle UniversalResponse format
-      console.log('[ChatPanelG] 📦 Raw result structure:', {
+      // ✅ Update assistant message with ACTUAL response from Brain/Tools
+      console.log('[ChatPanelG] 📦 Processing response:', {
         hasData: !!result.data,
-        hasNestedData: !!(result as any).data?.data,
         hasMeta: !!(result as any).meta,
-        operation: (result as any).meta?.operation,
         hasContext: !!(result as any).context
       });
       
-      // UniversalResponse structure: { data: scene, meta: { operation }, context: { chatResponse } }
       const responseData = result as any;
-      const baseResponse = responseData.context?.chatResponse || responseData.chatResponse || responseData.message || 'Scene operation completed!';
-      const finalResponse = `${baseResponse} ⚡ (${duration}s)`;
       
-      updateMessage(projectId, assistantMessageId, {
-        content: finalResponse,
-        status: 'success'
-      });
+      // Check if this is a clarification request
+      if (responseData.error && responseData.chatResponse) {
+        // Brain asked for clarification - show ONLY the clarification question
+        updateMessage(projectId, assistantMessageId, {
+          content: responseData.chatResponse,
+          status: 'success'
+        });
+      } else {
+        // Normal operation - use the actual AI response
+        const aiResponse = responseData.context?.chatResponse || 
+                          responseData.chatResponse || 
+                          responseData.message || 
+                          'Operation completed successfully.';
+        
+        // Add timing only to completion messages, not clarifications
+        const finalMessage = `${aiResponse} ✓ (${duration}s)`;
+        
+        updateMessage(projectId, assistantMessageId, {
+          content: finalMessage,
+          status: 'success'
+        });
+      }
 
       // 🚨 NEW: Scroll to bottom after updating assistant message
       setTimeout(() => {
@@ -540,13 +495,15 @@ export default function ChatPanelG({
               }
             };
             
-            // Check if this is a welcome project (only has default scene)
+            // Check if this is a welcome project (only has welcome scene)
             const isWelcomeProject = currentScenes.length === 1 && 
-              currentScenes[0]?.data?.name === 'WelcomeScene';
+              (currentScenes[0]?.data?.name === 'Welcome Scene' || // Check with space
+               currentScenes[0]?.data?.isWelcomeScene === true ||  // Check flag
+               currentScenes[0]?.type === 'welcome');              // Check type
             
             // If welcome project, replace the welcome scene; otherwise append
             const updatedScenes = isWelcomeProject 
-              ? [transformedScene]  // Replace welcome scene
+              ? [transformedScene]  // Replace welcome scene with new content
               : [...currentScenes, transformedScene];  // Append to existing
               
             const currentPropsData = getCurrentProps();
@@ -627,12 +584,23 @@ export default function ChatPanelG({
     } catch (error) {
       console.error('[ChatPanelG] ❌ Chat flow failed:', error);
       
-      // 🚀 [TICKET-006] Clear loading message interval
-      clearInterval(messageInterval);
+      // No interval to clear anymore
       
-      // Update message with error status
+      // Update message with user-friendly error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      let userFriendlyError = 'I encountered an error. ';
+      
+      // Make error messages more user-friendly
+      if (errorMessage.includes('timeout')) {
+        userFriendlyError += 'The request took too long. Please try again.';
+      } else if (errorMessage.includes('Image download timeout')) {
+        userFriendlyError += 'I couldn\'t load the image. Please try again.';
+      } else {
+        userFriendlyError += 'Please try again or rephrase your request.';
+      }
+      
       updateMessage(projectId, assistantMessageId, {
-        content: `❌ Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: userFriendlyError,
         status: 'error'
       });
       
@@ -645,7 +613,6 @@ export default function ChatPanelG({
       });
     } finally {
       setIsGenerating(false);
-      setCurrentOperation('');
       activeAssistantMessageIdRef.current = null;
       setGenerationComplete(true);
     }
@@ -844,7 +811,6 @@ export default function ChatPanelG({
     setIsGenerating(false);
     setGenerationComplete(false);
     setCurrentPrompt('');
-    setEditComplexityFeedback(null);
     setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
     
     // Reset first message flag for new projects
@@ -1341,13 +1307,7 @@ export default function ChatPanelG({
           </div>
         )}
 
-        {/* 🚀 [TICKET-006] Show current operation */}
-        {isGenerating && currentOperation && (
-          <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-            <span className="text-sm text-blue-700">{currentOperation}</span>
-          </div>
-        )}
+        {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
           <div className="flex-1 relative">
