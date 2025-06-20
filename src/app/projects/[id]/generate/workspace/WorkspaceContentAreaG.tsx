@@ -511,17 +511,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Track if initialization has been attempted for this project
     const initializationAttemptedRef = useRef<Set<string>>(new Set());
     
-    // 🚨 SIMPLIFIED: Initialization now handled by page.tsx, just set the props once
+    // 🚨 FIX: Removed defensive check that prevented updates with fresh DB data
     useEffect(() => {
-      // Check if VideoState already has data for this project
-      const existingProps = getCurrentProps();
-      if (existingProps && existingProps.scenes && existingProps.scenes.length > 0) {
-        console.log('[WorkspaceContentAreaG] VideoState already has data for project:', projectId);
-        console.log('[WorkspaceContentAreaG] Existing scenes count:', existingProps.scenes.length);
-        // Don't re-initialize if we already have scene data
-        return;
-      }
-      
       // Only initialize once per project
       if (initializationAttemptedRef.current.has(projectId)) {
         console.log('[WorkspaceContentAreaG] Initialization already attempted for project:', projectId);
@@ -534,15 +525,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       console.log('[WorkspaceContentAreaG] Initializing project with provided props:', projectId);
       console.log('[WorkspaceContentAreaG] Initial props scenes count:', initialProps?.scenes?.length || 0);
       
-      // ✅ TRUST page.tsx: Use the provided initialProps directly 
-      // page.tsx now ensures these are ALWAYS the correct props (either real scenes or welcome)
+      // ✅ ALWAYS update with server data (removed the check that skipped if data existed)
       if (initialProps) {
         updateAndRefresh(projectId, () => initialProps);
-        console.log('[WorkspaceContentAreaG] ✅ Initialized video state with correct props from page.tsx');
+        console.log('[WorkspaceContentAreaG] ✅ Initialized video state with server data from page.tsx');
       } else {
         console.warn('[WorkspaceContentAreaG] No initial props provided - this should not happen');
       }
-    }, [projectId, initialProps, updateAndRefresh, getCurrentProps]);
+    }, [projectId, initialProps, updateAndRefresh]);
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -689,7 +679,6 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             projectId={projectId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
-            onProjectRename={onProjectRename}
           />;
         case 'preview':
           return (

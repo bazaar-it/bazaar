@@ -297,7 +297,7 @@ export default function FintechUI() {
 export const templateConfig = {
   id: 'fintech-ui',
   name: 'Fintech UI',
-  duration: 240, // 8 seconds
+  duration: 150, // 5 seconds - animation completes at frame 135
   previewFrame: 30,
   getCode: () => `const {
 AbsoluteFill,

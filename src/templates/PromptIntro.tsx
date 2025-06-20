@@ -151,7 +151,7 @@ import {
 export const templateConfig = {
   id: 'promptintro',
   name: 'Prompt Intro',
-  duration: 180, // 6 seconds
+  duration: 100, // 3.3 seconds - animation completes at frame 90
   previewFrame: 30,
   getCode: () => `const {
   AbsoluteFill,

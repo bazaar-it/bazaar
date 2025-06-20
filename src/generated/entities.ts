@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED FROM DATABASE SCHEMA
  * DO NOT EDIT MANUALLY - RUN: npm run generate:types
  * 
- * Generated at: 2025-06-18T18:23:26.958Z
+ * Generated at: 2025-06-20T14:58:55.133Z
  */
 
 /**
@@ -80,6 +80,7 @@ export interface SceneIterationEntity {
   userEditedAgain: boolean;
   userSatisfactionScore?: number | null;
   sessionId?: string | null;
+  messageId?: string | null;    // Link to message that triggered this iteration
   readonly createdAt: Date;
 }
 

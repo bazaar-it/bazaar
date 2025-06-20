@@ -3,7 +3,6 @@ import { projectRouter } from "~/server/api/routers/project";
 import { chatRouter } from "~/server/api/routers/chat";
 import { renderRouter } from "~/server/api/routers/render";
 import { generationUniversalRouter } from "~/server/api/routers/generation.universal";
-import { generationStreamingRouter } from "~/server/api/routers/generation.streaming";
 import { voiceRouter } from "~/server/api/routers/voice";
 import { feedbackRouter } from "~/server/api/routers/feedback";
 import { emailSubscriberRouter } from "~/server/api/routers/emailSubscriber";
@@ -24,7 +23,6 @@ export const appRouter = createTRPCRouter({
   chat: chatRouter,
   render: renderRouter,
   generation: generationUniversalRouter,
-  generationStreaming: generationStreamingRouter,
   voice: voiceRouter,
   feedback: feedbackRouter,
   emailSubscriber: emailSubscriberRouter,

@@ -13,6 +13,19 @@
 export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene';
 
 // ============================================================================
+// TOOL TO OPERATION MAPPING - Single source of truth
+// ============================================================================
+
+export const TOOL_OPERATION_MAP = {
+  addScene: 'scene.create',
+  editScene: 'scene.update',
+  trimScene: 'scene.update',
+  deleteScene: 'scene.delete'
+} as const;
+
+export type ToolOperationType = typeof TOOL_OPERATION_MAP[ToolName];
+
+// ============================================================================
 // BRAIN DECISION - What the orchestrator returns
 // ============================================================================
 
@@ -26,9 +39,9 @@ export interface BrainDecision {
   toolContext?: {
     userPrompt: string;
     targetSceneId?: string;
+    targetDuration?: number; // For trim operations
     imageUrls?: string[];
     visionAnalysis?: any;
-    requestedDurationSeconds?: number;
     errorDetails?: string;
   };
   
@@ -111,6 +124,7 @@ export interface ToolSelectionResult {
   success: boolean;
   toolName?: ToolName;
   targetSceneId?: string;
+  targetDuration?: number; // For trim operations - exact frame count
   reasoning?: string;
   error?: string;
   needsClarification?: boolean;

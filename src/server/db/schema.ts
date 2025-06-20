@@ -140,6 +140,7 @@ export const messages = createTable(
     kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
     imageUrls: d.jsonb("image_urls").$type<string[]>(), // 🚨 NEW: Support for uploaded images
+    sequence: d.integer().notNull().default(0), // Message sequence number for ordering
     createdAt: d
       .timestamp({ withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -155,6 +156,7 @@ export const messages = createTable(
   (t) => [
     index("message_project_idx").on(t.projectId),
     index("message_status_idx").on(t.status),
+    index("message_project_sequence_idx").on(t.projectId, t.sequence), // Index for efficient sequence-based queries
   ],
 );
 
@@ -231,6 +233,9 @@ export const sceneIterations = createTable(
     userSatisfactionScore: d.integer("user_satisfaction_score"), // 1-5 rating (future feature)
     sessionId: d.varchar("session_id", { length: 255 }), // Track user sessions
     
+    // Link to message that triggered this iteration
+    messageId: d.uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    
     createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   }),
   (t) => [
@@ -238,12 +243,14 @@ export const sceneIterations = createTable(
     index("scene_iteration_project_idx").on(t.projectId),
     index("scene_iteration_operation_idx").on(t.operationType, t.editComplexity),
     index("scene_iteration_satisfaction_idx").on(t.userEditedAgain, t.createdAt),
+    index("scene_iteration_message_idx").on(t.messageId),
   ],
 );
 
 export const sceneIterationsRelations = relations(sceneIterations, ({ one }) => ({
   scene: one(scenes, { fields: [sceneIterations.sceneId], references: [scenes.id] }),
   project: one(projects, { fields: [sceneIterations.projectId], references: [projects.id] }),
+  message: one(messages, { fields: [sceneIterations.messageId], references: [messages.id] }),
 }));
 
 // --- Scene Specs table ---

@@ -24,8 +24,9 @@ Bazaar-Vid is a **sophisticated AI-powered video creation platform** that enable
 - **Database**: PostgreSQL (Neon) + Drizzle ORM
 - **Storage**: Cloudflare R2 for assets
 - **Video**: Remotion for composition and rendering
-- **AI**: OpenAI GPT-4o-mini with multi-agent system
-- **Real-time**: Server-Sent Events + JSON Patch for collaboration
+- **AI**: OpenAI GPT-4o-mini with MCP tools
+- **Real-time**: Server-Sent Events (SSE) for chat streaming
+- **Media**: Voice-to-text input, Image upload with compression
 
 ### Production Flow (CRITICAL TO UNDERSTAND):
 ```

@@ -33,6 +33,10 @@ export class IntentAnalyzer {
 
       console.log('🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...');
       const parsed = this.extractJsonFromResponse(rawOutput);
+      
+      // Debug log to see what brain actually returned
+      console.log('🎯 [NEW INTENT ANALYZER] Raw parsed JSON:', JSON.stringify(parsed, null, 2));
+      
       const result = this.processBrainDecision(parsed, input);
       
       console.log('🎯 [NEW INTENT ANALYZER] Decision:', {
@@ -62,7 +66,8 @@ export class IntentAnalyzer {
         const sceneNum = i + 1;
         const isNewest = i === storyboardSoFar.length - 1;
         const isFirst = i === 0;
-        return `Scene ${sceneNum}: "${scene.name}" (ID: ${scene.id})${isNewest ? ' [NEWEST/LAST ADDED]' : ''}${isFirst ? ' [FIRST]' : ''}`;
+        const durationSec = (scene.duration / 30).toFixed(1); // Convert frames to seconds
+        return `Scene ${sceneNum}: "${scene.name}" (ID: ${scene.id}, Duration: ${scene.duration} frames / ${durationSec}s)${isNewest ? ' [NEWEST/LAST ADDED]' : ''}${isFirst ? ' [FIRST]' : ''}`;
       }).join('\n');
       
       // Add helpful context about recent actions
@@ -179,6 +184,7 @@ Respond with JSON only.`;
       toolName: parsed.toolName,
       reasoning: parsed.reasoning,
       targetSceneId: parsed.targetSceneId,
+      targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
       userFeedback: parsed.userFeedback,
     };
 

@@ -14,6 +14,7 @@ export interface ChatMessage {
   message: string;
   isUser: boolean;
   timestamp: number;
+  sequence?: number; // Message sequence number for proper ordering
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
   kind?: "text" | "error" | "status" | "tool_result";
   jobId?: string | null;
@@ -42,6 +43,7 @@ export type DbMessage = {
   content: string;
   role: 'user' | 'assistant';
   createdAt: Date;
+  sequence: number;
   // Added for streaming support
   updatedAt?: Date;
   status?: 'pending' | 'success' | 'error' | 'building';
@@ -72,7 +74,7 @@ interface VideoState {
   pendingDbSync: Record<string, boolean>; // Track which projects need DB sync
   
   // Actions
-  setProject: (projectId: string, initialProps: InputProps) => void;
+  setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
   replace: (projectId: string, newProps: InputProps) => void;
   getCurrentProps: () => InputProps | null;
   
@@ -102,9 +104,10 @@ interface VideoState {
   
   // Force refresh of preview components by generating a new refresh token
   
-  // OPTIMIZATION #2: Add/update individual scenes without full refetch
+  // OPTIMIZATION #2: Add/update/delete individual scenes without full refetch
   addScene: (projectId: string, scene: any) => void;
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
+  deleteScene: (projectId: string, sceneId: string) => void;
   
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) => void;
@@ -140,9 +143,9 @@ export const useVideoState = create<VideoState>((set, get) => ({
     return projects[currentProjectId].chatHistory || [];
   },
 
-  setProject: (projectId, initialProps) => 
+  setProject: (projectId, initialProps, options = {}) => 
     set((state) => {
-      console.log('[videoState.setProject] Called. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 300) + (JSON.stringify(initialProps).length > 300 ? '...' : ''));
+      console.log('[videoState.setProject] Called. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 300) + (JSON.stringify(initialProps).length > 300 ? '...' : ''), 'Options:', options);
       const isProjectSwitch = state.currentProjectId && state.currentProjectId !== projectId;
       
       // If switching to a different project, clear old chat history to avoid contamination
@@ -150,12 +153,31 @@ export const useVideoState = create<VideoState>((set, get) => ({
         console.log(`[VideoState] Switching from project ${state.currentProjectId} to ${projectId}, clearing chat history`);
       }
       
+      // Check if we should skip update (only if not forcing)
+      if (!options.force && state.projects[projectId]) {
+        const localScenes = state.projects[projectId].props?.scenes || [];
+        const newScenes = initialProps?.scenes || [];
+        
+        // Only skip if local has real scenes (not just welcome) and new has none/welcome only
+        const hasRealLocalScenes = localScenes.some(s => 
+          s.type !== 'welcome' && !s.data?.isWelcomeScene
+        );
+        const hasRealNewScenes = newScenes.some(s => 
+          s.type !== 'welcome' && !s.data?.isWelcomeScene
+        );
+        
+        if (hasRealLocalScenes && !hasRealNewScenes) {
+          console.log('[VideoState] Keeping local scenes (has real scenes), skipping update with welcome/empty scenes');
+          return state;
+        }
+      }
+      
       return {
         currentProjectId: projectId,
         projects: {
           ...state.projects,
           [projectId]: {
-            // Always use the provided initialProps - don't preserve old props
+            // Always use the provided initialProps when force=true or when it makes sense
             props: initialProps,
             // Clear chat history on project switch, otherwise preserve
             chatHistory: isProjectSwitch ? (console.log('[videoState.setProject] Setting default chat history for new/switched project'), []) : (console.log('[videoState.setProject] Preserving existing chat history'), state.projects[projectId]?.chatHistory || []),
@@ -213,12 +235,18 @@ export const useVideoState = create<VideoState>((set, get) => ({
       // Skip if project doesn't exist
       if (!state.projects[projectId]) return state;
       
+      // Calculate next sequence number
+      const maxSequence = state.projects[projectId].chatHistory.reduce((max, msg) => 
+        Math.max(max, msg.sequence ?? 0), 0
+      );
+      
       // Create new message
       const newMessage: ChatMessage = {
         id: `${isUser ? 'user' : 'system'}-${Date.now()}`,
         message,
         isUser,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        sequence: maxSequence + 1
       };
       
       // Return updated state with new message
@@ -250,12 +278,18 @@ export const useVideoState = create<VideoState>((set, get) => ({
         return state;
       }
       
+      // Calculate next sequence number
+      const maxSequence = state.projects[projectId].chatHistory.reduce((max, msg) => 
+        Math.max(max, msg.sequence ?? 0), 0
+      );
+      
       // Create new message with the server-provided ID
       const newMessage: ChatMessage = {
         id: messageId, // Use the server-provided ID
         message: initialContent,
         isUser: false,
         timestamp: Date.now(),
+        sequence: maxSequence + 1,
         status: 'pending',
         kind: 'status'
       };
@@ -347,6 +381,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
         message: dbMessage.content,
         isUser: dbMessage.role === "user",
         timestamp: new Date(dbMessage.createdAt).getTime(),
+        sequence: dbMessage.sequence,
         status: dbMessage.status || "success",
         kind: dbMessage.kind || (dbMessage.role === "user" ? "text" : "text"), // User messages are also 'text' type
         jobId: null // DB messages don't have jobId
@@ -406,8 +441,15 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       });
       
-      // Sort messages by timestamp to maintain chronological order
-      deduplicatedHistory.sort((a, b) => a.timestamp - b.timestamp);
+      // Sort messages by sequence (if available) or timestamp to maintain chronological order
+      deduplicatedHistory.sort((a, b) => {
+        // If both have sequence numbers, use those
+        if (a.sequence !== undefined && b.sequence !== undefined) {
+          return a.sequence - b.sequence;
+        }
+        // Otherwise fall back to timestamp
+        return a.timestamp - b.timestamp;
+      });
       
       console.log('[videoState.syncDbMessages] Deduplication complete. Client:', currentClientMessages.length, 'DB:', syncedMessages.length, 'Final:', deduplicatedHistory.length);
       
@@ -602,6 +644,71 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       };
     }),
+  
+  deleteScene: (projectId: string, sceneId: string) =>
+    set((state) => {
+      console.log('[VideoState.deleteScene] ⚡ Deleting scene:', sceneId);
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.deleteScene] ❌ Project not found:', projectId);
+        return state;
+      }
+      
+      const sceneIndex = project.props.scenes.findIndex((s: any) => s.id === sceneId);
+      if (sceneIndex === -1) {
+        console.log('[VideoState.deleteScene] ❌ Scene not found:', sceneId);
+        return state;
+      }
+      
+      // Get the scene being deleted for duration calculation
+      const deletedScene = project.props.scenes[sceneIndex];
+      const deletedDuration = deletedScene?.duration || 150;
+      
+      // Filter out the deleted scene
+      const updatedScenes = project.props.scenes.filter((s: any) => s.id !== sceneId);
+      
+      // TIMELINE FIX: Recalculate start times for subsequent scenes
+      let currentStart = 0;
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+        if (scene) {
+          updatedScenes[i] = {
+            ...scene,
+            start: currentStart
+          };
+          currentStart += scene.duration || 150;
+        }
+      }
+      
+      // TOTAL DURATION FIX: Recalculate total video duration
+      const totalDuration = updatedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+      
+      console.log('[VideoState.deleteScene] ✅ Scene deleted successfully - all panels should refresh now');
+      
+      // Generate new refresh token (same as replace method)
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: totalDuration
+              },
+              scenes: updatedScenes
+            },
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now(), // Track when updated
+          }
+        }
+      };
+    }),
     
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) =>
@@ -641,11 +748,17 @@ export const useVideoState = create<VideoState>((set, get) => ({
         return state;
       }
       
+      // Calculate next sequence number
+      const maxSequence = project.chatHistory.reduce((max, msg) => 
+        Math.max(max, msg.sequence ?? 0), 0
+      );
+      
       const newMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         message: content,
         isUser: true,
         timestamp: Date.now(),
+        sequence: maxSequence + 1,
         status: 'success',
         imageUrls: imageUrls // 🚨 NEW: Include uploaded images with message
       };

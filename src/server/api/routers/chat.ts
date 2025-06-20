@@ -24,7 +24,7 @@ export const chatRouter = createTRPCRouter({
             }
             const messageHistory = await ctx.db.query.messages.findMany({
                 where: eq(messages.projectId, input.projectId),
-                orderBy: [desc(messages.createdAt)],
+                orderBy: [desc(messages.sequence)],
                 limit: input.limit,
                 columns: {
                     id: true,
@@ -34,6 +34,7 @@ export const chatRouter = createTRPCRouter({
                     kind: true,
                     imageUrls: true,
                     createdAt: true,
+                    sequence: true,
                 },
             });
             return messageHistory.reverse();

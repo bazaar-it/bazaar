@@ -44,13 +44,13 @@ function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
   };
 
   return (
-    <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
+    <div className="w-full max-w-sm p-8 relative">
       <h1 className="mb-6 text-center text-2xl font-bold text-gray-800">Sign in to Bazaar</h1>
 
       <div className="flex flex-col gap-4">
         <button
           onClick={handleGitHubLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-md bg-gray-900 py-2 px-4 text-white hover:bg-gray-700 transition"
+          className="flex w-full items-center justify-center gap-3 rounded-lg bg-gray-900 py-3 px-4 text-white hover:bg-gray-800 transition-colors font-medium"
         >
           <span className="flex items-center justify-center w-5 h-5">
             <GitHubIcon className="w-full h-full" />
@@ -60,7 +60,7 @@ function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
 
         <button
           onClick={handleGoogleLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-md bg-blue-600 py-2 px-4 text-white hover:bg-blue-500 transition"
+          className="flex w-full items-center justify-center gap-3 rounded-lg bg-blue-600 py-3 px-4 text-white hover:bg-blue-700 transition-colors font-medium"
         >
           <span className="flex items-center justify-center w-5 h-5">
             <GoogleIcon className="w-full h-full" />
@@ -126,20 +126,18 @@ function GoogleIcon({ className }: { className?: string }) {
 
 export default function LoginPage(props: LoginPageProps) {
   return (
-    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-purple-100 to-indigo-100">
-      <Suspense fallback={
-        <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto mb-6"></div>
-            <div className="space-y-4">
-              <div className="h-10 bg-gray-200 rounded"></div>
-              <div className="h-10 bg-gray-200 rounded"></div>
-            </div>
+    <Suspense fallback={
+      <div className="w-full max-w-sm rounded-2xl bg-white p-8 relative">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto mb-6"></div>
+          <div className="space-y-4">
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
           </div>
         </div>
-      }>
-        <LoginContent {...props} />
-      </Suspense>
-    </div>
+      </div>
+    }>
+      <LoginContent {...props} />
+    </Suspense>
   );
 } 

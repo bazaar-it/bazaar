@@ -120,6 +120,7 @@ export interface SceneIterationEntity {
   userEditedAgain: boolean;
   userSatisfactionScore?: number | null;
   sessionId?: string | null;
+  messageId?: string | null;    // Link to message that triggered this iteration
   readonly createdAt: Date;
 }
 

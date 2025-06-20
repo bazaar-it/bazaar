@@ -31,8 +31,9 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   // Initialize video state on mount
   useEffect(() => {
     if (DEBUG) console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
-    if (DEBUG) console.log('[GenerateWorkspaceRoot] About to call setProject. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
-    setProject(projectId, initialProps);
+    if (DEBUG) console.log('[GenerateWorkspaceRoot] About to call setProject with force=true. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
+    // Force update with server data to ensure we always show what's in the database
+    setProject(projectId, initialProps, { force: true });
   }, [projectId, initialProps, setProject]);
   
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
@@ -143,8 +144,6 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
-            projects={userProjects}
-            currentProjectId={projectId}
             onAddPanel={handleAddPanel}
             isCollapsed={!isSidebarExpanded}
             onToggleCollapse={() => setIsSidebarExpanded(!isSidebarExpanded)}

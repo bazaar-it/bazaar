@@ -11,7 +11,16 @@ import {
   type InsertImageAnalysis,
   type MemoryType,
 } from "~/server/db/schema";
-import type { ImageFacts } from "~/server/services/brain/orchestrator";
+
+// Define ImageFacts type based on imageAnalysis table structure
+interface ImageFacts {
+  imageUrls: string[];
+  palette: any; // JSON data
+  typography: string;
+  mood: string;
+  layoutJson?: any; // Optional JSON data
+  processingTimeMs: number;
+}
 
 /**
  * Project Memory Service

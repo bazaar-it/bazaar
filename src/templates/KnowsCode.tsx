@@ -95,7 +95,7 @@ export default function KnowsCode() {
 export const templateConfig = {
   id: 'knowscode',
   name: 'Knows Code',
-  duration: 180, // 6 seconds
+  duration: 60, // 2 seconds - animation completes at frame 35
   previewFrame: 30,
   getCode: () => `// src/templates/KnowsCode.tsx
 const { AbsoluteFill, interpolate, useCurrentFrame, spring } = window.Remotion;

@@ -103,7 +103,7 @@ export class ContextBuilder {
       .select()
       .from(messages)
       .where(eq(messages.projectId, input.projectId))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(messages.sequence))
       .limit(20);
 
     const conversationImages: any[] = [];

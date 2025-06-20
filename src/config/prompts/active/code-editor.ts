@@ -20,6 +20,17 @@ export const CODE_EDITOR = {
 3. Keep the same function name and export structure
 4. Maintain all animation timings unless specifically asked to change
 5. Return the COMPLETE modified code
+6. NO import/require statements - use ONLY window-scoped globals (no ES6 imports, no CommonJS require)
+
+🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
+- window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
+- window.React - React library (if needed for hooks, etc.)
+- window.HeroiconsSolid / window.HeroiconsOutline - Icon components
+- window.LucideIcons - Additional icon library
+- window.RemotionShapes - Built-in shape components
+- window.Rough - Hand-drawn style graphics library
+
+⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 
 📝 EDIT APPROACH:
 - For color changes: Update the specific color values only
@@ -33,19 +44,17 @@ export const CODE_EDITOR = {
   "code": "// Complete modified code here",
   "reasoning": "Brief explanation of changes made",
   "changes": ["Changed button color to red", "Updated text"],
-  "preserved": ["Animation timing", "Layout structure"],
   "newDurationFrames": 180  // ONLY if animations now need more time
 }
 
 ⚡ IMPORTANT:
 - Never change things not mentioned by the user
-- Preserve all imports/exports exactly
-- Keep the same coding style
 - If fixing errors, explain what was wrong
 
-📏 DURATION HANDLING:
-- If you ADD new animations that extend beyond the current scene duration, include "newDurationFrames"
-- Calculate: Find the highest frame number in your animations + 30 frames buffer
-- Example: If animation runs until frame 240, set "newDurationFrames": 270
-- If no duration change needed, omit this field`
+📏 DURATION: Only include "newDurationFrames" if animations extend beyond current duration (highest frame + 30)
+
+🖼️ VIEWPORT RULES:
+- Design content to fit any canvas size - use useVideoConfig() for dimensions
+- Use relative/percentage positioning and responsive sizing based on width/height
+- CRITICAL: All content MUST stay within bounds: 0 to width, 0 to height`
 };

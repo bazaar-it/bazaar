@@ -24,8 +24,9 @@ Bazaar-Vid is a **sophisticated AI-powered video creation platform** that enable
 - **Database**: PostgreSQL (Neon) + Drizzle ORM
 - **Storage**: Cloudflare R2 for assets
 - **Video**: Remotion for composition and rendering
-- **AI**: OpenAI GPT-4o-mini with multi-agent system, Claude sonnet 4 for codegen. 
-- **Real-time**: Server-Sent Events + JSON Patch for collaboration
+- **AI**: OpenAI GPT-4o-mini with MCP tools, Claude sonnet 4 for codegen. 
+- **Real-time**: Server-Sent Events (SSE) for chat streaming
+- **Media**: Voice-to-text input, Image upload with compression
 
 ### Production Flow (CRITICAL TO UNDERSTAND):
 ```
@@ -35,7 +36,78 @@ User Prompt → ChatPanelG → generation.generateScene → MCP Tools  → Custo
 ### State Management Flow (SIMPLIFIED - Sprint 35):
 ```
 Backend Response → VideoState (Direct Update) → React Re-render → UI Updates Immediately
+```
 
+---
+
+## 🎯 SYSTEM SIMPLIFICATION (CRITICAL)
+
+### Modularization Success
+We've transformed our codebase from monolithic files to focused, maintainable modules:
+- **ChatPanelG**: 1400+ lines → ~760 lines (44% reduction)
+- **Clear Separation**: Each component has ONE responsibility
+- **Better Developer Experience**: New team members understand the flow
+
+### Simplified Flow - The Complete Journey
+
+```
+1. User types in ChatPanelG or uploads image
+   └─> "Create a tech startup video with animations"
+
+2. Request flows to generation.universal.ts (API Router)
+   └─> Validates user, prepares for Brain
+
+3. Brain Orchestrator (orchestratorNEW.ts) takes over
+   ├─> Builds context from chat history & current state
+   ├─> Understands intent: "User wants to create new scene"
+   └─> Selects tool: AddScene
+
+4. MCP Tool executes (src/tools/addScene.ts)
+   ├─> If text: Layout Generation → Code Generation
+   ├─> If image: Direct Code Generation
+   └─> Returns Remotion-compatible React code
+
+5. VideoState updates directly (src/stores/videoState.ts)
+   └─> updateScene(projectId, sceneId, generatedCode)
+
+6. Preview auto-refreshes (PreviewPanelG.tsx)
+   └─> Zustand reactivity triggers re-render
+   └─> User sees video immediately
+```
+
+### The Magic of Simplification
+
+**Before**: 2+ minutes, unclear flow, 40+ prompts, race conditions
+**After**: 60-90 seconds, linear flow, 5 prompts, no race conditions
+
+**See SYSTEM-ARCHITECTURE.md for complete technical documentation**
+
+---
+
+## 🚀 ENHANCED FEATURES (NEW - Sprints 45-48)
+
+### Chat System Improvements:
+- **SSE Streaming**: Real-time chat messages via Server-Sent Events
+- **No More Duplicates**: Database as single source of truth
+- **Voice Input**: Voice-to-text transcription for chat
+- **Image Upload**: Advanced compression and R2 storage
+- **Auto-Fix**: One-click error fixing with progress feedback
+
+### New UI Components:
+- **Modular Chat**: ChatMessage, ChatWelcome, GeneratingMessage
+- **AutoFixErrorBanner**: Shows compilation errors with fix button
+- **ImageUpload**: Drag-and-drop with preview and compression
+- **VoiceInput**: Record and transcribe voice messages
+
+### Multi-Format Support (Sprint 48):
+- **YouTube**: 1920x1080 (16:9) - landscape
+- **TikTok/Reels**: 1080x1920 (9:16) - portrait  
+- **Instagram**: 1080x1080 (1:1) - square
+- **Custom**: Any dimensions supported
+
+### API Endpoints:
+- **`/api/generate-stream`**: SSE endpoint for real-time chat
+- **Standard tRPC routers**: All existing functionality
 
 ---
 
@@ -133,20 +205,11 @@ const imageUrls = contextBuilder.getImageUrlsFromReference(imageContext, imageRe
 
 ---
 
-## 🧭 HOW TO NAVIGATE THE CODEBASE
-
-### Key Files to Understand:
-1. **`CLAUDE.md`** - Project instructions & quick start
-2. **`coco_notes.md`** - Main functionality reference
-3. **`src/app/projects/[id]/generate/`** - Main video editor
-4. **`src/server/services/brain/orchestrator.ts`** - AI orchestration
-5. **`src/server/services/brain/contextBuilder.service.ts`** - Context building & image handling
-6. **`src/server/services/mcp/tools/`** - Production AI tools
-7. **`src/server/api/routers/generation.ts`** - Main API endpoint
+¨
 
 ### Main User Flow Files:
 ```
-ChatPanelG.tsx → generation.generateScene → brain/orchestrator.ts → MCP tools → sceneBuilder.service.ts
+ChatPanelG.tsx → generation.generateScene → brain/orchestrator.ts → MCP tools → 
 ```
 
 ### Quick Navigation Commands:

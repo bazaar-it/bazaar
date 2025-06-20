@@ -1,6 +1,13 @@
 // Video Types - Single Source of Truth
-export * from './input-props';
-export * from './remotion-constants';
 export * from './timeline';
-export * from './storyboard';
-export * from './sceneLayout';
+
+// Export everything except Transition from input-props
+export {
+  inputPropsSchema,
+  type InputProps,
+  type Scene,
+  type Transition as InputPropsTransition
+} from './input-props';
+
+// Export everything from remotion-constants (including its Transition)
+export * from './remotion-constants';

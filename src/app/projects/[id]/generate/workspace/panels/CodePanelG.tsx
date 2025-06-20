@@ -231,7 +231,7 @@ export function CodePanelG({
           scenes: [...props.scenes, newScene],
           meta: {
             ...props.meta,
-            duration: props.scenes.reduce((sum: number, scene: Scene) => sum + (scene.duration || 150), 0) + (newScene.duration || 150)
+            duration: props.scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0) + (newScene.duration || 150)
           }
         }));
       }

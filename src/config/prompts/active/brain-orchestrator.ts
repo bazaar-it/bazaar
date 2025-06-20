@@ -36,6 +36,7 @@ RESPONSE FORMAT (JSON):
   "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene",
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
+  "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)
   "userFeedback": "Brief, friendly message about what you're doing",
   "needsClarification": false,
   "clarificationQuestion": "Optional: Ask user to clarify if ambiguous"
@@ -48,9 +49,15 @@ CRITICAL: If you need clarification, you MUST set:
 
 Otherwise, you MUST provide a valid toolName.
 
+TRIM CALCULATION EXAMPLES:
+- User: "cut the last second" (scene is 150 frames) → targetDuration: 120
+- User: "make it 3 seconds" → targetDuration: 90 (3 seconds × 30fps)
+- User: "add 2 seconds" (scene is 90 frames) → targetDuration: 150
+- User: "cut in half" (scene is 180 frames) → targetDuration: 90
+
 CLARIFICATION EXAMPLES:
-- "make scene 1 3 seconds" → trimScene (clear duration change)
-- "cut last 2 seconds from scene 3" → trimScene (clear trim operation)
+- "make scene 1 3 seconds" → trimScene with targetDuration: 90
+- "cut last 2 seconds from scene 3" → trimScene with targetDuration calculated
 - "compress scene 2 animations to 5 seconds" → editScene (animation timing change)
 
 IMPORTANT:

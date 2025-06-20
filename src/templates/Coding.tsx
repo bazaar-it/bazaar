@@ -159,7 +159,7 @@ export default function Coding() {
 export const templateConfig = {
   id: 'ai-coding',
   name: 'AI Coding',
-  duration: 240, // 8 seconds
+  duration: 180, // 6 seconds - animation completes at frame 165
   previewFrame: 30,
   getCode: () => `const {
 AbsoluteFill,

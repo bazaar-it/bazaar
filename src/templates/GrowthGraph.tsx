@@ -178,7 +178,7 @@ export default function GrowthGraph() {
 export const templateConfig = {
   id: 'growth-graph',
   name: 'Growth Graph',
-  duration: 240, // 8 seconds
+  duration: 180, // 6 seconds - animation completes at frame 165
   previewFrame: 30,
   getCode: () => `const {
 AbsoluteFill,
