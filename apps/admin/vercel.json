@@ -1,0 +1,11 @@
+{
+  "buildCommand": "cd ../.. && npm run build --filter=admin",
+  "outputDirectory": ".next",
+  "installCommand": "cd ../.. && npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_APP_URL": "https://admin.bazaar.it",
+    "NEXT_PUBLIC_MAIN_APP_URL": "https://bazaar.it"
+  }
+}

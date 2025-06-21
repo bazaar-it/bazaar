@@ -1,0 +1,1 @@
+ALTER TABLE "bazaar-vid_scene" ADD COLUMN "duration" integer DEFAULT 150 NOT NULL;

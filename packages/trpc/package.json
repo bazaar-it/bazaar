@@ -1,0 +1,24 @@
+{
+  "name": "@bazaar/trpc",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./react": "./react.tsx",
+    "./server": "./server.ts"
+  },
+  "dependencies": {
+    "@trpc/server": "^11.0.0-rc.477",
+    "@trpc/client": "^11.0.0-rc.477",
+    "@trpc/react-query": "^11.0.0-rc.477",
+    "@trpc/next": "^11.0.0-rc.477",
+    "@tanstack/react-query": "^5.51.23",
+    "superjson": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}

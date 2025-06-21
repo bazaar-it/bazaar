@@ -1,0 +1,38 @@
+{
+  "name": "@bazaar/admin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bazaar/auth": "*",
+    "@bazaar/database": "*",
+    "@bazaar/types": "*",
+    "@bazaar/ui": "*",
+    "@remotion/player": "^4.0.318",
+    "@tanstack/react-query": "^5.69.0",
+    "@trpc/client": "^11.0.0",
+    "@trpc/react-query": "^11.0.0",
+    "next": "15.3.4",
+    "next-auth": "5.0.0-beta.25",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-error-boundary": "^6.0.0",
+    "remotion": "^4.0.318",
+    "sucrase": "^3.35.0",
+    "superjson": "^2.2.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

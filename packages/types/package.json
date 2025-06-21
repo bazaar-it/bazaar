@@ -1,0 +1,22 @@
+{
+  "name": "@bazaar/types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./api": "./api/index.ts",
+    "./video": "./video/index.ts",
+    "./ai": "./ai/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trpc/server": "^11.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

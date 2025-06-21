@@ -1,0 +1,25 @@
+"use strict";
+/*
+ * ATTENTION: An "eval-source-map" devtool has been used.
+ * This devtool is neither made for production nor for readable output files.
+ * It uses "eval()" calls to create a separate source file with attached SourceMaps in the browser devtools.
+ * If you are trying to read the output file, select a different devtool (https://webpack.js.org/configuration/devtool/)
+ * or disable the default devtool with "devtool: false".
+ * If you are looking for production-ready output files, see mode: "production" (https://webpack.js.org/configuration/mode/).
+ */
+exports.id = "vendor-chunks/is-arguments";
+exports.ids = ["vendor-chunks/is-arguments"];
+exports.modules = {
+
+/***/ "(rsc)/../../node_modules/is-arguments/index.js":
+/*!************************************************!*\
+  !*** ../../node_modules/is-arguments/index.js ***!
+  \************************************************/
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+eval("\n\nvar hasToStringTag = __webpack_require__(/*! has-tostringtag/shams */ \"(rsc)/../../node_modules/has-tostringtag/shams.js\")();\nvar callBound = __webpack_require__(/*! call-bound */ \"(rsc)/../../node_modules/call-bound/index.js\");\n\nvar $toString = callBound('Object.prototype.toString');\n\n/** @type {import('.')} */\nvar isStandardArguments = function isArguments(value) {\n\tif (\n\t\thasToStringTag\n\t\t&& value\n\t\t&& typeof value === 'object'\n\t\t&& Symbol.toStringTag in value\n\t) {\n\t\treturn false;\n\t}\n\treturn $toString(value) === '[object Arguments]';\n};\n\n/** @type {import('.')} */\nvar isLegacyArguments = function isArguments(value) {\n\tif (isStandardArguments(value)) {\n\t\treturn true;\n\t}\n\treturn value !== null\n\t\t&& typeof value === 'object'\n\t\t&& 'length' in value\n\t\t&& typeof value.length === 'number'\n\t\t&& value.length >= 0\n\t\t&& $toString(value) !== '[object Array]'\n\t\t&& 'callee' in value\n\t\t&& $toString(value.callee) === '[object Function]';\n};\n\nvar supportsStandardArguments = (function () {\n\treturn isStandardArguments(arguments);\n}());\n\n// @ts-expect-error TODO make this not error\nisStandardArguments.isLegacyArguments = isLegacyArguments; // for tests\n\n/** @type {import('.')} */\nmodule.exports = supportsStandardArguments ? isStandardArguments : isLegacyArguments;\n//# sourceURL=[module]\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiKHJzYykvLi4vLi4vbm9kZV9tb2R1bGVzL2lzLWFyZ3VtZW50cy9pbmRleC5qcyIsIm1hcHBpbmdzIjoiQUFBYTs7QUFFYixxQkFBcUIsbUJBQU8sQ0FBQyxnRkFBdUI7QUFDcEQsZ0JBQWdCLG1CQUFPLENBQUMsZ0VBQVk7O0FBRXBDOztBQUVBLFdBQVcsYUFBYTtBQUN4QjtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBOztBQUVBLFdBQVcsYUFBYTtBQUN4QjtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTs7QUFFQTtBQUNBO0FBQ0EsQ0FBQzs7QUFFRDtBQUNBLDJEQUEyRDs7QUFFM0QsV0FBVyxhQUFhO0FBQ3hCIiwic291cmNlcyI6WyIvVXNlcnMvbWFya3VzaG9nbmUvRG9jdW1lbnRzL0FQUFMvYmF6YWFyLXZpZC9iYXphYXItdmlkL25vZGVfbW9kdWxlcy9pcy1hcmd1bWVudHMvaW5kZXguanMiXSwic291cmNlc0NvbnRlbnQiOlsiJ3VzZSBzdHJpY3QnO1xuXG52YXIgaGFzVG9TdHJpbmdUYWcgPSByZXF1aXJlKCdoYXMtdG9zdHJpbmd0YWcvc2hhbXMnKSgpO1xudmFyIGNhbGxCb3VuZCA9IHJlcXVpcmUoJ2NhbGwtYm91bmQnKTtcblxudmFyICR0b1N0cmluZyA9IGNhbGxCb3VuZCgnT2JqZWN0LnByb3RvdHlwZS50b1N0cmluZycpO1xuXG4vKiogQHR5cGUge2ltcG9ydCgnLicpfSAqL1xudmFyIGlzU3RhbmRhcmRBcmd1bWVudHMgPSBmdW5jdGlvbiBpc0FyZ3VtZW50cyh2YWx1ZSkge1xuXHRpZiAoXG5cdFx0aGFzVG9TdHJpbmdUYWdcblx0XHQmJiB2YWx1ZVxuXHRcdCYmIHR5cGVvZiB2YWx1ZSA9PT0gJ29iamVjdCdcblx0XHQmJiBTeW1ib2wudG9TdHJpbmdUYWcgaW4gdmFsdWVcblx0KSB7XG5cdFx0cmV0dXJuIGZhbHNlO1xuXHR9XG5cdHJldHVybiAkdG9TdHJpbmcodmFsdWUpID09PSAnW29iamVjdCBBcmd1bWVudHNdJztcbn07XG5cbi8qKiBAdHlwZSB7aW1wb3J0KCcuJyl9ICovXG52YXIgaXNMZWdhY3lBcmd1bWVudHMgPSBmdW5jdGlvbiBpc0FyZ3VtZW50cyh2YWx1ZSkge1xuXHRpZiAoaXNTdGFuZGFyZEFyZ3VtZW50cyh2YWx1ZSkpIHtcblx0XHRyZXR1cm4gdHJ1ZTtcblx0fVxuXHRyZXR1cm4gdmFsdWUgIT09IG51bGxcblx0XHQmJiB0eXBlb2YgdmFsdWUgPT09ICdvYmplY3QnXG5cdFx0JiYgJ2xlbmd0aCcgaW4gdmFsdWVcblx0XHQmJiB0eXBlb2YgdmFsdWUubGVuZ3RoID09PSAnbnVtYmVyJ1xuXHRcdCYmIHZhbHVlLmxlbmd0aCA+PSAwXG5cdFx0JiYgJHRvU3RyaW5nKHZhbHVlKSAhPT0gJ1tvYmplY3QgQXJyYXldJ1xuXHRcdCYmICdjYWxsZWUnIGluIHZhbHVlXG5cdFx0JiYgJHRvU3RyaW5nKHZhbHVlLmNhbGxlZSkgPT09ICdbb2JqZWN0IEZ1bmN0aW9uXSc7XG59O1xuXG52YXIgc3VwcG9ydHNTdGFuZGFyZEFyZ3VtZW50cyA9IChmdW5jdGlvbiAoKSB7XG5cdHJldHVybiBpc1N0YW5kYXJkQXJndW1lbnRzKGFyZ3VtZW50cyk7XG59KCkpO1xuXG4vLyBAdHMtZXhwZWN0LWVycm9yIFRPRE8gbWFrZSB0aGlzIG5vdCBlcnJvclxuaXNTdGFuZGFyZEFyZ3VtZW50cy5pc0xlZ2FjeUFyZ3VtZW50cyA9IGlzTGVnYWN5QXJndW1lbnRzOyAvLyBmb3IgdGVzdHNcblxuLyoqIEB0eXBlIHtpbXBvcnQoJy4nKX0gKi9cbm1vZHVsZS5leHBvcnRzID0gc3VwcG9ydHNTdGFuZGFyZEFyZ3VtZW50cyA/IGlzU3RhbmRhcmRBcmd1bWVudHMgOiBpc0xlZ2FjeUFyZ3VtZW50cztcbiJdLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOlswXSwic291cmNlUm9vdCI6IiJ9\n//# sourceURL=webpack-internal:///(rsc)/../../node_modules/is-arguments/index.js\n");
+
+/***/ })
+
+};
+;

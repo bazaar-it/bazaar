@@ -1,0 +1,23 @@
+{
+  "name": "@bazaar/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./schema": "./schema.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "drizzle-orm": "^0.43.1",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "drizzle-kit": "^0.30.5"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "/api/trpc/[trpc]/route": "app/api/trpc/[trpc]/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/projects/[id]/generate/page": "app/projects/[id]/generate/page.js",
+  "/page": "app/page.js"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@bazaar/auth",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./config": "./config.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "^1.7.2",
+    "@bazaar/database": "*",
+    "next-auth": "5.0.0-beta.25"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.8.2"
+  }
+}
