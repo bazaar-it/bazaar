@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 import { Loader2, Send, ImageIcon } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
-import { ChatWelcome } from "~/components/chat/ChatWelcome";
 import { AutoFixErrorBanner } from "~/components/chat/AutoFixErrorBanner";
 import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/components/chat/ImageUpload";
 import { VoiceInput } from "~/components/chat/VoiceInput";
@@ -562,7 +561,7 @@ export default function ChatPanelG({
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {componentMessages.length === 0 ? (
-          <ChatWelcome onExampleClick={setMessage} />
+          null
         ) : (
           componentMessages.map((msg) => (
             <ChatMessage
