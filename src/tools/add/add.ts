@@ -18,12 +18,25 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
     console.log('🔨 [ADD TOOL] Input:', {
       prompt: input.userPrompt.substring(0, 50) + '...',
       hasImages: !!input.imageUrls?.length,
+      hasWebContext: !!input.webContext,
       sceneNumber: input.sceneNumber,
       hasPreviousScene: !!input.previousSceneContext
     });
     console.log('🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!');
     
     try {
+      // Handle web context + image-based scene creation
+      if (input.webContext && (input.imageUrls?.length || 0) > 0) {
+        console.log('🔨 [ADD TOOL] Using web context + images generation');
+        return await this.generateFromWebAndImages(input);
+      }
+      
+      // Handle web context only
+      if (input.webContext) {
+        console.log('🔨 [ADD TOOL] Using web context generation for', input.webContext.originalUrl);
+        return await this.generateFromWebContext(input);
+      }
+      
       // Handle image-based scene creation
       if (input.imageUrls && input.imageUrls.length > 0) {
         console.log('🔨 [ADD TOOL] Using image-based generation for', input.imageUrls.length, 'images');
@@ -172,6 +185,152 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       imageCount: input.imageUrls.length
     });
     
+    return result;
+  }
+
+  /**
+   * Generate scene from web context screenshots
+   * PURE FUNCTION - no side effects
+   */
+  private async generateFromWebContext(input: AddToolInput): Promise<AddToolOutput> {
+    if (!input.webContext) {
+      throw new Error("No web context provided");
+    }
+
+    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+
+    // Create combined image list with web screenshots
+    const allImageUrls = [
+      input.webContext.screenshotUrls.desktop,
+      input.webContext.screenshotUrls.mobile,
+    ];
+
+    // Enhanced prompt for web context
+    const enhancedPrompt = `${input.userPrompt}
+
+WEBSITE CONTEXT:
+- URL: ${input.webContext.originalUrl}
+- Title: ${input.webContext.pageData.title}
+- Description: ${input.webContext.pageData.description || 'Not available'}
+- Key headings: ${input.webContext.pageData.headings.slice(0, 5).join(', ')}
+
+BRAND MATCHING INSTRUCTIONS:
+- Use the website screenshots to match the brand's visual identity
+- Extract colors, fonts, and design patterns from the screenshots
+- Maintain brand consistency in the motion graphics
+- The desktop screenshot shows the full layout, mobile shows the mobile design`;
+
+    // Generate code using website screenshots
+    const codeResult = await codeGenerator.generateCodeFromImage({
+      imageUrls: allImageUrls,
+      userPrompt: enhancedPrompt,
+      functionName: functionName,
+      visionAnalysis: {
+        webContext: input.webContext,
+        analysisType: 'website_brand_matching'
+      },
+    });
+
+    const result = {
+      success: true,
+      tsxCode: codeResult.code,
+      name: codeResult.name,
+      duration: codeResult.duration,
+      reasoning: `Generated scene based on website ${input.webContext.pageData.title}: ${codeResult.reasoning}`,
+      chatResponse: `I've created a scene inspired by the ${input.webContext.pageData.title} website, matching their brand identity`,
+      scene: {
+        tsxCode: codeResult.code,
+        name: codeResult.name,
+        duration: codeResult.duration,
+      },
+      debug: {
+        webContextGeneration: codeResult.debug,
+        websiteUrl: input.webContext.originalUrl,
+        pageTitle: input.webContext.pageData.title,
+      },
+    };
+
+    console.log('✅ [ADD TOOL] Finished web context generation - returning result:', {
+      name: result.name,
+      duration: result.duration,
+      codeLength: result.tsxCode.length,
+      websiteUrl: input.webContext.originalUrl
+    });
+
+    return result;
+  }
+
+  /**
+   * Generate scene from web context + additional images
+   * PURE FUNCTION - no side effects
+   */
+  private async generateFromWebAndImages(input: AddToolInput): Promise<AddToolOutput> {
+    if (!input.webContext || !input.imageUrls?.length) {
+      throw new Error("No web context or images provided");
+    }
+
+    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+
+    // Combine website screenshots with user images
+    const allImageUrls = [
+      input.webContext.screenshotUrls.desktop,
+      input.webContext.screenshotUrls.mobile,
+      ...input.imageUrls
+    ];
+
+    // Enhanced prompt combining web context with user images
+    const enhancedPrompt = `${input.userPrompt}
+
+WEBSITE BRAND CONTEXT:
+- URL: ${input.webContext.originalUrl}
+- Title: ${input.webContext.pageData.title}
+- Description: ${input.webContext.pageData.description || 'Not available'}
+
+COMBINED CONTEXT INSTRUCTIONS:
+- Use the website screenshots (first 2 images) to understand the brand identity
+- Use the additional user images for specific content requirements
+- Blend the brand's visual style with the user's image content
+- Maintain brand consistency while incorporating user image elements`;
+
+    // Generate code using combined context
+    const codeResult = await codeGenerator.generateCodeFromImage({
+      imageUrls: allImageUrls,
+      userPrompt: enhancedPrompt,
+      functionName: functionName,
+      visionAnalysis: {
+        webContext: input.webContext,
+        userImageCount: input.imageUrls.length,
+        analysisType: 'website_plus_images'
+      },
+    });
+
+    const result = {
+      success: true,
+      tsxCode: codeResult.code,
+      name: codeResult.name,
+      duration: codeResult.duration,
+      reasoning: `Generated scene combining ${input.webContext.pageData.title} brand with ${input.imageUrls.length} user image(s): ${codeResult.reasoning}`,
+      chatResponse: `I've created a scene that combines the ${input.webContext.pageData.title} brand style with your images`,
+      scene: {
+        tsxCode: codeResult.code,
+        name: codeResult.name,
+        duration: codeResult.duration,
+      },
+      debug: {
+        webAndImageGeneration: codeResult.debug,
+        websiteUrl: input.webContext.originalUrl,
+        userImageCount: input.imageUrls.length,
+      },
+    };
+
+    console.log('✅ [ADD TOOL] Finished web+images generation - returning result:', {
+      name: result.name,
+      duration: result.duration,
+      codeLength: result.tsxCode.length,
+      websiteUrl: input.webContext.originalUrl,
+      userImageCount: input.imageUrls.length
+    });
+
     return result;
   }
 

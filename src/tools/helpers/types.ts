@@ -42,6 +42,20 @@ export interface AddToolInput extends BaseToolInput {
   };
   imageUrls?: string[];
   visionAnalysis?: any;
+  webContext?: {
+    originalUrl: string;
+    screenshotUrls: {
+      desktop: string;
+      mobile: string;
+    };
+    pageData: {
+      title: string;
+      description?: string;
+      headings: string[];
+      url: string;
+    };
+    analyzedAt: string;
+  };
 }
 
 export interface AddToolOutput extends BaseToolOutput {
@@ -63,6 +77,25 @@ export interface EditToolInput extends BaseToolInput {
   imageUrls?: string[];
   visionAnalysis?: any;
   errorDetails?: string;
+  referenceScenes?: Array<{  // For cross-scene style/color matching
+    id: string;
+    name: string;
+    tsxCode: string;
+  }>;
+  webContext?: {
+    originalUrl: string;
+    screenshotUrls: {
+      desktop: string;
+      mobile: string;
+    };
+    pageData: {
+      title: string;
+      description?: string;
+      headings: string[];
+      url: string;
+    };
+    analyzedAt: string;
+  };
 }
 
 export interface EditToolOutput extends BaseToolOutput {
@@ -207,6 +240,20 @@ export const addToolInputSchema = baseToolInputSchema.extend({
   }).optional().describe("Previous scene for style consistency"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
+  webContext: z.object({
+    originalUrl: z.string(),
+    screenshotUrls: z.object({
+      desktop: z.string(),
+      mobile: z.string(),
+    }),
+    pageData: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+      headings: z.array(z.string()),
+      url: z.string(),
+    }),
+    analyzedAt: z.string(),
+  }).optional().describe("Web analysis context with screenshots for brand matching"),
 });
 
 export const editToolInputSchema = baseToolInputSchema.extend({
@@ -216,6 +263,20 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
+  webContext: z.object({
+    originalUrl: z.string(),
+    screenshotUrls: z.object({
+      desktop: z.string(),
+      mobile: z.string(),
+    }),
+    pageData: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+      headings: z.array(z.string()),
+      url: z.string(),
+    }),
+    analyzedAt: z.string(),
+  }).optional().describe("Web analysis context with screenshots for brand matching"),
 });
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({

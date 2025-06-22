@@ -40,9 +40,24 @@ export interface BrainDecision {
     userPrompt: string;
     targetSceneId?: string;
     targetDuration?: number; // For trim operations
+    referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     visionAnalysis?: any;
     errorDetails?: string;
+    webContext?: {
+      originalUrl: string;
+      screenshotUrls: {
+        desktop: string;
+        mobile: string;
+      };
+      pageData: {
+        title: string;
+        description?: string;
+        headings: string[];
+        url: string;
+      };
+      analyzedAt: string;
+    };
   };
   
   // Brain's reasoning
@@ -95,25 +110,53 @@ export interface OrchestrationOutput {
 // ============================================================================
 
 export interface ContextPacket {
-  userPreferences: Record<string, string>;
+  // Real scene history with full TSX code for cross-scene operations
   sceneHistory: Array<{
     id: string;
     name: string;
-    type: string;
+    tsxCode: string;  // CRITICAL: Full code for cross-scene references
+    order: number;
   }>;
+  
+  // Recent conversation context
   conversationContext: string;
-  sceneList?: Array<{
-    id: string;
-    name: string;
+  recentMessages: Array<{
+    role: string;
+    content: string;
   }>;
-  imageContext?: {
-    conversationImages: Array<{
+  
+  // Image context from uploads
+  imageContext: {
+    currentImages?: string[];
+    recentImagesFromChat?: Array<{
       position: number;
       userPrompt: string;
-      imageCount: number;
       imageUrls: string[];
     }>;
   };
+  
+  // Web analysis context from URL detection
+  webContext?: {
+    originalUrl: string;
+    screenshotUrls: {
+      desktop: string;
+      mobile: string;
+    };
+    pageData: {
+      title: string;
+      description?: string;
+      headings: string[];
+      url: string;
+    };
+    analyzedAt: string;
+  };
+  
+  // Scene list for quick reference
+  sceneList: Array<{
+    id: string;
+    name: string;
+    order: number;
+  }>;
 }
 
 // ============================================================================
@@ -125,6 +168,7 @@ export interface ToolSelectionResult {
   toolName?: ToolName;
   targetSceneId?: string;
   targetDuration?: number; // For trim operations - exact frame count
+  referencedSceneIds?: string[]; // For cross-scene style/color matching
   reasoning?: string;
   error?: string;
   needsClarification?: boolean;

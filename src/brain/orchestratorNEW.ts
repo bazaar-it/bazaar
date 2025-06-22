@@ -67,7 +67,9 @@ export class Orchestrator {
             userPrompt: input.prompt,
             targetSceneId: toolSelection.targetSceneId,
             targetDuration: toolSelection.targetDuration,
+            referencedSceneIds: toolSelection.referencedSceneIds,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
+            webContext: contextPacket.webContext,
           },
           workflow: toolSelection.workflow,
         }

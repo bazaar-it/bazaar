@@ -53,6 +53,19 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
         context += `\n\nERROR TO FIX:\n${input.errorDetails}`;
       }
       
+      if (input.webContext) {
+        context += `\n\nWEBSITE BRAND CONTEXT:
+- URL: ${input.webContext.originalUrl}
+- Title: ${input.webContext.pageData.title}
+- Description: ${input.webContext.pageData.description || 'Not available'}
+- Key headings: ${input.webContext.pageData.headings.slice(0, 5).join(', ')}
+
+BRAND MATCHING INSTRUCTIONS:
+- Use the website screenshots to match the brand's visual identity
+- Extract and apply colors, fonts, and design patterns from the screenshots
+- Maintain brand consistency in your edits`;
+      }
+      
       if (input.imageUrls?.length) {
         context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
       }
@@ -60,12 +73,37 @@ export class EditTool extends BaseMCPTool<EditToolInput, EditToolOutput> {
       if (input.visionAnalysis) {
         context += `\n\nVISION ANALYSIS:\n${JSON.stringify(input.visionAnalysis, null, 2)}`;
       }
+      
+      // Add reference scenes for style/color matching
+      if (input.referenceScenes?.length) {
+        context += `\n\nREFERENCE SCENES FOR STYLE/COLOR MATCHING:`;
+        input.referenceScenes.forEach((scene) => {
+          context += `\n\n${scene.name} (ID: ${scene.id}):\n\`\`\`tsx\n${scene.tsxCode}\n\`\`\``;
+        });
+        context += `\n\nIMPORTANT: Extract the specific colors, styles, animations, or patterns from the reference scenes that the user wants to apply. Be precise in matching the requested elements.`;
+      }
 
-      // Build message content based on whether we have images
+      // Build message content based on available context
       let messageContent: any;
       
+      // Prepare all available images (web screenshots + user images)
+      const allImageUrls: string[] = [];
+      if (input.webContext) {
+        allImageUrls.push(input.webContext.screenshotUrls.desktop);
+        allImageUrls.push(input.webContext.screenshotUrls.mobile);
+      }
       if (input.imageUrls?.length) {
+        allImageUrls.push(...input.imageUrls);
+      }
+      
+      if (allImageUrls.length > 0) {
         // Build vision content array for image-based edits
+        const contextInstructions = input.webContext 
+          ? 'IMPORTANT: The first two images are website screenshots for brand matching. Use them to understand the brand\'s visual identity, colors, and design patterns. ' +
+            (input.imageUrls?.length ? `The additional ${input.imageUrls.length} image(s) show specific content requirements. ` : '') +
+            'Apply the brand style while incorporating any specific visual requirements from additional images.'
+          : 'IMPORTANT: Look at the provided image(s) and recreate the visual elements from the image in the scene code. Match colors, layout, text, and visual hierarchy as closely as possible.';
+        
         messageContent = [
           { 
             type: 'text', 
@@ -76,12 +114,12 @@ EXISTING CODE:
 ${input.tsxCode}
 \`\`\`
 
-IMPORTANT: Look at the provided image(s) and recreate the visual elements from the image in the scene code. Match colors, layout, text, and visual hierarchy as closely as possible. Return the complete modified code.`
+${contextInstructions} Return the complete modified code.`
           }
         ];
         
-        // Add each image
-        for (const imageUrl of input.imageUrls) {
+        // Add all images (web screenshots first, then user images)
+        for (const imageUrl of allImageUrls) {
           messageContent.push({
             type: 'image_url',
             image_url: { url: imageUrl }
@@ -103,8 +141,11 @@ Please edit the code according to the user request. Return the complete modified
         userPrompt: input.userPrompt,
         hasError: !!input.errorDetails,
         hasImages: !!input.imageUrls?.length,
+        hasWebContext: !!input.webContext,
+        totalImages: allImageUrls.length,
         codeLength: input.tsxCode.length,
-        codePreview: input.tsxCode.substring(0, 200)
+        codePreview: input.tsxCode.substring(0, 200),
+        websiteUrl: input.webContext?.originalUrl
       });
 
       // Use the AI to edit the code

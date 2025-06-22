@@ -83,11 +83,11 @@ export class IntentAnalyzer {
     
     // Add image context
     let imageInfo = "";
-    if (contextPacket.imageContext && contextPacket.imageContext.conversationImages.length > 0) {
-      const images = contextPacket.imageContext.conversationImages;
+    if (contextPacket.imageContext && contextPacket.imageContext.recentImagesFromChat && contextPacket.imageContext.recentImagesFromChat.length > 0) {
+      const images = contextPacket.imageContext.recentImagesFromChat;
       imageInfo = `\nIMAGES IN CONVERSATION:`;
       images.forEach((img: any) => {
-        imageInfo += `\n${img.position}. "${img.userPrompt}" [${img.imageCount} image(s)]`;
+        imageInfo += `\n${img.position}. "${img.userPrompt}" [${img.imageUrls.length} image(s)]`;
       });
       imageInfo += `\n\nWhen user references images:
 - "the image" or "this image" → most recent image (position ${images.length})
@@ -110,7 +110,7 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
       chatInfo = `\nCONVERSATION: ${contextPacket.conversationContext}`;
       
       // Check if last message indicates we just added a scene
-      const lastMessages = contextPacket.last5Messages || [];
+      const lastMessages = contextPacket.recentMessages || [];
       if (lastMessages.length >= 2) {
         const lastAssistantMsg = [...lastMessages].reverse().find(m => m.role === 'assistant');
         if (lastAssistantMsg && (
@@ -123,10 +123,24 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
       }
     }
 
+    // Add web analysis context
+    let webInfo = "";
+    if (contextPacket.webContext) {
+      const web = contextPacket.webContext;
+      webInfo = `\nWEB ANALYSIS CONTEXT:
+Website: ${web.pageData.title} (${web.originalUrl})
+Description: ${web.pageData.description || 'No description'}
+Key Headings: ${web.pageData.headings.slice(0, 3).join(', ')}
+Screenshots: Desktop (${web.screenshotUrls.desktop}) & Mobile (${web.screenshotUrls.mobile})
+Analyzed: ${new Date(web.analyzedAt).toLocaleString()}
+
+The AI has access to visual screenshots of this website and can reference them for brand matching, design inspiration, and style consistency.`;
+    }
+
     return `USER: "${prompt}"
 
 STORYBOARD:
-${storyboardInfo}${imageInfo}${chatInfo}
+${storyboardInfo}${imageInfo}${chatInfo}${webInfo}
 
 Respond with JSON only.`;
   }
@@ -185,6 +199,7 @@ Respond with JSON only.`;
       reasoning: parsed.reasoning,
       targetSceneId: parsed.targetSceneId,
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
+      referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
       userFeedback: parsed.userFeedback,
     };
 
