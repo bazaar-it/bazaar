@@ -17,6 +17,7 @@ export class Orchestrator {
       prompt: input.prompt,
       projectId: input.projectId,
       hasImages: !!(input.userContext?.imageUrls as string[])?.length,
+      hasVideos: !!(input.userContext?.videoUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
     
@@ -82,11 +83,20 @@ export class Orchestrator {
             targetDuration: toolSelection.targetDuration,
             referencedSceneIds: toolSelection.referencedSceneIds,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
+            videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
           },
           workflow: toolSelection.workflow,
         }
       };
+      
+      // Debug logging for video URLs
+      console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {
+        hasImageUrls: !!(input.userContext?.imageUrls as string[])?.length,
+        hasVideoUrls: !!(input.userContext?.videoUrls as string[])?.length,
+        videoUrls: (input.userContext?.videoUrls as string[]),
+      });
+      
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;
 

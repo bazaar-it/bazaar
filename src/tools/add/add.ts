@@ -18,10 +18,12 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
     console.log('🔨 [ADD TOOL] Input:', {
       prompt: input.userPrompt.substring(0, 50) + '...',
       hasImages: !!input.imageUrls?.length,
+      hasVideos: !!input.videoUrls?.length,
       hasWebContext: !!input.webContext,
       sceneNumber: input.sceneNumber,
       hasPreviousScene: !!input.previousSceneContext
     });
+    console.log('🔨 [ADD TOOL] Video URLs received:', input.videoUrls);
     console.log('🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!');
     
     try {
@@ -35,6 +37,13 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       if (input.webContext) {
         console.log('🔨 [ADD TOOL] Using web context generation for', input.webContext.originalUrl);
         return await this.generateFromWebContext(input);
+      }
+      
+      // Handle video-based scene creation
+      if (input.videoUrls && input.videoUrls.length > 0) {
+        console.log('🔨 [ADD TOOL] Using video-based generation for', input.videoUrls.length, 'videos');
+        // For now, treat videos similar to images but pass them through
+        return await this.generateFromVideos(input);
       }
       
       // Handle image-based scene creation
@@ -61,7 +70,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
    */
   private async generateFromText(input: AddToolInput): Promise<AddToolOutput> {
     // Generate function name (deterministic based on input)
-    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+    const functionName = this.generateFunctionName();
     
     // If we have a previous scene with code, use it as reference
     if (input.previousSceneContext?.tsxCode) {
@@ -150,7 +159,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       throw new Error("No images provided");
     }
 
-    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+    const functionName = this.generateFunctionName();
 
     // Generate code directly from images
     const codeResult = await codeGenerator.generateCodeFromImage({
@@ -189,6 +198,52 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
   }
 
   /**
+   * Generate scene from videos
+   * PURE FUNCTION - no side effects
+   */
+  private async generateFromVideos(input: AddToolInput): Promise<AddToolOutput> {
+    if (!input.videoUrls || input.videoUrls.length === 0) {
+      throw new Error("No videos provided");
+    }
+
+    const functionName = this.generateFunctionName();
+
+    // Generate code for video-based scenes
+    const codeResult = await codeGenerator.generateCodeWithVideos({
+      videoUrls: input.videoUrls,
+      userPrompt: input.userPrompt,
+      functionName: functionName,
+    });
+
+    const result = {
+      success: true,
+      tsxCode: codeResult.code,
+      name: codeResult.name,
+      duration: codeResult.duration,
+      reasoning: `Generated scene with video: ${codeResult.reasoning}`,
+      chatResponse: `I've created a scene using your video with the requested animations`,
+      scene: {
+        tsxCode: codeResult.code,
+        name: codeResult.name,
+        duration: codeResult.duration,
+      },
+      debug: {
+        videoGeneration: codeResult.debug,
+        videoUrls: input.videoUrls,
+      },
+    };
+
+    console.log('✅ [ADD TOOL] Finished video generation - returning result:', {
+      name: result.name,
+      duration: result.duration,
+      codeLength: result.tsxCode.length,
+      videoCount: input.videoUrls.length
+    });
+
+    return result;
+  }
+
+  /**
    * Generate scene from web context screenshots
    * PURE FUNCTION - no side effects
    */
@@ -197,7 +252,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       throw new Error("No web context provided");
     }
 
-    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+    const functionName = this.generateFunctionName();
 
     // Create combined image list with web screenshots
     const allImageUrls = [
@@ -269,7 +324,7 @@ BRAND MATCHING INSTRUCTIONS:
       throw new Error("No web context or images provided");
     }
 
-    const functionName = this.generateFunctionName(input.projectId, input.sceneNumber);
+    const functionName = this.generateFunctionName();
 
     // Combine website screenshots with user images
     const allImageUrls = [
@@ -338,7 +393,7 @@ COMBINED CONTEXT INSTRUCTIONS:
    * Generate unique component name using a stable ID
    * This prevents naming collisions when scenes are deleted/reordered
    */
-  private generateFunctionName(projectId: string, sceneNumber?: number): string {
+  private generateFunctionName(): string {
     // Generate a unique 8-character ID for this scene
     // This ensures component names never collide, even after deletions
     const uniqueId = this.generateUniqueId();

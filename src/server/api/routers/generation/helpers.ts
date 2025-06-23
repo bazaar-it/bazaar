@@ -39,6 +39,13 @@ export async function executeToolFromDecision(
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
       }
 
+      // Debug logging for video URLs
+      console.log('📝 [HELPERS] Building ADD tool input:', {
+        hasImageUrls: !!decision.toolContext.imageUrls?.length,
+        hasVideoUrls: !!decision.toolContext.videoUrls?.length,
+        videoUrls: decision.toolContext.videoUrls,
+      });
+
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -46,6 +53,7 @@ export async function executeToolFromDecision(
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
+        videoUrls: decision.toolContext.videoUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
         // Pass previous scene for style continuity
         previousSceneContext: storyboard.length > 0 ? {
@@ -180,6 +188,7 @@ export async function executeToolFromDecision(
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
         currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
+        videoUrls: decision.toolContext.videoUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,

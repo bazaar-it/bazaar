@@ -53,6 +53,7 @@ export interface AddToolInput extends BaseToolInput {
     tsxCode: string;
   }>;
   imageUrls?: string[];
+  videoUrls?: string[];
   visionAnalysis?: any;
   webContext?: {
     originalUrl: string;
@@ -87,6 +88,7 @@ export interface EditToolInput extends BaseToolInput {
   tsxCode: string;       // ✓ FIXED: Was existingCode
   currentDuration?: number;
   imageUrls?: string[];
+  videoUrls?: string[];
   visionAnalysis?: any;
   errorDetails?: string;
   referenceScenes?: Array<{  // For cross-scene style/color matching
@@ -212,6 +214,7 @@ export interface CreativeEditInput {
   tsxCode: string;        // ✓ FIXED: Was existingCode
   functionName: string;
   imageUrls?: string[];
+  videoUrls?: string[];
   visionAnalysis?: any;
 }
 
@@ -246,12 +249,25 @@ export const baseToolInputSchema = z.object({
 
 export const addToolInputSchema = baseToolInputSchema.extend({
   sceneNumber: z.number().optional().describe("Optional scene number/position"),
+  storyboardSoFar: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    duration: z.number(),
+    order: z.number(),
+    tsxCode: z.string(),
+  })).optional().describe("Current storyboard scenes"),
   previousSceneContext: z.object({
     tsxCode: z.string(),
     style: z.string().optional(),
   }).optional().describe("Previous scene for style consistency"),
+  referenceScenes: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    tsxCode: z.string(),
+  })).optional().describe("Reference scenes for cross-scene style/color matching"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
+  videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   webContext: z.object({
     originalUrl: z.string(),
     screenshotUrls: z.object({
@@ -273,8 +289,14 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   tsxCode: z.string().describe("Current scene TSX code"),
   currentDuration: z.number().optional().describe("Current duration in frames"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
+  videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
+  referenceScenes: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    tsxCode: z.string(),
+  })).optional().describe("Reference scenes for cross-scene style/color matching"),
   webContext: z.object({
     originalUrl: z.string(),
     screenshotUrls: z.object({

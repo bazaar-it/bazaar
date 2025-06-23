@@ -24,7 +24,7 @@ export const CODE_GENERATOR = {
 8. ONLY use these fonts: "Inter", "Arial", or "sans-serif"
 
 🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
-- window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
+- window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, Video, Audio, etc.)
 - window.React - React library (if needed for hooks, etc.)
 - window.HeroiconsSolid / window.HeroiconsOutline - Icon components
 - window.LucideIcons - Additional icon library
@@ -33,8 +33,16 @@ export const CODE_GENERATOR = {
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 
+🎥 VIDEO HANDLING:
+- Use const { Video } = window.Remotion; for video components
+- For video backgrounds: <Video src={videoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+- Let video play for scene duration (no endAt needed unless trimming)
+- Common props: volume={0} (mute background videos), loop (for short clips)
+- Layer text/graphics over video with absolute positioning and higher z-index
+
 📋 CONTEXT HANDLING:
 - If images provided: Extract KEY ELEMENTS for motion graphics (unless user specifically requests exact recreation)
+- If videos provided: Use as background or integrate with overlays based on user intent
 - If previous scene code provided: Match the style, colors, and animation patterns
 - If only text prompt: Create engaging motion graphics based on the description
 

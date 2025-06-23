@@ -337,6 +337,81 @@ export default function ${input.functionName}() {
     return { system: systemPrompt.content, user };
   }
 
+  /**
+   * Generate code for video-based scenes
+   */
+  async generateCodeWithVideos(input: {
+    videoUrls: string[];
+    userPrompt: string;
+    functionName: string;
+  }): Promise<CodeGenerationOutput> {
+    const config = getModel('codeGenerator');
+    
+    console.log('🎥 [CODE GENERATOR] Generating code with videos:', {
+      videoCount: input.videoUrls.length,
+      prompt: input.userPrompt.substring(0, 50) + '...'
+    });
+    
+    try {
+      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+        FUNCTION_NAME: input.functionName
+      });
+      
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+VIDEO URLS: ${input.videoUrls.map((url, i) => `
+Video ${i + 1}: ${url}`).join('')}
+
+FUNCTION NAME: ${input.functionName}
+
+Generate a Remotion component that uses the provided video(s) as background or main content.
+- Use const { Video } = window.Remotion; to access the Video component
+- For background videos: <Video src={videoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+- Add text overlays, animations, or other elements as requested
+- Default to muting background videos with volume={0}
+- Match the scene duration to the request (default 5-10 seconds)`;
+
+      const messages = [
+        { role: 'user' as const, content: userPrompt }
+      ];
+      
+      const response = await AIClientService.generateResponse(
+        config,
+        messages,
+        { role: 'system', content: systemPrompt.content }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from CodeGenerator LLM");
+      }
+      
+      // Clean and process code
+      let cleanCode = rawOutput.trim();
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Extract duration
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
+      return {
+        code: cleanCode,
+        name: "Scene", 
+        duration: durationAnalysis.frames,
+        reasoning: `Generated scene with video content (${durationAnalysis.frames} frames)`,
+        debug: {
+          method: 'withVideos',
+          videoCount: input.videoUrls.length,
+          promptLength: userPrompt.length,
+          responseLength: rawOutput.length,
+          durationAnalysis
+        }
+      };
+    } catch (error) {
+      console.error('[CODE GENERATOR] Video generation failed:', error);
+      throw error;
+    }
+  }
+
   // Removed buildImageToCodePrompt - now using centralized IMAGE_CODE_GENERATOR prompt
 }
 

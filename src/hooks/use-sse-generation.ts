@@ -3,7 +3,7 @@ import { useVideoState } from '~/stores/videoState';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (messageId: string | undefined, data?: { userMessage?: string; imageUrls?: string[] }) => void;
+  onMessageCreated?: (messageId: string | undefined, data?: { userMessage?: string; imageUrls?: string[]; videoUrls?: string[] }) => void;
   onComplete?: (messageId: string) => void;
   onError?: (error: string) => void;
 }
@@ -14,7 +14,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
 
   const generate = useCallback(async (
     userMessage: string,
-    imageUrls?: string[]
+    imageUrls?: string[],
+    videoUrls?: string[]
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -29,6 +30,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     
     if (imageUrls?.length) {
       params.append('imageUrls', JSON.stringify(imageUrls));
+    }
+    
+    if (videoUrls?.length) {
+      params.append('videoUrls', JSON.stringify(videoUrls));
     }
 
     // Create new EventSource
@@ -47,7 +52,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             // Don't pass empty string - let the mutation create the assistant message
             onMessageCreated?.(undefined, {
               userMessage: data.userMessage,
-              imageUrls: data.imageUrls
+              imageUrls: data.imageUrls,
+              videoUrls: data.videoUrls
             });
             eventSource.close();
             break;
