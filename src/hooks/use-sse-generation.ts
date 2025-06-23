@@ -83,13 +83,14 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     };
 
     eventSource.onerror = (error) => {
-      // Check if this is just the connection closing normally after sending the complete event
-      if (eventSource.readyState === EventSource.CLOSED) {
+      // Check if we've already received a message - if so, this is likely just the connection closing normally
+      if (currentMessageId || eventSource.readyState === EventSource.CLOSED) {
         // This is expected - the server closed the connection after creating the message
+        console.log('[SSE] Connection closed normally');
         return;
       }
       
-      // Only log actual errors
+      // Only log and show error if we haven't received any messages yet
       console.error('[SSE] Connection error:', error);
       onError?.('Connection lost. Please try again.');
       eventSource.close();

@@ -134,18 +134,20 @@ export class ContextBuilder {
       // First try to extract a URL with protocol
       let targetUrl = extractFirstValidUrl(input.prompt);
       
-      // If no URL found, check if the prompt itself looks like a domain
+      // If no URL found, look for domain patterns within the text
       if (!targetUrl) {
-        // Check if the prompt is a simple domain like "nrk.no" or "stripe.com"
-        const domainPattern = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i;
-        const trimmedPrompt = input.prompt.trim();
+        // Look for domains with common patterns like www.example.com or example.com
+        // Updated regex to be more flexible and catch domains in various contexts
+        const domainPattern = /(?:^|[\s,.:;!?'"(]|is\s+)((?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,})(?:[\s,.:;!?'")]|$)/i;
+        const match = input.prompt.match(domainPattern);
         
-        if (domainPattern.test(trimmedPrompt)) {
+        if (match && match[1]) {
+          const domain = match[1];
           // Normalize the URL by adding https://
-          const normalizedUrl = normalizeUrl(trimmedPrompt);
+          const normalizedUrl = normalizeUrl(domain);
           if (isValidWebUrl(normalizedUrl)) {
             targetUrl = normalizedUrl;
-            console.log(`📚 [CONTEXT BUILDER] Normalized domain "${trimmedPrompt}" to "${targetUrl}"`);
+            console.log(`📚 [CONTEXT BUILDER] Found and normalized domain "${domain}" to "${targetUrl}"`);
           }
         }
       }
@@ -178,12 +180,36 @@ export class ContextBuilder {
       // Return structured web context
       if (analysis.screenshotUrls && analysis.pageData) {
         console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.pageData.title}`);
-        return {
+        
+        const webContext = {
           originalUrl: analysis.url!,
           screenshotUrls: analysis.screenshotUrls,
           pageData: analysis.pageData,
           analyzedAt: analysis.analyzedAt!
         };
+        
+        // Fire-and-forget async save to database
+        (async () => {
+          try {
+            const { webContextService } = await import('~/server/services/data/web-context.service');
+            await webContextService.saveWebContext(
+              input.projectId,
+              analysis.url!,
+              {
+                screenshotUrls: analysis.screenshotUrls!,
+                pageData: analysis.pageData!,
+                analyzedAt: analysis.analyzedAt!
+              },
+              input.prompt
+            );
+            console.log(`📚 [CONTEXT BUILDER] 💾 Web context saved to database for future reference`);
+          } catch (error) {
+            console.error(`📚 [CONTEXT BUILDER] Failed to save web context to database:`, error);
+            // Silent failure - don't block the main flow
+          }
+        })();
+        
+        return webContext;
       }
       
       return undefined;

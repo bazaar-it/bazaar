@@ -37,10 +37,18 @@ RESPONSE FORMAT (JSON):
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)
+  "referencedSceneIds": ["scene-1-id", "scene-2-id"], // When user mentions other scenes for style/color matching
   "userFeedback": "Brief, friendly message about what you're doing",
   "needsClarification": false,
   "clarificationQuestion": "Optional: Ask user to clarify if ambiguous"
 }
+
+WHEN TO SET referencedSceneIds:
+- User says "like scene X", "match scene X", "same as scene X", "similar to scene X"
+- User mentions colors/styles from specific scenes: "use the blue from scene 1"
+- User says "use the background/animation/style from scene X"
+- User references multiple scenes: "combine scene 1's colors with scene 2's animations"
+- DO NOT set for general edits without scene references
 
 CRITICAL: If you need clarification, you MUST set:
 - "needsClarification": true

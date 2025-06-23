@@ -88,7 +88,7 @@ export default function ChatPanelG({
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
-    .filter(m => !m.isUser && m.id)
+    .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-'))
     .map(m => m.id);
 
   const { data: messageIterations } = api.generation.getBatchMessageIterations.useQuery(
@@ -206,6 +206,11 @@ export default function ChatPanelG({
     console.log('[ChatPanelG] Adding user message:', trimmedMessage);
     addUserMessage(projectId, trimmedMessage, imageUrls.length > 0 ? imageUrls : undefined);
     
+    // 🚀 OPTIMISTIC UI: Add assistant message immediately (don't wait for SSE)
+    const optimisticMessageId = `optimistic-${nanoid()}`;
+    addAssistantMessage(projectId, optimisticMessageId, "Generating code...");
+    console.log('[ChatPanelG] Added optimistic assistant message:', optimisticMessageId);
+    
     // Clear input immediately for better UX
     setMessage("");
     setUploadedImages([]);
@@ -219,10 +224,10 @@ export default function ChatPanelG({
     // Store message data for the mutation callback
     pendingMessageRef.current = { message: trimmedMessage, imageUrls };
     
-    // 🚀 SSE APPROACH: Create assistant message via SSE
-    console.log('[ChatPanelG] 🚀 Starting SSE message creation...');
+    // 🚀 SSE APPROACH: Create real assistant message via SSE
+    console.log('[ChatPanelG] 🚀 Starting SSE for real message (will replace optimistic)...');
     
-    // Start SSE to create the assistant message
+    // Start SSE to create the real assistant message
     generateSSE(trimmedMessage, imageUrls);
   };
 
@@ -407,6 +412,20 @@ export default function ChatPanelG({
     projectId,
     onMessageCreated: async (messageId) => {
       console.log('[ChatPanelG] ✅ SSE created assistant message:', messageId);
+      
+      // Remove the optimistic message if it exists
+      const optimisticId = activeAssistantMessageIdRef.current;
+      if (optimisticId && optimisticId.startsWith('optimistic-')) {
+        console.log('[ChatPanelG] Removing optimistic message:', optimisticId);
+        // Remove from video state (we need to add this method)
+        const state = useVideoState.getState();
+        const project = state.projects[projectId];
+        if (project && project.chatHistory) {
+          project.chatHistory = project.chatHistory.filter(msg => msg.id !== optimisticId);
+          state.setProject(projectId, project.props, { force: true });
+        }
+      }
+      
       activeAssistantMessageIdRef.current = messageId;
       
       // Now trigger the actual generation
@@ -426,105 +445,113 @@ export default function ChatPanelG({
           
           console.log('[ChatPanelG] ✅ Generation completed:', result);
           
-          // Handle the result (scene updates, etc.)
+          // The result contains the actual response
           const responseData = result as any;
           
-          // Update the assistant message with the response
+          // Update the message with the actual AI response
           const aiResponse = responseData.context?.chatResponse || 
                             responseData.chatResponse || 
                             responseData.message || 
-                            'Operation completed successfully.';
+                            'Scene generated successfully.';
           
           updateMessage(projectId, messageId, {
             content: aiResponse,
             status: 'success'
           });
           
-          // Handle scene operations
           const actualScene = responseData.data;
           const operation = responseData.meta?.operation;
+      
+      if (actualScene) {
+        // Get current scenes to calculate start time
+        const currentScenes = getCurrentProps()?.scenes || [];
+        
+        if (operation === 'scene.delete') {
+          // For delete operations, remove the scene from VideoState
+          deleteScene(projectId, actualScene.id);
           
-          if (actualScene) {
-            // Get current scenes to calculate start time
-            const currentScenes = getCurrentProps()?.scenes || [];
+          console.log('[ChatPanelG] ✅ Deleted scene from VideoState:', {
+            sceneId: actualScene.id,
+            sceneName: actualScene.name
+          });
+          
+          // Invalidate the scenes query to ensure fresh data
+          await utils.generation.getProjectScenes.invalidate({ projectId });
+          
+        } else if (operation === 'scene.edit' || operation === 'scene.update') {
+          // For edits, use the updateScene method from VideoState
+          updateScene(projectId, actualScene.id, actualScene);
+          
+          console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
+            sceneId: actualScene.id,
+            operation
+          });
+          
+          // Invalidate the scenes query to ensure fresh data
+          await utils.generation.getProjectScenes.invalidate({ projectId });
+          
+          // Call the callback if provided
+          if (onSceneGenerated) {
+            onSceneGenerated(actualScene.id);
+          }
+        } else if (operation === 'scene.create' || !operation) {
+          // For create operations
+          const lastScene = currentScenes[currentScenes.length - 1];
+          const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
+          
+          // Transform database format to InputProps format
+          const transformedScene = {
+            id: actualScene.id,
+            type: 'custom' as const,
+            start: startTime,
+            duration: actualScene.duration || 180,
+            data: {
+              code: actualScene.tsxCode,
+              name: actualScene.name || 'Generated Scene',
+              componentId: actualScene.id,
+              props: actualScene.props || {}
+            }
+          };
+          
+          // Check if this is a welcome project
+          const isWelcomeProject = currentScenes.length === 1 && 
+            (currentScenes[0]?.data?.name === 'Welcome Scene' ||
+             currentScenes[0]?.data?.isWelcomeScene === true ||
+             currentScenes[0]?.type === 'welcome');
+          
+          // If welcome project, replace the welcome scene; otherwise append
+          const updatedScenes = isWelcomeProject 
+            ? [transformedScene]
+            : [...currentScenes, transformedScene];
+          
+          const currentPropsData = getCurrentProps();
+          if (currentPropsData) {
+            const updatedProps = {
+              ...currentPropsData,
+              scenes: updatedScenes,
+              meta: {
+                ...currentPropsData.meta,
+                duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+                title: currentPropsData.meta?.title || 'New Project'
+              }
+            };
             
-            if (operation === 'scene.delete') {
-              // For delete operations, remove the scene from VideoState
-              deleteScene(projectId, actualScene.id);
-              
-              console.log('[ChatPanelG] ✅ Deleted scene from VideoState:', {
-                sceneId: actualScene.id,
-                sceneName: actualScene.name
-              });
-              
-            } else if (operation === 'scene.edit' || operation === 'scene.update') {
-              // For edits, use the updateScene method from VideoState
-              updateScene(projectId, actualScene.id, actualScene);
-              
-              console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
-                sceneId: actualScene.id,
-                operation
-              });
-              
-              // Call the callback if provided
-              if (onSceneGenerated) {
-                onSceneGenerated(actualScene.id);
-              }
-            } else if (operation === 'scene.create' || !operation) {
-              // For create operations
-              const lastScene = currentScenes[currentScenes.length - 1];
-              const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
-              
-              // Transform database format to InputProps format
-              const transformedScene = {
-                id: actualScene.id,
-                type: 'custom' as const,
-                start: startTime,
-                duration: actualScene.duration || 180,
-                data: {
-                  code: actualScene.tsxCode,
-                  name: actualScene.name || 'Generated Scene',
-                  componentId: actualScene.id,
-                  props: actualScene.props || {}
-                }
-              };
-              
-              // Check if this is a welcome project
-              const isWelcomeProject = currentScenes.length === 1 && 
-                (currentScenes[0]?.data?.name === 'Welcome Scene' ||
-                 currentScenes[0]?.data?.isWelcomeScene === true ||
-                 currentScenes[0]?.type === 'welcome');
-              
-              // If welcome project, replace the welcome scene; otherwise append
-              const updatedScenes = isWelcomeProject 
-                ? [transformedScene]
-                : [...currentScenes, transformedScene];
-              
-              const currentPropsData = getCurrentProps();
-              if (currentPropsData) {
-                const updatedProps = {
-                  ...currentPropsData,
-                  scenes: updatedScenes,
-                  meta: {
-                    ...currentPropsData.meta,
-                    duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                    title: currentPropsData.meta?.title || 'New Project'
-                  }
-                };
-                
-                replace(projectId, updatedProps);
-                
-                console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
-                  sceneId: transformedScene.id,
-                  totalScenes: updatedScenes.length,
-                  replacedWelcome: isWelcomeProject
-                });
-                
-                // Call the callback if provided
-                if (onSceneGenerated) {
-                  onSceneGenerated(transformedScene.id);
-                }
-              }
+            replace(projectId, updatedProps);
+            
+            console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
+              sceneId: transformedScene.id,
+              totalScenes: updatedScenes.length,
+              replacedWelcome: isWelcomeProject
+            });
+            
+            // Invalidate the scenes query to ensure fresh data
+            await utils.generation.getProjectScenes.invalidate({ projectId });
+            
+            // Call the callback if provided
+            if (onSceneGenerated) {
+              onSceneGenerated(transformedScene.id);
+            }
+          }
             }
           }
           
@@ -537,6 +564,9 @@ export default function ChatPanelG({
         } finally {
           setIsGenerating(false);
           setGenerationComplete(true);
+          
+          // Always invalidate scenes to ensure UI is in sync with database
+          await utils.generation.getProjectScenes.invalidate({ projectId });
         }
       }
     },

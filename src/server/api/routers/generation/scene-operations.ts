@@ -149,18 +149,29 @@ export const generateScene = protectedProcedure
         chatResponse: orchestratorResponse.chatResponse,
       };
 
-      // 6. Create assistant's response FIRST (before tool execution)
-      // This ensures proper message ordering in the database
+      // 6. Update or create assistant's response
       let assistantMessageId: string | undefined;
-      if (decision.chatResponse) {
+      
+      if (input.assistantMessageId) {
+        // Update existing message from SSE
+        assistantMessageId = input.assistantMessageId;
+        await db.update(messages)
+          .set({
+            content: decision.chatResponse || "Processing your request...",
+            updatedAt: new Date(),
+          })
+          .where(eq(messages.id, input.assistantMessageId));
+        console.log(`[${response.getRequestId()}] Updated existing assistant message: ${assistantMessageId}`);
+      } else if (decision.chatResponse) {
+        // Create new message if no SSE message exists (fallback)
         const newAssistantMessage = await messageService.createMessage({
-          id: input.assistantMessageId, // Use the ID from SSE if provided
           projectId,
           content: decision.chatResponse,
           role: "assistant",
-          status: "pending", // Start as pending, update to success after tool execution
+          status: "pending",
         });
         assistantMessageId = newAssistantMessage?.id;
+        console.log(`[${response.getRequestId()}] Created new assistant message: ${assistantMessageId}`);
       }
 
       // 7. Execute the tool

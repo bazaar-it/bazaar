@@ -28,13 +28,28 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   const { data: session } = useSession();
   const { setProject } = useVideoState();
 
-  // Initialize video state on mount
+  // Initialize video state on mount - but only if not already loaded
   useEffect(() => {
-    if (DEBUG) console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
-    if (DEBUG) console.log('[GenerateWorkspaceRoot] About to call setProject with force=true. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
-    // Force update with server data to ensure we always show what's in the database
-    setProject(projectId, initialProps, { force: true });
-  }, [projectId, initialProps, setProject]);
+    const currentProps = useVideoState.getState().getCurrentProps();
+    const isProjectLoaded = currentProps && useVideoState.getState().projects[projectId];
+    
+    if (DEBUG) console.log('[GenerateWorkspaceRoot] Checking if project needs initialization:', {
+      projectId,
+      isProjectLoaded,
+      hasCurrentScenes: currentProps?.scenes?.length || 0,
+      initialScenes: initialProps?.scenes?.length || 0
+    });
+    
+    // Only initialize if:
+    // 1. Project is not loaded yet, OR
+    // 2. Current state has no scenes but initial props has scenes (fresh data from server)
+    if (!isProjectLoaded || (!currentProps?.scenes?.length && initialProps?.scenes?.length)) {
+      if (DEBUG) console.log('[GenerateWorkspaceRoot] Initializing project with server data');
+      setProject(projectId, initialProps, { force: true });
+    } else {
+      if (DEBUG) console.log('[GenerateWorkspaceRoot] Project already loaded, skipping initialization');
+    }
+  }, [projectId]); // Remove initialProps from dependencies to prevent re-runs
   
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);

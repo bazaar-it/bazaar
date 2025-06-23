@@ -36,10 +36,22 @@ export interface BaseToolOutput {
 
 export interface AddToolInput extends BaseToolInput {
   sceneNumber?: number;
+  storyboardSoFar?: Array<{
+    id: string;
+    name: string;
+    duration: number;
+    order: number;
+    tsxCode: string;
+  }>;
   previousSceneContext?: {
     tsxCode: string;
     style?: string;
   };
+  referenceScenes?: Array<{  // For cross-scene style/color matching
+    id: string;
+    name: string;
+    tsxCode: string;
+  }>;
   imageUrls?: string[];
   visionAnalysis?: any;
   webContext?: {

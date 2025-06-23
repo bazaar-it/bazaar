@@ -106,21 +106,14 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
     
     // Add conversation context with recent action detection
     let chatInfo = "";
-    if (contextPacket.conversationContext !== 'New conversation') {
-      chatInfo = `\nCONVERSATION: ${contextPacket.conversationContext}`;
-      
-      // Check if last message indicates we just added a scene
-      const lastMessages = contextPacket.recentMessages || [];
-      if (lastMessages.length >= 2) {
-        const lastAssistantMsg = [...lastMessages].reverse().find(m => m.role === 'assistant');
-        if (lastAssistantMsg && (
-          lastAssistantMsg.content.includes('added') || 
-          lastAssistantMsg.content.includes('created') ||
-          lastAssistantMsg.content.includes('I\'ve added')
-        )) {
-          chatInfo += `\nRECENT: Just added a new scene (likely Scene ${storyboardSoFar?.length || 'latest'})`;
-        }
-      }
+    const recentMessages = contextPacket.recentMessages || [];
+    if (recentMessages.length > 0) {
+      chatInfo = "\nRECENT CONVERSATION:";
+      // Include last 3 message pairs for context
+      const messagesToShow = recentMessages.slice(-6);
+      messagesToShow.forEach((msg, idx) => {
+        chatInfo += `\n${msg.role.toUpperCase()}: "${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}"`;
+      });
     }
 
     // Add web analysis context

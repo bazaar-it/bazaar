@@ -1,56 +1,49 @@
 // src/app/page.tsx
 "use client";
 import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { api } from "~/trpc/react";
-import LoginPage from "./login/page";
+import dynamic from "next/dynamic";
+
+// Lazy load heavy components
+const LoginModal = lazy(() => import("./login/page"));
+const EmailSubscriptionForm = dynamic(() => import("~/components/marketing/EmailSubscriptionForm"), { ssr: false });
+const FAQSection = dynamic(() => import("~/components/marketing/FAQSection"), { ssr: false });
 
 
 
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [showLogin, setShowLogin] = useState(false);
-  const [email, setEmail] = useState("");
-  const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
-  const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
-  const [mounted, setMounted] = useState(false);
+  // State for login modal only
+  // removed mounted state to render immediately
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   const router = useRouter();
-  const createProject = api.project.create.useMutation();
+  // Lazy load tRPC only when needed
+  const [createProjectMutation, setCreateProjectMutation] = useState<any>(null);
   
-  // Email subscription mutation - MUST be before any conditional returns
-  const subscribeEmail = api.emailSubscriber.subscribe.useMutation({
-    onSuccess: (data) => {
-      setEmailSubmitState('success');
-      setEmailErrorMessage('');
-      console.log(data.message);
-      // Reset form after 3 seconds
-      setTimeout(() => {
-        setEmail("");
-        setEmailSubmitState('idle');
-      }, 3000);
-    },
-    onError: (error) => {
-      setEmailSubmitState('error');
-      setEmailErrorMessage(error.message || 'Failed to subscribe. Please try again later.');
-      console.error("Email subscription error:", error.message);
-      // Reset to idle after 5 seconds (longer for error messages)
-      setTimeout(() => {
-        setEmailSubmitState('idle');
-        setEmailErrorMessage('');
-      }, 5000);
-    },
-  });
+  useEffect(() => {
+    if (status === "authenticated") {
+      import("~/trpc/react").then(({ api }) => {
+        setCreateProjectMutation(() => api.project.create.useMutation());
+      });
+    }
+  }, [status]);
+  
+  // Email subscription state (mutation moved to EmailSubscriptionForm component)
+  const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
+  // Removed - now handled in EmailSubscriptionForm component
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
       // Create a new project and redirect to generator
-      const project = await createProject.mutateAsync({});
-      if (project?.projectId) {
-        router.push(`/projects/${project.projectId}/generate`);
+      if (createProjectMutation) {
+        const project = await createProjectMutation.mutateAsync({});
+        if (project?.projectId) {
+          router.push(`/projects/${project.projectId}/generate`);
+        }
       }
     } else {
       setIntendedAction('try-for-free');
@@ -58,20 +51,9 @@ export default function HomePage() {
     }
   };
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || emailSubmitState === 'loading') return;
-    
-    setEmailSubmitState('loading');
-    subscribeEmail.mutate({ 
-      email: email.trim(),
-      source: 'homepage' 
-    });
-  };
+  // Email submit handler moved to EmailSubscriptionForm component
 
-  const toggleFaq = (id: string) => {
-    setExpandedFaq(expandedFaq === id ? null : id);
-  };
+  // Removed - now handled in FAQSection component
 
   // Example video cards data
   const exampleCards = [
@@ -131,30 +113,21 @@ export default function HomePage() {
     { name: "Vercel", path: "https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//Vercel.svg" },
   ];
 
-  // Set mounted state to handle hydration
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   // Auto-redirect logged-in users to workspace
   useEffect(() => {
-    if (mounted && status === "authenticated" && session?.user) {
+    if (status === "authenticated" && session?.user) {
       console.log("User is already logged in, redirecting to workspace...");
       router.push("/projects");
     }
-  }, [mounted, status, session, router]);
+  }, [status, session, router]);
 
   // Handle loading states and redirects after all hooks
-  if (!mounted || status === "loading") {
-    return null; // Prevent hydration mismatch
-  }
-
-  if (status === "authenticated" && session?.user) {
-    return null; // Redirecting via useEffect
-  }
+  if (status === "loading") {
+     return null; // Prevent hydration mismatch
+   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col animate-fade-in">
       {/* Header */}
       <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
@@ -181,17 +154,17 @@ export default function HomePage() {
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
         <div className="mb-16 w-full text-center">
-          <h1 className="text-6xl font-extrabold mb-6">Motion Graphics, Made Simple</h1>
+          <h1 className="text-6xl font-extrabold mb-6 animate-slide-up">Motion Graphics, Made Simple</h1>
           <p className="text-xl text-gray-600">Bazaar is an AI-powered video generator that turns descriptions into animated motion graphics — in seconds.</p>
         </div>
         
         <div className="w-full text-center">
           <button
             onClick={handleTryForFree}
-            disabled={createProject.isPending}
-            className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
+            disabled={!createProjectMutation || createProjectMutation?.isPending}
+            className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
           >
-            {createProject.isPending ? "Creating..." : "Try for Free"}
+            {createProjectMutation?.isPending ? "Creating..." : "Try for Free"}
           </button>
           <p className="text-center text-gray-500 text-sm mt-3">
             No credit card required • Start creating in seconds
@@ -204,7 +177,9 @@ export default function HomePage() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
             {exampleCards.map((card, index) => (
-              <div key={index} className="flex flex-col bg-white rounded-lg shadow-lg overflow-hidden transition-transform hover:scale-[1.02] hover:shadow-xl">
+              <div key={index} className="flex flex-col bg-white rounded-lg shadow-lg overflow-hidden animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                {/* card content will follow */}
+              
                 <div className="aspect-video w-full bg-black overflow-hidden">
                   <video
                     src={card.videoUrl}
@@ -237,21 +212,21 @@ export default function HomePage() {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10 lg:gap-16 max-w-7xl mx-auto px-4">
             {/* Step 1 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow animate-fade-in-up" style={{ animationDelay: '0ms' }}>
               <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">1</div>
               <h3 className="text-xl font-semibold mb-4">Describe</h3>
               <p className="text-gray-600">Describe exactly what you want to create in a scene — the more detail the better</p>
             </div>
             
             {/* Step 2 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow animate-fade-in-up" style={{ animationDelay: '100ms' }}>
               <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">2</div>
               <h3 className="text-xl font-semibold mb-4">Generate</h3>
               <p className="text-gray-600">Generate motion graphics instantly with AI.</p>
             </div>
             
             {/* Step 3 */}
-            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex flex-col items-center text-center p-8 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow animate-fade-in-up" style={{ animationDelay: '200ms' }}>
               <div className="w-14 h-14 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold mb-6">3</div>
               <h3 className="text-xl font-semibold mb-4">Refine</h3>
               <p className="text-gray-600">Refine each scene using natural language prompts — iterate until it's perfect.</p>
@@ -316,122 +291,14 @@ export default function HomePage() {
       </section>
 
       {/* FAQ Section */}
-      <section className="w-full py-24 bg-white">
-        <div className="max-w-3xl mx-auto px-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16 flex items-center justify-center gap-3">
-            <span className="text-2xl">📚</span> FAQs
-          </h2>
-          
-          <div className="space-y-4">
-            {faqs.map((faq) => (
-              <div 
-                key={faq.id} 
-                className="border border-gray-200 rounded-lg overflow-hidden transition-all duration-200"
-              >
-                <button
-                  onClick={() => toggleFaq(faq.id)}
-                  className="w-full px-6 py-4 text-left flex justify-between items-center hover:bg-gray-50 focus:outline-none"
-                >
-                  <span className="font-medium text-lg">{faq.question}</span>
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="20" 
-                    height="20" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className={`transition-transform duration-200 ${expandedFaq === faq.id ? 'rotate-180' : ''}`}
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </button>
-                <div 
-                  className={`px-6 overflow-hidden transition-all duration-300 ease-in-out ${
-                    expandedFaq === faq.id ? 'max-h-96 py-4' : 'max-h-0 py-0'
-                  }`}
-                >
-                  <div className="text-gray-600 space-y-3">
-                    {faq.answer.split('\n\n').map((paragraph, index) => (
-                      <p key={index}>{paragraph}</p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <Suspense fallback={<div className="w-full py-24 bg-white" />}>
+        <FAQSection faqs={faqs} />
+      </Suspense>
 
       {/* Email Sign-Up Section */}
-      <section className="w-full py-16 bg-gray-50">
-        <div className="max-w-lg mx-auto px-4 text-center">
-          <h2 className="text-2xl font-bold mb-8 flex items-center justify-center gap-3">
-            <span className="text-2xl">✉️</span> Sign up for updates
-          </h2>
-          
-          <form onSubmit={handleEmailSubmit} className="flex flex-col sm:flex-row gap-3 mb-3">
-            <input
-              type="email"
-              placeholder="Your email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-black disabled:bg-gray-100 disabled:cursor-not-allowed"
-              required
-              disabled={emailSubmitState === 'loading' || emailSubmitState === 'success'}
-            />
-            <button
-              type="submit"
-              disabled={emailSubmitState === 'loading' || emailSubmitState === 'success' || !email.trim()}
-              className={`px-6 py-3 font-semibold rounded-lg transition whitespace-nowrap min-w-[100px] flex items-center justify-center gap-2 ${
-                emailSubmitState === 'success' 
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
-                  : emailSubmitState === 'error'
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-black text-white hover:bg-gray-800'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {emailSubmitState === 'loading' && (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Submitting...
-                </>
-              )}
-              {emailSubmitState === 'success' && (
-                <>
-                  <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Success!
-                </>
-              )}
-              {emailSubmitState === 'error' && (
-                <>
-                  <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  Try Again
-                </>
-              )}
-              {emailSubmitState === 'idle' && 'Sign up'}
-            </button>
-          </form>
-          {/* Error message display */}
-          {emailSubmitState === 'error' && emailErrorMessage && (
-            <div className="mt-2 text-sm text-red-600 text-center">
-              {emailErrorMessage}
-            </div>
-          )}
-          <p className="text-sm text-gray-500">
-            Be the first to know when new features launch.
-          </p>
-        </div>
-      </section>
+      <Suspense fallback={<div className="w-full py-16 bg-gray-50" />}>
+        <EmailSubscriptionForm />
+      </Suspense>
 
       {/* Login Modal Overlay - Updated to be more compact */}
       {showLogin && (
@@ -446,10 +313,71 @@ export default function HomePage() {
                 <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <LoginPage redirectTo={intendedAction === 'try-for-free' ? '/projects/new' : '/projects'} />
+            <Suspense fallback={<div className="p-8">Loading...</div>}>
+              <LoginModal redirectTo={intendedAction === 'try-for-free' ? '/projects/new' : '/projects'} />
+            </Suspense>
           </div>
         </div>
       )}
+      <style jsx global>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes pop-in {
+          0% {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          50% {
+            transform: scale(1.02);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+        
+        .animate-slide-up {
+          animation: slide-up 0.6s ease-out;
+        }
+        
+        .animate-fade-in-up {
+          opacity: 0;
+          animation: fade-in-up 0.5s ease-out forwards;
+        }
+        
+        .animate-pop-in {
+          animation: pop-in 0.4s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

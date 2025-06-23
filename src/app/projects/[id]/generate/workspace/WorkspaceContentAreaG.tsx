@@ -508,31 +508,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       }
     }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, updateAndRefresh]);
 
-    // Track if initialization has been attempted for this project
-    const initializationAttemptedRef = useRef<Set<string>>(new Set());
-    
-    // 🚨 FIX: Removed defensive check that prevented updates with fresh DB data
-    useEffect(() => {
-      // Only initialize once per project
-      if (initializationAttemptedRef.current.has(projectId)) {
-        console.log('[WorkspaceContentAreaG] Initialization already attempted for project:', projectId);
-        return;
-      }
-      
-      // Mark this project as initialization attempted
-      initializationAttemptedRef.current.add(projectId);
-      
-      console.log('[WorkspaceContentAreaG] Initializing project with provided props:', projectId);
-      console.log('[WorkspaceContentAreaG] Initial props scenes count:', initialProps?.scenes?.length || 0);
-      
-      // ✅ ALWAYS update with server data (removed the check that skipped if data existed)
-      if (initialProps) {
-        updateAndRefresh(projectId, () => initialProps);
-        console.log('[WorkspaceContentAreaG] ✅ Initialized video state with server data from page.tsx');
-      } else {
-        console.warn('[WorkspaceContentAreaG] No initial props provided - this should not happen');
-      }
-    }, [projectId, initialProps, updateAndRefresh]);
+    // 🚨 REMOVED: Redundant initialization logic
+    // GenerateWorkspaceRoot already handles project initialization
+    // Having it here causes double initialization and the welcome scene bug
+    // when switching tabs
     
     // State for dragging
     const [activeId, setActiveId] = useState<string | null>(null);

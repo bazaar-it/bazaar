@@ -88,7 +88,7 @@ export const authConfig = {
     // Your authorized callback can likely stay here too
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isProtectedRoute = nextUrl.pathname.startsWith('/dashboard') || nextUrl.pathname.startsWith('/projects');
+      const isProtectedRoute = nextUrl.pathname.startsWith('/projects');
       // Consider if API should be protected differently (e.g., allow unauthed access to specific tRPC routes?)
       const isApiRoute = nextUrl.pathname.startsWith('/api/');
       if (isProtectedRoute || (isApiRoute && !nextUrl.pathname.startsWith('/api/auth'))) { // Example: Protect API except auth routes

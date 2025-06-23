@@ -37,32 +37,58 @@ export async function GET(request: NextRequest) {
   // Start the async work
   (async () => {
     try {
-      // 1. Generate a temporary message ID (not saved to DB)
-      const assistantMessageId = randomUUID();
+      // 1. Create the assistant message in the database with pending status
+      const assistantMessage = await messageService.createMessage({
+        projectId,
+        content: "Generating code...",
+        role: "assistant",
+        status: "pending",
+      });
+
+      if (!assistantMessage) {
+        throw new Error('Failed to create assistant message');
+      }
       
-      // 2. Send temporary "Generating code..." message to client only
-      // This is NOT saved to the database - it's just for immediate UI feedback
+      // 2. Send the message to client with the real database ID
       await writer.write(encoder.encode(formatSSE({
         type: 'message',
-        id: assistantMessageId,
-        content: "Generating code...",
-        status: 'pending',
-        isTemporary: true  // Flag to indicate this is not a real message
+        id: assistantMessage.id,
+        content: assistantMessage.content,
+        status: assistantMessage.status,
       })));
 
-      // 3. The actual message will be created by the mutation
-      // when it has the real content to save
+      // 3. Keep connection open - don't send complete yet
+      // The mutation will update this message with the real content
+      
+      // 4. Send complete event after a small delay
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await writer.write(encoder.encode(formatSSE({
+        type: 'complete',
+        id: assistantMessage.id,
+      })));
 
     } catch (error) {
       console.error('[SSE] Error:', error);
       
-      // Send error to client
-      await writer.write(encoder.encode(formatSSE({
-        type: 'error',
-        error: 'Failed to process request'
-      })));
+      try {
+        // Send error to client
+        await writer.write(encoder.encode(formatSSE({
+          type: 'error',
+          error: 'Failed to process request'
+        })));
+      } catch (writeError) {
+        console.error('[SSE] Failed to write error:', writeError);
+      }
     } finally {
-      await writer.close();
+      // Small delay to ensure the last message is sent
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      try {
+        await writer.close();
+      } catch (closeError) {
+        // Stream might already be closed
+        console.log('[SSE] Stream already closed');
+      }
     }
   })();
 
