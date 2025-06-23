@@ -22,7 +22,8 @@ export const chatRouter = createTRPCRouter({
             if (!project || project.userId !== ctx.session.user.id) {
                 throw new TRPCError({ code: "FORBIDDEN", message: "Project not found or access denied." });
             }
-            const messageHistory = await ctx.db.query.messages.findMany({
+            // First get the messages in descending order to get the most recent ones
+            const recentMessages = await ctx.db.query.messages.findMany({
                 where: eq(messages.projectId, input.projectId),
                 orderBy: [desc(messages.sequence)],
                 limit: input.limit,
@@ -37,6 +38,9 @@ export const chatRouter = createTRPCRouter({
                     sequence: true,
                 },
             });
-            return messageHistory.reverse();
+            
+            // Then reverse to return them in chronological order (oldest to newest)
+            // This ensures we get the last N messages in the correct order
+            return recentMessages.reverse();
         }),
 });

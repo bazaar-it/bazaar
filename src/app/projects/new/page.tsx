@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { projects } from "~/server/db/schema";
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, like, desc } from "drizzle-orm";
 import { analytics } from '~/lib/utils/analytics';
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 
 /**
- * Special route that automatically creates a new project and redirects to it
- * This allows direct navigation to /projects/new to work as expected
+ * IDEMPOTENT route that ensures users have a project
+ * - If user has existing projects, redirect to most recent
+ * - If user has no projects, create ONE
+ * This prevents duplicate creation during race conditions
  * 
  * UNIFIED WITH tRPC ROUTE: Now uses same title generation, default props, and NO welcome message
  */
@@ -20,6 +22,22 @@ export default async function NewProjectPage() {
   if (!session?.user) {
     redirect("/login");
   }
+
+  // FAST PATH: Check if user has ANY project (limit 1 for speed)
+  const mostRecentProject = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.userId, session.user.id))
+    .orderBy(desc(projects.updatedAt))
+    .limit(1);
+
+  // If user has at least one project, redirect to it immediately
+  if (mostRecentProject.length > 0) {
+    console.log(`[NewProjectPage] Fast path: User has projects, redirecting to: ${mostRecentProject[0]!.id}`);
+    redirect(`/projects/${mostRecentProject[0]!.id}/generate`);
+  }
+
+  // User has no projects, proceed with creation
 
   let newProject;
   let attempts = 0;
@@ -82,6 +100,7 @@ export default async function NewProjectPage() {
         .returning();
       
       newProject = insertedProjectAttempt; // Success!
+      console.log(`[NewProjectPage] Created new project: ${newProject!.id} with title: ${titleToInsert}`);
 
       // Track project creation analytics
       if (newProject) {
@@ -91,14 +110,45 @@ export default async function NewProjectPage() {
       // NO WELCOME MESSAGE CREATION - Let UI show the nice default instead (UNIFIED)
 
     } catch (error: any) {
+      console.error(`[NewProjectPage] Creation attempt ${attempts} failed:`, error);
+      
+      // RACE CONDITION CHECK: Another request might have created a project
+      // Check again if user now has projects
+      const checkAgain = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.userId, session.user.id))
+        .orderBy(projects.updatedAt);
+      
+      if (checkAgain.length > 0) {
+        // A project was created by another request!
+        const mostRecent = checkAgain[checkAgain.length - 1];
+        console.log(`[NewProjectPage] Race condition detected - found project created by another request: ${mostRecent!.id}`);
+        redirect(`/projects/${mostRecent!.id}/generate`);
+      }
+      
       // Check for PostgreSQL unique violation error (SQLSTATE 23505)
       if (error.code === '23505' || (error.message && (error.message.includes('violates unique constraint') || error.message.includes('duplicate key value')))) {
         console.warn(`Attempt ${attempts}: Failed to create project with title '${error.values?.title || 'unknown'}'. Retrying. Error: ${error.message}`);
         if (attempts >= MAX_ATTEMPTS) {
           console.error("Max attempts reached. Failed to create new project.");
+          // Final check before giving up
+          const finalCheck = await db
+            .select()
+            .from(projects)
+            .where(eq(projects.userId, session.user.id))
+            .orderBy(projects.updatedAt);
+          
+          if (finalCheck.length > 0) {
+            const mostRecent = finalCheck[finalCheck.length - 1];
+            console.log(`[NewProjectPage] Final check found existing project: ${mostRecent!.id}`);
+            redirect(`/projects/${mostRecent!.id}/generate`);
+          }
+          
           // Track error analytics
           analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Max attempts reached', '/projects/new');
-          redirect("/projects?error=creation_failed_max_attempts");
+          // Redirect to landing page instead of non-existent /projects
+          redirect("/?error=creation_failed");
           return null;
         }
       } else {
@@ -106,7 +156,8 @@ export default async function NewProjectPage() {
         console.error("Failed to create new project (non-unique constraint error):", error);
         // Track error analytics
         analytics.errorOccurred('project_creation_failed', error instanceof Error ? error.message : 'Unknown error', '/projects/new');
-        redirect("/projects?error=unknown_creation_failure");
+        // Redirect to landing page instead of non-existent /projects
+        redirect("/?error=creation_failed");
         return null;
       }
     }
@@ -116,11 +167,24 @@ export default async function NewProjectPage() {
     // Redirect to the new project's generate page
     redirect(`/projects/${newProject.id}/generate`);
   } else {
-    // Fallback to projects page if something went wrong
+    // One final check before giving up completely
+    const finalCheck = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.userId, session.user.id))
+      .orderBy(projects.updatedAt);
+    
+    if (finalCheck.length > 0) {
+      const mostRecent = finalCheck[finalCheck.length - 1];
+      console.log(`[NewProjectPage] Final fallback check found existing project: ${mostRecent!.id}`);
+      redirect(`/projects/${mostRecent!.id}/generate`);
+    }
+    
+    // Fallback to landing page if something went wrong
     console.error("Failed to create new project after multiple attempts or unexpected issue.");
     // Track error analytics
     analytics.errorOccurred('project_creation_failed', 'Fallback creation failure', '/projects/new');
-    redirect("/projects?error=fallback_creation_failure");
+    redirect("/?error=creation_failed");
   }
 
   // This should never be reached due to the redirects above,

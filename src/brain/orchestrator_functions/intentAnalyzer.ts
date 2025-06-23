@@ -177,12 +177,20 @@ Respond with JSON only.`;
     
     // Handle clarification responses
     if (parsed.needsClarification) {
-      return {
-        success: true,
-        needsClarification: true,
-        clarificationQuestion: parsed.clarificationQuestion,
-        reasoning: parsed.reasoning
-      };
+      // If brain provided both tool and clarification, prefer the tool
+      if (parsed.toolName) {
+        console.log('🎯 [INTENT] Brain wants clarification but chose tool - proceeding with tool:', parsed.toolName);
+        // Continue to normal processing
+      } else {
+        // Only clarification, no tool
+        return {
+          success: true,
+          needsClarification: true,
+          clarificationQuestion: parsed.clarificationQuestion,
+          reasoning: parsed.reasoning,
+          toolName: null  // Explicitly null, not undefined
+        };
+      }
     }
 
     // Single tool operation

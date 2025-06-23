@@ -50,12 +50,21 @@ WHEN TO SET referencedSceneIds:
 - User references multiple scenes: "combine scene 1's colors with scene 2's animations"
 - DO NOT set for general edits without scene references
 
-CRITICAL: If you need clarification, you MUST set:
+CRITICAL DECISION RULES:
+1. EITHER choose a tool OR ask for clarification - NEVER BOTH
+2. If you choose a tool, commit to it (needsClarification: false)
+3. Only ask for clarification when truly impossible to proceed
+
+CLARIFICATION FORMAT (when needed):
 - "needsClarification": true
 - "clarificationQuestion": "Your question here"
-- "toolName": null (not undefined)
+- "toolName": null
 
-Otherwise, you MUST provide a valid toolName.
+DEFAULT BEHAVIORS (be decisive):
+- URL only → addScene (create content inspired by website)
+- "Fix it" → editScene (apply auto-fix)
+- "Make it better" → editScene (enhance current scene)
+- Image only → addScene (create from image)
 
 TRIM CALCULATION EXAMPLES:
 - User: "cut the last second" (scene is 150 frames) → targetDuration: 120
@@ -69,8 +78,9 @@ CLARIFICATION EXAMPLES:
 - "compress scene 2 animations to 5 seconds" → editScene (animation timing change)
 
 IMPORTANT:
-- Be decisive when intent is clear
-- Ask for clarification only when truly ambiguous
+- Be VERY decisive - users expect action, not questions
+- Default to action over clarification
 - For trim operations, you MUST provide targetSceneId
-- Keep reasoning concise but clear`
+- Keep reasoning concise but clear
+- If unsure between tools, pick the most likely one`
 };

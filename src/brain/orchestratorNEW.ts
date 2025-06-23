@@ -44,14 +44,27 @@ export class Orchestrator {
         };
       }
       
+      // Handle clarification as a valid response, not an error
+      if (toolSelection.needsClarification) {
+        console.log('🧠 [NEW ORCHESTRATOR] Clarification needed:', toolSelection.clarificationQuestion);
+        return {
+          success: true,  // Clarification is a valid outcome
+          needsClarification: true,
+          chatResponse: toolSelection.clarificationQuestion || "Could you provide more details about what you'd like to create?",
+          reasoning: toolSelection.reasoning
+        };
+      }
+      
       // 3. Return decision (NO EXECUTION!)
       console.log('🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...');
       
       if (!toolSelection.toolName) {
+        // This should rarely happen now with proper clarification handling
+        console.error('🧠 [NEW ORCHESTRATOR] No tool selected and no clarification - this is a bug!');
         return {
           success: false,
           error: "No tool selected",
-          chatResponse: toolSelection.clarificationQuestion || "I need more information to help you."
+          chatResponse: "I need more information to help you."
         };
       }
 

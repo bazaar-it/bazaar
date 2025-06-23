@@ -103,6 +103,8 @@ export interface OrchestrationOutput {
   reasoning?: string;
   error?: string;
   chatResponse?: string;
+  needsClarification?: boolean;
+  toolUsed?: ToolName;
 }
 
 // ============================================================================

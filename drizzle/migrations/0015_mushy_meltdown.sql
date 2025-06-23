@@ -1,1 +1,0 @@
-ALTER TABLE "bazaar-vid_scene_specs" ALTER COLUMN "createdBy" SET DATA TYPE varchar(255);

@@ -130,6 +130,7 @@
     "openai": "^4.96.0",
     "opossum": "^8.4.0",
     "pg": "^8.16.0",
+    "playwright": "^1.53.1",
     "postgres": "^3.4.5",
     "react": "^19.0.0",
     "react-day-picker": "^9.7.0",

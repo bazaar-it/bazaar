@@ -5,7 +5,6 @@ import { db } from "~/server/db";
 import { scenes, messages } from "~/server/db/schema";
 import { eq, desc } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
-import { WebAnalysisAgent } from "~/tools/webAnalysis/WebAnalysisAgent";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 
 export class ContextBuilder {
@@ -159,7 +158,8 @@ export class ContextBuilder {
       
       console.log(`📚 [CONTEXT BUILDER] Analyzing website: ${targetUrl}`);
       
-      // Initialize web analysis agent
+      // Dynamic import to ensure server-side only execution
+      const { WebAnalysisAgent } = await import('~/tools/webAnalysis/WebAnalysisAgent');
       const webAgent = new WebAnalysisAgent();
       
       // Validate URL first

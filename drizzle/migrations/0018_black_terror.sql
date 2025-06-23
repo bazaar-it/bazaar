@@ -1,1 +1,0 @@
-ALTER TABLE "bazaar-vid_scene" ADD COLUMN "layout_json" text;

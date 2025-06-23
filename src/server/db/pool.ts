@@ -1,13 +1,33 @@
 // src/server/db/pool.ts
 import { Pool } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
 import { env } from "~/env";
 import * as schema from "./schema";
 
 // Configure Neon to use WebSockets for connection pooling
 import { neonConfig } from '@neondatabase/serverless';
-neonConfig.webSocketConstructor = ws;
+
+// Only set up WebSocket in Node.js environment
+if (typeof window === 'undefined' && typeof global !== 'undefined') {
+  // Dynamically import ws only on server side
+  const setupWebSocket = async () => {
+    try {
+      const ws = await import('ws');
+      neonConfig.webSocketConstructor = ws.default || ws;
+      console.log('[DB Pool] WebSocket configured successfully');
+    } catch (error) {
+      console.error('[DB Pool] Failed to configure WebSocket:', error);
+      // Fall back to fetch-based pooling
+      neonConfig.poolQueryViaFetch = true;
+    }
+  };
+  
+  // Execute the setup
+  setupWebSocket();
+} else {
+  // Use fetch-based pooling in non-Node environments
+  neonConfig.poolQueryViaFetch = true;
+}
 
 // Global pool instance for connection reuse
 let globalPool: Pool | undefined;
@@ -28,10 +48,35 @@ function getPool(): Pool {
       connectionTimeoutMillis: 10000, // Timeout for new connections
     });
 
-    // Log pool events in development
+    // Log pool events for monitoring
+    let connectCount = 0;
+    let queryCount = 0;
+    
+    globalPool.on('connect', () => {
+      connectCount++;
+      console.log(`[DB Pool] New connection established (#${connectCount})`);
+    });
+    
+    globalPool.on('remove', () => {
+      console.log('[DB Pool] Connection removed from pool');
+    });
+    
+    // Log pool stats periodically in development
     if (process.env.NODE_ENV === 'development') {
-      globalPool.on('connect', () => console.log('[DB Pool] New connection established'));
-      globalPool.on('remove', () => console.log('[DB Pool] Connection removed from pool'));
+      setInterval(() => {
+        if (queryCount > 0) {
+          console.log(`[DB Pool Stats] Connections: ${connectCount}, Queries: ${queryCount}, Avg queries/connection: ${(queryCount / connectCount).toFixed(1)}`);
+        }
+      }, 30000); // Every 30 seconds
+    }
+    
+    // Monkey-patch to count queries (development only)
+    if (process.env.NODE_ENV === 'development') {
+      const originalQuery = globalPool.query.bind(globalPool);
+      globalPool.query = function(...args: any[]) {
+        queryCount++;
+        return originalQuery(...args);
+      };
     }
   }
   return globalPool;

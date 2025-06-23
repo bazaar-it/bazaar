@@ -37,34 +37,25 @@ export async function GET(request: NextRequest) {
   // Start the async work
   (async () => {
     try {
-      // 1. Create the assistant message in the database with pending status
-      const assistantMessage = await messageService.createMessage({
+      // 1. Create the user message FIRST to ensure correct sequence order
+      const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
+      const userMsg = await messageService.createMessage({
         projectId,
-        content: "Generating code...",
-        role: "assistant",
-        status: "pending",
+        content: userMessage,
+        role: "user",
+        imageUrls: parsedImageUrls,
       });
 
-      if (!assistantMessage) {
-        throw new Error('Failed to create assistant message');
+      if (!userMsg) {
+        throw new Error('Failed to create user message');
       }
       
-      // 2. Send the message to client with the real database ID
+      // 2. Just send the user data back - no assistant message yet
       await writer.write(encoder.encode(formatSSE({
-        type: 'message',
-        id: assistantMessage.id,
-        content: assistantMessage.content,
-        status: assistantMessage.status,
-      })));
-
-      // 3. Keep connection open - don't send complete yet
-      // The mutation will update this message with the real content
-      
-      // 4. Send complete event after a small delay
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await writer.write(encoder.encode(formatSSE({
-        type: 'complete',
-        id: assistantMessage.id,
+        type: 'ready',
+        userMessageId: userMsg.id,
+        userMessage: userMessage,
+        imageUrls: parsedImageUrls
       })));
 
     } catch (error) {

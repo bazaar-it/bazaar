@@ -1,63 +1,64 @@
 // src/server/db/index.ts
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { neon, neonConfig } from "@neondatabase/serverless";
-
 import { env } from "~/env";
 import * as schema from "./schema";
 
 // Recommended by Neon for Drizzle to cache connection details.
 neonConfig.fetchConnectionCache = true;
 
-// Augment the NodeJS global type for HMR-proofing in development
-declare global {
-  // eslint-disable-next-line no-var
-  var __drizzleNeonClient__: ReturnType<typeof drizzleNeon<typeof schema>> | undefined;
-}
+// Try to use pooling if available, otherwise fall back to HTTP
+let db: ReturnType<typeof drizzleNeon<typeof schema>>;
 
-const createDbConnection = () => {
-  // console.log("Creating new Neon database connection instance"); 
+try {
+  // Only try pooling on server-side
+  if (typeof window === 'undefined') {
+    // Try to require the server-only pool module
+    const poolModule = require('./pool-server');
+    db = poolModule.getServerPooledDb();
+    console.log("[DB] ✅ Using WebSocket-based connection pooling");
+  } else {
+    throw new Error("Client-side execution");
+  }
+} catch (error) {
+  // Fallback to HTTP connection
+  console.log("[DB] Using HTTP-based connection (pooling not available)");
   const sql = neon(env.DATABASE_URL, {
     fetchOptions: {
       keepalive: true,
-      timeout: 30000, // 30 seconds (increased from 10)
+      timeout: 30000,
+    },
+  });
+  db = drizzleNeon(sql, { schema });
+}
+
+export { db };
+
+// Keep the old HTTP-based connection as a fallback
+// Can be used if WebSocket connections fail in certain environments
+const createHttpConnection = () => {
+  console.log("[DB] Creating HTTP-based fallback connection");
+  const sql = neon(env.DATABASE_URL, {
+    fetchOptions: {
+      keepalive: true,
+      timeout: 30000, // 30 seconds
     },
   });
   return drizzleNeon(sql, { schema });
 };
 
-const createDummyDbConnection = () => {
-  // console.warn("Falling back to dummy Neon database connection instance"); 
-  const dummySql = neon("postgresql://user:password@localhost:5432/dummy");
-  return drizzleNeon(dummySql, { schema });
-};
-
-let dbConnectionInstance: ReturnType<typeof drizzleNeon<typeof schema>>;
-
-if (process.env.NODE_ENV === "production") {
+// Export the HTTP client as a fallback option
+// Usage: import { httpDb } from "~/server/db" (only if needed)
+export const httpDb = (() => {
   try {
-    console.log("Initializing Neon database connection for PRODUCTION");
-    dbConnectionInstance = createDbConnection();
+    return createHttpConnection();
   } catch (error) {
-    console.error("Failed to initialize database connection for PRODUCTION:", error);
-    dbConnectionInstance = createDummyDbConnection();
+    console.error("[DB] Failed to create HTTP fallback connection:", error);
+    // Return a dummy connection that will fail on use
+    const dummySql = neon("postgresql://user:password@localhost:5432/dummy");
+    return drizzleNeon(dummySql, { schema });
   }
-} else {
-  // Development: cache the connection on the global object to reuse across HMR reloads.
-  if (!global.__drizzleNeonClient__) {
-    console.log("Initializing Neon database connection for DEVELOPMENT (new global instance)");
-    try {
-      global.__drizzleNeonClient__ = createDbConnection();
-    } catch (error) {
-      console.error("Failed to initialize globally cached database connection for DEVELOPMENT:", error);
-      global.__drizzleNeonClient__ = createDummyDbConnection();
-    }
-  } else {
-    console.log("Reusing existing Neon database connection for DEVELOPMENT from global cache");
-  }
-  dbConnectionInstance = global.__drizzleNeonClient__;
-}
-
-export const db = dbConnectionInstance;
+})();
 
 /**
  * Execute a database operation with retry logic for transient connection issues
