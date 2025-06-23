@@ -161,10 +161,10 @@ export default function HomePage() {
         <div className="w-full text-center">
           <button
             onClick={handleTryForFree}
-            disabled={!createProjectMutation || createProjectMutation?.isPending}
+            disabled={createProjectMutation?.isPending}
             className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
           >
-            {createProjectMutation?.isPending ? "Creating..." : "Try for Free"}
+            {createProjectMutation?.isPending ? "Creating..." : "Try for $0.00"}
           </button>
           <p className="text-center text-gray-500 text-sm mt-3">
             No credit card required • Start creating in seconds
@@ -319,65 +319,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      <style jsx global>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes pop-in {
-          0% {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          50% {
-            transform: scale(1.02);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.6s ease-out;
-        }
-        
-        .animate-slide-up {
-          animation: slide-up 0.6s ease-out;
-        }
-        
-        .animate-fade-in-up {
-          opacity: 0;
-          animation: fade-in-up 0.5s ease-out forwards;
-        }
-        
-        .animate-pop-in {
-          animation: pop-in 0.4s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
