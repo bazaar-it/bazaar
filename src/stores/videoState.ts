@@ -722,6 +722,11 @@ export const useVideoState = create<VideoState>((set, get) => ({
       
       console.log('[VideoState.deleteScene] ✅ Scene deleted successfully - all panels should refresh now');
       
+      // Dispatch event to clean up any error banners for this scene
+      window.dispatchEvent(new CustomEvent('scene-deleted', {
+        detail: { sceneId }
+      }));
+      
       // Generate new refresh token (same as replace method)
       const newRefreshToken = Date.now().toString();
       

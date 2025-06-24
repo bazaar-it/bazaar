@@ -90,6 +90,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
     addUserMessage(projectId, fixPrompt);
     
+    // Mark this scene as being fixed
+    setFixingScenes(prev => new Set(prev).add(sceneId));
+    
     console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
     
     try {
@@ -159,8 +162,20 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         next.delete(sceneId);
         return next;
       });
+      
+      // Remove from fixing set after a delay to allow preview to refresh
+      setTimeout(() => {
+        setFixingScenes(prev => {
+          const next = new Set(prev);
+          next.delete(sceneId);
+          return next;
+        });
+      }, 2000); // 2 second delay to ensure preview has refreshed
     }
   }, [sceneErrors, scenes, projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, addUserMessage, addAssistantMessage, updateMessage]);
+
+  // Track scenes that are currently being fixed to avoid re-adding errors
+  const [fixingScenes, setFixingScenes] = useState<Set<string>>(new Set());
 
   // Listen for preview panel errors
   useEffect(() => {
@@ -173,6 +188,12 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         errorType: typeof error,
         fullEvent: event.detail 
       });
+      
+      // Don't track errors for scenes that are currently being fixed
+      if (fixingScenes.has(sceneId)) {
+        console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Ignoring error for scene being fixed:', sceneId);
+        return;
+      }
       
       // Track scene error with Map
       setSceneErrors(prev => {
@@ -227,18 +248,40 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       });
     };
 
+    // Listen for successful scene fixes
+    const handleSceneFixed = (event: CustomEvent) => {
+      const { sceneId } = event.detail;
+      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Scene fixed successfully, clearing error:', sceneId);
+      
+      setSceneErrors(prev => {
+        if (!prev.has(sceneId)) return prev;
+        const next = new Map(prev);
+        next.delete(sceneId);
+        return next;
+      });
+      
+      // Also remove from fixing set
+      setFixingScenes(prev => {
+        const next = new Set(prev);
+        next.delete(sceneId);
+        return next;
+      });
+    };
+
     console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Setting up preview-scene-error listener');
     window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
     window.addEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
     window.addEventListener('scene-deleted', handleSceneDeleted as EventListener);
+    window.addEventListener('scene-fixed', handleSceneFixed as EventListener);
     
     return () => {
       console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Removing preview-scene-error listener');
       window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
       window.removeEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
       window.removeEventListener('scene-deleted', handleSceneDeleted as EventListener);
+      window.removeEventListener('scene-fixed', handleSceneFixed as EventListener);
     };
-  }, [handleAutoFix, scenes]);
+  }, [handleAutoFix, scenes, fixingScenes]);
 
   return {
     sceneErrors,

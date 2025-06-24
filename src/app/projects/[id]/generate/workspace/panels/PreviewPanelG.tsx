@@ -93,6 +93,16 @@ export default function TestComponent() {
       });
 
       console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) compiled successfully`);
+      
+      // 🚨 NEW: Dispatch success event to clear any existing errors
+      const successEvent = new CustomEvent('scene-fixed', {
+        detail: {
+          sceneId,
+          sceneName
+        }
+      });
+      window.dispatchEvent(successEvent);
+      
       return {
         isValid: true,
         compiledCode: cleanSceneCode,
