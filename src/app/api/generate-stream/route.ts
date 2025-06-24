@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const projectId = searchParams.get('projectId');
   const userMessage = searchParams.get('message');
   const imageUrls = searchParams.get('imageUrls');
+  const videoUrls = searchParams.get('videoUrls');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -39,11 +40,16 @@ export async function GET(request: NextRequest) {
     try {
       // 1. Create the user message FIRST to ensure correct sequence order
       const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
+      const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
+      
+      // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
+      const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
+      
       const userMsg = await messageService.createMessage({
         projectId,
         content: userMessage,
         role: "user",
-        imageUrls: parsedImageUrls,
+        imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
       });
 
       if (!userMsg) {
@@ -55,7 +61,8 @@ export async function GET(request: NextRequest) {
         type: 'ready',
         userMessageId: userMsg.id,
         userMessage: userMessage,
-        imageUrls: parsedImageUrls
+        imageUrls: parsedImageUrls,
+        videoUrls: parsedVideoUrls
       })));
 
     } catch (error) {

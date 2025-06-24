@@ -23,6 +23,7 @@ export const generateScene = protectedProcedure
     userMessage: z.string(),
     userContext: z.object({
       imageUrls: z.array(z.string()).optional(),
+      videoUrls: z.array(z.string()).optional(),
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
   }))
@@ -116,6 +117,11 @@ export const generateScene = protectedProcedure
 
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
+      console.log(`[${response.getRequestId()}] User context:`, {
+        hasImageUrls: !!userContext?.imageUrls?.length,
+        hasVideoUrls: !!userContext?.videoUrls?.length,
+        videoUrls: userContext?.videoUrls,
+      });
       const orchestratorResponse = await orchestrator.processUserInput({
         prompt: userMessage,
         projectId,
@@ -124,6 +130,7 @@ export const generateScene = protectedProcedure
         chatHistory,
         userContext: {
           imageUrls: userContext?.imageUrls,
+          videoUrls: userContext?.videoUrls,
         },
       });
 

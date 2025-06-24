@@ -193,13 +193,21 @@ export default function ChatPanelG({
 
     const trimmedMessage = message.trim();
     
-    // 🚨 NEW: Get image URLs from uploaded images
+    // 🚨 NEW: Get image and video URLs from uploaded media
     const imageUrls = uploadedImages
-      .filter(img => img.status === 'uploaded' && img.url)
+      .filter(img => img.status === 'uploaded' && img.url && img.type !== 'video')
+      .map(img => img.url!);
+    
+    const videoUrls = uploadedImages
+      .filter(img => img.status === 'uploaded' && img.url && img.type === 'video')
       .map(img => img.url!);
     
     if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
+    }
+    
+    if (videoUrls.length > 0) {
+      console.log('[ChatPanelG] 🎥 Including videos in chat submission:', videoUrls);
     }
     
     // Show user message immediately
@@ -216,7 +224,7 @@ export default function ChatPanelG({
     }, 50);
     
     // Let SSE handle DB sync in background
-    generateSSE(trimmedMessage, imageUrls);
+    generateSSE(trimmedMessage, imageUrls, videoUrls);
   };
 
   // Handle keyboard events for textarea
@@ -402,7 +410,7 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [] } = data;
+        const { userMessage, imageUrls = [], videoUrls = [] } = data;
         
         try {
           const result = await generateSceneMutation.mutateAsync({
@@ -410,6 +418,7 @@ export default function ChatPanelG({
             userMessage,
             userContext: {
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+              videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
             },
             // Don't pass assistantMessageId - let mutation create it
           });
@@ -692,7 +701,7 @@ export default function ChatPanelG({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/quicktime,video/webm"
               multiple
               onChange={imageHandlers.handleFileSelect}
               className="hidden"

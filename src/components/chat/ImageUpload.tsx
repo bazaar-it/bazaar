@@ -10,6 +10,7 @@ export interface UploadedImage {
   status: 'uploading' | 'uploaded' | 'error';
   url?: string;
   error?: string;
+  type?: 'image' | 'video';
 }
 
 interface ImageUploadProps {
@@ -71,6 +72,7 @@ export function ImageUpload({
       id: nanoid(),
       file,
       status: 'uploading' as const,
+      type: file.type.startsWith('video/') ? 'video' : 'image'
     }));
 
     // Add new images to the list
@@ -80,12 +82,19 @@ export function ImageUpload({
     // Upload each image to R2
     for (const image of newImages) {
       try {
-        // Compress image before upload
-        const compressedFile = await compressImage(image.file);
-        console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${compressedFile.size} bytes`);
+        // Only compress images, not videos
+        const fileToUpload = image.type === 'video' 
+          ? image.file 
+          : await compressImage(image.file);
+        
+        if (image.type === 'image') {
+          console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
+        } else {
+          console.log(`[ImageUpload] 🎥 Video upload: ${image.file.name} (${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
+        }
         
         const formData = new FormData();
-        formData.append('file', compressedFile);
+        formData.append('file', fileToUpload);
         formData.append('projectId', projectId);
 
         const response = await fetch('/api/upload', {
@@ -141,11 +150,19 @@ export function ImageUpload({
             <XCircleIcon className="h-6 w-6 text-red-500" />
           )}
           {image.url && image.status === 'uploaded' && (
-            <img 
-              src={image.url} 
-              alt="Upload preview" 
-              className="absolute inset-0 w-full h-full object-cover rounded"
-            />
+            image.type === 'video' ? (
+              <video 
+                src={image.url} 
+                className="absolute inset-0 w-full h-full object-cover rounded"
+                muted
+              />
+            ) : (
+              <img 
+                src={image.url} 
+                alt="Upload preview" 
+                className="absolute inset-0 w-full h-full object-cover rounded"
+              />
+            )
           )}
           {/* Delete button - always visible for uploaded images, hidden for uploading */}
           {image.status !== 'uploading' && (
@@ -215,6 +232,7 @@ export const createImageUploadHandlers = (
       id: nanoid(),
       file,
       status: 'uploading' as const,
+      type: file.type.startsWith('video/') ? 'video' : 'image'
     }));
 
     setUploadedImages([...uploadedImages, ...newImages]);
@@ -222,12 +240,19 @@ export const createImageUploadHandlers = (
     // Upload each image to R2
     for (const image of newImages) {
       try {
-        // Compress image before upload
-        const compressedFile = await compressImage(image.file);
-        console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${compressedFile.size} bytes`);
+        // Only compress images, not videos
+        const fileToUpload = image.type === 'video' 
+          ? image.file 
+          : await compressImage(image.file);
+        
+        if (image.type === 'image') {
+          console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
+        } else {
+          console.log(`[ImageUpload] 🎥 Video upload: ${image.file.name} (${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
+        }
         
         const formData = new FormData();
-        formData.append('file', compressedFile);
+        formData.append('file', fileToUpload);
         formData.append('projectId', projectId);
 
         const response = await fetch('/api/upload', {
@@ -280,7 +305,7 @@ export const createImageUploadHandlers = (
     e.preventDefault();
     
     const files = Array.from(e.dataTransfer.files).filter(file => 
-      file.type.startsWith('image/')
+      file.type.startsWith('image/') || file.type.startsWith('video/')
     );
     
     if (files.length > 0) {

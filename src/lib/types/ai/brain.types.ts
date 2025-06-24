@@ -42,6 +42,7 @@ export interface BrainDecision {
     targetDuration?: number; // For trim operations
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
+    videoUrls?: string[];
     visionAnalysis?: any;
     errorDetails?: string;
     webContext?: {
@@ -127,13 +128,19 @@ export interface ContextPacket {
     content: string;
   }>;
   
-  // Image context from uploads
+  // Media context from uploads (images and videos)
   imageContext: {
     currentImages?: string[];
+    currentVideos?: string[];
     recentImagesFromChat?: Array<{
       position: number;
       userPrompt: string;
       imageUrls: string[];
+    }>;
+    recentVideosFromChat?: Array<{
+      position: number;
+      userPrompt: string;
+      videoUrls: string[];
     }>;
   };
   

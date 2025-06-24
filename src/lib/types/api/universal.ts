@@ -50,10 +50,11 @@ export type Operation =
   | 'brain.decide'
   | 'project.read'
   | 'project.update'
-  | 'user.authenticate';
+  | 'user.authenticate'
+  | 'clarification';
 
 // All entities in the system
-export type Entity = 'scene' | 'project' | 'user' | 'decision';
+export type Entity = 'scene' | 'project' | 'user' | 'decision' | 'message';
 
 // Standardized error codes
 export enum ErrorCode {

@@ -104,27 +104,40 @@ export class ContextBuilder {
   }
 
   private async buildImageContext(input: OrchestrationInput) {
-    // Simple: Check current request for images
+    // Simple: Check current request for images and videos
     const currentImages = input.userContext?.imageUrls as string[] || [];
+    const currentVideos = input.userContext?.videoUrls as string[] || [];
     
     // Extract images from recent chat history  
     const recentImagesFromChat: any[] = [];
+    const recentVideosFromChat: any[] = [];
     const recentChat = input.chatHistory?.slice(-10) || [];
     
     for (let i = 0; i < recentChat.length; i++) {
       const msg = recentChat[i];
-      if (msg && msg.role === 'user' && (msg as any).imageUrls?.length > 0) {
-        recentImagesFromChat.push({
-          position: i + 1,
-          userPrompt: msg.content,
-          imageUrls: (msg as any).imageUrls
-        });
+      if (msg && msg.role === 'user') {
+        if ((msg as any).imageUrls?.length > 0) {
+          recentImagesFromChat.push({
+            position: i + 1,
+            userPrompt: msg.content,
+            imageUrls: (msg as any).imageUrls
+          });
+        }
+        if ((msg as any).videoUrls?.length > 0) {
+          recentVideosFromChat.push({
+            position: i + 1,
+            userPrompt: msg.content,
+            videoUrls: (msg as any).videoUrls
+          });
+        }
       }
     }
 
     return { 
       currentImages,
-      recentImagesFromChat
+      currentVideos,
+      recentImagesFromChat,
+      recentVideosFromChat
     };
   }
 

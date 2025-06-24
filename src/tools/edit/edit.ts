@@ -70,6 +70,11 @@ BRAND MATCHING INSTRUCTIONS:
         context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
       }
       
+      if (input.videoUrls?.length) {
+        context += `\n\nVIDEO CONTEXT: User provided ${input.videoUrls.length} video(s)`;
+        context += `\nVIDEO URLS: ${input.videoUrls.map((url, i) => `\nVideo ${i + 1}: ${url}`).join('')}`;
+      }
+      
       if (input.visionAnalysis) {
         context += `\n\nVISION ANALYSIS:\n${JSON.stringify(input.visionAnalysis, null, 2)}`;
       }
@@ -141,6 +146,7 @@ Please edit the code according to the user request. Return the complete modified
         userPrompt: input.userPrompt,
         hasError: !!input.errorDetails,
         hasImages: !!input.imageUrls?.length,
+        hasVideos: !!input.videoUrls?.length,
         hasWebContext: !!input.webContext,
         totalImages: allImageUrls.length,
         codeLength: input.tsxCode.length,
