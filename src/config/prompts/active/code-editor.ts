@@ -27,8 +27,10 @@ export const CODE_EDITOR = {
 - window.React - React library (if needed for hooks, etc.)
 - window.HeroiconsSolid / window.HeroiconsOutline - Icon components
 - window.LucideIcons - Additional icon library
+- window.IconifyIcon - Iconify icon component (200,000+ icons)
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
+- window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 

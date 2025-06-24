@@ -6,6 +6,24 @@ import type * as HeroiconsOutline from '@heroicons/react/24/outline';
 import type * as RemotionShapes from '@remotion/shapes';
 import type * as LucideIcons from 'lucide-react';
 import type rough from 'roughjs';
+import type { Icon } from '@iconify/react';
+
+// Google Fonts types
+interface GoogleFontResult {
+  fontFamily: string;
+  fonts: Record<string, Record<string, Record<string, string>>>;
+  unicodeRanges: Record<string, string>;
+  waitUntilDone: () => Promise<void>;
+}
+
+interface RemotionGoogleFonts {
+  loadFont: (fontName: string) => GoogleFontResult;
+  Inter: () => GoogleFontResult;
+  Roboto: () => GoogleFontResult;
+  OpenSans: () => GoogleFontResult;
+  Poppins: () => GoogleFontResult;
+  Montserrat: () => GoogleFontResult;
+}
 
 declare global {
   interface Window {
@@ -16,6 +34,8 @@ declare global {
     RemotionShapes: typeof RemotionShapes;
     LucideIcons: typeof LucideIcons;
     Rough: typeof rough;
+    RemotionGoogleFonts: RemotionGoogleFonts;
+    IconifyIcon: typeof Icon;
     react?: typeof React;
     remotion?: typeof Remotion;
     __REMOTION_COMPONENT?: React.ComponentType<any>;
