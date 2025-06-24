@@ -5,15 +5,13 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import ChatPanelG from './panels/ChatPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
-import { CodePanelG } from './panels/CodePanelG';
-import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import type { InputProps } from '~/lib/types/video/input-props';
-import { MessageSquareIcon, LayoutTemplateIcon, FolderIcon, Code2Icon, ListIcon, MenuIcon, PlusIcon } from 'lucide-react';
+import { MessageSquareIcon, LayoutTemplateIcon, FolderIcon, PlusIcon } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { useRouter } from 'next/navigation';
 import { api } from '~/trpc/react';
 
-type MobilePanel = 'chat' | 'templates' | 'myprojects' | 'code' | 'storyboard' | 'menu';
+type MobilePanel = 'chat' | 'templates' | 'myprojects' | 'newproject';
 
 interface MobileWorkspaceLayoutProps {
   projectId: string;
@@ -30,7 +28,6 @@ export function MobileWorkspaceLayout({
 }: MobileWorkspaceLayoutProps) {
   const [activePanel, setActivePanel] = useState<MobilePanel>('chat');
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
-  const [showMenu, setShowMenu] = useState(false);
   const router = useRouter();
   
   // Setup mutation for creating a new project
@@ -57,11 +54,10 @@ export function MobileWorkspaceLayout({
   }, []);
 
   const handlePanelChange = (panel: MobilePanel) => {
-    if (panel === 'menu') {
-      setShowMenu(true);
+    if (panel === 'newproject') {
+      createProject.mutate();
     } else {
       setActivePanel(panel);
-      setShowMenu(false);
     }
   };
 
@@ -88,23 +84,6 @@ export function MobileWorkspaceLayout({
             currentProjectId={projectId} 
           />
         );
-      case 'code':
-        return (
-          <CodePanelG 
-            projectId={projectId} 
-            selectedSceneId={selectedSceneId} 
-            onClose={() => setActivePanel('chat')}
-            onSceneSelect={setSelectedSceneId}
-          />
-        );
-      case 'storyboard':
-        return (
-          <StoryboardPanelG 
-            projectId={projectId} 
-            selectedSceneId={selectedSceneId} 
-            onSceneSelect={setSelectedSceneId}
-          />
-        );
       default:
         return null;
     }
@@ -114,7 +93,7 @@ export function MobileWorkspaceLayout({
     { id: 'chat' as MobilePanel, label: 'Chat', icon: MessageSquareIcon },
     { id: 'templates' as MobilePanel, label: 'Templates', icon: LayoutTemplateIcon },
     { id: 'myprojects' as MobilePanel, label: 'Projects', icon: FolderIcon },
-    { id: 'menu' as MobilePanel, label: 'More', icon: MenuIcon },
+    { id: 'newproject' as MobilePanel, label: 'New', icon: PlusIcon },
   ];
 
   return (
@@ -135,6 +114,7 @@ export function MobileWorkspaceLayout({
           <button
             key={item.id}
             onClick={() => handlePanelChange(item.id)}
+            disabled={item.id === 'newproject' && createProject.isPending}
             className={cn(
               "flex-1 flex flex-col items-center justify-center py-2 px-1 transition-colors",
               activePanel === item.id
@@ -147,54 +127,6 @@ export function MobileWorkspaceLayout({
           </button>
         ))}
       </div>
-
-      {/* Slide-up Menu */}
-      {showMenu && (
-        <>
-          <div 
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setShowMenu(false)}
-          />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-xl z-50 transform transition-transform">
-            <div className="p-4">
-              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-4">More Options</h3>
-              <button
-                onClick={() => {
-                  setActivePanel('code');
-                  setShowMenu(false);
-                }}
-                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                <Code2Icon className="h-5 w-5 text-gray-600" />
-                <span>Code Editor</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActivePanel('storyboard');
-                  setShowMenu(false);
-                }}
-                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                <ListIcon className="h-5 w-5 text-gray-600" />
-                <span>Storyboard</span>
-              </button>
-              <div className="my-2 border-t border-gray-200" />
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  createProject.mutate();
-                }}
-                disabled={createProject.isPending}
-                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                <PlusIcon className="h-5 w-5 text-gray-600" />
-                <span>{createProject.isPending ? "Creating..." : "New Project"}</span>
-              </button>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }

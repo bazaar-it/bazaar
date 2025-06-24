@@ -126,6 +126,8 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
           <MobileAppHeader
             projectTitle={title}
             projectId={projectId}
+            onRename={handleRename}
+            isRenaming={renameMutation.isPending}
           />
         </div>
         
