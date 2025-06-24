@@ -68,6 +68,7 @@ export const bazaarVidProjectRelations = relations(bazaarVidProject, ({one, many
 
 export const bazaarVidMessageRelations = relations(bazaarVidMessage, ({one, many}) => ({
 	bazaarVidScenePlans: many(bazaarVidScenePlan),
+	bazaarVidSceneIterations: many(bazaarVidSceneIteration),
 	bazaarVidCustomComponentJobs: many(bazaarVidCustomComponentJob),
 	bazaarVidProject: one(bazaarVidProject, {
 		fields: [bazaarVidMessage.projectId],
@@ -112,6 +113,10 @@ export const bazaarVidSceneIterationRelations = relations(bazaarVidSceneIteratio
 	bazaarVidProject: one(bazaarVidProject, {
 		fields: [bazaarVidSceneIteration.projectId],
 		references: [bazaarVidProject.id]
+	}),
+	bazaarVidMessage: one(bazaarVidMessage, {
+		fields: [bazaarVidSceneIteration.messageId],
+		references: [bazaarVidMessage.id]
 	}),
 }));
 

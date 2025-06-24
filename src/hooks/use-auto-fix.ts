@@ -90,10 +90,6 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
     addUserMessage(projectId, fixPrompt);
     
-    // ✅ IMMEDIATE: Add assistant loading message
-    const assistantMessageId = `assistant-fix-${Date.now()}`;
-    addAssistantMessage(projectId, assistantMessageId, '🔧 Analyzing and fixing scene error...');
-    
     console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
     
     try {
@@ -107,6 +103,24 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
 
       // ✅ CRITICAL: Force complete state refresh after successful fix
       const responseData = result as any;
+      
+      // Get the real assistant message ID from the response
+      const realAssistantMessageId = responseData.assistantMessageId;
+      
+      if (realAssistantMessageId) {
+        // Add the real assistant message to VideoState (same as ChatPanelG)
+        const aiResponse = responseData.context?.chatResponse || 
+                          responseData.chatResponse || 
+                          responseData.message || 
+                          '✅ Scene error fixed successfully!';
+        
+        // Add the real assistant message to VideoState
+        addAssistantMessage(projectId, realAssistantMessageId, aiResponse);
+        updateMessage(projectId, realAssistantMessageId, {
+          status: 'success'
+        });
+      }
+      
       if (responseData.data || responseData.meta?.success) {
         console.log('[useAutoFix] 🔧 Auto-fix successful, force refreshing all state...');
         
@@ -129,18 +143,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         }
       }
       
-      // Update assistant message with success
-      updateMessage(projectId, assistantMessageId, {
-        content: `✅ Scene error fixed successfully!`,
-        status: 'success'
-      });
-      
     } catch (error) {
       console.error('Auto-fix failed:', error);
       
-      // Update assistant message with error
-      updateMessage(projectId, assistantMessageId, {
-        content: `Auto-fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      // Create error message
+      const errorMessageId = `assistant-error-${Date.now()}`;
+      addAssistantMessage(projectId, errorMessageId, `Auto-fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      updateMessage(projectId, errorMessageId, {
         status: 'error'
       });
     } finally {
@@ -177,18 +186,6 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       });
 
       console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Error state updated for scene:', sceneId);
-      
-      // Also show a toast notification for immediate feedback
-      toast.error(`Scene "${sceneName}" has an error - AutoFix available!`, {
-        duration: 5000,
-        action: {
-          label: "Auto-Fix",
-          onClick: () => {
-            console.log('[useAutoFix] 🔧 AUTOFIX: Toast action clicked for scene:', sceneId);
-            handleAutoFix(sceneId);
-          }
-        }
-      });
     };
 
     // Also listen for direct autofix triggers from error boundaries

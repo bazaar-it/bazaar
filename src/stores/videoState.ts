@@ -114,6 +114,9 @@ interface VideoState {
   
   // Get selected scene
   getSelectedScene: (projectId: string) => InputProps['scenes'][number] | null;
+  
+  // Remove a specific message by ID
+  removeMessage: (projectId: string, messageId: string) => void;
 }
 
 export const useVideoState = create<VideoState>((set, get) => ({
@@ -371,8 +374,17 @@ export const useVideoState = create<VideoState>((set, get) => ({
     set((state) => {
       if (!state.projects[projectId]) return state;
       
-      console.log('[videoState.syncDbMessages] Called. ProjectId:', projectId, 'Incoming dbMessages:', JSON.stringify(dbMessages).substring(0,300) + (JSON.stringify(dbMessages).length > 300 ? '...' : ''));
-      console.log('[videoState.syncDbMessages] Current chatHistory before sync (projectId:', projectId, '):', JSON.stringify(state.projects[projectId]?.chatHistory).substring(0,300) + (JSON.stringify(state.projects[projectId]?.chatHistory).length > 300 ? '...' : ''));
+      console.log('[videoState.syncDbMessages] Called. ProjectId:', projectId, 'Incoming dbMessages count:', dbMessages.length);
+      
+      // Log sequence numbers to debug ordering
+      console.log('[videoState.syncDbMessages] DB message sequences:', dbMessages.map(m => ({
+        id: m.id.substring(0, 8),
+        role: m.role,
+        seq: m.sequence,
+        content: m.content.substring(0, 30) + '...'
+      })));
+      
+      console.log('[videoState.syncDbMessages] Current chatHistory before sync:', state.projects[projectId]?.chatHistory.length || 0, 'messages');
       const activeStreamingMessageId = state.projects[projectId].activeStreamingMessageId;
 
       // Convert DB messages to ChatMessage format
@@ -424,7 +436,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       });
       
-      // Check for any client-only messages that aren't duplicates
+      // Only keep client messages that don't exist in DB (rare edge cases)
       currentClientMessages.forEach(clientMsg => {
         // Skip if this message is a duplicate of any DB message
         const isDuplicate = deduplicatedHistory.some(existingMsg => 
@@ -432,7 +444,6 @@ export const useVideoState = create<VideoState>((set, get) => ({
         );
         
         if (!isDuplicate) {
-          // This is a new message not yet in DB (e.g., still being processed)
           const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}`;
           if (!processedContents.has(contentKey)) {
             deduplicatedHistory.push(clientMsg);
@@ -443,15 +454,40 @@ export const useVideoState = create<VideoState>((set, get) => ({
       
       // Sort messages by sequence (if available) or timestamp to maintain chronological order
       deduplicatedHistory.sort((a, b) => {
-        // If both have sequence numbers, use those
+        // Primary sort by sequence if both have it
         if (a.sequence !== undefined && b.sequence !== undefined) {
           return a.sequence - b.sequence;
         }
-        // Otherwise fall back to timestamp
-        return a.timestamp - b.timestamp;
+        
+        // If only one has sequence, prioritize the one with sequence
+        if (a.sequence !== undefined && b.sequence === undefined) return -1;
+        if (a.sequence === undefined && b.sequence !== undefined) return 1;
+        
+        // Secondary sort by timestamp
+        if (a.timestamp !== b.timestamp) {
+          return a.timestamp - b.timestamp;
+        }
+        
+        // Tertiary sort by role (user messages before assistant)
+        // This helps when messages have the same timestamp
+        if (a.isUser !== b.isUser) {
+          return a.isUser ? -1 : 1;
+        }
+        
+        // Finally, sort by ID to ensure consistent ordering
+        return a.id.localeCompare(b.id);
       });
       
       console.log('[videoState.syncDbMessages] Deduplication complete. Client:', currentClientMessages.length, 'DB:', syncedMessages.length, 'Final:', deduplicatedHistory.length);
+      
+      // Log final sorted order to debug
+      console.log('[videoState.syncDbMessages] Final sorted order:', deduplicatedHistory.map(m => ({
+        id: m.id.substring(0, 8),
+        isUser: m.isUser,
+        seq: m.sequence,
+        timestamp: new Date(m.timestamp).toISOString(),
+        content: m.message.substring(0, 30) + '...'
+      })));
       
       return {
         projects: {
@@ -929,6 +965,28 @@ export const useVideoState = create<VideoState>((set, get) => ({
           [projectId]: {
             ...project,
             chatHistory: [...project.chatHistory, newMessage]
+          }
+        }
+      };
+    }),
+    
+  // Remove a specific message by ID
+  removeMessage: (projectId: string, messageId: string) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      console.log('[VideoState] Removing message:', messageId);
+      
+      const updatedChatHistory = project.chatHistory.filter(msg => msg.id !== messageId);
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            chatHistory: updatedChatHistory
           }
         }
       };

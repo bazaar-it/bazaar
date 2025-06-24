@@ -1,1 +1,0 @@
-ALTER TABLE "bazaar-vid_feedback" ADD COLUMN "temp_field" text;

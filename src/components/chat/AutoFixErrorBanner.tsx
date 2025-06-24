@@ -77,9 +77,6 @@ export function AutoFixErrorBanner({
               </p>
               <p className="text-xs text-gray-500 mb-3">— Reid Hoffman</p>
               
-              <p className="text-xs text-gray-600 leading-relaxed">
-                If you're one of those few people who still knows how to code, you can open the code panel and fix it yourself, or else send it to the higher powers and hope for the best.
-              </p>
             </div>
             
             <div className="text-xs text-gray-500">

@@ -66,6 +66,10 @@ const config = {
         http: false,
         https: false,
         child_process: false,
+        // Add ws as false to prevent client-side bundling
+        ws: false,
+        net: false,
+        tls: false,
       });
     }
 

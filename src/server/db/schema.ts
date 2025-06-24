@@ -75,7 +75,7 @@ export const verificationTokens = createTable(
   (d) => ({
     identifier: d.varchar({ length: 255 }).notNull(),
     token: d.varchar({ length: 255 }).notNull(),
-    expires: d.timestamp({ mode: "date", withTimezone: true }).notNull(),
+    expires: d.timestamp({ mode: "string", withTimezone: true }).notNull(),
   }),
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
 );
@@ -232,6 +232,7 @@ export const sceneIterations = createTable(
     userEditedAgain: d.boolean("user_edited_again").default(false), // Did user edit this scene again within 5 minutes?
     userSatisfactionScore: d.integer("user_satisfaction_score"), // 1-5 rating (future feature)
     sessionId: d.varchar("session_id", { length: 255 }), // Track user sessions
+    changeSource: d.varchar({ length: 50 }).default('llm').notNull(), // Source of the change (llm, user, etc.)
     
     // Link to message that triggered this iteration
     messageId: d.uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
@@ -326,16 +327,10 @@ export const customComponentJobs = createTable(
       .default(sql`CURRENT_TIMESTAMP`)
       .$onUpdate(() => new Date()),
     
-    // KEEP BOTH VERSIONS OF COLUMNS (camelCase and snake_case)
-    // CamelCase original columns - need to preserve these
-    originalTsxCode: d.text(), // Camel case version
-    lastFixAttempt: d.timestamp({ withTimezone: true }), // Camel case version
-    fixIssues: d.text(), // Camel case version
-    
-    // Snake_case new columns
-    original_tsx_code: d.text('original_tsx_code'), // Snake case version
-    last_fix_attempt: d.timestamp('last_fix_attempt', { withTimezone: true }), // Snake case version
-    fix_issues: d.text('fix_issues') // Snake case version
+    // Original columns (using camelCase as in production)
+    originalTsxCode: d.text(), // Original TSX code before fix attempts
+    lastFixAttempt: d.timestamp({ withTimezone: true }), // Timestamp of last fix attempt
+    fixIssues: d.text() // Issues encountered during fix attempts
   }),
   (t) => [
     index("custom_component_job_project_idx").on(t.projectId),
@@ -436,6 +431,7 @@ export const animationDesignBriefs = createTable(
     componentJobId: d
       .uuid()
       .references(() => customComponentJobs.id), // Optional link to component job
+    designBrief: d.jsonb().notNull(), // Design brief data
     llmModel: d.varchar({ length: 100 }).notNull(), // Model used to generate the brief
     status: d.varchar({ length: 50 })
       .default("pending")
@@ -533,10 +529,10 @@ export const agentMessages = createTable(
     correlationId: d.text("correlation_id"), // Optional ID to correlate messages
     status: d.text("status").default('pending').notNull(), // e.g., pending, processed, failed
     createdAt: d
-      .timestamp({ withTimezone: true, mode: 'date' })
+      .timestamp({ withTimezone: true, mode: 'string' })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
-    processedAt: d.timestamp({ withTimezone: true, mode: 'date' })
+    processedAt: d.timestamp({ withTimezone: true, mode: 'string' })
   }),
   (t) => [
     index("agent_message_correlation_id_idx").on(t.correlationId),

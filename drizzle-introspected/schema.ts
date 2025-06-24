@@ -178,10 +178,13 @@ export const bazaarVidSceneIteration = pgTable("bazaar-vid_scene_iteration", {
 	userSatisfactionScore: integer("user_satisfaction_score"),
 	sessionId: varchar("session_id", { length: 255 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	changeSource: varchar({ length: 50 }).default('llm').notNull(),
+	messageId: uuid("message_id"),
 }, (table) => [
+	index("scene_iteration_message_idx").using("btree", table.messageId.asc().nullsLast().op("uuid_ops")),
 	index("scene_iteration_operation_idx").using("btree", table.operationType.asc().nullsLast().op("text_ops"), table.editComplexity.asc().nullsLast().op("text_ops")),
 	index("scene_iteration_project_idx").using("btree", table.projectId.asc().nullsLast().op("uuid_ops")),
-	index("scene_iteration_satisfaction_idx").using("btree", table.userEditedAgain.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("scene_iteration_satisfaction_idx").using("btree", table.userEditedAgain.asc().nullsLast().op("bool_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	index("scene_iteration_scene_idx").using("btree", table.sceneId.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.sceneId],
@@ -193,6 +196,11 @@ export const bazaarVidSceneIteration = pgTable("bazaar-vid_scene_iteration", {
 			foreignColumns: [bazaarVidProject.id],
 			name: "bazaar-vid_scene_iteration_project_id_bazaar-vid_project_id_fk"
 		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.messageId],
+			foreignColumns: [bazaarVidMessage.id],
+			name: "bazaar-vid_scene_iteration_message_id_fkey"
+		}).onDelete("set null"),
 ]);
 
 export const bazaarVidComponentTestCase = pgTable("bazaar-vid_component_test_case", {
@@ -337,6 +345,10 @@ export const bazaarVidScene = pgTable("bazaar-vid_scene", {
 	publishedAt: timestamp({ withTimezone: true, mode: 'string' }),
 	duration: integer().default(150).notNull(),
 	layoutJson: text("layout_json"),
+	slug: varchar({ length: 255 }),
+	dominantColors: jsonb(),
+	firstH1Text: text(),
+	lastFocused: boolean().default(false),
 }, (table) => [
 	index("scene_order_idx").using("btree", table.projectId.asc().nullsLast().op("uuid_ops"), table.order.asc().nullsLast().op("uuid_ops")),
 	index("scene_project_idx").using("btree", table.projectId.asc().nullsLast().op("uuid_ops")),
@@ -439,7 +451,10 @@ export const bazaarVidMessage = pgTable("bazaar-vid_message", {
 	originalTsxCode: text(),
 	lastFixAttempt: timestamp({ withTimezone: true, mode: 'string' }),
 	fixIssues: text(),
+	imageUrls: jsonb("image_urls"),
+	sequence: integer().default(0),
 }, (table) => [
+	index("idx_message_project_sequence").using("btree", table.projectId.asc().nullsLast().op("int4_ops"), table.sequence.asc().nullsLast().op("uuid_ops")),
 	index("message_project_idx").using("btree", table.projectId.asc().nullsLast().op("uuid_ops")),
 	index("message_status_idx").using("btree", table.status.asc().nullsLast().op("text_ops")),
 	foreignKey({

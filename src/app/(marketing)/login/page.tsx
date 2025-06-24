@@ -13,7 +13,7 @@ interface LoginPageProps {
 function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
   const searchParams = useSearchParams();
   // Check for redirect parameter, then prop, default to /projects
-  const redirectTo = searchParams.get('redirect') || redirectToProp || '/projects';
+  const redirectTo = searchParams.get('redirect') || redirectToProp || '/projects/new';
   
   const handleGitHubLogin = () => {
     console.log('[LoginPage] GitHub login clicked, redirecting to:', redirectTo);

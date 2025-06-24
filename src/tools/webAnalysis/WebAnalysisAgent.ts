@@ -37,8 +37,8 @@ export class WebAnalysisAgent {
       // Navigate with timeout
       console.log('📍 Navigating to website...');
       await page.goto(url, { 
-        waitUntil: 'networkidle',
-        timeout: 10000 
+        waitUntil: 'domcontentloaded',
+        timeout: 15000 
       });
       
       // Desktop screenshot

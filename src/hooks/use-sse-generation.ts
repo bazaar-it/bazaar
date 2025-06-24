@@ -3,7 +3,7 @@ import { useVideoState } from '~/stores/videoState';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (messageId: string) => void;
+  onMessageCreated?: (messageId: string | undefined, data?: { userMessage?: string; imageUrls?: string[] }) => void;
   onComplete?: (messageId: string) => void;
   onError?: (error: string) => void;
 }
@@ -42,33 +42,13 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
         const data = JSON.parse(event.data);
         
         switch (data.type) {
-          case 'message':
-            // Initial message from server with DB ID
-            currentMessageId = data.id;
-            addAssistantMessage(projectId, data.id, data.content);
-            // Call the callback so parent can trigger mutation
-            onMessageCreated?.(data.id);
-            break;
-            
-          case 'update':
-            // Update existing message content
-            if (currentMessageId) {
-              updateMessage(projectId, data.id, {
-                content: data.content,
-                status: data.status
-              });
-            }
-            break;
-            
-          case 'complete':
-            // Final message state
-            if (currentMessageId) {
-              updateMessage(projectId, data.id, {
-                content: data.content,
-                status: 'success'
-              });
-              onComplete?.(data.id);
-            }
+          case 'ready':
+            // SSE is ready, trigger the generation
+            // Don't pass empty string - let the mutation create the assistant message
+            onMessageCreated?.(undefined, {
+              userMessage: data.userMessage,
+              imageUrls: data.imageUrls
+            });
             eventSource.close();
             break;
             

@@ -20,16 +20,6 @@ export default function HomePage() {
   // removed mounted state to render immediately
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   const router = useRouter();
-  // Lazy load tRPC only when needed
-  const [createProjectMutation, setCreateProjectMutation] = useState<any>(null);
-  
-  useEffect(() => {
-    if (status === "authenticated") {
-      import("~/trpc/react").then(({ api }) => {
-        setCreateProjectMutation(() => api.project.create.useMutation());
-      });
-    }
-  }, [status]);
   
   // Email subscription state (mutation moved to EmailSubscriptionForm component)
   const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -38,13 +28,9 @@ export default function HomePage() {
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
-      // Create a new project and redirect to generator
-      if (createProjectMutation) {
-        const project = await createProjectMutation.mutateAsync({});
-        if (project?.projectId) {
-          router.push(`/projects/${project.projectId}/generate`);
-        }
-      }
+      // Redirect to /projects/new which handles idempotent project creation
+      // This ensures we don't create duplicate projects on multiple clicks
+      router.push('/projects/new');
     } else {
       setIntendedAction('try-for-free');
       setShowLogin(true);
@@ -117,7 +103,8 @@ export default function HomePage() {
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       console.log("User is already logged in, redirecting to workspace...");
-      router.push("/projects");
+      // Use /projects/new which will redirect to most recent project if exists
+      router.push("/projects/new");
     }
   }, [status, session, router]);
 
@@ -161,10 +148,10 @@ export default function HomePage() {
         <div className="w-full text-center">
           <button
             onClick={handleTryForFree}
-            disabled={createProjectMutation?.isPending}
+            disabled={false}
             className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
           >
-            {createProjectMutation?.isPending ? "Creating..." : "Try for $0.00"}
+            Try for $0.00
           </button>
           <p className="text-center text-gray-500 text-sm mt-3">
             No credit card required • Start creating in seconds
@@ -314,7 +301,7 @@ export default function HomePage() {
               </svg>
             </button>
             <Suspense fallback={<div className="p-8">Loading...</div>}>
-              <LoginModal redirectTo={intendedAction === 'try-for-free' ? '/projects/new' : '/projects'} />
+              <LoginModal redirectTo='/projects/new' />
             </Suspense>
           </div>
         </div>

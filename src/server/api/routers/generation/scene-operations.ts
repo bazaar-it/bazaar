@@ -111,13 +111,8 @@ export const generateScene = protectedProcedure
         content: msg.content
       }));
 
-      // 4. Store user message
-      await messageService.createMessage({
-        projectId,
-        content: userMessage,
-        role: "user",
-        imageUrls: (userContext?.imageUrls as string[]) || [],
-      });
+      // 4. User message is already created in SSE route, skip creating it here
+      // This prevents duplicate messages and ensures correct sequence order
 
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
@@ -139,6 +134,46 @@ export const generateScene = protectedProcedure
           'scene.create',
           'scene'
         ) as any as SceneCreateResponse;
+      }
+
+      // Handle clarification responses
+      if (orchestratorResponse.needsClarification) {
+        console.log(`[${response.getRequestId()}] Brain needs clarification:`, orchestratorResponse.chatResponse);
+        
+        // Update or create assistant's clarification message
+        let assistantMessageId: string | undefined;
+        
+        if (input.assistantMessageId) {
+          // Update existing message from SSE
+          assistantMessageId = input.assistantMessageId;
+          await db.update(messages)
+            .set({
+              content: orchestratorResponse.chatResponse || "Could you provide more details?",
+              status: 'success', // Clarification is a successful response
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, input.assistantMessageId));
+        } else {
+          // Create new message if no SSE message exists (fallback)
+          const newAssistantMessage = await messageService.createMessage({
+            projectId,
+            content: orchestratorResponse.chatResponse || "Could you provide more details?",
+            role: "assistant",
+            status: "success",
+          });
+          assistantMessageId = newAssistantMessage?.id;
+        }
+        
+        // Return a clarification response without scene data
+        return {
+          ...response.success(null, 'clarification', 'message', []),
+          context: {
+            reasoning: orchestratorResponse.reasoning,
+            chatResponse: orchestratorResponse.chatResponse,
+            needsClarification: true,
+          },
+          assistantMessageId,
+        } as any;
       }
 
       const decision: BrainDecision = {
@@ -229,6 +264,7 @@ export const generateScene = protectedProcedure
           reasoning: decision.reasoning,
           chatResponse: decision.chatResponse,
         },
+        assistantMessageId, // Include the assistant message ID
       } as SceneCreateResponse;
 
     } catch (error) {
