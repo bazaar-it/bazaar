@@ -44,8 +44,8 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
     return (
       <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-sm font-medium">Error Loading</div>
-          <div className="text-gray-500 text-xs mt-1">Could not load project</div>
+          <div className="text-red-500 text-xs sm:text-sm font-medium">Error Loading</div>
+          <div className="text-gray-500 text-[10px] sm:text-xs mt-1">Could not load project</div>
         </div>
       </div>
     );
@@ -55,8 +55,8 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
     return (
       <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto mb-2" />
-          <div className="text-gray-500 text-sm">Loading...</div>
+          <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-gray-400 mx-auto mb-1 sm:mb-2" />
+          <div className="text-gray-500 text-xs sm:text-sm">Loading...</div>
         </div>
       </div>
     );
@@ -65,10 +65,10 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
   if (!scenes || scenes.length === 0) {
     return (
       <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-200 rounded overflow-hidden flex items-center justify-center">
-        <div className="text-center p-4">
-          <FolderIcon className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-          <div className="text-gray-500 text-sm font-medium">Empty Project</div>
-          <div className="text-gray-400 text-xs mt-1">No scenes yet</div>
+        <div className="text-center p-2 sm:p-4">
+          <FolderIcon className="h-6 sm:h-8 w-6 sm:w-8 text-gray-300 mx-auto mb-1 sm:mb-2" />
+          <div className="text-gray-500 text-xs sm:text-sm font-medium">Empty Project</div>
+          <div className="text-gray-400 text-[10px] sm:text-xs mt-1">No scenes yet</div>
         </div>
       </div>
     );
@@ -78,8 +78,8 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
     return (
       <div className="w-full h-full bg-orange-50 border-2 border-dashed border-orange-200 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
-          <div className="text-orange-600 text-sm font-medium">Scene Error</div>
-          <div className="text-orange-500 text-xs mt-1">Failed to compile</div>
+          <div className="text-orange-600 text-xs sm:text-sm font-medium">Scene Error</div>
+          <div className="text-orange-500 text-[10px] sm:text-xs mt-1">Failed to compile</div>
         </div>
       </div>
     );
@@ -89,8 +89,8 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
     return (
       <div className="w-full h-full bg-blue-50 border-2 border-dashed border-blue-200 rounded overflow-hidden flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-400 mx-auto mb-2" />
-          <div className="text-blue-600 text-sm">Compiling...</div>
+          <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-blue-400 mx-auto mb-1 sm:mb-2" />
+          <div className="text-blue-600 text-xs sm:text-sm">Compiling...</div>
         </div>
       </div>
     );
@@ -231,17 +231,17 @@ const ProjectPreview = ({
         
         {/* Current project badge */}
         {isCurrentProject && (
-          <div className="absolute top-2 right-2 z-10">
-            <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-              Current Project
+          <div className="absolute top-1 sm:top-2 right-1 sm:right-2 z-10">
+            <div className="bg-blue-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium">
+              Current
             </div>
           </div>
         )}
 
         {/* Project name overlay - only visible on hover */}
         {isHovered && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
-            <div className="text-white text-sm font-medium">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
+            <div className="text-white text-xs sm:text-sm font-medium">
               {editingProject === project.id ? (
                 <input
                   type="text"
@@ -250,7 +250,7 @@ const ProjectPreview = ({
                   onKeyDown={onEditKeyPress}
                   onBlur={onEditBlur}
                   autoFocus
-                  className="bg-transparent border-none outline-none text-white text-sm font-medium w-full p-0 m-0"
+                  className="bg-transparent border-none outline-none text-white text-xs sm:text-sm font-medium w-full p-0 m-0"
                   style={{ background: 'transparent' }}
                 />
               ) : (
@@ -601,7 +601,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
         </div>
       </div>
 
-      {/* Projects Grid */}
+      {/* Projects Grid - Mobile-responsive */}
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
@@ -612,10 +612,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
           </div>
         ) : (
           <div 
-            className="grid gap-3"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'
-            }}
+            className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
           >
             {filteredAndSortedProjects.map((project) => (
               <Card key={`project-${project.id}`} className="overflow-hidden hover:shadow-lg transition-shadow p-0">

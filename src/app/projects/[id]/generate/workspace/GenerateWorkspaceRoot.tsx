@@ -11,6 +11,9 @@ import type { InputProps } from '~/lib/types/video/input-props';
 import { GenerateSidebar } from "./GenerateSidebar";
 import WorkspaceContentAreaG from './WorkspaceContentAreaG';
 import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContentAreaG';
+import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
+import { useBreakpoint } from '~/hooks/use-breakpoint';
+import MobileAppHeader from '~/components/MobileAppHeader';
 
 // ✅ NEW: Debug flag for production logging
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -27,6 +30,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   
   const { data: session } = useSession();
   const { setProject } = useVideoState();
+  const breakpoint = useBreakpoint();
 
   // Initialize video state on mount - but only if not already loaded
   useEffect(() => {
@@ -113,6 +117,32 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   // Access user info from session
   const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
 
+  // Use mobile layout for mobile breakpoint
+  if (breakpoint === 'mobile') {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+        {/* Mobile Header - Compact version */}
+        <div className="sticky top-0 z-40 w-full">
+          <MobileAppHeader
+            projectTitle={title}
+            projectId={projectId}
+          />
+        </div>
+        
+        {/* Mobile Workspace */}
+        <div className="flex-1 overflow-hidden">
+          <MobileWorkspaceLayout
+            projectId={projectId}
+            initialProps={initialProps}
+            projects={userProjects}
+            onProjectRename={handleProjectRenamed}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop/Tablet layout
   return (
     <div className="h-screen flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
