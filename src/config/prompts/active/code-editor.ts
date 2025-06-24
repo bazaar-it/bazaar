@@ -25,10 +25,13 @@ export const CODE_EDITOR = {
 🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
 - window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
 - window.React - React library (if needed for hooks, etc.)
+- window.IconifyIcon - Iconify icon component (200,000+ icons)
 - window.HeroiconsSolid / window.HeroiconsOutline - Icon components
 - window.LucideIcons - Additional icon library
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
+- window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
+
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 

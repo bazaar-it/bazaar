@@ -2,6 +2,7 @@ import { AIClientService, type AIMessage } from "~/server/services/ai/aiClient.s
 import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
+import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 
 /**
@@ -94,19 +95,17 @@ Generate a complete Remotion component based on the user's request.
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
         FUNCTION_NAME: input.functionName
       });
-      const userPrompt = `PREVIOUS SCENE CODE:
+      const transitionContext = getSmartTransitionContext(input.previousSceneCode);
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+PREVIOUS SCENE (focus on last 30 frames for smooth transition):
 \`\`\`tsx
-${input.previousSceneCode}
+${transitionContext}
 \`\`\`
 
-USER REQUEST: "${input.userPrompt}"
+Create entrance animations that flow naturally from how the previous scene exits.
 
-FUNCTION NAME: ${input.functionName}
-
-Generate a NEW scene based on the user's request, using the previous scene's code as a style reference. 
-- Keep the same visual style, colors, fonts, and animation patterns
-- Create NEW content based on the user's request
-- Ensure it's a complete, self-contained Remotion component`;
+FUNCTION NAME: ${input.functionName}`;
 
       const messages = [
         { role: 'user' as const, content: userPrompt }

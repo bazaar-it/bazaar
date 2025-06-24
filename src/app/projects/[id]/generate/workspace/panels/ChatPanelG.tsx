@@ -651,12 +651,12 @@ export default function ChatPanelG({
               onChange={handleMessageChange}
               onKeyDown={handleKeyDown}
               placeholder="Describe your video"
-              disabled={isGenerating}
+              disabled={false}
               className={cn(
                 "w-full resize-none rounded-md border border-input bg-background",
                 "pl-16 pr-3 py-3 text-sm leading-5",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:cursor-not-allowed disabled:opacity-50",
+                isGenerating && "opacity-70",
                 isDragOver && "border-blue-500 bg-blue-50"
               )}
               style={{

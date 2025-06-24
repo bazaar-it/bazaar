@@ -641,8 +641,8 @@ export default function FallbackComposition() {
     
     return {
       fps: 30,
-      width: 1280,
-      height: 720,
+      width: 1920,
+      height: 1080,
       durationInFrames: totalDuration, // Use total duration, not just last scene
       inputProps: {}
     };

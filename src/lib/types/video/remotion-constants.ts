@@ -647,6 +647,6 @@ export const SVG_ICONS = ["circle", "square", "triangle", "star", "heart", "chec
 export type SvgIcon = (typeof SVG_ICONS)[number];
 
 export const DURATION_IN_FRAMES = 200;
-export const VIDEO_WIDTH = 1280;
-export const VIDEO_HEIGHT = 720;
+export const VIDEO_WIDTH = 1920;
+export const VIDEO_HEIGHT = 1080;
 export const VIDEO_FPS = 30;
