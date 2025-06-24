@@ -650,11 +650,7 @@ export default function ChatPanelG({
               value={message}
               onChange={handleMessageChange}
               onKeyDown={handleKeyDown}
-              placeholder={
-                selectedSceneId
-                  ? "Describe changes to the selected scene..."
-                  : "Describe your video or add a new scene..."
-              }
+              placeholder="Describe your video"
               disabled={isGenerating}
               className={cn(
                 "w-full resize-none rounded-md border border-input bg-background",
