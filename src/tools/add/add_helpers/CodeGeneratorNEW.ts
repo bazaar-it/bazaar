@@ -30,13 +30,7 @@ export class CodeGeneratorService {
       });
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-FUNCTION NAME: ${input.functionName}
-
-Generate a complete Remotion component based on the user's request.
-- Create engaging motion graphics
-- Use modern animations with Framer Motion
-- Ensure it's a complete, self-contained component
-- Default duration: 5 seconds (150 frames at 30fps)`;
+FUNCTION NAME: ${input.functionName}`;
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -98,12 +92,17 @@ Generate a complete Remotion component based on the user's request.
       const transitionContext = getSmartTransitionContext(input.previousSceneCode);
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-PREVIOUS SCENE (focus on last 30 frames for smooth transition):
+PREVIOUS SCENE REFERENCE:
 \`\`\`tsx
 ${transitionContext}
 \`\`\`
 
-Create entrance animations that flow naturally from how the previous scene exits.
+IMPORTANT INSTRUCTIONS:
+1. Study the previous scene's visual style, colors, animation timing, and patterns
+2. Create a NEW scene that maintains visual consistency
+3. If previous elements exit in a direction, consider entering from the opposite
+4. Match the pacing and energy of the previous scene
+5. Use similar animation timing (if previous uses 8-12 frames, you should too)
 
 FUNCTION NAME: ${input.functionName}`;
 
@@ -250,8 +249,15 @@ export default function ${input.functionName}() {
       // Build user message for vision API - include the actual user prompt!
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-IMPORTANT: Recreate the UI/layout shown in the image as accurately as possible. Match colors, text, positioning, and visual hierarchy exactly. Then add appropriate animations based on the user's request.
-${input.visionAnalysis ? `Vision analysis: ${JSON.stringify(input.visionAnalysis, null, 2)}` : ''}`;
+IMPORTANT: Study the image to understand the visual style, colors, typography, and design elements. Then create MOTION GRAPHICS that showcase these elements one at a time in sequence.
+
+DO NOT recreate the static layout exactly. Instead:
+1. Identify the key elements (headline, subtext, buttons, icons, etc.)
+2. Show each element individually in temporal sequence
+3. Match the visual style (colors, fonts, spacing) but follow motion graphics principles
+4. Use conditional rendering: {frame >= X && frame < Y && (element)}
+
+Transform the static design into sequential storytelling.`;
       
       // Use centralized vision API with proper message format
       const visionMessagesContent: AIMessage['content'] = [
@@ -363,12 +369,14 @@ Video ${i + 1}: ${url}`).join('')}
 
 FUNCTION NAME: ${input.functionName}
 
-Generate a Remotion component that uses the provided video(s) as background or main content.
-- Use const { Video } = window.Remotion; to access the Video component
-- For background videos: <Video src={videoUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-- Add text overlays, animations, or other elements as requested
-- Default to muting background videos with volume={0}
-- Match the scene duration to the request (default 5-10 seconds)`;
+Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytelling:
+- Default: Use video as background with volume={0} unless user specifies otherwise (split-screen, side-by-side, etc.)
+- If text/graphics are needed, they should appear ONE AT A TIME in sequence
+- Follow temporal sequence: Title (0-60) → Description (60-120) → CTA (120-180)
+- Each element should have its own time slot using conditional rendering
+- Transform any requested overlays into sequential appearances
+- NO static overlays - everything should animate in sequence
+- Adapt video placement based on user request (background, split-screen, picture-in-picture, etc.)`;
 
       const messages = [
         { role: 'user' as const, content: userPrompt }

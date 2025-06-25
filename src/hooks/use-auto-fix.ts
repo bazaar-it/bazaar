@@ -22,7 +22,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     updateAndRefresh, 
     addUserMessage, 
     addAssistantMessage, 
-    updateMessage 
+    updateMessage
   } = useVideoState();
 
   // Helper function to convert database scenes to InputProps format
@@ -93,6 +93,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     // Mark this scene as being fixed
     setFixingScenes(prev => new Set(prev).add(sceneId));
     
+    // ✅ IMMEDIATE: Clear the error banner right away
+    setSceneErrors(prev => {
+      const next = new Map(prev);
+      next.delete(sceneId);
+      return next;
+    });
+    
     console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
     
     try {
@@ -156,12 +163,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         status: 'error'
       });
     } finally {
-      // Clean up the error for this scene after successful fix
-      setSceneErrors(prev => {
-        const next = new Map(prev);
-        next.delete(sceneId);
-        return next;
-      });
+      // Error already cleaned up at the start
       
       // Remove from fixing set after a delay to allow preview to refresh
       setTimeout(() => {

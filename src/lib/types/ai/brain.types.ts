@@ -43,7 +43,6 @@ export interface BrainDecision {
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     videoUrls?: string[];
-    visionAnalysis?: any;
     errorDetails?: string;
     webContext?: {
       originalUrl: string;

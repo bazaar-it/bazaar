@@ -244,8 +244,9 @@ export default function ChatPanelG({
 
   // Handle message input change
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
-  }, []);
+  }, [isGenerating]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -643,9 +644,10 @@ export default function ChatPanelG({
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
-        <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+        <form onSubmit={handleSubmit} className="flex gap-2 items-end" autoComplete="off">
           <div className="flex-1 relative">
             <textarea
+              key="chat-input"
               ref={textareaRef}
               value={message}
               onChange={handleMessageChange}

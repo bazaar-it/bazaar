@@ -166,7 +166,6 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       imageUrls: input.imageUrls,
       userPrompt: input.userPrompt,
       functionName: functionName,
-      visionAnalysis: input.visionAnalysis,
     });
 
     // Return generated content - NO DATABASE!
@@ -280,10 +279,6 @@ BRAND MATCHING INSTRUCTIONS:
       imageUrls: allImageUrls,
       userPrompt: enhancedPrompt,
       functionName: functionName,
-      visionAnalysis: {
-        webContext: input.webContext,
-        analysisType: 'website_brand_matching'
-      },
     });
 
     const result = {
@@ -352,11 +347,6 @@ COMBINED CONTEXT INSTRUCTIONS:
       imageUrls: allImageUrls,
       userPrompt: enhancedPrompt,
       functionName: functionName,
-      visionAnalysis: {
-        webContext: input.webContext,
-        userImageCount: input.imageUrls.length,
-        analysisType: 'website_plus_images'
-      },
     });
 
     const result = {
