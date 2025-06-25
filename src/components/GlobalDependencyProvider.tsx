@@ -37,11 +37,11 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       // NEW: Add Rough.js
       (window as any).Rough = rough;
-
+      
       // NEW: Add Iconify
       // Create a wrapper that ensures the Icon component is properly bound
       const IconifyWrapper = (props: any) => React.createElement(Icon, props);
-
+      
       // Test the wrapper to make sure it works
       try {
         const testIcon = React.createElement(IconifyWrapper, { icon: 'mdi:home' });
@@ -49,9 +49,9 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       } catch (error) {
         console.error('❌ IconifyWrapper test failed:', error);
       }
-
+      
       (window as any).IconifyIcon = IconifyWrapper;
-
+      
       // NEW: Add Google Fonts loader
       (window as any).RemotionGoogleFonts = {
         loadFont: (fontName: string) => {
@@ -63,12 +63,12 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
             'Poppins': loadPoppins,
             'Montserrat': loadMontserrat,
           };
-
+          
           const loader = fontMap[fontName];
           if (loader) {
             return loader();
           }
-
+          
           // Default to Inter if font not found
           return loadInter();
         },
@@ -78,7 +78,7 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
         Poppins: () => loadPoppins(),
         Montserrat: () => loadMontserrat(),
       };
-
+      
       console.log('✅ GlobalDependencyProvider: All dependencies loaded successfully');
     }
   }, []);

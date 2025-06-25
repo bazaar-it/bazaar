@@ -7,7 +7,7 @@ import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOv
 import type { DragEndEvent, DragStartEvent, DragOverEvent, DropAnimation } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { XIcon, RefreshCwIcon } from 'lucide-react';
+import { XIcon, RotateCcw } from 'lucide-react';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
@@ -120,7 +120,7 @@ function SortablePanelG({ id, children, style, className, onRemove }: {
                 aria-label="Refresh preview"
                 title="Refresh preview"
               >
-                <RefreshCwIcon className="h-3.5 w-3.5" />
+                <RotateCcw className="h-3.5 w-3.5" />
               </button>
             )}
             <button 

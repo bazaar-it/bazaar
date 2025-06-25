@@ -1037,3 +1037,4 @@ export default function DualScreenApp() {
   );
 }`
 };
+ 

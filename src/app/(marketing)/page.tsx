@@ -65,24 +65,14 @@ export default function HomePage() {
       answer: "Bazaar is free with unlimited use during the beta testing period."
     },
     {
-      id: "how-it-works",
-      question: "How does it work?",
-      answer: "You type a single scene description, and we turn it into a motion graphic video in about 7 seconds.\n\nBehind the scenes, we use AI to generate React code based on your prompt, and then render it using Remotion. The more descriptive you are, the better the results — so don't hold back. Mention colors, fonts, sizes, layout, movement, and any other visual details you imagine.\n\nPut simply: clear input = great output.\nVague input? Not so much."
-    },
-    {
       id: "what-is",
       question: "What is Bazaar?",
-      answer: "Our long term vision for Bazaar is to build a tool that turns code into content and enables storytelling at scale.\n\nNo timelines. No editing. Just emotional, accurate, and visually captivating video - for every feature, in every language, tailored to every customer."
+      answer: "Bazaar is AI-powered video generation model for creating motion graphic videos. Just describe your scene in natural language—Bazaar brings it to life."
     },
     {
-      id: "beta-features",
-      question: "What features are in Beta V1?",
-      answer: "Beta V1 is our very first release — a primitive but promising text-to-motion generator.\n\nFrom a single text prompt, you can generate short, animated scenes. You can iterate on each either by describing the change you want to make or by opening the code panel, editing it and clicking 'Run'.\n\nVideo downloads aren't supported yet, so you'll need to screen record your masterpiece for now.\n\nYour scenes are saved to your account, but you won't be able to view or manage them just yet — that feature's coming soon."
-    },
-    {
-      id: "new-features",
-      question: "What new features are you working on?",
-      answer: "While we have an ambitious vision for fully automated video generation, our AI isn't there yet — so we're building the foundation in the meantime.\n\nRight now, we're working on a fully featured editor where you can create multi-scene videos from a single prompt, add music, and save your work properly. You'll be able to stitch scenes together, fine-tune timing, and build more complete product demos.\n\nBehind the scenes, we're training our AI to go from a single prompt to an entire software demo — but we've still got a lot of work to get there."
+      id: "beta-v2-features",
+      question: "What's new in Beta V2?",
+      answer: "**Faster. Smoother. Smarter.**\n\n• Scene generation is now up to **3× faster**\n• Edits happen **1.5× quicker**\n• Scenes now flow better with **'Smart Transitions'**\n\n\n**Total Control. Zero Clutter.**\n\n• Trim, extend, add or delete scenes — all from the chat\n• Not happy with the edit? Restore the previous version in one click\n\n\n**Creativity, Supercharged.**\n\n• Browse your past work in the new **Projects panel**\n• Start with ready-made animations in the **Template library**\n• Tap into over **200,000 components**, icons and logos\n\n\n**Great Scenes Start With Great Context.**\n\n• Use **voice input** to describe your scene\n• Upload **images or video** to guide the animation\n• Paste a link to your website — Bazaar reads the page and turns it into motion\n\n\n**Share in a Tap.**\n\n• Share your video with a link\n\n\nWant a say in what we build next? Check out our roadmap and upvote features you want to see next https://bazaar.featurebase.app/roadmap"
     }
   ];
 
@@ -118,13 +108,10 @@ export default function HomePage() {
       {/* Header */}
       <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
-          <Image 
-            src="https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//Bazaar%20BETA%20V1.png" 
-            alt="Bazaar Logo" 
-            width={120} 
-            height={120} 
-            priority 
-          />
+          <div className="flex items-baseline gap-2 font-inter">
+            <span className="text-3xl font-semibold text-black">Bazaar</span>
+            <span className="text-base font-medium text-gray-600">Beta V2</span>
+          </div>
         </div>
         <div className="flex gap-4 items-center">
           {status === "authenticated" ? (
@@ -140,6 +127,18 @@ export default function HomePage() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
+        {/* Announcement Banner */}
+        <div className="w-full mb-8 flex justify-center">
+          <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
+            <span className="bg-black text-white px-3 py-1 rounded-full text-sm font-medium">
+              New
+            </span>
+            <span className="text-gray-900 font-medium text-sm">
+              Beta V2 is now live
+            </span>
+          </div>
+        </div>
+        
         <div className="mb-16 w-full text-center">
           <h1 className="text-6xl font-extrabold mb-6 animate-slide-up">Motion Graphics, Made Simple</h1>
           <p className="text-xl text-gray-600">Bazaar is an AI-powered video generator that turns descriptions into animated motion graphics — in seconds.</p>
@@ -151,10 +150,10 @@ export default function HomePage() {
             disabled={false}
             className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
           >
-            Try for $0.00
+            Try for Free
           </button>
           <p className="text-center text-gray-500 text-sm mt-3">
-            No credit card required • Start creating in seconds
+            No credit card required
           </p>
         </div>
         
@@ -243,15 +242,15 @@ export default function HomePage() {
           <div className="overflow-hidden w-full whitespace-nowrap">
             <div className="inline-block animate-[scroll_25s_linear_infinite]">
               {companyLogos.map((logo) => (
-                <div key={`first-${logo.name}`} className="inline-block mx-8 align-middle">
-                  <div className="w-48 h-16 relative flex items-center justify-center">
+                <div key={`first-${logo.name}`} className="inline-block mx-12 align-middle">
+                  <div className="w-24 h-12 relative flex items-center justify-center">
                     <Image
                       src={logo.path}
                       alt={`${logo.name} logo`}
-                      width={192}
-                      height={72}
+                      width={128}
+                      height={64}
                       style={{ objectFit: 'contain' }}
-                      className="max-h-16 w-auto grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+                      className="h-8 w-auto grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
                     />
                   </div>
                 </div>
@@ -259,15 +258,15 @@ export default function HomePage() {
             </div>
             <div className="inline-block animate-[scroll_25s_linear_infinite]">
               {companyLogos.map((logo) => (
-                <div key={`second-${logo.name}`} className="inline-block mx-8 align-middle">
-                  <div className="w-48 h-16 relative flex items-center justify-center">
+                <div key={`second-${logo.name}`} className="inline-block mx-12 align-middle">
+                  <div className="w-24 h-12 relative flex items-center justify-center">
                     <Image
                       src={logo.path}
                       alt={`${logo.name} logo`}
-                      width={192}
-                      height={72}
+                      width={128}
+                      height={64}
                       style={{ objectFit: 'contain' }}
-                      className="max-h-16 w-auto grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+                      className="h-8 w-auto grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
                     />
                   </div>
                 </div>
