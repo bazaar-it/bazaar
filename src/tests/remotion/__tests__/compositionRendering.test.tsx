@@ -90,8 +90,8 @@ describe('Remotion Composition Rendering', () => {
           component={TestComposition}
           durationInFrames={300}
           fps={30}
-          width={1280}
-          height={720}
+          width={1920}
+          height={1080}
         />
       </>
     );
@@ -105,7 +105,7 @@ describe('Remotion Composition Rendering', () => {
     
     // Second composition
     expect(compositions[1].getAttribute('data-duration')).toBe('300');
-    expect(compositions[1].getAttribute('data-dimensions')).toBe('1280x720');
+    expect(compositions[1].getAttribute('data-dimensions')).toBe('1920x1080');
   });
 
   it('should render with the Player component', () => {

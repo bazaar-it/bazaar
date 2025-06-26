@@ -180,7 +180,7 @@ export default function AppHeader({
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 rounded-[15px] shadow-sm border-blue-200 text-blue-600 hover:bg-blue-50"
+            className="gap-2 rounded-[15px] shadow-sm border-gray-200 text-gray-600 hover:bg-gray-50"
             onClick={handleShare}
             disabled={isSharing}
           >

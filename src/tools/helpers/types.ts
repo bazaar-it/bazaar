@@ -54,7 +54,6 @@ export interface AddToolInput extends BaseToolInput {
   }>;
   imageUrls?: string[];
   videoUrls?: string[];
-  visionAnalysis?: any;
   webContext?: {
     originalUrl: string;
     screenshotUrls: {
@@ -89,7 +88,6 @@ export interface EditToolInput extends BaseToolInput {
   currentDuration?: number;
   imageUrls?: string[];
   videoUrls?: string[];
-  visionAnalysis?: any;
   errorDetails?: string;
   referenceScenes?: Array<{  // For cross-scene style/color matching
     id: string;
@@ -162,7 +160,6 @@ export interface LayoutGenerationInput {
   projectId: string;
   sceneNumber?: number;
   previousSceneJson?: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -182,7 +179,6 @@ export interface CodeGenerationInput {
   layoutJson: any;
   functionName: string;
   projectId: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -203,7 +199,6 @@ export interface ImageToCodeInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -215,7 +210,6 @@ export interface CreativeEditInput {
   functionName: string;
   imageUrls?: string[];
   videoUrls?: string[];
-  visionAnalysis?: any;
 }
 
 /**
@@ -265,7 +259,6 @@ export const addToolInputSchema = baseToolInputSchema.extend({
     name: z.string(),
     tsxCode: z.string(),
   })).optional().describe("Reference scenes for cross-scene style/color matching"),
-  visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   webContext: z.object({
@@ -290,7 +283,6 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   currentDuration: z.number().optional().describe("Current duration in frames"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
-  visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
   referenceScenes: z.array(z.object({
     id: z.string(),

@@ -244,8 +244,9 @@ export default function ChatPanelG({
 
   // Handle message input change
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
-  }, []);
+  }, [isGenerating]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -623,7 +624,7 @@ export default function ChatPanelG({
       </div>
 
       {/* Input area */}
-      <div className="p-4 border-t bg-gray-50/50">
+      <div className="p-4">
 
         {/* Auto-fix error banner */}
         <AutoFixErrorBanner
@@ -643,75 +644,86 @@ export default function ChatPanelG({
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
-        <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+        <form onSubmit={handleSubmit} className="flex items-end" autoComplete="off">
           <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={handleMessageChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Describe your video"
-              disabled={isGenerating}
-              className={cn(
-                "w-full resize-none rounded-md border border-input bg-background",
-                "pl-16 pr-3 py-3 text-sm leading-5",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                isDragOver && "border-blue-500 bg-blue-50"
-              )}
-              style={{
-                height: '40px', // Start at button height
-                minHeight: '40px', // Match button height
-                maxHeight: 24 * 6, // 6 lines
-                overflowY: "auto"
-              }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            />
+            <div className={cn(
+              "rounded-2xl border border-gray-300 bg-white shadow-sm",
+              "focus-within:border-gray-400 focus-within:shadow-md transition-all",
+              isDragOver && "border-blue-500 bg-blue-50"
+            )}>
+              {/* Text area container with fixed height that stops before icons */}
+              <div className="relative">
+                <textarea
+                  key="chat-input"
+                  ref={textareaRef}
+                  value={message}
+                  onChange={handleMessageChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={!message ? "Describe what you want to create" : ""}
+                  disabled={false}
+                  className={cn(
+                    "w-full resize-none bg-transparent border-none",
+                    "px-3 pt-3 pb-0 text-sm leading-6",
+                    "focus:outline-none focus:ring-0",
+                    isGenerating && "opacity-70",
+                    "rounded-t-2xl"
+                  )}
+                  style={{
+                    minHeight: '48px',
+                    maxHeight: '480px', // 20 lines * 24px line height
+                    overflowY: "auto"
+                  }}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                />
+              </div>
 
-            <div className="absolute left-3 flex gap-1 items-center" style={{ bottom: '16px' }}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-0.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                disabled={isGenerating}
-                aria-label="Upload images"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </button>
+              {/* Icon row at bottom - completely separate from text area */}
+              <div className="flex items-center justify-between px-3 py-1">
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    disabled={isGenerating}
+                    aria-label="Upload images"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
 
-              <VoiceInput 
-                onTranscription={(text) => {
-                  setMessage(prevMessage => {
-                    const newMessage = prevMessage.trim() 
-                      ? `${prevMessage} ${text}` 
-                      : text;
-                    return newMessage;
-                  });
-                }}
-                disabled={isGenerating}
-              />
+                  <VoiceInput 
+                    onTranscription={(text) => {
+                      setMessage(prevMessage => {
+                        const newMessage = prevMessage.trim() 
+                          ? `${prevMessage} ${text}` 
+                          : text;
+                      return newMessage;
+                    });
+                  }}
+                  disabled={isGenerating}
+                />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!message.trim() || isGenerating}
+                  className="w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0"
+                >
+                  {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                </Button>
+              </div>
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/mp4,video/quicktime,video/webm"
-              multiple
-              onChange={imageHandlers.handleFileSelect}
-              className="hidden"
-            />
           </div>
 
-          <Button
-            type="submit"
-            disabled={!message.trim() || isGenerating}
-            className="w-10 flex-shrink-0"
-            style={{ minHeight: '42px', marginBottom: '6px' }}
-          >
-            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/mp4,video/quicktime,video/webm"
+            multiple
+            onChange={imageHandlers.handleFileSelect}
+            className="hidden"
+          />
         </form>
       </div>
     </div>

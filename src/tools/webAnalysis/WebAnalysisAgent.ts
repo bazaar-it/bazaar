@@ -43,7 +43,7 @@ export class WebAnalysisAgent {
       
       // Desktop screenshot
       console.log('🖥️ Taking desktop screenshot...');
-      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.setViewportSize({ width: 1920, height: 1080 });
       const desktopScreenshot = await page.screenshot({ 
         type: 'png',
         fullPage: false 

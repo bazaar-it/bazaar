@@ -75,9 +75,6 @@ BRAND MATCHING INSTRUCTIONS:
         context += `\nVIDEO URLS: ${input.videoUrls.map((url, i) => `\nVideo ${i + 1}: ${url}`).join('')}`;
       }
       
-      if (input.visionAnalysis) {
-        context += `\n\nVISION ANALYSIS:\n${JSON.stringify(input.visionAnalysis, null, 2)}`;
-      }
       
       // Add reference scenes for style/color matching
       if (input.referenceScenes?.length) {
