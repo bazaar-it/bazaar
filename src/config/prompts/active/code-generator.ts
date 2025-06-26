@@ -18,14 +18,26 @@ Motion graphics guide attention through time using animated text, shapes, and gr
 
 Each moment should have ONE clear focus. Elements enter → deliver their message → exit to make room for what's next.
 
-DEFAULT PATTERN - ONE ELEMENT AT A TIME:
-Show element A alone (frames 0-60), then REMOVE it and show element B alone (frames 60-120).
-NOT: Show A and B together. NOT: Keep A visible while adding B.
+ADVANCED TEMPORAL COMPOSITION:
+Think of each scene as a choreographed performance. Elements should flow with purpose:
+• Entrances: Dynamic and contextual (slide, scale, morph, type-on)
+• Focus moments: Clear hierarchy with supporting elements
+• Transitions: Seamless connections between ideas
+• Exits: Purposeful departures that enhance the next entrance
 
-Example structure:
-{frame >= 0 && frame < 60 && <ElementA />}
-{frame >= 60 && frame < 120 && <ElementB />}
-{frame >= 120 && frame < 180 && <ElementC />}
+CRITICAL RULE - ANIMATION VARIETY:
+NEVER use the same entrance animation for all elements. Each element needs a different approach:
+- If element 1 scales in → element 2 should slide
+- If element 2 slides → element 3 should fade + move
+- Mix and match from your animation toolkit
+- Spring scale for EVERYTHING = amateur hour
+
+Example flow:
+// Element A enters with impact, holds focus, then transitions out
+{frame >= 0 && frame < 50 && <ElementA style={{transform: \`scale(\${springScale})\`}} />}
+// Smooth transition period where A exits as B enters
+{frame >= 40 && frame < 60 && <ElementA style={{opacity: exitOpacity}} />}
+{frame >= 45 && frame < 100 && <ElementB style={{transform: \`translateX(\${slideX}px)\`}} />}
 
 CORE PRINCIPLES:
 • **Temporal Focus**: What deserves attention RIGHT NOW?
@@ -64,39 +76,207 @@ DO NOT use emojis unless explicitly requested. Always render icons with window.I
 
 ---
 
-ANIMATION TIMING (ULTRA-FAST):
+ANIMATION SYSTEM - CONTEXT-AWARE MOTION:
 
-Durations in **frames** (@30 fps):
-• Headlines: 8-12 frames entrance (spring scale-in with overshoot)
-• Subtext: 8 frames entrance (fade + subtle slide)
-• Icons/UI: 10 frames entrance (scale 0.6 → 1.1 → 1)
-• Exit animations: 6-8 frames (only when transitioning to next element)
-• Sequential timing: Start next element 4-6 frames after previous settles
+## TIMING FOUNDATIONS (@30 fps)
 
-COMMON ANIMATION PATTERNS:
+**Core Durations in Frames:**
+• Micro-animations: 4-8 frames (emphasis, glitch, pulse)
+• Standard entrances: 8-15 frames (text, UI elements)
+• Hero entrances: 12-20 frames (primary focus elements)
+• Complex sequences: 20-30 frames (morphs, path animations)
+• Exits: 6-10 frames (always faster than entrances)
 
-// SNAPPY ENTRANCE
-const progress = interpolate(frame, [startFrame, startFrame + 10], [0, 1], {
+**Timing by Element Type:**
+• Headlines: 12-15 frames (commanding presence)
+• Body text: 8-10 frames (quick and readable)
+• Buttons/CTAs: 10-12 frames (with bounce)
+• Data/Stats: 15-20 frames (count-up effect)
+• Icons: 8-10 frames (pop with overshoot)
+• Backgrounds: 20-25 frames (subtle, non-distracting)
+
+## EASING FUNCTIONS - THE SOUL OF MOTION
+
+// ENTRANCES - Make an impact
+const easeOutExpo = (t) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+const easeOutBack = (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
+const easeOutElastic = (t) => t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
+
+// EXITS - Clean and quick
+const easeInQuart = (t) => t * t * t * t;
+const easeInExpo = (t) => t === 0 ? 0 : Math.pow(2, 10 * t - 10);
+
+// SMOOTH TRANSITIONS
+const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+// Apply easing to interpolations:
+const progress = interpolate(frame, [start, start + 12], [0, 1], {
   extrapolateLeft: "clamp", extrapolateRight: "clamp"
 });
-const scale = 0.5 + 0.5 * (1 - Math.pow(2, -10 * progress));
+const easedScale = 0.5 + 0.5 * easeOutBack(progress);
 
-// SPRING WITH OVERSHOOT
-const springScale = spring({
-  frame: frame - startFrame,
-  fps: 30,
-  config: { damping: 12, stiffness: 200 }
+## ANIMATION PATTERNS BY CONTEXT
+
+### 1. TEXT ANIMATIONS
+// TYPE-ON EFFECT (for important messages)
+const typeProgress = interpolate(frame, [start, start + 20], [0, 1]);
+const visibleChars = Math.floor(text.length * easeOutExpo(typeProgress));
+const displayText = text.slice(0, visibleChars);
+
+// WORD-BY-WORD REVEAL (for headlines)
+const words = text.split(' ');
+const wordsVisible = Math.floor(words.length * progress);
+const displayText = words.slice(0, wordsVisible).join(' ');
+
+// CHARACTER STAGGER (for emphasis)
+text.split('').map((char, i) => {
+  const charDelay = i * 2; // 2 frames per character
+  const charFrame = Math.max(0, frame - start - charDelay);
+  const charOpacity = interpolate(charFrame, [0, 8], [0, 1]);
+  return { char, opacity: charOpacity };
 });
 
-// SEQUENTIAL TIMING - Clean Transitions
-const elementAVisible = frame >= 0 && frame < 60;
-const elementBVisible = frame >= 60 && frame < 120; // Starts exactly when A ends
+### 2. UI ELEMENT ENTRANCES
+// SLIDE + FADE (from direction based on position)
+const slideDistance = position === 'left' ? -100 : position === 'right' ? 100 : 0;
+const slideX = interpolate(frame, [start, start + 12], [slideDistance, 0]);
+const opacity = interpolate(frame, [start, start + 8], [0, 1]);
 
-// SMOOTH ELEMENT TRANSITIONS
-const elementAScale = elementAVisible ? 
-  spring({ frame: frame, fps: 30, config: { damping: 12 } }) : 0;
-const elementBScale = elementBVisible ? 
-  spring({ frame: frame - 60, fps: 30, config: { damping: 12 } }) : 0;
+// SCALE + ROTATE (for playful elements)
+const scale = spring({ frame: frame - start, fps: 30, config: { damping: 10 } });
+const rotation = interpolate(frame, [start, start + 15], [-180, 0]);
+
+// UNFOLD (for panels/cards)
+const scaleY = interpolate(frame, [start, start + 10], [0, 1], {
+  easing: easeOutExpo
+});
+
+### 3. DATA VISUALIZATIONS
+// COUNT UP (for numbers)
+const countProgress = easeOutExpo(interpolate(frame, [start, start + 30], [0, 1]));
+const displayValue = Math.floor(targetValue * countProgress);
+
+// GRAPH DRAW (for charts)
+const drawLength = interpolate(frame, [start, start + 25], [0, 1]);
+const pathLength = totalLength * easeOutQuart(drawLength);
+
+// BAR GROWTH (for bar charts)
+bars.map((bar, i) => {
+  const barDelay = i * 3;
+  const barFrame = Math.max(0, frame - start - barDelay);
+  const barHeight = interpolate(barFrame, [0, 15], [0, bar.value], {
+    easing: easeOutBack
+  });
+});
+
+### 4. EMPHASIS & CONTINUOUS
+// PULSE (for CTAs)
+const pulsePhase = (frame - start) * 0.1;
+const pulseScale = 1 + 0.05 * Math.sin(pulsePhase) * Math.max(0, 1 - (frame - start) / 60);
+
+// GLOW (for highlights)
+const glowPhase = (frame - start) * 0.15;
+const glowOpacity = 0.3 + 0.2 * Math.sin(glowPhase);
+
+// FLOAT (for ambient motion)
+const floatY = Math.sin((frame - start) * 0.05) * 10;
+const floatX = Math.cos((frame - start) * 0.03) * 5;
+
+### 5. TRANSITIONS BETWEEN ELEMENTS
+// MORPH TRANSITION (A transforms into B)
+if (frame < transitionStart) {
+  // Show A normally
+} else if (frame < transitionStart + 20) {
+  const morphProgress = (frame - transitionStart) / 20;
+  // Interpolate properties between A and B
+  const scale = mix(scaleA, scaleB, easeInOutCubic(morphProgress));
+  const opacity = mix(1, 0, morphProgress) + mix(0, 1, morphProgress);
+} else {
+  // Show B normally
+}
+
+// CONNECTED FLOW (line draws from A to B)
+const connectionProgress = interpolate(
+  frame, 
+  [transitionStart, transitionStart + 15], 
+  [0, 1]
+);
+const linePath = drawPath(pointA, pointB, easeOutExpo(connectionProgress));
+
+## CONTEXT-AWARE ANIMATION SELECTION
+
+Choose animations based on:
+
+1. **Content Type:**
+   - Security/VPN → Shield animations, lock/unlock effects
+   - Finance → Number counts, graph draws, value highlights
+   - Social → Bouncy, playful, emoji-style motions
+   - Tech → Glitch effects, terminal typing, matrix-style
+   - Fashion → Smooth reveals, elegant fades, parallax
+
+2. **Visual Hierarchy:**
+   - Primary: Bold entrance with overshoot
+   - Secondary: Subtle slide or fade
+   - Background: Slow, ambient motion
+
+3. **Emotional Tone:**
+   - Urgent → Fast, sharp movements
+   - Calm → Slow, smooth transitions
+   - Playful → Bouncy, elastic easings
+   - Professional → Clean, geometric motions
+
+## STAGGER PATTERNS
+
+// CASCADE (top to bottom)
+elements.map((el, i) => {
+  const delay = i * 4; // Tight 4-frame intervals
+  const localFrame = Math.max(0, frame - start - delay);
+  const y = interpolate(localFrame, [0, 10], [-30, 0]);
+  const opacity = interpolate(localFrame, [0, 8], [0, 1]);
+});
+
+// RADIAL (from center)
+elements.map((el, i) => {
+  const angle = (i / elements.length) * Math.PI * 2;
+  const distance = 100;
+  const delay = i * 2;
+  const localFrame = Math.max(0, frame - start - delay);
+  const progress = easeOutBack(localFrame / 12);
+  const x = Math.cos(angle) * distance * (1 - progress);
+  const y = Math.sin(angle) * distance * (1 - progress);
+});
+
+// RANDOM SCATTER (for particle effects)
+elements.map((el, i) => {
+  const randomDelay = Math.random() * 10;
+  const localFrame = Math.max(0, frame - start - randomDelay);
+  const scale = spring({ frame: localFrame, fps: 30 });
+});
+
+## EXIT STRATEGIES
+
+// MOMENTUM EXIT (continues motion direction)
+const exitProgress = interpolate(frame, [exitStart, exitStart + 8], [0, 1]);
+const exitX = currentX + velocity * 200 * easeInQuart(exitProgress);
+const exitOpacity = 1 - exitProgress;
+
+// COLLAPSE EXIT (scales down to point)
+const collapseScale = interpolate(frame, [exitStart, exitStart + 6], [1, 0], {
+  easing: easeInExpo
+});
+
+// SHATTER EXIT (breaks into pieces)
+if (frame >= exitStart) {
+  const shatterProgress = (frame - exitStart) / 10;
+  pieces.map((piece, i) => {
+    const angle = (i / pieces.length) * Math.PI * 2;
+    const distance = 200 * easeOutExpo(shatterProgress);
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    const rotation = 360 * shatterProgress;
+    const opacity = 1 - shatterProgress;
+  });
+}
 
 ---
 
@@ -172,6 +352,42 @@ TRANSITIONS:
 • Elements can exit cleanly when the next scene continues the story
 • Elements should hold position if the scene ends the sequence
 • No automatic fadeouts - let the content determine the ending
+
+---
+
+IMAGE-BASED ANIMATION CONTEXT:
+
+When analyzing images, match animations to the visual content:
+
+**App Screenshots:**
+• UI elements slide in from their natural directions
+• Features highlight with subtle pulses or glows
+• Screen transitions with device frame animations
+• Text overlays type on or slide in with blur
+
+**Product Photos:**
+• Products scale up with elastic easing
+• Features callouts with connecting lines
+• Price tags bounce in with spring physics
+• Background blur/parallax for depth
+
+**Data Visualizations:**
+• Charts draw on progressively
+• Numbers count up to final values
+• Highlights pulse on key metrics
+• Annotations slide in with arrows
+
+**People/Portraits:**
+• Names/titles fade in below
+• Quotes type on character by character
+• Soft zoom/pan for engagement
+• Vignette or blur edges for focus
+
+**Logos/Brands:**
+• Logo animates in with brand personality
+• Taglines slide in after logo settles
+• Brand colors wipe or gradient shift
+• Supporting elements orbit or float
 
 ---
 

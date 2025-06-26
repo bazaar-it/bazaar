@@ -257,6 +257,14 @@ DO NOT recreate the static layout exactly. Instead:
 3. Match the visual style (colors, fonts, spacing) but follow motion graphics principles
 4. Use conditional rendering: {frame >= X && frame < Y && (element)}
 
+ANIMATION REQUIREMENTS:
+- First element: Choose from slide-in, fade+scale, or type-on
+- Second element: MUST use a different animation than the first
+- Status/alerts: Add continuous pulse or glow AFTER entrance
+- Buttons/CTAs: Use directional entrance (slide up/down) with bounce
+- Data/maps: Progressive reveal with path animations
+- VARY YOUR ANIMATIONS - don't just spring scale everything
+
 Transform the static design into sequential storytelling.`;
       
       // Use centralized vision API with proper message format
