@@ -179,11 +179,8 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         // Add the scene to video state (addScene checks for duplicates internally)
         addScene(projectId, result.scene);
         
-        // Add assistant message to video state
-        // The message ID from server should be unique, preventing duplicates
-        const messageContent = `Added template: ${result.scene.name}`;
-        const messageId = `template-msg-${result.scene.id}`; // Use scene ID to ensure uniqueness
-        addAssistantMessage(projectId, messageId, messageContent);
+        // Note: The server already creates the "Added template:" message in the database
+        // so we don't need to create it client-side to avoid duplicates
         
         // Still invalidate caches for consistency with database
         await utils.generation.getProjectScenes.invalidate({ projectId });
