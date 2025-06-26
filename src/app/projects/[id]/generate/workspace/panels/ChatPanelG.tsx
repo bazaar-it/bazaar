@@ -660,12 +660,12 @@ export default function ChatPanelG({
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   placeholder={!message ? "Describe what you want to create" : ""}
-                  disabled={isGenerating}
+                  disabled={false}
                   className={cn(
                     "w-full resize-none bg-transparent border-none",
                     "px-3 pt-3 pb-0 text-sm leading-6",
                     "focus:outline-none focus:ring-0",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    isGenerating && "opacity-70",
                     "rounded-t-2xl"
                   )}
                   style={{
