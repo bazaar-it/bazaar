@@ -36,12 +36,38 @@ export interface BaseToolOutput {
 
 export interface AddToolInput extends BaseToolInput {
   sceneNumber?: number;
+  storyboardSoFar?: Array<{
+    id: string;
+    name: string;
+    duration: number;
+    order: number;
+    tsxCode: string;
+  }>;
   previousSceneContext?: {
     tsxCode: string;
     style?: string;
   };
+  referenceScenes?: Array<{  // For cross-scene style/color matching
+    id: string;
+    name: string;
+    tsxCode: string;
+  }>;
   imageUrls?: string[];
-  visionAnalysis?: any;
+  videoUrls?: string[];
+  webContext?: {
+    originalUrl: string;
+    screenshotUrls: {
+      desktop: string;
+      mobile: string;
+    };
+    pageData: {
+      title: string;
+      description?: string;
+      headings: string[];
+      url: string;
+    };
+    analyzedAt: string;
+  };
 }
 
 export interface AddToolOutput extends BaseToolOutput {
@@ -61,8 +87,27 @@ export interface EditToolInput extends BaseToolInput {
   tsxCode: string;       // ✓ FIXED: Was existingCode
   currentDuration?: number;
   imageUrls?: string[];
-  visionAnalysis?: any;
+  videoUrls?: string[];
   errorDetails?: string;
+  referenceScenes?: Array<{  // For cross-scene style/color matching
+    id: string;
+    name: string;
+    tsxCode: string;
+  }>;
+  webContext?: {
+    originalUrl: string;
+    screenshotUrls: {
+      desktop: string;
+      mobile: string;
+    };
+    pageData: {
+      title: string;
+      description?: string;
+      headings: string[];
+      url: string;
+    };
+    analyzedAt: string;
+  };
 }
 
 export interface EditToolOutput extends BaseToolOutput {
@@ -115,7 +160,6 @@ export interface LayoutGenerationInput {
   projectId: string;
   sceneNumber?: number;
   previousSceneJson?: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -135,7 +179,6 @@ export interface CodeGenerationInput {
   layoutJson: any;
   functionName: string;
   projectId: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -156,7 +199,6 @@ export interface ImageToCodeInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
-  visionAnalysis?: any;
 }
 
 /**
@@ -167,7 +209,7 @@ export interface CreativeEditInput {
   tsxCode: string;        // ✓ FIXED: Was existingCode
   functionName: string;
   imageUrls?: string[];
-  visionAnalysis?: any;
+  videoUrls?: string[];
 }
 
 /**
@@ -201,12 +243,38 @@ export const baseToolInputSchema = z.object({
 
 export const addToolInputSchema = baseToolInputSchema.extend({
   sceneNumber: z.number().optional().describe("Optional scene number/position"),
+  storyboardSoFar: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    duration: z.number(),
+    order: z.number(),
+    tsxCode: z.string(),
+  })).optional().describe("Current storyboard scenes"),
   previousSceneContext: z.object({
     tsxCode: z.string(),
     style: z.string().optional(),
   }).optional().describe("Previous scene for style consistency"),
-  visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
+  referenceScenes: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    tsxCode: z.string(),
+  })).optional().describe("Reference scenes for cross-scene style/color matching"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
+  videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
+  webContext: z.object({
+    originalUrl: z.string(),
+    screenshotUrls: z.object({
+      desktop: z.string(),
+      mobile: z.string(),
+    }),
+    pageData: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+      headings: z.array(z.string()),
+      url: z.string(),
+    }),
+    analyzedAt: z.string(),
+  }).optional().describe("Web analysis context with screenshots for brand matching"),
 });
 
 export const editToolInputSchema = baseToolInputSchema.extend({
@@ -214,8 +282,27 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   tsxCode: z.string().describe("Current scene TSX code"),
   currentDuration: z.number().optional().describe("Current duration in frames"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
-  visionAnalysis: z.any().optional().describe("Vision analysis from image analysis"),
+  videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
+  referenceScenes: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    tsxCode: z.string(),
+  })).optional().describe("Reference scenes for cross-scene style/color matching"),
+  webContext: z.object({
+    originalUrl: z.string(),
+    screenshotUrls: z.object({
+      desktop: z.string(),
+      mobile: z.string(),
+    }),
+    pageData: z.object({
+      title: z.string(),
+      description: z.string().optional(),
+      headings: z.array(z.string()),
+      url: z.string(),
+    }),
+    analyzedAt: z.string(),
+  }).optional().describe("Web analysis context with screenshots for brand matching"),
 });
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({

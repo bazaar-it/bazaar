@@ -23,6 +23,7 @@ export const generateScene = protectedProcedure
     userMessage: z.string(),
     userContext: z.object({
       imageUrls: z.array(z.string()).optional(),
+      videoUrls: z.array(z.string()).optional(),
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
   }))
@@ -111,16 +112,16 @@ export const generateScene = protectedProcedure
         content: msg.content
       }));
 
-      // 4. Store user message
-      await messageService.createMessage({
-        projectId,
-        content: userMessage,
-        role: "user",
-        imageUrls: (userContext?.imageUrls as string[]) || [],
-      });
+      // 4. User message is already created in SSE route, skip creating it here
+      // This prevents duplicate messages and ensures correct sequence order
 
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
+      console.log(`[${response.getRequestId()}] User context:`, {
+        hasImageUrls: !!userContext?.imageUrls?.length,
+        hasVideoUrls: !!userContext?.videoUrls?.length,
+        videoUrls: userContext?.videoUrls,
+      });
       const orchestratorResponse = await orchestrator.processUserInput({
         prompt: userMessage,
         projectId,
@@ -129,6 +130,7 @@ export const generateScene = protectedProcedure
         chatHistory,
         userContext: {
           imageUrls: userContext?.imageUrls,
+          videoUrls: userContext?.videoUrls,
         },
       });
 
@@ -141,6 +143,46 @@ export const generateScene = protectedProcedure
         ) as any as SceneCreateResponse;
       }
 
+      // Handle clarification responses
+      if (orchestratorResponse.needsClarification) {
+        console.log(`[${response.getRequestId()}] Brain needs clarification:`, orchestratorResponse.chatResponse);
+        
+        // Update or create assistant's clarification message
+        let assistantMessageId: string | undefined;
+        
+        if (input.assistantMessageId) {
+          // Update existing message from SSE
+          assistantMessageId = input.assistantMessageId;
+          await db.update(messages)
+            .set({
+              content: orchestratorResponse.chatResponse || "Could you provide more details?",
+              status: 'success', // Clarification is a successful response
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, input.assistantMessageId));
+        } else {
+          // Create new message if no SSE message exists (fallback)
+          const newAssistantMessage = await messageService.createMessage({
+            projectId,
+            content: orchestratorResponse.chatResponse || "Could you provide more details?",
+            role: "assistant",
+            status: "success",
+          });
+          assistantMessageId = newAssistantMessage?.id;
+        }
+        
+        // Return a clarification response without scene data
+        return {
+          ...response.success(null, 'clarification', 'message', []),
+          context: {
+            reasoning: orchestratorResponse.reasoning,
+            chatResponse: orchestratorResponse.chatResponse,
+            needsClarification: true,
+          },
+          assistantMessageId,
+        } as any;
+      }
+
       const decision: BrainDecision = {
         success: true,
         toolName: orchestratorResponse.result.toolName,
@@ -149,18 +191,29 @@ export const generateScene = protectedProcedure
         chatResponse: orchestratorResponse.chatResponse,
       };
 
-      // 6. Create assistant's response FIRST (before tool execution)
-      // This ensures proper message ordering in the database
+      // 6. Update or create assistant's response
       let assistantMessageId: string | undefined;
-      if (decision.chatResponse) {
+      
+      if (input.assistantMessageId) {
+        // Update existing message from SSE
+        assistantMessageId = input.assistantMessageId;
+        await db.update(messages)
+          .set({
+            content: decision.chatResponse || "Processing your request...",
+            updatedAt: new Date(),
+          })
+          .where(eq(messages.id, input.assistantMessageId));
+        console.log(`[${response.getRequestId()}] Updated existing assistant message: ${assistantMessageId}`);
+      } else if (decision.chatResponse) {
+        // Create new message if no SSE message exists (fallback)
         const newAssistantMessage = await messageService.createMessage({
-          id: input.assistantMessageId, // Use the ID from SSE if provided
           projectId,
           content: decision.chatResponse,
           role: "assistant",
-          status: "pending", // Start as pending, update to success after tool execution
+          status: "pending",
         });
         assistantMessageId = newAssistantMessage?.id;
+        console.log(`[${response.getRequestId()}] Created new assistant message: ${assistantMessageId}`);
       }
 
       // 7. Execute the tool
@@ -218,6 +271,7 @@ export const generateScene = protectedProcedure
           reasoning: decision.reasoning,
           chatResponse: decision.chatResponse,
         },
+        assistantMessageId, // Include the assistant message ID
       } as SceneCreateResponse;
 
     } catch (error) {

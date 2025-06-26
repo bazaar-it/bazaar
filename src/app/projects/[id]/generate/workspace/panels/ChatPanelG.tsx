@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Loader2, Send, ImageIcon } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
-import { ChatWelcome } from "~/components/chat/ChatWelcome";
+import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { AutoFixErrorBanner } from "~/components/chat/AutoFixErrorBanner";
 import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/components/chat/ImageUpload";
 import { VoiceInput } from "~/components/chat/VoiceInput";
@@ -58,7 +58,7 @@ export default function ChatPanelG({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -88,7 +88,7 @@ export default function ChatPanelG({
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
-    .filter(m => !m.isUser && m.id)
+    .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-'))
     .map(m => m.id);
 
   const { data: messageIterations } = api.generation.getBatchMessageIterations.useQuery(
@@ -105,10 +105,7 @@ export default function ChatPanelG({
   // Auto-scroll function
   const scrollToBottom = useCallback(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior: 'smooth',
-      });
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, []);
   
@@ -156,12 +153,15 @@ export default function ChatPanelG({
     }
   }, [componentMessages, scrollToBottom, generationComplete]);
 
-  // Separate effect for completion scroll
+  // Force scroll to bottom whenever messages change
   useEffect(() => {
-    if (generationComplete) {
-      scrollToBottom();
-    }
-  }, [generationComplete, scrollToBottom]);
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    });
+  }, [componentMessages]); // Trigger on any message change
 
   
   // 🚀 [TICKET-006] Retry logic with exponential backoff
@@ -193,17 +193,24 @@ export default function ChatPanelG({
 
     const trimmedMessage = message.trim();
     
-    // 🚨 NEW: Get image URLs from uploaded images
+    // 🚨 NEW: Get image and video URLs from uploaded media
     const imageUrls = uploadedImages
-      .filter(img => img.status === 'uploaded' && img.url)
+      .filter(img => img.status === 'uploaded' && img.url && img.type !== 'video')
+      .map(img => img.url!);
+    
+    const videoUrls = uploadedImages
+      .filter(img => img.status === 'uploaded' && img.url && img.type === 'video')
       .map(img => img.url!);
     
     if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
     }
     
-    // ✅ SIMPLE: Add user message to VideoState
-    console.log('[ChatPanelG] Adding user message:', trimmedMessage);
+    if (videoUrls.length > 0) {
+      console.log('[ChatPanelG] 🎥 Including videos in chat submission:', videoUrls);
+    }
+    
+    // Show user message immediately
     addUserMessage(projectId, trimmedMessage, imageUrls.length > 0 ? imageUrls : undefined);
     
     // Clear input immediately for better UX
@@ -211,19 +218,13 @@ export default function ChatPanelG({
     setUploadedImages([]);
     setIsGenerating(true);
     
-    // 🚨 NEW: Immediately scroll to bottom after adding messages
+    // Immediately scroll to bottom after adding messages
     setTimeout(() => {
       scrollToBottom();
     }, 50);
     
-    // Store message data for the mutation callback
-    pendingMessageRef.current = { message: trimmedMessage, imageUrls };
-    
-    // 🚀 SSE APPROACH: Create assistant message via SSE
-    console.log('[ChatPanelG] 🚀 Starting SSE message creation...');
-    
-    // Start SSE to create the assistant message
-    generateSSE(trimmedMessage, imageUrls);
+    // Let SSE handle DB sync in background
+    generateSSE(trimmedMessage, imageUrls, videoUrls);
   };
 
   // Handle keyboard events for textarea
@@ -243,8 +244,9 @@ export default function ChatPanelG({
 
   // Handle message input change
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
-  }, []);
+  }, [isGenerating]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -253,7 +255,7 @@ export default function ChatPanelG({
       const scrollHeight = textareaRef.current.scrollHeight;
       const minHeight = 40; // Match button height
       const lineHeight = 24; // Approximate line height
-      const maxLines = 6;
+      const maxLines = 20;
       const maxHeight = lineHeight * maxLines;
       
       const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
@@ -296,7 +298,6 @@ export default function ChatPanelG({
     setIsGenerating(false);
     setGenerationComplete(false);
     setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
-    pendingMessageRef.current = null;
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
@@ -309,8 +310,7 @@ export default function ChatPanelG({
   // Use auto-fix hook
   const { sceneErrors, handleAutoFix } = useAutoFix(projectId, scenes);
 
-  // Store message data for mutation after SSE creates the message
-  const pendingMessageRef = useRef<{ message: string; imageUrls: string[] } | null>(null);
+  // No need for pendingMessageRef - data will come from SSE
   
   // Handle revert action
   const [isReverting, setIsReverting] = useState(false);
@@ -405,14 +405,13 @@ export default function ChatPanelG({
   // Use SSE generation hook
   const { generate: generateSSE, cancel: cancelSSE } = useSSEGeneration({
     projectId,
-    onMessageCreated: async (messageId) => {
-      console.log('[ChatPanelG] ✅ SSE created assistant message:', messageId);
-      activeAssistantMessageIdRef.current = messageId;
+    onMessageCreated: async (messageId, data) => {
+      console.log('[ChatPanelG] ✅ SSE ready with data:', data);
+      // messageId is undefined when creating new assistant message
       
-      // Now trigger the actual generation
-      if (pendingMessageRef.current) {
-        const { message: userMessage, imageUrls } = pendingMessageRef.current;
-        pendingMessageRef.current = null;
+      // Now trigger the actual generation using data from SSE
+      if (data?.userMessage) {
+        const { userMessage, imageUrls = [], videoUrls = [] } = data;
         
         try {
           const result = await generateSceneMutation.mutateAsync({
@@ -420,130 +419,159 @@ export default function ChatPanelG({
             userMessage,
             userContext: {
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+              videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
             },
-            assistantMessageId: messageId, // Pass the message ID to update it
+            // Don't pass assistantMessageId - let mutation create it
           });
           
           console.log('[ChatPanelG] ✅ Generation completed:', result);
           
-          // Handle the result (scene updates, etc.)
+          // The result contains the actual response
           const responseData = result as any;
           
-          // Update the assistant message with the response
-          const aiResponse = responseData.context?.chatResponse || 
-                            responseData.chatResponse || 
-                            responseData.message || 
-                            'Operation completed successfully.';
+          // Get the assistant message ID from the response
+          const assistantMessageId = responseData.assistantMessageId;
           
-          updateMessage(projectId, messageId, {
-            content: aiResponse,
-            status: 'success'
-          });
-          
-          // Handle scene operations
-          const actualScene = responseData.data;
-          const operation = responseData.meta?.operation;
-          
-          if (actualScene) {
-            // Get current scenes to calculate start time
-            const currentScenes = getCurrentProps()?.scenes || [];
+          if (assistantMessageId) {
+            // First, add the assistant message to VideoState since it doesn't exist yet
+            const aiResponse = responseData.context?.chatResponse || 
+                              responseData.chatResponse || 
+                              responseData.message || 
+                              'Scene generated successfully.';
             
-            if (operation === 'scene.delete') {
-              // For delete operations, remove the scene from VideoState
-              deleteScene(projectId, actualScene.id);
+            // Add the assistant message to VideoState
+            addAssistantMessage(projectId, assistantMessageId, aiResponse);
+            
+            // Then update its status to success
+            updateMessage(projectId, assistantMessageId, {
+              status: 'success'
+            });
+            
+            // Hide the pulsating message immediately when we have the real message
+            setIsGenerating(false);
+          }
+          
+          // Check if this is a clarification response
+          if (responseData.context?.needsClarification) {
+            console.log('[ChatPanelG] ✅ Received clarification request:', responseData.context.chatResponse);
+            // No scene to process, clarification message already added above
+            // Skip scene processing but continue to finally block
+          } else {
+            // Process scene normally
+            const actualScene = responseData.data;
+            const operation = responseData.meta?.operation;
+            
+            if (actualScene) {
+              // Get current scenes to calculate start time
+              const currentScenes = getCurrentProps()?.scenes || [];
               
-              console.log('[ChatPanelG] ✅ Deleted scene from VideoState:', {
-                sceneId: actualScene.id,
-                sceneName: actualScene.name
-              });
-              
-            } else if (operation === 'scene.edit' || operation === 'scene.update') {
-              // For edits, use the updateScene method from VideoState
-              updateScene(projectId, actualScene.id, actualScene);
-              
-              console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
-                sceneId: actualScene.id,
-                operation
-              });
-              
-              // Call the callback if provided
-              if (onSceneGenerated) {
-                onSceneGenerated(actualScene.id);
-              }
-            } else if (operation === 'scene.create' || !operation) {
-              // For create operations
-              const lastScene = currentScenes[currentScenes.length - 1];
-              const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
-              
-              // Transform database format to InputProps format
-              const transformedScene = {
-                id: actualScene.id,
-                type: 'custom' as const,
-                start: startTime,
-                duration: actualScene.duration || 180,
-                data: {
-                  code: actualScene.tsxCode,
-                  name: actualScene.name || 'Generated Scene',
-                  componentId: actualScene.id,
-                  props: actualScene.props || {}
-                }
-              };
-              
-              // Check if this is a welcome project
-              const isWelcomeProject = currentScenes.length === 1 && 
-                (currentScenes[0]?.data?.name === 'Welcome Scene' ||
-                 currentScenes[0]?.data?.isWelcomeScene === true ||
-                 currentScenes[0]?.type === 'welcome');
-              
-              // If welcome project, replace the welcome scene; otherwise append
-              const updatedScenes = isWelcomeProject 
-                ? [transformedScene]
-                : [...currentScenes, transformedScene];
-              
-              const currentPropsData = getCurrentProps();
-              if (currentPropsData) {
-                const updatedProps = {
-                  ...currentPropsData,
-                  scenes: updatedScenes,
-                  meta: {
-                    ...currentPropsData.meta,
-                    duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                    title: currentPropsData.meta?.title || 'New Project'
-                  }
-                };
+              if (operation === 'scene.delete') {
+                // For delete operations, remove the scene from VideoState
+                deleteScene(projectId, actualScene.id);
                 
-                replace(projectId, updatedProps);
-                
-                console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
-                  sceneId: transformedScene.id,
-                  totalScenes: updatedScenes.length,
-                  replacedWelcome: isWelcomeProject
+                console.log('[ChatPanelG] ✅ Deleted scene from VideoState:', {
+                  sceneId: actualScene.id,
+                  sceneName: actualScene.name
                 });
+                
+                // Invalidate the scenes query to ensure fresh data
+                await utils.generation.getProjectScenes.invalidate({ projectId });
+                
+              } else if (operation === 'scene.edit' || operation === 'scene.update') {
+                // For edits, use the updateScene method from VideoState
+                updateScene(projectId, actualScene.id, actualScene);
+                
+                console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
+                  sceneId: actualScene.id,
+                  operation
+                });
+                
+                // Invalidate the scenes query to ensure fresh data
+                await utils.generation.getProjectScenes.invalidate({ projectId });
                 
                 // Call the callback if provided
                 if (onSceneGenerated) {
-                  onSceneGenerated(transformedScene.id);
+                  onSceneGenerated(actualScene.id);
+                }
+              } else if (operation === 'scene.create' || !operation) {
+                // For create operations
+                const lastScene = currentScenes[currentScenes.length - 1];
+                const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
+                
+                // Transform database format to InputProps format
+                const transformedScene = {
+                  id: actualScene.id,
+                  type: 'custom' as const,
+                  start: startTime,
+                  duration: actualScene.duration || 180,
+                  data: {
+                    code: actualScene.tsxCode,
+                    name: actualScene.name || 'Generated Scene',
+                    componentId: actualScene.id,
+                    props: actualScene.props || {}
+                  }
+                };
+                
+                // Check if this is a welcome project
+                const isWelcomeProject = currentScenes.length === 1 && 
+                  (currentScenes[0]?.data?.name === 'Welcome Scene' ||
+                   currentScenes[0]?.data?.isWelcomeScene === true ||
+                   currentScenes[0]?.type === 'welcome');
+                
+                // If welcome project, replace the welcome scene; otherwise append
+                const updatedScenes = isWelcomeProject 
+                  ? [transformedScene]
+                  : [...currentScenes, transformedScene];
+                
+                const currentPropsData = getCurrentProps();
+                if (currentPropsData) {
+                  const updatedProps = {
+                    ...currentPropsData,
+                    scenes: updatedScenes,
+                    meta: {
+                      ...currentPropsData.meta,
+                      duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
+                      title: currentPropsData.meta?.title || 'New Project'
+                    }
+                  };
+                  
+                  replace(projectId, updatedProps);
+                  
+                  console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
+                    sceneId: transformedScene.id,
+                    totalScenes: updatedScenes.length,
+                    replacedWelcome: isWelcomeProject
+                  });
+                  
+                  // Invalidate the scenes query to ensure fresh data
+                  await utils.generation.getProjectScenes.invalidate({ projectId });
+                  
+                  // Call the callback if provided
+                  if (onSceneGenerated) {
+                    onSceneGenerated(transformedScene.id);
+                  }
                 }
               }
             }
-          }
+          } // Close the else block for clarification check
           
         } catch (error) {
           console.error('[ChatPanelG] Generation failed:', error);
-          updateMessage(projectId, messageId, {
-            content: 'Failed to process your request. Please try again.',
-            status: 'error'
-          });
+          
+          // No optimistic messages to clean up
         } finally {
           setIsGenerating(false);
           setGenerationComplete(true);
+          
+          // Always invalidate scenes to ensure UI is in sync with database
+          await utils.generation.getProjectScenes.invalidate({ projectId });
         }
       }
     },
-    onComplete: (messageId) => {
+    onComplete: (messageId: string) => {
       console.log('[ChatPanelG] SSE completed:', messageId);
     },
-    onError: (error) => {
+    onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
       toast.error(error);
       setIsGenerating(false);
@@ -561,37 +589,42 @@ export default function ChatPanelG({
     <div className="flex flex-col h-full">
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {componentMessages.length === 0 ? (
-          <ChatWelcome onExampleClick={setMessage} />
-        ) : (
-          componentMessages.map((msg) => (
-            <ChatMessage
-              key={msg.id}
-              message={{
-                id: msg.id,
-                message: msg.content,
-                isUser: msg.isUser,
-                timestamp: msg.timestamp.getTime(),
-                status: msg.status,
-                kind: msg.kind,
-                imageUrls: msg.imageUrls,
-              }}
-              onImageClick={(imageUrl) => {
-                // TODO: Implement image click handler
-                console.log('Image clicked:', imageUrl);
-              }}
-              projectId={projectId}
-              onRevert={isReverting ? undefined : handleRevert}
-              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-            />
-          ))
+        {componentMessages.map((msg) => (
+          <ChatMessage
+            key={msg.id}
+            message={{
+              id: msg.id,
+              message: msg.content,
+              isUser: msg.isUser,
+              timestamp: msg.timestamp.getTime(),
+              status: msg.status,
+              kind: msg.kind,
+              imageUrls: msg.imageUrls,
+            }}
+            onImageClick={(imageUrl) => {
+              // TODO: Implement image click handler
+              console.log('Image clicked:', imageUrl);
+            }}
+            projectId={projectId}
+            onRevert={isReverting ? undefined : handleRevert}
+            hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+          />
+        ))}
+        
+        {/* Show pulsating message UI when generating */}
+        {isGenerating && (
+          <div className="flex justify-start mb-4">
+            <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+              <GeneratingMessage />
+            </div>
+          </div>
         )}
         
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input area */}
-      <div className="p-4 border-t bg-gray-50/50">
+      <div className="p-4">
 
         {/* Auto-fix error banner */}
         <AutoFixErrorBanner
@@ -611,79 +644,86 @@ export default function ChatPanelG({
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
-        <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+        <form onSubmit={handleSubmit} className="flex items-end" autoComplete="off">
           <div className="flex-1 relative">
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={handleMessageChange}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                selectedSceneId
-                  ? "Describe changes to the selected scene..."
-                  : "Describe your video or add a new scene..."
-              }
-              disabled={isGenerating}
-              className={cn(
-                "w-full resize-none rounded-md border border-input bg-background",
-                "pl-16 pr-3 py-3 text-sm leading-5",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:cursor-not-allowed disabled:opacity-50",
-                isDragOver && "border-blue-500 bg-blue-50"
-              )}
-              style={{
-                height: '40px', // Start at button height
-                minHeight: '40px', // Match button height
-                maxHeight: 24 * 6, // 6 lines
-                overflowY: "auto"
-              }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            />
+            <div className={cn(
+              "rounded-2xl border border-gray-300 bg-white shadow-sm",
+              "focus-within:border-gray-400 focus-within:shadow-md transition-all",
+              isDragOver && "border-blue-500 bg-blue-50"
+            )}>
+              {/* Text area container with fixed height that stops before icons */}
+              <div className="relative">
+                <textarea
+                  key="chat-input"
+                  ref={textareaRef}
+                  value={message}
+                  onChange={handleMessageChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={!message ? "Describe what you want to create" : ""}
+                  disabled={false}
+                  className={cn(
+                    "w-full resize-none bg-transparent border-none",
+                    "px-3 pt-3 pb-0 text-sm leading-6",
+                    "focus:outline-none focus:ring-0",
+                    isGenerating && "opacity-70",
+                    "rounded-t-2xl"
+                  )}
+                  style={{
+                    minHeight: '48px',
+                    maxHeight: '480px', // 20 lines * 24px line height
+                    overflowY: "auto"
+                  }}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                />
+              </div>
 
-            <div className="absolute left-3 flex gap-1 items-center" style={{ bottom: '16px' }}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-0.5 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                disabled={isGenerating}
-                aria-label="Upload images"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </button>
+              {/* Icon row at bottom - completely separate from text area */}
+              <div className="flex items-center justify-between px-3 py-1">
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    disabled={isGenerating}
+                    aria-label="Upload images"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
 
-              <VoiceInput 
-                onTranscription={(text) => {
-                  setMessage(prevMessage => {
-                    const newMessage = prevMessage.trim() 
-                      ? `${prevMessage} ${text}` 
-                      : text;
-                    return newMessage;
-                  });
-                }}
-                disabled={isGenerating}
-              />
+                  <VoiceInput 
+                    onTranscription={(text) => {
+                      setMessage(prevMessage => {
+                        const newMessage = prevMessage.trim() 
+                          ? `${prevMessage} ${text}` 
+                          : text;
+                      return newMessage;
+                    });
+                  }}
+                  disabled={isGenerating}
+                />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!message.trim() || isGenerating}
+                  className="w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0"
+                >
+                  {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                </Button>
+              </div>
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={imageHandlers.handleFileSelect}
-              className="hidden"
-            />
           </div>
 
-          <Button
-            type="submit"
-            disabled={!message.trim() || isGenerating}
-            className="w-10 flex-shrink-0"
-            style={{ minHeight: '42px', marginBottom: '6px' }}
-          >
-            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/mp4,video/quicktime,video/webm"
+            multiple
+            onChange={imageHandlers.handleFileSelect}
+            className="hidden"
+          />
         </form>
       </div>
     </div>

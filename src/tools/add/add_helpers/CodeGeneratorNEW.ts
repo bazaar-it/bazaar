@@ -2,6 +2,7 @@ import { AIClientService, type AIMessage } from "~/server/services/ai/aiClient.s
 import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
+import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 
 /**
@@ -29,13 +30,7 @@ export class CodeGeneratorService {
       });
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-FUNCTION NAME: ${input.functionName}
-
-Generate a complete Remotion component based on the user's request.
-- Create engaging motion graphics
-- Use modern animations with Framer Motion
-- Ensure it's a complete, self-contained component
-- Default duration: 5 seconds (150 frames at 30fps)`;
+FUNCTION NAME: ${input.functionName}`;
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -94,19 +89,22 @@ Generate a complete Remotion component based on the user's request.
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
         FUNCTION_NAME: input.functionName
       });
-      const userPrompt = `PREVIOUS SCENE CODE:
+      const transitionContext = getSmartTransitionContext(input.previousSceneCode);
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+PREVIOUS SCENE REFERENCE:
 \`\`\`tsx
-${input.previousSceneCode}
+${transitionContext}
 \`\`\`
 
-USER REQUEST: "${input.userPrompt}"
+IMPORTANT INSTRUCTIONS:
+1. Study the previous scene's visual style, colors, animation timing, and patterns
+2. Create a NEW scene that maintains visual consistency
+3. If previous elements exit in a direction, consider entering from the opposite
+4. Match the pacing and energy of the previous scene
+5. Use similar animation timing (if previous uses 8-12 frames, you should too)
 
-FUNCTION NAME: ${input.functionName}
-
-Generate a NEW scene based on the user's request, using the previous scene's code as a style reference. 
-- Keep the same visual style, colors, fonts, and animation patterns
-- Create NEW content based on the user's request
-- Ensure it's a complete, self-contained Remotion component`;
+FUNCTION NAME: ${input.functionName}`;
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -251,8 +249,15 @@ export default function ${input.functionName}() {
       // Build user message for vision API - include the actual user prompt!
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-IMPORTANT: Recreate the UI/layout shown in the image as accurately as possible. Match colors, text, positioning, and visual hierarchy exactly. Then add appropriate animations based on the user's request.
-${input.visionAnalysis ? `Vision analysis: ${JSON.stringify(input.visionAnalysis, null, 2)}` : ''}`;
+IMPORTANT: Study the image to understand the visual style, colors, typography, and design elements. Then create MOTION GRAPHICS that showcase these elements one at a time in sequence.
+
+DO NOT recreate the static layout exactly. Instead:
+1. Identify the key elements (headline, subtext, buttons, icons, etc.)
+2. Show each element individually in temporal sequence
+3. Match the visual style (colors, fonts, spacing) but follow motion graphics principles
+4. Use conditional rendering: {frame >= X && frame < Y && (element)}
+
+Transform the static design into sequential storytelling.`;
       
       // Use centralized vision API with proper message format
       const visionMessagesContent: AIMessage['content'] = [
@@ -335,6 +340,83 @@ export default function ${input.functionName}() {
     const user = JSON.stringify(layoutJson, null, 2);
     
     return { system: systemPrompt.content, user };
+  }
+
+  /**
+   * Generate code for video-based scenes
+   */
+  async generateCodeWithVideos(input: {
+    videoUrls: string[];
+    userPrompt: string;
+    functionName: string;
+  }): Promise<CodeGenerationOutput> {
+    const config = getModel('codeGenerator');
+    
+    console.log('🎥 [CODE GENERATOR] Generating code with videos:', {
+      videoCount: input.videoUrls.length,
+      prompt: input.userPrompt.substring(0, 50) + '...'
+    });
+    
+    try {
+      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+        FUNCTION_NAME: input.functionName
+      });
+      
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+VIDEO URLS: ${input.videoUrls.map((url, i) => `
+Video ${i + 1}: ${url}`).join('')}
+
+FUNCTION NAME: ${input.functionName}
+
+Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytelling:
+- Default: Use video as background with volume={0} unless user specifies otherwise (split-screen, side-by-side, etc.)
+- If text/graphics are needed, they should appear ONE AT A TIME in sequence
+- Follow temporal sequence: Title (0-60) → Description (60-120) → CTA (120-180)
+- Each element should have its own time slot using conditional rendering
+- Transform any requested overlays into sequential appearances
+- NO static overlays - everything should animate in sequence
+- Adapt video placement based on user request (background, split-screen, picture-in-picture, etc.)`;
+
+      const messages = [
+        { role: 'user' as const, content: userPrompt }
+      ];
+      
+      const response = await AIClientService.generateResponse(
+        config,
+        messages,
+        { role: 'system', content: systemPrompt.content }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from CodeGenerator LLM");
+      }
+      
+      // Clean and process code
+      let cleanCode = rawOutput.trim();
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Extract duration
+      const durationAnalysis = analyzeDuration(cleanCode);
+      
+      return {
+        code: cleanCode,
+        name: "Scene", 
+        duration: durationAnalysis.frames,
+        reasoning: `Generated scene with video content (${durationAnalysis.frames} frames)`,
+        debug: {
+          method: 'withVideos',
+          videoCount: input.videoUrls.length,
+          promptLength: userPrompt.length,
+          responseLength: rawOutput.length,
+          durationAnalysis
+        }
+      };
+    } catch (error) {
+      console.error('[CODE GENERATOR] Video generation failed:', error);
+      throw error;
+    }
   }
 
   // Removed buildImageToCodePrompt - now using centralized IMAGE_CODE_GENERATOR prompt

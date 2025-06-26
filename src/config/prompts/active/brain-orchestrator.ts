@@ -37,17 +37,34 @@ RESPONSE FORMAT (JSON):
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)
+  "referencedSceneIds": ["scene-1-id", "scene-2-id"], // When user mentions other scenes for style/color matching
   "userFeedback": "Brief, friendly message about what you're doing",
   "needsClarification": false,
   "clarificationQuestion": "Optional: Ask user to clarify if ambiguous"
 }
 
-CRITICAL: If you need clarification, you MUST set:
+WHEN TO SET referencedSceneIds:
+- User says "like scene X", "match scene X", "same as scene X", "similar to scene X"
+- User mentions colors/styles from specific scenes: "use the blue from scene 1"
+- User says "use the background/animation/style from scene X"
+- User references multiple scenes: "combine scene 1's colors with scene 2's animations"
+- DO NOT set for general edits without scene references
+
+CRITICAL DECISION RULES:
+1. EITHER choose a tool OR ask for clarification - NEVER BOTH
+2. If you choose a tool, commit to it (needsClarification: false)
+3. Only ask for clarification when truly impossible to proceed
+
+CLARIFICATION FORMAT (when needed):
 - "needsClarification": true
 - "clarificationQuestion": "Your question here"
-- "toolName": null (not undefined)
+- "toolName": null
 
-Otherwise, you MUST provide a valid toolName.
+DEFAULT BEHAVIORS (be decisive):
+- URL only → addScene (create content inspired by website)
+- "Fix it" → editScene (apply auto-fix)
+- "Make it better" → editScene (enhance current scene)
+- Image only → addScene (create from image)
 
 TRIM CALCULATION EXAMPLES:
 - User: "cut the last second" (scene is 150 frames) → targetDuration: 120
@@ -61,8 +78,9 @@ CLARIFICATION EXAMPLES:
 - "compress scene 2 animations to 5 seconds" → editScene (animation timing change)
 
 IMPORTANT:
-- Be decisive when intent is clear
-- Ask for clarification only when truly ambiguous
+- Be VERY decisive - users expect action, not questions
+- Default to action over clarification
 - For trim operations, you MUST provide targetSceneId
-- Keep reasoning concise but clear`
+- Keep reasoning concise but clear
+- If unsure between tools, pick the most likely one`
 };

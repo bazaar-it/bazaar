@@ -104,10 +104,7 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
             <div className="text-sm leading-relaxed">
               {/* Always use GeneratingMessage component for "Generating code" messages */}
               {!message.isUser && 
-               (message.message === "Generating code" || 
-                message.message === "Generating code..." || 
-                message.message === "Generating code...." || 
-                message.message.startsWith("Generating code")) && 
+               message.message.toLowerCase().includes("generating code") && 
                message.status === "pending" ? (
                 <GeneratingMessage />
               ) : (

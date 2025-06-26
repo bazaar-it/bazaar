@@ -83,11 +83,11 @@ export class IntentAnalyzer {
     
     // Add image context
     let imageInfo = "";
-    if (contextPacket.imageContext && contextPacket.imageContext.conversationImages.length > 0) {
-      const images = contextPacket.imageContext.conversationImages;
+    if (contextPacket.imageContext && contextPacket.imageContext.recentImagesFromChat && contextPacket.imageContext.recentImagesFromChat.length > 0) {
+      const images = contextPacket.imageContext.recentImagesFromChat;
       imageInfo = `\nIMAGES IN CONVERSATION:`;
       images.forEach((img: any) => {
-        imageInfo += `\n${img.position}. "${img.userPrompt}" [${img.imageCount} image(s)]`;
+        imageInfo += `\n${img.position}. "${img.userPrompt}" [${img.imageUrls.length} image(s)]`;
       });
       imageInfo += `\n\nWhen user references images:
 - "the image" or "this image" → most recent image (position ${images.length})
@@ -106,27 +106,34 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
     
     // Add conversation context with recent action detection
     let chatInfo = "";
-    if (contextPacket.conversationContext !== 'New conversation') {
-      chatInfo = `\nCONVERSATION: ${contextPacket.conversationContext}`;
-      
-      // Check if last message indicates we just added a scene
-      const lastMessages = contextPacket.last5Messages || [];
-      if (lastMessages.length >= 2) {
-        const lastAssistantMsg = [...lastMessages].reverse().find(m => m.role === 'assistant');
-        if (lastAssistantMsg && (
-          lastAssistantMsg.content.includes('added') || 
-          lastAssistantMsg.content.includes('created') ||
-          lastAssistantMsg.content.includes('I\'ve added')
-        )) {
-          chatInfo += `\nRECENT: Just added a new scene (likely Scene ${storyboardSoFar?.length || 'latest'})`;
-        }
-      }
+    const recentMessages = contextPacket.recentMessages || [];
+    if (recentMessages.length > 0) {
+      chatInfo = "\nRECENT CONVERSATION:";
+      // Include last 3 message pairs for context
+      const messagesToShow = recentMessages.slice(-6);
+      messagesToShow.forEach((msg, idx) => {
+        chatInfo += `\n${msg.role.toUpperCase()}: "${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}"`;
+      });
+    }
+
+    // Add web analysis context
+    let webInfo = "";
+    if (contextPacket.webContext) {
+      const web = contextPacket.webContext;
+      webInfo = `\nWEB ANALYSIS CONTEXT:
+Website: ${web.pageData.title} (${web.originalUrl})
+Description: ${web.pageData.description || 'No description'}
+Key Headings: ${web.pageData.headings.slice(0, 3).join(', ')}
+Screenshots: Desktop (${web.screenshotUrls.desktop}) & Mobile (${web.screenshotUrls.mobile})
+Analyzed: ${new Date(web.analyzedAt).toLocaleString()}
+
+The AI has access to visual screenshots of this website and can reference them for brand matching, design inspiration, and style consistency.`;
     }
 
     return `USER: "${prompt}"
 
 STORYBOARD:
-${storyboardInfo}${imageInfo}${chatInfo}
+${storyboardInfo}${imageInfo}${chatInfo}${webInfo}
 
 Respond with JSON only.`;
   }
@@ -170,12 +177,20 @@ Respond with JSON only.`;
     
     // Handle clarification responses
     if (parsed.needsClarification) {
-      return {
-        success: true,
-        needsClarification: true,
-        clarificationQuestion: parsed.clarificationQuestion,
-        reasoning: parsed.reasoning
-      };
+      // If brain provided both tool and clarification, prefer the tool
+      if (parsed.toolName) {
+        console.log('🎯 [INTENT] Brain wants clarification but chose tool - proceeding with tool:', parsed.toolName);
+        // Continue to normal processing
+      } else {
+        // Only clarification, no tool
+        return {
+          success: true,
+          needsClarification: true,
+          clarificationQuestion: parsed.clarificationQuestion,
+          reasoning: parsed.reasoning,
+          toolName: null  // Explicitly null, not undefined
+        };
+      }
     }
 
     // Single tool operation
@@ -185,6 +200,7 @@ Respond with JSON only.`;
       reasoning: parsed.reasoning,
       targetSceneId: parsed.targetSceneId,
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
+      referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
       userFeedback: parsed.userFeedback,
     };
 

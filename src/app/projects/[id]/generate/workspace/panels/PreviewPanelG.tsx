@@ -93,6 +93,16 @@ export default function TestComponent() {
       });
 
       console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) compiled successfully`);
+      
+      // 🚨 NEW: Dispatch success event to clear any existing errors
+      const successEvent = new CustomEvent('scene-fixed', {
+        detail: {
+          sceneId,
+          sceneName
+        }
+      });
+      window.dispatchEvent(successEvent);
+      
       return {
         isValid: true,
         compiledCode: cleanSceneCode,
@@ -631,8 +641,8 @@ export default function FallbackComposition() {
     
     return {
       fps: 30,
-      width: 1280,
-      height: 720,
+      width: 1920,
+      height: 1080,
       durationInFrames: totalDuration, // Use total duration, not just last scene
       inputProps: {}
     };

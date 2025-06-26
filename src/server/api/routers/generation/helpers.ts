@@ -28,6 +28,24 @@ export async function executeToolFromDecision(
   // Prepare tool input based on tool type
   switch (decision.toolName) {
     case 'addScene':
+      // Get reference scenes if specified by Brain for cross-scene style matching
+      let referenceScenes: any[] = [];
+      if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {
+        // Safety: Only include scenes that exist in storyboard
+        referenceScenes = storyboard.filter(s => 
+          decision.toolContext!.referencedSceneIds!.includes(s.id)
+        );
+        
+        console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
+      }
+
+      // Debug logging for video URLs
+      console.log('📝 [HELPERS] Building ADD tool input:', {
+        hasImageUrls: !!decision.toolContext.imageUrls?.length,
+        hasVideoUrls: !!decision.toolContext.videoUrls?.length,
+        videoUrls: decision.toolContext.videoUrls,
+      });
+
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -35,7 +53,21 @@ export async function executeToolFromDecision(
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
+        videoUrls: decision.toolContext.videoUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
+        // Pass previous scene for style continuity
+        previousSceneContext: storyboard.length > 0 ? {
+          tsxCode: storyboard[storyboard.length - 1].tsxCode,
+          style: undefined
+        } : undefined,
+        // NEW: Pass reference scenes for cross-scene style matching
+        referenceScenes: referenceScenes.length > 0 ? referenceScenes.map(s => ({
+          id: s.id,
+          name: s.name,
+          tsxCode: s.tsxCode
+        })) : undefined,
+        // NEW: Pass web context for brand-matching
+        webContext: decision.toolContext.webContext,
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -128,6 +160,26 @@ export async function executeToolFromDecision(
         throw new Error("Scene not found for editing");
       }
       
+      // Handle referenced scenes for style/color matching in edits
+      let editReferenceScenes = undefined;
+      if (decision.toolContext.referencedSceneIds && decision.toolContext.referencedSceneIds.length > 0) {
+        editReferenceScenes = decision.toolContext.referencedSceneIds
+          .map(refId => storyboard.find(s => s.id === refId))
+          .filter(Boolean)
+          .map(scene => ({
+            id: scene.id,
+            name: scene.name,
+            tsxCode: scene.tsxCode
+          }));
+        
+        if (editReferenceScenes.length > 0) {
+          console.log('🔗 [HELPERS] Using reference scenes for edit:', {
+            targetScene: sceneToEdit.name,
+            referenceScenes: editReferenceScenes.map(r => r.name)
+          });
+        }
+      }
+      
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -136,8 +188,10 @@ export async function executeToolFromDecision(
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
         currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
+        videoUrls: decision.toolContext.videoUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
         errorDetails: decision.toolContext.errorDetails,
+        referenceScenes: editReferenceScenes,
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);
@@ -325,15 +379,12 @@ export async function executeToolFromDecision(
         throw new Error(deleteResult.error?.message || 'Delete operation failed');
       }
       
-      // Delete from database
-      await db.delete(scenes).where(eq(scenes.id, decision.toolContext.targetSceneId));
-      
-      // Track this iteration if we have a messageId
+      // Track this iteration BEFORE deleting (to avoid foreign key constraint)
       if (messageId) {
         const endTime = Date.now();
         const generationTimeMs = endTime - startTime;
         
-        // Create scene iteration record
+        // Create scene iteration record BEFORE deletion
         await db.insert(sceneIterations).values({
           sceneId: decision.toolContext.targetSceneId,
           projectId,
@@ -354,6 +405,9 @@ export async function executeToolFromDecision(
           generationTimeMs,
         });
       }
+      
+      // Delete from database AFTER tracking the iteration
+      await db.delete(scenes).where(eq(scenes.id, decision.toolContext.targetSceneId));
       
       return {
         success: true,

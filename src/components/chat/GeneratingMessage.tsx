@@ -19,17 +19,12 @@ export function GeneratingMessage({ className = "" }: GeneratingMessageProps) {
 
   return (
     <span className={`inline-flex items-baseline ${className}`}>
-      <style jsx>{`
-        @keyframes subtleGlow {
-          0%, 100% { opacity: 0.6; }
-          50% { opacity: 1; }
-        }
-        
-        .glow-text {
-          animation: subtleGlow 2s ease-in-out infinite;
-        }
-      `}</style>
-      <span className="text-gray-600 text-sm font-normal glow-text">
+      <span 
+        className="text-gray-600 text-sm font-normal animate-pulse"
+        style={{
+          animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        }}
+      >
         Generating code<span className="inline-block w-12 text-left">{'.'.repeat(dots)}</span>
       </span>
     </span>

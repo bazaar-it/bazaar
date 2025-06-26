@@ -17,6 +17,7 @@ export class Orchestrator {
       prompt: input.prompt,
       projectId: input.projectId,
       hasImages: !!(input.userContext?.imageUrls as string[])?.length,
+      hasVideos: !!(input.userContext?.videoUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
     
@@ -44,14 +45,27 @@ export class Orchestrator {
         };
       }
       
+      // Handle clarification as a valid response, not an error
+      if (toolSelection.needsClarification) {
+        console.log('🧠 [NEW ORCHESTRATOR] Clarification needed:', toolSelection.clarificationQuestion);
+        return {
+          success: true,  // Clarification is a valid outcome
+          needsClarification: true,
+          chatResponse: toolSelection.clarificationQuestion || "Could you provide more details about what you'd like to create?",
+          reasoning: toolSelection.reasoning
+        };
+      }
+      
       // 3. Return decision (NO EXECUTION!)
       console.log('🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...');
       
       if (!toolSelection.toolName) {
+        // This should rarely happen now with proper clarification handling
+        console.error('🧠 [NEW ORCHESTRATOR] No tool selected and no clarification - this is a bug!');
         return {
           success: false,
           error: "No tool selected",
-          chatResponse: toolSelection.clarificationQuestion || "I need more information to help you."
+          chatResponse: "I need more information to help you."
         };
       }
 
@@ -67,11 +81,22 @@ export class Orchestrator {
             userPrompt: input.prompt,
             targetSceneId: toolSelection.targetSceneId,
             targetDuration: toolSelection.targetDuration,
+            referencedSceneIds: toolSelection.referencedSceneIds,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
+            videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
+            webContext: contextPacket.webContext,
           },
           workflow: toolSelection.workflow,
         }
       };
+      
+      // Debug logging for video URLs
+      console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {
+        hasImageUrls: !!(input.userContext?.imageUrls as string[])?.length,
+        hasVideoUrls: !!(input.userContext?.videoUrls as string[])?.length,
+        videoUrls: (input.userContext?.videoUrls as string[]),
+      });
+      
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;
 

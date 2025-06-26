@@ -49,8 +49,8 @@ const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "My Projects", icon: FolderIcon, href: "#myprojects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
   { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
-  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
+  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
 ];
 
 

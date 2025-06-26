@@ -9,6 +9,7 @@ import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
 import { Player } from "@remotion/player";
+import { useVideoState } from "~/stores/videoState";
 
 interface TemplatesPanelGProps {
   projectId: string;
@@ -21,10 +22,10 @@ const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
 
   if (compilationError) {
     return (
-      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-24 sm:h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 text-sm font-medium">Template Error</div>
-          <div className="text-gray-500 text-xs mt-1">Failed to compile</div>
+          <div className="text-red-500 text-xs sm:text-sm font-medium">Template Error</div>
+          <div className="text-gray-500 text-[10px] sm:text-xs mt-1">Failed to compile</div>
         </div>
       </div>
     );
@@ -32,10 +33,10 @@ const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
 
   if (isCompiling || !component) {
     return (
-      <div className="w-full h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-24 sm:h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto mb-2" />
-          <div className="text-gray-500 text-sm">Compiling...</div>
+          <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-gray-400 mx-auto mb-1 sm:mb-2" />
+          <div className="text-gray-500 text-xs sm:text-sm">Compiling...</div>
         </div>
       </div>
     );
@@ -123,8 +124,8 @@ const TemplatePreview = ({ template, onClick, isLoading }: {
 
       {/* Template name overlay - only visible on hover when not loading */}
       {isHovered && !isLoading && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
-          <div className="text-white text-sm font-medium">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
+          <div className="text-white text-xs sm:text-sm font-medium">
             {template.name}
           </div>
         </div>
@@ -161,31 +162,37 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
+  // Get video state methods
+  const { addScene, addAssistantMessage } = useVideoState();
+  
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
     onSuccess: async (result) => {
       setLoadingTemplateId(null);
-      if (result.success) {
+      if (result.success && result.scene) {
         toast.success(`${result.message}`);
         console.log('[TemplatesPanelG] Template added successfully:', result.scene);
         
-        // 🚨 CRITICAL: Invalidate all relevant caches to trigger UI updates
-        console.log('[TemplatesPanelG] Invalidating caches and refreshing video state...');
+        // 🚨 CRITICAL: Update video state directly for immediate UI update
+        console.log('[TemplatesPanelG] Updating video state directly...');
         
-        // Invalidate project scenes cache
+        // Add the scene to video state (addScene checks for duplicates internally)
+        addScene(projectId, result.scene);
+        
+        // Note: The server already creates the "Added template:" message in the database
+        // so we don't need to create it client-side to avoid duplicates
+        
+        // Still invalidate caches for consistency with database
         await utils.generation.getProjectScenes.invalidate({ projectId });
-        await utils.generation.getProjectScenes.refetch({ projectId });
-        
-        // Invalidate chat messages cache
         await utils.chat.getMessages.invalidate({ projectId });
         
-        // 🚨 CRITICAL: Update video state through callback
+        // Call the callback if provided
         if (onSceneGenerated && result.scene?.id) {
-          console.log('[TemplatesPanelG] Triggering video state update...');
+          console.log('[TemplatesPanelG] Triggering additional video state update...');
           await onSceneGenerated(result.scene.id);
         }
         
-        console.log('[TemplatesPanelG] ✅ All caches invalidated and video state updated');
+        console.log('[TemplatesPanelG] ✅ Video state updated and caches invalidated');
       } else {
         toast.error("Failed to add template");
       }
@@ -242,13 +249,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         </div>
       </div>
 
-      {/* Templates Grid - Dynamic responsive grid */}
+      {/* Templates Grid - Mobile-responsive grid */}
       <div className="flex-1 overflow-y-auto p-2">
         <div 
-          className="grid gap-3"
-          style={{
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))'
-          }}
+          className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
         >
           {filteredTemplates.map((template) => (
             <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">

@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const projectId = searchParams.get('projectId');
   const userMessage = searchParams.get('message');
   const imageUrls = searchParams.get('imageUrls');
+  const videoUrls = searchParams.get('videoUrls');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -37,32 +38,55 @@ export async function GET(request: NextRequest) {
   // Start the async work
   (async () => {
     try {
-      // 1. Generate a temporary message ID (not saved to DB)
-      const assistantMessageId = randomUUID();
+      // 1. Create the user message FIRST to ensure correct sequence order
+      const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
+      const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
       
-      // 2. Send temporary "Generating code..." message to client only
-      // This is NOT saved to the database - it's just for immediate UI feedback
-      await writer.write(encoder.encode(formatSSE({
-        type: 'message',
-        id: assistantMessageId,
-        content: "Generating code...",
-        status: 'pending',
-        isTemporary: true  // Flag to indicate this is not a real message
-      })));
+      // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
+      const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
+      
+      const userMsg = await messageService.createMessage({
+        projectId,
+        content: userMessage,
+        role: "user",
+        imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
+      });
 
-      // 3. The actual message will be created by the mutation
-      // when it has the real content to save
+      if (!userMsg) {
+        throw new Error('Failed to create user message');
+      }
+      
+      // 2. Just send the user data back - no assistant message yet
+      await writer.write(encoder.encode(formatSSE({
+        type: 'ready',
+        userMessageId: userMsg.id,
+        userMessage: userMessage,
+        imageUrls: parsedImageUrls,
+        videoUrls: parsedVideoUrls
+      })));
 
     } catch (error) {
       console.error('[SSE] Error:', error);
       
-      // Send error to client
-      await writer.write(encoder.encode(formatSSE({
-        type: 'error',
-        error: 'Failed to process request'
-      })));
+      try {
+        // Send error to client
+        await writer.write(encoder.encode(formatSSE({
+          type: 'error',
+          error: 'Failed to process request'
+        })));
+      } catch (writeError) {
+        console.error('[SSE] Failed to write error:', writeError);
+      }
     } finally {
-      await writer.close();
+      // Small delay to ensure the last message is sent
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      try {
+        await writer.close();
+      } catch (closeError) {
+        // Stream might already be closed
+        console.log('[SSE] Stream already closed');
+      }
     }
   })();
 

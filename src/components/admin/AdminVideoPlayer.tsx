@@ -267,8 +267,8 @@ export default function AdminVideoPlayer({
                 ref={playerRef}
                 component={VideoComposition}
                 durationInFrames={totalDuration}
-                compositionWidth={1280}
-                compositionHeight={720}
+                compositionWidth={1920}
+                compositionHeight={1080}
                 fps={30}
                 style={{
                   width: '100%',

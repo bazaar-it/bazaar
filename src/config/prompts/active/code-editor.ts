@@ -20,15 +20,21 @@ export const CODE_EDITOR = {
 3. Keep the same function name and export structure
 4. Maintain all animation timings unless specifically asked to change
 5. Return the COMPLETE modified code
-6. NO import/require statements - use ONLY window-scoped globals (no ES6 imports, no CommonJS require)
+6. NO import/require statements - use ONLY window-scoped globals
+7. ONLY destructure from window.Remotion - NEVER from window.React or other globals
+8. Access React hooks directly: window.React.useState(), window.React.useEffect()
+9. Access icons directly: <window.IconifyIcon icon="..." />
 
 🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
 - window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
 - window.React - React library (if needed for hooks, etc.)
+- window.IconifyIcon - Iconify icon component (200,000+ icons)
 - window.HeroiconsSolid / window.HeroiconsOutline - Icon components
 - window.LucideIcons - Additional icon library
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
+- window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
+
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 

@@ -11,6 +11,9 @@ import type { InputProps } from '~/lib/types/video/input-props';
 import { GenerateSidebar } from "./GenerateSidebar";
 import WorkspaceContentAreaG from './WorkspaceContentAreaG';
 import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContentAreaG';
+import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
+import { useBreakpoint } from '~/hooks/use-breakpoint';
+import MobileAppHeader from '~/components/MobileAppHeader';
 
 // ✅ NEW: Debug flag for production logging
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -27,14 +30,30 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   
   const { data: session } = useSession();
   const { setProject } = useVideoState();
+  const breakpoint = useBreakpoint();
 
-  // Initialize video state on mount
+  // Initialize video state on mount - but only if not already loaded
   useEffect(() => {
-    if (DEBUG) console.log('Initializing video state for project:', projectId, 'with props:', initialProps);
-    if (DEBUG) console.log('[GenerateWorkspaceRoot] About to call setProject with force=true. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 500) + (JSON.stringify(initialProps).length > 500 ? '...' : ''));
-    // Force update with server data to ensure we always show what's in the database
-    setProject(projectId, initialProps, { force: true });
-  }, [projectId, initialProps, setProject]);
+    const currentProps = useVideoState.getState().getCurrentProps();
+    const isProjectLoaded = currentProps && useVideoState.getState().projects[projectId];
+    
+    if (DEBUG) console.log('[GenerateWorkspaceRoot] Checking if project needs initialization:', {
+      projectId,
+      isProjectLoaded,
+      hasCurrentScenes: currentProps?.scenes?.length || 0,
+      initialScenes: initialProps?.scenes?.length || 0
+    });
+    
+    // Only initialize if:
+    // 1. Project is not loaded yet, OR
+    // 2. Current state has no scenes but initial props has scenes (fresh data from server)
+    if (!isProjectLoaded || (!currentProps?.scenes?.length && initialProps?.scenes?.length)) {
+      if (DEBUG) console.log('[GenerateWorkspaceRoot] Initializing project with server data');
+      setProject(projectId, initialProps, { force: true });
+    } else {
+      if (DEBUG) console.log('[GenerateWorkspaceRoot] Project already loaded, skipping initialization');
+    }
+  }, [projectId]); // Remove initialProps from dependencies to prevent re-runs
   
   const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -98,6 +117,34 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   // Access user info from session
   const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
 
+  // Use mobile layout for mobile breakpoint
+  if (breakpoint === 'mobile') {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+        {/* Mobile Header - Compact version */}
+        <div className="sticky top-0 z-40 w-full">
+          <MobileAppHeader
+            projectTitle={title}
+            projectId={projectId}
+            onRename={handleRename}
+            isRenaming={renameMutation.isPending}
+          />
+        </div>
+        
+        {/* Mobile Workspace */}
+        <div className="flex-1 overflow-hidden">
+          <MobileWorkspaceLayout
+            projectId={projectId}
+            initialProps={initialProps}
+            projects={userProjects}
+            onProjectRename={handleProjectRenamed}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop/Tablet layout
   return (
     <div className="h-screen flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
