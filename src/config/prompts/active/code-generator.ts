@@ -96,7 +96,7 @@ Match the icon size with the next closest element to it, if none then default to
 ⸻
 
 BACKGROUNDS AND VISUAL STYLE
-  • Use dynamic gradients for backgrounds such as:
+  • Start by using a brand color for the background, if not available, use dynamic gradients for backgrounds such as:
 Vibrant: linear-gradient from #667eea to #764ba2
 Warm: linear-gradient from #f093fb to #f5576c
 Cool: linear-gradient from #4facfe to #00f2fe
@@ -121,7 +121,7 @@ VIDEO HANDLING
 
 IMAGE HANDLING
 If an image is provided, follow the users instructions exactly. 
-• Extract the core design language, including:
+•⁠  ⁠Extract the core design language, including:
   - Font style and weight, and match with a similar or exact match with a Google font available via window.RemotionGoogleFonts.loadFont
   - Color palette 
   - Corner radius

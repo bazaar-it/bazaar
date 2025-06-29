@@ -3,6 +3,8 @@
  * DO NOT EDIT MANUALLY - RUN: npm run generate:types
  * 
  * Generated at: 2025-06-29T04:39:12.553Z
+
+ * Generated at: 2025-06-26T16:55:04.028Z
  */
 
 /**
