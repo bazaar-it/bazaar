@@ -55,7 +55,7 @@
     "log:refresh:mcp": "tsx src/scripts/log-tools/log-refresh.ts",
     "log:issues:mcp": "tsx src/scripts/log-tools/log-issues.ts",
     "log:raw:mcp": "tsx src/scripts/log-tools/log-raw.ts",
-    "postinstall": "npm rebuild lightningcss || true"
+    "postinstall": "npm rebuild lightningcss || true && npx playwright install chromium || true"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
