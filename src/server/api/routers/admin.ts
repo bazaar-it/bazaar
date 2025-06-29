@@ -1780,7 +1780,7 @@ export default function GeneratedScene() {
       }
 
       try {
-        const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
+        const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/email/send`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1895,7 +1895,7 @@ export default function GeneratedScene() {
               ctaUrl,
             };
 
-            const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
+            const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/email/send`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

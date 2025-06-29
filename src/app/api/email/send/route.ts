@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         emailHtml = await render(WelcomeEmailTemplate({ 
           firstName: emailData.firstName || 'there' 
         }));
-        subject = 'Welcome to Bazaar-Vid! 🎬';
+        subject = 'Welcome to Bazaar! 🎬';
         break;
 
       case 'newsletter':
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Bazaar-Vid <noreply@bazaar-vid.vercel.app>',
+        from: 'Bazaar <onboarding@resend.dev>',
         to: [emailData.to],
         subject,
         html: emailHtml,
