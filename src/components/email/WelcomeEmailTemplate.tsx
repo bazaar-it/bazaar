@@ -1,80 +1,179 @@
-import * as React from 'react';
+import {
+  Body,
+  Container,
+  Head,
+  Heading,
+  Html,
+  Img,
+  Link,
+  Preview,
+  Section,
+  Text,
+  Button,
+} from '@react-email/components';
 
-interface WelcomeEmailTemplateProps {
-  firstName: string;
-  userEmail: string;
+interface WelcomeEmailProps {
+  firstName?: string;
 }
 
-export function WelcomeEmailTemplate({ firstName, userEmail }: WelcomeEmailTemplateProps) {
+export default function WelcomeEmailTemplate({ firstName = 'there' }: WelcomeEmailProps) {
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: 1.6, color: '#333' }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <h1 style={{ color: '#3B82F6', fontSize: '28px', marginBottom: '10px' }}>
-            Welcome to Bazaar-Vid! 🎉
-          </h1>
-        </div>
-        
-        <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', marginBottom: '20px' }}>
-          <h2 style={{ color: '#1F2937', fontSize: '20px', marginBottom: '15px' }}>
-            Hi {firstName}!
-          </h2>
-          <p style={{ fontSize: '16px', marginBottom: '15px' }}>
-            We're excited to have you join the Bazaar-Vid community! Your account has been successfully created.
-          </p>
-          <p style={{ fontSize: '16px', marginBottom: '15px' }}>
-            With Bazaar-Vid, you can create stunning motion graphics and animations with the power of AI. 
-            Start by creating your first project and let our AI help you bring your ideas to life.
-          </p>
-        </div>
+    <Html>
+      <Head />
+      <Preview>Welcome to Bazaar-Vid - Create stunning videos with AI</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={logoSection}>
+            <Img
+              src="https://bazaar-vid.vercel.app/bazaar-logo.png"
+              width="120"
+              height="40"
+              alt="Bazaar-Vid"
+              style={logo}
+            />
+          </Section>
 
-        <div style={{ marginBottom: '30px' }}>
-          <h3 style={{ color: '#1F2937', fontSize: '18px', marginBottom: '15px' }}>
-            What you can do with Bazaar-Vid:
-          </h3>
-          <ul style={{ fontSize: '16px', paddingLeft: '20px' }}>
-            <li style={{ marginBottom: '8px' }}>Create animated scenes with AI assistance</li>
-            <li style={{ marginBottom: '8px' }}>Upload images for AI-powered scene generation</li>
-            <li style={{ marginBottom: '8px' }}>Use professional templates to get started quickly</li>
-            <li style={{ marginBottom: '8px' }}>Export high-quality video content</li>
-          </ul>
-        </div>
+          <Section style={content}>
+            <Heading style={h1}>Welcome to Bazaar-Vid, {firstName}! 🎬</Heading>
+            
+            <Text style={text}>
+              We're thrilled to have you join our community of creators! Bazaar-Vid makes it incredibly easy to create professional videos using the power of AI.
+            </Text>
 
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <a 
-            href="https://bazaar-vid.vercel.app/projects" 
-            style={{
-              backgroundColor: '#3B82F6',
-              color: 'white',
-              padding: '12px 24px',
-              textDecoration: 'none',
-              borderRadius: '6px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              display: 'inline-block'
-            }}
-          >
-            Start Creating Now
-          </a>
-        </div>
+            <Section style={featuresSection}>
+              <Text style={featuresTitle}>Here's what you can do:</Text>
+              
+              <Text style={feature}>
+                🎨 <strong>AI-Powered Scene Generation</strong><br />
+                Describe your vision and watch our AI create stunning video scenes
+              </Text>
+              
+              <Text style={feature}>
+                ⚡ <strong>Real-time Editing</strong><br />
+                Make changes instantly with our intelligent editing system
+              </Text>
+              
+              <Text style={feature}>
+                🎭 <strong>Custom Animations</strong><br />
+                Add professional animations and effects with simple prompts
+              </Text>
+              
+              <Text style={feature}>
+                📱 <strong>Export & Share</strong><br />
+                Export your videos in high quality and share them anywhere
+              </Text>
+            </Section>
 
-        <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '20px', fontSize: '14px', color: '#6b7280' }}>
-          <p>
-            If you have any questions, feel free to reach out to our support team. We're here to help!
-          </p>
-          <p style={{ marginTop: '15px' }}>
-            Best regards,<br />
-            The Bazaar-Vid Team
-          </p>
-        </div>
+            <Section style={ctaSection}>
+              <Button
+                href="https://bazaar-vid.vercel.app/projects"
+                style={button}
+              >
+                Start Creating Your First Video
+              </Button>
+            </Section>
 
-        <div style={{ textAlign: 'center', marginTop: '30px', fontSize: '12px', color: '#9ca3af' }}>
-          <p>
-            This email was sent to {userEmail}. If you didn't create an account with Bazaar-Vid, 
-            you can safely ignore this email.
-          </p>
-        </div>
-      </div>
-    </div>
+            <Text style={text}>
+              Need help getting started? Check out our <Link href="https://bazaar-vid.vercel.app/docs" style={link}>documentation</Link> or reply to this email - we're here to help!
+            </Text>
+
+            <Text style={footer}>
+              Best regards,<br />
+              The Bazaar-Vid Team
+            </Text>
+          </Section>
+        </Container>
+      </Body>
+    </Html>
   );
-} 
+}
+
+const main = {
+  backgroundColor: '#f6f9fc',
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
+};
+
+const container = {
+  backgroundColor: '#ffffff',
+  margin: '0 auto',
+  padding: '20px 0 48px',
+  marginBottom: '64px',
+};
+
+const logoSection = {
+  padding: '32px 32px 0',
+};
+
+const logo = {
+  margin: '0 auto',
+};
+
+const content = {
+  padding: '0 32px',
+};
+
+const h1 = {
+  color: '#1f2937',
+  fontSize: '24px',
+  fontWeight: '600',
+  lineHeight: '28px',
+  margin: '32px 0 16px',
+};
+
+const text = {
+  color: '#374151',
+  fontSize: '16px',
+  lineHeight: '24px',
+  margin: '16px 0',
+};
+
+const featuresSection = {
+  margin: '32px 0',
+  padding: '24px',
+  backgroundColor: '#f9fafb',
+  borderRadius: '8px',
+};
+
+const featuresTitle = {
+  color: '#1f2937',
+  fontSize: '18px',
+  fontWeight: '600',
+  margin: '0 0 16px',
+};
+
+const feature = {
+  color: '#374151',
+  fontSize: '14px',
+  lineHeight: '20px',
+  margin: '12px 0',
+};
+
+const ctaSection = {
+  textAlign: 'center' as const,
+  margin: '32px 0',
+};
+
+const button = {
+  backgroundColor: '#3b82f6',
+  borderRadius: '6px',
+  color: '#ffffff',
+  fontSize: '16px',
+  fontWeight: '600',
+  textDecoration: 'none',
+  textAlign: 'center' as const,
+  display: 'inline-block',
+  padding: '12px 24px',
+  margin: '0 auto',
+};
+
+const link = {
+  color: '#3b82f6',
+  textDecoration: 'underline',
+};
+
+const footer = {
+  color: '#6b7280',
+  fontSize: '14px',
+  lineHeight: '20px',
+  margin: '32px 0 0',
+}; 

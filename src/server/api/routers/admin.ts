@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers } from "~/server/db/schema";
 import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -1816,6 +1816,7 @@ export default function GeneratedScene() {
   sendNewsletter: adminOnlyProcedure
     .input(z.object({
       userIds: z.array(z.string()).optional(),
+      customEmails: z.array(z.string().email()).optional(),
       sendToAll: z.boolean().default(false),
       subject: z.string(),
       content: z.string(),
@@ -1824,110 +1825,124 @@ export default function GeneratedScene() {
       isCustomCode: z.boolean().default(false),
     }))
     .mutation(async ({ input }) => {
-      const { userIds, sendToAll, subject, content, ctaText, ctaUrl } = input;
+      const { userIds, customEmails, sendToAll, subject, content, ctaText, ctaUrl } = input;
 
-      let targetUsers;
+      let targetEmails: Array<{ email: string; name?: string }> = [];
 
-      if (sendToAll) {
-        // Send to all users
-        targetUsers = await db
-          .select({
-            id: users.id,
-            email: users.email,
-            name: users.name,
-          })
-          .from(users);
-      } else if (userIds && userIds.length > 0) {
-        // Send to specific users
-        targetUsers = await db
-          .select({
-            id: users.id,
-            email: users.email,
-            name: users.name,
-          })
-          .from(users)
-          .where(inArray(users.id, userIds));
-      } else {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Must specify either userIds or sendToAll=true",
-        });
-      }
+              if (sendToAll) {
+          // Send to all users and subscribers
+          const [allUsers, allSubscribers] = await Promise.all([
+            db
+              .select({
+                email: users.email,
+                name: users.name,
+              })
+              .from(users)
+              .where(sql`${users.email} IS NOT NULL AND ${users.email} != ''`),
+            db
+              .select({
+                email: emailSubscribers.email,
+                name: sql<string | null>`NULL`.as('name'),
+              })
+              .from(emailSubscribers)
+              .where(eq(emailSubscribers.status, 'active'))
+          ]);
 
-      if (targetUsers.length === 0) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No users found to send newsletter to",
-        });
-      }
-
-      const emailPromises = targetUsers.map(async (user) => {
-        try {
-          const emailPayload = input.isCustomCode ? {
-            type: 'custom',
-            to: user.email,
-            subject,
-            reactCode: content,
-          } : {
-            type: 'newsletter',
-            to: user.email,
-            firstName: user.name || 'there',
-            subject,
-            content,
-            ctaText,
-            ctaUrl,
-          };
-
-          const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(emailPayload),
-          });
-
-          const result = await response.json();
-
-          if (!response.ok) {
-            throw new Error(result.error || 'Failed to send email');
+          targetEmails = [
+            ...allUsers.map(user => ({ email: user.email, name: user.name || undefined })), 
+            ...allSubscribers.map(sub => ({ email: sub.email, name: sub.name || undefined }))
+          ];
+        } else {
+          // Send to specific users and/or custom emails
+          if (userIds && userIds.length > 0) {
+            const selectedUsers = await db
+              .select({
+                email: users.email,
+                name: users.name,
+              })
+              .from(users)
+              .where(inArray(users.id, userIds));
+            
+            targetEmails.push(...selectedUsers.map(user => ({ email: user.email, name: user.name || undefined })));
           }
 
-          return {
-            userId: user.id,
-            email: user.email,
-            success: true,
-            emailId: result.data?.id,
-          };
-        } catch (error) {
-          console.error(`Failed to send newsletter to ${user.email}:`, error);
-          return {
-            userId: user.id,
-            email: user.email,
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          };
+          if (customEmails && customEmails.length > 0) {
+            targetEmails.push(...customEmails.map(email => ({ email, name: undefined })));
+          }
         }
-      });
 
-      const results = await Promise.all(emailPromises);
-      const successful = results.filter(r => r.success);
-      const failed = results.filter(r => !r.success);
+        if (targetEmails.length === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No valid recipients found",
+          });
+        }
 
-      return {
-        totalSent: successful.length,
-        totalFailed: failed.length,
-        totalUsers: targetUsers.length,
-        successful,
-        failed,
-        message: `Newsletter sent to ${successful.length} out of ${targetUsers.length} users`,
-      };
+                const emailPromises = targetEmails.map(async (recipient) => {
+          try {
+            const emailPayload = input.isCustomCode ? {
+              type: 'custom',
+              to: recipient.email,
+              subject,
+              reactCode: content,
+            } : {
+              type: 'newsletter',
+              to: recipient.email,
+              firstName: recipient.name || 'there',
+              subject,
+              content,
+              ctaText,
+              ctaUrl,
+            };
+
+            const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(emailPayload),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              throw new Error(result.error || 'Failed to send email');
+            }
+
+            return {
+              email: recipient.email,
+              success: true,
+              emailId: result.data?.id,
+            };
+          } catch (error) {
+            console.error(`Failed to send newsletter to ${recipient.email}:`, error);
+            return {
+              email: recipient.email,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            };
+          }
+        });
+
+              const results = await Promise.all(emailPromises);
+        const successful = results.filter((r: any) => r.success);
+        const failed = results.filter((r: any) => !r.success);
+
+        return {
+          totalSent: successful.length,
+          totalFailed: failed.length,
+          totalUsers: targetEmails.length,
+          successful,
+          failed,
+          message: `Newsletter sent to ${successful.length} out of ${targetEmails.length} recipients`,
+        };
     }),
 
   // Get email marketing statistics
   getEmailStats: adminOnlyProcedure
     .query(async () => {
       // Get user counts for email targeting - only count users with email addresses
-      const [totalUsers, recentUsers] = await Promise.all([
+      const [totalUsers, recentUsers, totalSubscribers, recentSubscribers] = await Promise.all([
         db
           .select({ count: count() })
           .from(users)
@@ -1939,15 +1954,134 @@ export default function GeneratedScene() {
             gte(users.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
             sql`${users.email} IS NOT NULL AND ${users.email} != ''`
           )),
+        db
+          .select({ count: count() })
+          .from(emailSubscribers)
+          .where(eq(emailSubscribers.status, 'active')),
+        db
+          .select({ count: count() })
+          .from(emailSubscribers)
+          .where(and(
+            eq(emailSubscribers.status, 'active'),
+            gte(emailSubscribers.subscribedAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+          )),
       ]);
 
       return {
         totalUsers: totalUsers[0]?.count || 0,
         recentUsers: recentUsers[0]?.count || 0,
+        totalSubscribers: totalSubscribers[0]?.count || 0,
+        recentSubscribers: recentSubscribers[0]?.count || 0,
         emailsSentToday: 0, // TODO: Track email sends in database
         emailsSentThisMonth: 0, // TODO: Track email sends in database
         openRate: 0, // TODO: Implement email tracking
         clickRate: 0, // TODO: Implement email tracking
+      };
+    }),
+
+  // Get email recipients for targeting
+  getEmailRecipients: adminOnlyProcedure
+    .input(z.object({
+      segment: z.enum(['users', 'subscribers', 'all']).default('all'),
+      search: z.string().optional(),
+      limit: z.number().min(1).max(100).default(50),
+      offset: z.number().min(0).default(0),
+    }))
+    .query(async ({ input }) => {
+      const { segment, search, limit, offset } = input;
+
+      let usersQuery;
+      let subscribersQuery;
+
+      // Build search conditions
+      const userSearchCondition = search ? or(
+        like(users.name, `%${search}%`),
+        like(users.email, `%${search}%`)
+      ) : undefined;
+
+      const subscriberSearchCondition = search ? 
+        like(emailSubscribers.email, `%${search}%`) : undefined;
+
+      // Get users (registered users)
+      if (segment === 'users' || segment === 'all') {
+        const userWhereConditions = [
+          sql`${users.email} IS NOT NULL AND ${users.email} != ''`
+        ];
+        if (userSearchCondition) {
+          userWhereConditions.push(userSearchCondition);
+        }
+
+        usersQuery = db
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            type: sql<'user'>`'user'`.as('type'),
+            createdAt: users.createdAt,
+          })
+          .from(users)
+          .where(and(...userWhereConditions))
+          .orderBy(asc(users.email));
+      }
+
+      // Get email subscribers (homepage signups)
+      if (segment === 'subscribers' || segment === 'all') {
+        const subscriberWhereConditions = [
+          eq(emailSubscribers.status, 'active')
+        ];
+        if (subscriberSearchCondition) {
+          subscriberWhereConditions.push(subscriberSearchCondition);
+        }
+
+        subscribersQuery = db
+          .select({
+            id: emailSubscribers.id,
+            name: sql<string | null>`NULL`.as('name'),
+            email: emailSubscribers.email,
+            type: sql<'subscriber'>`'subscriber'`.as('type'),
+            createdAt: emailSubscribers.subscribedAt,
+          })
+          .from(emailSubscribers)
+          .where(and(...subscriberWhereConditions))
+          .orderBy(asc(emailSubscribers.email));
+      }
+
+      // Execute queries and combine results
+      let allRecipients: Array<{
+        id: string;
+        name: string | null;
+        email: string;
+        type: 'user' | 'subscriber';
+        createdAt: Date;
+      }> = [];
+
+      if (usersQuery && subscribersQuery) {
+        const [userResults, subscriberResults] = await Promise.all([
+          usersQuery,
+          subscribersQuery
+        ]);
+        allRecipients = [...userResults, ...subscriberResults];
+      } else if (usersQuery) {
+        allRecipients = await usersQuery;
+      } else if (subscribersQuery) {
+        allRecipients = await subscribersQuery;
+      }
+
+      // Sort combined results by email
+      allRecipients.sort((a, b) => a.email.localeCompare(b.email));
+
+      // Apply pagination
+      const totalCount = allRecipients.length;
+      const paginatedRecipients = allRecipients.slice(offset, offset + limit);
+
+      return {
+        recipients: paginatedRecipients,
+        totalCount,
+        hasMore: offset + limit < totalCount,
+        segments: {
+          users: allRecipients.filter(r => r.type === 'user').length,
+          subscribers: allRecipients.filter(r => r.type === 'subscriber').length,
+        },
       };
     }),
 });

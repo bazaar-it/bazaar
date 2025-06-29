@@ -44,16 +44,18 @@ export default function EmailMarketingPage() {
   const [customEmail, setCustomEmail] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState('');
+  const [selectedSegment, setSelectedSegment] = useState<'users' | 'subscribers' | 'all'>('all');
+  const [recipientSearch, setRecipientSearch] = useState('');
 
   // UI state
   const [showTemplateForm, setShowTemplateForm] = useState(false);
 
   // Queries
   const { data: emailStats, isLoading: statsLoading } = api.admin.getEmailStats.useQuery();
-  const { data: users, isLoading: usersLoading } = api.admin.getUsers.useQuery({
-    page: 1,
+  const { data: recipients, refetch: refetchRecipients } = api.admin.getEmailRecipients.useQuery({
+    segment: selectedSegment,
+    search: recipientSearch,
     limit: 100,
-    search: userSearch,
   });
 
   // Mutations
@@ -120,35 +122,72 @@ export default function EmailMarketingPage() {
 
   const handleSendEmail = async () => {
     if (!emailCode.trim()) {
-      toast.error('Email code is required');
+      toast.error('Please enter email content');
       return;
     }
 
-    // Determine recipients
-    let recipients: string[] = [];
-    
-    if (sendToAll) {
-      recipients = users?.users.map(u => u.email) || [];
-    } else if (customEmail.trim()) {
-      recipients = [customEmail.trim()];
-    } else if (selectedUserIds.length > 0) {
-      const selectedUsers = users?.users.filter(u => selectedUserIds.includes(u.id)) || [];
-      recipients = selectedUsers.map(u => u.email);
-    }
+    try {
+      let emailRecipients: string[] = [];
+      
+      if (sendToAll) {
+        emailRecipients = recipients?.recipients.map(r => r.email) || [];
+      } else if (customEmail.trim()) {
+        emailRecipients = [customEmail.trim()];
+      } else if (selectedUserIds.length > 0) {
+        const selectedRecipients = recipients?.recipients.filter(r => selectedUserIds.includes(r.id)) || [];
+        emailRecipients = selectedRecipients.map(r => r.email);
+      }
 
-    if (recipients.length === 0) {
-      toast.error('Please select recipients');
-      return;
-    }
+      if (emailRecipients.length === 0) {
+        toast.error('Please select recipients or enter a custom email');
+        return;
+      }
 
-         // Send as custom React code email
-     sendEmailMutation.mutate({
-       sendToAll,
-       userIds: sendToAll ? undefined : selectedUserIds,
-       subject: 'Custom Email Campaign',
-       content: emailCode,
-       isCustomCode: true,
-     });
+      // Send emails in batches to avoid overwhelming the API
+      const batchSize = 10;
+      const batches = [];
+      for (let i = 0; i < emailRecipients.length; i += batchSize) {
+        batches.push(emailRecipients.slice(i, i + batchSize));
+      }
+
+      let totalSent = 0;
+      let totalFailed = 0;
+
+      for (const batch of batches) {
+        const results = await Promise.allSettled(
+          batch.map(email => 
+            sendEmailMutation.mutateAsync({
+              userIds: [], // We're using custom emails
+              sendToAll: false,
+              subject: 'Custom Email Campaign',
+              content: emailCode,
+              isCustomCode: true,
+            })
+          )
+        );
+
+        results.forEach(result => {
+          if (result.status === 'fulfilled') {
+            totalSent += result.value.totalSent;
+            totalFailed += result.value.totalFailed;
+          } else {
+            totalFailed += 1;
+          }
+        });
+      }
+
+      toast.success(`Email sent successfully! ${totalSent} sent, ${totalFailed} failed`);
+      
+      // Reset form
+      setEmailCode('');
+      setCustomEmail('');
+      setSelectedUserIds([]);
+      setSendToAll(false);
+      
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error('Failed to send email');
+    }
   };
 
   const handleUserSelection = (userId: string, checked: boolean) => {
@@ -159,9 +198,9 @@ export default function EmailMarketingPage() {
     }
   };
 
-  const filteredUsers = users?.users.filter(user => 
-    user.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    user.email.toLowerCase().includes(userSearch.toLowerCase())
+  const filteredUsers = recipients?.recipients.filter(user => 
+    user.name?.toLowerCase().includes(recipientSearch.toLowerCase()) ||
+    user.email.toLowerCase().includes(recipientSearch.toLowerCase())
   ) || [];
 
   if (statsLoading) {
@@ -205,13 +244,13 @@ export default function EmailMarketingPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New Users (30d)</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Newsletter Subscribers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{emailStats?.recentUsers || 0}</div>
+            <div className="text-2xl font-bold">{emailStats?.totalSubscribers || 0}</div>
             <p className="text-xs text-muted-foreground">
-              Recent signups
+              Total subscribers
             </p>
           </CardContent>
         </Card>
@@ -364,102 +403,117 @@ export function EmailTemplate({ firstName }: { firstName: string }) {
           <div className="space-y-4">
             <Label>Recipients</Label>
             
+            {/* Segment Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Target Segment
+              </label>
+              <select
+                value={selectedSegment}
+                onChange={(e) => setSelectedSegment(e.target.value as 'users' | 'subscribers' | 'all')}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Recipients ({recipients?.segments.users || 0} users + {recipients?.segments.subscribers || 0} subscribers)</option>
+                <option value="users">Registered Users ({recipients?.segments.users || 0})</option>
+                <option value="subscribers">Newsletter Subscribers ({recipients?.segments.subscribers || 0})</option>
+              </select>
+            </div>
+
             {/* Send to All Toggle */}
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="sendToAll"
-                checked={sendToAll}
-                onCheckedChange={(checked) => {
-                  setSendToAll(checked);
-                  if (checked) {
-                    setCustomEmail('');
-                    setSelectedUserIds([]);
-                  }
-                }}
-              />
-              <Label htmlFor="sendToAll">Send to all users</Label>
-              {sendToAll && (
-                <Badge variant="secondary">
-                  {emailStats?.totalUsers || 0} recipients
-                </Badge>
-              )}
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={sendToAll}
+                  onChange={(e) => {
+                    setSendToAll(e.target.checked);
+                    if (e.target.checked) {
+                      setCustomEmail('');
+                      setSelectedUserIds([]);
+                    }
+                  }}
+                  className="mr-2"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Send to all {selectedSegment === 'all' ? 'recipients' : selectedSegment} 
+                  ({selectedSegment === 'all' ? (recipients?.totalCount || 0) : 
+                    selectedSegment === 'users' ? (recipients?.segments.users || 0) : 
+                    (recipients?.segments.subscribers || 0)} emails)
+                </span>
+              </label>
             </div>
 
             {!sendToAll && (
-              <div className="space-y-4">
+              <>
                 {/* Custom Email Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="customEmail">Custom Email Address</Label>
-                  <Input
-                    id="customEmail"
-                    type="email"
-                    placeholder="user@example.com"
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Custom Email Addresses (comma-separated)
+                  </label>
+                  <textarea
                     value={customEmail}
                     onChange={(e) => {
                       setCustomEmail(e.target.value);
-                      if (e.target.value) {
+                      if (e.target.value.trim()) {
                         setSelectedUserIds([]);
                       }
                     }}
+                    placeholder="email1@example.com, email2@example.com"
+                    rows={3}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
 
-                {!customEmail && (
-                  <div className="space-y-2">
-                    <Label>Select from Users</Label>
+                {/* User Search and Selection */}
+                {!customEmail.trim() && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Search and Select Recipients
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientSearch}
+                      onChange={(e) => setRecipientSearch(e.target.value)}
+                      placeholder="Search by name or email..."
+                      className="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-2 focus:ring-blue-500"
+                    />
                     
-                    {/* User Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                      <Input
-                        placeholder="Search users..."
-                        value={userSearch}
-                        onChange={(e) => setUserSearch(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-
-                    {/* User List */}
-                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto">
-                      {usersLoading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      ) : filteredUsers.length === 0 ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          No users found
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {filteredUsers.map((user) => (
-                            <div key={user.id} className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`user-${user.id}`}
-                                checked={selectedUserIds.includes(user.id)}
-                                onChange={(e) => handleUserSelection(user.id, e.target.checked)}
-                                className="rounded"
-                              />
-                              <Label htmlFor={`user-${user.id}`} className="flex-1 cursor-pointer">
-                                <div className="flex items-center justify-between">
-                                  <span>{user.name || 'Unnamed User'}</span>
-                                  <span className="text-sm text-muted-foreground">{user.email}</span>
-                                </div>
-                              </Label>
+                    <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-lg">
+                      {recipients?.recipients.map((recipient) => (
+                        <label key={recipient.id} className="flex items-center p-3 hover:bg-gray-50 border-b last:border-b-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(recipient.id)}
+                            onChange={(e) => handleUserSelection(recipient.id, e.target.checked)}
+                            className="mr-3"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{recipient.name || recipient.email}</span>
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                recipient.type === 'user' 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-green-100 text-green-800'
+                              }`}>
+                                {recipient.type === 'user' ? 'User' : 'Subscriber'}
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            {recipient.name && (
+                              <div className="text-sm text-gray-500">{recipient.email}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
                     </div>
                     
                     {selectedUserIds.length > 0 && (
-                      <Badge variant="secondary">
-                        {selectedUserIds.length} recipients selected
-                      </Badge>
+                      <div className="mt-2 text-sm text-gray-600">
+                        {selectedUserIds.length} recipient{selectedUserIds.length !== 1 ? 's' : ''} selected
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
 
@@ -467,7 +521,7 @@ export function EmailTemplate({ firstName }: { firstName: string }) {
           <Button 
             onClick={handleSendEmail}
             className="w-full" 
-            disabled={sendEmailMutation.isPending}
+            disabled={sendEmailMutation.isPending || !emailCode.trim()}
           >
             {sendEmailMutation.isPending ? (
               <>

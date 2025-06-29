@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
-import { WelcomeEmailTemplate } from '~/components/email/WelcomeEmailTemplate';
-import { NewsletterEmailTemplate } from '~/components/email/NewsletterEmailTemplate';
 import { z } from 'zod';
+import { render } from '@react-email/render';
+import WelcomeEmailTemplate from '~/components/email/WelcomeEmailTemplate';
+import NewsletterEmailTemplate from '~/components/email/NewsletterEmailTemplate';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_gWkijeDk_HZFELnWcPSAWg7EZRkK4kSJq');
+// Resend API configuration
+const RESEND_API_KEY = 're_gWkijeDk_HZFELnWcPSAWg7EZRkK4kSJq';
+const RESEND_BASE_URL = 'https://api.resend.com';
 
-// Input validation schemas
+// Email validation schemas
 const welcomeEmailSchema = z.object({
   type: z.literal('welcome'),
   to: z.string().email(),
-  firstName: z.string(),
+  firstName: z.string().optional(),
 });
 
 const newsletterEmailSchema = z.object({
   type: z.literal('newsletter'),
-  to: z.union([z.string().email(), z.array(z.string().email())]),
-  firstName: z.string(),
+  to: z.string().email(),
+  firstName: z.string().optional(),
   subject: z.string(),
   content: z.string(),
   ctaText: z.string().optional(),
@@ -25,92 +27,103 @@ const newsletterEmailSchema = z.object({
 
 const customEmailSchema = z.object({
   type: z.literal('custom'),
-  to: z.union([z.string().email(), z.array(z.string().email())]),
+  to: z.string().email(),
   subject: z.string(),
   reactCode: z.string(),
 });
 
-const emailSchema = z.union([welcomeEmailSchema, newsletterEmailSchema, customEmailSchema]);
+const emailSchema = z.discriminatedUnion('type', [
+  welcomeEmailSchema,
+  newsletterEmailSchema,
+  customEmailSchema,
+]);
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const validatedData = emailSchema.parse(body);
+    const emailData = emailSchema.parse(body);
 
-    let emailData;
+    let emailHtml: string;
+    let subject: string;
 
-    if (validatedData.type === 'welcome') {
-      emailData = {
-        from: 'Bazaar-Vid <onboarding@bazaar-vid.com>',
-        to: validatedData.to,
-        subject: 'Welcome to Bazaar-Vid! 🎉',
-        react: WelcomeEmailTemplate({
-          firstName: validatedData.firstName,
-          userEmail: validatedData.to,
-        }),
-      };
-    } else if (validatedData.type === 'newsletter') {
-      const recipients = Array.isArray(validatedData.to) ? validatedData.to : [validatedData.to];
-      
-      emailData = {
-        from: 'Bazaar-Vid <newsletter@bazaar-vid.com>',
-        to: recipients,
-        subject: validatedData.subject,
-        react: NewsletterEmailTemplate({
-          firstName: validatedData.firstName,
-          userEmail: Array.isArray(validatedData.to) ? validatedData.to[0]! : validatedData.to,
-          subject: validatedData.subject,
-          content: validatedData.content,
-          ctaText: validatedData.ctaText,
-          ctaUrl: validatedData.ctaUrl,
-        }),
-      };
-    } else if (validatedData.type === 'custom') {
-      const recipients = Array.isArray(validatedData.to) ? validatedData.to : [validatedData.to];
-      
-      // For now, we'll send the React code as HTML content
-      // In a production environment, you'd want to properly compile the React code
-      emailData = {
-        from: 'Bazaar-Vid <campaigns@bazaar-vid.com>',
-        to: recipients,
-        subject: validatedData.subject,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Custom Email Campaign</h2>
-            <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <h3>React Code:</h3>
-              <pre style="background: #000; color: #0f0; padding: 10px; border-radius: 3px; overflow-x: auto;">
-                <code>${validatedData.reactCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
-              </pre>
-            </div>
-            <p style="color: #666; font-size: 14px;">
-              This is a preview of your custom React email template. 
-              In production, this would be compiled and rendered as a proper email.
-            </p>
-          </div>
-        `,
-      };
-    } else {
+    switch (emailData.type) {
+      case 'welcome':
+        emailHtml = await render(WelcomeEmailTemplate({ 
+          firstName: emailData.firstName || 'there' 
+        }));
+        subject = 'Welcome to Bazaar-Vid! 🎬';
+        break;
+
+      case 'newsletter':
+        emailHtml = await render(NewsletterEmailTemplate({
+          firstName: emailData.firstName || 'there',
+          subject: emailData.subject,
+          content: emailData.content,
+          ctaText: emailData.ctaText,
+          ctaUrl: emailData.ctaUrl,
+        }));
+        subject = emailData.subject;
+        break;
+
+      case 'custom':
+        // For custom React code emails, we would need to compile the React code
+        // For now, we'll send a plain HTML version with the code as content
+        emailHtml = `
+          <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h1 style="color: #3B82F6;">Custom Email</h1>
+              <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <pre style="white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px;">${emailData.reactCode}</pre>
+              </div>
+              <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                This is a custom email generated from React code.
+              </p>
+            </body>
+          </html>
+        `;
+        subject = emailData.subject;
+        break;
+
+      default:
+        return NextResponse.json(
+          { error: 'Invalid email type' },
+          { status: 400 }
+        );
+    }
+
+    // Send email via Resend API
+    const response = await fetch(`${RESEND_BASE_URL}/emails`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Bazaar-Vid <noreply@bazaar-vid.vercel.app>',
+        to: [emailData.to],
+        subject,
+        html: emailHtml,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('Resend API error:', result);
       return NextResponse.json(
-        { error: 'Invalid email type' },
-        { status: 400 }
+        { 
+          error: 'Failed to send email',
+          details: result.message || 'Unknown error',
+          status: response.status 
+        },
+        { status: response.status }
       );
     }
 
-    const { data, error } = await resend.emails.send(emailData);
-
-    if (error) {
-      console.error('Resend error:', error);
-      return NextResponse.json(
-        { error: 'Failed to send email', details: error },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      data,
-      message: 'Email sent successfully' 
+    return NextResponse.json({
+      success: true,
+      message: 'Email sent successfully',
+      data: result,
     });
 
   } catch (error) {
@@ -118,13 +131,19 @@ export async function POST(request: NextRequest) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid request data', details: error.errors },
+        { 
+          error: 'Invalid email data',
+          details: error.errors 
+        },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
