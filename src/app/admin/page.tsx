@@ -41,12 +41,25 @@ export default function AdminDashboard() {
   }
 
   if (!adminCheck?.isAdmin) {
+    // Temporary bypass for debugging - remove this in production
+    console.log('Admin check result:', adminCheck);
+    console.log('Current user:', session?.user);
+    
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="text-6xl mb-4">🚫</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">You don't have permission to access the admin dashboard.</p>
+          
+          {/* Debug information */}
+          <div className="bg-gray-100 p-4 rounded-lg mb-4 text-left text-sm">
+            <p><strong>Debug Info:</strong></p>
+            <p>User ID: {session?.user?.id}</p>
+            <p>Email: {session?.user?.email}</p>
+            <p>Admin Status: {adminCheck?.isAdmin ? 'true' : 'false'}</p>
+          </div>
+          
           <Link
             href="/"
             className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
