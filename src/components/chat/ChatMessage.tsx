@@ -15,9 +15,6 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp }: ChatMessageProps) {
-  const [confirmMode, setConfirmMode] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   // Only query if hasIterations prop not provided (backward compatibility)
   const { data: iterations, isLoading: isChecking } = api.generation.getMessageIterations.useQuery(
     { messageId: message.id! },
@@ -35,31 +32,12 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Simplified restore click handler - no confirmation needed
   const handleRestoreClick = () => {
-    if (!confirmMode) {
-      // First click - enter confirm mode
-      setConfirmMode(true);
-      
-      // Auto-reset after 3 seconds if no second click
-      timeoutRef.current = setTimeout(() => {
-        setConfirmMode(false);
-      }, 3000);
-    } else {
-      // Second click - execute restore
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setConfirmMode(false);
-      if (onRevert && message.id) {
-        onRevert(message.id);
-      }
+    if (onRevert && message.id) {
+      onRevert(message.id);
     }
   };
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
 
   return (
     <div
@@ -122,24 +100,11 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                 {!message.isUser && hasIterations && onRevert && message.id && (
                   <button
                     onClick={handleRestoreClick}
-                    className={`text-xs flex items-center gap-1 transition-colors ${
-                      confirmMode 
-                        ? 'text-red-500 hover:text-red-700' 
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                    title={confirmMode ? "Click again to confirm" : "Restore to this version"}
+                    className="text-xs flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Restore to this version"
                   >
-                    {confirmMode ? (
-                      <>
-                        <AlertCircle className="h-3 w-3" />
-                        <span>Are you sure?</span>
-                      </>
-                    ) : (
-                      <>
-                        <Undo2 className="h-3 w-3" />
-                        <span>Restore</span>
-                      </>
-                    )}
+                    <Undo2 className="h-3 w-3" />
+                    <span>Restore</span>
                   </button>
                 )}
               </div>
