@@ -455,13 +455,15 @@ export default function ChatPanelG({
           if (responseData.context?.needsClarification) {
             console.log('[ChatPanelG] ✅ Received clarification request:', responseData.context.chatResponse);
             // No scene to process, clarification message already added above
-            // Skip scene processing but continue to finally block
-          } else {
-            // Process scene normally
-            const actualScene = responseData.data;
-            const operation = responseData.meta?.operation;
-            
-            if (actualScene) {
+            // Early return to skip scene processing
+            return;
+          }
+          
+          // Process scene normally
+          const actualScene = responseData.data;
+          const operation = responseData.meta?.operation;
+          
+          if (actualScene) {
               // Get current scenes to calculate start time
               const currentScenes = getCurrentProps()?.scenes || [];
               
@@ -553,7 +555,6 @@ export default function ChatPanelG({
                 }
               }
             }
-          } // Close the else block for clarification check
           
         } catch (error) {
           console.error('[ChatPanelG] Generation failed:', error);
