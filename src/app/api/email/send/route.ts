@@ -5,8 +5,13 @@ import WelcomeEmailTemplate from '~/components/email/WelcomeEmailTemplate';
 import NewsletterEmailTemplate from '~/components/email/NewsletterEmailTemplate';
 
 // Resend API configuration
-const RESEND_API_KEY = 're_gWkijeDk_HZFELnWcPSAWg7EZRkK4kSJq';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gWkijeDk_HZFELnWcPSAWg7EZRkK4kSJq';
 const RESEND_BASE_URL = 'https://api.resend.com';
+
+// Email from address - use test domain for development
+const FROM_EMAIL = process.env.NODE_ENV === 'production' 
+  ? 'Bazaar <noreply@bazaar-vid.vercel.app>'
+  : 'Bazaar <onboarding@resend.dev>';
 
 // Email validation schemas
 const welcomeEmailSchema = z.object({
@@ -99,7 +104,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Bazaar <onboarding@resend.dev>',
+        from: FROM_EMAIL,
         to: [emailData.to],
         subject,
         html: emailHtml,
@@ -153,6 +158,8 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({ 
     message: 'Email API is working',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    fromEmail: FROM_EMAIL,
+    environment: process.env.NODE_ENV
   });
 } 
