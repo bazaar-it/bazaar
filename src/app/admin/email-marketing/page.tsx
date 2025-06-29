@@ -44,7 +44,7 @@ export default function EmailMarketingPage() {
   const [customEmail, setCustomEmail] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState('');
-  const [selectedSegment, setSelectedSegment] = useState<'users' | 'subscribers' | 'all'>('all');
+  const [selectedSegment, setSelectedSegment] = useState<'users' | 'subscribers' | 'all' | 'none'>('none');
   const [recipientSearch, setRecipientSearch] = useState('');
 
   // UI state
@@ -53,9 +53,11 @@ export default function EmailMarketingPage() {
   // Queries
   const { data: emailStats, isLoading: statsLoading } = api.admin.getEmailStats.useQuery();
   const { data: recipients, refetch: refetchRecipients } = api.admin.getEmailRecipients.useQuery({
-    segment: selectedSegment,
+    segment: selectedSegment === 'none' ? 'all' : selectedSegment,
     search: recipientSearch,
     limit: 100,
+  }, {
+    enabled: selectedSegment !== 'none', // Only fetch when a segment is selected
   });
 
   // Mutations
@@ -129,17 +131,25 @@ export default function EmailMarketingPage() {
     try {
       let emailRecipients: string[] = [];
       
-      if (sendToAll) {
+      if (selectedSegment === 'none') {
+        // Only use custom emails when "none" is selected
+        if (customEmail.trim()) {
+          emailRecipients = customEmail.split(',').map(email => email.trim()).filter(Boolean);
+        } else {
+          toast.error('Please enter custom email addresses');
+          return;
+        }
+      } else if (sendToAll) {
         emailRecipients = recipients?.recipients.map(r => r.email) || [];
       } else if (customEmail.trim()) {
-        emailRecipients = [customEmail.trim()];
+        emailRecipients = customEmail.split(',').map(email => email.trim()).filter(Boolean);
       } else if (selectedUserIds.length > 0) {
         const selectedRecipients = recipients?.recipients.filter(r => selectedUserIds.includes(r.id)) || [];
         emailRecipients = selectedRecipients.map(r => r.email);
       }
 
       if (emailRecipients.length === 0) {
-        toast.error('Please select recipients or enter a custom email');
+        toast.error('Please select recipients or enter custom email addresses');
         return;
       }
 
@@ -157,7 +167,7 @@ export default function EmailMarketingPage() {
         const results = await Promise.allSettled(
           batch.map(email => 
             sendEmailMutation.mutateAsync({
-              userIds: [], // We're using custom emails
+              customEmails: [email],
               sendToAll: false,
               subject: 'Custom Email Campaign',
               content: emailCode,
@@ -410,12 +420,13 @@ export function EmailTemplate({ firstName }: { firstName: string }) {
               </label>
               <select
                 value={selectedSegment}
-                onChange={(e) => setSelectedSegment(e.target.value as 'users' | 'subscribers' | 'all')}
+                onChange={(e) => setSelectedSegment(e.target.value as 'users' | 'subscribers' | 'all' | 'none')}
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Recipients ({recipients?.segments.users || 0} users + {recipients?.segments.subscribers || 0} subscribers)</option>
                 <option value="users">Registered Users ({recipients?.segments.users || 0})</option>
                 <option value="subscribers">Newsletter Subscribers ({recipients?.segments.subscribers || 0})</option>
+                <option value="none">None</option>
               </select>
             </div>
 
@@ -433,17 +444,24 @@ export function EmailTemplate({ firstName }: { firstName: string }) {
                     }
                   }}
                   className="mr-2"
+                  disabled={selectedSegment === 'none'} // Disable when "none" is selected
                 />
                 <span className="text-sm font-medium text-gray-700">
-                  Send to all {selectedSegment === 'all' ? 'recipients' : selectedSegment} 
-                  ({selectedSegment === 'all' ? (recipients?.totalCount || 0) : 
-                    selectedSegment === 'users' ? (recipients?.segments.users || 0) : 
-                    (recipients?.segments.subscribers || 0)} emails)
+                  {selectedSegment === 'none' ? (
+                    <span className="text-gray-400">Send to all (disabled - no segment selected)</span>
+                  ) : (
+                    <>
+                      Send to all {selectedSegment === 'all' ? 'recipients' : selectedSegment} 
+                      ({selectedSegment === 'all' ? (recipients?.totalCount || 0) : 
+                        selectedSegment === 'users' ? (recipients?.segments.users || 0) : 
+                        (recipients?.segments.subscribers || 0)} emails)
+                    </>
+                  )}
                 </span>
               </label>
             </div>
 
-            {!sendToAll && (
+            {(!sendToAll || selectedSegment === 'none') && (
               <>
                 {/* Custom Email Input */}
                 <div className="mb-4">
@@ -464,8 +482,8 @@ export function EmailTemplate({ firstName }: { firstName: string }) {
                   />
                 </div>
 
-                {/* User Search and Selection */}
-                {!customEmail.trim() && (
+                {/* User Search and Selection - Only show when segment is selected and no custom emails */}
+                {selectedSegment !== 'none' && !customEmail.trim() && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Search and Select Recipients

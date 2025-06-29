@@ -1982,13 +1982,26 @@ export default function GeneratedScene() {
   // Get email recipients for targeting
   getEmailRecipients: adminOnlyProcedure
     .input(z.object({
-      segment: z.enum(['users', 'subscribers', 'all']).default('all'),
+      segment: z.enum(['users', 'subscribers', 'all', 'none']).default('all'),
       search: z.string().optional(),
       limit: z.number().min(1).max(100).default(50),
       offset: z.number().min(0).default(0),
     }))
     .query(async ({ input }) => {
       const { segment, search, limit, offset } = input;
+
+      // If segment is "none", return empty results as user will use custom emails
+      if (segment === 'none') {
+        return {
+          recipients: [],
+          totalCount: 0,
+          hasMore: false,
+          segments: {
+            users: 0,
+            subscribers: 0,
+          },
+        };
+      }
 
       let usersQuery;
       let subscribersQuery;
