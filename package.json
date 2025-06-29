@@ -54,7 +54,8 @@
     "log:ask:mcp": "tsx src/scripts/log-tools/log-ask.ts",
     "log:refresh:mcp": "tsx src/scripts/log-tools/log-refresh.ts",
     "log:issues:mcp": "tsx src/scripts/log-tools/log-issues.ts",
-    "log:raw:mcp": "tsx src/scripts/log-tools/log-raw.ts"
+    "log:raw:mcp": "tsx src/scripts/log-tools/log-raw.ts",
+    "postinstall": "npm rebuild lightningcss @tailwindcss/oxide || true && npx playwright install chromium || true"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
@@ -87,6 +88,8 @@
     "@radix-ui/react-tabs": "^1.1.9",
     "@radix-ui/react-toast": "^1.2.13",
     "@radix-ui/react-tooltip": "^1.2.4",
+    "@react-email/components": "^0.1.1",
+    "@react-email/render": "^1.1.3",
     "@remotion/bundler": "4.0.290",
     "@remotion/cli": "4.0.290",
     "@remotion/enable-scss": "4.0.290",
@@ -143,6 +146,7 @@
     "redis": "^4.7.1",
     "remark-gfm": "^4.0.1",
     "remotion": "4.0.290",
+    "resend": "^4.6.0",
     "rfc6902": "^5.1.2",
     "roughjs": "^4.6.6",
     "sass": "1.77.2",
@@ -228,6 +232,10 @@
     "tw-animate-css": "^1.2.8",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "1.29.2",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.1.6"
   },
   "ct3aMetadata": {
     "initVersion": "7.39.3"

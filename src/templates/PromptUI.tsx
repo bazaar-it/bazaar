@@ -1,305 +1,194 @@
-// src/templates/PromptUI.tsx
-import React from 'react';
-import {
-  AbsoluteFill,
-  interpolate,
-  useCurrentFrame,
-  spring,
-} from 'remotion';
-
-const Title: React.FC<{
-  opacity: number;
-}> = ({ opacity }) => {
-  return (
-    <div
-      style={{
-        fontSize: "64px",
-        fontFamily: "Inter, sans-serif",
-        fontWeight: 700,
-        color: "#FFFFFF",
-        marginBottom: "48px",
-        opacity,
-      }}
-    >
-      What can I help you ship?
-    </div>
-  );
-};
-
-const SearchBar: React.FC<{
-  opacity: number;
-}> = ({ opacity }) => {
-  const frame = useCurrentFrame();
-  
-  // Typing animation with slower speed
-  const text = "Create an animation of three dwarfs chasing a frog through a pond";
-  const charCount = Math.floor(
-    interpolate(
-      frame,
-      [30, 90],
-      [0, text.length],
-      { extrapolateLeft: "clamp" }
-    )
-  );
-  
-  // Cursor blink animation
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
-
-  return (
-    <div
-      style={{
-        width: "1000px",
-        height: "160px", // Increased height
-        background: "#1A1A1A",
-        borderRadius: "25px",
-        padding: "24px",
-        opacity,
-        boxShadow: "0 4px 32px rgba(0, 0, 0, 0.2)",
-        marginBottom: "48px",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "24px",
-          fontFamily: "Inter, sans-serif",
-          color: "#FFFFFF",
-          opacity: 0.8,
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-        }}
-      >
-        {text.slice(0, charCount)}
-        {cursorVisible && (
-          <span
-            style={{
-              width: "3px",
-              height: "24px",
-              background: "#FFFFFF",
-              display: "inline-block",
-            }}
-          />
-        )}
-      </div>
-    </div>
-  );
-};
-
-const QuickAction: React.FC<{
-  icon: string;
-  label: string;
-  delay: number;
-}> = ({ icon, label, delay }) => {
-  const frame = useCurrentFrame();
-  
-  const progress = spring({
-    frame: frame - delay,
-    fps: 30,
-    config: {
-      damping: 12,
-      stiffness: 200,
-    },
-  });
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        padding: "16px 32px",
-        background: "#1A1A1A",
-        borderRadius: "25px",
-        opacity: progress,
-        transform: `scale(${interpolate(progress, [0, 1], [0.9, 1])})`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <div style={{ fontSize: "24px" }}>{icon}</div>
-      <div
-        style={{
-          fontSize: "16px",
-          fontFamily: "Inter, sans-serif",
-          color: "#FFFFFF",
-          opacity: 0.8,
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  );
-};
-
-export default function PromptUI() {
-  const frame = useCurrentFrame();
-  
-  const mainProgress = spring({
-    frame: frame > 5 ? frame : 0,
-    fps: 30,
-    config: {
-      damping: 20,
-      stiffness: 80,
-    },
-  });
-
-  const quickActions = [
-    { icon: "📸", label: "Animate a screenshot", delay: 30 },
-    { icon: "🎨", label: "Import from Figma", delay: 35 },
-    { icon: "📤", label: "Upload an image", delay: 40 },
-  ];
-
-  return (
-    <AbsoluteFill
-      style={{
-        background: "#000000",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Title opacity={mainProgress} />
-      <SearchBar opacity={mainProgress} />
-      
-      <div
-        style={{
-          display: "flex",
-          gap: "24px",
-          justifyContent: "center",
-          width: "1000px",
-        }}
-      >
-        {quickActions.map((action, i) => (
-          <QuickAction key={i} {...action} />
-        ))}
-      </div>
-    </AbsoluteFill>
-  );
-}
+import { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } from "remotion";
 
 // Template configuration - exported so registry can use it
 export const templateConfig = {
   id: 'prompt-ui',
   name: 'Prompt UI',
   duration: 180, // 6 seconds
-  previewFrame: 45,
-  getCode: () => `const {
-  AbsoluteFill,
-  interpolate,
-  useCurrentFrame,
-  spring,
-} = window.Remotion;
-
-const Title = ({ opacity }) => {
-  return (
-    <div
-      style={{
-        fontSize: "64px",
-        fontFamily: "Inter, sans-serif",
-        fontWeight: 700,
-        color: "#FFFFFF",
-        marginBottom: "48px",
-        opacity,
-      }}
-    >
-      What can I help you ship?
-    </div>
-  );
-};
+  previewFrame: 90,
+  getCode: () => `const { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } = window.Remotion;
 
 const SearchBar = ({ opacity }) => {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
   
-  const text = "Create an animation of three dwarfs chasing a frog through a pond";
-  const charCount = Math.floor(
+  const line1 = "Start creating by adding a detailed prompt";
+  const line2 = "and uploading an image.";
+  
+  const line1CharCount = Math.floor(
     interpolate(
       frame,
       [30, 90],
-      [0, text.length],
+      [0, line1.length],
+      { extrapolateLeft: "clamp" }
+    )
+  );
+  
+  const line2CharCount = Math.floor(
+    interpolate(
+      frame,
+      [90, 150],
+      [0, line2.length],
       { extrapolateLeft: "clamp" }
     )
   );
   
   const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+  const showLine2 = frame >= 90;
+  const showCursorOnLine2 = frame >= 90 && frame <= 150;
+  const iconProgress = 1;
+  const boxHeight = showLine2 ? "400px" : "320px";
 
   return (
-    <div
-      style={{
-        width: "1000px",
-        height: "160px",
-        background: "#1A1A1A",
-        borderRadius: "25px",
-        padding: "24px",
-        opacity,
-        boxShadow: "0 4px 32px rgba(0, 0, 0, 0.2)",
-        marginBottom: "48px",
-      }}
-    >
+    <>
       <div
         style={{
-          fontSize: "24px",
-          fontFamily: "Inter, sans-serif",
-          color: "#FFFFFF",
-          opacity: 0.8,
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
+          width: "1600px",
+          height: boxHeight,
+          background: "#F5F5F5",
+          borderRadius: "50px",
+          padding: "48px",
+          opacity,
+          boxShadow: "0 8px 64px rgba(0, 0, 0, 0.1)",
+          position: "relative",
+          transition: "height 0.3s ease",
         }}
       >
-        {text.slice(0, charCount)}
-        {cursorVisible && (
-          <span
+        <div
+          style={{
+            fontSize: "65px",
+            fontFamily: "Inter, sans-serif",
+            color: "#000000",
+            opacity: 0.8,
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            marginBottom: "40px",
+            zIndex: 1,
+            position: "relative",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {line1.slice(0, line1CharCount)}
+            {cursorVisible && frame <= 90 && (
+              <span
+                style={{
+                  width: "6px",
+                  height: "48px",
+                  background: "#000000",
+                  display: "inline-block",
+                  marginLeft: "4px",
+                }}
+              />
+            )}
+          </div>
+          {showLine2 && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {line2.slice(0, line2CharCount)}
+              {cursorVisible && showCursorOnLine2 && (
+                <span
+                  style={{
+                    width: "6px",
+                    height: "48px",
+                    background: "#000000",
+                    display: "inline-block",
+                    marginLeft: "4px",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div
+          style={{
+            position: "absolute",
+            bottom: "40px",
+            left: "48px",
+            display: "flex",
+            gap: "32px",
+            alignItems: "center",
+            opacity: iconProgress,
+            zIndex: 2,
+          }}
+        >
+          <div
             style={{
-              width: "3px",
-              height: "24px",
-              background: "#FFFFFF",
-              display: "inline-block",
+              fontSize: "72px",
+              color: "#666666",
+              cursor: "pointer",
+              width: "72px",
+              height: "72px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px solid #666666",
+              borderRadius: "12px",
             }}
-          />
-        )}
+          >
+            <window.IconifyIcon
+              icon="akar-icons:image"
+              style={{
+                fontSize: "72px",
+                color: "#666666",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              fontSize: "72px",
+              color: "#666666",
+              cursor: "pointer",
+              width: "72px",
+              height: "72px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px solid #666666",
+              borderRadius: "12px",
+            }}
+          >
+            <window.IconifyIcon
+              icon="material-symbols:mic-outline"
+              style={{
+                fontSize: "72px",
+                color: "#666666",
+              }}
+            />
+          </div>
+        </div>
+        
+        <div
+          style={{
+            position: "absolute",
+            bottom: "40px",
+            right: "48px",
+            opacity: iconProgress,
+          }}
+        >
+          <div
+            style={{
+              width: "120px",
+              height: "120px",
+              borderRadius: "50%",
+              background: "#333333",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <window.IconifyIcon
+              icon="quill:send"
+              style={{
+                fontSize: "60px",
+                color: "#FFFFFF",
+              }}
+            />
+          </div>
+        </div>
       </div>
-    </div>
-  );
-};
-
-const QuickAction = ({ icon, label, delay }) => {
-  const frame = useCurrentFrame();
-  
-  const progress = spring({
-    frame: frame - delay,
-    fps: 30,
-    config: {
-      damping: 12,
-      stiffness: 200,
-    },
-  });
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        padding: "16px 32px",
-        background: "#1A1A1A",
-        borderRadius: "25px",
-        opacity: progress,
-        transform: \`scale(\${interpolate(progress, [0, 1], [0.9, 1])})\`,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <div style={{ fontSize: "24px" }}>{icon}</div>
-      <div
-        style={{
-          fontSize: "16px",
-          fontFamily: "Inter, sans-serif",
-          color: "#FFFFFF",
-          opacity: 0.8,
-        }}
-      >
-        {label}
-      </div>
-    </div>
+    </>
   );
 };
 
@@ -315,38 +204,229 @@ export default function PromptUI() {
     },
   });
 
-  const quickActions = [
-    { icon: "📸", label: "Animate a screenshot", delay: 30 },
-    { icon: "🎨", label: "Import from Figma", delay: 35 },
-    { icon: "📤", label: "Upload an image", delay: 40 },
-  ];
-
   return (
     <AbsoluteFill
       style={{
-        background: "#000000",
+        background: "#FFFFFF",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Title opacity={mainProgress} />
       <SearchBar opacity={mainProgress} />
-      
-      <div
-        style={{
-          display: "flex",
-          gap: "24px",
-          justifyContent: "center",
-          width: "1000px",
-        }}
-      >
-        {quickActions.map((action, i) => (
-          <QuickAction key={i} {...action} />
-        ))}
-      </div>
     </AbsoluteFill>
   );
-}`,
+}`
 };
+
+const SearchBar = ({ opacity }: { opacity: number }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  
+  const line1 = "Start creating by adding a detailed prompt";
+  const line2 = "and uploading an image.";
+  
+  const line1CharCount = Math.floor(
+    interpolate(
+      frame,
+      [30, 90],
+      [0, line1.length],
+      { extrapolateLeft: "clamp" }
+    )
+  );
+  
+  const line2CharCount = Math.floor(
+    interpolate(
+      frame,
+      [90, 150],
+      [0, line2.length],
+      { extrapolateLeft: "clamp" }
+    )
+  );
+  
+  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+  const showLine2 = frame >= 90;
+  const showCursorOnLine2 = frame >= 90 && frame <= 150;
+  const iconProgress = 1;
+  const boxHeight = showLine2 ? "400px" : "320px";
+
+  return (
+    <>
+      <div
+        style={{
+          width: "1600px",
+          height: boxHeight,
+          background: "#F5F5F5",
+          borderRadius: "50px",
+          padding: "48px",
+          opacity,
+          boxShadow: "0 8px 64px rgba(0, 0, 0, 0.1)",
+          position: "relative",
+          transition: "height 0.3s ease",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "65px",
+            fontFamily: "Inter, sans-serif",
+            color: "#000000",
+            opacity: 0.8,
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            marginBottom: "40px",
+            zIndex: 1,
+            position: "relative",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {line1.slice(0, line1CharCount)}
+            {cursorVisible && frame <= 90 && (
+              <span
+                style={{
+                  width: "6px",
+                  height: "48px",
+                  background: "#000000",
+                  display: "inline-block",
+                  marginLeft: "4px",
+                }}
+              />
+            )}
+          </div>
+          {showLine2 && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              {line2.slice(0, line2CharCount)}
+              {cursorVisible && showCursorOnLine2 && (
+                <span
+                  style={{
+                    width: "6px",
+                    height: "48px",
+                    background: "#000000",
+                    display: "inline-block",
+                    marginLeft: "4px",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div
+          style={{
+            position: "absolute",
+            bottom: "40px",
+            left: "48px",
+            display: "flex",
+            gap: "32px",
+            alignItems: "center",
+            opacity: iconProgress,
+            zIndex: 2,
+          }}
+        >
+          <div
+            style={{
+              fontSize: "72px",
+              color: "#666666",
+              cursor: "pointer",
+              width: "72px",
+              height: "72px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px solid #666666",
+              borderRadius: "12px",
+            }}
+          >
+            <window.IconifyIcon
+              icon="akar-icons:image"
+              style={{
+                fontSize: "72px",
+                color: "#666666",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              fontSize: "72px",
+              color: "#666666",
+              cursor: "pointer",
+              width: "72px",
+              height: "72px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "3px solid #666666",
+              borderRadius: "12px",
+            }}
+          >
+            <window.IconifyIcon
+              icon="material-symbols:mic-outline"
+              style={{
+                fontSize: "72px",
+                color: "#666666",
+              }}
+            />
+          </div>
+        </div>
+        
+        <div
+          style={{
+            position: "absolute",
+            bottom: "40px",
+            right: "48px",
+            opacity: iconProgress,
+          }}
+        >
+          <div
+            style={{
+              width: "120px",
+              height: "120px",
+              borderRadius: "50%",
+              background: "#333333",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <window.IconifyIcon
+              icon="quill:send"
+              style={{
+                fontSize: "60px",
+                color: "#FFFFFF",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default function PromptUI() {
+  const frame = useCurrentFrame();
+  
+  const mainProgress = spring({
+    frame: frame > 5 ? frame : 0,
+    fps: 30,
+    config: {
+      damping: 20,
+      stiffness: 80,
+    },
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: "#FFFFFF",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <SearchBar opacity={mainProgress} />
+    </AbsoluteFill>
+  );
+} 

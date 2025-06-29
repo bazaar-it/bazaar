@@ -251,9 +251,9 @@ export default function ChatPanelG({
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = '40px'; // Reset to button height first
+      textareaRef.current.style.height = '20px'; // Reset to smaller initial height
       const scrollHeight = textareaRef.current.scrollHeight;
-      const minHeight = 40; // Match button height
+      const minHeight = 10; // Smaller minimum height
       const lineHeight = 24; // Approximate line height
       const maxLines = 20;
       const maxHeight = lineHeight * maxLines;
@@ -645,13 +645,18 @@ export default function ChatPanelG({
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
         <form onSubmit={handleSubmit} className="flex items-end" autoComplete="off">
-          <div className="flex-1 relative">
-            <div className={cn(
-              "rounded-2xl border border-gray-300 bg-white shadow-sm",
+          <div 
+            className={cn(
+              "flex-1 relative rounded-2xl border border-gray-300 bg-white shadow-sm",
               "focus-within:border-gray-400 focus-within:shadow-md transition-all",
               isDragOver && "border-blue-500 bg-blue-50"
-            )}>
-              {/* Text area container with fixed height that stops before icons */}
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {/* Text area container with fixed height that stops before icons */}
+            <div className="flex flex-col w-full">
               <div className="relative">
                 <textarea
                   key="chat-input"
@@ -660,22 +665,19 @@ export default function ChatPanelG({
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   placeholder={!message ? "Describe what you want to create" : ""}
-                  disabled={false}
+                  disabled={isGenerating}
                   className={cn(
                     "w-full resize-none bg-transparent border-none",
-                    "px-3 pt-3 pb-0 text-sm leading-6",
+                    "px-3 py-1 text-sm leading-6",
                     "focus:outline-none focus:ring-0",
-                    isGenerating && "opacity-70",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
                     "rounded-t-2xl"
                   )}
                   style={{
-                    minHeight: '48px',
-                    maxHeight: '480px', // 20 lines * 24px line height
+                    height: '32px',
+                    maxHeight: '480px',
                     overflowY: "auto"
                   }}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
                 />
               </div>
 
