@@ -19,12 +19,6 @@ const userUpdateSchema = z.object({
 
 // Admin-only procedure that checks if user is admin
 const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  // Temporary admin override for debugging
-  const tempAdminEmails = ['jack@josventures.ie', 'markushogne@gmail.com'];
-  if (tempAdminEmails.includes(ctx.session.user.email || '')) {
-    return next();
-  }
-
   // Check if user is admin
   const user = await db
     .select({ isAdmin: users.isAdmin })
@@ -46,12 +40,6 @@ export const adminRouter = createTRPCRouter({
   // Check if current user is admin
   checkAdminAccess: protectedProcedure
     .query(async ({ ctx }) => {
-      // Temporary admin override for debugging
-      const tempAdminEmails = ['jack@josventures.ie', 'markushogne@gmail.com'];
-      if (tempAdminEmails.includes(ctx.session.user.email || '')) {
-        return { isAdmin: true };
-      }
-
       const user = await db
         .select({ isAdmin: users.isAdmin })
         .from(users)
