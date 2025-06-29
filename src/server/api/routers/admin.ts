@@ -875,7 +875,8 @@ export const adminRouter = createTRPCRouter({
         models: {
           brain: `${pack.models.brain.provider}/${pack.models.brain.model}`,
           codeGenerator: `${pack.models.codeGenerator.provider}/${pack.models.codeGenerator.model}`,
-          visionAnalysis: `${pack.models.visionAnalysis.provider}/${pack.models.visionAnalysis.model}`,
+          editScene: `${pack.models.editScene.provider}/${pack.models.editScene.model}`,
+          titleGenerator: `${pack.models.titleGenerator.provider}/${pack.models.titleGenerator.model}`,
         },
       }));
     }),
@@ -1748,6 +1749,191 @@ export default function GeneratedScene() {
           firstIteration: iterations[0]?.createdAt || null,
           lastIteration: iterations[iterations.length - 1]?.createdAt || null,
         }
+      };
+    }),
+
+  // EMAIL MARKETING ENDPOINTS - admin only
+
+  // Send welcome email to new user
+  sendWelcomeEmail: adminOnlyProcedure
+    .input(z.object({
+      userId: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const { userId } = input;
+
+      // Get user details
+      const user = await db
+        .select({
+          email: users.email,
+          name: users.name,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      try {
+        const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'welcome',
+            to: user[0].email,
+            firstName: user[0].name || 'there',
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to send email');
+        }
+
+        return {
+          success: true,
+          message: `Welcome email sent to ${user[0].email}`,
+          emailId: result.data?.id,
+        };
+      } catch (error) {
+        console.error('Failed to send welcome email:', error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to send welcome email: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }),
+
+  // Send newsletter to multiple users
+  sendNewsletter: adminOnlyProcedure
+    .input(z.object({
+      userIds: z.array(z.string()).optional(),
+      sendToAll: z.boolean().default(false),
+      subject: z.string(),
+      content: z.string(),
+      ctaText: z.string().optional(),
+      ctaUrl: z.string().url().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { userIds, sendToAll, subject, content, ctaText, ctaUrl } = input;
+
+      let targetUsers;
+
+      if (sendToAll) {
+        // Send to all users
+        targetUsers = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+          })
+          .from(users);
+      } else if (userIds && userIds.length > 0) {
+        // Send to specific users
+        targetUsers = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+          })
+          .from(users)
+          .where(inArray(users.id, userIds));
+      } else {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Must specify either userIds or sendToAll=true",
+        });
+      }
+
+      if (targetUsers.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No users found to send newsletter to",
+        });
+      }
+
+      const emailPromises = targetUsers.map(async (user) => {
+        try {
+          const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              type: 'newsletter',
+              to: user.email,
+              firstName: user.name || 'there',
+              subject,
+              content,
+              ctaText,
+              ctaUrl,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Failed to send email');
+          }
+
+          return {
+            userId: user.id,
+            email: user.email,
+            success: true,
+            emailId: result.data?.id,
+          };
+        } catch (error) {
+          console.error(`Failed to send newsletter to ${user.email}:`, error);
+          return {
+            userId: user.id,
+            email: user.email,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          };
+        }
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+
+      return {
+        totalSent: successful.length,
+        totalFailed: failed.length,
+        totalUsers: targetUsers.length,
+        successful,
+        failed,
+        message: `Newsletter sent to ${successful.length} out of ${targetUsers.length} users`,
+      };
+    }),
+
+  // Get email marketing statistics
+  getEmailStats: adminOnlyProcedure
+    .query(async () => {
+      // Get user counts for email targeting
+      const [totalUsers, recentUsers] = await Promise.all([
+        db.select({ count: count() }).from(users),
+        db
+          .select({ count: count() })
+          .from(users)
+          .where(gte(users.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))),
+      ]);
+
+      return {
+        totalUsers: totalUsers[0]?.count || 0,
+        recentUsers: recentUsers[0]?.count || 0,
+        emailsSentToday: 0, // TODO: Track email sends in database
+        emailsSentThisMonth: 0, // TODO: Track email sends in database
+        openRate: 0, // TODO: Implement email tracking
+        clickRate: 0, // TODO: Implement email tracking
       };
     }),
 });
