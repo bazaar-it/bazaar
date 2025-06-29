@@ -19,6 +19,7 @@ import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
+import { ExportButton } from '~/components/export/ExportButton';
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -59,12 +60,13 @@ export interface WorkspaceContentAreaGHandle {
 }
 
 // Sortable panel wrapper
-function SortablePanelG({ id, children, style, className, onRemove }: { 
+function SortablePanelG({ id, children, style, className, onRemove, projectId }: { 
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties; 
   className?: string;
   onRemove?: () => void;
+  projectId?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   
@@ -114,14 +116,21 @@ function SortablePanelG({ id, children, style, className, onRemove }: {
           <span className="font-medium text-sm">{panelTitle}</span>
           <div className="flex items-center gap-1">
             {isPreviewPanel && (
-              <button
-                onClick={handlePreviewRefresh}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
-                aria-label="Refresh preview"
-                title="Refresh preview"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
+              <>
+                <button
+                  onClick={handlePreviewRefresh}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                  aria-label="Refresh preview"
+                  title="Refresh preview"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+                {projectId && (
+                  <div className="mx-1">
+                    <ExportButton projectId={projectId} size="sm" />
+                  </div>
+                )}
+              </>
             )}
             <button 
               onClick={onRemove} 
