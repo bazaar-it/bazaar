@@ -1,7 +1,6 @@
 // src/app/api/download/[renderId]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "~/server/auth";
+import { auth } from "~/server/auth";
 import { renderState } from "~/server/services/render/render-state";
 import fs from "fs";
 import path from "path";
@@ -11,7 +10,7 @@ export async function GET(
   { params }: { params: { renderId: string } }
 ) {
   // Check authentication
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     return new NextResponse("Unauthorized", { status: 401 });
   }

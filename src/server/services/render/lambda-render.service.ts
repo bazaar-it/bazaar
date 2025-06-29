@@ -112,7 +112,7 @@ export async function renderVideoOnLambda({
         scenes,
         projectId,
       },
-      codec: format === 'gif' ? 'gif' : 'h264-mkv',
+      codec: format === 'gif' ? 'gif' : 'h264',
       imageFormat: format === 'gif' ? 'png' : 'jpeg',
       jpegQuality: settings.jpegQuality,
       crf: format === 'gif' ? undefined : settings.crf,
@@ -123,18 +123,11 @@ export async function renderVideoOnLambda({
       },
       webhook: webhookUrl ? {
         url: webhookUrl,
-        secret: process.env.WEBHOOK_SECRET,
+        secret: process.env.WEBHOOK_SECRET ?? null,
       } : undefined,
       maxRetries: 3,
-      memorySizeInMb: parseInt(process.env.LAMBDA_MEMORY_MB || "3008"),
-      diskSizeInMb: parseInt(process.env.LAMBDA_DISK_SIZE_MB || "10240"),
-      timeoutInSeconds: 900,
       frameRange: totalDuration > 0 ? [0, totalDuration - 1] : undefined,
       outName: `${projectId}.${format}`,
-      // Progress callback for logging
-      onProgress: (progress) => {
-        console.log(`[LambdaRender] Progress: ${Math.round(progress.overallProgress * 100)}%`);
-      },
     });
     
     console.log(`[LambdaRender] Render started successfully`);
@@ -188,9 +181,9 @@ export async function getLambdaRenderProgress(renderId: string, bucketName: stri
     
     return {
       overallProgress: progress.overallProgress,
-      renderedFrames: progress.renderedFrames,
-      encodedFrames: progress.encodedFrames,
-      currentTime: progress.costs?.estimatedTotalLambdaInvokeCost,
+      renderedFrames: progress.framesRendered,
+      encodedFrames: progress.encodingStatus?.framesEncoded || 0,
+      currentTime: progress.costs?.accruedSoFar,
       done: progress.done,
       outputFile: progress.outputFile,
       errors: progress.errors,
