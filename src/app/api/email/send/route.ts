@@ -23,7 +23,14 @@ const newsletterEmailSchema = z.object({
   ctaUrl: z.string().url().optional(),
 });
 
-const emailSchema = z.union([welcomeEmailSchema, newsletterEmailSchema]);
+const customEmailSchema = z.object({
+  type: z.literal('custom'),
+  to: z.union([z.string().email(), z.array(z.string().email())]),
+  subject: z.string(),
+  reactCode: z.string(),
+});
+
+const emailSchema = z.union([welcomeEmailSchema, newsletterEmailSchema, customEmailSchema]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +64,31 @@ export async function POST(request: NextRequest) {
           ctaText: validatedData.ctaText,
           ctaUrl: validatedData.ctaUrl,
         }),
+      };
+    } else if (validatedData.type === 'custom') {
+      const recipients = Array.isArray(validatedData.to) ? validatedData.to : [validatedData.to];
+      
+      // For now, we'll send the React code as HTML content
+      // In a production environment, you'd want to properly compile the React code
+      emailData = {
+        from: 'Bazaar-Vid <campaigns@bazaar-vid.com>',
+        to: recipients,
+        subject: validatedData.subject,
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2>Custom Email Campaign</h2>
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <h3>React Code:</h3>
+              <pre style="background: #000; color: #0f0; padding: 10px; border-radius: 3px; overflow-x: auto;">
+                <code>${validatedData.reactCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>
+              </pre>
+            </div>
+            <p style="color: #666; font-size: 14px;">
+              This is a preview of your custom React email template. 
+              In production, this would be compiled and rendered as a proper email.
+            </p>
+          </div>
+        `,
       };
     } else {
       return NextResponse.json(

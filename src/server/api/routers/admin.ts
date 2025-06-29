@@ -1821,6 +1821,7 @@ export default function GeneratedScene() {
       content: z.string(),
       ctaText: z.string().optional(),
       ctaUrl: z.string().url().optional(),
+      isCustomCode: z.boolean().default(false),
     }))
     .mutation(async ({ input }) => {
       const { userIds, sendToAll, subject, content, ctaText, ctaUrl } = input;
@@ -1862,20 +1863,27 @@ export default function GeneratedScene() {
 
       const emailPromises = targetUsers.map(async (user) => {
         try {
+          const emailPayload = input.isCustomCode ? {
+            type: 'custom',
+            to: user.email,
+            subject,
+            reactCode: content,
+          } : {
+            type: 'newsletter',
+            to: user.email,
+            firstName: user.name || 'there',
+            subject,
+            content,
+            ctaText,
+            ctaUrl,
+          };
+
           const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/email/send`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              type: 'newsletter',
-              to: user.email,
-              firstName: user.name || 'there',
-              subject,
-              content,
-              ctaText,
-              ctaUrl,
-            }),
+            body: JSON.stringify(emailPayload),
           });
 
           const result = await response.json();
@@ -1918,13 +1926,19 @@ export default function GeneratedScene() {
   // Get email marketing statistics
   getEmailStats: adminOnlyProcedure
     .query(async () => {
-      // Get user counts for email targeting
+      // Get user counts for email targeting - only count users with email addresses
       const [totalUsers, recentUsers] = await Promise.all([
-        db.select({ count: count() }).from(users),
         db
           .select({ count: count() })
           .from(users)
-          .where(gte(users.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))),
+          .where(sql`${users.email} IS NOT NULL AND ${users.email} != ''`),
+        db
+          .select({ count: count() })
+          .from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+            sql`${users.email} IS NOT NULL AND ${users.email} != ''`
+          )),
       ]);
 
       return {
