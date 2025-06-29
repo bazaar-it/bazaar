@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "src/app/api/generate-stream/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "PLAYWRIGHT_BROWSERS_PATH": "/tmp/ms-playwright"
+  }
+}
