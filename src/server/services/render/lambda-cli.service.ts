@@ -1,13 +1,11 @@
 // src/server/services/render/lambda-cli.service.ts
-import { exec, execFile } from "child_process";
+import { exec } from "child_process";
 import { promisify } from "util";
-import path from "path";
 import { renderState } from "../render/render-state";
 import type { RenderConfig } from "./render.service";
 import { qualitySettings } from "./render.service";
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
@@ -26,6 +24,15 @@ export async function renderVideoOnLambda({
   webhookUrl,
 }: LambdaRenderConfig) {
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
+  console.log(`[LambdaRender] Environment info:`, {
+    NODE_ENV: process.env.NODE_ENV,
+    PWD: process.cwd(),
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    AWS_REGION: process.env.AWS_REGION ? 'set' : 'missing',
+    REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME ? 'set' : 'missing',
+    REMOTION_BUCKET_NAME: process.env.REMOTION_BUCKET_NAME ? 'set' : 'missing',
+  });
   
   // Check required environment variables
   if (!process.env.AWS_REGION || !process.env.REMOTION_FUNCTION_NAME || !process.env.REMOTION_BUCKET_NAME) {
@@ -83,19 +90,67 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] Executing CLI command...`);
     
-    // Use the locally installed remotion CLI directly
-    const remotionPath = path.join(process.cwd(), 'node_modules/.bin/remotion');
+    // Build the full command as a string for exec
+    // Try multiple approaches to find the remotion CLI
+    const remotionPaths = [
+      './node_modules/@remotion/cli/remotion-cli.js',  // Direct path to CLI
+      './node_modules/.bin/remotion',                  // Symlink in .bin
+      'remotion'                                       // Global or npx fallback
+    ];
     
-    // Execute the command using execFile to avoid shell escaping issues
-    const { stdout, stderr } = await execFileAsync(remotionPath, cliArgs, {
-      env: {
-        ...process.env,
-        AWS_REGION: process.env.AWS_REGION,
-        REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME,
-        HOME: '/tmp', // Lambda has write access to /tmp
-        NPM_CONFIG_CACHE: '/tmp/.npm', // Set npm cache to writable directory
-      },
-    });
+    let stdout: string = '';
+    let stderr: string = '';
+    let commandExecuted = false;
+    
+    // Try each path until one works
+    for (const remotionPath of remotionPaths) {
+      const command = remotionPath.startsWith('./') 
+        ? `node ${remotionPath} ${cliArgs.map(arg => {
+            // Properly escape arguments that contain spaces or special characters
+            if (arg.includes(' ') || arg.includes('{') || arg.includes('}')) {
+              return `'${arg}'`;
+            }
+            return arg;
+          }).join(' ')}`
+        : `npx ${remotionPath} ${cliArgs.map(arg => {
+            // Properly escape arguments that contain spaces or special characters
+            if (arg.includes(' ') || arg.includes('{') || arg.includes('}')) {
+              return `'${arg}'`;
+            }
+            return arg;
+          }).join(' ')}`;
+      
+      try {
+        console.log(`[LambdaRender] Trying command with ${remotionPath}...`);
+        const result = await execAsync(command, {
+          env: {
+            ...process.env,
+            AWS_REGION: process.env.AWS_REGION,
+            AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+            AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+            REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME,
+            REMOTION_BUCKET_NAME: process.env.REMOTION_BUCKET_NAME,
+            HOME: '/tmp', // Lambda has write access to /tmp
+            NPM_CONFIG_CACHE: '/tmp/.npm', // Set npm cache to writable directory
+            PATH: `${process.env.PATH}:/opt/nodejs/node16/bin:/opt/nodejs/node18/bin`, // Include Lambda Node paths
+          },
+          maxBuffer: 1024 * 1024 * 10, // 10MB buffer for large outputs
+          cwd: process.cwd(), // Ensure we're in the right directory
+        });
+        stdout = result.stdout;
+        stderr = result.stderr;
+        commandExecuted = true;
+        console.log(`[LambdaRender] Command succeeded with ${remotionPath}`);
+        break; // Exit loop on success
+      } catch (error) {
+        console.error(`[LambdaRender] Failed with ${remotionPath}:`, error);
+        // Continue to next path
+      }
+    }
+    
+    if (!commandExecuted) {
+      throw new Error("Failed to execute remotion CLI with any method");
+    }
     
     if (stderr && !stderr.includes('Render finished')) {
       console.error(`[LambdaRender] CLI stderr:`, stderr);
