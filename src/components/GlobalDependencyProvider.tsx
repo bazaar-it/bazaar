@@ -79,6 +79,15 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
         Montserrat: () => loadMontserrat(),
       };
       
+      // NEW: Add Avatar System - Ultra Simple
+      (window as any).BazaarAvatars = {
+        'asian-woman': '/avatars/asian-woman.png',
+        'black-man': '/avatars/black-man.png', 
+        'hispanic-man': '/avatars/hispanic-man.png',
+        'middle-eastern-man': '/avatars/middle-eastern-man.png',
+        'white-woman': '/avatars/white-woman.png'
+      };
+      
       console.log('✅ GlobalDependencyProvider: All dependencies loaded successfully');
     }
   }, []);
