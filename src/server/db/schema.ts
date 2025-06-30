@@ -769,3 +769,71 @@ export type InsertProjectMemory = typeof projectMemory.$inferInsert;
 
 export type ImageAnalysis = typeof imageAnalysis.$inferSelect;
 export type InsertImageAnalysis = typeof imageAnalysis.$inferInsert;
+
+// --- Exports table ---
+// Stores video export records for tracking and analytics
+export const exports = createTable("exports", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  renderId: d.text("render_id").notNull().unique(),
+  status: d.text("status", { 
+    enum: ["pending", "rendering", "completed", "failed"] 
+  }).notNull().default("pending"),
+  progress: d.integer("progress").default(0),
+  format: d.text("format", { 
+    enum: ["mp4", "webm", "gif"] 
+  }).notNull().default("mp4"),
+  quality: d.text("quality", { 
+    enum: ["low", "medium", "high"] 
+  }).notNull().default("high"),
+  outputUrl: d.text("output_url"),
+  fileSize: d.integer("file_size"), // in bytes
+  duration: d.integer("duration"), // in frames
+  error: d.text("error"),
+  metadata: d.jsonb("metadata"), // For storing additional info like resolution, fps, etc.
+  downloadCount: d.integer("download_count").default(0),
+  lastDownloadedAt: d.timestamp("last_downloaded_at"),
+  createdAt: d.timestamp("created_at").defaultNow().notNull(),
+  completedAt: d.timestamp("completed_at"),
+}), (t) => [
+  index("exports_user_idx").on(t.userId),
+  index("exports_project_idx").on(t.projectId),
+  index("exports_render_idx").on(t.renderId),
+  index("exports_created_idx").on(t.createdAt),
+]);
+
+export const exportsRelations = relations(exports, ({ one }) => ({
+  user: one(users, {
+    fields: [exports.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [exports.projectId],
+    references: [projects.id],
+  }),
+}));
+
+// Export analytics table for tracking detailed metrics
+export const exportAnalytics = createTable("export_analytics", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  exportId: d.uuid("export_id").notNull().references(() => exports.id, { onDelete: "cascade" }),
+  event: d.text("event", {
+    enum: ["started", "progress", "completed", "failed", "downloaded", "viewed"]
+  }).notNull(),
+  eventData: d.jsonb("event_data"), // Additional event-specific data
+  userAgent: d.text("user_agent"),
+  ipAddress: d.text("ip_address"),
+  createdAt: d.timestamp("created_at").defaultNow().notNull(),
+}), (t) => [
+  index("export_analytics_export_idx").on(t.exportId),
+  index("export_analytics_event_idx").on(t.event),
+  index("export_analytics_created_idx").on(t.createdAt),
+]);
+
+export const exportAnalyticsRelations = relations(exportAnalytics, ({ one }) => ({
+  export: one(exports, {
+    fields: [exportAnalytics.exportId],
+    references: [exports.id],
+  }),
+}));

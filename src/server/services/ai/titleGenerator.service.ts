@@ -69,7 +69,7 @@ export async function generateTitle(
     const aiResponse = await AIClientService.generateResponse(
       titleModelConfig,
       messages,
-      systemPromptConfig,
+      systemPromptConfig as any, // TODO: Fix type mismatch between string and SystemPromptConfig
       { responseFormat: { type: "json_object" } }
     );
     

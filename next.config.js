@@ -84,6 +84,18 @@ const config = {
       config.externals.push('esbuild');
     }
 
+    // Add webpack config to handle Remotion platform-specific binaries
+    config.externals = [
+      ...(Array.isArray(config.externals) ? config.externals : [config.externals || {}]),
+      ({ request }, callback) => {
+        // Ignore platform-specific Remotion compositor binaries
+        if (request?.includes('@remotion/compositor-')) {
+          return callback(null, 'commonjs ' + request);
+        }
+        callback();
+      },
+    ].filter(Boolean);
+
     // Configure webpack to ignore logs directory for file watching
     if (dev) {
       // Define comprehensive patterns to ignore using only string patterns
