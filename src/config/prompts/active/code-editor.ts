@@ -34,6 +34,7 @@ export const CODE_EDITOR = {
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
 - window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
+- window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
 
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
