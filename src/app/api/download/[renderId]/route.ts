@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "~/server/auth";
 import { renderState } from "~/server/services/render/render-state";
+import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
 import fs from "fs";
 import path from "path";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
@@ -85,6 +86,13 @@ export async function GET(
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       const filename = `bazaar-vid-export-${timestamp}.${job.format}`;
       
+      // Track the download
+      await ExportTrackingService.trackDownload(
+        renderId,
+        req.headers.get('user-agent') || undefined,
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined
+      );
+      
       return new NextResponse(file, {
         headers: {
           'Content-Type': contentType,
@@ -137,6 +145,13 @@ export async function GET(
       if (response.ContentLength) {
         headers.set("Content-Length", response.ContentLength.toString());
       }
+
+      // Track the download
+      await ExportTrackingService.trackDownload(
+        renderId,
+        req.headers.get('user-agent') || undefined,
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined
+      );
 
       return new NextResponse(webStream, {
         status: 200,
