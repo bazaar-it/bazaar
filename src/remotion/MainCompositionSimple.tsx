@@ -44,7 +44,14 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
             RemotionGoogleFonts: {
               loadFont: () => {} // No-op for Lambda
             },
-            IconifyIcon: (props) => React.createElement('span', { style: props.style }, '⬤') // Simple circle icon
+            IconifyIcon: (props) => React.createElement('span', { style: props.style }, '⬤'), // Simple circle icon
+            BazaarAvatars: {
+              'asian-woman': '/avatars/asian-woman.png',
+              'black-man': '/avatars/black-man.png', 
+              'hispanic-man': '/avatars/hispanic-man.png',
+              'middle-eastern-man': '/avatars/middle-eastern-man.png',
+              'white-woman': '/avatars/white-woman.png'
+            }
           };
           
           ${scene.jsCode}

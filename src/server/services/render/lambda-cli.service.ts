@@ -10,7 +10,7 @@ export interface LambdaRenderConfig extends RenderConfig {
 }
 
 // Use the deployed site URL from environment or the new fixed version
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-avatars/index.html";
 
 // Main Lambda rendering function using programmatic API
 export async function renderVideoOnLambda({
