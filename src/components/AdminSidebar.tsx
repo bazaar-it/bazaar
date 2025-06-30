@@ -16,6 +16,7 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
   const currentSection = pathname === '/admin' ? (activeSection || 'homepage') :
     pathname === '/admin/users' ? 'users' :
     pathname === '/admin/analytics' ? 'analytics' :
+    pathname === '/admin/exports' ? 'exports' :
     pathname === '/admin/testing' ? 'testing' :
     pathname === '/admin/email-marketing' ? 'email-marketing' : 'homepage';
 
@@ -86,6 +87,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v10a2 2 0 002 2z" />
               </svg>
               Email Marketing
+            </Link>
+
+            {/* Exports */}
+            <Link 
+              href="/admin/exports"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full text-left transition-colors ${
+                currentSection === 'exports'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
+              Exports
             </Link>
 
             {/* Coming Soon section */}
