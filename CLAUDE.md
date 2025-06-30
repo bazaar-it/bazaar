@@ -319,6 +319,28 @@ Building → Storage → Preview → Chat Updates
 - Instagram Posts (1080x1080) - square
 - Custom dimensions support
 
+### 7. Video Export with AWS Lambda
+- **Export Button**: Integrated in preview panel header
+- **Lambda Rendering**: Cloud-based video rendering via Remotion Lambda
+- **Progress Tracking**: Real-time export progress with percentage display
+- **Auto-Download**: Automatic download when rendering completes
+- **Rate Limiting**: 10 exports per day per user (configurable)
+- **Format Support**: MP4, WebM, GIF with quality settings
+- **Production Ready**: Requires AWS Lambda configuration (see Environment Variables)
+
+**⚠️ CRITICAL S3 SETUP**: After deploying Remotion Lambda, you MUST run:
+```bash
+npm run setup:s3-public
+```
+This configures public read access for rendered videos. Without this step, all exports will fail with "access denied" errors when users try to download.
+
+### 8. Email Marketing System
+- **Resend Integration**: Professional email delivery service
+- **Admin Dashboard**: `/admin/email-marketing` for campaign management
+- **Email Templates**: Welcome emails and newsletters with React Email
+- **Campaign Tracking**: Monitor email performance and engagement
+- **User Management**: Send to all users or specific segments
+
 ## Development Workflow
 
 ### Essential Commands
@@ -330,9 +352,10 @@ npm run test               # Run Jest tests
 npm run lint               # Linting
 npm run typecheck         # Type checking
 
-# Database
-npm run db:generate        # Generate migrations
-npm run db:migrate         # Apply migrations
+# Database - WITH EXTREME CAUTION
+npm run db:generate        # Generate migrations (uses tsx)
+npm run db:migrate         # Apply migrations (uses tsx)
+npm run db:push            # Push schema changes (uses tsx)
 npm run db:studio          # Database UI
 ```
 
@@ -341,6 +364,70 @@ npm run db:studio          # Database UI
 - `remotion.config.ts` - Remotion setup
 - `drizzle.config.ts` - Database configuration
 - `tailwind.config.ts` - Styling configuration
+
+## 🚨 CRITICAL DATABASE MIGRATION GUIDELINES 🚨
+
+**⚠️ WARNING: Improper database migrations caused complete data loss in Sprint 32!**
+
+### Database Branch Strategy
+- **Development Branch**: Connected to development database (safe for testing)
+- **Production Branch**: Connected to production database (EXTREME CAUTION)
+- **NEVER run migrations directly on production without testing**
+
+### Safe Migration Process
+
+#### 1. Local Development (Dev Branch)
+```bash
+# When adding new tables or columns:
+1. Make schema changes in src/server/db/schema.ts
+2. npm run db:generate    # Creates migration file
+3. Review the generated SQL in drizzle/migrations/
+4. npm run db:push        # Apply to dev database
+5. Test thoroughly
+```
+
+#### 2. CRITICAL: Before Merging to Production
+```bash
+# DO NOT MERGE if migration contains:
+- ALTER COLUMN that changes data types (e.g., varchar → uuid)
+- DROP TABLE or DROP COLUMN
+- Any destructive changes
+
+# Safe migrations include:
+- CREATE TABLE (new tables)
+- ADD COLUMN (new columns)
+- CREATE INDEX
+```
+
+#### 3. Production Deployment Process
+```bash
+1. BACKUP PRODUCTION DATABASE FIRST
+2. Test migration on staging database
+3. Create rollback plan
+4. Apply migration during low-traffic period
+5. Verify data integrity immediately
+```
+
+### Migration Red Flags 🚩
+- **Type Changes**: NEVER change column types without data migration plan
+- **NextAuth.js**: User IDs MUST remain varchar(255), not UUID
+- **Foreign Keys**: Check cascade effects before any changes
+- **Data Loss**: Any ALTER TABLE can potentially destroy data
+
+### Emergency Procedures
+If data loss occurs:
+1. Stop all database operations immediately
+2. Check `/memory-bank/sprints/sprint32/CRITICAL-DATA-LOSS-INCIDENT.md`
+3. Restore from most recent backup
+4. Document incident in memory bank
+
+### Best Practices
+1. **Always backup before migrations**
+2. **Test on development branch first**
+3. **Review generated SQL manually**
+4. **Never trust automatic migrations blindly**
+5. **Keep migrations small and focused**
+6. **Document migration purpose in memory bank**
 
 ## Memory Bank System (ESSENTIAL)
 
@@ -378,6 +465,14 @@ CLOUDFLARE_R2_SECRET_ACCESS_KEY=...
 # Auth
 AUTH_SECRET=...
 NEXTAUTH_URL=http://localhost:3000
+
+# AWS Lambda (for video export)
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+REMOTION_FUNCTION_NAME=remotion-render-...
+REMOTION_BUCKET_NAME=remotionlambda-...
+RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 ```
 
 ## Current Development Context

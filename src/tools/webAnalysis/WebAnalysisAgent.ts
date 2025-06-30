@@ -26,12 +26,12 @@ export class WebAnalysisAgent {
   async analyzeWebsite(url: string, projectId?: string, userId?: string): Promise<WebAnalysisResult> {
     console.log(`🌐 Analyzing: ${url}`);
     
-    const browser = await chromium.launch({ 
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
-    });
-    
+    let browser;
     try {
+      browser = await chromium.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
+      });
       const page = await browser.newPage();
       
       // Navigate with timeout
@@ -109,7 +109,9 @@ export class WebAnalysisAgent {
         url
       };
     } finally {
-      await browser.close();
+      if (browser) {
+        await browser.close();
+      }
     }
   }
   
@@ -172,7 +174,9 @@ export class WebAnalysisAgent {
         error: `Cannot reach website: ${error instanceof Error ? error.message : String(error)}` 
       };
     } finally {
-      await browser.close();
+      if (browser) {
+        await browser.close();
+      }
     }
   }
 }

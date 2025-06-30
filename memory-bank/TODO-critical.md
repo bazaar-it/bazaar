@@ -1,8 +1,25 @@
 //memory-bank/TODO-critical.md
 # 🚨 MVP Launch Blockers - UPDATED PRIORITIES
 
-**Updated**: January 15, 2025  
+**Updated**: January 27, 2025  
 **Based on**: User feedback on production readiness assessment
+
+## 🎬 NEW: Export Feature (Sprint 63)
+
+### Export Videos via AWS Lambda - **IMPLEMENTATION COMPLETE**
+- **Status**: ✅ Code complete, awaiting AWS setup
+- **Implementation**: Full Lambda rendering service with progress tracking
+- **User Action Required**:
+  1. Follow `/memory-bank/sprints/sprint63_export/lambda-setup-guide.md`
+  2. Set up AWS account, CLI, and credentials
+  3. Deploy Lambda function and create S3 bucket
+  4. Configure environment variables from `.env.lambda.example`
+- **Features**:
+  - Export button in app header (next to Share)
+  - Real-time progress tracking with FFmpeg hints
+  - Auto-download when complete
+  - Support for MP4, WebM, and GIF formats
+- **Note**: Direct Lambda approach chosen after SSR failed due to Remotion server component limitations
 
 ## 🔥 IMMEDIATE FIXES NEEDED
 

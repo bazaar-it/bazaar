@@ -25,6 +25,15 @@ interface RemotionGoogleFonts {
   Montserrat: () => GoogleFontResult;
 }
 
+// Avatar System types - Ultra Simple
+interface BazaarAvatars {
+  'asian-woman': string;
+  'black-man': string;
+  'hispanic-man': string;
+  'middle-eastern-man': string;
+  'white-woman': string;
+}
+
 declare global {
   interface Window {
     React: typeof React;
@@ -36,6 +45,7 @@ declare global {
     Rough: typeof rough;
     RemotionGoogleFonts: RemotionGoogleFonts;
     IconifyIcon: typeof Icon;
+    BazaarAvatars: BazaarAvatars;
     react?: typeof React;
     remotion?: typeof Remotion;
     __REMOTION_COMPONENT?: React.ComponentType<any>;

@@ -16,6 +16,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
+import { ExportDropdown } from "~/components/export/ExportDropdown";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -174,61 +175,54 @@ export default function AppHeader({
       </div>
 
       {/* Right: Share button and User info */}
-      <div className="flex items-center gap-4 min-w-[180px] justify-end">
+      <div className="flex items-center gap-2 min-w-[180px] justify-end">
         {/* Share button - simplified auto-copy functionality */}
         {projectId && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 rounded-[15px] shadow-sm border-gray-200 text-gray-600 hover:bg-gray-50"
-            onClick={handleShare}
-            disabled={isSharing}
-          >
-            {isSharing ? <Copy className="h-4 w-4 animate-pulse" /> : <ShareIcon className="h-4 w-4" />}
-            {isSharing ? "Copied!" : "Share"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 rounded-[15px] shadow-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+              onClick={handleShare}
+              disabled={isSharing}
+            >
+              {isSharing ? <Copy className="h-4 w-4 animate-pulse" /> : <ShareIcon className="h-4 w-4" />}
+              {isSharing ? "Copied!" : "Share"}
+            </Button>
+            
+            {/* Export dropdown */}
+            <ExportDropdown projectId={projectId} size="sm" className="rounded-[15px] shadow-sm" />
+          </>
         )}
         
-        {/* Export button temporarily disabled until export feature is ready */}
-        {/*
-        <Button
-          variant="default"
-          size="sm"
-          className="gap-2 rounded-[15px] shadow-sm"
-          onClick={onRender}
-          disabled={isRendering}
-        >
-          <DownloadIcon className="h-4 w-4" />
-          {isRendering ? "Exporting..." : "Export"}
-        </Button>
-        */}
-        
         {user && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="outline-none">
-                <UserAvatar name={user.name || user.email || 'U'} />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 rounded-[15px] shadow-sm border-gray-100 overflow-hidden">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="px-2 py-1.5">
-                <p className="text-sm font-medium">{user.name}</p>
-                {user.email && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
-                )}
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={handleLogout}
-                className="text-red-600 cursor-pointer"
-              >
-                <LogOutIcon className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="ml-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="outline-none">
+                  <UserAvatar name={user.name || user.email || 'U'} />
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-[15px] shadow-sm border-gray-100 overflow-hidden">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{user.name}</p>
+                  {user.email && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
+                  )}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={handleLogout}
+                  className="text-red-600 cursor-pointer"
+                >
+                  <LogOutIcon className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
       </div>
     </header>

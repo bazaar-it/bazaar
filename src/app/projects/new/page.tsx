@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
-import { projects } from "~/server/db/schema";
+import { projects, users } from "~/server/db/schema";
 import { eq, and, like, desc } from "drizzle-orm";
 import { analytics } from '~/lib/utils/analytics';
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
@@ -21,6 +21,34 @@ export default async function NewProjectPage() {
   // Redirect to login if not authenticated
   if (!session?.user) {
     redirect("/login");
+  }
+
+  // CRITICAL: Ensure user exists in database before creating projects
+  // This handles race conditions where auth session exists but user record doesn't
+  const existingUser = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  if (existingUser.length === 0) {
+    console.error(`[NewProjectPage] User ${session.user.id} not found in database!`);
+    console.log(`[NewProjectPage] Creating user record for ${session.user.email}`);
+    
+    // Create the user record
+    try {
+      await db.insert(users).values({
+        id: session.user.id,
+        email: session.user.email!,
+        name: session.user.name || session.user.email?.split('@')[0],
+        emailVerified: new Date(), // Mark as verified since they're authenticated
+      });
+      console.log(`[NewProjectPage] User record created successfully`);
+    } catch (error) {
+      console.error(`[NewProjectPage] Failed to create user:`, error);
+      // If user creation fails (e.g., race condition where another request created it)
+      // continue anyway as the user might exist now
+    }
   }
 
   // FAST PATH: Check if user has ANY project (limit 1 for speed)
