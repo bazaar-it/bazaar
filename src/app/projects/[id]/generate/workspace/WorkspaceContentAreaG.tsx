@@ -19,7 +19,7 @@ import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
-import { ExportButton } from '~/components/export/ExportButton';
+import { ExportDropdown } from '~/components/export/ExportDropdown';
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {

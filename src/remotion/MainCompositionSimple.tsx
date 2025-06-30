@@ -5,7 +5,6 @@ import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index }) => {
-  const frame = useCurrentFrame();
   
   // Log what we're receiving
   console.log(`[DynamicScene] Scene ${index}:`, {
@@ -19,7 +18,7 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
   // If we have jsCode (pre-compiled JavaScript), try to render it
   if (scene.jsCode) {
     try {
-      // Create a sandboxed function to execute the component
+      // Create a component factory function
       const createComponent = new Function(
         'React',
         'AbsoluteFill',
@@ -27,44 +26,68 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
         'interpolate',
         'spring',
         'Sequence',
-        'frame',
+        'useVideoConfig',
+        'random',
+        'useEffect',
+        'useState',
         `
         try {
-          // Inject all Remotion functions the scene might need
-          const useVideoConfig = () => ({ width: 1920, height: 1080, fps: 30, durationInFrames: ${scene.duration || 150} });
-          const random = (seed) => {
-            const x = Math.sin(seed) * 10000;
-            return x - Math.floor(x);
-          };
-          
-          // Additional Remotion utilities that might be used
+          // Additional Remotion components that might be used
+          const Series = Sequence; // Alias for compatibility
           const Audio = () => null; // Stub for Lambda
           const Video = () => null; // Stub for Lambda
           const Img = () => null; // Stub for Lambda
           const staticFile = (path) => path; // Stub for Lambda
           
+          // Stubs for external dependencies
+          const window = {
+            RemotionGoogleFonts: {
+              loadFont: () => {} // No-op for Lambda
+            },
+            IconifyIcon: (props) => React.createElement('span', { style: props.style }, '⬤') // Simple circle icon
+          };
+          
           ${scene.jsCode}
           
           // Try to return the component (it should be assigned to Component variable)
           if (typeof Component !== 'undefined') {
-            return React.createElement(Component);
+            return Component;
           }
           
           // Fallback attempts
-          if (typeof Scene !== 'undefined') return React.createElement(Scene);
-          if (typeof MyScene !== 'undefined') return React.createElement(MyScene);
+          if (typeof Scene !== 'undefined') return Scene;
+          if (typeof MyScene !== 'undefined') return MyScene;
           
           console.error('No component found in scene code');
           return null;
         } catch (e) {
-          console.error('Scene execution error:', e);
+          console.error('Scene component factory error:', e);
           return null;
         }
         `
       );
       
-      const element = createComponent(React, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, frame);
-      if (element) return element;
+      // Get the component factory
+      const ComponentFactory = createComponent(
+        React, 
+        AbsoluteFill, 
+        useCurrentFrame, 
+        interpolate, 
+        spring, 
+        Sequence,
+        () => ({ width: 1920, height: 1080, fps: 30, durationInFrames: scene.duration || 150 }),
+        (seed: number) => {
+          const x = Math.sin(seed) * 10000;
+          return x - Math.floor(x);
+        },
+        React.useEffect,
+        React.useState
+      );
+      
+      if (ComponentFactory) {
+        // Render the component
+        return <ComponentFactory />;
+      }
     } catch (error) {
       console.error(`Failed to render scene ${index}:`, error);
     }
@@ -163,7 +186,7 @@ export const MainComposition: React.FC = () => {
           scenes: [],
           projectId: '',
         }}
-        calculateMetadata={({ props }) => {
+        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string } }) => {
           const totalDuration = (props.scenes || []).reduce(
             (sum: number, scene: any) => sum + (scene.duration || 150),
             0

@@ -61,17 +61,52 @@ function preprocessSceneForLambda(scene: any) {
       production: true,
     });
     
+    // Extract Remotion components being used (if any)
+    const remotionComponents = [];
+    const remotionMatch = transformedCode.match(/const\s*{\s*([^}]+)\s*}\s*=\s*window\.Remotion\s*;?/);
+    if (remotionMatch) {
+      remotionComponents.push(...remotionMatch[1].split(',').map((h: string) => h.trim()));
+    }
+    
     // Remove the window.Remotion destructuring line (we'll provide it differently)
     transformedCode = transformedCode.replace(
       /const\s*{\s*[^}]+\s*}\s*=\s*window\.Remotion\s*;?/g,
       ''
     );
     
+    // Extract React hooks being used (if any)
+    const reactHooks = [];
+    const hookMatch = transformedCode.match(/const\s*{\s*([^}]+)\s*}\s*=\s*window\.React\s*;?/);
+    if (hookMatch) {
+      reactHooks.push(...hookMatch[1].split(',').map((h: string) => h.trim()));
+      // Remove the window.React destructuring line
+      transformedCode = transformedCode.replace(
+        /const\s*{\s*[^}]+\s*}\s*=\s*window\.React\s*;?/g,
+        ''
+      );
+    }
+    
+    // Add React hooks at the beginning if needed
+    if (reactHooks.length > 0 || transformedCode.includes('useEffect')) {
+      transformedCode = `\nconst { ${reactHooks.length > 0 ? reactHooks.join(', ') : 'useState, useEffect'} } = React;\n` + transformedCode;
+    }
+    
+    // Add Remotion components at the beginning if needed
+    if (remotionComponents.length > 0) {
+      // Simply declare the components as available - MainCompositionSimple will provide them
+      transformedCode = `// Remotion components will be provided by the runtime\n` + transformedCode;
+    }
+    
     // Replace export default with a direct assignment
     transformedCode = transformedCode.replace(
       /export\s+default\s+function\s+(\w+)/g,
-      'const Component = function $1'
+      '\nconst Component = function $1'
     );
+    
+    // Ensure the component is returned at the end
+    if (!transformedCode.includes('return Component;')) {
+      transformedCode = transformedCode + '\n\nreturn Component;';
+    }
     
     // Replace window.React with React
     transformedCode = transformedCode.replace(/window\.React/g, 'React');
@@ -96,6 +131,7 @@ function preprocessSceneForLambda(scene: any) {
     return {
       ...scene,
       jsCode: transformedCode,
+      compiledCode: transformedCode, // Lambda expects this field
       // Keep tsxCode for reference but Lambda will use jsCode
       tsxCode: tsxCode,
     };
@@ -142,7 +178,7 @@ export function prepareRenderConfig({
 }
 
 // Temporary mock function until Lambda is set up
-export async function renderVideo(config: RenderConfig) {
+export async function renderVideo(_config: RenderConfig) {
   throw new Error(
     "Direct rendering is not available. Please set up AWS Lambda following the guide in /memory-bank/sprints/sprint63_export/lambda-setup.md"
   );

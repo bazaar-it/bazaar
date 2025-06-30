@@ -1,5 +1,5 @@
 // src/server/services/render/lambda-cli.service.ts
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import { renderState } from "../render/render-state";
@@ -7,14 +7,15 @@ import type { RenderConfig } from "./render.service";
 import { qualitySettings } from "./render.service";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
   webhookUrl?: string;
 }
 
-// Use the already deployed site URL
-const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid/index.html";
+// Use the deployed site URL from environment or the new fixed version
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
 
 // Main Lambda rendering function using CLI
 export async function renderVideoOnLambda({
@@ -25,6 +26,15 @@ export async function renderVideoOnLambda({
   webhookUrl,
 }: LambdaRenderConfig) {
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
+  
+  // Check required environment variables
+  if (!process.env.AWS_REGION || !process.env.REMOTION_FUNCTION_NAME || !process.env.REMOTION_BUCKET_NAME) {
+    const missing = [];
+    if (!process.env.AWS_REGION) missing.push('AWS_REGION');
+    if (!process.env.REMOTION_FUNCTION_NAME) missing.push('REMOTION_FUNCTION_NAME');
+    if (!process.env.REMOTION_BUCKET_NAME) missing.push('REMOTION_BUCKET_NAME');
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
   
   // Get quality settings
   const settings = qualitySettings[quality];
@@ -38,34 +48,43 @@ export async function renderVideoOnLambda({
     console.log(`[LambdaRender] Total duration: ${totalDuration} frames`);
     console.log(`[LambdaRender] Format: ${format}, Quality: ${quality}`);
     
-    // Prepare input props - escape for shell
+    // Log what we're sending to Lambda
+    console.log(`[LambdaRender] Scenes being sent to Lambda:`, scenes.map(s => ({
+      id: s.id,
+      hasJsCode: !!s.jsCode,
+      hasCompiledCode: !!s.compiledCode,
+      hasTsxCode: !!s.tsxCode,
+      jsCodePreview: s.jsCode ? s.jsCode.substring(0, 100) + '...' : 'none',
+    })));
+    
+    // Prepare input props - properly escape for shell
     const inputProps = JSON.stringify({
       scenes,
       projectId,
-    }).replace(/'/g, "'\"'\"'");
+    });
     
     // Build CLI command
     const outputName = `${projectId}.${format}`;
-    const cliCommand = [
-      'npx', 'remotion', 'lambda', 'render',
+    const cliArgs = [
+      'remotion', 'lambda', 'render',
       DEPLOYED_SITE_URL,
       'MainComposition',
-      `--props='${inputProps}'`,
-      `--codec=${format === 'gif' ? 'gif' : 'h264'}`,
-      `--image-format=${format === 'gif' ? 'png' : 'jpeg'}`,
-      `--jpeg-quality=${settings.jpegQuality}`,
-      format !== 'gif' ? `--crf=${settings.crf}` : '',
-      `--frames=0-${totalDuration - 1}`,
-      `--out-name=${outputName}`,
-      '--privacy=public',
-      '--download-behavior=download',
-      process.env.WEBHOOK_SECRET && webhookUrl ? `--webhook-custom-data='{"secret":"${process.env.WEBHOOK_SECRET}"}'` : '',
-    ].filter(Boolean).join(' ');
+      '--props', inputProps,
+      '--codec', format === 'gif' ? 'gif' : format === 'webm' ? 'vp8' : 'h264',
+      '--image-format', format === 'gif' ? 'png' : 'jpeg',
+      '--jpeg-quality', settings.jpegQuality.toString(),
+      ...(format !== 'gif' ? ['--crf', settings.crf.toString()] : []),
+      '--frames', `0-${totalDuration - 1}`,
+      '--out-name', outputName,
+      '--privacy', 'public',
+      '--download-behavior', 'download',
+      ...(process.env.WEBHOOK_SECRET && webhookUrl ? ['--webhook-custom-data', JSON.stringify({secret: process.env.WEBHOOK_SECRET})] : []),
+    ];
     
     console.log(`[LambdaRender] Executing CLI command...`);
     
-    // Execute the command
-    const { stdout, stderr } = await execAsync(cliCommand, {
+    // Execute the command using execFile to avoid shell escaping issues
+    const { stdout, stderr } = await execFileAsync('npx', cliArgs, {
       env: {
         ...process.env,
         AWS_REGION: process.env.AWS_REGION,
@@ -94,9 +113,11 @@ export async function renderVideoOnLambda({
     }
     
     // Look for the actual S3 URL in the output (this is the public URL)
-    const s3UrlMatch = stdout.match(/\+ S3\s+(https:\/\/s3[^\s]+\.mp4)/);
+    // Match mp4, gif, or webm files
+    const s3UrlMatch = stdout.match(/\+ S3\s+(https:\/\/s3[^\s]+\.(mp4|gif|webm))/);
     if (s3UrlMatch) {
       outputUrl = s3UrlMatch[1];
+      console.log(`[LambdaRender] ✅ Export complete! Download URL: ${outputUrl}`);
       console.log(`[LambdaRender] Found public S3 URL: ${outputUrl}`);
     }
     
@@ -155,10 +176,10 @@ export async function renderVideoOnLambda({
 }
 
 // Get render progress from Lambda using S3
-export async function getLambdaRenderProgress(renderId: string, bucketName: string) {
+export async function getLambdaRenderProgress(renderId: string, bucketName: string, projectId: string, format: string = 'mp4') {
   try {
     // Check if the output file exists in S3
-    const outputName = `${renderId.split('-')[0]}.mp4`; // Extract project ID from render ID
+    const outputName = `${projectId}.${format}`;
     const s3Key = `renders/${renderId}/${outputName}`;
     
     // Use AWS CLI to check if file exists
@@ -173,7 +194,7 @@ export async function getLambdaRenderProgress(renderId: string, bucketName: stri
       });
       
       // If file exists, render is complete
-      if (stdout.includes('.mp4')) {
+      if (stdout.includes(`.${format}`)) {
         // Use the public S3 URL format
         const outputUrl = `https://s3.${process.env.AWS_REGION}.amazonaws.com/${bucketName}/${s3Key}`;
         return {

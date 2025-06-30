@@ -6,8 +6,7 @@ This document details how we successfully implemented video export functionality
 ## The Problem
 The initial implementation showed "Invalid Scene" or placeholder content in exported videos because:
 1. Lambda environment couldn't compile TypeScript/JSX at runtime
-2. `sucrase` (TypeScript compiler) wasn't available in Lambda
-3. Scene code referenced browser globals (`window.Remotion`, `window.React`, etc.)
+i3. Scene code referenced browser globals (`window.Remotion`, `window.React`, etc.)
 4. Export default syntax wasn't compatible with our execution model
 
 ## The Solution

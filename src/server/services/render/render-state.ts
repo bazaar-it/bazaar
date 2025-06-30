@@ -38,6 +38,8 @@ export const renderState = {
   
   set: (id: string, job: RenderJob) => activeRenders.set(id, job),
   
+  getAllIds: () => Array.from(activeRenders.keys()),
+  
   isRendering: () => {
     return Array.from(activeRenders.values()).some(
       job => job.status === 'rendering'

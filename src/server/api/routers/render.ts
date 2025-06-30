@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { prepareRenderConfig } from "~/server/services/render/render.service";
 import { renderVideoOnLambda } from "~/server/services/render/lambda-cli.service";
 import { renderState } from "~/server/services/render/render-state";
+import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
 import crypto from "crypto";
 
 // User quota limits
@@ -117,27 +118,63 @@ export const renderRouter = createTRPCRouter({
             bucketName: result.bucketName,
           });
           
+          // Track export in database
+          const totalDuration = project.scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+          await ExportTrackingService.trackExportStart({
+            userId: ctx.session.user.id,
+            projectId: input.projectId,
+            renderId: result.renderId,
+            format: input.format,
+            quality: input.quality,
+            duration: totalDuration,
+          });
+          
           // Update state if we got an output URL immediately
           if (result.outputUrl) {
             renderState.set(result.renderId, {
               ...renderState.get(result.renderId)!,
+              status: 'completed',
+              progress: 100,
+              outputUrl: result.outputUrl,
+            });
+            
+            // Update database tracking
+            await ExportTrackingService.updateExportStatus({
+              renderId: result.renderId,
+              status: 'completed',
+              progress: 100,
               outputUrl: result.outputUrl,
             });
           }
           
           return { renderId: result.renderId };
         } catch (error) {
-          // Lambda not set up yet
+          // Lambda not set up yet - provide helpful error message
+          console.error("[Render] Lambda render failed:", error);
+          
+          // Check for specific missing configurations
+          const missingConfigs = [];
+          if (!process.env.AWS_REGION) missingConfigs.push("AWS_REGION");
+          if (!process.env.REMOTION_FUNCTION_NAME) missingConfigs.push("REMOTION_FUNCTION_NAME");
+          if (!process.env.REMOTION_BUCKET_NAME) missingConfigs.push("REMOTION_BUCKET_NAME");
+          
+          if (missingConfigs.length > 0) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: `Export configuration missing: ${missingConfigs.join(", ")}. Please contact your administrator.`,
+            });
+          }
+          
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: "Video export requires AWS Lambda setup. Please contact support or follow the setup guide.",
+            message: "Video export is temporarily unavailable. Please try again later or contact support.",
           });
         }
       } else {
         // Lambda is required for production
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: "Video export is currently being set up. Please try again later or contact support.",
+          message: "Video export is not enabled. Please set RENDER_MODE=lambda in your environment configuration.",
         });
       }
     }),
@@ -146,14 +183,24 @@ export const renderRouter = createTRPCRouter({
   getRenderStatus: protectedProcedure
     .input(z.object({ renderId: z.string() }))
     .query(async ({ ctx, input }) => {
+      console.log(`[getRenderStatus] Checking status for render ID: ${input.renderId}`);
       const job = renderState.get(input.renderId);
       
       if (!job) {
+        console.log(`[Render] Job ${input.renderId} not found in render state`);
+        console.log(`[Render] Active render IDs:`, Array.from(renderState.getAllIds()));
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: "Render job not found",
         });
       }
+      
+      console.log(`[getRenderStatus] Found job:`, {
+        id: job.id,
+        status: job.status,
+        progress: job.progress,
+        outputUrl: job.outputUrl,
+      });
 
       // Security check
       if (job.userId !== ctx.session.user.id) {
@@ -167,12 +214,20 @@ export const renderRouter = createTRPCRouter({
       if (isLambda && job.status === 'rendering' && job.bucketName) {
         try {
           const { getLambdaRenderProgress } = await import("~/server/services/render/lambda-cli.service");
-          const progress = await getLambdaRenderProgress(input.renderId, job.bucketName);
+          const progress = await getLambdaRenderProgress(input.renderId, job.bucketName, job.projectId, job.format);
           
           // Update local state with latest progress
           if (progress.done) {
             renderState.set(input.renderId, {
               ...job,
+              status: 'completed',
+              progress: 100,
+              outputUrl: progress.outputFile || undefined,
+            });
+            
+            // Update database tracking
+            await ExportTrackingService.updateExportStatus({
+              renderId: input.renderId,
               status: 'completed',
               progress: 100,
               outputUrl: progress.outputFile || undefined,
@@ -183,12 +238,29 @@ export const renderRouter = createTRPCRouter({
               status: 'failed',
               error: progress.errors[0]?.message || "Unknown error",
             });
+            
+            // Update database tracking
+            await ExportTrackingService.updateExportStatus({
+              renderId: input.renderId,
+              status: 'failed',
+              error: progress.errors[0]?.message || "Unknown error",
+            });
           } else {
+            const currentProgress = Math.round((progress.overallProgress || 0) * 100);
             renderState.set(input.renderId, {
               ...job,
-              progress: Math.round((progress.overallProgress || 0) * 100),
+              progress: currentProgress,
               isFinalizingFFmpeg: progress.encodedFrames === progress.renderedFrames && progress.overallProgress < 1,
             });
+            
+            // Update database tracking periodically (every 10% progress)
+            if (currentProgress % 10 === 0 && currentProgress !== job.progress) {
+              await ExportTrackingService.updateExportStatus({
+                renderId: input.renderId,
+                status: 'rendering',
+                progress: currentProgress,
+              });
+            }
           }
           
           // Get updated job
@@ -207,13 +279,16 @@ export const renderRouter = createTRPCRouter({
         }
       }
 
-      return {
+      const response = {
         status: job.status,
         progress: job.progress,
         error: job.error,
         outputUrl: job.outputUrl,
         isFinalizingFFmpeg: job.isFinalizingFFmpeg,
       };
+      
+      console.log(`[getRenderStatus] Returning response:`, response);
+      return response;
     }),
 
   // List user's recent renders
@@ -231,5 +306,26 @@ export const renderRouter = createTRPCRouter({
         createdAt: new Date(job.createdAt).toISOString(),
         progress: job.progress,
       }));
+    }),
+    
+  // Get user export statistics
+  getExportStats: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await ExportTrackingService.getUserExportStats(ctx.session.user.id);
+    }),
+    
+  // Track download when user clicks download link
+  trackDownload: protectedProcedure
+    .input(z.object({ renderId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // In Next.js app router, headers are available from ctx.headers
+      const userAgent = ctx.headers.get('user-agent') || undefined;
+      const ipAddress = ctx.headers.get('x-forwarded-for') || ctx.headers.get('x-real-ip') || undefined;
+      
+      return await ExportTrackingService.trackDownload(
+        input.renderId,
+        userAgent,
+        ipAddress
+      );
     }),
 }); 

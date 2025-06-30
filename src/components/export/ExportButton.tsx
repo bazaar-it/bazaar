@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { ExportOptionsModal, type ExportFormat, type ExportQuality } from "./ExportOptionsModal";
 
 interface ExportButtonProps {
   projectId: string;
@@ -20,6 +21,9 @@ interface ExportButtonProps {
 
 export function ExportButton({ projectId, className, size = "sm" }: ExportButtonProps) {
   const [renderId, setRenderId] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
@@ -32,11 +36,13 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
     },
   });
 
-  const { data: status, isLoading: statusLoading } = api.render.getRenderStatus.useQuery(
+  const { data: status } = api.render.getRenderStatus.useQuery(
     { renderId: renderId! },
     {
       enabled: !!renderId,
-      refetchInterval: (data) => {
+      refetchInterval: (query) => {
+        const data = query.state.data;
+        console.log('[ExportButton] Status query data:', data);
         if (data?.status === 'completed' || data?.status === 'failed') {
           return false;
         }
@@ -44,50 +50,155 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
       },
     }
   );
+  
+  const trackDownload = api.render.trackDownload.useMutation();
 
   // Handle completion and auto-download
   useEffect(() => {
-    if (status?.status === 'completed') {
+    console.log('[ExportButton] Status changed:', status);
+    
+    if (status?.status === 'completed' && !hasDownloaded) {
       // Check if we have an output URL (Lambda) or need to download locally
       if (status.outputUrl) {
-        toast.success("Export complete! Starting download...");
+        toast.success("Export complete! Click the download button to save your video.");
+        setHasDownloaded(true);
+        setDownloadUrl(status.outputUrl);
         
-        // Download from S3/Lambda URL
+        // Try auto-download (might be blocked by browser)
         const link = document.createElement('a');
         link.href = status.outputUrl;
-        link.download = `bazaar-vid-${projectId}.mp4`;
-        link.target = '_blank'; // Open in new tab for S3 URLs
+        const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
+        link.download = `bazaar-vid-${projectId}.${extension}`;
+        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // If auto-download fails, user can click the button
       } else {
         // Fallback for local render (if implemented later)
         toast.success("Export complete!");
       }
-      
-      // Reset after a delay
-      setTimeout(() => setRenderId(null), 5000);
     } else if (status?.status === 'failed') {
       toast.error(`Export failed: ${status.error || 'Unknown error'}`);
-      setTimeout(() => setRenderId(null), 5000);
+      setTimeout(() => {
+        setRenderId(null);
+        setHasDownloaded(false);
+      }, 5000);
     }
-  }, [status?.status, status?.outputUrl, projectId, status?.error]);
+  }, [status?.status, status?.outputUrl, projectId, status?.error, renderId, trackDownload, hasDownloaded]);
 
-  const handleExport = () => {
+  const handleExport = (format: ExportFormat, quality: ExportQuality) => {
+    setShowExportModal(false);
     startRender.mutate({ 
       projectId,
-      format: 'mp4',
-      quality: 'high',
+      format,
+      quality,
     });
   };
 
-  // Completed state
-  if (status?.status === 'completed') {
+  const handleExportClick = () => {
+    setShowExportModal(true);
+  };
+
+  // Completed state - show download button
+  if (status?.status === 'completed' || downloadUrl) {
+    const handleDownload = async () => {
+      if (downloadUrl || status?.outputUrl) {
+        const url = downloadUrl || status?.outputUrl!;
+        
+        // Track the download
+        if (renderId) {
+          trackDownload.mutate({ renderId });
+        }
+        
+        try {
+          // First, try direct download from S3 (if CORS allows)
+          console.log('[ExportButton] Attempting direct download from:', url);
+          
+          const directResponse = await fetch(url, { mode: 'cors' });
+          if (directResponse.ok) {
+            const blob = await directResponse.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            const extension = url.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
+            link.download = `bazaar-vid-${projectId}.${extension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            toast.success("Download started!");
+            return;
+          }
+        } catch (directError) {
+          console.log('[ExportButton] Direct download failed, trying proxy:', directError);
+        }
+        
+        try {
+          // Fallback to proxy endpoint
+          toast.info("Downloading video...");
+          
+          const extension = url.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
+          const proxyUrl = `/api/download/${renderId}?projectId=${projectId}&format=${extension}`;
+          
+          console.log('[ExportButton] Using proxy endpoint:', proxyUrl);
+          
+          const response = await fetch(proxyUrl);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[ExportButton] Proxy download failed:', response.status, errorText);
+            throw new Error(`Proxy download failed: ${response.status} ${errorText}`);
+          }
+          
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = `bazaar-vid-${projectId}.${extension}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          toast.success("Download started!");
+        } catch (error) {
+          console.error('[ExportButton] All download methods failed:', error);
+          // Last resort: just open the URL
+          toast.error("Download failed. Opening video in new tab...");
+          window.open(url, '_blank');
+        }
+      }
+    };
+    
     return (
-      <Button variant="outline" disabled size={size} className={className}>
-        <Check className="mr-2 h-4 w-4 text-green-500" />
-        Download Started!
-      </Button>
+      <div className="flex gap-2">
+        <Button 
+          variant="default" 
+          size={size} 
+          className={className}
+          onClick={handleDownload}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Download Video
+        </Button>
+        <Button 
+          variant="outline" 
+          size={size}
+          onClick={() => {
+            setRenderId(null);
+            setDownloadUrl(null);
+            setHasDownloaded(false);
+          }}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Export Again
+        </Button>
+      </div>
     );
   }
 
@@ -138,24 +249,33 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
 
   // Default state - ready to export
   return (
-    <Button 
-      onClick={handleExport} 
-      disabled={startRender.isLoading}
-      variant="default"
-      size={size}
-      className={className}
-    >
-      {startRender.isLoading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Starting...
-        </>
-      ) : (
-        <>
-          <Download className="mr-2 h-4 w-4" />
-          Export
-        </>
-      )}
-    </Button>
+    <>
+      <Button 
+        onClick={handleExportClick} 
+        disabled={startRender.isPending}
+        variant="default"
+        size={size}
+        className={className}
+      >
+        {startRender.isPending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Starting...
+          </>
+        ) : (
+          <>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </>
+        )}
+      </Button>
+      
+      <ExportOptionsModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExport={handleExport}
+        isExporting={startRender.isPending}
+      />
+    </>
   );
 }

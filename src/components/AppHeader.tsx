@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
-import { ExportButton } from "~/components/export/ExportButton";
+import { ExportDropdown } from "~/components/export/ExportDropdown";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -190,8 +190,8 @@ export default function AppHeader({
               {isSharing ? "Copied!" : "Share"}
             </Button>
             
-            {/* Export button */}
-            <ExportButton projectId={projectId} size="sm" className="rounded-[15px] shadow-sm" />
+            {/* Export dropdown */}
+            <ExportDropdown projectId={projectId} size="sm" className="rounded-[15px] shadow-sm" />
           </>
         )}
         
