@@ -66,7 +66,7 @@ export async function renderVideoOnLambda({
     // Build CLI command
     const outputName = `${projectId}.${format}`;
     const cliArgs = [
-      'remotion', 'lambda', 'render',
+      'lambda', 'render',
       DEPLOYED_SITE_URL,
       'MainComposition',
       '--props', inputProps,
@@ -83,12 +83,17 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] Executing CLI command...`);
     
+    // Use the locally installed remotion CLI directly
+    const remotionPath = path.join(process.cwd(), 'node_modules/.bin/remotion');
+    
     // Execute the command using execFile to avoid shell escaping issues
-    const { stdout, stderr } = await execFileAsync('npx', cliArgs, {
+    const { stdout, stderr } = await execFileAsync(remotionPath, cliArgs, {
       env: {
         ...process.env,
         AWS_REGION: process.env.AWS_REGION,
         REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME,
+        HOME: '/tmp', // Lambda has write access to /tmp
+        NPM_CONFIG_CACHE: '/tmp/.npm', // Set npm cache to writable directory
       },
     });
     
