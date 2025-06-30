@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, Loader2, Check, ChevronDown, FileVideo, Globe, Image } from "lucide-react";
+import { Download, Loader2, Check, ChevronDown, FileVideo } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -90,13 +90,6 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
   const isCompleted = status?.status === 'completed';
   const progress = status?.progress || 0;
 
-  const formatIcons = {
-    mp4: FileVideo,
-    webm: Globe,
-    gif: Image,
-  };
-
-  const FormatIcon = formatIcons[format];
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -133,25 +126,6 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
       </DropdownMenuTrigger>
       
       <DropdownMenuContent align="end" className="w-48">
-        {/* Format Selection */}
-        <DropdownMenuLabel className="text-xs font-normal opacity-70">Format</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={format} onValueChange={(v) => setFormat(v as ExportFormat)}>
-          <DropdownMenuRadioItem value="mp4" className="gap-2" onSelect={(e) => e.preventDefault()}>
-            <FileVideo className="h-3 w-3" />
-            MP4
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="webm" className="gap-2" onSelect={(e) => e.preventDefault()}>
-            <Globe className="h-3 w-3" />
-            WebM
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="gif" className="gap-2" onSelect={(e) => e.preventDefault()}>
-            <Image className="h-3 w-3" />
-            GIF
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        
-        <DropdownMenuSeparator />
-        
         {/* Quality Selection */}
         <DropdownMenuLabel className="text-xs font-normal opacity-70">Quality</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as ExportQuality)}>
@@ -180,7 +154,7 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
             className="gap-2 font-medium"
           >
             <Download className="h-3 w-3 text-green-500" />
-            Download {format.toUpperCase()}
+            Download MP4
           </DropdownMenuItem>
         ) : (
           // Show export/progress button
@@ -197,8 +171,8 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
               </>
             ) : (
               <>
-                <FormatIcon className="h-3 w-3" />
-                Export as {format.toUpperCase()}
+                <FileVideo className="h-3 w-3" />
+                Export as MP4
               </>
             )}
           </DropdownMenuItem>

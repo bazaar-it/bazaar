@@ -8,6 +8,13 @@
       "when": 1750658913138,
       "tag": "0000_third_maelstrom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1751314925822,
+      "tag": "0001_fair_paibok",
+      "breakpoints": true
     }
   ]
 }

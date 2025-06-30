@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports } from "~/server/db/schema";
 import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2095,6 +2095,210 @@ export default function GeneratedScene() {
           users: allRecipients.filter(r => r.type === 'user').length,
           subscribers: allRecipients.filter(r => r.type === 'subscriber').length,
         },
+      };
+    }),
+
+  // EXPORT ANALYTICS ENDPOINTS - admin only
+
+  // Get export statistics with timeframe filtering
+  getExportStats: adminOnlyProcedure
+    .input(z.object({ 
+      timeframe: z.enum(['all', '30d', '7d', '24h']).default('30d') 
+    }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const timeframeFilter = 
+        input.timeframe === '24h' ? new Date(now.getTime() - 24 * 60 * 60 * 1000) :
+        input.timeframe === '7d' ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) :
+        input.timeframe === '30d' ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) :
+        null;
+
+      const whereCondition = timeframeFilter ? gte(exports.createdAt, timeframeFilter) : undefined;
+
+      // Get basic stats
+      const [
+        totalExportsResult,
+        successfulExportsResult,
+        formatDistribution,
+        avgDurationResult,
+        totalMinutesResult
+      ] = await Promise.all([
+        // Total exports
+        db.select({ count: count() }).from(exports).where(whereCondition),
+        
+        // Successful exports
+        db.select({ count: count() })
+          .from(exports)
+          .where(and(whereCondition, eq(exports.status, 'completed'))),
+        
+        // Format distribution
+        db.select({
+          format: exports.format,
+          count: count(),
+        })
+          .from(exports)
+          .where(whereCondition)
+          .groupBy(exports.format),
+        
+        // Average render duration (for successful exports)
+        db.select({
+          avgDuration: sql<number>`ROUND(AVG(EXTRACT(EPOCH FROM (${exports.completedAt} - ${exports.createdAt}))))::integer`
+        })
+          .from(exports)
+          .where(and(whereCondition, eq(exports.status, 'completed'), sql`${exports.completedAt} IS NOT NULL`)),
+        
+        // Total video minutes exported
+        db.select({
+          totalMinutes: sql<number>`ROUND(SUM(${exports.duration}::float / 30 / 60))::integer`
+        })
+          .from(exports)
+          .where(and(whereCondition, eq(exports.status, 'completed')))
+      ]);
+
+      const totalExports = totalExportsResult[0]?.count || 0;
+      const successfulExports = successfulExportsResult[0]?.count || 0;
+      const successRate = totalExports > 0 ? Math.round((successfulExports / totalExports) * 100) : 0;
+
+      // Calculate format distribution percentages
+      const formatDistributionWithPercentage = formatDistribution.reduce((acc, item) => {
+        const percentage = totalExports > 0 ? Math.round((item.count / totalExports) * 100) : 0;
+        acc[item.format] = {
+          count: item.count,
+          percentage
+        };
+        return acc;
+      }, {} as Record<string, { count: number; percentage: number }>);
+
+      // Calculate trends (comparing to previous period)
+      let exportsTrend, successRateTrend;
+      if (input.timeframe !== 'all') {
+        const previousPeriodStart = 
+          input.timeframe === '24h' ? new Date(now.getTime() - 48 * 60 * 60 * 1000) :
+          input.timeframe === '7d' ? new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) :
+          new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+        
+        const previousPeriodEnd = timeframeFilter!;
+
+        const [prevTotalResult, prevSuccessResult] = await Promise.all([
+          db.select({ count: count() })
+            .from(exports)
+            .where(and(gte(exports.createdAt, previousPeriodStart), sql`${exports.createdAt} < ${previousPeriodEnd}`)),
+          
+          db.select({ count: count() })
+            .from(exports)
+            .where(and(
+              gte(exports.createdAt, previousPeriodStart),
+              sql`${exports.createdAt} < ${previousPeriodEnd}`,
+              eq(exports.status, 'completed')
+            ))
+        ]);
+
+        const prevTotal = prevTotalResult[0]?.count || 0;
+        const prevSuccess = prevSuccessResult[0]?.count || 0;
+        const prevSuccessRate = prevTotal > 0 ? (prevSuccess / prevTotal) * 100 : 0;
+
+        exportsTrend = prevTotal > 0 ? {
+          value: Math.round(((totalExports - prevTotal) / prevTotal) * 100),
+          isPositive: totalExports >= prevTotal
+        } : undefined;
+
+        successRateTrend = prevSuccessRate > 0 ? {
+          value: Math.round(successRate - prevSuccessRate),
+          isPositive: successRate >= prevSuccessRate
+        } : undefined;
+      }
+
+      return {
+        totalExports,
+        successRate,
+        avgDuration: avgDurationResult[0]?.avgDuration || 0,
+        totalMinutesExported: totalMinutesResult[0]?.totalMinutes || 0,
+        formatDistribution: formatDistributionWithPercentage,
+        exportsTrend,
+        successRateTrend
+      };
+    }),
+
+  // Get recent exports with pagination
+  getRecentExports: adminOnlyProcedure
+    .input(z.object({
+      page: z.number().default(1),
+      pageSize: z.number().default(20),
+      timeframe: z.enum(['all', '30d', '7d', '24h']).default('30d'),
+      status: z.enum(['all', 'completed', 'failed', 'rendering']).optional(),
+      userId: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const offset = (input.page - 1) * input.pageSize;
+      
+      const now = new Date();
+      const timeframeFilter = 
+        input.timeframe === '24h' ? new Date(now.getTime() - 24 * 60 * 60 * 1000) :
+        input.timeframe === '7d' ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) :
+        input.timeframe === '30d' ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) :
+        null;
+
+      const conditions = [];
+      if (timeframeFilter) conditions.push(gte(exports.createdAt, timeframeFilter));
+      if (input.status && input.status !== 'all') conditions.push(eq(exports.status, input.status));
+      if (input.userId) conditions.push(eq(exports.userId, input.userId));
+
+      const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [exportsList, totalCountResult] = await Promise.all([
+        db.select({
+          id: exports.id,
+          userId: exports.userId,
+          projectId: exports.projectId,
+          renderId: exports.renderId,
+          status: exports.status,
+          progress: exports.progress,
+          format: exports.format,
+          quality: exports.quality,
+          outputUrl: exports.outputUrl,
+          fileSize: exports.fileSize,
+          duration: exports.duration,
+          error: exports.error,
+          downloadCount: exports.downloadCount,
+          createdAt: exports.createdAt,
+          completedAt: exports.completedAt,
+          // Join user info
+          user: {
+            id: users.id,
+            name: users.name,
+            email: users.email,
+          },
+          // Join project info
+          project: {
+            id: projects.id,
+            name: projects.title,
+          }
+        })
+        .from(exports)
+        .leftJoin(users, eq(exports.userId, users.id))
+        .leftJoin(projects, eq(exports.projectId, projects.id))
+        .where(whereCondition)
+        .orderBy(desc(exports.createdAt))
+        .limit(input.pageSize)
+        .offset(offset),
+
+        db.select({ count: count() })
+          .from(exports)
+          .where(whereCondition)
+      ]);
+
+      const totalCount = totalCountResult[0]?.count || 0;
+      const totalPages = Math.ceil(totalCount / input.pageSize);
+
+      return {
+        exports: exportsList,
+        pagination: {
+          page: input.page,
+          pageSize: input.pageSize,
+          totalCount,
+          totalPages,
+          hasMore: input.page < totalPages
+        }
       };
     }),
 });
