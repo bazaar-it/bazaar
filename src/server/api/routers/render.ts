@@ -214,7 +214,7 @@ export const renderRouter = createTRPCRouter({
       if (isLambda && job.status === 'rendering' && job.bucketName) {
         try {
           const { getLambdaRenderProgress } = await import("~/server/services/render/lambda-cli.service");
-          const progress = await getLambdaRenderProgress(input.renderId, job.bucketName, job.projectId, job.format);
+          const progress = await getLambdaRenderProgress(input.renderId, job.bucketName);
           
           // Update local state with latest progress
           if (progress.done) {

@@ -1,11 +1,8 @@
 // src/server/services/render/lambda-cli.service.ts
-import { exec } from "child_process";
-import { promisify } from "util";
-import { renderState } from "../render/render-state";
+import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
+import type { AwsRegion } from "@remotion/lambda";
 import type { RenderConfig } from "./render.service";
 import { qualitySettings } from "./render.service";
-
-const execAsync = promisify(exec);
 
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
@@ -15,7 +12,7 @@ export interface LambdaRenderConfig extends RenderConfig {
 // Use the deployed site URL from environment or the new fixed version
 const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
 
-// Main Lambda rendering function using CLI
+// Main Lambda rendering function using programmatic API
 export async function renderVideoOnLambda({
   projectId,
   scenes,
@@ -26,9 +23,6 @@ export async function renderVideoOnLambda({
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
   console.log(`[LambdaRender] Environment info:`, {
     NODE_ENV: process.env.NODE_ENV,
-    PWD: process.cwd(),
-    PATH: process.env.PATH,
-    HOME: process.env.HOME,
     AWS_REGION: process.env.AWS_REGION ? 'set' : 'missing',
     REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME ? 'set' : 'missing',
     REMOTION_BUCKET_NAME: process.env.REMOTION_BUCKET_NAME ? 'set' : 'missing',
@@ -64,145 +58,78 @@ export async function renderVideoOnLambda({
       jsCodePreview: s.jsCode ? s.jsCode.substring(0, 100) + '...' : 'none',
     })));
     
-    // Prepare input props - properly escape for shell
-    const inputProps = JSON.stringify({
+    // Prepare input props
+    const inputProps = {
       scenes,
       projectId,
+    };
+    
+    // Determine codec based on format
+    const codec = format === 'gif' ? 'gif' : format === 'webm' ? 'vp8' : 'h264';
+    
+    console.log(`[LambdaRender] Using programmatic API to render...`);
+    
+    // Use the programmatic API
+    const { renderId, bucketName } = await renderMediaOnLambda({
+      region: process.env.AWS_REGION as AwsRegion,
+      functionName: process.env.REMOTION_FUNCTION_NAME!,
+      serveUrl: DEPLOYED_SITE_URL,
+      composition: "MainComposition",
+      inputProps,
+      codec,
+      imageFormat: format === 'gif' ? 'png' : 'jpeg',
+      jpegQuality: settings.jpegQuality,
+      crf: format !== 'gif' ? settings.crf : undefined,
+      frameRange: [0, totalDuration - 1],
+      outName: `${projectId}.${format}`,
+      privacy: "public",
+      downloadBehavior: {
+        type: "download",
+        fileName: null, // Use default filename
+      },
+      webhook: webhookUrl && process.env.WEBHOOK_SECRET ? {
+        url: webhookUrl,
+        secret: process.env.WEBHOOK_SECRET,
+      } : undefined,
+      // Performance settings
+      framesPerLambda: 180,
+      concurrencyPerLambda: 1,
+      maxRetries: 3,
+      envVariables: {},
+      chromiumOptions: {},
+      logLevel: 'info',
     });
     
-    // Build CLI command
-    const outputName = `${projectId}.${format}`;
-    const cliArgs = [
-      'lambda', 'render',
-      DEPLOYED_SITE_URL,
-      'MainComposition',
-      '--props', inputProps,
-      '--codec', format === 'gif' ? 'gif' : format === 'webm' ? 'vp8' : 'h264',
-      '--image-format', format === 'gif' ? 'png' : 'jpeg',
-      '--jpeg-quality', settings.jpegQuality.toString(),
-      ...(format !== 'gif' ? ['--crf', settings.crf.toString()] : []),
-      '--frames', `0-${totalDuration - 1}`,
-      '--out-name', outputName,
-      '--privacy', 'public',
-      '--download-behavior', 'download',
-      ...(process.env.WEBHOOK_SECRET && webhookUrl ? ['--webhook-custom-data', JSON.stringify({secret: process.env.WEBHOOK_SECRET})] : []),
-    ];
-    
-    console.log(`[LambdaRender] Executing CLI command...`);
-    
-    // Build the full command as a string for exec
-    // Try multiple approaches to find the remotion CLI
-    const remotionPaths = [
-      './node_modules/@remotion/cli/remotion-cli.js',  // Direct path to CLI
-      './node_modules/.bin/remotion',                  // Symlink in .bin
-      'remotion'                                       // Global or npx fallback
-    ];
-    
-    let stdout: string = '';
-    let stderr: string = '';
-    let commandExecuted = false;
-    
-    // Try each path until one works
-    for (const remotionPath of remotionPaths) {
-      const command = remotionPath.startsWith('./') 
-        ? `node ${remotionPath} ${cliArgs.map(arg => {
-            // Properly escape arguments that contain spaces or special characters
-            if (arg.includes(' ') || arg.includes('{') || arg.includes('}')) {
-              return `'${arg}'`;
-            }
-            return arg;
-          }).join(' ')}`
-        : `npx ${remotionPath} ${cliArgs.map(arg => {
-            // Properly escape arguments that contain spaces or special characters
-            if (arg.includes(' ') || arg.includes('{') || arg.includes('}')) {
-              return `'${arg}'`;
-            }
-            return arg;
-          }).join(' ')}`;
-      
-      try {
-        console.log(`[LambdaRender] Trying command with ${remotionPath}...`);
-        const result = await execAsync(command, {
-          env: {
-            ...process.env,
-            AWS_REGION: process.env.AWS_REGION,
-            AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-            AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
-            REMOTION_FUNCTION_NAME: process.env.REMOTION_FUNCTION_NAME,
-            REMOTION_BUCKET_NAME: process.env.REMOTION_BUCKET_NAME,
-            HOME: '/tmp', // Lambda has write access to /tmp
-            NPM_CONFIG_CACHE: '/tmp/.npm', // Set npm cache to writable directory
-            PATH: `${process.env.PATH}:/opt/nodejs/node16/bin:/opt/nodejs/node18/bin`, // Include Lambda Node paths
-          },
-          maxBuffer: 1024 * 1024 * 10, // 10MB buffer for large outputs
-          cwd: process.cwd(), // Ensure we're in the right directory
-        });
-        stdout = result.stdout;
-        stderr = result.stderr;
-        commandExecuted = true;
-        console.log(`[LambdaRender] Command succeeded with ${remotionPath}`);
-        break; // Exit loop on success
-      } catch (error) {
-        console.error(`[LambdaRender] Failed with ${remotionPath}:`, error);
-        // Continue to next path
-      }
-    }
-    
-    if (!commandExecuted) {
-      throw new Error("Failed to execute remotion CLI with any method");
-    }
-    
-    if (stderr && !stderr.includes('Render finished')) {
-      console.error(`[LambdaRender] CLI stderr:`, stderr);
-    }
-    
-    // Parse output to get render ID and bucket
-    // The CLI output format is different than expected, let's parse from stderr/stdout
-    console.log(`[LambdaRender] CLI stdout:`, stdout);
-    console.log(`[LambdaRender] CLI stderr:`, stderr);
-    
-    // Extract render ID from the output
-    let renderId: string | undefined;
-    let bucketName = process.env.REMOTION_BUCKET_NAME!;
-    let outputUrl: string | undefined;
-    
-    // Look for render ID in the output
-    const renderIdMatch = stdout.match(/Render ID:\s*([^\s]+)/);
-    if (renderIdMatch) {
-      renderId = renderIdMatch[1];
-    }
-    
-    // Look for the actual S3 URL in the output (this is the public URL)
-    // Match mp4, gif, or webm files
-    const s3UrlMatch = stdout.match(/\+ S3\s+(https:\/\/s3[^\s]+\.(mp4|gif|webm))/);
-    if (s3UrlMatch) {
-      outputUrl = s3UrlMatch[1];
-      console.log(`[LambdaRender] ✅ Export complete! Download URL: ${outputUrl}`);
-      console.log(`[LambdaRender] Found public S3 URL: ${outputUrl}`);
-    }
-    
-    if (!renderId && !outputUrl) {
-      console.error("[LambdaRender] Could not extract render ID or output URL from output");
-      throw new Error("Failed to parse render output");
-    }
-    
-    // If we have outputUrl but no renderId, extract it from the URL
-    if (outputUrl && !renderId) {
-      const renderIdFromUrl = outputUrl.match(/renders\/([^\/]+)\//);
-      if (renderIdFromUrl) {
-        renderId = renderIdFromUrl[1];
-      }
-    }
-    
-    console.log(`[LambdaRender] Render completed successfully`);
+    console.log(`[LambdaRender] Render started successfully`);
     console.log(`[LambdaRender] Render ID: ${renderId}`);
     console.log(`[LambdaRender] Bucket: ${bucketName}`);
-    console.log(`[LambdaRender] Output URL: ${outputUrl}`);
     
+    // Try to get initial progress to check if URL is available
+    try {
+      const progress = await getRenderProgress({
+        renderId,
+        bucketName,
+        functionName: process.env.REMOTION_FUNCTION_NAME!,
+        region: process.env.AWS_REGION as AwsRegion,
+      });
+      
+      if (progress.outputFile) {
+        console.log(`[LambdaRender] ✅ Export complete! Download URL: ${progress.outputFile}`);
+        return { 
+          renderId, 
+          bucketName,
+          outputUrl: progress.outputFile 
+        };
+      }
+    } catch (progressError) {
+      console.log(`[LambdaRender] Initial progress check failed, render still in progress`);
+    }
+    
+    // Return without immediate URL (will be polled later)
     return { 
-      renderId: renderId!, 
-      bucketName: bucketName!,
-      outputUrl: outputUrl! 
+      renderId, 
+      bucketName,
+      outputUrl: undefined 
     };
   } catch (error) {
     console.error("[LambdaRender] Render failed:", error);
@@ -235,68 +162,47 @@ export async function renderVideoOnLambda({
   }
 }
 
-// Get render progress from Lambda using S3
-export async function getLambdaRenderProgress(renderId: string, bucketName: string, projectId: string, format: string = 'mp4') {
+// Get render progress from Lambda using programmatic API
+export async function getLambdaRenderProgress(renderId: string, bucketName: string) {
   try {
-    // Check if the output file exists in S3
-    const outputName = `${projectId}.${format}`;
-    const s3Key = `renders/${renderId}/${outputName}`;
+    console.log(`[LambdaRender] Getting progress for render ${renderId}`);
     
-    // Use AWS CLI to check if file exists
-    const checkCommand = `aws s3 ls s3://${bucketName}/${s3Key}`;
+    const progress = await getRenderProgress({
+      renderId,
+      bucketName,
+      functionName: process.env.REMOTION_FUNCTION_NAME!,
+      region: process.env.AWS_REGION as AwsRegion,
+    });
     
-    try {
-      const { stdout } = await execAsync(checkCommand, {
-        env: {
-          ...process.env,
-          AWS_REGION: process.env.AWS_REGION,
-        },
-      });
-      
-      // If file exists, render is complete
-      if (stdout.includes(`.${format}`)) {
-        // Use the public S3 URL format
-        const outputUrl = `https://s3.${process.env.AWS_REGION}.amazonaws.com/${bucketName}/${s3Key}`;
-        return {
-          overallProgress: 1,
-          renderedFrames: 100,
-          encodedFrames: 100,
-          done: true,
-          outputFile: outputUrl,
-          errors: [],
-        };
-      }
-    } catch (checkError) {
-      // File doesn't exist yet, still rendering
-    }
+    console.log(`[LambdaRender] Progress:`, {
+      overallProgress: progress.overallProgress,
+      done: progress.done,
+      outputFile: progress.outputFile,
+    });
     
-    // Try to get progress.json if available
-    try {
-      const progressCommand = `aws s3 cp s3://${bucketName}/renders/${renderId}/progress.json -`;
-      const { stdout: progressJson } = await execAsync(progressCommand);
-      const progress = JSON.parse(progressJson);
-      
-      return {
-        overallProgress: progress.overallProgress || 0.5,
-        renderedFrames: progress.renderedFrames || 0,
-        encodedFrames: progress.encodedFrames || 0,
-        done: progress.done || false,
-        outputFile: progress.outputFile,
-        errors: progress.errors || [],
-      };
-    } catch (progressError) {
-      // No progress file yet, assume still rendering
-      return {
-        overallProgress: 0.3,
-        renderedFrames: 0,
-        encodedFrames: 0,
-        done: false,
-        outputFile: undefined,
-        errors: [],
-      };
-    }
+    // Calculate frame progress from overall progress
+    // Assuming 30fps and we know the total duration
+    const estimatedFrames = Math.round(progress.overallProgress * 100);
+    
+    return {
+      overallProgress: progress.overallProgress || 0,
+      renderedFrames: estimatedFrames,
+      encodedFrames: estimatedFrames,
+      done: progress.done || false,
+      outputFile: progress.outputFile,
+      errors: progress.errors || [],
+    };
   } catch (error) {
     console.error("[LambdaRender] Failed to get progress:", error);
-    throw error;
+    
+    // Return a default progress state on error
+    return {
+      overallProgress: 0,
+      renderedFrames: 0,
+      encodedFrames: 0,
+      done: false,
+      outputFile: undefined,
+      errors: [error instanceof Error ? error.message : 'Unknown error'],
+    };
   }
 }
