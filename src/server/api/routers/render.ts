@@ -90,7 +90,7 @@ export const renderRouter = createTRPCRouter({
       const renderId = crypto.randomUUID();
 
       // Prepare render configuration
-      const renderConfig = prepareRenderConfig({
+      const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
         scenes: project.scenes,
         format: input.format,
