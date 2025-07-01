@@ -148,7 +148,6 @@ async function preprocessSceneForLambda(scene: any) {
 // Helper function to replace Iconify icons with actual SVGs
 async function replaceIconifyIcons(code: string): Promise<string> {
   const { loadNodeIcon } = await import('@iconify/utils/lib/loader/node-loader');
-  const { iconToSVG, iconToHTML } = await import('@iconify/utils');
   
   // Find all IconifyIcon references
   const iconRegex = /<window\.IconifyIcon\s+icon="([^"]+)"([^>]*?)\/>/g;
@@ -160,30 +159,39 @@ async function replaceIconifyIcons(code: string): Promise<string> {
   for (const match of matches) {
     const [fullMatch, iconName, attrs = ''] = match;
     
+    if (!iconName) {
+      console.warn(`[Preprocess] Empty icon name found, using placeholder`);
+      code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
+      continue;
+    }
+    
     try {
-      // Load the icon data
-      const iconData = await loadNodeIcon(iconName, {
-        addXmlNs: true
-      });
+      // Split icon name into collection and icon (e.g., "material-symbols:play-arrow" -> ["material-symbols", "play-arrow"])
+      const [collection, icon] = iconName.split(':');
       
-      if (!iconData) {
+      if (!collection || !icon) {
+        console.warn(`[Preprocess] Invalid icon name format "${iconName}", using placeholder`);
+        code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
+        continue;
+      }
+      
+      // Load the icon data - loadNodeIcon returns SVG string directly
+      const svgString = await loadNodeIcon(collection, icon);
+      
+      if (!svgString) {
         console.warn(`[Preprocess] Icon "${iconName}" not found, using placeholder`);
         code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
         continue;
       }
       
-      // Convert icon to SVG
-      const renderData = iconToSVG(iconData);
-      const svgHtml = iconToHTML(renderData.body, renderData.attributes);
-      
       // Extract style and className from original attributes
       const styleMatch = attrs?.match(/style=\{([^}]+)\}/);
       const classMatch = attrs?.match(/className="([^"]+)"/);
       
-      // Build React-compatible SVG
-      let reactSvg = svgHtml
+      // Build React-compatible SVG from the string
+      let reactSvg = svgString
         .replace(/class=/g, 'className=')
-        .replace(/(\w+)-(\w+)=/g, (match, p1, p2) => `${p1}${p2.charAt(0).toUpperCase() + p2.slice(1)}=`);
+        .replace(/(\w+)-(\w+)=/g, (_match, p1, p2) => `${p1}${p2.charAt(0).toUpperCase() + p2.slice(1)}=`);
       
       // Apply style if present
       if (styleMatch) {

@@ -65,26 +65,30 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
         setDownloadUrl(status.outputUrl);
         
         // Auto-download with improved approach
-        try {
-          const response = await fetch(status.outputUrl);
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
-          // Create a cleaner filename with timestamp
-          const date = new Date().toISOString().split('T')[0];
-          link.download = `video-${date}-${projectId.slice(-6)}.${extension}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          
-          // Clean up the blob URL after a short delay
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-        } catch (error) {
-          console.log('[ExportButton] Auto-download failed, user can click button:', error);
-        }
+        (async () => {
+          try {
+            if (!status.outputUrl) return;
+            
+            const response = await fetch(status.outputUrl);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
+            // Create a cleaner filename with timestamp
+            const date = new Date().toISOString().split('T')[0];
+            link.download = `video-${date}-${projectId.slice(-6)}.${extension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the blob URL after a short delay
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          } catch (error) {
+            console.log('[ExportButton] Auto-download failed, user can click button:', error);
+          }
+        })();
       } else {
         // Fallback for local render (if implemented later)
         toast.success("Render complete!");
