@@ -191,6 +191,19 @@ export const adminRouter = createTRPCRouter({
         prompts30d,
         prompts7d,
         prompts24h,
+        // Previous periods
+        prevUsers30d,
+        prevUsers7d,
+        prevUsers24h,
+        prevProjects30d,
+        prevProjects7d,
+        prevProjects24h,
+        prevScenes30d,
+        prevScenes7d,
+        prevScenes24h,
+        prevPrompts30d,
+        prevPrompts7d,
+        prevPrompts24h,
         recentFeedback
       ] = await Promise.all([
         // Users - using createdAt for user registration tracking
@@ -256,6 +269,87 @@ export const adminRouter = createTRPCRouter({
             gte(messages.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
           )),
 
+        // Previous periods for percentage change calculations
+        // Users - previous periods
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 30 days (days 31-60 ago)
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 7 days (days 8-14 ago)
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 24 hours (24-48 hours ago)
+
+        // Projects - previous periods  
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
+        // Scenes - previous periods
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
+        // Prompts - previous periods
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
         // Recent feedback
         db.select({
           id: feedback.id,
@@ -275,24 +369,40 @@ export const adminRouter = createTRPCRouter({
           last30Days: totalUsers30d[0]?.count || 0,
           last7Days: totalUsers7d[0]?.count || 0,
           last24Hours: totalUsers24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevUsers30d[0]?.count || 0,
+          prev7Days: prevUsers7d[0]?.count || 0,
+          prev24Hours: prevUsers24h[0]?.count || 0,
         },
         projects: {
           all: projectsAll[0]?.count || 0,
           last30Days: projects30d[0]?.count || 0,
           last7Days: projects7d[0]?.count || 0,
           last24Hours: projects24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevProjects30d[0]?.count || 0,
+          prev7Days: prevProjects7d[0]?.count || 0,
+          prev24Hours: prevProjects24h[0]?.count || 0,
         },
         scenes: {
           all: scenesAll[0]?.count || 0,
           last30Days: scenes30d[0]?.count || 0,
           last7Days: scenes7d[0]?.count || 0,
           last24Hours: scenes24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevScenes30d[0]?.count || 0,
+          prev7Days: prevScenes7d[0]?.count || 0,
+          prev24Hours: prevScenes24h[0]?.count || 0,
         },
         prompts: {
           all: promptsAll[0]?.count || 0,
           last30Days: prompts30d[0]?.count || 0,
           last7Days: prompts7d[0]?.count || 0,
           last24Hours: prompts24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevPrompts30d[0]?.count || 0,
+          prev7Days: prevPrompts7d[0]?.count || 0,
+          prev24Hours: prevPrompts24h[0]?.count || 0,
         },
         recentFeedback
       };
