@@ -81,14 +81,15 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       // NEW: Add Avatar System - Ultra Simple (R2 Storage URLs)
       (window as any).BazaarAvatars = {
-        'asian-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/bazaar-vid-components/Bazaar%20avatars/asian-woman.png',
-        'black-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/bazaar-vid-components/Bazaar%20avatars/black-man.png', 
-        'hispanic-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/bazaar-vid-components/Bazaar%20avatars/hispanic-man.png',
-        'middle-eastern-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/bazaar-vid-components/Bazaar%20avatars/middle-eastern-man.png',
-        'white-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/bazaar-vid-components/Bazaar%20avatars/white-woman.png'
+        'asian-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/asian-woman.png',
+        'black-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/black-man.png', 
+        'hispanic-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/hispanic-man.png',
+        'middle-eastern-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/middle-eastern-man.png',
+        'white-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/white-woman.png'
       };
       
       console.log('✅ GlobalDependencyProvider: All dependencies loaded successfully');
+      console.log('🎭 BazaarAvatars loaded:', (window as any).BazaarAvatars);
     }
   }, []);
 
