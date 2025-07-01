@@ -84,6 +84,21 @@ export default function AdminDashboard() {
     return calculateChange(current, Math.max(previous - current, 0));
   };
 
+  const getPromptsValue = () => {
+    return selectedTimeframe === 'all' ? dashboardData?.prompts?.all || 0 :
+           selectedTimeframe === '30d' ? dashboardData?.prompts?.last30Days || 0 :
+           selectedTimeframe === '7d' ? dashboardData?.prompts?.last7Days || 0 :
+           dashboardData?.prompts?.last24Hours || 0;
+  };
+
+  const getPromptsChange = () => {
+    const current = getPromptsValue();
+    const previous = selectedTimeframe === '24h' ? dashboardData?.prompts?.last7Days || 0 :
+                    selectedTimeframe === '7d' ? dashboardData?.prompts?.last30Days || 0 :
+                    selectedTimeframe === '30d' ? dashboardData?.prompts?.all || 0 : 0;
+    return calculateChange(current, Math.max(previous - current, 0));
+  };
+
   const MetricCard = ({ 
     title, 
     value, 
@@ -183,9 +198,9 @@ export default function AdminDashboard() {
 
           <MetricCard
             title="Total Prompts"
-            value={1250} // TODO: Connect to actual prompts data
+            value={getPromptsValue()}
             description="Prompts submitted"
-            change={18}
+            change={getPromptsChange()}
             color="green"
             href="/admin/analytics"
           />

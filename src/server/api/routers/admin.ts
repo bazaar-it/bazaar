@@ -187,6 +187,10 @@ export const adminRouter = createTRPCRouter({
         scenes30d,
         scenes7d,
         scenes24h,
+        promptsAll,
+        prompts30d,
+        prompts7d,
+        prompts24h,
         recentFeedback
       ] = await Promise.all([
         // Users - using createdAt for user registration tracking
@@ -225,6 +229,33 @@ export const adminRouter = createTRPCRouter({
         db.select({ count: count() }).from(scenes)
           .where(gte(scenes.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))),
 
+        // Prompts (user messages) - all timeframes
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(eq(messages.role, 'user')),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+          )),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+          )),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
+          )),
+
         // Recent feedback
         db.select({
           id: feedback.id,
@@ -256,6 +287,12 @@ export const adminRouter = createTRPCRouter({
           last30Days: scenes30d[0]?.count || 0,
           last7Days: scenes7d[0]?.count || 0,
           last24Hours: scenes24h[0]?.count || 0,
+        },
+        prompts: {
+          all: promptsAll[0]?.count || 0,
+          last30Days: prompts30d[0]?.count || 0,
+          last7Days: prompts7d[0]?.count || 0,
+          last24Hours: prompts24h[0]?.count || 0,
         },
         recentFeedback
       };
