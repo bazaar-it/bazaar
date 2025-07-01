@@ -67,10 +67,23 @@ export default function AdminDashboard() {
                    selectedTimeframe === '30d' ? dashboardData?.users?.last30Days || 0 :
                    selectedTimeframe === '7d' ? dashboardData?.users?.last7Days || 0 :
                    dashboardData?.users?.last24Hours || 0;
-    const previous = selectedTimeframe === '24h' ? dashboardData?.users?.last7Days || 0 :
-                    selectedTimeframe === '7d' ? dashboardData?.users?.last30Days || 0 :
-                    selectedTimeframe === '30d' ? dashboardData?.users?.all || 0 : 0;
-    return calculateChange(current, Math.max(previous - current, 0));
+    
+    // Get the equivalent previous period for proper comparison
+    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
+                    selectedTimeframe === '30d' ? dashboardData?.users?.prev30Days || 0 :
+                    selectedTimeframe === '7d' ? dashboardData?.users?.prev7Days || 0 :
+                    dashboardData?.users?.prev24Hours || 0;
+    
+    // Debug logging
+    if (selectedTimeframe === '30d') {
+      console.log('Users 30d Debug:', {
+        current,
+        previous,
+        dashboardData: dashboardData?.users
+      });
+    }
+    
+    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
   };
 
   const getScenesChange = () => {
@@ -78,10 +91,33 @@ export default function AdminDashboard() {
                    selectedTimeframe === '30d' ? dashboardData?.scenes?.last30Days || 0 :
                    selectedTimeframe === '7d' ? dashboardData?.scenes?.last7Days || 0 :
                    dashboardData?.scenes?.last24Hours || 0;
-    const previous = selectedTimeframe === '24h' ? dashboardData?.scenes?.last7Days || 0 :
-                    selectedTimeframe === '7d' ? dashboardData?.scenes?.last30Days || 0 :
-                    selectedTimeframe === '30d' ? dashboardData?.scenes?.all || 0 : 0;
-    return calculateChange(current, Math.max(previous - current, 0));
+    
+    // Get the equivalent previous period for proper comparison
+    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
+                    selectedTimeframe === '30d' ? dashboardData?.scenes?.prev30Days || 0 :
+                    selectedTimeframe === '7d' ? dashboardData?.scenes?.prev7Days || 0 :
+                    dashboardData?.scenes?.prev24Hours || 0;
+    
+    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
+  };
+
+  const getPromptsValue = () => {
+    return selectedTimeframe === 'all' ? dashboardData?.prompts?.all || 0 :
+           selectedTimeframe === '30d' ? dashboardData?.prompts?.last30Days || 0 :
+           selectedTimeframe === '7d' ? dashboardData?.prompts?.last7Days || 0 :
+           dashboardData?.prompts?.last24Hours || 0;
+  };
+
+  const getPromptsChange = () => {
+    const current = getPromptsValue();
+    
+    // Get the equivalent previous period for proper comparison
+    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
+                    selectedTimeframe === '30d' ? dashboardData?.prompts?.prev30Days || 0 :
+                    selectedTimeframe === '7d' ? dashboardData?.prompts?.prev7Days || 0 :
+                    dashboardData?.prompts?.prev24Hours || 0;
+    
+    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
   };
 
   const MetricCard = ({ 
@@ -183,9 +219,9 @@ export default function AdminDashboard() {
 
           <MetricCard
             title="Total Prompts"
-            value={1250} // TODO: Connect to actual prompts data
+            value={getPromptsValue()}
             description="Prompts submitted"
-            change={18}
+            change={getPromptsChange()}
             color="green"
             href="/admin/analytics"
           />
