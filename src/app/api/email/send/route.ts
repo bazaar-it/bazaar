@@ -5,13 +5,13 @@ import WelcomeEmailTemplate from '~/components/email/WelcomeEmailTemplate';
 import NewsletterEmailTemplate from '~/components/email/NewsletterEmailTemplate';
 
 // Resend API configuration
-const RESEND_API_KEY = process.env.RESEND_API_KEY || 're_gWkijeDk_HZFELnWcPSAWg7EZRkK4kSJq';
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_BASE_URL = 'https://api.resend.com';
 
-// Email from address - use test domain for development
+// Email from address - use bazaar.it domain
 const FROM_EMAIL = process.env.NODE_ENV === 'production' 
-  ? 'Bazaar <noreply@bazaar-vid.vercel.app>'
-  : 'Bazaar <onboarding@resend.dev>';
+  ? 'Bazaar <create@bazaar.it>'
+  : 'Bazaar <create@bazaar.it>';
 
 // Email validation schemas
 const welcomeEmailSchema = z.object({
