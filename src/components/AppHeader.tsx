@@ -115,7 +115,7 @@ export default function AppHeader({
     <header className="flex items-center justify-between px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
       {/* Left: Logo only */}
       <div className="flex items-center min-w-[64px]">
-        <a href="/" className="flex items-center" aria-label="Go to homepage">
+        <a href="/?view" className="flex items-center" aria-label="Go to homepage">
           <Image src="/bazaar-logo.png" alt="Bazaar" width={79} height={30} className="object-contain" priority />
         </a>
       </div>
