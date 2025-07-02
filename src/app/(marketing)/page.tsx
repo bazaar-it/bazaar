@@ -89,19 +89,7 @@ export default function HomePage() {
     { name: "Vercel", path: "https://egvuknlirjkhhhoooecl.supabase.co/storage/v1/object/public/bazaar-vid//Vercel.svg" },
   ];
 
-  // Auto-redirect logged-in users to workspace
-  useEffect(() => {
-    if (status === "authenticated" && session?.user) {
-      console.log("User is already logged in, redirecting to workspace...");
-      // Use /projects/new which will redirect to most recent project if exists
-      router.push("/projects/new");
-    }
-  }, [status, session, router]);
 
-  // Handle loading states and redirects after all hooks
-  if (status === "loading") {
-     return null; // Prevent hydration mismatch
-   }
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">

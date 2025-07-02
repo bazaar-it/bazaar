@@ -403,7 +403,7 @@ export default function ChatPanelG({
   }, [projectId, revertMutation, utils, getCurrentProps, replace, updateScene, updateAndRefresh]);
 
   // Use SSE generation hook
-  const { generate: generateSSE, cancel: cancelSSE } = useSSEGeneration({
+  const { generate: generateSSE, cleanup: cancelSSE } = useSSEGeneration({
     projectId,
     onMessageCreated: async (messageId, data) => {
       console.log('[ChatPanelG] ✅ SSE ready with data:', data);
@@ -569,8 +569,8 @@ export default function ChatPanelG({
         }
       }
     },
-    onComplete: (messageId: string) => {
-      console.log('[ChatPanelG] SSE completed:', messageId);
+    onComplete: () => {
+      console.log('[ChatPanelG] SSE completed');
     },
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);

@@ -63,13 +63,14 @@ export async function generateTitle(
     const llmStartTime = Date.now();
 
     const messages: AIMessage[] = [
+      { role: "system", content: systemPromptConfig },
       { role: "user", content: prompt }
     ];
 
     const aiResponse = await AIClientService.generateResponse(
       titleModelConfig,
       messages,
-      systemPromptConfig as any, // TODO: Fix type mismatch between string and SystemPromptConfig
+      undefined,
       { responseFormat: { type: "json_object" } }
     );
     
@@ -96,7 +97,7 @@ export async function generateTitle(
         error: errMessage,
         responseContent: aiResponse.content 
       });
-      return { title: "New Video Project" }; // Fallback
+      return { title: "Untitled Video" };
     }
     
     const duration = Date.now() - startTime;
@@ -114,6 +115,6 @@ export async function generateTitle(
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     titleLogger.error(contextId, `Failed to generate title: ${errorMessage}`, { error });
     
-    return { title: "New Video Project" }; // Fallback
+    return { title: "Untitled Video" };
   }
 } 
