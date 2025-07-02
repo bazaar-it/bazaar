@@ -78,20 +78,48 @@ export async function GET(request: NextRequest) {
             contextId: projectId,
           });
 
+          let finalTitle = titleResult.title;
+          
+          // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
+          if (finalTitle === "Untitled Video") {
+            // Get all user's projects with "Untitled Video" pattern to find next number
+            const userProjects = await db.query.projects.findMany({
+              columns: { title: true },
+              where: eq(projects.userId, userId), // Use the authenticated userId
+            });
+            
+            // Find the highest number used in "Untitled Video X" titles
+            let highestNumber = 0;
+            const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+            
+            for (const project of untitledProjects) {
+              const match = /^Untitled Video (\d+)$/.exec(project.title);
+              if (match?.[1]) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > highestNumber) {
+                  highestNumber = num;
+                }
+              }
+            }
+            
+            // Generate proper numbered fallback
+            finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
+          }
+
           // Update the project title
           await db.update(projects)
             .set({ 
-              title: titleResult.title,
+              title: finalTitle,
               updatedAt: new Date(),
             })
             .where(eq(projects.id, projectId));
 
-          console.log(`[SSE] Generated and set title: "${titleResult.title}" for project ${projectId}`);
+          console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
           
           // ✅ NEW: Send title update to client so it can invalidate queries
           await writer.write(encoder.encode(formatSSE({
             type: 'title_updated',
-            title: titleResult.title,
+            title: finalTitle,
             projectId: projectId
           })));
         }
