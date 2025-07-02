@@ -87,6 +87,13 @@ export async function GET(request: NextRequest) {
             .where(eq(projects.id, projectId));
 
           console.log(`[SSE] Generated and set title: "${titleResult.title}" for project ${projectId}`);
+          
+          // ✅ NEW: Send title update to client so it can invalidate queries
+          await writer.write(encoder.encode(formatSSE({
+            type: 'title_updated',
+            title: titleResult.title,
+            projectId: projectId
+          })));
         }
       } catch (titleError) {
         // Don't fail the whole request if title generation fails

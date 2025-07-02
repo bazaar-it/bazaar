@@ -1,16 +1,20 @@
 import { useCallback, useRef } from 'react';
 import { useVideoState } from '~/stores/videoState';
+import { api } from '~/trpc/react';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (messageId: string | undefined, data?: { userMessage?: string; imageUrls?: string[]; videoUrls?: string[] }) => void;
-  onComplete?: (messageId: string) => void;
+  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[] }) => void;
+  onComplete?: () => void;
   onError?: (error: string) => void;
 }
 
 export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onError }: UseSSEGenerationOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const { addAssistantMessage, updateMessage } = useVideoState();
+  
+  // ✅ NEW: Get tRPC utils for query invalidation
+  const utils = api.useUtils();
 
   const generate = useCallback(async (
     userMessage: string,
@@ -57,6 +61,14 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             });
             eventSource.close();
             break;
+          
+          // ✅ NEW: Handle title updates
+          case 'title_updated':
+            console.log(`[SSE] Title updated to: "${data.title}"`);
+            // Invalidate project queries to refresh the UI
+            utils.project.getById.invalidate({ id: projectId });
+            utils.project.list.invalidate();
+            break;
             
           case 'error':
             onError?.(data.error);
@@ -85,14 +97,14 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     return () => {
       eventSource.close();
     };
-  }, [projectId, addAssistantMessage, updateMessage, onMessageCreated, onComplete, onError]);
+  }, [projectId, onMessageCreated, onError, utils]);
 
-  const cancel = useCallback(() => {
+  const cleanup = useCallback(() => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
     }
   }, []);
 
-  return { generate, cancel };
+  return { generate, cleanup };
 }
