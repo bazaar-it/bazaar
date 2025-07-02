@@ -1,36 +1,35 @@
 // middleware.ts
-import { withAuth } from "next-auth/middleware"
-import { NextResponse } from "next/server"
+import { auth } from "~/server/auth";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default withAuth(
-  function middleware(req) {
-    const { pathname } = req.nextUrl;
-    
-    // Only redirect authenticated users from homepage
-    if (pathname === '/') {
-      console.log('[Middleware] Authenticated user detected, redirecting to /projects/new');
-      return NextResponse.redirect(new URL('/projects/new', req.url));
-    }
-    
+export async function middleware(request: NextRequest) {
+  const { pathname, searchParams } = request.nextUrl;
+  
+  // Only process homepage
+  if (pathname !== '/') {
     return NextResponse.next();
-  },
-  {
-    callbacks: {
-      // This function determines if the middleware should run
-      authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl;
-        
-        // For homepage, check if user has valid token (authenticated)
-        if (pathname === '/') {
-          return !!token; // Only run middleware if user is authenticated
-        }
-        
-        // For other paths, don't run this middleware
-        return false;
-      },
-    },
   }
-)
+  
+  // Check if user is authenticated
+  const session = await auth();
+  
+  if (!session?.user) {
+    // Not authenticated, show landing page
+    return NextResponse.next();
+  }
+  
+  // Check if user explicitly wants to view landing page
+  const intentionalLanding = searchParams.has('view') || searchParams.has('landing');
+  
+  // Redirect authenticated users from homepage if not intentional
+  if (!intentionalLanding) {
+    console.log('[Middleware] Authenticated user detected, redirecting to /projects/new');
+    return NextResponse.redirect(new URL('/projects/new', request.url));
+  }
+  
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [

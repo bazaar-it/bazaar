@@ -17,6 +17,6 @@ export const siteConfig = {
   description: "Create incredible motion graphics videos with AI",
   url: getBaseUrl(), // Removed NEXT_PUBLIC_BASE_URL since we're hardcoding
   ogImage: "/og-image.png",
-  links: {,
+  links: {
   },
 };
