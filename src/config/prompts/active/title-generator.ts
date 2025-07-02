@@ -9,7 +9,7 @@ export const TITLE_GENERATOR = {
   content: `Generate a concise, descriptive title for a video project.
 
 Rules:
-- Maximum 4 words
+- Maximum 3 words
 - No quotes or special characters
 - Clear and memorable
 - Related to the content/theme
@@ -19,5 +19,8 @@ Examples:
 - "Tech Conference Opener"
 - "Brand Story Animation"
 
-Return ONLY the title, nothing else.`
+Return a JSON object with the following structure:
+{
+  "title": "Generated Title Here"
+}`
 };

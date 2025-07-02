@@ -32,6 +32,15 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   const { setProject } = useVideoState();
   const breakpoint = useBreakpoint();
 
+  // ✅ NEW: Fetch current project details to get updated title
+  const { data: currentProjectData } = api.project.getById.useQuery(
+    { id: projectId },
+    { 
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    }
+  );
+
   // Initialize video state on mount - but only if not already loaded
   useEffect(() => {
     const currentProps = useVideoState.getState().getCurrentProps();
@@ -55,7 +64,21 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
     }
   }, [projectId]); // Remove initialProps from dependencies to prevent re-runs
   
-  const [title, setTitle] = useState(initialProjects.find(p => p.id === projectId)?.name || "Untitled Project");
+  // ✅ UPDATED: Use current project data title or fallback to initial title
+  const [title, setTitle] = useState(
+    currentProjectData?.title || 
+    initialProjects.find(p => p.id === projectId)?.name || 
+    "Untitled Project"
+  );
+
+  // ✅ NEW: Update title when project data changes (auto-generated titles)
+  useEffect(() => {
+    if (currentProjectData?.title && currentProjectData.title !== title) {
+      console.log(`[GenerateWorkspaceRoot] Updating title from "${title}" to "${currentProjectData.title}"`);
+      setTitle(currentProjectData.title);
+    }
+  }, [currentProjectData?.title, title]);
+
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   const handleProjectRenamed = useCallback((newTitle: string) => {
@@ -88,7 +111,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
   });
   
   // Set up render mutation
-  const renderMutation = api.render.start.useMutation({
+  const renderMutation = api.render.startRender.useMutation({
     onSuccess: () => {
       if (DEBUG) console.log("Render started successfully");
     },
