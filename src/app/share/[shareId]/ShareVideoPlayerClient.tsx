@@ -133,8 +133,8 @@ export default function ShareVideoPlayerClient({ inputProps }: ShareVideoPlayerC
         showVolumeControls
         doubleClickToFullscreen
         clickToPlay
-        loop={false}
-        autoPlay={false}
+        loop={true}
+        autoPlay={true}
       />
     </div>
   );
