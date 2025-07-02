@@ -78,7 +78,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     }
     
     // More explicit prompt for brain orchestrator
-    const fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". This scene needs to be fixed using the fixBrokenScene tool. The broken code is in the scene with ID ${sceneId}.`;
+    const fixPrompt = `Fixing scene`;
     
     console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Starting autofix flow:', {
       sceneId: sceneId,
