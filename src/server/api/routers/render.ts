@@ -90,7 +90,7 @@ export const renderRouter = createTRPCRouter({
       const renderId = crypto.randomUUID();
 
       // Prepare render configuration
-      const renderConfig = prepareRenderConfig({
+      const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
         scenes: project.scenes,
         format: input.format,
@@ -233,17 +233,21 @@ export const renderRouter = createTRPCRouter({
               outputUrl: progress.outputFile || undefined,
             });
           } else if (progress.errors && progress.errors.length > 0) {
+            const errorMessage = typeof progress.errors[0] === 'string' 
+              ? progress.errors[0] 
+              : progress.errors[0]?.message || "Unknown error";
+            
             renderState.set(input.renderId, {
               ...job,
               status: 'failed',
-              error: progress.errors[0]?.message || "Unknown error",
+              error: errorMessage,
             });
             
             // Update database tracking
             await ExportTrackingService.updateExportStatus({
               renderId: input.renderId,
               status: 'failed',
-              error: progress.errors[0]?.message || "Unknown error",
+              error: errorMessage,
             });
           } else {
             const currentProgress = Math.round((progress.overallProgress || 0) * 100);

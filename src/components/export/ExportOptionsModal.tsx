@@ -41,9 +41,9 @@ export function ExportOptionsModal({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Export Options</DialogTitle>
+          <DialogTitle>Render Options</DialogTitle>
           <DialogDescription>
-            Choose your export format and quality settings
+            Choose your render format and quality settings
           </DialogDescription>
         </DialogHeader>
 
@@ -108,10 +108,10 @@ export function ExportOptionsModal({
                 <Label htmlFor="high" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2 font-medium">
                     <Sparkles className="h-4 w-4" />
-                    High Quality
+                    1080p HD
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Best visual quality. Larger file sizes. 1080p resolution.
+                    Full HD resolution (1920×1080). Best visual quality, larger file sizes.
                   </p>
                 </Label>
               </div>
@@ -121,10 +121,10 @@ export function ExportOptionsModal({
                 <Label htmlFor="medium" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2 font-medium">
                     <Gauge className="h-4 w-4" />
-                    Medium Quality
+                    720p HD
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Balanced quality and file size. Good for most uses.
+                    HD resolution (1280×720). Balanced quality and file size.
                   </p>
                 </Label>
               </div>
@@ -134,10 +134,10 @@ export function ExportOptionsModal({
                 <Label htmlFor="low" className="flex-1 cursor-pointer">
                   <div className="flex items-center gap-2 font-medium">
                     <Zap className="h-4 w-4" />
-                    Low Quality
+                    480p SD
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Fastest export. Smallest file size. 720p resolution.
+                    Standard resolution (854×480). Fastest render, smallest file size.
                   </p>
                 </Label>
               </div>
@@ -148,7 +148,7 @@ export function ExportOptionsModal({
           <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              <span className="font-medium">Export Details</span>
+              <span className="font-medium">Render Details</span>
             </div>
             <p className="mt-1">
               {format === "mp4" 
@@ -165,7 +165,7 @@ export function ExportOptionsModal({
             Cancel
           </Button>
           <Button onClick={handleExport} disabled={isExporting}>
-            {isExporting ? "Exporting..." : "Export"}
+            {isExporting ? "Rendering..." : "Render"}
           </Button>
         </DialogFooter>
       </DialogContent>
