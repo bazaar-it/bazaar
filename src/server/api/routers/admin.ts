@@ -2,7 +2,7 @@
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports } from "~/server/db/schema";
-import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
+import { sql, and, gte, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -2447,5 +2447,91 @@ export default function GeneratedScene() {
           hasMore: input.page < totalPages
         }
       };
+    }),
+
+  // Chat Export & Analysis
+  exportChatHistory: adminOnlyProcedure
+    .input(z.object({
+      startDate: z.date().nullable().optional(),
+      endDate: z.date().nullable().optional(),
+      format: z.enum(['json', 'csv', 'jsonl']),
+      includeUserInfo: z.boolean(),
+      anonymize: z.boolean(),
+    }))
+    .mutation(async ({ input }) => {
+      const { startDate, endDate, format, includeUserInfo, anonymize } = input;
+
+      // Build date filter conditions
+      const dateConditions = [];
+      if (startDate) dateConditions.push(gte(messages.createdAt, startDate));
+      if (endDate) dateConditions.push(lte(messages.createdAt, endDate));
+
+      // Get all messages with project and user info
+      const rawMessages = await db
+        .select({
+          messageId: messages.id,
+          messageContent: messages.content,
+          messageRole: messages.role,
+          messageSequence: messages.sequence,
+          messageCreatedAt: messages.createdAt,
+          messageImageUrls: messages.imageUrls,
+          projectId: projects.id,
+          projectTitle: projects.title,
+          projectCreatedAt: projects.createdAt,
+          userId: users.id,
+          userName: users.name,
+          userEmail: users.email,
+          sceneCount: sql<number>`COUNT(DISTINCT ${scenes.id})`,
+        })
+        .from(messages)
+        .innerJoin(projects, eq(messages.projectId, projects.id))
+        .innerJoin(users, eq(projects.userId, users.id))
+        .leftJoin(scenes, eq(scenes.projectId, projects.id))
+        .where(dateConditions.length > 0 ? and(...dateConditions) : undefined)
+        .groupBy(messages.id, projects.id, users.id)
+        .orderBy(projects.createdAt, messages.sequence);
+
+      // Get iteration metrics for enrichment
+      const projectIds = [...new Set(rawMessages.map(m => m.projectId))];
+      const iterationMetrics = await db
+        .select({
+          projectId: sceneIterations.projectId,
+          avgGenerationTime: sql<number>`AVG(${sceneIterations.generationTimeMs}) / 1000`, // Convert to seconds
+          totalIterations: count(),
+          editCount: sql<number>`COUNT(CASE WHEN ${sceneIterations.userEditedAgain} = true THEN 1 END)`,
+        })
+        .from(sceneIterations)
+        .where(inArray(sceneIterations.projectId, projectIds))
+        .groupBy(sceneIterations.projectId);
+
+      // Import helper functions
+      const { groupAndEnrichConversations, formatAsCSV, formatAsJSONL, formatAsJSON } = await import('~/server/api/routers/admin/chat-export-helpers');
+
+      // Process and group conversations
+      const conversations = groupAndEnrichConversations(
+        rawMessages,
+        iterationMetrics,
+        anonymize
+      );
+
+      // Format based on requested format
+      switch (format) {
+        case 'csv':
+          return formatAsCSV(conversations);
+        case 'jsonl':
+          return formatAsJSONL(conversations);
+        case 'json':
+        default:
+          return formatAsJSON(conversations);
+      }
+    }),
+
+  getChatAnalytics: adminOnlyProcedure
+    .input(z.object({
+      timeframe: z.enum(['24h', '7d', '30d', 'all'])
+    }))
+    .query(async ({ input }) => {
+      const { computeChatAnalytics } = await import('~/server/api/routers/admin/chat-analytics');
+      return await computeChatAnalytics(input.timeframe, db);
     }),
 });

@@ -20,6 +20,7 @@ import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
+import { PlaybackSpeedControl } from "~/components/ui/PlaybackSpeedControl";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -60,13 +61,15 @@ export interface WorkspaceContentAreaGHandle {
 }
 
 // Sortable panel wrapper
-function SortablePanelG({ id, children, style, className, onRemove, projectId }: { 
+function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setCurrentPlaybackSpeed }: { 
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties; 
   className?: string;
   onRemove?: () => void;
   projectId?: string;
+  currentPlaybackSpeed?: number;
+  setCurrentPlaybackSpeed?: (speed: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   
@@ -117,6 +120,15 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId }:
           <div className="flex items-center gap-1">
             {isPreviewPanel && (
               <>
+                <PlaybackSpeedControl
+                  currentSpeed={currentPlaybackSpeed || 1}
+                  onSpeedChange={(speed) => {
+                    setCurrentPlaybackSpeed?.(speed);
+                    // Dispatch event to PreviewPanelG
+                    const event = new CustomEvent('playback-speed-change', { detail: { speed } });
+                    window.dispatchEvent(event);
+                  }}
+                />
                 <button
                   onClick={handlePreviewRefresh}
                   className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
@@ -125,11 +137,6 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId }:
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                 </button>
-                {projectId && (
-                  <div className="mx-1">
-                    <ExportButton projectId={projectId} size="sm" />
-                  </div>
-                )}
               </>
             )}
             <button 
@@ -298,6 +305,24 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       { id: 'chat', type: 'chat' },
       { id: 'preview', type: 'preview' },
     ]);
+    
+    // Playback speed state for preview panel header
+    const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(1);
+    
+    // Listen for playback speed loaded from PreviewPanelG
+    useEffect(() => {
+      const handleSpeedLoaded = (event: CustomEvent) => {
+        const speed = event.detail?.speed;
+        if (typeof speed === 'number') {
+          setCurrentPlaybackSpeed(speed);
+        }
+      };
+
+      window.addEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
+      return () => {
+        window.removeEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
+      };
+    }, []);
     
     // Scene selection state - shared between Storyboard and Code panels
     const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -761,6 +786,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                         <SortablePanelG 
                           id={panel?.id || `panel-${idx}`}
                           onRemove={() => panel?.id ? removePanel(panel.id) : null}
+                          projectId={projectId}
+                          currentPlaybackSpeed={currentPlaybackSpeed}
+                          setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
                         >
                           {renderPanelContent(panel)}
                         </SortablePanelG>

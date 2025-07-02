@@ -1,7 +1,7 @@
 // src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
@@ -11,6 +11,7 @@ import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
 import { api } from "~/trpc/react";
+import { PlaybackSpeedControl } from "~/components/ui/PlaybackSpeedControl";
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -44,6 +45,10 @@ export function PreviewPanelG({
   const [isCompiling, setIsCompiling] = useState(false);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
+  
+  // Playback speed state
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const playerRef = useRef<PlayerRef>(null);
   
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
@@ -632,6 +637,50 @@ export default function FallbackComposition() {
     }
   }, [compileMultiSceneComposition]);
 
+  // Listen for playback speed change events from header
+  useEffect(() => {
+    const handleSpeedChange = (event: CustomEvent) => {
+      const speed = event.detail?.speed;
+      if (typeof speed === 'number' && speed >= 0.25 && speed <= 2) {
+        console.log('[PreviewPanelG] Received speed change event:', speed);
+        setPlaybackSpeed(speed);
+        
+        // Save preference
+        try {
+          localStorage.setItem('bazaar-playback-speed', speed.toString());
+        } catch (error) {
+          console.warn('[PreviewPanelG] Failed to save playback speed preference:', error);
+        }
+      }
+    };
+
+    window.addEventListener('playback-speed-change', handleSpeedChange as EventListener);
+    return () => {
+      window.removeEventListener('playback-speed-change', handleSpeedChange as EventListener);
+    };
+  }, []);
+
+  // Load saved playback speed preference on mount
+  useEffect(() => {
+    try {
+      const savedSpeed = localStorage.getItem('bazaar-playback-speed');
+      if (savedSpeed) {
+        const speed = parseFloat(savedSpeed);
+        if (speed >= 0.25 && speed <= 2) {
+          setPlaybackSpeed(speed);
+          console.log('[PreviewPanelG] Loaded saved playback speed:', speed);
+          
+          // Dispatch event to update header display
+          const event = new CustomEvent('playback-speed-loaded', { detail: { speed } });
+          window.dispatchEvent(event);
+        }
+      }
+    } catch (error) {
+      console.warn('[PreviewPanelG] Failed to load playback speed preference:', error);
+    }
+  }, []);
+
+
   // Player props
   const playerProps = useMemo(() => {
     if (!scenes.length) return null;
@@ -669,6 +718,8 @@ export default function FallbackComposition() {
               height={playerProps.height}
               inputProps={playerProps.inputProps}
               refreshToken={refreshToken}
+              playerRef={playerRef}
+              playbackRate={playbackSpeed}
             />
           </ErrorBoundary>
         ) : componentError ? (

@@ -18,7 +18,8 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/analytics' ? 'analytics' :
     pathname === '/admin/exports' ? 'exports' :
     pathname === '/admin/testing' ? 'testing' :
-    pathname === '/admin/email-marketing' ? 'email-marketing' : 'homepage';
+    pathname === '/admin/email-marketing' ? 'email-marketing' :
+    pathname === '/admin/chat-export' ? 'chat-export' : 'homepage';
 
   return (
     <div className="w-64 bg-white shadow-sm border-r border-gray-200 min-h-screen">
@@ -87,6 +88,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2v10a2 2 0 002 2z" />
               </svg>
               Email Marketing
+            </Link>
+
+            {/* Chat Export */}
+            <Link 
+              href="/admin/chat-export"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full text-left transition-colors ${
+                currentSection === 'chat-export'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Chat Export
             </Link>
 
             {/* Exports */}

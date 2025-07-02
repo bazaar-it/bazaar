@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useMemo, Suspense } from 'react';
-import { Player } from '@remotion/player';
+import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component to display when component loading fails
@@ -28,6 +28,7 @@ export interface RemotionPreviewProps {
   height: number;
   refreshToken?: string;
   inputProps?: Record<string, any>;
+  playerRef?: React.RefObject<PlayerRef | null>;
 }
 
 // The main preview component that wraps Remotion Player
@@ -38,7 +39,9 @@ export default function RemotionPreview({
   width,
   height,
   refreshToken = '',
-  inputProps = {}
+  inputProps = {},
+  playerRef,
+  playbackRate = 1
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
@@ -54,6 +57,7 @@ export default function RemotionPreview({
         </div>
       }>
         <Player
+          ref={playerRef}
           lazyComponent={lazyComponent}
           inputProps={inputProps}
           durationInFrames={durationInFrames}
@@ -71,6 +75,7 @@ export default function RemotionPreview({
           clickToPlay
           loop={true}
           autoPlay={true}
+          playbackRate={playbackRate}
           key={refreshToken} // Force remount when refreshToken changes
           acknowledgeRemotionLicense
         />
