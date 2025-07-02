@@ -13,12 +13,10 @@ export function getBaseUrl() {
 }
 
 export const siteConfig = {
-  name: "Bazaar Vid",
-  description: "Create professional motion graphics videos with AI-powered scene generation",
+  name: "Bazaar",
+  description: "Create incredible motion graphics videos with AI",
   url: getBaseUrl(), // Removed NEXT_PUBLIC_BASE_URL since we're hardcoding
   ogImage: "/og-image.png",
-  links: {
-    twitter: "https://twitter.com/bazaarvid",
-    github: "https://github.com/bazaar-vid/bazaar-vid",
+  links: {,
   },
 };
