@@ -5,6 +5,9 @@ import type { ChatAnalytics } from "~/lib/types/api/chat-export.types";
 export async function computeChatAnalytics(timeframe: string, db: any): Promise<ChatAnalytics> {
   const dateFilter = getDateFilter(timeframe);
   
+  // Debug: Log date filter
+  console.log('[Chat Analytics] Computing analytics for timeframe:', timeframe, 'dateFilter:', dateFilter);
+  
   // 1. Basic metrics
   const basicMetrics = await db
     .select({
@@ -14,8 +17,17 @@ export async function computeChatAnalytics(timeframe: string, db: any): Promise<
       assistantMessages: sql<number>`COUNT(CASE WHEN ${messages.role} = 'assistant' THEN 1 END)`,
     })
     .from(messages)
+    .innerJoin(projects, eq(messages.projectId, projects.id))
     .where(dateFilter ? gte(messages.createdAt, dateFilter) : undefined)
-    .then(r => r[0]);
+    .then((r: any[]) => {
+      console.log('[Chat Analytics] Basic metrics result:', r);
+      return r[0] || {
+        totalConversations: 0,
+        totalMessages: 0,
+        userMessages: 0,
+        assistantMessages: 0,
+      };
+    });
 
   // 2. Common phrases analysis
   const userMessages = await db
@@ -23,6 +35,7 @@ export async function computeChatAnalytics(timeframe: string, db: any): Promise<
       content: messages.content,
     })
     .from(messages)
+    .innerJoin(projects, eq(messages.projectId, projects.id))
     .where(and(
       eq(messages.role, 'user'),
       dateFilter ? gte(messages.createdAt, dateFilter) : undefined

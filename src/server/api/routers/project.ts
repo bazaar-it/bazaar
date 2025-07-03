@@ -56,6 +56,7 @@ export const projectRouter = createTRPCRouter({
   create: protectedProcedure
     .input(z.object({
       initialMessage: z.string().min(1).max(2000).optional(),
+      format: z.enum(['landscape', 'portrait', 'square']).optional(),
     }).optional())
     .mutation(async ({ ctx, input }) => {
       try {
@@ -115,7 +116,7 @@ export const projectRouter = createTRPCRouter({
           .values({
             userId: ctx.session?.user?.id || 'system',
             title,
-            props: createDefaultProjectProps(),
+            props: createDefaultProjectProps(input?.format || 'landscape'),
           })
           .returning());
 

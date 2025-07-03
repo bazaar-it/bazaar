@@ -370,14 +370,29 @@ This sprint contains user-requested features from the Bazaar.it roadmap, priorit
   - Show commit history
 - **Effort**: 3 days
 
-#### 24. **Loop Control** (LOW Complexity)
-- **What**: Stop animations after X loops
-- **Current State**: Infinite loops
-- **Implementation**:
-  - Add loop count to scene settings
-  - Modify animation code generation
-  - Update preview behavior
-- **Effort**: 1 day
+#### 24. **Loop Control** (LOW Complexity) ✅ **COMPLETED**
+- **What**: Video and scene loop control with three-state system
+- **Status**: ✅ **IMPLEMENTED** - January 3, 2025
+- **Implementation Summary**:
+  - ✅ Three-state loop system: video loop → off → scene loop
+  - ✅ Scene selector dropdown (matching code panel UI pattern)
+  - ✅ Proper icon system (Repeat for video, Repeat1 for scene)
+  - ✅ Fixed default autoloop behavior
+  - ✅ Fixed drag handler blocking loop button clicks
+  - ✅ Used Remotion's native inFrame/outFrame props for clean implementation
+- **Files Modified**:
+  - `/src/components/ui/LoopToggle.tsx` - Complete rewrite for three-state system
+  - `/src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx` - Updated state management
+  - `/src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx` - Scene loop implementation
+- **Key Features Delivered**:
+  - Default: Autoloop entire video (Repeat icon active)
+  - Click once: Turn off loop (Repeat icon greyed out)
+  - Click again: Loop single scene (Repeat1 icon active + scene dropdown)
+  - Scene selector only appears in scene loop mode
+  - Uses same "Scene 1, Scene 2" naming as code panel
+  - Persistent state across sessions via localStorage
+- **Documentation**: See `/memory-bank/sprints/sprint66_feature_roadmap/024-loop-control.md`
+- **Effort**: 1 day ✅ Completed in estimated time
 
 #### 25. **Panel Usage Analytics** (MEDIUM Complexity)
 - **What**: Track which workspace panels users actually use and for how long
@@ -677,100 +692,77 @@ This sprint contains user-requested features from the Bazaar.it roadmap, priorit
   - Concurrent users editing same scene
 - **Effort**: 2 days
 
-#### 31. **Fix First Scene Context Issue** (MEDIUM Complexity)
+#### 31. **Fix First Scene Context Issue** (MEDIUM Complexity) ✅ **COMPLETED**
 - **What**: Remove previous scene context contamination causing all first scenes to look similar (purple theme)
-- **Current State**: All first scenes generated are appearing similar with purple styling, suggesting context bleed from previous projects
-- **Root Cause Investigation Needed**:
-  - Previous scene context being passed to first scene generation
-  - Cached/persistent context from other users' projects
-  - Default template or styling being applied incorrectly
-  - Brain Orchestrator not properly isolating new project context
-- **User Problems**:
-  - First scenes lack variety and creativity
-  - All new projects start with similar purple/generic styling
-  - Reduces user satisfaction with initial generation
-  - Makes the AI appear less capable than it actually is
-- **Implementation**:
-  1. **Context Isolation**:
-     ```typescript
-     // In Brain Orchestrator - ensure clean context for first scene
-     const buildContext = async (projectId: string, sceneId?: string) => {
-       const scenes = await getProjectScenes(projectId);
-       
-       // For first scene, don't include previous scene context
-       if (scenes.length === 0 || isFirstScene(sceneId)) {
-         return {
-           projectScenes: [], // Empty - no previous scenes to reference
-           styleContext: null, // No style inheritance
-           previousSceneCode: null,
-           isFirstScene: true
-         };
-       }
-       
-       // For subsequent scenes, include relevant context
-       return buildFullContext(scenes, sceneId);
-     };
-     ```
-  2. **Brain Orchestrator Debug**:
-     - Add logging to see what context is being passed
-     - Check if previous project data is bleeding through
-     - Verify scene isolation between different projects
-     - Ensure clean slate for new projects
-  3. **Prompt Analysis**:
-     - Review CODE_GENERATOR prompt for bias toward purple/generic styling
-     - Check if default examples in prompts are too influential
-     - Ensure prompt encourages variety in first scenes
-     - Remove any hardcoded style preferences
-  4. **Database Investigation**:
-     ```typescript
-     // Check if scene context is properly isolated
-     const debugFirstScene = async (projectId: string) => {
-       const context = await buildContext(projectId);
-       console.log('First scene context:', {
-         previousScenes: context.projectScenes.length,
-         styleContext: context.styleContext,
-         hasTemplateInfluence: context.templateCode ? true : false
-       });
-     };
-     ```
-  5. **Template Influence Check**:
-     - Verify templates aren't automatically applying purple styling
-     - Check if default template is being used when none selected
-     - Ensure template context is only applied when explicitly chosen
-- **Technical Investigation Points**:
-  - Check `/src/brain/orchestratorNEW.ts` context building
-  - Review `/src/tools/add/add.ts` for first scene handling
-  - Examine CODE_GENERATOR prompt for styling bias
-  - Look for cached context between requests
-  - Verify project isolation in database queries
-- **Testing Approach**:
+- **Status**: ✅ **IMPLEMENTED** - January 3, 2025
+- **Root Cause Found**: 
+  - CODE_GENERATOR prompt had specific purple gradient as default: `#f093fb to #f5576c`
+  - This was being used as the "warm" gradient option for all first scenes
+- **Implementation Summary**:
+  - ✅ Updated CODE_GENERATOR prompt to remove purple bias
+  - ✅ Added emphasis on matching user's prompt context for colors
+  - ✅ Provided variety of gradient examples without defaulting to purple
+  - ✅ Added "FIRST SCENE VARIETY" section to prompt
+  - ✅ Kept previousSceneContext logic intact (it was already correct)
+- **Files Modified**:
+  - `/src/config/prompts/active/code-generator.ts` - Removed purple bias, added variety
+- **Key Changes**:
   ```typescript
-  // Test with multiple new projects to verify variety
-  const testFirstSceneVariety = async () => {
-    const prompts = [
-      "Create a business presentation slide",
-      "Make a fun birthday animation", 
-      "Design a product showcase",
-      "Build a motivational quote display"
-    ];
-    
-    // Each should produce different styles, not all purple
-    for (const prompt of prompts) {
-      const result = await generateFirstScene(prompt);
-      console.log('Generated colors:', extractColors(result.code));
-    }
-  };
+  // OLD: Specific purple gradient
+  Warm: linear-gradient from #f093fb to #f5576c
+  
+  // NEW: Context-driven color selection
+  - Consider the tone and context of what they're creating
+  - Professional blues/grays for business content
+  - Vibrant colors for fun content
+  - Variety of gradient examples (no purple default)
   ```
-- **Expected Outcomes**:
-  - First scenes show variety in colors, styles, and layouts
-  - No consistent purple bias across different prompts
-  - Each new project starts fresh without previous context
-  - Improved user satisfaction with initial generations
-- **Debug Priority Areas**:
-  1. Context building in Brain Orchestrator
-  2. Scene isolation between projects  
-  3. Prompt styling bias
-  4. Template default application
-  5. Caching/session persistence issues
-- **Effort**: 1-2 days (investigation + fix)
+- **Expected Results**:
+  - First scenes now match user prompt context
+  - No more default purple bias
+  - Each project starts with unique visual identity
+  - Better variety across different projects
+- **Effort**: 0.5 days ✅ Completed quickly once root cause identified
+
+#### 32. **Fix Double Refresh on Scene Updates** (MEDIUM Complexity)
+- **What**: Eliminate redundant preview panel refreshes when scenes are added/updated
+- **Current State**: Preview refreshes twice for every scene update (template add, edit, etc.)
+- **Root Cause**: 
+  - First refresh: Direct state update via `addScene()` in videoState
+  - Second refresh: Database fetch + `updateAndRefresh()` in `handleSceneGenerated`
+- **User Problems**:
+  - Jarring visual experience with double flicker
+  - Performance impact from compiling scenes twice
+  - Potential race conditions between refreshes
+  - Confusing for users who see content flash/reload
+- **Implementation Options**:
+  - **Option A**: Remove optimistic updates, only update after DB fetch
+  - **Option B**: Check if scene exists in state before fetching from DB (recommended)
+  - **Option C**: Debounce refresh mechanism to prevent rapid updates
+- **Recommended Solution** (Option B):
+  ```typescript
+  // In handleSceneGenerated
+  const existingScene = getCurrentProps()?.scenes.find(s => s.id === sceneId);
+  if (existingScene) {
+    console.log('[WorkspaceContentAreaG] Scene already in state, skipping DB fetch');
+    setSelectedSceneId(sceneId);
+    return;
+  }
+  // Only fetch if scene not in state
+  ```
+- **Technical Details**:
+  - TemplatesPanelG adds scene optimistically via `addScene()`
+  - Then calls `onSceneGenerated` callback
+  - Callback fetches ALL scenes from DB and replaces state
+  - This causes PreviewPanelG's effect to fire twice
+- **Success Metrics**:
+  - Single refresh per scene update
+  - No visual flicker/flash
+  - Faster perceived performance
+  - Consistent state between panels
+- **Edge Cases to Handle**:
+  - Scene updates from other sources (SSE, polling)
+  - Concurrent edits from multiple panels
+  - Failed optimistic updates needing rollback
+- **Effort**: 1 day
 

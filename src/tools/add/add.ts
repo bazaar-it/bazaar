@@ -119,6 +119,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       userPrompt: input.userPrompt,
       functionName: functionName,
       projectId: input.projectId,
+      projectFormat: input.projectFormat,
     });
 
     // Return generated content - NO DATABASE!

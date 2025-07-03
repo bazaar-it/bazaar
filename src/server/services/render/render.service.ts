@@ -7,6 +7,7 @@ export interface RenderConfig {
   scenes: any[];
   format: 'mp4' | 'webm' | 'gif';
   quality: 'low' | 'medium' | 'high';
+  projectProps?: any;
   onProgress?: (progress: number) => void;
 }
 
@@ -30,6 +31,31 @@ export const qualitySettings = {
     resolution: { width: 1920, height: 1080 }, // 1080p
     videoBitrate: '5M',
   },
+};
+
+// Format-specific quality adjustments
+export const getQualityForFormat = (quality: string, format: string) => {
+  const baseSettings = qualitySettings[quality as keyof typeof qualitySettings];
+  
+  if (format === 'webm') {
+    // VP8 codec benefits from slightly higher CRF for similar visual quality
+    return {
+      ...baseSettings,
+      crf: Math.min(baseSettings.crf + 2, 51), // VP8 max is 63 but we cap at 51
+    };
+  }
+  
+  if (format === 'gif') {
+    // GIFs don't use CRF or video bitrate
+    return {
+      ...baseSettings,
+      crf: undefined,
+      videoBitrate: undefined,
+      jpegQuality: undefined, // GIFs use PNG for better quality
+    };
+  }
+  
+  return baseSettings;
 };
 
 // Pre-compile TypeScript to JavaScript for Lambda
@@ -227,12 +253,37 @@ export async function prepareRenderConfig({
   scenes,
   format = 'mp4',
   quality = 'high',
+  projectProps,
 }: RenderConfig) {
-  const settings = qualitySettings[quality];
+  const settings = getQualityForFormat(quality, format);
   
-  // Pre-compile all scenes for Lambda
+  // Get project format dimensions or fallback to quality settings
+  const projectFormat = projectProps?.meta?.format || 'landscape';
+  const projectWidth = projectProps?.meta?.width || 1920;
+  const projectHeight = projectProps?.meta?.height || 1080;
+  
+  // For quality-based scaling, maintain aspect ratio
+  let renderWidth = settings.resolution.width;
+  let renderHeight = settings.resolution.height;
+  
+  if (projectFormat === 'portrait') {
+    // 9:16 aspect ratio
+    renderHeight = settings.resolution.width; // Use width as height for portrait
+    renderWidth = Math.round(renderHeight * 9 / 16);
+  } else if (projectFormat === 'square') {
+    // 1:1 aspect ratio
+    renderWidth = renderHeight = Math.min(settings.resolution.width, settings.resolution.height);
+  } else {
+    // Landscape 16:9 - use default quality settings
+  }
+  
+  // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
-    scenes.map(scene => preprocessSceneForLambda(scene))
+    scenes.map(scene => preprocessSceneForLambda({
+      ...scene,
+      width: renderWidth,
+      height: renderHeight
+    }))
   );
   
   // Calculate total duration

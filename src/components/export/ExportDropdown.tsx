@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import React from "react";
 import { Download, Loader2, Check, ChevronDown, FileVideo } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,28 +17,44 @@ import {
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { cn } from "~/lib/cn";
+import { generateCleanFilename } from "~/lib/utils/filename";
 
 export type ExportFormat = "mp4" | "webm" | "gif";
-export type ExportQuality = "high" | "medium" | "low";
+export type ExportQuality = "1080p" | "720p" | "480p";
+
+// Map resolution labels to legacy quality values for database
+const qualityMap: Record<ExportQuality, 'high' | 'medium' | 'low'> = {
+  '1080p': 'high',
+  '720p': 'medium', 
+  '480p': 'low',
+};
 
 interface ExportDropdownProps {
   projectId: string;
+  projectTitle?: string;
   className?: string;
   size?: "default" | "sm" | "lg";
 }
 
-export function ExportDropdown({ projectId, className, size = "sm" }: ExportDropdownProps) {
+export function ExportDropdown({ projectId, projectTitle = "video", className, size = "sm" }: ExportDropdownProps) {
   const [format, setFormat] = useState<ExportFormat>("mp4");
-  const [quality, setQuality] = useState<ExportQuality>("high");
+  const [quality, setQuality] = useState<ExportQuality>("1080p");
   const [renderId, setRenderId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  
+  // When format changes to GIF, default to 720p for reasonable file size
+  React.useEffect(() => {
+    if (format === 'gif' && quality === '1080p') {
+      setQuality('720p');
+    }
+  }, [format, quality]);
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
     onSuccess: (data) => {
       setRenderId(data.renderId);
-      toast.info("Download started! This may take a few minutes...");
+      toast.info("Render started! This may take a few minutes...");
     },
     onError: (error) => {
       toast.error(error.message);
@@ -68,19 +85,47 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
     startRender.mutate({ 
       projectId,
       format: selectedFormat || format,
-      quality: selectedQuality || quality,
+      quality: qualityMap[selectedQuality || quality],
     });
   };
 
-  // Handle completion - DON'T auto-close, let user download
+  // Handle completion - auto-download
   if (status?.status === 'completed' && renderId && status.outputUrl && !hasDownloaded) {
     setHasDownloaded(true);
-    toast.success('Export complete! Click the download button.');
+    toast.success('Render complete! Starting download...');
+    
+    // Auto-download after a short delay
+    setTimeout(async () => {
+      try {
+        const response = await fetch(status.outputUrl!);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = generateCleanFilename(projectTitle, quality, format);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+        
+        // Reset state after successful download
+        setTimeout(() => {
+          setRenderId(null);
+          setHasDownloaded(false);
+          setIsOpen(false);
+        }, 1500);
+      } catch (error) {
+        console.error('Auto-download failed:', error);
+        toast.error('Auto-download failed. Please click the download button.');
+      }
+    }, 500);
   }
 
   // Handle failure
   if (status?.status === 'failed') {
-    toast.error(`Download failed: ${status.error || 'Unknown error'}`);
+    toast.error(`Render failed: ${status.error || 'Unknown error'}`);
     setRenderId(null);
     setIsOpen(false);
   }
@@ -103,7 +148,7 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
           {isCompleted ? (
             <>
               <Check className="h-4 w-4 text-green-500" />
-              Downloaded!
+              Rendered!
             </>
           ) : isRendering ? (
             <>
@@ -118,7 +163,7 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
           ) : (
             <>
               <Download className="h-4 w-4" />
-              Download
+              Render
               <ChevronDown className="h-3 w-3 opacity-50" />
             </>
           )}
@@ -126,23 +171,66 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
       </DropdownMenuTrigger>
       
       <DropdownMenuContent align="end" className="w-48">
-        {/* Quality Selection */}
-        <DropdownMenuLabel className="text-xs font-normal opacity-70">Quality</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as ExportQuality)}>
-          <DropdownMenuRadioItem value="high" onSelect={(e) => e.preventDefault()}>High</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="medium" onSelect={(e) => e.preventDefault()}>Medium</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="low" onSelect={(e) => e.preventDefault()}>Low</DropdownMenuRadioItem>
+        {/* Format Selection */}
+        <DropdownMenuLabel className="text-xs font-normal opacity-70">Format</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={format} onValueChange={(v) => setFormat(v as ExportFormat)}>
+          <DropdownMenuRadioItem value="mp4" onSelect={(e) => e.preventDefault()}>MP4</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="webm" onSelect={(e) => e.preventDefault()}>WebM</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="gif" onSelect={(e) => e.preventDefault()}>GIF</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         
         <DropdownMenuSeparator />
+        
+        {/* Quality Selection - only show for video formats */}
+        {format !== 'gif' && (
+          <>
+            <DropdownMenuLabel className="text-xs font-normal opacity-70">Resolution</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as ExportQuality)}>
+              <DropdownMenuRadioItem value="1080p" onSelect={(e) => e.preventDefault()}>1080p</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="720p" onSelect={(e) => e.preventDefault()}>720p</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="480p" onSelect={(e) => e.preventDefault()}>480p</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        
+        {/* GIF-specific resolution for GIF format */}
+        {format === 'gif' && (
+          <>
+            <DropdownMenuLabel className="text-xs font-normal opacity-70">GIF Size</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={quality} onValueChange={(v) => setQuality(v as ExportQuality)}>
+              <DropdownMenuRadioItem value="720p" onSelect={(e) => e.preventDefault()}>720p</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="480p" onSelect={(e) => e.preventDefault()}>480p</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         
         {/* Export/Progress/Download Button */}
         {isCompleted && status?.outputUrl ? (
           // Show download button when complete
           <DropdownMenuItem 
-            onClick={() => {
-              const proxyUrl = `/api/download/${renderId}?projectId=${projectId}&format=${format}`;
-              window.open(proxyUrl, '_blank');
+            onClick={async () => {
+              try {
+                // First try to download from S3 URL directly
+                const response = await fetch(status.outputUrl!);
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                // Use clean filename utility
+                link.download = generateCleanFilename(projectTitle, quality, format);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+                toast.success("Download started!");
+              } catch (error) {
+                console.error('Manual download failed:', error);
+                toast.error('Download failed. Please try again.');
+              }
               
               // Reset after download
               setTimeout(() => {
@@ -154,7 +242,7 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
             className="gap-2 font-medium"
           >
             <Download className="h-3 w-3 text-green-500" />
-            Download MP4
+            Download {format.toUpperCase()}
           </DropdownMenuItem>
         ) : (
           // Show export/progress button
@@ -167,12 +255,12 @@ export function ExportDropdown({ projectId, className, size = "sm" }: ExportDrop
             {isRendering ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Exporting... {progress}%
+                Rendering... {progress}%
               </>
             ) : (
               <>
                 <FileVideo className="h-3 w-3" />
-                Export as MP4
+                Render as {format.toUpperCase()}
               </>
             )}
           </DropdownMenuItem>

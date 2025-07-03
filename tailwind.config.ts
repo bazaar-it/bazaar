@@ -84,11 +84,16 @@ export default {
           "0%": { opacity: "1" },
           "100%": { opacity: "0.15" },
         },
+        "spin-slow": {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         spinner: "spinner 1.2s linear infinite",
+        "spin-slow": "spin-slow 3s linear infinite",
       },
       padding: {
         "geist-quarter": "var(--geist-quarter-pad)",

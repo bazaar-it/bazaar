@@ -68,6 +68,11 @@ export interface AddToolInput extends BaseToolInput {
     };
     analyzedAt: string;
   };
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 export interface AddToolOutput extends BaseToolOutput {

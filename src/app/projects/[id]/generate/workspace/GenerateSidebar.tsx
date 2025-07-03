@@ -62,28 +62,9 @@ export function GenerateSidebar({
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
   
-  // Setup mutation for creating a new project (for collapsed button)
-  const utils = api.useUtils();
-  const createProject = api.project.create.useMutation({
-    onSuccess: async (data) => {
-      try {
-        // Invalidate the projects list query to refetch it
-        await utils.project.list.invalidate();
-        
-        // Redirect to the generate page for the new project
-        router.push(`/projects/${data.projectId}/generate`);
-      } catch (error) {
-        console.error("Error after project creation:", error);
-      }
-    },
-    onError: (error) => {
-      console.error("Failed to create project:", error);
-    },
-  });
-
   const handleCreateProject = () => {
-    if (createProject.isPending) return;
-    createProject.mutate();
+    // Redirect to the new project page where users can select format
+    router.push('/projects/new');
   };
   
   // Toggle the sidebar collapsed state
@@ -174,7 +155,6 @@ export function GenerateSidebar({
                   size="icon"
                   className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
                   onClick={handleCreateProject}
-                  disabled={createProject.isPending}
                 >
                   <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                 </Button>

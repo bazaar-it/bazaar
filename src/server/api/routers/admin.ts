@@ -2457,14 +2457,22 @@ export default function GeneratedScene() {
       format: z.enum(['json', 'csv', 'jsonl']),
       includeUserInfo: z.boolean(),
       anonymize: z.boolean(),
+      roleFilter: z.enum(['user', 'assistant', 'both']).optional().default('both'),
+      includeMetadata: z.boolean().optional().default(true),
+      includeIds: z.boolean().optional().default(true),
     }))
     .mutation(async ({ input }) => {
-      const { startDate, endDate, format, includeUserInfo, anonymize } = input;
+      const { startDate, endDate, format, includeUserInfo, anonymize, roleFilter, includeMetadata, includeIds } = input;
 
-      // Build date filter conditions
-      const dateConditions = [];
-      if (startDate) dateConditions.push(gte(messages.createdAt, startDate));
-      if (endDate) dateConditions.push(lte(messages.createdAt, endDate));
+      // Build filter conditions
+      const conditions = [];
+      if (startDate) conditions.push(gte(messages.createdAt, startDate));
+      if (endDate) conditions.push(lte(messages.createdAt, endDate));
+      
+      // Add role filter
+      if (roleFilter && roleFilter !== 'both') {
+        conditions.push(eq(messages.role, roleFilter));
+      }
 
       // Get all messages with project and user info
       const rawMessages = await db
@@ -2487,7 +2495,7 @@ export default function GeneratedScene() {
         .innerJoin(projects, eq(messages.projectId, projects.id))
         .innerJoin(users, eq(projects.userId, users.id))
         .leftJoin(scenes, eq(scenes.projectId, projects.id))
-        .where(dateConditions.length > 0 ? and(...dateConditions) : undefined)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
         .groupBy(messages.id, projects.id, users.id)
         .orderBy(projects.createdAt, messages.sequence);
 
@@ -2511,13 +2519,15 @@ export default function GeneratedScene() {
       const conversations = groupAndEnrichConversations(
         rawMessages,
         iterationMetrics,
-        anonymize
+        anonymize,
+        includeMetadata,
+        includeIds
       );
 
       // Format based on requested format
       switch (format) {
         case 'csv':
-          return formatAsCSV(conversations);
+          return formatAsCSV(conversations, includeUserInfo);
         case 'jsonl':
           return formatAsJSONL(conversations);
         case 'json':
