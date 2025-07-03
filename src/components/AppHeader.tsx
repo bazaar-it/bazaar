@@ -191,7 +191,7 @@ export default function AppHeader({
             </Button>
             
             {/* Export dropdown */}
-            <ExportDropdown projectId={projectId} size="sm" className="rounded-[15px] shadow-sm" />
+            <ExportDropdown projectId={projectId} projectTitle={projectTitle} size="sm" className="rounded-[15px] shadow-sm" />
           </>
         )}
         

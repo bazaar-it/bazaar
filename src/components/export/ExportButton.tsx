@@ -12,18 +12,22 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { ExportOptionsModal, type ExportFormat, type ExportQuality } from "./ExportOptionsModal";
+import { generateCleanFilename } from "~/lib/utils/filename";
 
 interface ExportButtonProps {
   projectId: string;
+  projectTitle?: string;
   className?: string;
   size?: "default" | "sm" | "lg";
 }
 
-export function ExportButton({ projectId, className, size = "sm" }: ExportButtonProps) {
+export function ExportButton({ projectId, projectTitle = "video", className, size = "sm" }: ExportButtonProps) {
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [currentFormat, setCurrentFormat] = useState<ExportFormat>('mp4');
+  const [currentQuality, setCurrentQuality] = useState<ExportQuality>('high');
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
@@ -76,9 +80,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
             const link = document.createElement('a');
             link.href = blobUrl;
             const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
-            // Create a cleaner filename with timestamp
-            const date = new Date().toISOString().split('T')[0];
-            link.download = `video-${date}-${projectId.slice(-6)}.${extension}`;
+            // Use clean filename utility
+            link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -104,6 +107,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
 
   const handleExport = (format: ExportFormat, quality: ExportQuality) => {
     setShowExportModal(false);
+    setCurrentFormat(format);
+    setCurrentQuality(quality);
     startRender.mutate({ 
       projectId,
       format,
@@ -138,9 +143,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
             const link = document.createElement('a');
             link.href = blobUrl;
             const extension = url.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
-            // Use same cleaner filename format
-            const date = new Date().toISOString().split('T')[0];
-            link.download = `video-${date}-${projectId.slice(-6)}.${extension}`;
+            // Use clean filename utility
+            link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -175,8 +179,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
           
           const link = document.createElement('a');
           link.href = blobUrl;
-          const date = new Date().toISOString().split('T')[0];
-          link.download = `video-${date}-${projectId.slice(-6)}.${extension}`;
+          // Use clean filename utility
+          link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);

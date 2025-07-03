@@ -2,12 +2,35 @@
 
 ## �� **Current Status: Production Ready with Export Feature**
 
-**Last Updated**: January 1, 2025  
-**Current Sprint**: Sprint 65 - Render Improvements
-**Previous Sprint**: Sprint 63 - Export Feature (AWS Lambda)
+**Last Updated**: January 3, 2025  
+**Current Sprint**: Sprint 66 - Chat Export Dashboard Fixes
+**Previous Sprint**: Sprint 65 - Render Improvements
 **Next Focus**: Production Testing & Deployment
 
-## 🚀 Sprint 65: Render/Export Improvements (Current - January 1, 2025)
+## 🚀 Sprint 66: Chat Export Dashboard Fixes (Current - January 3, 2025)
+
+### Chat Analytics & Export Enhancements
+- **Status**: Complete
+- **Goal**: Fix analytics dashboard showing zeros and add export filtering
+- **Branch**: `fix-render-icons-avatars`
+
+### Completed Fixes:
+- ✅ Fixed analytics dashboard showing 0 conversations (missing table join)
+- ✅ Added role filtering (user/assistant/both messages)
+- ✅ Added metadata inclusion toggle
+- ✅ Added ID inclusion toggle for privacy
+- ✅ Updated UI with better organization
+- ✅ Maintained backwards compatibility
+
+### Technical Solution:
+- **Analytics Fix**: Added proper joins with projects table
+- **Export Options**: Enhanced filtering for granular control
+- **CSV Export**: Dynamic field inclusion based on options
+
+### Documentation:
+- `/memory-bank/sprints/sprint66_chat_export_fixes/chat-export-fixes.md`
+
+## 🚀 Sprint 65: Render/Export Improvements (Completed - January 1, 2025)
 
 ### Enhanced Rendering Experience
 - **Status**: Complete and Ready for Testing

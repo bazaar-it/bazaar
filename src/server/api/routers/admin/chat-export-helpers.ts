@@ -28,7 +28,9 @@ interface IterationMetric {
 export function groupAndEnrichConversations(
   messages: RawMessage[],
   metrics: IterationMetric[],
-  anonymize: boolean
+  anonymize: boolean,
+  includeMetadata: boolean = true,
+  includeIds: boolean = true
 ): ConversationExport[] {
   const metricsMap = new Map(metrics.map(m => [m.projectId, m]));
   const conversationsMap = new Map<string, ConversationExport>();
@@ -39,15 +41,15 @@ export function groupAndEnrichConversations(
     if (!conversation) {
       const projectMetrics = metricsMap.get(msg.projectId);
       conversation = {
-        projectId: msg.projectId,
+        projectId: includeIds ? msg.projectId : '',
         projectTitle: msg.projectTitle,
-        userId: anonymize ? hashUserId(msg.userId) : msg.userId,
+        userId: includeIds ? (anonymize ? hashUserId(msg.userId) : msg.userId) : '',
         userName: anonymize ? undefined : msg.userName,
         userEmail: anonymize ? undefined : msg.userEmail,
         createdAt: msg.projectCreatedAt,
         lastActivity: msg.messageCreatedAt,
         messages: [],
-        metrics: {
+        metrics: includeMetadata ? {
           totalMessages: 0,
           userMessages: 0,
           assistantMessages: 0,
@@ -58,6 +60,17 @@ export function groupAndEnrichConversations(
           avgGenerationTime: projectMetrics?.avgGenerationTime || 0,
           totalIterations: projectMetrics?.totalIterations || 0,
           editCount: projectMetrics?.editCount || 0,
+        } : {
+          totalMessages: 0,
+          userMessages: 0,
+          assistantMessages: 0,
+          scenesCreated: 0,
+          errorsEncountered: 0,
+          exportCount: 0,
+          sessionDuration: 0,
+          avgGenerationTime: 0,
+          totalIterations: 0,
+          editCount: 0,
         }
       };
       conversationsMap.set(msg.projectId, conversation);
@@ -69,16 +82,22 @@ export function groupAndEnrichConversations(
     }
 
     // Add message
-    conversation.messages.push({
-      id: msg.messageId,
+    const messageData: ChatMessage = {
+      id: includeIds ? msg.messageId : '',
       role: msg.messageRole as 'user' | 'assistant' | 'system',
       content: anonymize ? anonymizeContent(msg.messageContent) : msg.messageContent,
       timestamp: msg.messageCreatedAt,
-      metadata: {
+    };
+    
+    // Only include metadata if requested
+    if (includeMetadata) {
+      messageData.metadata = {
         imageUrls: msg.messageImageUrls || undefined,
         hasError: msg.messageContent.includes('error') || msg.messageContent.includes('failed'),
-      }
-    });
+      };
+    }
+    
+    conversation.messages.push(messageData);
 
     // Update metrics
     conversation.metrics.totalMessages++;
@@ -96,28 +115,48 @@ export function groupAndEnrichConversations(
   return Array.from(conversationsMap.values());
 }
 
-export function formatAsCSV(conversations: ConversationExport[]): string {
+export function formatAsCSV(conversations: ConversationExport[], includeUserInfo: boolean = false): string {
   const flatData = conversations.flatMap(conv => 
-    conv.messages.map(msg => ({
-      projectId: conv.projectId,
-      projectTitle: conv.projectTitle,
-      userId: conv.userId,
-      userName: conv.userName || 'Anonymous',
-      messageRole: msg.role,
-      messageContent: msg.content.substring(0, 500), // Truncate for CSV
-      timestamp: msg.timestamp.toISOString(),
-      hasImages: !!msg.metadata?.imageUrls?.length,
-      hasError: msg.metadata?.hasError || false,
-      scenesCreated: conv.metrics.scenesCreated,
-      sessionDurationMinutes: conv.metrics.sessionDuration,
-    }))
+    conv.messages.map(msg => {
+      const data: any = {
+        projectId: conv.projectId,
+        projectTitle: conv.projectTitle,
+        messageRole: msg.role,
+        messageContent: msg.content.substring(0, 500), // Truncate for CSV
+        timestamp: msg.timestamp.toISOString(),
+      };
+      
+      if (includeUserInfo) {
+        data.userId = conv.userId;
+        data.userName = conv.userName || 'Anonymous';
+        data.userEmail = conv.userEmail || '';
+      }
+      
+      if (msg.metadata) {
+        data.hasImages = !!msg.metadata.imageUrls?.length;
+        data.hasError = msg.metadata.hasError || false;
+      }
+      
+      if (conv.metrics) {
+        data.scenesCreated = conv.metrics.scenesCreated;
+        data.sessionDurationMinutes = conv.metrics.sessionDuration;
+      }
+      
+      return data;
+    })
   );
 
-  const fields = [
-    'projectId', 'projectTitle', 'userId', 'userName',
-    'messageRole', 'messageContent', 'timestamp',
-    'hasImages', 'hasError', 'scenesCreated', 'sessionDurationMinutes'
-  ];
+  const fields = ['projectId', 'projectTitle'];
+  if (includeUserInfo) {
+    fields.push('userId', 'userName', 'userEmail');
+  }
+  fields.push('messageRole', 'messageContent', 'timestamp');
+  if (conversations[0]?.messages[0]?.metadata) {
+    fields.push('hasImages', 'hasError');
+  }
+  if (conversations[0]?.metrics) {
+    fields.push('scenesCreated', 'sessionDurationMinutes');
+  }
 
   return parse(flatData, { fields });
 }

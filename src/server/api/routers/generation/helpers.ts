@@ -55,7 +55,7 @@ export async function executeToolFromDecision(
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
         visionAnalysis: decision.toolContext.visionAnalysis,
-        // Pass previous scene for style continuity
+        // Pass previous scene for style continuity (but not for first scene)
         previousSceneContext: storyboard.length > 0 ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
@@ -328,7 +328,8 @@ export async function executeToolFromDecision(
         await db.insert(sceneIterations).values({
           sceneId: decision.toolContext.targetSceneId,
           projectId,
-          operationType: 'edit', // Trim is a type of edit
+          operationType: 'edit', // Keep as 'edit' for DB compatibility
+          editComplexity: 'duration', // Mark this as a duration-only change
           userPrompt: decision.toolContext.userPrompt,
           brainReasoning: decision.reasoning,
           codeBefore: sceneToTrim.tsxCode,

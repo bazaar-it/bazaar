@@ -6,9 +6,12 @@ import { Player } from '@remotion/player';
 import { AbsoluteFill, Sequence } from 'remotion';
 import { transform } from 'sucrase';
 import type { InputProps } from '~/lib/types/video/input-props';
+import { LoopToggle } from '~/components/ui/LoopToggle';
 
 interface ShareVideoPlayerClientProps {
   inputProps: InputProps;
+  isLooping: boolean;
+  setIsLooping: (value: boolean) => void;
 }
 
 const DynamicScene: React.FC<{ code: string; sceneProps: any }> = ({ code, sceneProps }) => {
@@ -77,7 +80,8 @@ const DynamicScene: React.FC<{ code: string; sceneProps: any }> = ({ code, scene
     return <Component {...sceneProps} />;
 };
 
-export default function ShareVideoPlayerClient({ inputProps }: ShareVideoPlayerClientProps) {
+export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLooping }: ShareVideoPlayerClientProps) {
+  
   console.log('[ShareVideoPlayerClient] Rendering with inputProps:', {
     sceneCount: inputProps?.scenes?.length || 0,
     duration: inputProps?.meta?.duration || 0,
@@ -117,25 +121,33 @@ export default function ShareVideoPlayerClient({ inputProps }: ShareVideoPlayerC
   }, []);
 
   return (
-    <div className="w-full aspect-video bg-black rounded-lg overflow-hidden">
-      <Player
-        component={composition}
-        inputProps={{ scenes: inputProps.scenes }}
-        durationInFrames={totalDuration}
-        compositionWidth={1920}
-        compositionHeight={1080}
-        fps={30}
-        style={{
-          width: '100%',
-          height: '100%',
-        }}
-        controls
-        showVolumeControls
-        doubleClickToFullscreen
-        clickToPlay
-        loop={false}
-        autoPlay={false}
-      />
+    <div className="relative">
+      <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative">
+        
+        <Player
+          component={composition}
+          inputProps={{ scenes: inputProps.scenes }}
+          durationInFrames={totalDuration}
+          compositionWidth={1920}
+          compositionHeight={1080}
+          fps={30}
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+          controls
+          showVolumeControls
+          doubleClickToFullscreen
+          clickToPlay
+          loop={isLooping}
+          autoPlay={true}
+          renderLoading={() => (
+            <AbsoluteFill style={{backgroundColor: '#1a202c', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem'}}>
+              Loading Video...
+            </AbsoluteFill>
+          )}
+        />
+      </div>
     </div>
   );
 }

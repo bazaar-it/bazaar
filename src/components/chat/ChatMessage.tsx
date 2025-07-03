@@ -24,7 +24,13 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     }
   );
   
-  const hasIterations = hasIterationsProp ?? ((iterations?.length ?? 0) > 0);
+  // Check if any iterations have actual code changes (not just duration/metadata changes)
+  const hasCodeChanges = iterations?.some(iteration => 
+    iteration.codeBefore !== iteration.codeAfter && 
+    iteration.operationType !== 'delete' // Delete operations can be restored even without code changes
+  ) ?? false;
+  
+  const hasIterations = hasIterationsProp ?? (hasCodeChanges || iterations?.some(i => i.operationType === 'delete'));
   
   // Format timestamp for display
   const formatTimestamp = (timestamp: number) => {
@@ -101,7 +107,7 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                   <button
                     onClick={handleRestoreClick}
                     className="text-xs flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="Restore to this version"
+                    title="Restore to previous version"
                   >
                     <Undo2 className="h-3 w-3" />
                     <span>Restore</span>

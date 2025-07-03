@@ -12,6 +12,9 @@ export default function ChatExportPage() {
     format: 'json' as 'json' | 'csv' | 'jsonl',
     includeUserInfo: false,
     anonymize: false,
+    roleFilter: 'both' as 'user' | 'assistant' | 'both',
+    includeMetadata: true,
+    includeIds: true,
   });
 
   const [analyticsTimeframe, setAnalyticsTimeframe] = useState<'24h' | '7d' | '30d' | 'all'>('30d');
@@ -160,33 +163,77 @@ export default function ChatExportPage() {
               </select>
             </div>
             
-            <div className="flex items-center space-x-6">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.includeUserInfo}
-                  onChange={(e) => setFilters({
-                    ...filters,
-                    includeUserInfo: e.target.checked
-                  })}
-                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">Include User Info</span>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Message Role Filter
               </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={filters.anonymize}
-                  onChange={(e) => setFilters({
-                    ...filters,
-                    anonymize: e.target.checked
-                  })}
-                  className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">Anonymize Data</span>
-              </label>
+              <select
+                value={filters.roleFilter}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  roleFilter: e.target.value as 'user' | 'assistant' | 'both'
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="both">Both User & Assistant</option>
+                <option value="user">User Messages Only</option>
+                <option value="assistant">Assistant Messages Only</option>
+              </select>
             </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-6 mb-6">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.includeUserInfo}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  includeUserInfo: e.target.checked
+                })}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Include User Info</span>
+            </label>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.anonymize}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  anonymize: e.target.checked
+                })}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Anonymize Data</span>
+            </label>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.includeMetadata}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  includeMetadata: e.target.checked
+                })}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Include Metadata</span>
+            </label>
+            
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.includeIds}
+                onChange={(e) => setFilters({
+                  ...filters,
+                  includeIds: e.target.checked
+                })}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Include IDs</span>
+            </label>
           </div>
           
           <button

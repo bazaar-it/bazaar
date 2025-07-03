@@ -4,7 +4,7 @@ import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence } from "remotion";
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
-const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index }) => {
+const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
   
   // Log what we're receiving
   console.log(`[DynamicScene] Scene ${index}:`, {
@@ -30,6 +30,9 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
         'random',
         'useEffect',
         'useState',
+        'videoWidth',
+        'videoHeight',
+        'videoDuration',
         `
         try {
           // Additional Remotion components that might be used
@@ -44,7 +47,7 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
             RemotionGoogleFonts: {
               loadFont: () => {} // No-op for Lambda
             },
-            IconifyIcon: (props) => React.createElement('span', { style: props.style }, '⬤'), // Simple circle icon
+            // IconifyIcon should already be replaced with SVGs during preprocessing
             BazaarAvatars: {
               'asian-woman': '/avatars/asian-woman.png',
               'black-man': '/avatars/black-man.png', 
@@ -53,6 +56,9 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
               'white-woman': '/avatars/white-woman.png'
             }
           };
+          
+          // Override useVideoConfig to use actual dimensions
+          const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
           ${scene.jsCode}
           
@@ -82,13 +88,16 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
         interpolate, 
         spring, 
         Sequence,
-        () => ({ width: 1920, height: 1080, fps: 30, durationInFrames: scene.duration || 150 }),
+        () => ({ width: width, height: height, fps: 30, durationInFrames: scene.duration || 150 }),
         (seed: number) => {
           const x = Math.sin(seed) * 10000;
           return x - Math.floor(x);
         },
         React.useEffect,
-        React.useState
+        React.useState,
+        width,
+        height,
+        scene.duration || 150
       );
       
       if (ComponentFactory) {
@@ -146,7 +155,9 @@ const DynamicScene: React.FC<{ scene: any; index: number }> = ({ scene, index })
 export const VideoComposition: React.FC<{
   scenes?: any[];
   projectId?: string;
-}> = ({ scenes = [] }) => {
+  width?: number;
+  height?: number;
+}> = ({ scenes = [], width = 1920, height = 1080 }) => {
   if (!scenes || scenes.length === 0) {
     return (
       <AbsoluteFill
@@ -171,7 +182,7 @@ export const VideoComposition: React.FC<{
         
         return (
           <Series.Sequence key={scene.id || index} durationInFrames={duration}>
-            <DynamicScene scene={scene} index={index} />
+            <DynamicScene scene={scene} index={index} width={width} height={height} />
           </Series.Sequence>
         );
       })}
@@ -193,7 +204,7 @@ export const MainComposition: React.FC = () => {
           scenes: [],
           projectId: '',
         }}
-        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string } }) => {
+        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number } }) => {
           const totalDuration = (props.scenes || []).reduce(
             (sum: number, scene: any) => sum + (scene.duration || 150),
             0
@@ -202,8 +213,8 @@ export const MainComposition: React.FC = () => {
           return {
             durationInFrames: totalDuration || 300,
             fps: 30,
-            width: 1920,
-            height: 1080,
+            width: props.width || 1920,
+            height: props.height || 1080,
           };
         }}
       />

@@ -2,7 +2,7 @@
 import { renderMediaOnLambda, getRenderProgress } from "@remotion/lambda/client";
 import type { AwsRegion } from "@remotion/lambda";
 import type { RenderConfig } from "./render.service";
-import { qualitySettings } from "./render.service";
+import { getQualityForFormat } from "./render.service";
 
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
@@ -37,8 +37,8 @@ export async function renderVideoOnLambda({
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
   
-  // Get quality settings
-  const settings = qualitySettings[quality];
+  // Get quality settings adjusted for format
+  const settings = getQualityForFormat(quality, format);
   
   try {
     // Calculate total duration
@@ -48,6 +48,7 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] Total duration: ${totalDuration} frames`);
     console.log(`[LambdaRender] Format: ${format}, Quality: ${quality}`);
+    console.log(`[LambdaRender] Resolution: ${settings.resolution.width}x${settings.resolution.height}`);
     
     // Log what we're sending to Lambda
     console.log(`[LambdaRender] Scenes being sent to Lambda:`, scenes.map(s => ({
@@ -58,10 +59,12 @@ export async function renderVideoOnLambda({
       jsCodePreview: s.jsCode ? s.jsCode.substring(0, 100) + '...' : 'none',
     })));
     
-    // Prepare input props
+    // Prepare input props with resolution settings
     const inputProps = {
       scenes,
       projectId,
+      width: settings.resolution.width,
+      height: settings.resolution.height,
     };
     
     // Determine codec based on format
@@ -69,8 +72,8 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] Using programmatic API to render...`);
     
-    // Use the programmatic API
-    const { renderId, bucketName } = await renderMediaOnLambda({
+    // Build render options with format-specific settings
+    const renderOptions: Parameters<typeof renderMediaOnLambda>[0] = {
       region: process.env.AWS_REGION as AwsRegion,
       functionName: process.env.REMOTION_FUNCTION_NAME!,
       serveUrl: DEPLOYED_SITE_URL,
@@ -98,7 +101,17 @@ export async function renderVideoOnLambda({
       envVariables: {},
       chromiumOptions: {},
       logLevel: 'info',
-    });
+    };
+    
+    // Add GIF-specific optimizations
+    if (format === 'gif') {
+      // Reduce frame rate to keep GIF size reasonable
+      (renderOptions as any).everyNthFrame = 2; // Render every 2nd frame (15fps for 30fps video)
+      (renderOptions as any).numberOfGifLoops = null; // Infinite loop
+    }
+    
+    // Use the programmatic API
+    const { renderId, bucketName } = await renderMediaOnLambda(renderOptions);
     
     console.log(`[LambdaRender] Render started successfully`);
     console.log(`[LambdaRender] Render ID: ${renderId}`);

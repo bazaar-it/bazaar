@@ -32,6 +32,31 @@ export const qualitySettings = {
   },
 };
 
+// Format-specific quality adjustments
+export const getQualityForFormat = (quality: string, format: string) => {
+  const baseSettings = qualitySettings[quality as keyof typeof qualitySettings];
+  
+  if (format === 'webm') {
+    // VP8 codec benefits from slightly higher CRF for similar visual quality
+    return {
+      ...baseSettings,
+      crf: Math.min(baseSettings.crf + 2, 51), // VP8 max is 63 but we cap at 51
+    };
+  }
+  
+  if (format === 'gif') {
+    // GIFs don't use CRF or video bitrate
+    return {
+      ...baseSettings,
+      crf: undefined,
+      videoBitrate: undefined,
+      jpegQuality: undefined, // GIFs use PNG for better quality
+    };
+  }
+  
+  return baseSettings;
+};
+
 // Pre-compile TypeScript to JavaScript for Lambda
 async function preprocessSceneForLambda(scene: any) {
   console.log(`[Preprocess] Checking scene:`, {
@@ -228,11 +253,15 @@ export async function prepareRenderConfig({
   format = 'mp4',
   quality = 'high',
 }: RenderConfig) {
-  const settings = qualitySettings[quality];
+  const settings = getQualityForFormat(quality, format);
   
-  // Pre-compile all scenes for Lambda
+  // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
-    scenes.map(scene => preprocessSceneForLambda(scene))
+    scenes.map(scene => preprocessSceneForLambda({
+      ...scene,
+      width: settings.resolution.width,
+      height: settings.resolution.height
+    }))
   );
   
   // Calculate total duration

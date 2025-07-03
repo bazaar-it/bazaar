@@ -29,6 +29,10 @@ export interface RemotionPreviewProps {
   refreshToken?: string;
   inputProps?: Record<string, any>;
   playerRef?: React.RefObject<PlayerRef | null>;
+  playbackRate?: number;
+  loop?: boolean;
+  inFrame?: number;
+  outFrame?: number;
 }
 
 // The main preview component that wraps Remotion Player
@@ -41,13 +45,16 @@ export default function RemotionPreview({
   refreshToken = '',
   inputProps = {},
   playerRef,
-  playbackRate = 1
+  playbackRate = 1,
+  loop = true,
+  inFrame,
+  outFrame
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
     console.log('RemotionPreview rendering with refreshToken:', refreshToken);
-    console.log('RemotionPreview props:', { durationInFrames, fps, width, height });
-  }, [durationInFrames, fps, width, height, refreshToken]);
+    console.log('RemotionPreview props:', { durationInFrames, fps, width, height, playbackRate });
+  }, [durationInFrames, fps, width, height, refreshToken, playbackRate]);
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -73,9 +80,11 @@ export default function RemotionPreview({
           showVolumeControls
           doubleClickToFullscreen
           clickToPlay
-          loop={true}
+          loop={loop}
           autoPlay={true}
           playbackRate={playbackRate}
+          inFrame={inFrame}
+          outFrame={outFrame}
           key={refreshToken} // Force remount when refreshToken changes
           acknowledgeRemotionLicense
         />

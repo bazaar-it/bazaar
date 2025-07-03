@@ -25,10 +25,12 @@ function ErrorFallback({ error }: { error: Error }) {
 
 export function PreviewPanelG({ 
   projectId, 
-  initial 
+  initial,
+  selectedSceneId 
 }: { 
   projectId: string;
   initial?: InputProps;
+  selectedSceneId?: string | null;
 }) {
   // ✅ FIXED: Use separate selectors to prevent infinite loops
   const currentProps = useVideoState((state) => {
@@ -49,9 +51,35 @@ export function PreviewPanelG({
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const playerRef = useRef<PlayerRef>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  
+  // Loop state - using the three-state system
+  const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
   
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
+  
+  // Calculate scene boundaries for scene loop functionality
+  const sceneRanges = useMemo(() => {
+    let start = 0;
+    return scenes.map(scene => {
+      const duration = scene.duration || 150;
+      const range = { 
+        id: scene.id,
+        start, 
+        end: start + duration - 1, // -1 because frames are 0-indexed
+        duration 
+      };
+      start += duration;
+      return range;
+    });
+  }, [scenes]);
+  
+  // Find the selected scene range
+  const selectedSceneRange = useMemo(() => {
+    if (!selectedSceneId) return null;
+    return sceneRanges.find(range => range.id === selectedSceneId);
+  }, [selectedSceneId, sceneRanges]);
 
   // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
@@ -641,7 +669,7 @@ export default function FallbackComposition() {
   useEffect(() => {
     const handleSpeedChange = (event: CustomEvent) => {
       const speed = event.detail?.speed;
-      if (typeof speed === 'number' && speed >= 0.25 && speed <= 2) {
+      if (typeof speed === 'number' && speed >= 0.1 && speed <= 4) {
         console.log('[PreviewPanelG] Received speed change event:', speed);
         setPlaybackSpeed(speed);
         
@@ -666,7 +694,7 @@ export default function FallbackComposition() {
       const savedSpeed = localStorage.getItem('bazaar-playback-speed');
       if (savedSpeed) {
         const speed = parseFloat(savedSpeed);
-        if (speed >= 0.25 && speed <= 2) {
+        if (speed >= 0.1 && speed <= 4) {
           setPlaybackSpeed(speed);
           console.log('[PreviewPanelG] Loaded saved playback speed:', speed);
           
@@ -677,6 +705,60 @@ export default function FallbackComposition() {
       }
     } catch (error) {
       console.warn('[PreviewPanelG] Failed to load playback speed preference:', error);
+    }
+  }, []);
+
+  // Listen for loop state change events from header
+  useEffect(() => {
+    const handleLoopStateChange = (event: CustomEvent) => {
+      const state = event.detail?.state;
+      if (state === 'video' || state === 'off' || state === 'scene') {
+        console.log('[PreviewPanelG] Received loop state change:', state);
+        setLoopState(state);
+        
+        // Save preference
+        try {
+          localStorage.setItem('bazaar-loop-state', state);
+        } catch (error) {
+          console.warn('[PreviewPanelG] Failed to save loop state preference:', error);
+        }
+      }
+    };
+
+    window.addEventListener('loop-state-change', handleLoopStateChange as EventListener);
+    return () => {
+      window.removeEventListener('loop-state-change', handleLoopStateChange as EventListener);
+    };
+  }, []);
+
+  // Load saved loop preference on mount
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem('bazaar-loop-state');
+      let state: 'video' | 'off' | 'scene' = 'video'; // Default to video loop
+      
+      if (savedState === 'video' || savedState === 'off' || savedState === 'scene') {
+        state = savedState;
+      } else {
+        // Check old boolean format for backwards compatibility
+        const oldSaved = localStorage.getItem('bazaar-loop-enabled');
+        if (oldSaved === 'false') {
+          state = 'off';
+        }
+        // Save the new format
+        localStorage.setItem('bazaar-loop-state', state);
+      }
+      
+      setLoopState(state);
+      
+      // Dispatch event to sync with header
+      const event = new CustomEvent('loop-state-loaded', { detail: { state } });
+      window.dispatchEvent(event);
+      console.log('[PreviewPanelG] Loop state initialized:', state);
+    } catch (error) {
+      console.warn('[PreviewPanelG] Failed to load loop preference:', error);
+      // Even on error, ensure default video loop
+      setLoopState('video');
     }
   }, []);
 
@@ -720,6 +802,9 @@ export default function FallbackComposition() {
               refreshToken={refreshToken}
               playerRef={playerRef}
               playbackRate={playbackSpeed}
+              loop={loopState !== 'off'}
+              inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
+              outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
             />
           </ErrorBoundary>
         ) : componentError ? (

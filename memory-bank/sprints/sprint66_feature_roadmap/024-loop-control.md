@@ -2,458 +2,235 @@
 
 **Priority**: LOW  
 **Complexity**: LOW  
-**Effort**: 1 day  
+**Effort**: 1 day (basic) + 2 days (scene loop)  
 **Dependencies**: Code generation system, Scene metadata
+**Status**: ✅ COMPLETED (basic loop) | ✅ COMPLETED (scene loop)
 
 ## Overview
 
-Add loop control functionality to individual scenes, allowing users to specify how many times animations should loop instead of running infinitely. This feature provides better control over animation timing and prevents indefinite loops that can be distracting or consume unnecessary resources.
+Implemented simple loop toggle control for video playback in both preview panel and share page. The user clarified they wanted a simple on/off toggle for video looping, not animation loop counts as originally documented.
 
-## Problem Statement
+### Phase 2: Single Scene Loop (NEW FEATURE REQUEST)
 
-### Current Issues
-- All animations loop infinitely by default
-- No way to control animation repetition
-- Cannot create finite animation sequences
-- Difficult to time animations precisely
-- No user control over loop behavior
-- Animations may feel repetitive or overwhelming
+**Status**: ✅ COMPLETED  
+**Request**: "Option to have single scene loop after clip update rather than whole video"  
+**Requested**: January 3, 2025  
+**Completed**: January 3, 2025
 
-### User Needs
-- Set specific number of loops for animations
-- One-shot animations that play once
-- Control timing and pacing of video content
-- Reduce visual fatigue from infinite loops
-- Sync animations with overall video timing
-- Professional animation control
+Users want the ability to loop just the currently selected scene instead of the entire video composition. This is particularly useful when:
+- Fine-tuning a specific scene's timing or animations
+- Previewing changes to a single scene without watching the entire video
+- Working on scene transitions or effects
 
-## Technical Specification
+## Implementation Details
 
-### Scene Metadata Extension
+### What Was Built
 
-#### 1. Database Schema Update
+1. **LoopToggle Component** (`/src/components/ui/LoopToggle.tsx`)
+   - Clean toggle button with RefreshCw icon
+   - Shows blue when active, gray when inactive
+   - Spinning animation when loop is enabled
+   - Accessible with proper tooltips
+
+2. **Preview Panel Integration** 
+   - Added loop state management with localStorage persistence
+   - Event-based communication between workspace header and preview panel
+   - Default: loop enabled (true)
+   - Toggle button in workspace header next to playback speed control
+
+3. **Share Page Integration**
+   - Added loop toggle overlay on share page video player
+   - Positioned top-right with semi-transparent background
+   - Default: loop disabled (false) for better sharing experience
+   - Direct state management (no localStorage needed)
+
+4. **Tailwind Config Update**
+   - Added `animate-spin-slow` animation (3s rotation)
+   - Provides subtle visual feedback when loop is active
+
+### Technical Implementation
+
 ```typescript
-// Add loop control to scene metadata
-export const scenes = pgTable('scenes', {
-  // ... existing fields
-  loopCount: integer('loop_count').default(-1), // -1 = infinite, 0 = no animation, >0 = specific count
-  loopDuration: real('loop_duration'), // duration of one loop in seconds
-  animationType: varchar('animation_type', { length: 50 }), // 'infinite', 'finite', 'once'
+// Event dispatch from header
+const loopEvent = new CustomEvent('loop-toggle', {
+  detail: { loop: !isLooping }
 });
+window.dispatchEvent(loopEvent);
+
+// Remotion Player integration
+<Player
+  loop={isLooping}
+  // ... other props
+/>
 ```
 
-#### 2. Scene Interface Extension
-```typescript
-// Update Scene type
-interface Scene {
-  // ... existing properties
-  loopCount: number; // -1 for infinite, 0 for static, >0 for specific count
-  loopDuration?: number; // duration of single loop
-  animationType: 'infinite' | 'finite' | 'once' | 'static';
-}
-```
+### User Experience
+- Toggle persists across page refreshes in workspace
+- Visual feedback with spinning icon when active
+- Consistent placement in both workspace and share views
+- No impact on export functionality (loop is preview-only)
 
-### Code Generation Updates
+## Completed Tasks
+- ✅ Created LoopToggle UI component
+- ✅ Integrated with Remotion Player's native loop prop
+- ✅ Added to preview panel with persistence
+- ✅ Added to share page player
+- ✅ Implemented proper event handling
+- ✅ Added tailwind animation for visual feedback
 
-#### 1. Animation Code Modification
-```typescript
-// Update code generator to include loop controls
-const generateAnimationCode = (animation: AnimationConfig, loopControl: LoopControl) => {
-  const { loopCount, animationType } = loopControl;
-  
-  if (animationType === 'static') {
-    // Remove all animations
-    return generateStaticVersion(animation);
-  }
-  
-  if (animationType === 'once') {
-    // Single play, no loop
-    return `
-      const progress = useCurrentFrame() / ${animation.duration};
-      const animationValue = progress <= 1 ? 
-        interpolate(progress, [0, 1], [${animation.from}, ${animation.to}]) :
-        ${animation.to};
-    `;
-  }
-  
-  if (animationType === 'finite' && loopCount > 0) {
-    // Finite loops
-    return `
-      const totalLoops = ${loopCount};
-      const loopDuration = ${animation.duration};
-      const currentFrame = useCurrentFrame();
-      const currentLoop = Math.floor(currentFrame / loopDuration);
-      
-      const animationValue = currentLoop < totalLoops ?
-        interpolate(
-          currentFrame % loopDuration,
-          [0, loopDuration],
-          [${animation.from}, ${animation.to}]
-        ) : ${animation.to};
-    `;
-  }
-  
-  // Default infinite loop
-  return generateInfiniteLoop(animation);
-};
-```
+## Result
+Users can now easily toggle video looping on/off while previewing their creations, with the setting persisting across sessions in the workspace. The feature provides a clean, intuitive interface that aligns with modern video player controls.
 
-#### 2. Remotion Integration
-```typescript
-// Update Remotion components with loop control
-const AnimatedElement = ({ loopControl, children, ...props }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  const getAnimationProgress = () => {
-    if (loopControl.animationType === 'static') return 0;
-    
-    if (loopControl.animationType === 'once') {
-      const progress = frame / (loopControl.loopDuration * fps);
-      return Math.min(progress, 1);
-    }
-    
-    if (loopControl.animationType === 'finite') {
-      const loopFrames = loopControl.loopDuration * fps;
-      const currentLoop = Math.floor(frame / loopFrames);
-      
-      if (currentLoop >= loopControl.loopCount) {
-        return 1; // Final state
-      }
-      
-      return (frame % loopFrames) / loopFrames;
-    }
-    
-    // Infinite loop
-    const loopFrames = loopControl.loopDuration * fps;
-    return (frame % loopFrames) / loopFrames;
-  };
-  
-  const progress = getAnimationProgress();
-  
-  return (
-    <div style={{
-      transform: getTransformForProgress(progress),
-      opacity: getOpacityForProgress(progress),
-      ...props.style
-    }}>
-      {children}
-    </div>
-  );
-};
-```
+## Phase 2: Single Scene Loop Implementation Plan
 
-### UI Implementation
+### Technical Approach
 
-#### 1. Loop Control Panel
-```typescript
-// Scene settings component for loop control
-const LoopControlPanel = ({ scene, onUpdate }) => {
-  const [animationType, setAnimationType] = useState(scene.animationType || 'infinite');
-  const [loopCount, setLoopCount] = useState(scene.loopCount || 1);
-  const [loopDuration, setLoopDuration] = useState(scene.loopDuration || 2);
-  
-  const handleUpdate = () => {
-    onUpdate({
-      animationType,
-      loopCount: animationType === 'finite' ? loopCount : -1,
-      loopDuration
-    });
-  };
-  
-  return (
-    <div className="loop-control-panel">
-      <h3>Animation Control</h3>
-      
-      <div className="animation-type">
-        <Label>Animation Type</Label>
-        <Select value={animationType} onValueChange={setAnimationType}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="infinite">Infinite Loop</SelectItem>
-            <SelectItem value="finite">Limited Loops</SelectItem>
-            <SelectItem value="once">Play Once</SelectItem>
-            <SelectItem value="static">No Animation</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      
-      {animationType === 'finite' && (
-        <div className="loop-count">
-          <Label>Number of Loops</Label>
-          <Input
-            type="number"
-            min={1}
-            max={10}
-            value={loopCount}
-            onChange={(e) => setLoopCount(parseInt(e.target.value))}
-          />
-        </div>
-      )}
-      
-      {['infinite', 'finite', 'once'].includes(animationType) && (
-        <div className="loop-duration">
-          <Label>Loop Duration (seconds)</Label>
-          <Input
-            type="number"
-            min={0.5}
-            max={10}
-            step={0.1}
-            value={loopDuration}
-            onChange={(e) => setLoopDuration(parseFloat(e.target.value))}
-          />
-        </div>
-      )}
-      
-      <Button onClick={handleUpdate}>Apply Changes</Button>
-    </div>
-  );
-};
-```
+**Key Question: What defines the "current scene"?**
 
-#### 2. Quick Loop Controls
-```typescript
-// Quick controls in scene card
-const SceneLoopControls = ({ scene, onQuickUpdate }) => {
-  const quickPresets = [
-    { label: '∞', type: 'infinite', icon: Infinity },
-    { label: '1x', type: 'once', icon: PlayOnce },
-    { label: '3x', type: 'finite', count: 3, icon: Repeat },
-    { label: '◦', type: 'static', icon: Pause }
-  ];
-  
-  return (
-    <div className="quick-loop-controls">
-      {quickPresets.map(preset => (
-        <Button
-          key={preset.label}
-          variant={scene.animationType === preset.type ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => onQuickUpdate(preset)}
-          title={`Set to ${preset.label}`}
-        >
-          <preset.icon className="w-4 h-4" />
-        </Button>
-      ))}
-    </div>
-  );
-};
-```
+We need to establish how a scene becomes "current". Options:
 
-#### 3. Visual Loop Indicator
-```typescript
-// Show loop status in scene preview
-const LoopIndicator = ({ scene }) => {
-  const getLoopText = () => {
-    switch (scene.animationType) {
-      case 'infinite': return '∞ loop';
-      case 'once': return 'Play once';
-      case 'finite': return `${scene.loopCount}x loops`;
-      case 'static': return 'Static';
-      default: return '';
-    }
-  };
-  
-  return (
-    <div className="loop-indicator">
-      <Badge variant="secondary" className="text-xs">
-        {getLoopText()}
-      </Badge>
-    </div>
-  );
-};
-```
+1. **Option A: Scene Selection Based** (Recommended)
+   - User clicks on a scene in the storyboard/scene list to select it
+   - Selected scene becomes the "current scene" for looping
+   - Clear visual indicator shows which scene is selected
+   - If no scene selected, falls back to full video loop
 
-### Chat Integration
+2. **Option B: Playhead Position Based**
+   - Current scene is determined by where the playhead is in the video
+   - As video plays, current scene updates automatically
+   - More complex but more intuitive for some workflows
 
-#### 1. Natural Language Commands
-```typescript
-// Extend Brain Orchestrator to understand loop commands
-const loopCommands = [
-  'make it loop 3 times',
-  'stop the animation after 2 loops',
-  'make this play once',
-  'remove the animation',
-  'make it static',
-  'infinite loop',
-  'loop forever'
-];
+3. **Option C: Last Edited Scene**
+   - The most recently edited/added scene becomes current
+   - Automatically focuses on what user is working on
+   - Could be confusing if user edits multiple scenes
 
-// Pattern matching for loop control
-const parseLoopCommand = (prompt: string) => {
-  // "loop 3 times" or "3 loops"
-  const finiteMatch = prompt.match(/(?:loop|repeat)\s*(\d+)\s*times?|(\d+)\s*loops?/i);
-  if (finiteMatch) {
-    const count = parseInt(finiteMatch[1] || finiteMatch[2]);
-    return { type: 'finite', count };
-  }
-  
-  // "play once"
-  if (/play\s+once|one\s+time/i.test(prompt)) {
-    return { type: 'once' };
-  }
-  
-  // "no animation" or "static"
-  if (/no\s+animation|static|remove\s+animation/i.test(prompt)) {
-    return { type: 'static' };
-  }
-  
-  // "infinite" or "forever"
-  if (/infinite|forever|continuously/i.test(prompt)) {
-    return { type: 'infinite' };
-  }
-  
-  return null;
-};
-```
+### Recommended Implementation (Option A)
 
-#### 2. Loop Tool Implementation
-```typescript
-// New MCP tool for loop control
-export const loopControlTool = {
-  name: 'setLoopControl',
-  description: 'Control animation looping behavior',
-  parameters: {
-    sceneId: z.string(),
-    animationType: z.enum(['infinite', 'finite', 'once', 'static']),
-    loopCount: z.number().optional(),
-    loopDuration: z.number().optional()
-  },
-  execute: async ({ sceneId, animationType, loopCount, loopDuration }) => {
-    const scene = await getScene(sceneId);
-    
-    // Update scene metadata
-    await updateScene(sceneId, {
-      animationType,
-      loopCount: animationType === 'finite' ? loopCount : -1,
-      loopDuration
-    });
-    
-    // Regenerate code with loop controls
-    const updatedCode = await regenerateSceneWithLoopControl(scene, {
-      animationType,
-      loopCount,
-      loopDuration
-    });
-    
-    return {
-      success: true,
-      message: getLoopMessage(animationType, loopCount),
-      updatedCode
-    };
-  }
-};
-```
+1. **Scene Selection System** ✅ ALREADY EXISTS!
+   - We already have `selectedSceneId` state in WorkspaceContentAreaG
+   - Scene selection already works in storyboard and code panels
+   - We just need to:
+     - Pass `selectedSceneId` to PreviewPanelG
+     - Show visual indicator in preview when scene is selected
+     - Enable scene loop option when a scene is selected
 
-## Implementation Plan
+2. **UI Enhancement**
+   ```typescript
+   // Simple toggle approach when scene is selected
+   {selectedSceneId ? (
+     <Button
+       variant="ghost"
+       size="sm"
+       onClick={() => setLoopMode(loopMode === 'scene' ? 'video' : 'scene')}
+       title={loopMode === 'scene' ? 'Looping current scene' : 'Click to loop selected scene'}
+     >
+       {loopMode === 'scene' ? (
+         <>
+           <Repeat1 className="h-3.5 w-3.5 mr-1" />
+           Scene
+         </>
+       ) : (
+         <>
+           <Repeat className="h-3.5 w-3.5 mr-1" />
+           Video
+         </>
+       )}
+     </Button>
+   ) : (
+     <Button variant="ghost" size="sm" onClick={() => setIsLooping(!isLooping)}>
+       <Repeat className="h-3.5 w-3.5" />
+     </Button>
+   )}
+   ```
 
-### Phase 1: Backend Foundation (0.5 days)
-1. Add loop control fields to database schema
-2. Update Scene interface and types
-3. Create loop control MCP tool
-4. Add database migration
+3. **State Management**
+   - Add `selectedSceneId` to track which scene is selected
+   - Add `loopMode: 'video' | 'scene'` to preview state
+   - Calculate selected scene's frame range from scene list
+   - Store both in localStorage for persistence
 
-### Phase 2: Code Generation (0.25 days)
-1. Modify animation code generation
-2. Update Remotion component templates
-3. Test loop control in generated code
-4. Handle edge cases
+4. **Player Integration**
+   - When in scene loop mode, limit playback to selected scene's frame range
+   - Use Remotion's seek functionality to jump back to scene start
+   - Disable scene loop if selected scene is deleted
 
-### Phase 3: UI Implementation (0.25 days)
-1. Create loop control panel component
-2. Add quick controls to scene cards
-3. Implement visual loop indicators
-4. Test user interactions
+4. **Implementation Details**
+   ```typescript
+   // New state in PreviewPanelG
+   const [loopMode, setLoopMode] = useState<'video' | 'scene'>('video');
+   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+   
+   // Calculate scene boundaries
+   const sceneRanges = useMemo(() => {
+     let start = 0;
+     return scenes.map(scene => {
+       const range = { start, end: start + scene.duration };
+       start += scene.duration;
+       return range;
+     });
+   }, [scenes]);
+   
+   // Handle scene loop logic
+   useEffect(() => {
+     if (loopMode === 'scene' && currentFrame >= sceneRanges[currentSceneIndex].end) {
+       playerRef.current?.seekTo(sceneRanges[currentSceneIndex].start);
+     }
+   }, [currentFrame, loopMode, currentSceneIndex, sceneRanges]);
+   ```
 
-## Success Metrics
+5. **UI Component Update**
+   ```typescript
+   // Enhanced LoopToggle with dropdown
+   <DropdownMenu>
+     <DropdownMenuTrigger asChild>
+       <Button variant="ghost" size="sm">
+         {loopMode === 'video' ? <Repeat /> : <Repeat1 />}
+       </Button>
+     </DropdownMenuTrigger>
+     <DropdownMenuContent>
+       <DropdownMenuItem onClick={() => setLoopMode('video')}>
+         <Repeat className="mr-2 h-4 w-4" />
+         Loop Entire Video
+       </DropdownMenuItem>
+       <DropdownMenuItem onClick={() => setLoopMode('scene')}>
+         <Repeat1 className="mr-2 h-4 w-4" />
+         Loop Current Scene
+       </DropdownMenuItem>
+     </DropdownMenuContent>
+   </DropdownMenu>
+   ```
 
-- **Functionality**: All loop types work correctly in preview and export
-- **Code Quality**: Generated code handles loops without errors
-- **User Experience**: Loop controls are intuitive and discoverable
-- **Performance**: Loop control doesn't impact rendering performance
+### Benefits
+- Faster iteration when working on specific scenes
+- Better focus on individual scene timing
+- Reduces cognitive load when perfecting animations
+- Aligns with professional video editing workflows
 
-## Animation Types Supported
+### Integration Points
 
-### 1. Infinite Loop (Default)
-- Animations repeat continuously
-- Standard behavior for motion graphics
-- Best for background elements
+Since we already have scene selection infrastructure:
 
-### 2. Finite Loops
-- Specific number of repetitions (1-10)
-- Useful for emphasis or attention-drawing
-- Good for text animations and call-to-actions
+1. **WorkspaceContentAreaG** already maintains `selectedSceneId`
+2. **StoryboardPanelG** already allows scene selection
+3. **CodePanelG** already syncs with selected scene
+4. **ChatPanelG** scene cards could also trigger selection
 
-### 3. Play Once
-- Single animation play-through
-- Professional look for presentations
-- Good for entrance/exit animations
+We just need to:
+- Pass `selectedSceneId` to PreviewPanelG as a prop
+- Add the loop mode toggle UI
+- Implement the scene boundary calculation and loop logic
 
-### 4. Static (No Animation)
-- Removes all animation
-- Clean, minimal appearance
-- Good for final states or screenshots
+### User Flow
 
-## Edge Cases & Considerations
+1. User clicks on a scene in storyboard/chat to select it
+2. Loop toggle button shows "Scene" option when scene is selected
+3. User clicks to enable scene loop
+4. Preview plays only the selected scene in a loop
+5. User can switch back to full video loop or select different scene
 
-1. **Animation Timing**
-   - Ensure loop duration matches scene duration
-   - Handle cases where scene is shorter than one loop
-   - Synchronize multiple animated elements
-
-2. **Code Complexity**
-   - Keep generated code readable
-   - Handle nested animations properly
-   - Maintain performance with complex loops
-
-3. **User Expectations**
-   - Clear messaging about what each type does
-   - Preview behavior matches export behavior
-   - Consistent terminology across UI
-
-4. **Export Behavior**
-   - Loop controls work in exported videos
-   - Final frame state is appropriate
-   - No jarring transitions
-
-## Related Features
-
-- Scene duration control (existing)
-- Animation libraries (future)
-- Timeline controls (future)
-- Keyframe editing (future)
-
-## Future Enhancements
-
-1. **Advanced Loop Controls**
-   - Ease in/out for loop transitions
-   - Different loop types per element
-   - Loop delays and offsets
-   - Reverse loops (ping-pong)
-
-2. **Loop Presets**
-   - Save common loop configurations
-   - Apply to multiple scenes
-   - Template-based loop patterns
-   - Community-shared presets
-
-3. **Timeline Integration**
-   - Visual representation of loops in timeline
-   - Drag to adjust loop timing
-   - Loop markers and indicators
-   - Multi-track loop management
-
-## Testing Checklist
-
-- [ ] All animation types work in preview
-- [ ] Loop controls persist across sessions
-- [ ] Generated code compiles correctly
-- [ ] Export respects loop settings
-- [ ] UI controls are responsive
-- [ ] Natural language commands work
-- [ ] Edge cases handled gracefully
-- [ ] Performance impact minimal
-- [ ] Backward compatibility maintained
-- [ ] Documentation updated
+### Estimated Effort
+- UI updates: 0.5 days (simpler since selection exists)
+- State management and logic: 0.5 days
+- Testing and edge cases: 0.5 days
+- **Total**: 1.5 days (reduced from 2 days)
