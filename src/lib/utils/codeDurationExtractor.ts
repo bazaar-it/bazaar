@@ -165,6 +165,67 @@ export function extractDurationFromCode(code: string): number {
       }
     }
     
+    // Pattern 8: Exported durationInFrames constants
+    // Example: export const durationInFrames = totalFrames; const totalFrames = script.reduce(...)
+    const exportedDurationRegex = /export\s+const\s+durationInFrames\s*=\s*(\w+);/g;
+    while ((match = exportedDurationRegex.exec(cleanCode)) !== null) {
+      const variableName = match[1];
+      
+      if (!variableName) continue;
+      
+      // Look for the variable definition that calculates total frames
+      const variableDefRegex = new RegExp(`const\\s+${variableName}\\s*=\\s*script\\.reduce\\(\\(sum,\\s*item\\)\\s*=>\\s*sum\\s*\\+\\s*item\.frames,\\s*0\\);`, 'g');
+      const scriptFramesRegex = /\{\s*text:\s*"[^"]*",\s*frames:\s*(\d+)/g;
+      
+      if (variableDefRegex.test(cleanCode)) {
+        // Extract individual frame values from the script array
+        let totalCalculatedFrames = 0;
+        let scriptMatch;
+        
+        while ((scriptMatch = scriptFramesRegex.exec(cleanCode)) !== null) {
+          const frameValue = scriptMatch[1] ? parseInt(scriptMatch[1], 10) : NaN;
+          if (!isNaN(frameValue) && frameValue > 0) {
+            totalCalculatedFrames += frameValue;
+          }
+        }
+        
+        if (totalCalculatedFrames > 0) {
+          console.log(`[CodeDurationExtractor] Found exported durationInFrames with calculated total: ${totalCalculatedFrames} frames`);
+          ranges.push({
+            startFrame: 0,
+            endFrame: totalCalculatedFrames,
+            purpose: 'exported-duration'
+          });
+        }
+      }
+    }
+    
+    // Pattern 9: Direct totalFrames calculation
+    // Example: const totalFrames = script.reduce((sum, item) => sum + item.frames, 0);
+    const totalFramesRegex = /const\s+totalFrames\s*=\s*script\.reduce\(\(sum,\s*item\)\s*=>\s*sum\s*\+\s*item\.frames,\s*0\);/g;
+    if (totalFramesRegex.test(cleanCode)) {
+      // Extract frame values from script array
+      const scriptFramesRegex = /\{\s*text:\s*"[^"]*",\s*frames:\s*(\d+)/g;
+      let totalCalculatedFrames = 0;
+      let scriptMatch;
+      
+      while ((scriptMatch = scriptFramesRegex.exec(cleanCode)) !== null) {
+        const frameValue = scriptMatch[1] ? parseInt(scriptMatch[1], 10) : NaN;
+        if (!isNaN(frameValue) && frameValue > 0) {
+          totalCalculatedFrames += frameValue;
+        }
+      }
+      
+      if (totalCalculatedFrames > 0) {
+        console.log(`[CodeDurationExtractor] Found totalFrames calculation with total: ${totalCalculatedFrames} frames`);
+        ranges.push({
+          startFrame: 0,
+          endFrame: totalCalculatedFrames,
+          purpose: 'totalframes-calculation'
+        });
+      }
+    }
+    
     // If no ranges found, look for any numeric values that might represent frames
     if (ranges.length === 0) {
       const numberRegex = /\b(\d{2,3})\b/g;
@@ -245,7 +306,10 @@ export function analyzeDuration(code: string): {
   let confidence: 'high' | 'medium' | 'low' = 'low';
   let source = 'default fallback';
   
-  if (code.includes('spring(') && code.includes('durationInFrames')) {
+  if (code.includes('export const durationInFrames') && code.includes('script.reduce')) {
+    confidence = 'high';
+    source = 'exported durationInFrames with calculated total frames';
+  } else if (code.includes('spring(') && code.includes('durationInFrames')) {
     confidence = 'high';
     source = 'spring animations + smart buffer';
   } else if (code.includes('interpolate(')) {

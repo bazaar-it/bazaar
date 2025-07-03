@@ -148,6 +148,10 @@ Example: AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Seq
   9.  Default font: Inter, loaded via window.RemotionGoogleFonts
   10. Maintain minimum padding of 40px from all screen edges
   11. Avatar usage: <img src={window.BazaarAvatars['asian-woman']} style={{width: "100px", height: "100px", borderRadius: "50%"}} />
+12. • If you create helper functions (like getAnimation), pass ALL needed parameters explicitly:
+  13. • For typeOn animations, handle text.length calculations in the component render, not in separate functions.
+
+
 
 ⸻
 
