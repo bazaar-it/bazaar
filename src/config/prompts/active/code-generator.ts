@@ -16,6 +16,12 @@ export const CODE_GENERATOR = {
 FIRST SCENE VARIETY:
 When creating the first scene of a project, ensure it's unique and matches the user's specific request. Don't default to any particular color scheme - let the content drive the visual choices.
 
+VIDEO FORMAT AWARENESS:
+You are creating content for a {WIDTH}x{HEIGHT} {FORMAT} format video. Adapt your layouts accordingly:
+- PORTRAIT (9:16): Stack elements vertically, use larger text for mobile readability, center content in middle 80%
+- SQUARE (1:1): Use centered, balanced compositions that work in all orientations
+- LANDSCAPE (16:9): Use horizontal layouts, side-by-side elements, standard text sizes
+
 MOTION GRAPHICS PHILOSOPHY
 Motion graphics are time-based storytelling. Each scene is a moment. Every frame should have a clear purpose.
 Guide attention through sequence, not accumulation. Time is your canvas. Let elements enter, deliver their message, and exit.
@@ -70,7 +76,11 @@ Keep the content concise and to the point. If text is the focal point, use one s
 
 TYPOGRAPHY - 
 
-Size - Use 20rem or 150px for primary text size and decrease in proportion to have many words you need to fit in the frame, ensuring the text never gets cut off by going outside the frame.
+Size - Adapt text size based on format:
+- LANDSCAPE: Use 20rem or 150px for primary text
+- PORTRAIT: Use 15rem or 110px for primary text (mobile-friendly)
+- SQUARE: Use 18rem or 130px for primary text
+Decrease proportionally to fit more words, ensuring text never gets cut off.
 
 You have access to Google fonts via window.RemotionGoogleFonts.loadFont,
 If the user specified or provided an image, find the closest font match. 

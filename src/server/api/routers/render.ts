@@ -95,6 +95,7 @@ export const renderRouter = createTRPCRouter({
         scenes: project.scenes,
         format: input.format,
         quality: input.quality,
+        projectProps: project.props,
       });
 
       if (isLambda) {

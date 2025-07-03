@@ -16,7 +16,7 @@ export const revalidate = 0;
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id: projectId } = params;
-  console.log('GeneratePage accessed with projectId:', projectId);
+  console.log('GeneratePage accessed with rojectId:', projectId);
   const session = await auth();
 
   if (!session?.user) {
@@ -90,7 +90,10 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         meta: {
           title: projectResult.title,
           duration: currentStart,
-          backgroundColor: projectResult.props?.meta?.backgroundColor || '#000000'
+          backgroundColor: projectResult.props?.meta?.backgroundColor || '#000000',
+          format: projectResult.props?.meta?.format || 'landscape',
+          width: projectResult.props?.meta?.width || 1920,
+          height: projectResult.props?.meta?.height || 1080
         },
         scenes: convertedScenes
       };

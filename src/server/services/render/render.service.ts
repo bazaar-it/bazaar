@@ -7,6 +7,7 @@ export interface RenderConfig {
   scenes: any[];
   format: 'mp4' | 'webm' | 'gif';
   quality: 'low' | 'medium' | 'high';
+  projectProps?: any;
   onProgress?: (progress: number) => void;
 }
 
@@ -252,15 +253,36 @@ export async function prepareRenderConfig({
   scenes,
   format = 'mp4',
   quality = 'high',
+  projectProps,
 }: RenderConfig) {
   const settings = getQualityForFormat(quality, format);
+  
+  // Get project format dimensions or fallback to quality settings
+  const projectFormat = projectProps?.meta?.format || 'landscape';
+  const projectWidth = projectProps?.meta?.width || 1920;
+  const projectHeight = projectProps?.meta?.height || 1080;
+  
+  // For quality-based scaling, maintain aspect ratio
+  let renderWidth = settings.resolution.width;
+  let renderHeight = settings.resolution.height;
+  
+  if (projectFormat === 'portrait') {
+    // 9:16 aspect ratio
+    renderHeight = settings.resolution.width; // Use width as height for portrait
+    renderWidth = Math.round(renderHeight * 9 / 16);
+  } else if (projectFormat === 'square') {
+    // 1:1 aspect ratio
+    renderWidth = renderHeight = Math.min(settings.resolution.width, settings.resolution.height);
+  } else {
+    // Landscape 16:9 - use default quality settings
+  }
   
   // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
     scenes.map(scene => preprocessSceneForLambda({
       ...scene,
-      width: settings.resolution.width,
-      height: settings.resolution.height
+      width: renderWidth,
+      height: renderHeight
     }))
   );
   

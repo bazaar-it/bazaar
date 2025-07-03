@@ -19,6 +19,11 @@ export class CodeGeneratorService {
     userPrompt: string;
     functionName: string;
     projectId: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -28,7 +33,10 @@ export class CodeGeneratorService {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
         FUNCTION_NAME: input.functionName
       });
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+      const formatContext = input.projectFormat ? `
+VIDEO FORMAT: ${input.projectFormat.format} (${input.projectFormat.width}x${input.projectFormat.height})` : '';
+      
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"${formatContext}
 
 FUNCTION NAME: ${input.functionName}`;
 

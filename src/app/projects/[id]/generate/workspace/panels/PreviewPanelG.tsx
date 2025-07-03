@@ -770,14 +770,30 @@ export default function FallbackComposition() {
     // Calculate total duration of all scenes for proper multi-scene playback
     const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
     
+    // Get format dimensions from project props, fallback to landscape
+    const width = currentProps?.meta?.width || 1920;
+    const height = currentProps?.meta?.height || 1080;
+    const format = currentProps?.meta?.format || 'landscape';
+    
     return {
       fps: 30,
-      width: 1920,
-      height: 1080,
+      width,
+      height,
+      format,
       durationInFrames: totalDuration, // Use total duration, not just last scene
       inputProps: {}
     };
-  }, [scenes]);
+  }, [scenes, currentProps?.meta]);
+  
+  // Get format icon
+  const formatIcon = useMemo(() => {
+    const format = currentProps?.meta?.format || 'landscape';
+    switch (format) {
+      case 'portrait': return '📱';
+      case 'square': return '□';
+      default: return '🖥️';
+    }
+  }, [currentProps?.meta?.format]);
 
   return (
     <div className="h-full flex flex-col bg-white relative overflow-hidden">
@@ -789,24 +805,36 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow bg-white">
+      <div className="relative flex-grow bg-gray-100 flex items-center justify-center">
         {componentImporter && playerProps ? (
-          <ErrorBoundary FallbackComponent={ErrorFallback}>
-            <RemotionPreview
-              lazyComponent={componentImporter}
-              durationInFrames={playerProps.durationInFrames}
-              fps={playerProps.fps}
-              width={playerProps.width}
-              height={playerProps.height}
-              inputProps={playerProps.inputProps}
-              refreshToken={refreshToken}
-              playerRef={playerRef}
-              playbackRate={playbackSpeed}
-              loop={loopState !== 'off'}
-              inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
-              outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
-            />
-          </ErrorBoundary>
+          <div 
+            className="relative bg-black shadow-xl"
+            style={{
+              // Maintain aspect ratio while fitting within container
+              maxWidth: '100%',
+              maxHeight: '100%',
+              aspectRatio: `${playerProps.width} / ${playerProps.height}`,
+              width: playerProps.format === 'portrait' ? 'auto' : '100%',
+              height: playerProps.format === 'portrait' ? '100%' : 'auto',
+            }}
+          >
+            <ErrorBoundary FallbackComponent={ErrorFallback}>
+              <RemotionPreview
+                lazyComponent={componentImporter}
+                durationInFrames={playerProps.durationInFrames}
+                fps={playerProps.fps}
+                width={playerProps.width}
+                height={playerProps.height}
+                inputProps={playerProps.inputProps}
+                refreshToken={refreshToken}
+                playerRef={playerRef}
+                playbackRate={playbackSpeed}
+                loop={loopState !== 'off'}
+                inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
+                outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
+              />
+            </ErrorBoundary>
+          </div>
         ) : componentError ? (
           <div className="flex items-center justify-center h-full p-4">
             <ErrorFallback error={componentError} />

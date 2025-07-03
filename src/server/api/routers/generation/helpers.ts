@@ -1,5 +1,5 @@
 import { db } from "~/server/db";
-import { scenes, sceneIterations } from "~/server/db/schema";
+import { scenes, sceneIterations, projects } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
@@ -18,6 +18,18 @@ export async function executeToolFromDecision(
   messageId?: string
 ): Promise<{ success: boolean; scene?: SceneEntity }> {
   const startTime = Date.now(); // Track generation time
+  
+  // Get project format for AI context
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, projectId),
+    columns: { props: true }
+  });
+  
+  const projectFormat = {
+    format: project?.props?.meta?.format || 'landscape',
+    width: project?.props?.meta?.width || 1920,
+    height: project?.props?.meta?.height || 1080
+  };
   
   if (!decision.toolName || !decision.toolContext) {
     throw new Error("Invalid decision - missing tool name or context");
@@ -68,6 +80,8 @@ export async function executeToolFromDecision(
         })) : undefined,
         // NEW: Pass web context for brand-matching
         webContext: decision.toolContext.webContext,
+        // Pass project format for AI context
+        projectFormat: projectFormat,
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);

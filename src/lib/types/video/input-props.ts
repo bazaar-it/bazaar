@@ -114,7 +114,11 @@ export const inputPropsSchema = z.object({
   meta: z.object({
     duration: z.number().int().min(1).describe("Total composition duration in frames"),
     title: z.string().min(1),
-    backgroundColor: z.string().optional().describe("Global background color")
+    backgroundColor: z.string().optional().describe("Global background color"),
+    // Video format configuration
+    format: z.enum(["landscape", "portrait", "square"]).default("landscape"),
+    width: z.number().int().default(1920),
+    height: z.number().int().default(1080)
   }).strict(),
   scenes: z.array(sceneSchema),
 }).strict();
