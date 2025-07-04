@@ -31,12 +31,13 @@ export class CodeGeneratorService {
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
-      const formatContext = input.projectFormat ? `
-VIDEO FORMAT: ${input.projectFormat.format} (${input.projectFormat.width}x${input.projectFormat.height})` : '';
       
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"${formatContext}
+      const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
 
@@ -88,6 +89,11 @@ FUNCTION NAME: ${input.functionName}`;
     functionName: string;
     projectId: string;
     previousSceneCode: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -95,7 +101,10 @@ FUNCTION NAME: ${input.functionName}`;
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       const transitionContext = getSmartTransitionContext(input.previousSceneCode);
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
@@ -251,7 +260,10 @@ export default function ${input.functionName}() {
       
       // Get the IMAGE_CODE_GENERATOR prompt specifically for image-based generation
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
       // Build user message for vision API - include the actual user prompt!
@@ -351,6 +363,9 @@ export default function ${input.functionName}() {
     const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
       FUNCTION_NAME: functionName,
       USER_PROMPT: userPrompt,
+      WIDTH: input.projectFormat?.width.toString() || '1920',
+      HEIGHT: input.projectFormat?.height.toString() || '1080',
+      FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
     });
     
     const user = JSON.stringify(layoutJson, null, 2);
@@ -365,6 +380,11 @@ export default function ${input.functionName}() {
     videoUrls: string[];
     userPrompt: string;
     functionName: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -375,7 +395,10 @@ export default function ${input.functionName}() {
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
       const userPrompt = `USER REQUEST: "${input.userPrompt}"

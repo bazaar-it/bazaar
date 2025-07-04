@@ -262,19 +262,26 @@ export async function prepareRenderConfig({
   const projectWidth = projectProps?.meta?.width || 1920;
   const projectHeight = projectProps?.meta?.height || 1080;
   
-  // For quality-based scaling, maintain aspect ratio
-  let renderWidth = settings.resolution.width;
-  let renderHeight = settings.resolution.height;
+  // Calculate render dimensions based on project dimensions and quality settings
+  let renderWidth: number;
+  let renderHeight: number;
+  
+  // Scale project dimensions to match quality setting while maintaining aspect ratio
+  const projectAspectRatio = projectWidth / projectHeight;
+  const qualityMaxDimension = Math.max(settings.resolution.width, settings.resolution.height);
   
   if (projectFormat === 'portrait') {
-    // 9:16 aspect ratio
-    renderHeight = settings.resolution.width; // Use width as height for portrait
-    renderWidth = Math.round(renderHeight * 9 / 16);
+    // For portrait (9:16), prioritize height
+    renderHeight = Math.min(projectHeight, qualityMaxDimension);
+    renderWidth = Math.round(renderHeight * projectAspectRatio);
   } else if (projectFormat === 'square') {
-    // 1:1 aspect ratio
-    renderWidth = renderHeight = Math.min(settings.resolution.width, settings.resolution.height);
+    // For square (1:1), use the smaller of width/height
+    const maxSquareSize = Math.min(settings.resolution.width, settings.resolution.height);
+    renderWidth = renderHeight = Math.min(projectWidth, maxSquareSize);
   } else {
-    // Landscape 16:9 - use default quality settings
+    // For landscape (16:9), prioritize width
+    renderWidth = Math.min(projectWidth, settings.resolution.width);
+    renderHeight = Math.round(renderWidth / projectAspectRatio);
   }
   
   // Pre-compile all scenes for Lambda with resolution info
@@ -301,10 +308,14 @@ export async function prepareRenderConfig({
     settings,
     totalDuration,
     estimatedDurationMinutes,
+    renderWidth,
+    renderHeight,
     // This will be used by Lambda
     inputProps: {
       scenes: processedScenes,
       projectId,
+      width: renderWidth,
+      height: renderHeight,
     },
   };
 }

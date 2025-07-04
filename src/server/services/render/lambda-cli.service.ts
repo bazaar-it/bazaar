@@ -7,6 +7,8 @@ import { getQualityForFormat } from "./render.service";
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
   webhookUrl?: string;
+  renderWidth?: number;
+  renderHeight?: number;
 }
 
 // Use the deployed site URL from environment or the new fixed version
@@ -19,6 +21,8 @@ export async function renderVideoOnLambda({
   format = 'mp4',
   quality = 'high',
   webhookUrl,
+  renderWidth,
+  renderHeight,
 }: LambdaRenderConfig) {
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
   console.log(`[LambdaRender] Environment info:`, {
@@ -48,7 +52,12 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] Total duration: ${totalDuration} frames`);
     console.log(`[LambdaRender] Format: ${format}, Quality: ${quality}`);
-    console.log(`[LambdaRender] Resolution: ${settings.resolution.width}x${settings.resolution.height}`);
+    
+    // Use provided render dimensions or fall back to quality settings
+    const width = renderWidth || settings.resolution.width;
+    const height = renderHeight || settings.resolution.height;
+    
+    console.log(`[LambdaRender] Resolution: ${width}x${height}`);
     
     // Log what we're sending to Lambda
     console.log(`[LambdaRender] Scenes being sent to Lambda:`, scenes.map(s => ({
@@ -63,8 +72,8 @@ export async function renderVideoOnLambda({
     const inputProps = {
       scenes,
       projectId,
-      width: settings.resolution.width,
-      height: settings.resolution.height,
+      width,
+      height,
     };
     
     // Determine codec based on format

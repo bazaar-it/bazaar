@@ -69,21 +69,17 @@ export default function NewProjectPage() {
     });
   };
 
-  // TEMPORARY: Auto-create landscape project on mount
-  useEffect(() => {
-    if (!session?.user && status === "unauthenticated") {
-      router.push("/login");
-      return;
-    }
-    
-    if (session?.user && !createProjectMutation.isPending && !createProjectMutation.isSuccess) {
-      // Auto-select landscape format
-      handleFormatSelect('landscape');
-    }
-  }, [session, status]);
-
   // Loading state
-  if (status === "loading" || !session || createProjectMutation.isPending) {
+  if (status === "loading" || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+  
+  // Creating project state
+  if (createProjectMutation.isPending) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-500">Creating project...</div>
@@ -91,28 +87,13 @@ export default function NewProjectPage() {
     );
   }
 
-  // Error state
-  if (createProjectMutation.isError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-500">Failed to create project. Please try again.</div>
-      </div>
-    );
-  }
-
-  // Default loading while redirecting
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-500">Redirecting...</div>
-    </div>
-  );
-
-  /* TEMPORARILY DISABLED - Uncomment to re-enable format selection
   // Show format selector
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <FormatSelector onSelect={handleFormatSelect} />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <FormatSelector 
+        onSelect={handleFormatSelect} 
+        isCreating={createProjectMutation.isPending}
+      />
     </div>
   );
-  */
 }

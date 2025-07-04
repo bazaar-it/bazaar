@@ -795,7 +795,7 @@ export default function FallbackComposition() {
   }, [currentProps?.meta?.format]);
 
   return (
-    <div className="h-full flex flex-col bg-white relative overflow-hidden">
+    <div className="h-full flex flex-col bg-gray-100 relative overflow-hidden">
       {/* Hidden refresh button that the upper header can trigger */}
       <button 
         id="refresh-preview-button-g"
@@ -804,17 +804,21 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow bg-gray-100 flex items-center justify-center">
+      <div className="relative flex-grow flex items-center justify-center p-4">
         {componentImporter && playerProps ? (
           <div 
             className="relative bg-black shadow-xl"
             style={{
-              // Maintain aspect ratio while fitting within container
+              // Adaptive sizing based on format
               maxWidth: '100%',
               maxHeight: '100%',
               aspectRatio: `${playerProps.width} / ${playerProps.height}`,
+              // For portrait: constrain by height and let width adjust
+              // For landscape/square: constrain by width and let height adjust
               width: playerProps.format === 'portrait' ? 'auto' : '100%',
               height: playerProps.format === 'portrait' ? '100%' : 'auto',
+              // Center the video if it doesn't fill the container
+              margin: '0 auto',
             }}
           >
             <ErrorBoundary FallbackComponent={ErrorFallback}>

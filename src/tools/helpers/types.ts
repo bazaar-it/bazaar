@@ -12,6 +12,11 @@ export interface BaseToolInput {
   userPrompt: string;
   projectId: string;  // For context only, not DB access
   userId?: string;    // For context only, not DB access
+  formatContext?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**
@@ -184,6 +189,11 @@ export interface CodeGenerationInput {
   layoutJson: any;
   functionName: string;
   projectId: string;
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**
@@ -204,6 +214,11 @@ export interface ImageToCodeInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**

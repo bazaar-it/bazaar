@@ -206,6 +206,7 @@ export async function executeToolFromDecision(
         visionAnalysis: decision.toolContext.visionAnalysis,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
+        formatContext: projectFormat,
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);

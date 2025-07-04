@@ -98,6 +98,16 @@ export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLoo
   }
 
   const totalDuration = inputProps.meta.duration || 300; // Default 10 seconds at 30fps
+  
+  // Get dimensions from project metadata
+  const width = inputProps.meta?.width || 1920;
+  const height = inputProps.meta?.height || 1080;
+  
+  // Calculate aspect ratio class based on format
+  const format = inputProps.meta?.format || 'landscape';
+  const aspectClass = format === 'portrait' ? 'aspect-[9/16]' : 
+                      format === 'square' ? 'aspect-square' : 
+                      'aspect-video';
 
   const composition = useMemo(() => {
     const ShareComposition = ({ scenes: sceneData }: { scenes: any[] }) => {
@@ -122,14 +132,14 @@ export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLoo
 
   return (
     <div className="relative">
-      <div className="w-full aspect-video bg-black rounded-lg overflow-hidden relative">
+      <div className={`w-full ${aspectClass} bg-black rounded-lg overflow-hidden relative`}>
         
         <Player
           component={composition}
           inputProps={{ scenes: inputProps.scenes }}
           durationInFrames={totalDuration}
-          compositionWidth={1920}
-          compositionHeight={1080}
+          compositionWidth={width}
+          compositionHeight={height}
           fps={30}
           style={{
             width: '100%',

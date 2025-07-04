@@ -17,8 +17,8 @@ interface TemplatesPanelGProps {
 }
 
 // Template thumbnail showing frame 15 by default
-const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
-  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template);
+const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition; format: string }) => {
+  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format);
 
   if (compilationError) {
     return (
@@ -60,12 +60,12 @@ const TemplateThumbnail = ({ template }: { template: TemplateDefinition }) => {
 };
 
 // Template video player for hover state
-const TemplateVideoPlayer = ({ template }: { template: TemplateDefinition }) => {
-  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template);
+const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinition; format: string }) => {
+  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format);
 
   if (compilationError || isCompiling || !component) {
     // Fall back to thumbnail on error/loading
-    return <TemplateThumbnail template={template} />;
+    return <TemplateThumbnail template={template} format={format} />;
   }
 
   return (
@@ -83,10 +83,11 @@ const TemplateVideoPlayer = ({ template }: { template: TemplateDefinition }) => 
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading }: { 
+const TemplatePreview = ({ template, onClick, isLoading, format }: { 
   template: TemplateDefinition; 
   onClick: () => void;
   isLoading: boolean;
+  format: string;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -107,9 +108,9 @@ const TemplatePreview = ({ template, onClick, isLoading }: {
     >
       {/* Show static frame 15 by default, playing video on hover */}
       {isHovered ? (
-        <TemplateVideoPlayer template={template} />
+        <TemplateVideoPlayer template={template} format={format} />
       ) : (
-        <TemplateThumbnail template={template} />
+        <TemplateThumbnail template={template} format={format} />
       )}
       
       {/* Loading overlay - only shows when loading, covers full card */}
@@ -128,18 +129,49 @@ const TemplatePreview = ({ template, onClick, isLoading }: {
           <div className="text-white text-xs sm:text-sm font-medium">
             {template.name}
           </div>
+          {/* Format compatibility indicators */}
+          {template.supportedFormats && template.supportedFormats.length < 3 && (
+            <div className="flex gap-1 mt-1">
+              {template.supportedFormats.map(fmt => (
+                <span 
+                  key={fmt} 
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${
+                    fmt === format 
+                      ? 'bg-green-500/80 text-white' 
+                      : 'bg-white/20 text-white/70'
+                  }`}
+                >
+                  {fmt === 'landscape' ? '16:9' : fmt === 'portrait' ? '9:16' : '1:1'}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
+// Get dimensions based on format
+const getFormatDimensions = (format: string) => {
+  switch (format) {
+    case 'portrait':
+      return { width: 1080, height: 1920 };
+    case 'square':
+      return { width: 1080, height: 1080 };
+    case 'landscape':
+    default:
+      return { width: 1920, height: 1080 };
+  }
+};
+
 // Real template compilation component  
-const useCompiledTemplate = (template: TemplateDefinition) => {
+const useCompiledTemplate = (template: TemplateDefinition, format: string = 'landscape') => {
   // Templates already have working React components - use them directly!
   const component = template.component;
   const isCompiling = false; // No compilation needed
   const compilationError = null; // No compilation errors
+  const dimensions = getFormatDimensions(format);
 
   return { 
     component, 
@@ -149,8 +181,8 @@ const useCompiledTemplate = (template: TemplateDefinition) => {
       component,
       durationInFrames: template.duration,
       fps: 30,
-      compositionWidth: 1920,
-      compositionHeight: 1080,
+      compositionWidth: dimensions.width,
+      compositionHeight: dimensions.height,
     }
   };
 };
@@ -163,7 +195,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const utils = api.useUtils();
   
   // Get video state methods
-  const { addScene, addAssistantMessage } = useVideoState();
+  const { addScene, addAssistantMessage, getCurrentProps } = useVideoState();
+  
+  // Get current project format
+  const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
@@ -228,14 +263,29 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation]);
 
-  // Filter templates based on search (search by name but don't show name)
+  // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
-    if (!searchQuery.trim()) return TEMPLATES;
+    let templates = TEMPLATES;
     
-    return TEMPLATES.filter(template =>
-      template.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery]);
+    // Filter by format compatibility
+    templates = templates.filter(template => {
+      // If template has no format restrictions, show it
+      if (!template.supportedFormats || template.supportedFormats.length === 0) {
+        return true;
+      }
+      // Otherwise, check if current format is supported
+      return template.supportedFormats.includes(currentFormat);
+    });
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      templates = templates.filter(template =>
+        template.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    return templates;
+  }, [searchQuery, currentFormat]);
   
   return (
     <div className="flex flex-col h-full bg-white">
@@ -254,6 +304,17 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
 
       {/* Templates Grid - Mobile-responsive grid */}
       <div className="flex-1 overflow-y-auto p-2">
+        {/* Format indicator */}
+        <div className="mb-3 px-1">
+          <div className="text-xs text-gray-500">
+            Showing templates compatible with <span className="font-medium text-gray-700">
+              {currentFormat === 'landscape' ? 'Landscape (16:9)' : 
+               currentFormat === 'portrait' ? 'Portrait (9:16)' : 
+               'Square (1:1)'}
+            </span> format
+          </div>
+        </div>
+        
         <div 
           className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
         >
@@ -264,6 +325,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
                 template={template} 
                 onClick={() => handleAddTemplate(template)}
                 isLoading={loadingTemplateId === template.id}
+                format={currentFormat}
               />
             </Card>
           ))}
@@ -273,8 +335,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           <div className="text-center py-6 text-gray-500">
             <SearchIcon className="h-8 w-8 mx-auto mb-2 text-gray-300" />
             <p className="text-sm">No templates found</p>
-            {searchQuery && (
+            {searchQuery ? (
               <p className="text-xs mt-1">Try a different search term</p>
+            ) : (
+              <p className="text-xs mt-1">No templates available for {currentFormat} format</p>
             )}
           </div>
         )}

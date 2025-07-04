@@ -82,6 +82,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
         functionName: functionName,
         projectId: input.projectId,
         previousSceneCode: input.previousSceneContext.tsxCode,
+        projectFormat: input.projectFormat,
       });
       
       const result = {
@@ -167,6 +168,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       imageUrls: input.imageUrls,
       userPrompt: input.userPrompt,
       functionName: functionName,
+      projectFormat: input.projectFormat,
     });
 
     // Return generated content - NO DATABASE!
@@ -213,6 +215,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       videoUrls: input.videoUrls,
       userPrompt: input.userPrompt,
       functionName: functionName,
+      projectFormat: input.projectFormat,
     });
 
     const result = {
@@ -280,6 +283,7 @@ BRAND MATCHING INSTRUCTIONS:
       imageUrls: allImageUrls,
       userPrompt: enhancedPrompt,
       functionName: functionName,
+      projectFormat: input.projectFormat,
     });
 
     const result = {
@@ -348,6 +352,7 @@ COMBINED CONTEXT INSTRUCTIONS:
       imageUrls: allImageUrls,
       userPrompt: enhancedPrompt,
       functionName: functionName,
+      projectFormat: input.projectFormat,
     });
 
     const result = {

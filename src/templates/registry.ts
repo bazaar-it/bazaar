@@ -1,5 +1,7 @@
 // Import templates that have been updated to the new format
 import KnowsCode, { templateConfig as knowsCodeConfig } from './KnowsCode';
+import { type VideoFormat } from '../app/projects/new/FormatSelector';
+import { templateFormatAnalysis } from './analyze-templates';
 import PromptIntro, { templateConfig as promptIntroConfig } from './PromptIntro';
 import FintechUI, { templateConfig as fintechConfig } from './FintechUI';
 import GrowthGraph, { templateConfig as growthConfig } from './GrowthGraph';
@@ -35,120 +37,130 @@ export interface TemplateDefinition {
   previewFrame: number; // fps for preview
   component: React.ComponentType; // Real React component for Remotion Player
   getCode: () => string; // Code string for database storage
+  supportedFormats?: VideoFormat[]; // Formats this template works well with
+}
+
+// Helper function to add format support to templates
+function addFormatSupport(template: Omit<TemplateDefinition, 'supportedFormats'>): TemplateDefinition {
+  const formatInfo = templateFormatAnalysis[template.id as keyof typeof templateFormatAnalysis];
+  return {
+    ...template,
+    supportedFormats: formatInfo?.supportedFormats ?? ['landscape', 'portrait', 'square']
+  };
 }
 
 export const TEMPLATES: TemplateDefinition[] = [
   // ✅ NEW FORMAT: Self-contained templates
-  {
+  addFormatSupport({
     ...knowsCodeConfig,
     component: KnowsCode,
-  },
-  {
+  }),
+  addFormatSupport({
     ...promptIntroConfig,
     component: PromptIntro,
-  },
-  {
+  }),
+  addFormatSupport({
     ...fintechConfig,
     component: FintechUI,
-  },
-  {
+  }),
+  addFormatSupport({
     ...growthConfig,
     component: GrowthGraph,
-  },
-  {
+  }),
+  addFormatSupport({
     ...appleSignInConfig,
     component: AppleSignIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...githubSignInConfig,
     component: GitHubSignIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...googleSignInConfig,
     component: GoogleSignIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...codingConfig,
     component: Coding,
-  },
-  {
+  }),
+  addFormatSupport({
     ...blueGradientTextConfig,
     component: BlueGradientText,
-  },
-  {
+  }),
+  addFormatSupport({
     ...gradientTextConfig,
     component: GradientText,
-  },
-  {
+  }),
+  addFormatSupport({
     ...dualScreenAppConfig,
     component: DualScreenApp,
-  },
-  {
+  }),
+  addFormatSupport({
     ...audioAnimationConfig,
     component: AudioAnimation,
-  },
-  {
+  }),
+  addFormatSupport({
     ...promptUIConfig,
     component: PromptUI,
-  },
-  {
+  }),
+  addFormatSupport({
     ...generatingConfig,
     component: Generating,
-  },
-  {
+  }),
+  addFormatSupport({
     ...dotDotDotConfig,
     component: DotDotDot,
-  },
-  {
+  }),
+  addFormatSupport({
     ...placeholdersConfig,
     component: Placeholders,
-  },
-  {
+  }),
+  addFormatSupport({
     ...wordFlipConfig,
     component: WordFlip,
-  },
-  {
+  }),
+  addFormatSupport({
     ...morphingTextConfig,
     component: MorphingText,
-  },
-  {
+  }),
+  addFormatSupport({
     ...highlightSweepConfig,
     component: HighlightSweep,
-  },
-  {
+  }),
+  addFormatSupport({
     ...carouselTextConfig,
     component: CarouselText,
-  },
-  {
+  }),
+  addFormatSupport({
     ...drawOnConfig,
     component: DrawOn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...wipeInConfig,
     component: WipeIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...scaleInConfig,
     component: ScaleIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...slideInConfig,
     component: SlideIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...fadeInConfig,
     component: FadeIn,
-  },
-  {
+  }),
+  addFormatSupport({
     ...teslaStockGraphConfig,
     component: TeslaStockGraph,
-  },
-  {
+  }),
+  addFormatSupport({
     ...cursorClickSceneConfig,
     component: CursorClickScene,
-  },
-  {
+  }),
+  addFormatSupport({
     ...mobileAppConfig,
     component: MobileApp,
-  },
+  }),
 ]; 
