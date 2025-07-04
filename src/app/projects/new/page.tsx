@@ -35,16 +35,16 @@ export default function NewProjectPage() {
     onError: (error) => {
       console.error("Failed to create project:", error);
       // Try again with a numbered title
-      if (error.message.includes('unique constraint')) {
-        handleFormatSelect(selectedFormat!);
+      if (error.message.includes('unique constraint') && selectedFormat) {
+        handleFormatSelect(selectedFormat);
       }
     }
   });
 
-  const handleFormatSelect = async (format: VideoFormat) => {
+  const handleFormatSelect = async (formatId: VideoFormat) => {
     if (!session?.user) return;
     
-    setSelectedFormat(format);
+    setSelectedFormat(formatId);
     
     // Generate unique title
     let title = "Untitled Video";
@@ -65,23 +65,54 @@ export default function NewProjectPage() {
     
     // Create project with selected format
     createProjectMutation.mutate({
-      format: format
+      format: formatId
     });
   };
 
+  // TEMPORARY: Auto-create landscape project on mount
+  useEffect(() => {
+    if (!session?.user && status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+    
+    if (session?.user && !createProjectMutation.isPending && !createProjectMutation.isSuccess) {
+      // Auto-select landscape format
+      handleFormatSelect('landscape');
+    }
+  }, [session, status]);
+
   // Loading state
-  if (status === "loading" || !session) {
+  if (status === "loading" || !session || createProjectMutation.isPending) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-gray-500">Creating project...</div>
       </div>
     );
   }
 
+  // Error state
+  if (createProjectMutation.isError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500">Failed to create project. Please try again.</div>
+      </div>
+    );
+  }
+
+  // Default loading while redirecting
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-gray-500">Redirecting...</div>
+    </div>
+  );
+
+  /* TEMPORARILY DISABLED - Uncomment to re-enable format selection
   // Show format selector
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <FormatSelector onSelect={handleFormatSelect} />
     </div>
   );
+  */
 }

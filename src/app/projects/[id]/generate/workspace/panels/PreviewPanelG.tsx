@@ -11,7 +11,7 @@ import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
 import { api } from "~/trpc/react";
-import { PlaybackSpeedControl } from "~/components/ui/PlaybackSpeedControl";
+import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -673,9 +673,9 @@ export default function FallbackComposition() {
         console.log('[PreviewPanelG] Received speed change event:', speed);
         setPlaybackSpeed(speed);
         
-        // Save preference
+        // Save preference per project
         try {
-          localStorage.setItem('bazaar-playback-speed', speed.toString());
+          localStorage.setItem(`bazaar-playback-speed-${projectId}`, speed.toString());
         } catch (error) {
           console.warn('[PreviewPanelG] Failed to save playback speed preference:', error);
         }
@@ -686,27 +686,34 @@ export default function FallbackComposition() {
     return () => {
       window.removeEventListener('playback-speed-change', handleSpeedChange as EventListener);
     };
-  }, []);
+  }, [projectId]);
 
-  // Load saved playback speed preference on mount
+  // Load saved playback speed preference on mount (project-specific)
   useEffect(() => {
     try {
-      const savedSpeed = localStorage.getItem('bazaar-playback-speed');
+      const savedSpeed = localStorage.getItem(`bazaar-playback-speed-${projectId}`);
       if (savedSpeed) {
         const speed = parseFloat(savedSpeed);
         if (speed >= 0.1 && speed <= 4) {
           setPlaybackSpeed(speed);
-          console.log('[PreviewPanelG] Loaded saved playback speed:', speed);
+          console.log('[PreviewPanelG] Loaded saved playback speed for project:', projectId, speed);
           
           // Dispatch event to update header display
           const event = new CustomEvent('playback-speed-loaded', { detail: { speed } });
           window.dispatchEvent(event);
         }
+      } else {
+        // Reset to default speed when switching projects
+        setPlaybackSpeed(1);
+        const event = new CustomEvent('playback-speed-loaded', { detail: { speed: 1 } });
+        window.dispatchEvent(event);
       }
     } catch (error) {
       console.warn('[PreviewPanelG] Failed to load playback speed preference:', error);
+      // Reset to default on error
+      setPlaybackSpeed(1);
     }
-  }, []);
+  }, [projectId]);
 
   // Listen for loop state change events from header
   useEffect(() => {
@@ -716,9 +723,9 @@ export default function FallbackComposition() {
         console.log('[PreviewPanelG] Received loop state change:', state);
         setLoopState(state);
         
-        // Save preference
+        // Save preference per project
         try {
-          localStorage.setItem('bazaar-loop-state', state);
+          localStorage.setItem(`bazaar-loop-state-${projectId}`, state);
         } catch (error) {
           console.warn('[PreviewPanelG] Failed to save loop state preference:', error);
         }
@@ -729,24 +736,16 @@ export default function FallbackComposition() {
     return () => {
       window.removeEventListener('loop-state-change', handleLoopStateChange as EventListener);
     };
-  }, []);
+  }, [projectId]);
 
-  // Load saved loop preference on mount
+  // Load saved loop preference on mount (project-specific)
   useEffect(() => {
     try {
-      const savedState = localStorage.getItem('bazaar-loop-state');
+      const savedState = localStorage.getItem(`bazaar-loop-state-${projectId}`);
       let state: 'video' | 'off' | 'scene' = 'video'; // Default to video loop
       
       if (savedState === 'video' || savedState === 'off' || savedState === 'scene') {
         state = savedState;
-      } else {
-        // Check old boolean format for backwards compatibility
-        const oldSaved = localStorage.getItem('bazaar-loop-enabled');
-        if (oldSaved === 'false') {
-          state = 'off';
-        }
-        // Save the new format
-        localStorage.setItem('bazaar-loop-state', state);
       }
       
       setLoopState(state);
@@ -754,13 +753,13 @@ export default function FallbackComposition() {
       // Dispatch event to sync with header
       const event = new CustomEvent('loop-state-loaded', { detail: { state } });
       window.dispatchEvent(event);
-      console.log('[PreviewPanelG] Loop state initialized:', state);
+      console.log('[PreviewPanelG] Loop state initialized for project:', projectId, state);
     } catch (error) {
       console.warn('[PreviewPanelG] Failed to load loop preference:', error);
       // Even on error, ensure default video loop
       setLoopState('video');
     }
-  }, []);
+  }, [projectId]);
 
 
   // Player props

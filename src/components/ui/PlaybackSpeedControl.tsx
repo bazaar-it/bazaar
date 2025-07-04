@@ -12,7 +12,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { PlayIcon, CheckIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 
 interface PlaybackSpeedControlProps {
   currentSpeed: number;
@@ -85,7 +85,7 @@ export function PlaybackSpeedControl({
           className={`h-8 px-2 text-xs font-mono ${className}`}
           title="Playback Speed"
         >
-          <PlayIcon className="h-3 w-3 mr-1" />
+          <span className="mr-1">🐰</span>
           {currentSpeed}x
         </Button>
       </DropdownMenuTrigger>
