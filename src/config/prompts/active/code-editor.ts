@@ -24,6 +24,57 @@ export const CODE_EDITOR = {
 7. ONLY destructure from window.Remotion - NEVER from window.React or other globals
 8. Access React hooks directly: window.React.useState(), window.React.useEffect()
 9. Access icons directly: <window.IconifyIcon icon="..." />
+10. **ALWAYS include duration export - this is MANDATORY**
+11. **CRITICAL: Fix variable scoping - avoid "X is not defined" errors**
+
+📏 **DURATION EXPORT REQUIREMENT:**
+Every scene MUST include a duration export. Use one of these patterns:
+
+Pattern 1 - Direct export:
+\`\`\`
+export const durationInFrames = 180; // 6 seconds at 30fps
+\`\`\`
+
+Pattern 2 - Calculated from data arrays (CORRECT SCOPING):
+\`\`\`
+// CORRECT: Define data at TOP LEVEL (outside function)
+const script = [
+  { text: "Hello", frames: 60 },
+  { text: "World", frames: 90 }
+];
+
+export default function SceneName() {
+  // Function can access script from outer scope
+  return <AbsoluteFill>{/* ... */}</AbsoluteFill>;
+}
+
+// CORRECT: script is accessible here because it's at top level
+const totalFrames = script.reduce((s, i) => s + i.frames, 0);
+export const durationInFrames = totalFrames;
+\`\`\`
+
+🚨 **SCOPING ERROR PREVENTION:**
+NEVER do this (causes "script is not defined"):
+\`\`\`
+export default function SceneName() {
+  const script = [...]; // WRONG: defined inside function
+  return <div/>;
+}
+const totalFrames = script.reduce(...); // ERROR: script not accessible here
+\`\`\`
+
+ALWAYS do this (correct scoping):
+\`\`\`
+const script = [...]; // CORRECT: defined at top level
+
+export default function SceneName() {
+  // Function can access script
+  return <div/>;
+}
+
+const totalFrames = script.reduce(...); // CORRECT: script accessible here
+export const durationInFrames = totalFrames;
+\`\`\`
 
 🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
 - window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
@@ -36,29 +87,60 @@ export const CODE_EDITOR = {
 - window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
 - window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
 
-
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
+
+🏗️ **MANDATORY CODE STRUCTURE:**
+\`\`\`
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+
+// Data arrays MUST be at top level for proper scoping
+const script = [
+  { text: "Example", frames: 90 },
+  // ... more items
+];
+
+export default function SceneName() {
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  
+  // Animation calculations here
+  const someAnimation = interpolate(frame, [0, 60], [0, 1]);
+  
+  return (
+    <AbsoluteFill style={{ /* responsive styles */ }}>
+      {/* Scene content using script array */}
+    </AbsoluteFill>
+  );
+}
+
+// Duration calculation can access script because it's at top level
+const totalFrames = script.reduce((sum, item) => sum + item.frames, 0);
+export const durationInFrames = totalFrames; // Exact duration, no buffer
+\`\`\`
 
 📝 EDIT APPROACH:
 - For color changes: Update the specific color values only
 - For text changes: Replace the text content only
-- For animation changes: Adjust timing/easing as requested
+- For animation changes: Adjust timing/easing as requested AND update duration if needed
 - For structural changes: Reorganize while preserving functionality
 - For error fixes: Fix the issue with minimal changes
+- **For scoping fixes: Move data arrays to top level, outside functions**
 
 🎯 RESPONSE FORMAT (JSON):
 {
-  "code": "// Complete modified code here",
+  "code": "// Complete modified code with MANDATORY duration export and correct scoping",
   "reasoning": "Brief explanation of changes made",
-  "changes": ["Changed button color to red", "Updated text"],
-  "newDurationFrames": 180  // ONLY if animations now need more time
+  "changes": ["Changed button color to red", "Updated text", "Fixed scoping", "Adjusted duration to X frames"],
+  "newDurationFrames": 180  // Should match the exported durationInFrames exactly
 }
 
-⚡ IMPORTANT:
+⚡ CRITICAL FIXES:
 - Never change things not mentioned by the user
 - If fixing errors, explain what was wrong
-
-📏 DURATION: Only include "newDurationFrames" if animations extend beyond current duration (highest frame + 30)
+- **The duration export is NOT optional - include it every time**
+- **Duration should be EXACT - no arbitrary buffers or padding**
+- **Data arrays (script, timeline, etc.) MUST be at top level for scoping**
+- Make sure newDurationFrames matches your exported durationInFrames value exactly
 
 🖼️ VIEWPORT RULES:
 - Design content to fit any canvas size - use useVideoConfig() for dimensions
