@@ -547,6 +547,46 @@ export const useVideoState = create<VideoState>((set, get) => ({
       const project = state.projects[projectId];
       if (!project) return state;
       
+      // Check if this is a welcome project (only has one scene with "Welcome" in the name)
+      const isWelcomeProject = project.props.scenes.length === 1 && 
+        project.props.scenes[0]?.data?.name?.includes('Welcome');
+      
+      // If this is the first real scene being added to a welcome project, replace the welcome scene
+      if (isWelcomeProject) {
+        console.log('[VideoState.addScene] Replacing welcome scene with first real scene');
+        const newScene = {
+          id: scene.id,
+          type: 'custom' as const,
+          start: 0,
+          duration: scene.duration || 150,
+          data: {
+            code: scene.tsxCode,
+            name: scene.name || 'Generated Scene',
+            componentId: scene.id,
+            props: scene.props || {}
+          }
+        };
+        
+        return {
+          ...state,
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...project,
+              props: {
+                ...project.props,
+                meta: {
+                  ...project.props.meta,
+                  duration: newScene.duration
+                },
+                scenes: [newScene] // Replace welcome scene
+              }
+            }
+          }
+        };
+      }
+      
+      // Normal flow: add scene to existing scenes
       // Calculate the correct start position based on existing scenes' actual durations
       const currentTotalDuration = project.props.scenes.reduce((sum, s) => sum + (s.duration || 150), 0);
       

@@ -2,10 +2,10 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Slider } from "~/components/ui/slider";
 import { Button } from "~/components/ui/button";
-import { PlayIcon, RotateCcwIcon } from "lucide-react";
+import { PlayIcon } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -40,15 +40,11 @@ export function PlaybackSpeedSlider({
   }, [currentSpeed]);
   
   const handleSliderChange = (value: number[]) => {
-    const newSpeed = value[0];
+    const newSpeed = value[0] ?? currentSpeed;
     setSliderValue([newSpeed]);
     onSpeedChange(newSpeed);
   };
   
-  const handleReset = () => {
-    setSliderValue([1]);
-    onSpeedChange(1);
-  };
   
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -89,7 +85,7 @@ export function PlaybackSpeedSlider({
               <button
                 key={mark.value}
                 className={`cursor-pointer hover:text-foreground transition-colors ${
-                  Math.abs(sliderValue[0] - mark.value) < 0.05 ? 'text-foreground font-medium' : ''
+                  Math.abs((sliderValue[0] ?? currentSpeed) - mark.value) < 0.05 ? 'text-foreground font-medium' : ''
                 }`}
                 onClick={() => handleSliderChange([mark.value])}
               >
