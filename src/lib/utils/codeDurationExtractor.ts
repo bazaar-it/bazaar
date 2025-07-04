@@ -100,8 +100,8 @@ export function extractDurationFromCode(code: string): number {
     if (variableMatch && variableMatch[1]) {
       const variableName = variableMatch[1];
       
-      // Look for: const totalFrames = script.reduce((s,i) => s + i.frames, 0);
-      const calcRegex = new RegExp(`const\\s+${variableName}\\s*=\\s*script\\.reduce\\(\\([^)]+\\)\\s*=>\\s*[^,]+\\+[^,]+\\.frames,\\s*0\\);?`);
+      // Look for: const totalFrames = script_[ID].reduce((s,i) => s + i.frames, 0);
+      const calcRegex = new RegExp(`const\\s+${variableName}\\s*=\\s*script_\\w+\\.reduce\\(\\([^)]+\\)\\s*=>\\s*[^,]+\\+[^,]+\\.frames,\\s*0\\);?`);
       
       if (calcRegex.test(cleanCode)) {
         // Extract individual frame values from script array
