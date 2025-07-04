@@ -27,14 +27,26 @@ export const defaultDemoProps: z.infer<typeof DemoTimelineProps> = {
 };
 
 // Function to generate default project props with a welcome scene
-export function createDefaultProjectProps(): InputProps {
+export function createDefaultProjectProps(format: 'landscape' | 'portrait' | 'square' = 'landscape'): InputProps {
   const welcomeSceneId = uuidv4();
+  
+  // Define dimensions based on format
+  const formatDimensions = {
+    landscape: { width: 1920, height: 1080 },
+    portrait: { width: 1080, height: 1920 },
+    square: { width: 1080, height: 1080 }
+  };
+  
+  const { width, height } = formatDimensions[format];
   
   return {
     meta: { 
       duration: 300,
       title: "New Project",
-      backgroundColor: "#FFFFFF"
+      backgroundColor: "#FFFFFF",
+      format,
+      width,
+      height
     },
     scenes: [
       {

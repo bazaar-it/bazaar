@@ -51,7 +51,10 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       meta: {
         title: currentProps?.meta?.title || 'New Project',
         duration: currentStart,
-        backgroundColor: currentProps?.meta?.backgroundColor || '#000000'
+        backgroundColor: currentProps?.meta?.backgroundColor || '#000000',
+        format: currentProps?.meta?.format || 'landscape',
+        width: currentProps?.meta?.width || 1920,
+        height: currentProps?.meta?.height || 1080
       },
       scenes: convertedScenes
     };

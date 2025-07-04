@@ -12,24 +12,28 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { ExportOptionsModal, type ExportFormat, type ExportQuality } from "./ExportOptionsModal";
+import { generateCleanFilename } from "~/lib/utils/filename";
 
 interface ExportButtonProps {
   projectId: string;
+  projectTitle?: string;
   className?: string;
   size?: "default" | "sm" | "lg";
 }
 
-export function ExportButton({ projectId, className, size = "sm" }: ExportButtonProps) {
+export function ExportButton({ projectId, projectTitle = "video", className, size = "sm" }: ExportButtonProps) {
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [currentFormat, setCurrentFormat] = useState<ExportFormat>('mp4');
+  const [currentQuality, setCurrentQuality] = useState<ExportQuality>('high');
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
     onSuccess: (data) => {
       setRenderId(data.renderId);
-      toast.info("Export started! This may take a few minutes...");
+      toast.info("Render started! This may take a few minutes...");
     },
     onError: (error) => {
       toast.error(error.message);
@@ -60,27 +64,40 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
     if (status?.status === 'completed' && !hasDownloaded) {
       // Check if we have an output URL (Lambda) or need to download locally
       if (status.outputUrl) {
-        toast.success("Export complete! Click the download button to save your video.");
+        toast.success("Render complete! Starting download...");
         setHasDownloaded(true);
         setDownloadUrl(status.outputUrl);
         
-        // Try auto-download (might be blocked by browser)
-        const link = document.createElement('a');
-        link.href = status.outputUrl;
-        const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
-        link.download = `bazaar-vid-${projectId}.${extension}`;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // If auto-download fails, user can click the button
+        // Auto-download with improved approach
+        (async () => {
+          try {
+            if (!status.outputUrl) return;
+            
+            const response = await fetch(status.outputUrl);
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            const extension = status.outputUrl.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
+            // Use clean filename utility
+            link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up the blob URL after a short delay
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          } catch (error) {
+            console.log('[ExportButton] Auto-download failed, user can click button:', error);
+          }
+        })();
       } else {
         // Fallback for local render (if implemented later)
-        toast.success("Export complete!");
+        toast.success("Render complete!");
       }
     } else if (status?.status === 'failed') {
-      toast.error(`Export failed: ${status.error || 'Unknown error'}`);
+      toast.error(`Render failed: ${status.error || 'Unknown error'}`);
       setTimeout(() => {
         setRenderId(null);
         setHasDownloaded(false);
@@ -90,6 +107,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
 
   const handleExport = (format: ExportFormat, quality: ExportQuality) => {
     setShowExportModal(false);
+    setCurrentFormat(format);
+    setCurrentQuality(quality);
     startRender.mutate({ 
       projectId,
       format,
@@ -124,7 +143,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
             const link = document.createElement('a');
             link.href = blobUrl;
             const extension = url.match(/\.(mp4|gif|webm)$/)?.[1] || 'mp4';
-            link.download = `bazaar-vid-${projectId}.${extension}`;
+            // Use clean filename utility
+            link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -159,7 +179,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
           
           const link = document.createElement('a');
           link.href = blobUrl;
-          link.download = `bazaar-vid-${projectId}.${extension}`;
+          // Use clean filename utility
+          link.download = generateCleanFilename(projectTitle, currentQuality, extension as ExportFormat);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -168,9 +189,8 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
           toast.success("Download started!");
         } catch (error) {
           console.error('[ExportButton] All download methods failed:', error);
-          // Last resort: just open the URL
-          toast.error("Download failed. Opening video in new tab...");
-          window.open(url, '_blank');
+          // Show user-friendly error without redirect
+          toast.error("Download failed. Please try again or contact support.");
         }
       }
     };
@@ -196,7 +216,7 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
           }}
         >
           <Download className="mr-2 h-4 w-4" />
-          Export Again
+          Render Again
         </Button>
       </div>
     );
@@ -207,7 +227,7 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
     return (
       <Button variant="outline" disabled size={size} className={className}>
         <X className="mr-2 h-4 w-4 text-red-500" />
-        Export Failed
+        Render Failed
       </Button>
     );
   }
@@ -265,7 +285,7 @@ export function ExportButton({ projectId, className, size = "sm" }: ExportButton
         ) : (
           <>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            Render
           </>
         )}
       </Button>

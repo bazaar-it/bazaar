@@ -2,7 +2,7 @@
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports } from "~/server/db/schema";
-import { sql, and, gte, desc, count, eq, like, or, inArray, asc } from "drizzle-orm";
+import { sql, and, gte, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -187,6 +187,23 @@ export const adminRouter = createTRPCRouter({
         scenes30d,
         scenes7d,
         scenes24h,
+        promptsAll,
+        prompts30d,
+        prompts7d,
+        prompts24h,
+        // Previous periods
+        prevUsers30d,
+        prevUsers7d,
+        prevUsers24h,
+        prevProjects30d,
+        prevProjects7d,
+        prevProjects24h,
+        prevScenes30d,
+        prevScenes7d,
+        prevScenes24h,
+        prevPrompts30d,
+        prevPrompts7d,
+        prevPrompts24h,
         recentFeedback
       ] = await Promise.all([
         // Users - using createdAt for user registration tracking
@@ -225,6 +242,114 @@ export const adminRouter = createTRPCRouter({
         db.select({ count: count() }).from(scenes)
           .where(gte(scenes.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))),
 
+        // Prompts (user messages) - all timeframes
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(eq(messages.role, 'user')),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+          )),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+          )),
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 24 * 60 * 60 * 1000))
+          )),
+
+        // Previous periods for percentage change calculations
+        // Users - previous periods
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 30 days (days 31-60 ago)
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 7 days (days 8-14 ago)
+        db.select({ count: count() }).from(users)
+          .where(and(
+            gte(users.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${users.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`,
+            sql`${users.createdAt} IS NOT NULL`
+          )), // Previous 24 hours (24-48 hours ago)
+
+        // Projects - previous periods  
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() }).from(projects)
+          .where(and(
+            gte(projects.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${projects.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
+        // Scenes - previous periods
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() }).from(scenes)
+          .where(and(
+            gte(scenes.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${scenes.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
+        // Prompts - previous periods
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 30 days
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)}`
+          )), // Previous 7 days
+        db.select({ count: count() })
+          .from(messages)
+          .innerJoin(projects, eq(messages.projectId, projects.id))
+          .where(and(
+            eq(messages.role, 'user'),
+            gte(messages.createdAt, new Date(Date.now() - 48 * 60 * 60 * 1000)),
+            sql`${messages.createdAt} < ${new Date(Date.now() - 24 * 60 * 60 * 1000)}`
+          )), // Previous 24 hours
+
         // Recent feedback
         db.select({
           id: feedback.id,
@@ -244,18 +369,40 @@ export const adminRouter = createTRPCRouter({
           last30Days: totalUsers30d[0]?.count || 0,
           last7Days: totalUsers7d[0]?.count || 0,
           last24Hours: totalUsers24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevUsers30d[0]?.count || 0,
+          prev7Days: prevUsers7d[0]?.count || 0,
+          prev24Hours: prevUsers24h[0]?.count || 0,
         },
         projects: {
           all: projectsAll[0]?.count || 0,
           last30Days: projects30d[0]?.count || 0,
           last7Days: projects7d[0]?.count || 0,
           last24Hours: projects24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevProjects30d[0]?.count || 0,
+          prev7Days: prevProjects7d[0]?.count || 0,
+          prev24Hours: prevProjects24h[0]?.count || 0,
         },
         scenes: {
           all: scenesAll[0]?.count || 0,
           last30Days: scenes30d[0]?.count || 0,
           last7Days: scenes7d[0]?.count || 0,
           last24Hours: scenes24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevScenes30d[0]?.count || 0,
+          prev7Days: prevScenes7d[0]?.count || 0,
+          prev24Hours: prevScenes24h[0]?.count || 0,
+        },
+        prompts: {
+          all: promptsAll[0]?.count || 0,
+          last30Days: prompts30d[0]?.count || 0,
+          last7Days: prompts7d[0]?.count || 0,
+          last24Hours: prompts24h[0]?.count || 0,
+          // Previous periods for change calculation
+          prev30Days: prevPrompts30d[0]?.count || 0,
+          prev7Days: prevPrompts7d[0]?.count || 0,
+          prev24Hours: prevPrompts24h[0]?.count || 0,
         },
         recentFeedback
       };
@@ -2300,5 +2447,101 @@ export default function GeneratedScene() {
           hasMore: input.page < totalPages
         }
       };
+    }),
+
+  // Chat Export & Analysis
+  exportChatHistory: adminOnlyProcedure
+    .input(z.object({
+      startDate: z.date().nullable().optional(),
+      endDate: z.date().nullable().optional(),
+      format: z.enum(['json', 'csv', 'jsonl']),
+      includeUserInfo: z.boolean(),
+      anonymize: z.boolean(),
+      roleFilter: z.enum(['user', 'assistant', 'both']).optional().default('both'),
+      includeMetadata: z.boolean().optional().default(true),
+      includeIds: z.boolean().optional().default(true),
+    }))
+    .mutation(async ({ input }) => {
+      const { startDate, endDate, format, includeUserInfo, anonymize, roleFilter, includeMetadata, includeIds } = input;
+
+      // Build filter conditions
+      const conditions = [];
+      if (startDate) conditions.push(gte(messages.createdAt, startDate));
+      if (endDate) conditions.push(lte(messages.createdAt, endDate));
+      
+      // Add role filter
+      if (roleFilter && roleFilter !== 'both') {
+        conditions.push(eq(messages.role, roleFilter));
+      }
+
+      // Get all messages with project and user info
+      const rawMessages = await db
+        .select({
+          messageId: messages.id,
+          messageContent: messages.content,
+          messageRole: messages.role,
+          messageSequence: messages.sequence,
+          messageCreatedAt: messages.createdAt,
+          messageImageUrls: messages.imageUrls,
+          projectId: projects.id,
+          projectTitle: projects.title,
+          projectCreatedAt: projects.createdAt,
+          userId: users.id,
+          userName: users.name,
+          userEmail: users.email,
+          sceneCount: sql<number>`COUNT(DISTINCT ${scenes.id})`,
+        })
+        .from(messages)
+        .innerJoin(projects, eq(messages.projectId, projects.id))
+        .innerJoin(users, eq(projects.userId, users.id))
+        .leftJoin(scenes, eq(scenes.projectId, projects.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .groupBy(messages.id, projects.id, users.id)
+        .orderBy(projects.createdAt, messages.sequence);
+
+      // Get iteration metrics for enrichment
+      const projectIds = [...new Set(rawMessages.map(m => m.projectId))];
+      const iterationMetrics = await db
+        .select({
+          projectId: sceneIterations.projectId,
+          avgGenerationTime: sql<number>`AVG(${sceneIterations.generationTimeMs}) / 1000`, // Convert to seconds
+          totalIterations: count(),
+          editCount: sql<number>`COUNT(CASE WHEN ${sceneIterations.userEditedAgain} = true THEN 1 END)`,
+        })
+        .from(sceneIterations)
+        .where(inArray(sceneIterations.projectId, projectIds))
+        .groupBy(sceneIterations.projectId);
+
+      // Import helper functions
+      const { groupAndEnrichConversations, formatAsCSV, formatAsJSONL, formatAsJSON } = await import('~/server/api/routers/admin/chat-export-helpers');
+
+      // Process and group conversations
+      const conversations = groupAndEnrichConversations(
+        rawMessages,
+        iterationMetrics,
+        anonymize,
+        includeMetadata,
+        includeIds
+      );
+
+      // Format based on requested format
+      switch (format) {
+        case 'csv':
+          return formatAsCSV(conversations, includeUserInfo);
+        case 'jsonl':
+          return formatAsJSONL(conversations);
+        case 'json':
+        default:
+          return formatAsJSON(conversations);
+      }
+    }),
+
+  getChatAnalytics: adminOnlyProcedure
+    .input(z.object({
+      timeframe: z.enum(['24h', '7d', '30d', 'all'])
+    }))
+    .query(async ({ input }) => {
+      const { computeChatAnalytics } = await import('~/server/api/routers/admin/chat-analytics');
+      return await computeChatAnalytics(input.timeframe, db);
     }),
 });

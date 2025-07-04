@@ -2,12 +2,63 @@
 
 ## �� **Current Status: Production Ready with Export Feature**
 
-**Last Updated**: January 27, 2025  
-**Current Sprint**: Sprint 63 - Export Feature (AWS Lambda)
-**Previous Sprint**: Sprint 62 - Full Story
-**Next Focus**: AWS Lambda Setup & Testing
+**Last Updated**: January 3, 2025  
+**Current Sprint**: Sprint 66 - Chat Export Dashboard Fixes
+**Previous Sprint**: Sprint 65 - Render Improvements
+**Next Focus**: Production Testing & Deployment
 
-## 🚀 Sprint 63: Export Feature Implementation (Current - January 27, 2025)
+## 🚀 Sprint 66: Chat Export Dashboard Fixes (Current - January 3, 2025)
+
+### Chat Analytics & Export Enhancements
+- **Status**: Complete
+- **Goal**: Fix analytics dashboard showing zeros and add export filtering
+- **Branch**: `fix-render-icons-avatars`
+
+### Completed Fixes:
+- ✅ Fixed analytics dashboard showing 0 conversations (missing table join)
+- ✅ Added role filtering (user/assistant/both messages)
+- ✅ Added metadata inclusion toggle
+- ✅ Added ID inclusion toggle for privacy
+- ✅ Updated UI with better organization
+- ✅ Maintained backwards compatibility
+
+### Technical Solution:
+- **Analytics Fix**: Added proper joins with projects table
+- **Export Options**: Enhanced filtering for granular control
+- **CSV Export**: Dynamic field inclusion based on options
+
+### Documentation:
+- `/memory-bank/sprints/sprint66_chat_export_fixes/chat-export-fixes.md`
+
+## 🚀 Sprint 65: Render/Export Improvements (Completed - January 1, 2025)
+
+### Enhanced Rendering Experience
+- **Status**: Complete and Ready for Testing
+- **Goal**: Improve video rendering UX based on user feedback
+- **Branch**: `fix-render-icons-avatars`
+
+### Completed Improvements:
+- ✅ Resolution labels (1080p/720p/480p instead of high/medium/low)
+- ✅ Auto-download when render completes
+- ✅ Changed "Export" to "Render" terminology
+- ✅ Fixed download redirect issues
+- ✅ Improved filename format (video-YYYY-MM-DD-xxxxx.mp4)
+- ✅ Dynamic icon rendering with @iconify/utils
+- ✅ Fixed avatar URLs for Lambda rendering
+- ✅ Actual resolution changes based on quality settings
+
+### Technical Highlights:
+- **Icon Solution**: Server-side SVG fetching for all 200k+ Iconify icons
+- **Avatar Fix**: URL replacement to R2 storage paths
+- **Performance**: No impact on render time (preprocessing phase)
+- **User Experience**: Clean filenames, auto-download, proper expectations
+
+### Documentation:
+- `/memory-bank/sprints/sprint65_render_improvements/render-improvements-summary.md`
+- `/memory-bank/sprints/sprint65_render_improvements/icon-rendering-deep-dive.md`
+- `/memory-bank/sprints/sprint65_render_improvements/TODO.md`
+
+## 🚀 Sprint 63: Export Feature Implementation (Completed - December 2024)
 
 ### Video Export with AWS Lambda
 - **Status**: Implementation Complete, AWS Setup Pending

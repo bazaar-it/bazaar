@@ -1,7 +1,7 @@
 // src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
@@ -11,6 +11,7 @@ import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
 import { api } from "~/trpc/react";
+import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -24,10 +25,12 @@ function ErrorFallback({ error }: { error: Error }) {
 
 export function PreviewPanelG({ 
   projectId, 
-  initial 
+  initial,
+  selectedSceneId 
 }: { 
   projectId: string;
   initial?: InputProps;
+  selectedSceneId?: string | null;
 }) {
   // ✅ FIXED: Use separate selectors to prevent infinite loops
   const currentProps = useVideoState((state) => {
@@ -45,8 +48,38 @@ export function PreviewPanelG({
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
   
+  // Playback speed state
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const playerRef = useRef<PlayerRef>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  
+  // Loop state - using the three-state system
+  const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
+  
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
+  
+  // Calculate scene boundaries for scene loop functionality
+  const sceneRanges = useMemo(() => {
+    let start = 0;
+    return scenes.map(scene => {
+      const duration = scene.duration || 150;
+      const range = { 
+        id: scene.id,
+        start, 
+        end: start + duration - 1, // -1 because frames are 0-indexed
+        duration 
+      };
+      start += duration;
+      return range;
+    });
+  }, [scenes]);
+  
+  // Find the selected scene range
+  const selectedSceneRange = useMemo(() => {
+    if (!selectedSceneId) return null;
+    return sceneRanges.find(range => range.id === selectedSceneId);
+  }, [selectedSceneId, sceneRanges]);
 
   // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
@@ -632,6 +665,103 @@ export default function FallbackComposition() {
     }
   }, [compileMultiSceneComposition]);
 
+  // Listen for playback speed change events from header
+  useEffect(() => {
+    const handleSpeedChange = (event: CustomEvent) => {
+      const speed = event.detail?.speed;
+      if (typeof speed === 'number' && speed >= 0.1 && speed <= 4) {
+        console.log('[PreviewPanelG] Received speed change event:', speed);
+        setPlaybackSpeed(speed);
+        
+        // Save preference per project
+        try {
+          localStorage.setItem(`bazaar-playback-speed-${projectId}`, speed.toString());
+        } catch (error) {
+          console.warn('[PreviewPanelG] Failed to save playback speed preference:', error);
+        }
+      }
+    };
+
+    window.addEventListener('playback-speed-change', handleSpeedChange as EventListener);
+    return () => {
+      window.removeEventListener('playback-speed-change', handleSpeedChange as EventListener);
+    };
+  }, [projectId]);
+
+  // Load saved playback speed preference on mount (project-specific)
+  useEffect(() => {
+    try {
+      const savedSpeed = localStorage.getItem(`bazaar-playback-speed-${projectId}`);
+      if (savedSpeed) {
+        const speed = parseFloat(savedSpeed);
+        if (speed >= 0.1 && speed <= 4) {
+          setPlaybackSpeed(speed);
+          console.log('[PreviewPanelG] Loaded saved playback speed for project:', projectId, speed);
+          
+          // Dispatch event to update header display
+          const event = new CustomEvent('playback-speed-loaded', { detail: { speed } });
+          window.dispatchEvent(event);
+        }
+      } else {
+        // Reset to default speed when switching projects
+        setPlaybackSpeed(1);
+        const event = new CustomEvent('playback-speed-loaded', { detail: { speed: 1 } });
+        window.dispatchEvent(event);
+      }
+    } catch (error) {
+      console.warn('[PreviewPanelG] Failed to load playback speed preference:', error);
+      // Reset to default on error
+      setPlaybackSpeed(1);
+    }
+  }, [projectId]);
+
+  // Listen for loop state change events from header
+  useEffect(() => {
+    const handleLoopStateChange = (event: CustomEvent) => {
+      const state = event.detail?.state;
+      if (state === 'video' || state === 'off' || state === 'scene') {
+        console.log('[PreviewPanelG] Received loop state change:', state);
+        setLoopState(state);
+        
+        // Save preference per project
+        try {
+          localStorage.setItem(`bazaar-loop-state-${projectId}`, state);
+        } catch (error) {
+          console.warn('[PreviewPanelG] Failed to save loop state preference:', error);
+        }
+      }
+    };
+
+    window.addEventListener('loop-state-change', handleLoopStateChange as EventListener);
+    return () => {
+      window.removeEventListener('loop-state-change', handleLoopStateChange as EventListener);
+    };
+  }, [projectId]);
+
+  // Load saved loop preference on mount (project-specific)
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem(`bazaar-loop-state-${projectId}`);
+      let state: 'video' | 'off' | 'scene' = 'video'; // Default to video loop
+      
+      if (savedState === 'video' || savedState === 'off' || savedState === 'scene') {
+        state = savedState;
+      }
+      
+      setLoopState(state);
+      
+      // Dispatch event to sync with header
+      const event = new CustomEvent('loop-state-loaded', { detail: { state } });
+      window.dispatchEvent(event);
+      console.log('[PreviewPanelG] Loop state initialized for project:', projectId, state);
+    } catch (error) {
+      console.warn('[PreviewPanelG] Failed to load loop preference:', error);
+      // Even on error, ensure default video loop
+      setLoopState('video');
+    }
+  }, [projectId]);
+
+
   // Player props
   const playerProps = useMemo(() => {
     if (!scenes.length) return null;
@@ -639,14 +769,30 @@ export default function FallbackComposition() {
     // Calculate total duration of all scenes for proper multi-scene playback
     const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
     
+    // Get format dimensions from project props, fallback to landscape
+    const width = currentProps?.meta?.width || 1920;
+    const height = currentProps?.meta?.height || 1080;
+    const format = currentProps?.meta?.format || 'landscape';
+    
     return {
       fps: 30,
-      width: 1920,
-      height: 1080,
+      width,
+      height,
+      format,
       durationInFrames: totalDuration, // Use total duration, not just last scene
       inputProps: {}
     };
-  }, [scenes]);
+  }, [scenes, currentProps?.meta]);
+  
+  // Get format icon
+  const formatIcon = useMemo(() => {
+    const format = currentProps?.meta?.format || 'landscape';
+    switch (format) {
+      case 'portrait': return '📱';
+      case 'square': return '□';
+      default: return '🖥️';
+    }
+  }, [currentProps?.meta?.format]);
 
   return (
     <div className="h-full flex flex-col bg-white relative overflow-hidden">
@@ -658,19 +804,36 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow bg-white">
+      <div className="relative flex-grow bg-gray-100 flex items-center justify-center">
         {componentImporter && playerProps ? (
-          <ErrorBoundary FallbackComponent={ErrorFallback}>
-            <RemotionPreview
-              lazyComponent={componentImporter}
-              durationInFrames={playerProps.durationInFrames}
-              fps={playerProps.fps}
-              width={playerProps.width}
-              height={playerProps.height}
-              inputProps={playerProps.inputProps}
-              refreshToken={refreshToken}
-            />
-          </ErrorBoundary>
+          <div 
+            className="relative bg-black shadow-xl"
+            style={{
+              // Maintain aspect ratio while fitting within container
+              maxWidth: '100%',
+              maxHeight: '100%',
+              aspectRatio: `${playerProps.width} / ${playerProps.height}`,
+              width: playerProps.format === 'portrait' ? 'auto' : '100%',
+              height: playerProps.format === 'portrait' ? '100%' : 'auto',
+            }}
+          >
+            <ErrorBoundary FallbackComponent={ErrorFallback}>
+              <RemotionPreview
+                lazyComponent={componentImporter}
+                durationInFrames={playerProps.durationInFrames}
+                fps={playerProps.fps}
+                width={playerProps.width}
+                height={playerProps.height}
+                inputProps={playerProps.inputProps}
+                refreshToken={refreshToken}
+                playerRef={playerRef}
+                playbackRate={playbackSpeed}
+                loop={loopState !== 'off'}
+                inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
+                outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
+              />
+            </ErrorBoundary>
+          </div>
         ) : componentError ? (
           <div className="flex items-center justify-center h-full p-4">
             <ErrorFallback error={componentError} />

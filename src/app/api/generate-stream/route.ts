@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { auth } from '~/server/auth';
 import { db } from '~/server/db';
-import { messages } from '~/server/db/schema';
+import { messages, projects } from '~/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { messageService } from '~/server/services/data/message.service';
+import { generateTitle } from '~/server/services/ai/titleGenerator.service';
 
 // SSE helper to format messages
 function formatSSE(data: any): string {
@@ -55,8 +56,79 @@ export async function GET(request: NextRequest) {
       if (!userMsg) {
         throw new Error('Failed to create user message');
       }
+
+      // 2. Check if this is the first user message and generate title if needed
+      try {
+        const existingMessages = await db.query.messages.findMany({
+          where: eq(messages.projectId, projectId),
+          orderBy: [desc(messages.sequence)],
+          limit: 5, // Check a few messages to be sure
+        });
+
+        // Check if this is the first user message (only this message exists, or only welcome/assistant messages before)
+        const userMessages = existingMessages.filter(msg => msg.role === 'user');
+        const isFirstUserMessage = userMessages.length === 1 && userMessages[0]?.id === userMsg.id;
+
+        if (isFirstUserMessage) {
+          console.log('[SSE] First user message detected, generating title...');
+          
+          // Generate title based on the user's first message
+          const titleResult = await generateTitle({
+            prompt: userMessage,
+            contextId: projectId,
+          });
+
+          let finalTitle = titleResult.title;
+          
+          // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
+          if (finalTitle === "Untitled Video") {
+            // Get all user's projects with "Untitled Video" pattern to find next number
+            const userProjects = await db.query.projects.findMany({
+              columns: { title: true },
+              where: eq(projects.userId, userId), // Use the authenticated userId
+            });
+            
+            // Find the highest number used in "Untitled Video X" titles
+            let highestNumber = 0;
+            const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+            
+            for (const project of untitledProjects) {
+              const match = /^Untitled Video (\d+)$/.exec(project.title);
+              if (match?.[1]) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > highestNumber) {
+                  highestNumber = num;
+                }
+              }
+            }
+            
+            // Generate proper numbered fallback
+            finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
+          }
+
+          // Update the project title
+          await db.update(projects)
+            .set({ 
+              title: finalTitle,
+              updatedAt: new Date(),
+            })
+            .where(eq(projects.id, projectId));
+
+          console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
+          
+          // ✅ NEW: Send title update to client so it can invalidate queries
+          await writer.write(encoder.encode(formatSSE({
+            type: 'title_updated',
+            title: finalTitle,
+            projectId: projectId
+          })));
+        }
+      } catch (titleError) {
+        // Don't fail the whole request if title generation fails
+        console.error('[SSE] Title generation failed:', titleError);
+      }
       
-      // 2. Just send the user data back - no assistant message yet
+      // 3. Just send the user data back - no assistant message yet
       await writer.write(encoder.encode(formatSSE({
         type: 'ready',
         userMessageId: userMsg.id,

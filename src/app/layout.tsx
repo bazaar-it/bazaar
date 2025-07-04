@@ -18,7 +18,7 @@ function getStructuredData() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": siteConfig.name,
-    "description": "AI-powered motion graphics generator that transforms your ideas into professional videos in minutes.",
+    "description": "AI-powered motion graphics generator that transforms your ideas into videos in seconds.",
     "url": siteConfig.url,
     "potentialAction": {
       "@type": "SearchAction",
@@ -34,8 +34,8 @@ function getStructuredData() {
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `${siteConfig.name} | AI Motion Graphics Generator`,
-    template: `%s | ${siteConfig.name}`,
+    default: `Bazaar | AI Motion Graphics Generator`,
+    template: `%s | Bazaar`,
   },
   description: "Create stunning motion graphics with AI. Transform your ideas into professional videos in minutes with Bazaar's AI-powered video generation platform.",
   keywords: [
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
   ],
   creator: "Bazaar",
   openGraph: {
-    title: `${siteConfig.name} | AI Motion Graphics Generator`,
+    title: `Bazaar | AI Motion Graphics Generator`,
     description: "Create stunning motion graphics with AI. Transform your ideas into professional videos in minutes.",
     url: siteConfig.url,
     siteName: siteConfig.name,
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteConfig.name} | AI Motion Graphics Generator`,
+    title: `Bazaar | AI Motion Graphics Generator`,
     description: "Create stunning motion graphics with AI. No design skills needed.",
     creator: "@bazaar",
     images: [`${siteConfig.url}/og-image.png`],

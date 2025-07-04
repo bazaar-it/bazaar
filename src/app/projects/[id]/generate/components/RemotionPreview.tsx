@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useMemo, Suspense } from 'react';
-import { Player } from '@remotion/player';
+import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component to display when component loading fails
@@ -28,6 +28,11 @@ export interface RemotionPreviewProps {
   height: number;
   refreshToken?: string;
   inputProps?: Record<string, any>;
+  playerRef?: React.RefObject<PlayerRef | null>;
+  playbackRate?: number;
+  loop?: boolean;
+  inFrame?: number;
+  outFrame?: number;
 }
 
 // The main preview component that wraps Remotion Player
@@ -38,13 +43,18 @@ export default function RemotionPreview({
   width,
   height,
   refreshToken = '',
-  inputProps = {}
+  inputProps = {},
+  playerRef,
+  playbackRate = 1,
+  loop = true,
+  inFrame,
+  outFrame
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
     console.log('RemotionPreview rendering with refreshToken:', refreshToken);
-    console.log('RemotionPreview props:', { durationInFrames, fps, width, height });
-  }, [durationInFrames, fps, width, height, refreshToken]);
+    console.log('RemotionPreview props:', { durationInFrames, fps, width, height, playbackRate });
+  }, [durationInFrames, fps, width, height, refreshToken, playbackRate]);
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -54,6 +64,7 @@ export default function RemotionPreview({
         </div>
       }>
         <Player
+          ref={playerRef}
           lazyComponent={lazyComponent}
           inputProps={inputProps}
           durationInFrames={durationInFrames}
@@ -69,8 +80,11 @@ export default function RemotionPreview({
           showVolumeControls
           doubleClickToFullscreen
           clickToPlay
-          loop={true}
+          loop={loop}
           autoPlay={true}
+          playbackRate={playbackRate}
+          inFrame={inFrame}
+          outFrame={outFrame}
           key={refreshToken} // Force remount when refreshToken changes
           acknowledgeRemotionLicense
         />

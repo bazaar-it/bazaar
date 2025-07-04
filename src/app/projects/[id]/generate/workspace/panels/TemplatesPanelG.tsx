@@ -170,7 +170,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     onSuccess: async (result) => {
       setLoadingTemplateId(null);
       if (result.success && result.scene) {
-        toast.success(`${result.message}`);
+        // Only show toast if there's a message
+        if (result.message?.trim()) {
+          toast.success(`${result.message}`);
+        }
         console.log('[TemplatesPanelG] Template added successfully:', result.scene);
         
         // 🚨 CRITICAL: Update video state directly for immediate UI update

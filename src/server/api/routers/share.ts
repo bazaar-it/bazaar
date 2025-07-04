@@ -167,6 +167,9 @@ export const shareRouter = createTRPCRouter({
           title: sharedVideo.title || sharedVideo.project.title || "Untitled Video",
           duration: currentStart, // Total duration of all scenes
           backgroundColor: (sharedVideo.project.props as InputProps)?.meta?.backgroundColor || '#000000',
+          format: (sharedVideo.project.props as InputProps)?.meta?.format || 'landscape',
+          width: (sharedVideo.project.props as InputProps)?.meta?.width || 1920,
+          height: (sharedVideo.project.props as InputProps)?.meta?.height || 1080,
         },
         scenes: formattedScenes,
       };

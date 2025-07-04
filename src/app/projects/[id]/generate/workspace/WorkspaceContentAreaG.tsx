@@ -20,6 +20,8 @@ import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
+import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
+import { LoopToggle, type LoopState } from "~/components/ui/LoopToggle";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -60,13 +62,20 @@ export interface WorkspaceContentAreaGHandle {
 }
 
 // Sortable panel wrapper
-function SortablePanelG({ id, children, style, className, onRemove, projectId }: { 
+function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setCurrentPlaybackSpeed, currentLoopState, setCurrentLoopState, selectedSceneId, onSceneSelect, scenes }: { 
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties; 
   className?: string;
   onRemove?: () => void;
   projectId?: string;
+  currentPlaybackSpeed?: number;
+  setCurrentPlaybackSpeed?: (speed: number) => void;
+  currentLoopState?: LoopState;
+  setCurrentLoopState?: (state: LoopState) => void;
+  selectedSceneId?: string | null;
+  onSceneSelect?: (sceneId: string) => void;
+  scenes?: any[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   
@@ -89,18 +98,6 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId }:
   const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
   
-  const handlePreviewRefresh = () => {
-    try {
-      const previewPanel = document.querySelector('#preview-panel-container-g');
-      const refreshButton = previewPanel?.querySelector('#refresh-preview-button-g');
-      if (refreshButton instanceof HTMLButtonElement) {
-        refreshButton.click();
-      }
-    } catch (error) {
-      console.error('Error refreshing preview:', error);
-    }
-  };
-  
   return (
     <div
       ref={setNodeRef}
@@ -109,27 +106,41 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId }:
     >
       {!isCodePanel && (
         <div 
-          className={`flex items-center justify-between px-3 py-2 border-b ${isDragging ? 'bg-blue-50' : 'bg-gray-50'} cursor-move`}
-          {...attributes}
-          {...listeners}
+          className={`flex items-center justify-between px-3 py-2 border-b ${isDragging ? 'bg-blue-50' : 'bg-gray-50'}`}
         >
-          <span className="font-medium text-sm">{panelTitle}</span>
+          <span 
+            className="font-medium text-sm cursor-move flex-1"
+            {...attributes}
+            {...listeners}
+          >{panelTitle}</span>
           <div className="flex items-center gap-1">
             {isPreviewPanel && (
               <>
-                <button
-                  onClick={handlePreviewRefresh}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
-                  aria-label="Refresh preview"
-                  title="Refresh preview"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-                {projectId && (
-                  <div className="mx-1">
-                    <ExportButton projectId={projectId} size="sm" />
-                  </div>
-                )}
+                <LoopToggle
+                  loopState={currentLoopState || 'video'}
+                  onStateChange={(state) => {
+                    console.log('[WorkspaceContentAreaG] Loop state changed:', state);
+                    setCurrentLoopState?.(state);
+                    // Dispatch event to PreviewPanelG
+                    const event = new CustomEvent('loop-state-change', { detail: { state } });
+                    window.dispatchEvent(event);
+                  }}
+                  selectedSceneId={selectedSceneId}
+                  onSceneSelect={(sceneId) => {
+                    console.log('[WorkspaceContentAreaG] Scene selected for loop:', sceneId);
+                    onSceneSelect?.(sceneId);
+                  }}
+                  scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
+                />
+                <PlaybackSpeedSlider
+                  currentSpeed={currentPlaybackSpeed || 1}
+                  onSpeedChange={(speed) => {
+                    setCurrentPlaybackSpeed?.(speed);
+                    // Dispatch event to PreviewPanelG
+                    const event = new CustomEvent('playback-speed-change', { detail: { speed } });
+                    window.dispatchEvent(event);
+                  }}
+                />
               </>
             )}
             <button 
@@ -298,6 +309,38 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       { id: 'chat', type: 'chat' },
       { id: 'preview', type: 'preview' },
     ]);
+    
+    // Playback speed state for preview panel header
+    const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(1);
+    
+    // Loop state for preview panel header - always default to 'video'
+    // The actual project-specific state will be loaded by PreviewPanelG
+    const [currentLoopState, setCurrentLoopState] = useState<LoopState>('video');
+    
+    // Listen for playback speed loaded from PreviewPanelG
+    useEffect(() => {
+      const handleSpeedLoaded = (event: CustomEvent) => {
+        const speed = event.detail?.speed;
+        if (typeof speed === 'number') {
+          setCurrentPlaybackSpeed(speed);
+        }
+      };
+      
+      const handleLoopLoaded = (event: CustomEvent) => {
+        const state = event.detail?.state;
+        if (state === 'video' || state === 'off' || state === 'scene') {
+          setCurrentLoopState(state);
+        }
+      };
+
+      window.addEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
+      window.addEventListener('loop-state-loaded', handleLoopLoaded as EventListener);
+      return () => {
+        window.removeEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
+        window.removeEventListener('loop-state-loaded', handleLoopLoaded as EventListener);
+      };
+    }, []);
+    
     
     // Scene selection state - shared between Storyboard and Code panels
     const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -474,31 +517,31 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Callback for handling new scene generation with validation
     const handleSceneGenerated = useCallback(async (sceneId: string) => {
       console.log('[WorkspaceContentAreaG] 🎉 NEW SCENE GENERATED! Scene ID:', sceneId);
-      console.log('[WorkspaceContentAreaG] Starting scene refresh pipeline...');
+      
+      // 🚨 FIX DOUBLE REFRESH: Check if scene already exists in state
+      const currentProps = getCurrentProps();
+      const existingScene = currentProps?.scenes?.find((s: any) => s.id === sceneId);
+      
+      if (existingScene) {
+        console.log('[WorkspaceContentAreaG] ✅ Scene already in state (added optimistically), skipping DB fetch');
+        // Just select the scene, don't refetch or update state again
+        setSelectedSceneId(sceneId);
+        return;
+      }
+      
+      // Only fetch from DB if scene is genuinely missing (edge case)
+      console.log('[WorkspaceContentAreaG] ⚠️ Scene not found in state, fetching from database...');
       
       try {
         // ✅ FETCH: Get updated scenes from database  
-        console.log('[WorkspaceContentAreaG] Fetching updated scenes from database...');
         const scenesResult = await getProjectScenesQuery.refetch();
         
         if (scenesResult.data) {
           console.log('[WorkspaceContentAreaG] ✅ Fetched', scenesResult.data.length, 'scenes from database');
-          console.log('[WorkspaceContentAreaG] Scene details:', scenesResult.data.map(s => ({ id: s.id, name: s.name })));
           
           // ✅ CONVERT: Database scenes to InputProps format
           const updatedProps = convertDbScenesToInputProps(scenesResult.data);
           console.log('[WorkspaceContentAreaG] ✅ Converted to InputProps format:', updatedProps.scenes.length, 'scenes');
-          console.log('[WorkspaceContentAreaG] Total video duration:', updatedProps.meta.duration, 'frames');
-          
-          // Log to verify welcome scene removal
-          const currentProps = getCurrentProps();
-          const hadWelcomeScene = currentProps?.scenes?.some((s: any) => s.type === 'welcome' || s.data?.isWelcomeScene);
-          console.log('[WorkspaceContentAreaG] 🎯 Welcome scene check:', {
-            hadWelcomeScene,
-            oldSceneCount: currentProps?.scenes?.length || 0,
-            newSceneCount: updatedProps.scenes.length,
-            replacing: hadWelcomeScene ? 'YES - Welcome scene will be removed' : 'NO - No welcome scene found'
-          });
           
           // 🚨 CRITICAL FIX: Use updateAndRefresh instead of replace for guaranteed UI updates
           console.log('[WorkspaceContentAreaG] 🚀 Using updateAndRefresh for guaranteed state sync...');
@@ -515,7 +558,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         console.error('[WorkspaceContentAreaG] ❌ CRITICAL ERROR in scene generation handling:', error);
         toast.error('Critical error handling scene generation - please refresh the page');
       }
-    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, updateAndRefresh]);
+    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, updateAndRefresh, getCurrentProps]);
 
     // 🚨 REMOVED: Redundant initialization logic
     // GenerateWorkspaceRoot already handles project initialization
@@ -671,7 +714,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'preview':
           return (
             <div id="preview-panel-container-g" className="h-full">
-              <PreviewPanelG projectId={projectId} initial={initialProps} />
+              <PreviewPanelG 
+                projectId={projectId} 
+                initial={initialProps} 
+                selectedSceneId={selectedSceneId}
+              />
             </div>
           );
         case 'code':
@@ -761,6 +808,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                         <SortablePanelG 
                           id={panel?.id || `panel-${idx}`}
                           onRemove={() => panel?.id ? removePanel(panel.id) : null}
+                          projectId={projectId}
+                          currentPlaybackSpeed={currentPlaybackSpeed}
+                          setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
+                          currentLoopState={currentLoopState}
+                          setCurrentLoopState={setCurrentLoopState}
+                          selectedSceneId={selectedSceneId}
+                          onSceneSelect={setSelectedSceneId}
+                          scenes={getCurrentProps()?.scenes || []}
                         >
                           {renderPanelContent(panel)}
                         </SortablePanelG>

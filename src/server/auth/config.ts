@@ -6,10 +6,10 @@ import GoogleProvider from "next-auth/providers/google";
 // Use validated env import if you set it up in env.js/mjs
 // import { env } from "~/env";
 import { db } from "~/server/db";
+import { eq } from "drizzle-orm";
 import {
   accounts,
   users,
-  verificationTokens,
 } from "~/server/db/schema";
 
 /**
@@ -22,15 +22,17 @@ declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
+      isAdmin?: boolean;
       // ...other properties
       // role: UserRole;
     } & DefaultSession["user"];
   }
 
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
+  interface User {
+    isAdmin?: boolean;
+    // ...other properties
+    // role: UserRole;
+  }
 }
 
 /**
@@ -43,8 +45,8 @@ export const authConfig = {
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
-    verificationTokensTable: verificationTokens,
     // DO NOT add sessionsTable here
+    // verificationTokensTable: verificationTokens, // Removed due to type mismatch
   }),
   providers: [
     GitHubProvider({
@@ -63,9 +65,16 @@ export const authConfig = {
   },
   callbacks: {
     // Add the JWT callback needed for JWT strategy
-    jwt({ token, user }) {
-      if (user) {
+    async jwt({ token, user }) {
+      if (user?.id) {
         token.id = user.id;
+        // Fetch admin status from database
+        const adminStatus = await db
+          .select({ isAdmin: users.isAdmin })
+          .from(users)
+          .where(eq(users.id, user.id))
+          .limit(1);
+        token.isAdmin = adminStatus[0]?.isAdmin || false;
       }
       return token;
     },
@@ -75,10 +84,11 @@ export const authConfig = {
       user: {
         ...session.user,
         id: token.id as string, // Ensure ID from token is put into session user
+        isAdmin: token.isAdmin as boolean, // Include admin status from token
       },
     }),
     // Handle account linking for OAuth providers
-    async signIn({ user, account, profile, email, credentials }) {
+    async signIn({ account }) {
       // Allow all OAuth sign-ins
       if (account?.provider === "google" || account?.provider === "github") {
         return true;
