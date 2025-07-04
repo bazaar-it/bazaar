@@ -20,7 +20,7 @@ import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
-import { PlaybackSpeedControl } from "~/components/ui/PlaybackSpeedControl";
+import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { LoopToggle, type LoopState } from "~/components/ui/LoopToggle";
 
 // Panel definitions for BAZAAR-304 workspace
@@ -98,18 +98,6 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
   
-  const handlePreviewRefresh = () => {
-    try {
-      const previewPanel = document.querySelector('#preview-panel-container-g');
-      const refreshButton = previewPanel?.querySelector('#refresh-preview-button-g');
-      if (refreshButton instanceof HTMLButtonElement) {
-        refreshButton.click();
-      }
-    } catch (error) {
-      console.error('Error refreshing preview:', error);
-    }
-  };
-  
   return (
     <div
       ref={setNodeRef}
@@ -144,7 +132,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                   }}
                   scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
                 />
-                <PlaybackSpeedControl
+                <PlaybackSpeedSlider
                   currentSpeed={currentPlaybackSpeed || 1}
                   onSpeedChange={(speed) => {
                     setCurrentPlaybackSpeed?.(speed);
@@ -153,14 +141,6 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                     window.dispatchEvent(event);
                   }}
                 />
-                <button
-                  onClick={handlePreviewRefresh}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
-                  aria-label="Refresh preview"
-                  title="Refresh preview"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
               </>
             )}
             <button 
@@ -333,22 +313,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Playback speed state for preview panel header
     const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(1);
     
-    // Loop state for preview panel header - initialize from localStorage
-    const [currentLoopState, setCurrentLoopState] = useState<LoopState>(() => {
-      if (typeof window !== 'undefined') {
-        try {
-          const saved = localStorage.getItem('bazaar-loop-state');
-          if (saved === 'off' || saved === 'scene') return saved;
-          // Backwards compatibility: check old boolean state
-          const oldSaved = localStorage.getItem('bazaar-loop-enabled');
-          if (oldSaved === 'false') return 'off';
-          return 'video'; // Default to video loop
-        } catch {
-          return 'video';
-        }
-      }
-      return 'video';
-    });
+    // Loop state for preview panel header - always default to 'video'
+    // The actual project-specific state will be loaded by PreviewPanelG
+    const [currentLoopState, setCurrentLoopState] = useState<LoopState>('video');
     
     // Listen for playback speed loaded from PreviewPanelG
     useEffect(() => {

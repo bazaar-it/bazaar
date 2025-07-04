@@ -65,9 +65,9 @@ export function LoopToggle({
         )}
         onClick={handleToggleClick}
         title={
-          loopState === 'video' ? "Looping entire video - Click to turn off" : 
-          loopState === 'off' ? "Loop disabled - Click to loop scene" : 
-          "Looping single scene - Click to loop video"
+          loopState === 'video' ? "Loop video" : 
+          loopState === 'off' ? "Loop off" : 
+          "Loop scene"
         }
       >
         {loopState === 'scene' ? (
