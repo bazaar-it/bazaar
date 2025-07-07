@@ -15,6 +15,7 @@ type MobilePanel = 'chat' | 'templates' | 'myprojects' | 'newproject';
 
 interface MobileWorkspaceLayoutProps {
   projectId: string;
+  userId?: string;
   initialProps: InputProps;
   projects?: { id: string; name: string }[];
   onProjectRename?: (newTitle: string) => void;
@@ -22,6 +23,7 @@ interface MobileWorkspaceLayoutProps {
 
 export function MobileWorkspaceLayout({
   projectId,
+  userId,
   initialProps,
   projects = [],
   onProjectRename
@@ -67,6 +69,7 @@ export function MobileWorkspaceLayout({
         return (
           <ChatPanelG
             projectId={projectId}
+            userId={userId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
           />

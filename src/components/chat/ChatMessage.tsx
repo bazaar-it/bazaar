@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Undo2, AlertCircle } from 'lucide-react';
+import { Undo2, AlertCircle, Play } from 'lucide-react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
 import { api } from '~/trpc/react';
+import { toast } from 'sonner';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -12,9 +13,10 @@ interface ChatMessageProps {
   projectId?: string;
   onRevert?: (messageId: string) => void;
   hasIterations?: boolean;
+  userId?: string;
 }
 
-export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp }: ChatMessageProps) {
+export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId }: ChatMessageProps) {
   // Only query if hasIterations prop not provided (backward compatibility)
   const { data: iterations, isLoading: isChecking } = api.generation.getMessageIterations.useQuery(
     { messageId: message.id! },
@@ -24,6 +26,53 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     }
   );
   
+  // Scene creation mutation with comprehensive error handling
+  const createSceneMutation = api.createSceneFromPlan.createScene.useMutation({
+    onSuccess: (result) => {
+      console.log('[ChatMessage] Scene creation result:', result);
+      try {
+        if (result?.success) {
+          console.log('[ChatMessage] Scene created successfully:', result.scene?.name);
+          toast.success(`Scene created: ${result.scene?.name || 'Unnamed Scene'}`);
+          
+          // Refresh the page to show the new scene and updated scene plan message
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500); // Slightly longer delay to show the success toast
+        } else {
+          console.error('[ChatMessage] Scene creation failed:', result?.error || result?.message);
+          toast.error(`Failed to create scene: ${result?.message || result?.error || 'Unknown error'}`);
+        }
+      } catch (handleError) {
+        console.error('[ChatMessage] Error handling scene creation result:', handleError);
+        toast.error('Failed to process scene creation result');
+      }
+    },
+    onError: (error) => {
+      console.error('[ChatMessage] Scene creation mutation error:', error);
+      try {
+        // Extract useful error message from tRPC error
+        let errorMessage = 'Unknown error occurred';
+        
+        if (typeof error.message === 'string') {
+          errorMessage = error.message;
+        } else if (error.shape?.message) {
+          errorMessage = error.shape.message;
+        } else if (error.data?.zodError) {
+          errorMessage = 'Validation error occurred';
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        // Show user-friendly error message
+        toast.error(`Error creating scene: ${errorMessage}`);
+      } catch (handleError) {
+        console.error('[ChatMessage] Error handling mutation error:', handleError);
+        toast.error('Failed to create scene - unexpected error');
+      }
+    },
+  });
+  
   // Check if any iterations have actual code changes (not just duration/metadata changes)
   const hasCodeChanges = iterations?.some(iteration => 
     iteration.codeBefore !== iteration.codeAfter && 
@@ -31,6 +80,31 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   ) ?? false;
   
   const hasIterations = hasIterationsProp ?? (hasCodeChanges || iterations?.some(i => i.operationType === 'delete'));
+  
+  // Check if this is an error message with auto-fix capability
+  const isErrorMessage = message.status === 'error' && message.message.includes('Scene Compilation Error');
+  
+  // Check if this is a scene plan message
+  const isScenePlan = message.kind === 'scene_plan';
+  
+  // Check if this is a scene creation success message
+  const isSceneSuccess = message.kind === 'status' && 
+    message.status === 'success' && 
+    message.message.includes('created successfully');
+  
+  // Extract scene plan data if available
+  const scenePlanData = isScenePlan ? (() => {
+    const match = message.message.match(/<!-- SCENE_PLAN_DATA:(.*) -->/);
+    if (match && match[1]) {
+      try {
+        return JSON.parse(match[1]);
+      } catch (e) {
+        console.warn('Failed to parse scene plan data:', e);
+        return null;
+      }
+    }
+    return null;
+  })() : null;
   
   // Format timestamp for display
   const formatTimestamp = (timestamp: number) => {
@@ -45,6 +119,55 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     }
   };
 
+  // Handle auto-fix click - extract scene ID from error message content
+  const handleAutoFixClick = () => {
+    if (isErrorMessage && message.message) {
+      // Extract scene ID from the message content using regex
+      const sceneIdMatch = message.message.match(/\*\*Scene ID:\*\* ([a-f0-9-]{36})/);
+      if (sceneIdMatch && sceneIdMatch[1]) {
+        const sceneId = sceneIdMatch[1];
+        // Trigger auto-fix by dispatching custom event
+        window.dispatchEvent(new CustomEvent('autofix-scene', { detail: { sceneId } }));
+      } else {
+        console.warn('[ChatMessage] Could not extract scene ID from error message:', message.message);
+      }
+    }
+  };
+
+  // Handle create scene click
+  const handleCreateSceneClick = () => {
+    if (isScenePlan && message.id && projectId && userId) {
+      console.log('[ChatMessage] Creating scene:', { messageId: message.id, projectId, userId });
+      createSceneMutation.mutate({
+        messageId: message.id,
+        projectId: projectId,
+        userId: userId,
+      });
+    } else {
+      console.warn('[ChatMessage] Cannot create scene - missing required data:', {
+        isScenePlan,
+        messageId: message.id,
+        projectId,
+        userId
+      });
+    }
+  };
+
+  // Define different colors for scene plan messages
+  const getScenePlanColors = (sceneNumber: number) => {
+    const colors = [
+      "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200",      // Scene 1: Blue
+      "bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200",    // Scene 2: Purple
+      "bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200",   // Scene 3: Green
+      "bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200",     // Scene 4: Orange
+      "bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200",        // Scene 5: Teal
+      "bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200",  // Scene 6: Violet
+      "bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200",        // Scene 7: Rose
+      "bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200",    // Scene 8: Amber
+    ];
+    return colors[(sceneNumber - 1) % colors.length] || colors[0];
+  };
+
   return (
     <div
       className={`flex ${message.isUser ? "justify-end" : "justify-start"} mb-4`}
@@ -53,6 +176,10 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
         className={`max-w-[80%] ${
           message.isUser
             ? "bg-black text-white rounded-2xl px-4 py-3"
+            : isScenePlan && scenePlanData
+            ? `${getScenePlanColors(scenePlanData.sceneNumber)} text-gray-900 rounded-xl px-3 py-2`
+            : isSceneSuccess
+            ? "bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-800 rounded-xl px-3 py-2"
             : "bg-gray-100 text-gray-900 rounded-2xl px-4 py-3"
         }`}
       >
@@ -91,30 +218,85 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                message.message.toLowerCase().includes("generating code") && 
                message.status === "pending" ? (
                 <GeneratingMessage />
+              ) : isSceneSuccess ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600">✅</span>
+                  <span className="font-medium">{message.message}</span>
+                </div>
               ) : (
-                <span>{message.message}</span>
+                <span>
+                  {message.message
+                    .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
+                    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
+                    .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
+                    .trim()}
+                </span>
               )}
             </div>
             
-            {/* Timestamp and revert button */}
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs opacity-50">{formatTimestamp(message.timestamp)}</span>
-              <div className="flex items-center gap-2">
-                {message.status === "error" && (
-                  <span className="text-xs text-red-500">Failed</span>
-                )}
-                {!message.isUser && hasIterations && onRevert && message.id && (
+            {/* Scene plan actions */}
+            {isScenePlan && scenePlanData && (
+              <div className="mt-2 pt-2 border-t border-gray-200/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-gray-500">{formatTimestamp(message.timestamp)}</span>
+                    <span className="text-gray-300">•</span>
+                    <span className="bg-gray-100 px-2 py-0.5 rounded-full font-medium text-gray-700">Scene {scenePlanData.sceneNumber}</span>
+                    <span className="text-gray-300">•</span>
+                    <span className="capitalize text-gray-600">{scenePlanData.scenePlan.toolType}</span>
+                  </div>
                   <button
-                    onClick={handleRestoreClick}
-                    className="text-xs flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="Restore to previous version"
+                    onClick={handleCreateSceneClick}
+                    disabled={createSceneMutation.isPending}
+                    className="flex items-center gap-1 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors"
                   >
-                    <Undo2 className="h-3 w-3" />
-                    <span>Restore</span>
+                    {createSceneMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3 w-3" />
+                        <span>Create Scene</span>
+                      </>
+                    )}
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
+            
+            {/* Timestamp and action buttons - hidden for scene plan messages since they have their own footer */}
+            {!isScenePlan && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-xs opacity-50">{formatTimestamp(message.timestamp)}</span>
+                <div className="flex items-center gap-2">
+                  {message.status === "error" && !isErrorMessage && (
+                    <span className="text-xs text-red-500">Failed</span>
+                  )}
+                  {isErrorMessage && (
+                    <button
+                      onClick={handleAutoFixClick}
+                      className="text-xs flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
+                      title="Auto-fix this error"
+                    >
+                      <span>🔧</span>
+                      <span>Fix</span>
+                    </button>
+                  )}
+                  {!message.isUser && hasIterations && onRevert && message.id && !isErrorMessage && (
+                    <button
+                      onClick={handleRestoreClick}
+                      className="text-xs flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Restore to previous version"
+                    >
+                      <Undo2 className="h-3 w-3" />
+                      <span>Restore</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
       </div>
     </div>

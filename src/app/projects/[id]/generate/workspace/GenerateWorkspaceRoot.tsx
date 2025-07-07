@@ -20,11 +20,12 @@ const DEBUG = process.env.NODE_ENV === 'development';
 
 type Props = {
   projectId: string;
+  userId: string;
   initialProps: InputProps;
   initialProjects: { id: string; name: string }[];
 };
 
-export default function GenerateWorkspaceRoot({ projectId, initialProps, initialProjects }: Props) {
+export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
@@ -158,6 +159,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div className="flex-1 overflow-hidden">
           <MobileWorkspaceLayout
             projectId={projectId}
+            userId={userId}
             initialProps={initialProps}
             projects={userProjects}
             onProjectRename={handleProjectRenamed}
@@ -203,6 +205,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
             <WorkspaceContentAreaG
               ref={workspaceContentAreaRef}
               projectId={projectId}
+              userId={userId}
               initialProps={initialProps}
               projects={userProjects}
               onProjectRename={handleProjectRenamed}

@@ -51,6 +51,7 @@ interface OpenPanelG {
 
 interface WorkspaceContentAreaGProps {
   projectId: string;
+  userId?: string;
   initialProps: InputProps;
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
@@ -303,7 +304,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, initialProps, projects = [], onProjectRename }, ref) => {
+  ({ projectId, userId, initialProps, projects = [], onProjectRename }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -395,7 +396,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         console.log('[WorkspaceContentAreaG] Syncing database messages with VideoState:', dbMessages.length);
         syncDbMessages(projectId, dbMessages as any[]);
       }
-    }, [dbMessages, projectId, syncDbMessages]);
+    }, [dbMessages, projectId]); // Removed syncDbMessages from deps to prevent infinite loop
     
     // Helper function to convert database scenes to InputProps format
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -427,7 +428,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           // Preserve the original project title from initialProps instead of generating new ones
           title: initialProps?.meta?.title || 'New Project',
           duration: currentStart || 150, // Ensure minimum duration even if no scenes
-          backgroundColor: initialProps?.meta?.backgroundColor || '#000000'
+          backgroundColor: initialProps?.meta?.backgroundColor || '#000000',
+          format: initialProps?.meta?.format || 'landscape',
+          width: initialProps?.meta?.width || 1920,
+          height: initialProps?.meta?.height || 1080
         },
         scenes // This will REPLACE all scenes, including any welcome scene
       };
@@ -708,6 +712,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'chat':
           return <ChatPanelG
             projectId={projectId}
+            userId={userId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
           />;

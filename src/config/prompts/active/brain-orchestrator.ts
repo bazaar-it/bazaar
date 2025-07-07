@@ -13,6 +13,9 @@ AVAILABLE TOOLS:
 2. editScene - Modify an existing scene (animations, content, styling)
 3. deleteScene - Remove a scene
 4. trimScene - Fast duration adjustment (cut/extend without changing animations)
+5. typographyScene - Create animated text scenes (focused on text display)
+6. imageRecreatorScene - Recreate uploaded images/screenshots as scenes
+7. scenePlanner - Plan multi-scene videos (breaks down broad requests into multiple scenes)
 
 DECISION PROCESS:
 1. Analyze the user's request carefully
@@ -25,6 +28,17 @@ DECISION PROCESS:
    - "first scene", "last scene", "newest scene" → by position
 4. Consider any images provided in the conversation
 
+MULTI-SCENE DETECTION:
+- Use "scenePlanner" for broad requests like: "make an ad for...", "create a video about...", "tell the story of...", "show the process of..."
+- Use "typographyScene" for specific text requests: "add text that says...", "create animated text with...", "make a scene that says..."
+- Use "imageRecreatorScene" for image recreation: "recreate this image", "make this UI into a scene", "animate this screenshot", "copy this exactly", "replicate this", "make it look like this", "reproduce this layout"
+- Use focused tools for specific requests vs. general addScene for mixed content
+
+IMAGE DECISION CRITERIA:
+- If user uploads image(s) AND uses words like "recreate", "copy", "exactly", "replicate", "reproduce", "make it look like", "match this" → imageRecreatorScene
+- If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference" → addScene
+- If user uploads image(s) with no specific instruction → addScene (general scene creation)
+
 DURATION CHANGES - CHOOSE WISELY:
 - Use "trimScene" for: "cut last X seconds", "remove X seconds", "make it X seconds long", "make scene X, Y seconds"
   → This simply cuts or extends the scene duration without modifying animations (PREFERRED - faster)
@@ -33,7 +47,7 @@ DURATION CHANGES - CHOOSE WISELY:
 
 RESPONSE FORMAT (JSON):
 {
-  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene",
+  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "typographyScene" | "imageRecreatorScene" | "scenePlanner",
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)

@@ -157,10 +157,37 @@ export default function TestComponent() {
         window.dispatchEvent(errorEvent);
       }
       
-      // ONLY use fallback when REAL compilation actually fails
+      // 🚨 CRITICAL FIX: Never return invalid JSX code that could crash React
+      // Always return a safe fallback component that renders correctly
+      const safeFallbackCode = `
+function FallbackScene${index}() {
+  const { AbsoluteFill } = window.Remotion;
+  
+  return (
+    <AbsoluteFill style={{
+      backgroundColor: '#fff3cd',
+      border: '2px dashed #ffc107',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      padding: '20px',
+      textAlign: 'center',
+      color: '#856404'
+    }}>
+      <h3 style={{ margin: '0 0 10px 0' }}>🛠️ Scene ${index + 1} Error</h3>
+      <p style={{ margin: '0 0 10px 0' }}>${sceneName}</p>
+      <small style={{ opacity: 0.8 }}>
+        ${error instanceof Error ? error.message.replace(/"/g, "'") : 'Compilation failed'}
+      </small>
+    </AbsoluteFill>
+  );
+}`;
+      
       return {
         isValid: false,
-        compiledCode: createFallbackScene(sceneName, index, `Compilation error: ${error instanceof Error ? error.message : 'Unknown error'}`),
+        compiledCode: safeFallbackCode,
         componentName: `FallbackScene${index}`
       };
     }
@@ -263,9 +290,14 @@ function FallbackScene${sceneIndex}() {
 
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
-    const scenesWithCode = scenes.filter(scene => (scene.data as any)?.code);
+    // Include ALL scenes with code - handle invalid ones gracefully
+    const scenesWithCode = scenes.filter(scene => {
+      const code = (scene.data as any)?.code;
+      return code && code.trim();
+    });
     
     if (scenesWithCode.length === 0) {
+      console.warn('[PreviewPanelG] No scenes with code found');
       setComponentError(new Error('No scenes with code found.'));
       return;
     }
@@ -651,10 +683,21 @@ export default function FallbackComposition() {
   // Single effect: Compile when scenes change
   useEffect(() => {
     if (scenes.length > 0) {
-      console.log('[PreviewPanelG] Scenes changed, recompiling...');
-      compileMultiSceneComposition();
+      // Check if we have any scenes with code before attempting compilation
+      const hasAnyScenes = scenes.some(scene => {
+        const code = (scene.data as any)?.code;
+        return code && code.trim();
+      });
+      
+      if (hasAnyScenes) {
+        console.log('[PreviewPanelG] Scenes changed, recompiling...');
+        compileMultiSceneComposition();
+      } else {
+        console.warn('[PreviewPanelG] No scenes with code found');
+        setComponentError(new Error('No scenes with code found'));
+      }
     }
-  }, [scenes, compileMultiSceneComposition]);
+  }, [scenes]); // Removed compileMultiSceneComposition from deps to prevent infinite loop
 
 
   // Manual refresh

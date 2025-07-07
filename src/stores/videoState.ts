@@ -16,7 +16,7 @@ export interface ChatMessage {
   timestamp: number;
   sequence?: number; // Message sequence number for proper ordering
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
-  kind?: "text" | "error" | "status" | "tool_result";
+  kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   jobId?: string | null;
   toolName?: string;
   toolStartTime?: number;
@@ -47,7 +47,7 @@ export type DbMessage = {
   // Added for streaming support
   updatedAt?: Date;
   status?: 'pending' | 'success' | 'error' | 'building';
-  kind?: 'text' | 'tool_result' | 'error' | 'status';
+  kind?: 'text' | 'tool_result' | 'error' | 'status' | 'scene_plan';
 }
 
 // Define ProjectState interface
@@ -549,7 +549,9 @@ export const useVideoState = create<VideoState>((set, get) => ({
       
       // Check if this is a welcome project (only has one scene with "Welcome" in the name)
       const isWelcomeProject = project.props.scenes.length === 1 && 
-        project.props.scenes[0]?.data?.name?.includes('Welcome');
+        project.props.scenes[0]?.data?.name && 
+        typeof project.props.scenes[0].data.name === 'string' &&
+        project.props.scenes[0].data.name.includes('Welcome');
       
       // If this is the first real scene being added to a welcome project, replace the welcome scene
       if (isWelcomeProject) {
