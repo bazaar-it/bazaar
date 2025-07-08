@@ -136,6 +136,7 @@ export default function HomePage() {
           {status === "authenticated" && session?.user ? (
             <NewProjectButton
               enableQuickCreate={true}
+              disableFormatDropdown={true}
               className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
               variant="default"
             >

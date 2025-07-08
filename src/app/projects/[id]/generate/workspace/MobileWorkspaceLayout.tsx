@@ -81,9 +81,12 @@ export function MobileWorkspaceLayout({
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Preview Panel - 16:9 aspect ratio */}
-      <div className="w-full bg-white" style={{ aspectRatio: '16/9' }}>
-        <PreviewPanelG projectId={projectId} initial={initialProps} />
+      {/* Preview Panel - Dynamic aspect ratio based on format */}
+      <div className="w-full bg-white flex items-center justify-center" style={{ 
+        minHeight: '200px',
+        maxHeight: '60vh' // Increased from 50vh to give more space for portrait videos
+      }}>
+        <PreviewPanelG projectId={projectId} initial={initialProps} selectedSceneId={selectedSceneId} />
       </div>
 
       {/* Active Panel - Remaining space */}

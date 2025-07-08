@@ -143,7 +143,7 @@ TECHNICAL REQUIREMENTS
 1. Only destructure from window.Remotion (AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Video, Img).
 2. Access React via window.React; no other destructuring.
 3. Generate unique 8-character ID for function name only (Scene_ID). Use normal variable names for all internal variables.
-4. Script array must be declared at top-level outside the component function with normal name "script".
+4. Script array must be declared at top-level outside the component function. Use unique names based on the function ID (e.g., if function is Scene_ABC123, use script_ABC123).
 5. ALWAYS call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }) inside component.
 6. Font loading: Call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }); directly inside component - it is synchronous, not a Promise, do not use .then()
 7. Calculate all sequence timing using forEach loop BEFORE the return statement - never mutate variables inside map functions during render.
@@ -152,7 +152,16 @@ TECHNICAL REQUIREMENTS
 10. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function.
 11. Quote every CSS value and use exactly one transform per element.
 12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
-13. ALWAYS export the total duration at the end: const totalFrames = script.reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames;
+13. CRITICAL CSS RULES:
+    - Never mix shorthand and longhand CSS properties (e.g., don't use both 'background' and 'backgroundClip')
+    - Use either all shorthand or all longhand properties consistently
+    - For transforms, compose all transforms in a single string: transform: \`translate(-50%, -50%) scale(\${scale})\`
+    - Never set transform property multiple times on the same element
+14. POSITIONING RULES:
+    - For centered elements: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
+    - If adding additional transforms, compose them: transform: \`translate(-50%, -50%) scale(\${scale}) rotate(\${rotate}deg)\`
+    - Always test that elements appear correctly centered, not in top-left corner
+15. ALWAYS export the total duration at the end: const totalFrames = script.reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames;
 
 ⸻
 

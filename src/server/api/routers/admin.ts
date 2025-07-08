@@ -2544,4 +2544,245 @@ export default function GeneratedScene() {
       const { computeChatAnalytics } = await import('~/server/api/routers/admin/chat-analytics');
       return await computeChatAnalytics(input.timeframe, db);
     }),
+
+  // Get analytics comparison between two date ranges
+  getAnalyticsComparison: adminOnlyProcedure
+    .input(z.object({ 
+      metric: z.enum(['users', 'projects', 'scenes', 'prompts']),
+      currentStart: z.string(),
+      currentEnd: z.string(),
+      previousStart: z.string(),
+      previousEnd: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const { metric, currentStart, currentEnd, previousStart, previousEnd } = input;
+
+      // Parse dates
+      const currentStartDate = new Date(currentStart);
+      const currentEndDate = new Date(currentEnd);
+      const previousStartDate = new Date(previousStart);
+      const previousEndDate = new Date(previousEnd);
+
+      // Get aggregated metrics for both periods
+      const [currentMetrics, previousMetrics] = await Promise.all([
+        // Current period metrics
+        Promise.all([
+          // Users
+          db
+            .select({ count: count() })
+            .from(users)
+            .where(and(
+              gte(users.createdAt, currentStartDate),
+              lt(users.createdAt, currentEndDate),
+              sql`${users.createdAt} IS NOT NULL`
+            )),
+          // Projects
+          db
+            .select({ count: count() })
+            .from(projects)
+            .where(and(
+              gte(projects.createdAt, currentStartDate),
+              lt(projects.createdAt, currentEndDate)
+            )),
+          // Scenes
+          db
+            .select({ count: count() })
+            .from(scenes)
+            .where(and(
+              gte(scenes.createdAt, currentStartDate),
+              lt(scenes.createdAt, currentEndDate)
+            )),
+          // Prompts
+          db
+            .select({ count: count() })
+            .from(messages)
+            .innerJoin(projects, eq(messages.projectId, projects.id))
+            .where(and(
+              gte(messages.createdAt, currentStartDate),
+              lt(messages.createdAt, currentEndDate),
+              eq(messages.role, 'user')
+            )),
+        ]),
+        // Previous period metrics
+        Promise.all([
+          // Users
+          db
+            .select({ count: count() })
+            .from(users)
+            .where(and(
+              gte(users.createdAt, previousStartDate),
+              lt(users.createdAt, previousEndDate),
+              sql`${users.createdAt} IS NOT NULL`
+            )),
+          // Projects
+          db
+            .select({ count: count() })
+            .from(projects)
+            .where(and(
+              gte(projects.createdAt, previousStartDate),
+              lt(projects.createdAt, previousEndDate)
+            )),
+          // Scenes
+          db
+            .select({ count: count() })
+            .from(scenes)
+            .where(and(
+              gte(scenes.createdAt, previousStartDate),
+              lt(scenes.createdAt, previousEndDate)
+            )),
+          // Prompts
+          db
+            .select({ count: count() })
+            .from(messages)
+            .innerJoin(projects, eq(messages.projectId, projects.id))
+            .where(and(
+              gte(messages.createdAt, previousStartDate),
+              lt(messages.createdAt, previousEndDate),
+              eq(messages.role, 'user')
+            )),
+        ])
+      ]);
+
+      // Get detailed time-series data for the selected metric
+      const getTimeSeriesData = async (startDate: Date, endDate: Date) => {
+        // Generate daily time slots
+        const timeSlots = [];
+        const currentDate = new Date(startDate);
+        while (currentDate < endDate) {
+          const slotStart = new Date(currentDate);
+          const slotEnd = new Date(currentDate);
+          slotEnd.setDate(slotEnd.getDate() + 1);
+          
+          timeSlots.push({
+            start: slotStart,
+            end: slotEnd,
+            label: slotStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
+          });
+          
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Get data based on metric type
+        let data: { timestamp: Date; count: number }[] = [];
+
+        switch (metric) {
+          case 'users':
+            const userCounts = await db
+              .select({ timestamp: users.createdAt })
+              .from(users)
+              .where(and(
+                gte(users.createdAt, startDate),
+                lt(users.createdAt, endDate),
+                sql`${users.createdAt} IS NOT NULL`
+              ))
+              .orderBy(users.createdAt);
+
+            data = userCounts.map(row => ({
+              timestamp: row.timestamp!,
+              count: 1
+            }));
+            break;
+
+          case 'projects':
+            const projectCounts = await db
+              .select({ timestamp: projects.createdAt })
+              .from(projects)
+              .where(and(
+                gte(projects.createdAt, startDate),
+                lt(projects.createdAt, endDate)
+              ))
+              .orderBy(projects.createdAt);
+
+            data = projectCounts.map(row => ({
+              timestamp: row.timestamp,
+              count: 1
+            }));
+            break;
+
+          case 'scenes':
+            const sceneCounts = await db
+              .select({ timestamp: scenes.createdAt })
+              .from(scenes)
+              .where(and(
+                gte(scenes.createdAt, startDate),
+                lt(scenes.createdAt, endDate)
+              ))
+              .orderBy(scenes.createdAt);
+
+            data = sceneCounts.map(row => ({
+              timestamp: row.timestamp,
+              count: 1
+            }));
+            break;
+
+          case 'prompts':
+            const promptCounts = await db
+              .select({ timestamp: messages.createdAt })
+              .from(messages)
+              .innerJoin(projects, eq(messages.projectId, projects.id))
+              .where(and(
+                gte(messages.createdAt, startDate),
+                lt(messages.createdAt, endDate),
+                eq(messages.role, 'user')
+              ))
+              .orderBy(messages.createdAt);
+
+            data = promptCounts.map(row => ({
+              timestamp: row.timestamp,
+              count: 1
+            }));
+            break;
+        }
+
+        // Aggregate data into time slots
+        const chartData = timeSlots.map(slot => {
+          const slotData = data.filter(item => 
+            item.timestamp >= slot.start && item.timestamp < slot.end
+          );
+
+          return {
+            label: slot.label,
+            timestamp: slot.start.toISOString(),
+            count: slotData.length,
+          };
+        });
+
+        return {
+          data: chartData,
+          totalCount: data.length,
+        };
+      };
+
+      // Get time series data for both periods
+      const [currentData, previousData] = await Promise.all([
+        getTimeSeriesData(currentStartDate, currentEndDate),
+        getTimeSeriesData(previousStartDate, previousEndDate)
+      ]);
+
+      return {
+        current: {
+          users: currentMetrics[0][0]?.count || 0,
+          projects: currentMetrics[1][0]?.count || 0,
+          scenes: currentMetrics[2][0]?.count || 0,
+          prompts: currentMetrics[3][0]?.count || 0,
+        },
+        previous: {
+          users: previousMetrics[0][0]?.count || 0,
+          projects: previousMetrics[1][0]?.count || 0,
+          scenes: previousMetrics[2][0]?.count || 0,
+          prompts: previousMetrics[3][0]?.count || 0,
+        },
+        currentData,
+        previousData,
+        metric,
+        currentPeriod: {
+          start: currentStartDate.toISOString(),
+          end: currentEndDate.toISOString(),
+        },
+        previousPeriod: {
+          start: previousStartDate.toISOString(),
+          end: previousEndDate.toISOString(),
+        },
+      };
+    }),
 });

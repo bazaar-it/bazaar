@@ -635,29 +635,38 @@ export default function ChatPanelG({
     <div className="flex flex-col h-full">
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {componentMessages.map((msg) => (
-          <ChatMessage
-            key={msg.id}
-            message={{
-              id: msg.id,
-              message: msg.content,
-              isUser: msg.isUser,
-              timestamp: msg.timestamp.getTime(),
-              status: msg.status,
-              kind: msg.kind,
-              imageUrls: msg.imageUrls,
-            }}
-            onImageClick={(imageUrl) => {
-              // TODO: Implement image click handler
-              console.log('Image clicked:', imageUrl);
-            }}
-            projectId={projectId}
-            userId={userId}
-            onRevert={isReverting ? undefined : handleRevert}
-            onEditScenePlan={handleEditScenePlan}
-            hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-          />
-        ))}
+        {componentMessages.map((msg, index) => {
+          // Find all scene plan messages
+          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
+          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+          const totalScenePlans = scenePlanMessages.length;
+          
+          return (
+            <ChatMessage
+              key={msg.id}
+              message={{
+                id: msg.id,
+                message: msg.content,
+                isUser: msg.isUser,
+                timestamp: msg.timestamp.getTime(),
+                status: msg.status,
+                kind: msg.kind,
+                imageUrls: msg.imageUrls,
+              }}
+              onImageClick={(imageUrl) => {
+                // TODO: Implement image click handler
+                console.log('Image clicked:', imageUrl);
+              }}
+              projectId={projectId}
+              userId={userId}
+              onRevert={isReverting ? undefined : handleRevert}
+              onEditScenePlan={handleEditScenePlan}
+              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+              isFirstScenePlan={isFirstScenePlan}
+              totalScenePlans={totalScenePlans}
+            />
+          );
+        })}
         
         {/* Show pulsating message UI when generating */}
         {isGenerating && (

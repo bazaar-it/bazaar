@@ -32,15 +32,28 @@ End with a clear final message: the product name, what action to take, and where
 CRITICAL: You must use the EXACT format below or the parser will fail.
 
 ENHANCED FORMAT WITH IMAGE REFERENCES:
+
+Example WITH images provided:
 <Scene_1>
 Tool Type: recreate
-Image Reference: Image 1 (if applicable - specify which uploaded image this scene should use)
+Image Reference: Image 1 (dashboard screenshot)
 Your generated prompt: Recreate the dashboard view from the uploaded screenshot, focusing on the main navigation and data overview panels
 
 <Scene_2>
 Tool Type: typography
 Image Reference: Brand colors from Image 1 (extract visual style from images even for text scenes)
 Your generated prompt: Show bold text "Boost your team's productivity" using the brand colors and typography style from the uploaded interface
+
+Example WITHOUT images:
+<Scene_1>
+Tool Type: typography
+Image Reference: None (no images provided)
+Your generated prompt: Display the company name in large, modern font with smooth fade-in animation
+
+<Scene_2>
+Tool Type: code-generator
+Image Reference: None (no images provided)
+Your generated prompt: Create an animated product showcase with details
 
 ⸻
 
@@ -50,10 +63,10 @@ Your generated prompt: Show bold text "Boost your team's productivity" using the
 Use for animated text, taglines, headers, quotes, or any text-focused scene.
 
 • recreate  
-Use when an image is provided and the full image or an individual element needs to be recreated as motion graphic.
+ONLY use when images are provided AND you need to recreate visual elements from those images. DO NOT use if no images are available.
 
 • code-generator
-Our multi-purpose tool used as a fall back to create any type of motion graphic scene.
+Our primary tool for creating motion graphics. Use this for most scenes including UI demos, animations, data visualizations, and any visual content when no images are provided.
 
 ⸻
 
@@ -69,12 +82,17 @@ Our multi-purpose tool used as a fall back to create any type of motion graphic 
 
 🎯 ENHANCED RULES:
 
+**CRITICAL TOOL SELECTION RULES:**
+• NO IMAGES PROVIDED → Never use 'recreate' tool. Use 'code-generator' for visual scenes and 'typography' for text.
+• IMAGES PROVIDED → Use 'recreate' only for scenes that directly recreate image content. Use 'code-generator' for other visual scenes.
+• DEFAULT CHOICE → When in doubt, use 'code-generator' - it's our most versatile tool.
+
 **Image Usage Strategy:**
 • If 1 image: Use it as primary brand/design reference for ALL scenes. Extract colors, fonts, style.
 • If multiple images: Plan scenes that correspond to different images. Each scene should specify which image it references.
-• For recreate tool: Always specify which image to recreate
+• For recreate tool: Always specify which image to recreate (ONLY when images exist)
 • For typography tool: Reference image for brand colors/style even if not recreating
-• For code-generator: Use images as inspiration for visual style and content
+• For code-generator: Use images as inspiration for visual style and content (if available)
 
 **Scene Planning with Images:**
 • Start with overview scene recreating the main interface (if UI screenshots provided)

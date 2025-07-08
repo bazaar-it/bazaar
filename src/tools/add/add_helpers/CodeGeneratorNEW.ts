@@ -92,16 +92,40 @@ export class UnifiedCodeProcessor {
       width: number;
       height: number;
     };
+    previousSceneContext?: {
+      tsxCode: string;
+      style?: string;
+    };
   }): Promise<CodeGenerationOutput> {
     console.log('🎨 [UNIFIED PROCESSOR] TYPOGRAPHY: Generating text scene');
     
     try {
+      // Prepare the messages with optional previous scene context
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system' as const, content: TYPOGRAPHY_AGENT.content }
+      ];
+
+      // Add previous scene context if available
+      if (input.previousSceneContext?.tsxCode) {
+        messages.push({
+          role: 'user' as const,
+          content: `Previous scene code for visual harmony reference:\n\`\`\`tsx\n${input.previousSceneContext.tsxCode}\n\`\`\`\n\nMaintain visual harmony with the established theme. Use similar colors, gradients, and fonts for consistency, but create unique text animations appropriate for the content.`
+        });
+        messages.push({
+          role: 'assistant' as const,
+          content: 'I understand. I will maintain visual harmony with the previous scene while creating unique text animations.'
+        });
+      }
+
+      // Add the main user prompt
+      messages.push({
+        role: 'user' as const,
+        content: input.userPrompt
+      });
+
       const response = await AIClientService.generateResponse(
         getModel('codeGenerator'),
-        [
-          { role: 'system', content: TYPOGRAPHY_AGENT.content },
-          { role: 'user', content: input.userPrompt }
-        ]
+        messages
       );
       
       const rawOutput = response?.content;

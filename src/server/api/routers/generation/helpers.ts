@@ -443,6 +443,11 @@ export async function executeToolFromDecision(
         projectId,
         userId,
         projectFormat: projectFormat,
+        // Pass previous scene for style continuity (but not for first scene)
+        previousSceneContext: storyboard.length > 0 ? {
+          tsxCode: storyboard[storyboard.length - 1].tsxCode,
+          style: undefined
+        } : undefined,
       };
       
       try {

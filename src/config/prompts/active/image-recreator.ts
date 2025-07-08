@@ -56,15 +56,24 @@ TECHNICAL REQUIREMENTS
 	8.	Use extrapolateLeft and extrapolateRight set to "clamp" on all interpolations
 	9.	Use only one transform property per element: translate(-50%, -50%) scale(...)
 	10.	Default font: Inter (via window.RemotionGoogleFonts)
-	11.	Maintain minimum padding of 40px from all screen edges
-	12.	Avatar usage: <img src={window.BazaarAvatars['asian-woman']} style={{width: "100px", height: "100px", borderRadius: "50%"}} />
-	13.	transform: scale(...) needs to be wrapped in backticks \` \` to use template literals inside JSX
-	14.	Center all layouts unless the prompt specifies otherwise
-	15.	Use the provided image's background color or gradient as the scene's background unless overridden
-	16.	Numbers representing key metrics should animate upward smoothly (e.g., spring/lerp based tick-up animation)
-	17.	If the layout is too small relative to the screen, scale the main container to max-width: "90%", center it, and increase fontSize and graph height proportionally. Use width: "90vw" and height: "auto" when in doubt.
-	18.	MANDATORY: Component must have proper JSX return statement with AbsoluteFill as root element
-	19.	MANDATORY: Use useCurrentFrame() and useVideoConfig() for animations
+	11.	CRITICAL CSS RULES:
+	    - Never mix shorthand and longhand CSS properties (e.g., don't use both 'background' and 'backgroundClip')
+	    - Use either all shorthand or all longhand properties consistently
+	    - For transforms, compose all transforms in a single string: transform: \`translate(-50%, -50%) scale(\${scale})\`
+	    - Never set transform property multiple times on the same element
+	12.	POSITIONING RULES:
+	    - For centered elements: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
+	    - If adding additional transforms, compose them: transform: \`translate(-50%, -50%) scale(\${scale}) rotate(\${rotate}deg)\`
+	    - Always test that elements appear correctly centered, not in top-left corner
+	13.	Maintain minimum padding of 40px from all screen edges
+	14.	Avatar usage: <img src={window.BazaarAvatars['asian-woman']} style={{width: "100px", height: "100px", borderRadius: "50%"}} />
+	15.	transform: scale(...) needs to be wrapped in backticks \` \` to use template literals inside JSX
+	16.	Center all layouts unless the prompt specifies otherwise
+	17.	Use the provided image's background color or gradient as the scene's background unless overridden
+	18.	Numbers representing key metrics should animate upward smoothly (e.g., spring/lerp based tick-up animation)
+	19.	If the layout is too small relative to the screen, scale the main container to max-width: "90%", center it, and increase fontSize and graph height proportionally. Use width: "90vw" and height: "auto" when in doubt.
+	20.	MANDATORY: Component must have proper JSX return statement with AbsoluteFill as root element
+	21.	MANDATORY: Use useCurrentFrame() and useVideoConfig() for animations
 
 ⸻
 

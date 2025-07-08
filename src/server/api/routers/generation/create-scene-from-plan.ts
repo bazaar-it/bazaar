@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, messages, projects } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { addTool } from "~/tools/add/add";
 import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
@@ -214,7 +214,7 @@ export const createSceneFromPlanRouter = createTRPCRouter({
             name: toolResult.data.name,
             tsxCode: toolResult.data.tsxCode,
             duration: toolResult.data.duration || 150,
-            order: storyboard.length,
+            order: sceneNumber - 1,  // Use the planned scene number
             props: (toolResult.data as any).props || {},
             layoutJson: (toolResult.data as any).layoutJson || null,
           }).returning();
@@ -304,6 +304,247 @@ export const createSceneFromPlanRouter = createTRPCRouter({
           success: false,
           error: errorMessage,
           message: `Unexpected error: ${errorMessage}`
+        };
+      }
+    }),
+    
+  createAllScenes: publicProcedure
+    .input(z.object({
+      projectId: z.string(),
+      userId: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { projectId, userId } = input;
+      
+      console.log('[CREATE_ALL_SCENES] Starting bulk scene creation for project:', projectId);
+      
+      try {
+        // Get all scene plan messages for this project that haven't been converted yet
+        // Scene plans are created with kind='scene_plan' and status='success'
+        const scenePlanMessages = await db.query.messages.findMany({
+          where: and(
+            eq(messages.projectId, projectId),
+            eq(messages.kind, 'scene_plan'),
+            eq(messages.status, 'success')
+          ),
+          orderBy: [messages.sequence],
+        });
+        
+        if (!scenePlanMessages || scenePlanMessages.length === 0) {
+          // Check if there are any scene plans that have already been converted
+          const convertedScenePlans = await db.query.messages.findMany({
+            where: and(
+              eq(messages.projectId, projectId),
+              eq(messages.kind, 'status'),
+              eq(messages.status, 'success')
+            ),
+          });
+          
+          const hasConvertedPlans = convertedScenePlans.some(msg => 
+            msg.content.includes('Scene') && msg.content.includes('created successfully')
+          );
+          
+          return {
+            success: false,
+            error: hasConvertedPlans 
+              ? 'All scene plans have already been created' 
+              : 'No scene plans found. Generate a multi-scene video first.',
+            results: [],
+            errors: [],
+          };
+        }
+        
+        console.log(`[CREATE_ALL_SCENES] Found ${scenePlanMessages.length} scene plans to create`);
+        
+        const results = [];
+        const errors = [];
+        
+        // Create scenes sequentially to maintain order and context
+        for (const planMessage of scenePlanMessages) {
+          try {
+            // Extract scene plan data
+            const match = planMessage.content.match(/<!-- SCENE_PLAN_DATA:(.*) -->/);
+            if (!match || !match[1]) {
+              console.error('[CREATE_ALL_SCENES] Failed to extract scene plan data from message:', planMessage.id);
+              errors.push({
+                messageId: planMessage.id,
+                error: 'Failed to parse scene plan data'
+              });
+              continue;
+            }
+            
+            const scenePlanData = JSON.parse(match[1]);
+            
+            console.log(`[CREATE_ALL_SCENES] Creating scene ${scenePlanData.sceneNumber}...`);
+            
+            // Reuse the core scene creation logic inline
+            // (Could be extracted to a shared function later)
+            const sceneNumber = scenePlanData.sceneNumber;
+            const scenePlan = scenePlanData.scenePlan as ScenePlan;
+            const projectFormat = scenePlanData.projectFormat || { width: 1920, height: 1080, fps: 30 };
+            const imageUrls = scenePlanData.imageUrls || [];
+            
+            // Get current storyboard - IMPORTANT: Fetch fresh each time to include newly created scenes
+            const storyboard = await db.query.scenes.findMany({
+              where: eq(scenes.projectId, projectId),
+              orderBy: [scenes.order],
+            });
+            
+            console.log(`[CREATE_ALL_SCENES] Current storyboard has ${storyboard.length} scenes`);
+            
+            // Execute the appropriate tool
+            let toolResult;
+            
+            // Get previous scene context if available
+            const previousScene = storyboard.length > 0 ? storyboard[storyboard.length - 1] : null;
+            
+            // Extract existing identifiers from all scenes to avoid conflicts
+            const existingIdentifiers = new Set<string>();
+            storyboard.forEach(scene => {
+              // Extract top-level const/function declarations
+              const identifierRegex = /(?:const|let|var|function)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=/g;
+              let match;
+              while ((match = identifierRegex.exec(scene.tsxCode)) !== null) {
+                if (match[1]) {
+                  existingIdentifiers.add(match[1]);
+                }
+              }
+            });
+            
+            console.log(`[CREATE_ALL_SCENES] Found existing identifiers: ${Array.from(existingIdentifiers).join(', ')}`);
+            
+            // Modify the prompt to include identifier avoidance
+            let identifierWarning = '';
+            if (sceneNumber > 1 || existingIdentifiers.size > 0) {
+              const commonIdentifiers = ['script', 'sequences', 'currentFrame', 'currentStart', 'currentStartFrame', 'totalFrames'];
+              const allUsedIdentifiers = new Set([...existingIdentifiers, ...commonIdentifiers]);
+              identifierWarning = `\n\nCRITICAL: You are generating Scene ${sceneNumber}. ALL variable names must be unique. DO NOT use these identifiers: ${Array.from(allUsedIdentifiers).join(', ')}. \nInstead use: script${sceneNumber}, sequences${sceneNumber}, currentFrame${sceneNumber}, etc. This is REQUIRED to prevent conflicts.`;
+            }
+            
+            const baseInput = {
+              userPrompt: scenePlan.prompt + identifierWarning,
+              projectId,
+              userId,
+              projectFormat,
+              storyboardSoFar: storyboard.map(s => ({
+                id: s.id,
+                name: s.name,
+                duration: s.duration,
+                order: s.order,
+                tsxCode: s.tsxCode,
+              })),
+              previousSceneContext: previousScene ? {
+                tsxCode: previousScene.tsxCode,
+                style: previousScene.name // Use name as a style hint
+              } : undefined,
+              sceneNumber: sceneNumber,
+            };
+            
+            if (scenePlan.toolType === 'typography') {
+              toolResult = await typographyTool.run(baseInput);
+            } else if (scenePlan.toolType === 'recreate' && imageUrls.length > 0) {
+              toolResult = await imageRecreatorTool.run({
+                ...baseInput,
+                imageUrls,
+              });
+            } else {
+              // Default to add tool
+              toolResult = await addTool.run({
+                ...baseInput,
+                imageUrls,
+              });
+            }
+            
+            if (!toolResult.success || !toolResult.data) {
+              const errorMessage = typeof toolResult.error === 'string' 
+                ? toolResult.error 
+                : toolResult.error?.message || 'Tool execution failed';
+              throw new Error(errorMessage);
+            }
+            
+            // Save scene to database
+            const [newScene] = await db.insert(scenes).values({
+              projectId,
+              name: toolResult.data.name,
+              tsxCode: toolResult.data.tsxCode,
+              duration: toolResult.data.duration || 150,
+              order: sceneNumber - 1,  // Use the planned scene number
+              props: (toolResult.data as any).props || {},
+              layoutJson: (toolResult.data as any).layoutJson || null,
+            }).returning();
+            
+            // Update message status
+            await db.update(messages)
+              .set({
+                content: `Scene ${sceneNumber} created successfully`,
+                status: 'success',
+                kind: 'status',
+                updatedAt: new Date(),
+              })
+              .where(eq(messages.id, planMessage.id));
+            
+            // Notify UI about the new scene (for server-side events)
+            if (typeof globalThis !== 'undefined' && 'window' in globalThis) {
+              // This won't work on server, but keeping for reference
+              console.log(`[CREATE_ALL_SCENES] Would dispatch scene-created event if on client`);
+            }
+            
+            const result = { success: true, scene: newScene };
+            
+            if (result.success) {
+              console.log(`[CREATE_ALL_SCENES] ✅ Scene ${sceneNumber} created with order ${sceneNumber - 1}`);
+              results.push({
+                messageId: planMessage.id,
+                sceneNumber: scenePlanData.sceneNumber,
+                sceneName: result.scene?.name,
+                sceneId: result.scene?.id,
+                success: true
+              });
+            } else {
+              console.error(`[CREATE_ALL_SCENES] ❌ Scene ${sceneNumber} failed`);
+              errors.push({
+                messageId: planMessage.id,
+                sceneNumber: scenePlanData.sceneNumber,
+                error: 'Scene creation failed'
+              });
+            }
+            
+            // Small delay between scenes to avoid overwhelming the system
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+          } catch (error) {
+            console.error('[CREATE_ALL_SCENES] Error creating scene from message:', planMessage.id, error);
+            errors.push({
+              messageId: planMessage.id,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+        
+        console.log('[CREATE_ALL_SCENES] Bulk creation complete:', {
+          total: scenePlanMessages.length,
+          successful: results.length,
+          failed: errors.length
+        });
+        
+        return {
+          success: true,
+          results,
+          errors,
+          summary: {
+            total: scenePlanMessages.length,
+            successful: results.length,
+            failed: errors.length
+          }
+        };
+        
+      } catch (error) {
+        console.error('[CREATE_ALL_SCENES] Fatal error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to create scenes',
+          results: [],
+          errors: [],
         };
       }
     }),

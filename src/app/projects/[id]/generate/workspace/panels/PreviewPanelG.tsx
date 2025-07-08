@@ -12,6 +12,8 @@ import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
 import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
+import { cn } from '~/lib/cn';
+import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -40,6 +42,55 @@ export function PreviewPanelG({
   
   // 🚨 CLEANED UP: Only use project-specific refresh token
   const projectRefreshToken = useVideoState((state) => state.projects[projectId]?.refreshToken);
+  
+  // Get scenes from database to ensure we have the latest data
+  const { data: dbScenes } = api.generation.getProjectScenes.useQuery(
+    { projectId },
+    { 
+      refetchOnWindowFocus: false,
+      // This will be invalidated when scenes are created
+    }
+  );
+  
+  // Update VideoState when database scenes change
+  const { replace } = useVideoState();
+  useEffect(() => {
+    if (dbScenes && dbScenes.length > 0 && currentProps) {
+      console.log('[PreviewPanelG] Database scenes updated, syncing to VideoState:', dbScenes.length);
+      
+      // Convert database scenes to InputProps format
+      let currentStart = 0;
+      const convertedScenes = dbScenes.map((dbScene: any) => {
+        const sceneDuration = dbScene.duration || 150;
+        const scene = {
+          id: dbScene.id,
+          type: 'custom' as const,
+          start: currentStart,
+          duration: sceneDuration,
+          data: {
+            code: dbScene.tsxCode,
+            name: dbScene.name,
+            componentId: dbScene.id,
+            props: dbScene.props || {}
+          }
+        };
+        currentStart += sceneDuration;
+        return scene;
+      });
+      
+      // Update VideoState with new scenes
+      const updatedProps = {
+        ...currentProps,
+        scenes: convertedScenes,
+        meta: {
+          ...currentProps.meta,
+          duration: currentStart
+        }
+      };
+      
+      replace(projectId, updatedProps);
+    }
+  }, [dbScenes, projectId]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -145,13 +196,18 @@ export default function TestComponent() {
     } catch (error) {
       console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) REAL compilation failed:`, error);
       
+      // Enhanced error message with scene identification
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const detailedError = `Scene ${index + 1} (${sceneName}): ${errorMessage}`;
+      
       // 🚨 NEW: Dispatch error event to ChatPanelG for auto-fix
       if (error instanceof Error) {
         const errorEvent = new CustomEvent('preview-scene-error', {
           detail: {
             sceneId,
             sceneName,
-            error: error
+            sceneIndex: index + 1,
+            error: new Error(detailedError)
           }
         });
         window.dispatchEvent(errorEvent);
@@ -160,14 +216,14 @@ export default function TestComponent() {
       // ONLY use fallback when REAL compilation actually fails
       return {
         isValid: false,
-        compiledCode: createFallbackScene(sceneName, index, `Compilation error: ${error instanceof Error ? error.message : 'Unknown error'}`),
+        compiledCode: createFallbackScene(sceneName, index, detailedError, sceneId),
         componentName: `FallbackScene${index}`
       };
     }
   }, []);
 
   // 🚨 ENHANCED: Create safe fallback scene with autofix button
-  const createFallbackScene = useCallback((sceneName: string, sceneIndex: number, errorDetails?: string) => {
+  const createFallbackScene = useCallback((sceneName: string, sceneIndex: number, errorDetails?: string, sceneId?: string) => {
     return `
 function FallbackScene${sceneIndex}() {
   const handleAutoFix = () => {
@@ -176,86 +232,228 @@ function FallbackScene${sceneIndex}() {
     // 🚨 DIRECT: Trigger autofix in ChatPanelG
     const autoFixEvent = new CustomEvent('trigger-autofix', {
       detail: {
-        sceneId: '${sceneName}', // This will be the actual scene ID
+        sceneId: '${sceneId || sceneName}', // Use actual scene ID if available
         sceneName: '${sceneName || `Scene ${sceneIndex + 1}`}',
+        sceneIndex: ${sceneIndex + 1},
         error: { message: '${errorDetails || 'Compilation error'}' }
       }
     });
     window.dispatchEvent(autoFixEvent);
   };
 
+  const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  
+  // Smooth fade in
+  const opacity = interpolate(frame, [0, 20], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+  
+  // Gentle scale animation
+  const scale = spring({
+    frame,
+    fps,
+    from: 0.95,
+    to: 1,
+    config: {
+      damping: 20,
+      stiffness: 40,
+    },
+  });
+  
+  // Floating animation for the icon
+  const iconFloat = Math.sin(frame / 10) * 5;
+  
+  // Subtle background animation
+  const bgRotation = interpolate(frame, [0, 300], [0, 360], {
+    extrapolateRight: 'clamp',
+  });
+  
   return (
     <AbsoluteFill style={{
-      background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
+      background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      flexDirection: 'column',
-      border: '2px dashed #ffc107',
-      borderRadius: '12px',
-      margin: '20px',
-      fontFamily: 'Inter, sans-serif'
+      opacity,
     }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛠️</div>
-      
-      <h3 style={{ 
-        color: '#856404', 
-        marginBottom: '16px',
-        fontSize: '1.5rem',
-        fontWeight: '600'
+      {/* Animated background shapes */}
+      <div style={{
+        position: 'absolute',
+        width: '200%',
+        height: '200%',
+        top: '-50%',
+        left: '-50%',
+        opacity: 0.1,
+        transform: \`rotate(\${bgRotation}deg)\`,
       }}>
-        Scene needs a quick fix
-      </h3>
-      
-      <p style={{ 
-        color: '#856404', 
-        marginBottom: '16px',
-        textAlign: 'center',
-        maxWidth: '400px',
-        lineHeight: '1.5'
-      }}>
-        "${sceneName || `Scene ${sceneIndex + 1}`}" has a compilation issue, but don't worry!
-      </p>
-      
-      <button
-        onClick={handleAutoFix}
-        style={{
-          backgroundColor: '#3b82f6',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '0.75rem 1.5rem',
-          fontSize: '1rem',
-          fontWeight: '500',
-          cursor: 'pointer',
-          marginBottom: '1rem',
-          transition: 'all 0.2s'
-        }}
-      >
-        🚀 Auto-Fix Scene
-      </button>
-      
-      <small style={{ 
-        color: '#856404', 
-        opacity: '0.8',
-        textAlign: 'center',
-        maxWidth: '350px'
-      }}>
-        Other scenes continue to work normally
-      </small>
-      
-      <div style={{ 
-        fontSize: '11px', 
-        color: '#856404', 
-        marginTop: '12px', 
-        fontStyle: 'italic',
-        opacity: '0.7',
-        textAlign: 'center'
-      }}>
-        "If you are not embarrassed by the first version of your product, you've launched too late." - Reid Hoffman
+        <div style={{
+          position: 'absolute',
+          width: '40%',
+          height: '40%',
+          top: '10%',
+          left: '10%',
+          background: 'radial-gradient(circle, #3b82f6 0%, transparent 70%)',
+          borderRadius: '50%',
+        }} />
+        <div style={{
+          position: 'absolute',
+          width: '30%',
+          height: '30%',
+          bottom: '20%',
+          right: '20%',
+          background: 'radial-gradient(circle, #10b981 0%, transparent 70%)',
+          borderRadius: '50%',
+        }} />
       </div>
       
-      ${errorDetails ? `<div style={{ fontSize: '10px', color: '#856404', marginTop: '8px', maxWidth: '300px', textAlign: 'center', opacity: '0.6' }}>${errorDetails.substring(0, 100)}...</div>` : ''}
+      <div style={{
+        background: 'white',
+        borderRadius: '20px',
+        padding: '48px',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.08)',
+        maxWidth: '520px',
+        textAlign: 'center',
+        transform: \`scale(\${scale})\`,
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+        position: 'relative',
+        zIndex: 1,
+      }}>
+        {/* Animated icon */}
+        <div style={{ 
+          fontSize: '4rem', 
+          marginBottom: '1.5rem',
+          transform: \`translateY(\${iconFloat}px)\`,
+          transition: 'transform 0.3s ease',
+        }}>
+          🛠️
+        </div>
+        
+        <h3 style={{ 
+          color: '#1f2937', 
+          marginBottom: '16px',
+          fontSize: '1.5rem',
+          fontWeight: '700',
+          letterSpacing: '-0.02em',
+        }}>
+          Scene ${sceneIndex + 1} Needs Attention
+        </h3>
+        
+        <p style={{ 
+          color: '#6b7280', 
+          marginBottom: '24px',
+          fontSize: '1rem',
+          lineHeight: '1.6',
+          maxWidth: '400px',
+          margin: '0 auto 24px',
+        }}>
+          <strong>${sceneName || `Scene ${sceneIndex + 1}`}</strong> encountered a temporary issue. 
+          The good news? All other scenes are playing perfectly!
+        </p>
+        
+        <button
+          onClick={handleAutoFix}
+          style={{
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '12px',
+            padding: '0.875rem 2rem',
+            fontSize: '1rem',
+            fontWeight: '600',
+            cursor: 'pointer',
+            marginBottom: '1.5rem',
+            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.25)',
+            transition: 'all 0.2s',
+            transform: 'translateY(0)',
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.35)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 4px 14px rgba(59, 130, 246, 0.25)';
+          }}
+        >
+          <span style={{ marginRight: '8px' }}>✨</span>
+          Fix Scene Automatically
+        </button>
+        
+        <div style={{ 
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          color: '#10b981',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          marginBottom: '1rem',
+        }}>
+          <span style={{ 
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: '#10b981',
+            display: 'inline-block',
+            animation: 'pulse 2s ease-in-out infinite',
+          }} />
+          Other scenes playing normally
+        </div>
+        
+        <div style={{ 
+          fontSize: '0.75rem', 
+          color: '#9ca3af', 
+          marginTop: '16px', 
+          fontStyle: 'italic',
+          maxWidth: '380px',
+          margin: '16px auto 0',
+          lineHeight: '1.5',
+        }}>
+          "If you're not embarrassed by the first version of your product, you've launched too late."
+          <br />
+          <span style={{ fontWeight: '500' }}>— Reid Hoffman</span>
+        </div>
+        
+        ${errorDetails ? `
+        <details style={{ 
+          marginTop: '16px',
+          textAlign: 'left',
+          background: '#f9fafb',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          border: '1px solid #e5e7eb',
+        }}>
+          <summary style={{ 
+            cursor: 'pointer',
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            fontWeight: '500',
+            userSelect: 'none',
+          }}>
+            Technical Details
+          </summary>
+          <div style={{ 
+            fontSize: '0.75rem',
+            color: '#9ca3af',
+            marginTop: '8px',
+            fontFamily: 'monospace',
+            lineHeight: '1.4',
+            wordBreak: 'break-word',
+          }}>
+            ${errorDetails.substring(0, 150)}${errorDetails.length > 150 ? '...' : ''}
+          </div>
+        </details>
+        ` : ''}
+      </div>
+      
+      <style jsx>{\`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      \`}</style>
     </AbsoluteFill>
   );
 }`;
@@ -290,28 +488,36 @@ function FallbackScene${sceneIndex}() {
       const validScenes = compiledScenes.filter(s => s.isValid).length;
       console.log(`[PreviewPanelG] 🛡️ ISOLATION: ${validScenes}/${compiledScenes.length} scenes compiled successfully - broken scenes isolated`);
       
-      // 🚨 CRITICAL FIX: If ALL scenes fail, show fallback. If SOME work, continue with working ones
-      if (validScenes === 0) {
-        console.warn('[PreviewPanelG] ⚠️ All scenes failed compilation, using fallback composition');
-        throw new Error('All scenes failed compilation');
+      // 🚨 CRITICAL FIX: Continue even if some scenes fail - we'll use fallbacks for broken scenes
+      if (validScenes === 0 && compiledScenes.length > 0) {
+        console.warn('[PreviewPanelG] ⚠️ All scenes failed compilation, but continuing with fallback scenes');
+        // Don't throw - continue with fallback scenes
       }
 
       // For single scene, use simpler approach
       if (compiledScenes.length === 1) {
         const scene = compiledScenes[0];
         if (!scene) {
-          throw new Error('Scene compilation failed');
+          // Create a fallback scene instead of throwing
+          const fallbackScene = {
+            isValid: false,
+            compiledCode: createFallbackScene('Scene 1', 0, 'Scene compilation failed'),
+            componentName: 'FallbackScene0'
+          };
+          compiledScenes[0] = fallbackScene;
         }
         
         const allImports = new Set(['AbsoluteFill', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
         
-        // Scan the code for any Remotion functions that might be used
-        const remotionFunctions = ['Sequence', 'Audio', 'Video', 'Img', 'staticFile', 'Loop', 'Series'];
-        remotionFunctions.forEach(func => {
-          if (scene.compiledCode.includes(func)) {
-            allImports.add(func);
-          }
-        });
+        // If it's a valid scene, scan for Remotion functions
+        if (scene.isValid) {
+          const remotionFunctions = ['Sequence', 'Audio', 'Video', 'Img', 'staticFile', 'Loop', 'Series'];
+          remotionFunctions.forEach(func => {
+            if (scene.compiledCode.includes(func)) {
+              allImports.add(func);
+            }
+          });
+        }
 
         const allImportsArray = Array.from(allImports);
         const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
@@ -322,8 +528,93 @@ ${singleDestructuring}
 
 ${scene.compiledCode}
 
+// Single Scene Error Boundary
+class SingleSceneErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Single scene runtime error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      const frame = useCurrentFrame();
+      const { fps } = useVideoConfig();
+      
+      const opacity = interpolate(frame, [0, 20], [0, 1], {
+        extrapolateRight: 'clamp',
+      });
+      
+      const scale = spring({
+        frame,
+        fps,
+        from: 0.95,
+        to: 1,
+        config: {
+          damping: 20,
+          stiffness: 40,
+        },
+      });
+      
+      return (
+        <AbsoluteFill style={{
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity,
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+            maxWidth: '450px',
+            textAlign: 'center',
+            transform: \`scale(\${scale})\`,
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+          }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚡</div>
+            <h3 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.25rem', fontWeight: '600' }}>
+              Runtime Error
+            </h3>
+            <p style={{ color: '#b45309', marginBottom: '16px', fontSize: '0.875rem' }}>
+              This scene encountered an error during playback
+            </p>
+            <details style={{ 
+              marginTop: '12px',
+              textAlign: 'left',
+              background: '#fef3c7',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              color: '#92400e'
+            }}>
+              <summary style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
+                Error Details
+              </summary>
+              <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '0.7rem', opacity: 0.8, wordBreak: 'break-word' }}>
+                {this.state.error?.message || 'Unknown error'}
+              </div>
+            </details>
+          </div>
+        </AbsoluteFill>
+      );
+    }
+
+    return React.createElement(${scene.componentName});
+  }
+}
+
 export default function SingleSceneComposition() {
-  return <${scene.componentName} />;
+  return React.createElement(SingleSceneErrorBoundary);
 }
         `;
 
@@ -415,23 +706,176 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return React.createElement('div', {
-        style: {
-          padding: '20px',
-          backgroundColor: '#fff3cd',
-          border: '2px dashed #ffc107',
-          borderRadius: '8px',
-          textAlign: 'center',
-          color: '#856404',
-          margin: '10px'
-        }
-      }, [
-        React.createElement('h3', {key: 'title'}, '⚠️ Scene ${index + 1} Runtime Error'),
-        React.createElement('p', {key: 'msg'}, 'This scene crashed during playback'),
-        React.createElement('small', {key: 'hint'}, 'Error: ' + (this.state.error?.message || 'Unknown error')),
-        React.createElement('div', {key: 'tech', style: {fontSize: '10px', marginTop: '8px', color: '#999'}}, 
-          'Scene isolated - other scenes continue playing')
-      ]);
+      // Create a runtime error fallback that matches the compilation error style
+      const { useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+      
+      return React.createElement(() => {
+        const frame = useCurrentFrame();
+        const { fps } = useVideoConfig();
+        
+        const opacity = interpolate(frame, [0, 20], [0, 1], {
+          extrapolateRight: 'clamp',
+        });
+        
+        const scale = spring({
+          frame,
+          fps,
+          from: 0.95,
+          to: 1,
+          config: {
+            damping: 20,
+            stiffness: 40,
+          },
+        });
+        
+        return React.createElement('div', {
+          style: {
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity,
+          }
+        }, 
+          React.createElement('div', {
+            style: {
+              background: 'white',
+              borderRadius: '16px',
+              padding: '32px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+              maxWidth: '450px',
+              textAlign: 'center',
+              transform: \`scale(\${scale})\`,
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+            }
+          }, [
+            React.createElement('div', {
+              key: 'icon',
+              style: { 
+                fontSize: '3rem', 
+                marginBottom: '1rem',
+              }
+            }, '⚡'),
+            
+            React.createElement('h3', {
+              key: 'title',
+              style: { 
+                color: '#92400e', 
+                marginBottom: '12px',
+                fontSize: '1.25rem',
+                fontWeight: '600'
+              }
+            }, 'Scene ${index + 1} Runtime Error'),
+            
+            React.createElement('p', {
+              key: 'scene-name',
+              style: { 
+                color: '#b45309', 
+                marginBottom: '8px',
+                fontSize: '0.875rem',
+                fontWeight: '500'
+              }
+            }, '${(originalScene.data as any)?.name || 'Unnamed Scene'}'),
+            
+            React.createElement('p', {
+              key: 'msg',
+              style: { 
+                color: '#92400e', 
+                marginBottom: '16px',
+                fontSize: '0.875rem',
+                opacity: 0.8
+              }
+            }, 'This scene crashed during playback, but other scenes continue normally.'),
+            
+            React.createElement('button', {
+              key: 'autofix',
+              onClick: () => {
+                const autoFixEvent = new CustomEvent('trigger-autofix', {
+                  detail: {
+                    sceneId: '${originalScene.id}',
+                    sceneName: '${(originalScene.data as any)?.name || `Scene ${index + 1}`}',
+                    sceneIndex: ${index + 1},
+                    error: this.state.error
+                  }
+                });
+                window.dispatchEvent(autoFixEvent);
+              },
+              style: {
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '0.625rem 1.5rem',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                marginBottom: '1rem',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                transition: 'all 0.2s'
+              }
+            }, '✨ Auto-Fix Scene'),
+            
+            React.createElement('div', {
+              key: 'status',
+              style: { 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                color: '#059669',
+                fontSize: '0.75rem',
+                fontWeight: '500',
+              }
+            }, [
+              React.createElement('span', {
+                key: 'dot',
+                style: { 
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#059669',
+                  display: 'inline-block'
+                }
+              }),
+              'Other scenes playing normally'
+            ]),
+            
+            React.createElement('details', {
+              key: 'error-details',
+              style: { 
+                marginTop: '12px',
+                textAlign: 'left',
+                background: '#fef3c7',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                color: '#92400e'
+              }
+            }, [
+              React.createElement('summary', {
+                key: 'summary',
+                style: { 
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  userSelect: 'none'
+                }
+              }, 'Error Details'),
+              React.createElement('div', {
+                key: 'error-text',
+                style: { 
+                  marginTop: '4px',
+                  fontFamily: 'monospace',
+                  fontSize: '0.7rem',
+                  opacity: 0.8,
+                  wordBreak: 'break-word'
+                }
+              }, this.state.error?.message || 'Unknown error')
+            ])
+          ])
+        );
+      });
     }
 
     return React.createElement(${compiled.componentName});
@@ -468,21 +912,89 @@ function ${compiled.componentName}WithErrorBoundary() {
             // 🚨 LAST RESORT: Add emergency fallback for this scene
             const emergencyFallback = `
 function EmergencyScene${index}() {
-  return React.createElement('div', {
+  const { AbsoluteFill, useCurrentFrame, interpolate } = window.Remotion;
+  const frame = useCurrentFrame();
+  
+  const opacity = interpolate(frame, [0, 15], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+  
+  return React.createElement(AbsoluteFill, {
     style: {
-      padding: '20px',
-      backgroundColor: '#f8d7da',
-      border: '2px dashed #dc3545',
-      borderRadius: '8px',
-      textAlign: 'center',
-      color: '#721c24',
-      margin: '10px'
+      background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity,
     }
-  }, [
-    React.createElement('h3', {key: 'title'}, '🚨 Scene ${index + 1} Emergency Fallback'),
-    React.createElement('p', {key: 'msg'}, 'This scene had critical errors'),
-    React.createElement('small', {key: 'hint'}, 'Other scenes continue normally')
-  ]);
+  }, 
+    React.createElement('div', {
+      style: {
+        background: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+        maxWidth: '380px',
+        textAlign: 'center',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+      }
+    }, [
+      React.createElement('div', {
+        key: 'icon',
+        style: { 
+          fontSize: '2.5rem', 
+          marginBottom: '0.75rem',
+        }
+      }, '🚧'),
+      
+      React.createElement('h3', {
+        key: 'title',
+        style: { 
+          color: '#dc2626', 
+          marginBottom: '8px',
+          fontSize: '1.125rem',
+          fontWeight: '600'
+        }
+      }, 'Scene ${index + 1} Unavailable'),
+      
+      React.createElement('p', {
+        key: 'msg',
+        style: { 
+          color: '#b91c1c', 
+          marginBottom: '12px',
+          fontSize: '0.875rem',
+          opacity: 0.9
+        }
+      }, 'This scene encountered critical errors during processing.'),
+      
+      React.createElement('div', {
+        key: 'status',
+        style: { 
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: '#dcfce7',
+          color: '#166534',
+          fontSize: '0.75rem',
+          fontWeight: '500',
+          padding: '4px 12px',
+          borderRadius: '9999px',
+        }
+      }, [
+        React.createElement('span', {
+          key: 'dot',
+          style: { 
+            width: '5px',
+            height: '5px',
+            borderRadius: '50%',
+            background: '#166534',
+            display: 'inline-block'
+          }
+        }),
+        'Other scenes continue normally'
+      ])
+    ])
+  );
 }`;
             sceneImports.push(emergencyFallback);
             sceneComponents.push(`
@@ -554,20 +1066,52 @@ export default function MultiSceneComposition() {
       }
       
     } catch (error) {
-      console.error('[PreviewPanelG] Error during compilation:', error);
+      console.error('[PreviewPanelG] Error during composition compilation:', error);
+      
+      // Try to identify which scene might be causing the issue
+      let problematicSceneInfo = null;
+      if (error instanceof Error) {
+        problematicSceneInfo = detectProblematicScene(error, compiledScenes, scenesWithCode);
+        
+        if (problematicSceneInfo) {
+          const enhancedMessage = enhanceErrorMessage(error, problematicSceneInfo);
+          console.error('[PreviewPanelG] Scene-specific error detected:', enhancedMessage);
+          
+          // Create a more informative error
+          error = new Error(enhancedMessage);
+        }
+      }
       
       // 🚨 CRITICAL FIX: Dispatch error event for autofixer when compilation fails
-      const firstSceneWithCode = scenesWithCode[0];
-      if (firstSceneWithCode) {
-        console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching preview-scene-error event for autofixer');
-        const errorEvent = new CustomEvent('preview-scene-error', {
-          detail: {
-            sceneId: firstSceneWithCode.id,
-            sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
-            error: error
-          }
-        });
-        window.dispatchEvent(errorEvent);
+      if (problematicSceneInfo) {
+        // We know which specific scene is problematic
+        const problematicScene = scenesWithCode[problematicSceneInfo.sceneIndex];
+        if (problematicScene) {
+          console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching error for specific scene:', problematicSceneInfo.sceneName);
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId: problematicSceneInfo.sceneId,
+              sceneName: problematicSceneInfo.sceneName,
+              sceneIndex: problematicSceneInfo.sceneIndex + 1,
+              error: error
+            }
+          });
+          window.dispatchEvent(errorEvent);
+        }
+      } else {
+        // Fallback to first scene if we can't identify the specific one
+        const firstSceneWithCode = scenesWithCode[0];
+        if (firstSceneWithCode) {
+          console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching preview-scene-error event for autofixer');
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId: firstSceneWithCode.id,
+              sceneName: (firstSceneWithCode.data as any)?.name || 'Scene 1',
+              error: error
+            }
+          });
+          window.dispatchEvent(errorEvent);
+        }
       }
       
       // IDIOT PROOF: Create a simple fallback that always works
@@ -598,7 +1142,12 @@ export default function FallbackComposition() {
           🔧 Scene Compilation Issue
         </h2>
         <p style={{ color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
-          There was an issue compiling the scenes, but don't worry! You can:
+          ${problematicSceneInfo 
+            ? `Error in ${problematicSceneInfo.sceneName}: ${problematicSceneInfo.variableName ? `Variable '${problematicSceneInfo.variableName}' is not defined` : 'Compilation failed'}`
+            : 'There was an issue compiling the scenes'}
+        </p>
+        <p style={{ color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
+          Don't worry! You can:
         </p>
         <ul style={{ color: '#666', textAlign: 'left', lineHeight: '1.5' }}>
           <li>Try refreshing the preview</li>
@@ -715,6 +1264,42 @@ export default function FallbackComposition() {
     }
   }, [projectId]);
 
+  // Listen for scenes created in bulk
+  useEffect(() => {
+    const handleScenesCreatedBulk = (event: CustomEvent) => {
+      if (event.detail?.projectId === projectId) {
+        console.log('[PreviewPanelG] Bulk scenes created, refreshing...');
+        // Force a re-render by updating refresh token
+        setRefreshToken(`bulk-${Date.now()}`);
+        // Recompile the scenes
+        if (scenes.length > 0 || event.detail?.count > 0) {
+          setTimeout(() => {
+            compileMultiSceneComposition();
+          }, 500); // Small delay to ensure data is synced
+        }
+      }
+    };
+
+    const handleSceneCreated = (event: CustomEvent) => {
+      if (event.detail?.projectId === projectId) {
+        console.log('[PreviewPanelG] Single scene created, refreshing...');
+        setRefreshToken(`single-${Date.now()}`);
+        if (scenes.length > 0) {
+          setTimeout(() => {
+            compileMultiSceneComposition();
+          }, 500);
+        }
+      }
+    };
+
+    window.addEventListener('scenes-created-bulk', handleScenesCreatedBulk as EventListener);
+    window.addEventListener('scene-created', handleSceneCreated as EventListener);
+    return () => {
+      window.removeEventListener('scenes-created-bulk', handleScenesCreatedBulk as EventListener);
+      window.removeEventListener('scene-created', handleSceneCreated as EventListener);
+    };
+  }, [projectId, compileMultiSceneComposition, scenes.length]);
+
   // Listen for loop state change events from header
   useEffect(() => {
     const handleLoopStateChange = (event: CustomEvent) => {
@@ -804,21 +1389,17 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow flex items-center justify-center p-4">
+      <div className="relative flex-grow flex items-center justify-center p-1 sm:p-4">
         {componentImporter && playerProps ? (
           <div 
-            className="relative bg-black shadow-xl"
+            className={cn(
+              "relative bg-black shadow-xl flex items-center justify-center",
+              // On mobile, let portrait videos take their natural size
+              playerProps.format === 'portrait' ? "w-auto h-full" : "w-full h-full"
+            )}
             style={{
-              // Adaptive sizing based on format
-              maxWidth: '100%',
-              maxHeight: '100%',
-              aspectRatio: `${playerProps.width} / ${playerProps.height}`,
-              // For portrait: constrain by height and let width adjust
-              // For landscape/square: constrain by width and let height adjust
-              width: playerProps.format === 'portrait' ? 'auto' : '100%',
-              height: playerProps.format === 'portrait' ? '100%' : 'auto',
-              // Center the video if it doesn't fill the container
-              margin: '0 auto',
+              // Use CSS aspect ratio to maintain proper dimensions
+              aspectRatio: playerProps.format === 'portrait' ? '9/16' : playerProps.format === 'square' ? '1/1' : '16/9'
             }}
           >
             <ErrorBoundary FallbackComponent={ErrorFallback}>

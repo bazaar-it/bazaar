@@ -24,6 +24,7 @@ export class TypographyTool extends BaseMCPTool<TypographyToolInput, TypographyT
         userPrompt: input.userPrompt,
         functionName: functionName,
         projectFormat: input.projectFormat,
+        previousSceneContext: input.previousSceneContext,
       });
       
       return {

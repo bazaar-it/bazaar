@@ -169,6 +169,10 @@ export interface TypographyToolInput extends BaseToolInput {
     width: number;
     height: number;
   };
+  previousSceneContext?: {
+    tsxCode: string;
+    style?: string;
+  };
 }
 
 export interface TypographyToolOutput extends BaseToolOutput {

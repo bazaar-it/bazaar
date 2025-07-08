@@ -15,9 +15,68 @@ interface ChatMessageProps {
   hasIterations?: boolean;
   userId?: string;
   onEditScenePlan?: (prompt: string) => void;
+  isFirstScenePlan?: boolean;
+  totalScenePlans?: number;
 }
 
-export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId, onEditScenePlan }: ChatMessageProps) {
+// Create All Scenes Button Component
+function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { projectId: string; userId: string; totalScenePlans: number }) {
+  const utils = api.useUtils();
+  
+  const createAllMutation = api.createSceneFromPlan.createAllScenes.useMutation({
+    onSuccess: async (result) => {
+      if (result.success && result.summary) {
+        toast.success(`Created ${result.summary.successful} scenes successfully!`);
+        
+        // Invalidate queries to refresh UI
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+        await utils.chat.getMessages.invalidate({ projectId });
+        
+        // Dispatch events for UI updates
+        window.dispatchEvent(new CustomEvent('scenes-created-bulk', { 
+          detail: { 
+            projectId,
+            count: result.summary.successful
+          } 
+        }));
+        
+        if (result.errors.length > 0) {
+          toast.warning(`Note: ${result.errors.length} scenes failed to create`);
+        }
+      } else {
+        toast.error(result.error || 'Failed to create scenes');
+      }
+    },
+    onError: (error) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+  
+  return (
+    <button
+      onClick={() => createAllMutation.mutate({ projectId, userId })}
+      disabled={createAllMutation.isPending}
+      className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors ml-1"
+      title={`Create all ${totalScenePlans} scenes`}
+    >
+      {createAllMutation.isPending ? (
+        <>
+          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+          <span>Creating All...</span>
+        </>
+      ) : (
+        <>
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+          </svg>
+          <span>Create All ({totalScenePlans})</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId, onEditScenePlan, isFirstScenePlan, totalScenePlans }: ChatMessageProps) {
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
@@ -305,6 +364,15 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                         </>
                       )}
                     </button>
+                    
+                    {/* Create All button - only show on first scene plan */}
+                    {isFirstScenePlan && totalScenePlans && totalScenePlans > 1 && projectId && userId && (
+                      <CreateAllScenesButton 
+                        projectId={projectId}
+                        userId={userId}
+                        totalScenePlans={totalScenePlans}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
