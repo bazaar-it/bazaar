@@ -1,12 +1,17 @@
 import { db } from "~/server/db";
-import { scenes, sceneIterations, projects } from "~/server/db/schema";
+import { scenes, sceneIterations, projects, messages } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
+import { messageService } from "~/server/services/data/message.service";
 import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
 import { trimTool } from "~/tools/trim/trim";
+import { typographyTool } from "~/tools/typography/typography";
+import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
+import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
+import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
-import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput } from "~/tools/helpers/types";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { SceneEntity } from "~/generated/entities";
 
 // Helper function for tool execution and database save
@@ -15,8 +20,9 @@ export async function executeToolFromDecision(
   projectId: string,
   userId: string,
   storyboard: any[],
-  messageId?: string
-): Promise<{ success: boolean; scene?: SceneEntity }> {
+  messageId?: string,
+  onSceneComplete?: (scene: SceneEntity) => void  // NEW: Callback for real-time delivery
+): Promise<{ success: boolean; scene?: SceneEntity; scenes?: SceneEntity[]; partialFailures?: string[]; additionalMessageIds?: string[] }> {
   const startTime = Date.now(); // Track generation time
   
   // Get project format for AI context
@@ -66,7 +72,6 @@ export async function executeToolFromDecision(
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
-        visionAnalysis: decision.toolContext.visionAnalysis,
         // Pass previous scene for style continuity (but not for first scene)
         previousSceneContext: storyboard.length > 0 ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
@@ -203,7 +208,6 @@ export async function executeToolFromDecision(
         currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
-        visionAnalysis: decision.toolContext.visionAnalysis,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
         formatContext: projectFormat,
@@ -430,7 +434,494 @@ export async function executeToolFromDecision(
         scene: sceneToDelete as any // Cast to any to avoid props type issue
       };
 
+    case 'typographyScene':
+      console.log('🎨 [HELPERS] Using TYPOGRAPHY tool');
+      
+      // Build typography input with proper type checking
+      const typographyInput: TypographyToolInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        projectFormat: projectFormat,
+        // Pass previous scene for style continuity (but not for first scene)
+        previousSceneContext: storyboard.length > 0 ? {
+          tsxCode: storyboard[storyboard.length - 1].tsxCode,
+          style: undefined
+        } : undefined,
+      };
+      
+      try {
+        const typographyResult = await typographyTool.run(typographyInput);
+        
+        if (!typographyResult.success || !typographyResult.data) {
+          console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator');
+          throw new Error(typographyResult.error?.message || 'Typography generation failed');
+        }
+        
+        // Save to database (same pattern as addScene)
+        const [typographyScene] = await db.insert(scenes).values({
+          projectId,
+          name: typographyResult.data.name,
+          tsxCode: typographyResult.data.tsxCode,
+          duration: typographyResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        return { success: true, scene: typographyScene as any };
+        
+      } catch (error) {
+        console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator:', error);
+        
+        // Fall back to code-generator for text-based requests
+        const fallbackInput: AddToolInput = {
+          userPrompt: decision.toolContext.userPrompt,
+          projectId,
+          userId,
+          sceneNumber: storyboard.length + 1,
+          storyboardSoFar: storyboard,
+          projectFormat,
+        };
+        
+        const fallbackResult = await addTool.run(fallbackInput);
+        
+        if (!fallbackResult.success || !fallbackResult.data) {
+          throw new Error(fallbackResult.error?.message || 'Both typography and fallback generation failed');
+        }
+        
+        // Save to database with fallback result
+        const [fallbackScene] = await db.insert(scenes).values({
+          projectId,
+          name: fallbackResult.data.name,
+          tsxCode: fallbackResult.data.tsxCode,
+          duration: fallbackResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        return { success: true, scene: fallbackScene as any };
+      }
+
+    case 'imageRecreatorScene':
+      console.log('🖼️ [HELPERS] Using IMAGE RECREATOR tool');
+      
+      // Build image recreator input with proper type checking
+      const imageRecreatorInput: ImageRecreatorToolInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        imageUrls: decision.toolContext.imageUrls || [], // Ensure it's always an array
+        projectFormat: projectFormat,
+        recreationType: 'full' // Default recreation type
+      };
+      
+      try {
+        const imageResult = await imageRecreatorTool.run(imageRecreatorInput);
+        
+        if (!imageResult.success) {
+          // 🚨 CRITICAL FIX: Don't fallback if image recreator explicitly failed validation
+          // This indicates the generated code has syntax errors or missing patterns
+          // Falling back to addTool would likely generate the same invalid code
+          console.error('🚨 [HELPERS] Image recreator tool failed validation - returning error to prevent app crash');
+          console.error('🚨 [HELPERS] Error details:', imageResult.error);
+          
+          // Return the error directly instead of trying a fallback that might also fail
+          const errorMessage = typeof imageResult.error === 'string' 
+            ? imageResult.error 
+            : imageResult.error?.message || 'Image recreation validation failed - code would crash the app';
+          throw new Error(errorMessage);
+        }
+        
+        if (!imageResult.data) {
+          console.warn('🔄 [HELPERS] Image recreator succeeded but returned no data, falling back to code-generator');
+          throw new Error('Image recreation succeeded but returned no data');
+        }
+        
+        // Save to database (same pattern as addScene)
+        const [imageScene] = await db.insert(scenes).values({
+          projectId,
+          name: imageResult.data.name,
+          tsxCode: imageResult.data.tsxCode,
+          duration: imageResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        if (!imageScene) {
+          throw new Error('Failed to save image recreation scene to database');
+        }
+        
+        console.log('✅ [HELPERS] Image recreation successful:', imageScene.name);
+        return { success: true, scene: imageScene as any };
+        
+      } catch (error) {
+        // 🚨 CRITICAL FIX: Only use fallback for unexpected errors, not validation failures
+        if (error instanceof Error && error.message.includes('validation failed')) {
+          // Don't fallback for validation failures - rethrow to prevent app crashes
+          console.error('🚨 [HELPERS] Validation failure detected - not using fallback to prevent crashes');
+          throw error;
+        }
+        
+        console.warn('🔄 [HELPERS] Image recreator tool had unexpected error, falling back to code-generator:', error);
+        
+        // Fall back to code-generator with images (only for unexpected errors)
+        const fallbackInput: AddToolInput = {
+          userPrompt: decision.toolContext.userPrompt,
+          projectId,
+          userId,
+          sceneNumber: storyboard.length + 1,
+          storyboardSoFar: storyboard,
+          imageUrls: decision.toolContext.imageUrls,
+          projectFormat,
+        };
+        
+        const fallbackResult = await addTool.run(fallbackInput);
+        
+        if (!fallbackResult.success || !fallbackResult.data) {
+          throw new Error(fallbackResult.error?.message || 'Both image recreation and fallback generation failed');
+        }
+        
+        // Save to database with fallback result
+        const [fallbackScene] = await db.insert(scenes).values({
+          projectId,
+          name: fallbackResult.data.name,
+          tsxCode: fallbackResult.data.tsxCode,
+          duration: fallbackResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        if (!fallbackScene) {
+          throw new Error('Failed to save fallback scene to database');
+        }
+        
+        console.log('✅ [HELPERS] Fallback to addTool successful:', fallbackScene.name);
+        return { success: true, scene: fallbackScene as any };
+      }
+
+    case 'scenePlanner':
+      console.log('📋 [HELPERS] Creating scene plan without auto-execution');
+      
+      // Build scene planner input with proper null checks
+      const scenePlannerInput: ScenePlannerToolInput = {
+        userPrompt: decision.toolContext?.userPrompt || '',
+        projectId,
+        userId,
+        storyboardSoFar: storyboard,
+        imageUrls: decision.toolContext?.imageUrls,
+        chatHistory: []
+      };
+      
+      // ✅ NEW APPROACH: Just create the scene plan, don't execute scenes
+      const plannerResult = await scenePlannerTool.run(scenePlannerInput);
+      
+      if (!plannerResult.success || !plannerResult.data) {
+        throw new Error(plannerResult.error?.message || 'Scene planning failed');
+      }
+      
+      console.log(`📋 [HELPERS] Created plan with ${plannerResult.data.scenePlans.length} scenes`);
+      
+      // ✅ TRACK CREATED MESSAGE IDs for VideoState sync
+      const createdScenePlanMessageIds: string[] = [];
+      
+      // ✅ SEQUENTIAL APPROACH: Create individual scene plan messages
+      // Instead of executing scenes, we'll save the plans as special message types
+      
+             if (messageId) {
+         // Update the main assistant message to show the plan overview
+         await db.update(messages)
+           .set({
+             content: `📝 I've planned ${plannerResult.data.scenePlans.length} scenes for your video. Click the buttons below to create each scene individually:`,
+             kind: 'text',
+             updatedAt: new Date(),
+           })
+           .where(eq(messages.id, messageId));
+           
+         // Create individual scene plan messages
+         for (let i = 0; i < plannerResult.data.scenePlans.length; i++) {
+           const plan = plannerResult.data.scenePlans[i];
+           if (!plan) continue; // Skip if plan is undefined
+           
+           const sceneNumber = i + 1;
+           
+           // Store scene plan data as JSON in the content field with a special marker
+           const scenePlanData = {
+             sceneNumber,
+             scenePlan: plan,
+             projectFormat: {
+               format: (await db.query.projects.findFirst({
+                 where: eq(projects.id, projectId),
+                 columns: { props: true }
+               }))?.props?.meta?.format || 'landscape',
+               width: 1920,
+               height: 1080
+             },
+             // Include original image URLs from the user context
+             imageUrls: decision.toolContext.imageUrls || []
+           };
+           
+           const content = `${plan.prompt}
+           
+<!-- SCENE_PLAN_DATA:${JSON.stringify(scenePlanData)} -->`;
+           
+           const message = await messageService.createMessage({
+             projectId,
+             content,
+             role: "assistant",
+             status: "success",
+             kind: "scene_plan"
+           });
+           
+           // ✅ TRACK THE MESSAGE ID FOR CLIENT SYNC
+           if (message?.id) {
+             createdScenePlanMessageIds.push(message.id);
+             console.log(`📋 [HELPERS] Created scene plan message ${sceneNumber}: ${message.id}`);
+           }
+         }
+       }
+      
+      // ✅ NEW: Return no scene at all, only messages
+      // This prevents the dummy scene from being mistaken for real scene code
+      return {
+        success: true,
+        // No scene field - this prevents any scene from being created
+        additionalMessageIds: createdScenePlanMessageIds
+      };
+
     default:
       throw new Error(`Unknown tool: ${decision.toolName}`);
+  }
+}
+
+// Multi-scene execution function with proper null checks
+async function executeMultiSceneFromPlanner(
+  decision: BrainDecision,
+  projectId: string,
+  userId: string,
+  storyboard: any[],
+  messageId?: string,
+  onSceneComplete?: (scene: SceneEntity) => void
+): Promise<{ success: boolean; scenes: SceneEntity[]; partialFailures?: string[] }> {
+  console.log('🎬 [HELPERS] Executing multi-scene generation from planner');
+  
+  // Validate decision has toolContext
+  if (!decision.toolContext) {
+    throw new Error('Decision missing toolContext for multi-scene execution');
+  }
+  
+  // Build scene planner input
+  const scenePlannerInput: ScenePlannerToolInput = {
+    userPrompt: decision.toolContext.userPrompt,
+    projectId,
+    userId,
+    storyboardSoFar: storyboard,
+    imageUrls: decision.toolContext.imageUrls,
+    chatHistory: []
+  };
+  
+  // Get project format
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, projectId),
+    columns: { props: true }
+  });
+  
+  const projectFormat = {
+    format: project?.props?.meta?.format || 'landscape',
+    width: project?.props?.meta?.width || 1920,
+    height: project?.props?.meta?.height || 1080
+  };
+  
+  // Step 1: Run scene planner
+  const plannerInput = {
+    userPrompt: decision.toolContext.userPrompt,
+    projectId,
+    userId,
+    storyboardSoFar: storyboard,
+    imageUrls: decision.toolContext.imageUrls,
+    chatHistory: [], // TODO: Add chat history if available
+  } as ScenePlannerToolInput;
+  
+  const plannerResult = await scenePlannerTool.run(plannerInput);
+  
+  if (!plannerResult.success || !plannerResult.data) {
+    throw new Error(plannerResult.error?.message || 'Scene planning failed');
+  }
+  
+  console.log(`🎬 [MULTI-SCENE] Planned ${plannerResult.data.scenePlans.length} scenes, executing in parallel`);
+  
+  // Step 2: Set up ordered delivery buffer
+  const startingOrder = storyboard.length;
+  const orderBuffer = new SceneOrderBuffer(startingOrder, (scene: SceneEntity) => {
+    if (onSceneComplete) {
+      onSceneComplete(scene);
+    }
+  });
+  
+  // Step 3: Execute scenes in parallel with ordered delivery
+  const scenePromises = plannerResult.data.scenePlans.map(async (plan, index) => {
+    const sceneOrder = startingOrder + index;
+    
+    try {
+      console.log(`🎬 [MULTI-SCENE] Starting scene ${sceneOrder}: ${plan.toolType} - "${plan.prompt.substring(0, 50)}..."`);
+      
+      // Execute individual scene
+      const result = await executeIndividualScene(plan, projectId, userId, projectFormat, sceneOrder, storyboard);
+      
+      if (result.success && result.scene) {
+        console.log(`✅ [MULTI-SCENE] Scene ${sceneOrder} completed: ${result.scene.name}`);
+        
+        // Add to buffer for ordered delivery
+        orderBuffer.addCompletedScene(result.scene, sceneOrder);
+        
+        return { success: true, scene: result.scene, sceneOrder };
+      } else {
+        console.error(`❌ [MULTI-SCENE] Scene ${sceneOrder} failed: ${result.error}`);
+        return { success: false, error: result.error, sceneOrder };
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`❌ [MULTI-SCENE] Scene ${sceneOrder} threw error: ${errorMessage}`);
+      return { success: false, error: errorMessage, sceneOrder };
+    }
+  });
+  
+  // Step 4: Wait for all scenes and handle partial failures
+  const sceneResults = await Promise.all(scenePromises);
+  
+  // Check if there are any scenes still in the buffer (shouldn't happen, but safety check)
+  if (orderBuffer.getPendingCount() > 0) {
+    console.warn(`🚨 [MULTI-SCENE] ${orderBuffer.getPendingCount()} scenes still in buffer after completion`);
+  }
+  
+  // Separate successful and failed scenes
+  const successfulScenes = sceneResults.filter(r => r.success && r.scene).map(r => r.scene!);
+  const failedScenes = sceneResults.filter(r => !r.success);
+  
+  console.log(`🎬 [MULTI-SCENE] Completed: ${successfulScenes.length} successful, ${failedScenes.length} failed`);
+  
+  // Log failed scenes for debugging
+  if (failedScenes.length > 0) {
+    console.error('🚨 [MULTI-SCENE] Failed scenes:', failedScenes.map(f => `Scene ${f.sceneOrder}: ${f.error}`));
+  }
+  
+  // Return partial success if we have any successful scenes
+  if (successfulScenes.length > 0) {
+    return {
+      success: true,
+      scenes: successfulScenes,
+      partialFailures: failedScenes.map(f => `Scene ${f.sceneOrder}: ${f.error}`)
+    };
+  } else {
+    // All scenes failed
+    throw new Error(`All ${plannerResult.data.scenePlans.length} scenes failed to generate`);
+  }
+}
+
+async function executeIndividualScene(
+  plan: ScenePlan,
+  projectId: string,
+  userId: string,
+  projectFormat: any,
+  sceneOrder: number,
+  storyboard: any[]
+): Promise<{ success: boolean; scene?: SceneEntity; error?: string }> {
+  
+  try {
+    let toolResult;
+    
+    // Execute appropriate tool with fallback
+    switch (plan.toolType) {
+      case 'typography':
+        try {
+          toolResult = await typographyTool.run({
+            userPrompt: plan.prompt,
+            projectId,
+            userId,
+            projectFormat,
+          });
+          
+          if (!toolResult.success || !toolResult.data) {
+            throw new Error(toolResult.error?.message || 'Typography tool failed');
+          }
+        } catch (error) {
+          console.warn(`🔄 [MULTI-SCENE] Typography tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
+          
+          // Fall back to code-generator
+          toolResult = await addTool.run({
+            userPrompt: plan.prompt,
+            projectId,
+            userId,
+            sceneNumber: sceneOrder + 1,
+            storyboardSoFar: storyboard,
+            projectFormat,
+          });
+        }
+        break;
+        
+      case 'recreate':
+        try {
+          toolResult = await imageRecreatorTool.run({
+            userPrompt: plan.prompt,
+            imageUrls: plan.context.imageUrls || [],
+            projectId,
+            userId,
+            projectFormat,
+            recreationType: 'full',
+          });
+          
+          if (!toolResult.success || !toolResult.data) {
+            throw new Error(toolResult.error?.message || 'Image recreation tool failed');
+          }
+        } catch (error) {
+          console.warn(`🔄 [MULTI-SCENE] Image recreation tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
+          
+          // Fall back to code-generator with images
+          toolResult = await addTool.run({
+            userPrompt: plan.prompt,
+            projectId,
+            userId,
+            sceneNumber: sceneOrder + 1,
+            storyboardSoFar: storyboard,
+            imageUrls: plan.context.imageUrls,
+            projectFormat,
+          });
+        }
+        break;
+        
+      case 'code-generator':
+      default:
+        toolResult = await addTool.run({
+          userPrompt: plan.prompt,
+          projectId,
+          userId,
+          sceneNumber: sceneOrder + 1,
+          storyboardSoFar: storyboard,
+          projectFormat,
+        });
+        break;
+    }
+    
+    if (!toolResult.success || !toolResult.data) {
+      return { success: false, error: toolResult.error?.message || 'Tool execution failed' };
+    }
+    
+    // Save to database with correct order
+    const [newScene] = await db.insert(scenes).values({
+      projectId,
+      name: toolResult.data.name,
+      tsxCode: toolResult.data.tsxCode,
+      duration: toolResult.data.duration || 150,
+      order: sceneOrder,
+      props: {},
+    }).returning();
+    
+    return { success: true, scene: newScene as any };
+    
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error during scene execution' 
+    };
   }
 }

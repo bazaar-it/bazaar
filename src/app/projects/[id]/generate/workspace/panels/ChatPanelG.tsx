@@ -1,7 +1,7 @@
 // src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
@@ -25,7 +25,7 @@ interface ComponentMessage {
   isUser: boolean;
   timestamp: Date;
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
-  kind?: "text" | "error" | "status" | "tool_result";
+  kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
 }
 
@@ -33,12 +33,14 @@ interface ChatPanelGProps {
   projectId: string;
   selectedSceneId: string | null;
   onSceneGenerated?: (sceneId: string) => void;
+  userId?: string;
 }
 
 export default function ChatPanelG({
   projectId,
   selectedSceneId,
   onSceneGenerated,
+  userId,
 }: ChatPanelGProps) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -76,15 +78,28 @@ export default function ChatPanelG({
   })));
   
   // Convert VideoState messages to component format for rendering
-  const componentMessages: ComponentMessage[] = messages.map(msg => ({
-    id: msg.id,
-    content: msg.message,
-    isUser: msg.isUser,
-    timestamp: new Date(msg.timestamp),
-    status: msg.status,
-    kind: msg.kind,
-    imageUrls: msg.imageUrls,
-  }));
+  const componentMessages: ComponentMessage[] = useMemo(() => {
+    // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
+    const uniqueMessages = messages.filter((msg, index, array) => 
+      array.findIndex(m => m.id === msg.id) === index
+    );
+    
+    console.log('[ChatPanelG] Deduplicated messages:', {
+      original: messages.length,
+      unique: uniqueMessages.length,
+      removed: messages.length - uniqueMessages.length
+    });
+    
+    return uniqueMessages.map(msg => ({
+      id: msg.id,
+      content: msg.message,
+      isUser: msg.isUser,
+      timestamp: new Date(msg.timestamp),
+      status: msg.status,
+      kind: msg.kind,
+      imageUrls: msg.imageUrls,
+    }));
+  }, [messages]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
@@ -247,6 +262,20 @@ export default function ChatPanelG({
     console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
   }, [isGenerating]);
+
+  // ✅ NEW: Handle edit scene plan - copy prompt to input
+  const handleEditScenePlan = useCallback((prompt: string) => {
+    setMessage(prompt);
+    // Focus the textarea after setting the message
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        // Move cursor to end
+        const length = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, 50);
+  }, []);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -432,6 +461,9 @@ export default function ChatPanelG({
           // Get the assistant message ID from the response
           const assistantMessageId = responseData.assistantMessageId;
           
+          // ✅ NEW: Get additional message IDs from scene planner
+          const additionalMessageIds = responseData.additionalMessageIds || [];
+          
           if (assistantMessageId) {
             // First, add the assistant message to VideoState since it doesn't exist yet
             const aiResponse = responseData.context?.chatResponse || 
@@ -449,6 +481,19 @@ export default function ChatPanelG({
             
             // Hide the pulsating message immediately when we have the real message
             setIsGenerating(false);
+          }
+          
+          // ✅ NEW: Add scene plan messages to VideoState immediately
+          if (additionalMessageIds.length > 0) {
+            console.log(`[ChatPanelG] ✅ SCENE PLANNER: Adding ${additionalMessageIds.length} scene plan messages to VideoState:`, additionalMessageIds);
+            
+            // Force a re-fetch of messages to get the scene plan content from database
+            await utils.chat.getMessages.invalidate({ projectId });
+            
+            // Note: We don't manually add these messages to VideoState because:
+            // 1. They already exist in the database with proper content
+            // 2. The invalidation above will trigger a refresh that includes them
+            // 3. The syncDbMessages effect will automatically sync them to VideoState
           }
           
           // Check if this is a clarification response
@@ -590,27 +635,38 @@ export default function ChatPanelG({
     <div className="flex flex-col h-full">
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {componentMessages.map((msg) => (
-          <ChatMessage
-            key={msg.id}
-            message={{
-              id: msg.id,
-              message: msg.content,
-              isUser: msg.isUser,
-              timestamp: msg.timestamp.getTime(),
-              status: msg.status,
-              kind: msg.kind,
-              imageUrls: msg.imageUrls,
-            }}
-            onImageClick={(imageUrl) => {
-              // TODO: Implement image click handler
-              console.log('Image clicked:', imageUrl);
-            }}
-            projectId={projectId}
-            onRevert={isReverting ? undefined : handleRevert}
-            hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-          />
-        ))}
+        {componentMessages.map((msg, index) => {
+          // Find all scene plan messages
+          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
+          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+          const totalScenePlans = scenePlanMessages.length;
+          
+          return (
+            <ChatMessage
+              key={msg.id}
+              message={{
+                id: msg.id,
+                message: msg.content,
+                isUser: msg.isUser,
+                timestamp: msg.timestamp.getTime(),
+                status: msg.status,
+                kind: msg.kind,
+                imageUrls: msg.imageUrls,
+              }}
+              onImageClick={(imageUrl) => {
+                // TODO: Implement image click handler
+                console.log('Image clicked:', imageUrl);
+              }}
+              projectId={projectId}
+              userId={userId}
+              onRevert={isReverting ? undefined : handleRevert}
+              onEditScenePlan={handleEditScenePlan}
+              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+              isFirstScenePlan={isFirstScenePlan}
+              totalScenePlans={totalScenePlans}
+            />
+          );
+        })}
         
         {/* Show pulsating message UI when generating */}
         {isGenerating && (

@@ -12,10 +12,7 @@ import {
   MessageSquareIcon, 
   PlayIcon, 
   Code2Icon, 
-  ChevronLeftIcon, 
-  ChevronRightIcon, 
   PlusIcon,
-  ListIcon,
   FolderIcon,
   LayoutTemplateIcon,
 } from "lucide-react";
@@ -23,8 +20,6 @@ import {
 
 interface GenerateSidebarProps {
   onAddPanel?: (panelType: PanelTypeG) => void;
-  isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
 }
 
 interface WorkspacePanelG {
@@ -33,6 +28,7 @@ interface WorkspacePanelG {
   name: string;
   icon: any;
   href: string;
+  tooltip: string;
 }
 
 interface PanelOption {
@@ -44,40 +40,21 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels - storyboard is hidden but can still be added through panel options
+// Workspace panels in vertical order: Projects, Chat, Video, Code, Templates
 const navItems: WorkspacePanelG[] = [
-  { type: 'myprojects', id: 'myprojects', name: "My Projects", icon: FolderIcon, href: "#myprojects" },
-  { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat" },
-  { type: 'preview', id: 'preview', name: "Preview", icon: PlayIcon, href: "#preview" },
-  { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code" },
-  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates" },
+  { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
+  { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
+  { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
+  { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
+  { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
 ];
 
 
 export function GenerateSidebar({ 
-  onAddPanel, 
-  isCollapsed = false, 
-  onToggleCollapse 
+  onAddPanel
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
-  
-  const handleCreateProject = () => {
-    // Redirect to the new project page where users can select format
-    router.push('/projects/new');
-  };
-  
-  // Toggle the sidebar collapsed state
-  const toggleCollapse = useCallback(() => {
-    if (onToggleCollapse) {
-      onToggleCollapse();
-    }
-  }, [onToggleCollapse]);
-  
-  // Calculate sidebar width based on collapsed state
-  const sidebarWidth = useMemo(() => {
-    return isCollapsed ? '3rem' : '10rem';
-  }, [isCollapsed]);
   
   // Handle dragging panel icons from sidebar
   const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG) => {
@@ -122,110 +99,104 @@ export function GenerateSidebar({
   return (
     <TooltipProvider>
       <aside 
-        className={`flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-lg transition-all duration-200 ease-linear ${isCollapsed ? 'items-center' : 'items-start'}`}
+        className="flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-lg items-center"
         style={{ 
-          width: sidebarWidth,
-          maxWidth: isCollapsed ? '3rem' : '10rem',
-          minWidth: isCollapsed ? '3rem' : '10rem',
-          paddingTop: '25px',
-          paddingLeft: '10px',
-          paddingRight: isCollapsed ? '10px' : '20px'
-        }}
+          width: '4rem',
+          maxWidth: '4rem',
+          minWidth: '4rem',
+          paddingTop: '10px',
+          paddingLeft: '0px',
+          paddingRight: '0px'
+        }}    
       >
-        {/* Collapse/Expand button */}
-        <button
-          className="absolute -right-3 top-2 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full w-6 h-6 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 shadow-sm"
-          onClick={toggleCollapse}
-          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isCollapsed ? (
-            <ChevronRightIcon className="h-3 w-3 text-gray-700 dark:text-gray-300" />
-          ) : (
-            <ChevronLeftIcon className="h-3 w-3 text-gray-700 dark:text-gray-300" />
-          )}
-        </button>
-
         {/* New Project Button */}
-        <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
-          {isCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 rounded-lg flex items-center justify-center bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
-                  onClick={handleCreateProject}
-                >
-                  <PlusIcon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                New Project
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <NewProjectButton 
-              className="h-9 w-full justify-start rounded-lg text-sm font-normal text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 pr-4"
-              variant="ghost"
-              size="default"
-              showIcon={true}
-            />
-          )}
+        <div className="w-full flex flex-col items-center mb-1">
+          <div 
+            className="flex flex-col items-center group cursor-pointer gap-1"
+            onMouseEnter={() => {
+              // Trigger format dropdown when hovering over the entire highlighted area
+              const container = document.querySelector('[data-new-project-container]');
+              if (container) {
+                container.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+              }
+            }}
+            onMouseLeave={() => {
+              // Handle mouse leave for the entire highlighted area
+              const container = document.querySelector('[data-new-project-container]');
+              if (container) {
+                container.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+              }
+            }}
+          >
+            <div 
+              className="h-10 w-10 rounded-lg flex items-center justify-center bg-transparent group-hover:bg-gray-100 dark:group-hover:bg-gray-800 transition-all duration-200"
+              data-new-project-container
+            >
+              <NewProjectButton 
+                variant="ghost"
+                size="icon"
+                enableQuickCreate={true}
+                className="p-0 h-full w-full bg-transparent"
+              >
+                <PlusIcon className="h-6 w-6 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors stroke-2" />
+              </NewProjectButton>
+            </div>
+            <span className="text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 font-light leading-tight transition-colors">New</span>
+          </div>
         </div>
 
-        {/* Panel Navigation - Chat, Preview, Storyboard, Code */}
-        <nav className={`flex flex-col w-full mt-3 gap-3 ${isCollapsed ? 'items-center' : ''}`}>
+        {/* Panel Navigation */}
+        <nav 
+          className="flex flex-col w-full gap-4"
+          onMouseEnter={() => {
+            // Close any open format dropdowns when hovering over navigation items
+            document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
+          }}
+        >
           {navItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
-                <div className={`flex ${isCollapsed ? 'justify-center w-full' : 'w-full'}`}>
-                  {isCollapsed ? (
-                    <Button 
-                      variant="ghost"
-                      className="h-9 w-9 rounded-lg flex items-center justify-center transition-all duration-200 
-                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 
-                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
-                      onClick={() => handlePanelClick(item.type)}
-                      data-panel-type={item.type}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.type)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                    </Button>
-                  ) : (
-                    <Button 
-                      variant="ghost"
-                      className="h-9 w-full flex items-center justify-start rounded-lg transition-all duration-200 
-                        bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800
-                        text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 pr-4"
-                      onClick={() => handlePanelClick(item.type)}
-                      data-panel-type={item.type}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.type)}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <item.icon className="h-5 w-5 text-gray-500 dark:text-gray-400 mr-3" />
-                      <span className="text-sm font-normal">{item.name}</span>
-                    </Button>
-                  )}
+                <div className="flex flex-col items-center group cursor-pointer gap-1">
+                  <div 
+                    className="h-10 w-10 rounded-lg flex items-center justify-center transition-all duration-200 
+                      bg-transparent group-hover:bg-gray-100 dark:group-hover:bg-gray-800 
+                      text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 cursor-pointer"
+                    onClick={() => handlePanelClick(item.type)}
+                    data-panel-type={item.type}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, item.type)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <item.icon className="h-5 w-5 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors stroke-[1.5]" />
+                  </div>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 font-light leading-tight transition-colors">{item.name}</span>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="right" className={!isCollapsed ? 'hidden' : ''}>
-                {item.name}
+              <TooltipContent side="right">
+                {item.tooltip}
               </TooltipContent>
             </Tooltip>
           ))}
         </nav>
 
-
-
         {/* Separator */}
-        <div className="flex-grow"></div>
+        <div 
+          className="flex-grow"
+          onMouseEnter={() => {
+            // Close format dropdown when hovering over the separator area
+            document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
+          }}
+        ></div>
 
         {/* Feedback Button - aligned to bottom */}
-        <div className={`w-full ${isCollapsed ? 'flex justify-center' : ''}`}>
-          <SidebarFeedbackButton isCollapsed={isCollapsed} />
+        <div 
+          className="w-full flex justify-center"
+          onMouseEnter={() => {
+            // Close format dropdown when hovering over the feedback button area
+            document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
+          }}
+        >
+          <SidebarFeedbackButton isCollapsed={true} />
         </div>
 
       </aside>

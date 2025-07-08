@@ -56,11 +56,50 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       console.log('🔨 [ADD TOOL] Using text-based generation');
       return await this.generateFromText(input);
     } catch (error) {
+      // Return valid error response with fallback code to prevent infinite loops
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode = `const { AbsoluteFill } = window.Remotion;
+
+export default function Scene_ERROR() {
+  return (
+    <AbsoluteFill 
+      style={{ 
+        backgroundColor: "#f8d7da", 
+        display: "flex", 
+        alignItems: "center", 
+        justifyContent: "center",
+        color: "#721c24",
+        fontSize: "1.5rem",
+        textAlign: "center",
+        padding: "2rem"
+      }}
+    >
+      <div>
+        <div>Scene Generation Failed</div>
+        <div style={{ fontSize: "1rem", marginTop: "1rem", opacity: 0.8 }}>
+          {errorMessage}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+export const durationInFrames_ERROR = 180;`;
+
       return {
         success: false,
-        reasoning: `Failed to generate scene: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      } as AddToolOutput;
+        tsxCode: errorCode, // Return valid fallback code to prevent infinite loops
+        name: 'Scene Generation Error',
+        duration: 180,
+        reasoning: `Failed to generate scene: ${errorMessage}`,
+        error: errorMessage,
+        chatResponse: `❌ Scene generation failed: ${errorMessage}`,
+        scene: {
+          tsxCode: errorCode,
+          name: 'Scene Generation Error',
+          duration: 180,
+        },
+      };
     }
   }
 

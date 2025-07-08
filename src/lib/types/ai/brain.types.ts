@@ -7,10 +7,10 @@
  */
 
 // ============================================================================
-// TOOL NAMES - Only the 4 actual tools we have
+// TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene';
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'typographyScene' | 'imageRecreatorScene' | 'scenePlanner';
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -20,7 +20,10 @@ export const TOOL_OPERATION_MAP = {
   addScene: 'scene.create',
   editScene: 'scene.update',
   trimScene: 'scene.update',
-  deleteScene: 'scene.delete'
+  deleteScene: 'scene.delete',
+  typographyScene: 'scene.create',
+  imageRecreatorScene: 'scene.create',
+  scenePlanner: 'multi-scene.create'
 } as const;
 
 export type ToolOperationType = typeof TOOL_OPERATION_MAP[ToolName];
@@ -191,5 +194,5 @@ export interface ToolSelectionResult {
 // ============================================================================
 
 export function isValidToolName(value: string): value is ToolName {
-  return ['addScene', 'editScene', 'deleteScene', 'trimScene'].includes(value);
+  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'typographyScene', 'imageRecreatorScene', 'scenePlanner'].includes(value);
 }

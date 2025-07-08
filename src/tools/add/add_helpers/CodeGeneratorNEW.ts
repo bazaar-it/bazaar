@@ -3,14 +3,209 @@ import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
+import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
+import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 
 /**
- * Code Generator Service - converts JSON specifications to React/Remotion code
- * Second step of the two-step pipeline: JSON Spec → React Code
+ * Unified Code Processing Service - handles all code generation tools
+ * Provides consistent response processing for: Code Generator, Typography, Image Recreator
+ * Uses simple, proven approach from original CodeGeneratorService
  */
-export class CodeGeneratorService {
+export class UnifiedCodeProcessor {
   private readonly DEBUG = process.env.NODE_ENV === 'development';
+
+  /**
+   * UNIFIED: Process AI response with consistent logic for all tools
+   * Uses the proven simple approach from CodeGeneratorService
+   */
+  private processAIResponse(rawOutput: string, toolName: string, userPrompt: string, functionName: string): {
+    code: string;
+    name: string;
+    duration: number;
+    reasoning: string;
+  } {
+    // Clean and process code (same logic as original CodeGeneratorService)
+    let cleanCode = rawOutput.trim();
+    cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+    
+    // Ensure single export default only (original CodeGeneratorService logic)
+    if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
+      const sceneMatch = cleanCode.match(/const \{[^}]+\} = window\.Remotion;[\s\S]*?export default function \w+\(\)[^{]*\{[\s\S]*?\n\}/);
+      if (sceneMatch) {
+        cleanCode = sceneMatch[0];
+      }
+    }
+    
+    // Extract duration
+    const durationAnalysis = analyzeDuration(cleanCode);
+    
+    // Generate name based on tool type
+    const name = this.generateSceneName(toolName, userPrompt, cleanCode);
+    
+    return {
+      code: cleanCode,
+      name,
+      duration: durationAnalysis.frames,
+      reasoning: `Generated ${toolName.toLowerCase()} scene: "${name}" (${durationAnalysis.frames} frames)`,
+    };
+  }
+
+  /**
+   * UNIFIED: Generate scene name based on tool type
+   */
+  private generateSceneName(toolName: string, userPrompt: string, code: string): string {
+    switch (toolName.toLowerCase()) {
+      case 'typography':
+        // Look for text-specific patterns
+        const textMatch = userPrompt.match(/(?:says?|text|showing|displaying)\s+(.+?)(?:\s+with|\s+in|\s+on|\s+at|\s+for|$)/i);
+        if (textMatch?.[1]) return `Text: ${textMatch[1].substring(0, 30)}`;
+        
+        const quotedMatch = userPrompt.match(/["'](.*?)["']/) || code.match(/["'](.*?)["']/);
+        if (quotedMatch?.[1] && quotedMatch[1].length > 2) return `Text: ${quotedMatch[1].substring(0, 30)}`;
+        
+        return 'Animated Text';
+        
+      case 'image_recreator':
+        // Look for recreation-specific patterns
+        const recreateMatch = userPrompt.match(/recreate\s+(.+?)(?:\s+with|\s+as|\s+in|\s+for|$)/i);
+        if (recreateMatch?.[1]) return `Recreated ${recreateMatch[1].substring(0, 30)}`;
+        
+        const imageMatch = userPrompt.match(/image\s+of\s+(.+?)(?:\s+with|\s+as|\s+in|\s+for|$)/i);
+        if (imageMatch?.[1]) return `Image: ${imageMatch[1].substring(0, 30)}`;
+        
+        return 'Recreated Scene';
+        
+      default:
+        return 'Scene'; // Simple display name for code generator
+    }
+  }
+
+  /**
+   * TYPOGRAPHY: Generate animated text scenes
+   */
+  async generateTypographyScene(input: {
+    userPrompt: string;
+    functionName: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
+    previousSceneContext?: {
+      tsxCode: string;
+      style?: string;
+    };
+  }): Promise<CodeGenerationOutput> {
+    console.log('🎨 [UNIFIED PROCESSOR] TYPOGRAPHY: Generating text scene');
+    
+    try {
+      // Prepare the messages with optional previous scene context
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system' as const, content: TYPOGRAPHY_AGENT.content }
+      ];
+
+      // Add previous scene context if available
+      if (input.previousSceneContext?.tsxCode) {
+        messages.push({
+          role: 'user' as const,
+          content: `Previous scene code for visual harmony reference:\n\`\`\`tsx\n${input.previousSceneContext.tsxCode}\n\`\`\`\n\nMaintain visual harmony with the established theme. Use similar colors, gradients, and fonts for consistency, but create unique text animations appropriate for the content.`
+        });
+        messages.push({
+          role: 'assistant' as const,
+          content: 'I understand. I will maintain visual harmony with the previous scene while creating unique text animations.'
+        });
+      }
+
+      // Add the main user prompt
+      messages.push({
+        role: 'user' as const,
+        content: input.userPrompt
+      });
+
+      const response = await AIClientService.generateResponse(
+        getModel('codeGenerator'),
+        messages
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from Typography LLM");
+      }
+      
+      const result = this.processAIResponse(rawOutput, 'TYPOGRAPHY', input.userPrompt, input.functionName);
+      
+      return {
+        ...result,
+        debug: {
+          method: 'typography',
+          promptLength: input.userPrompt.length,
+          responseLength: rawOutput.length,
+        }
+      };
+      
+    } catch (error) {
+      console.error('[UNIFIED PROCESSOR] Typography generation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * IMAGE RECREATOR: Generate scenes from images
+   */
+  async generateImageRecreationScene(input: {
+    userPrompt: string;
+    functionName: string;
+    imageUrls: string[];
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
+  }): Promise<CodeGenerationOutput> {
+    console.log('🖼️ [UNIFIED PROCESSOR] IMAGE RECREATOR: Generating recreation scene');
+    
+    try {
+      // Build message content with text and images
+      const messageContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+        { type: 'text', text: input.userPrompt }
+      ];
+      
+      for (const url of input.imageUrls) {
+        messageContent.push({ 
+          type: 'image_url', 
+          image_url: { url } 
+        });
+      }
+      
+      const response = await AIClientService.generateResponse(
+        getModel('codeGenerator'),
+        [{ role: 'user', content: messageContent }],
+        { role: 'system', content: IMAGE_RECREATOR.content }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from Image Recreator LLM");
+      }
+      
+      const result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      
+      return {
+        ...result,
+        debug: {
+          method: 'imageRecreation',
+          imageCount: input.imageUrls.length,
+          promptLength: input.userPrompt.length,
+          responseLength: rawOutput.length,
+        }
+      };
+      
+    } catch (error) {
+      console.error('[UNIFIED PROCESSOR] Image recreation failed:', error);
+      throw error;
+    }
+  }
 
   /**
    * Generate code directly from prompt (FASTEST PATH - no layout)
@@ -462,4 +657,4 @@ Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytell
 }
 
 // Export singleton instance
-export const codeGenerator = new CodeGeneratorService();
+export const codeGenerator = new UnifiedCodeProcessor();

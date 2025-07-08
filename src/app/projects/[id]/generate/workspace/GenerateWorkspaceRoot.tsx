@@ -20,11 +20,12 @@ const DEBUG = process.env.NODE_ENV === 'development';
 
 type Props = {
   projectId: string;
+  userId: string;
   initialProps: InputProps;
   initialProjects: { id: string; name: string }[];
 };
 
-export default function GenerateWorkspaceRoot({ projectId, initialProps, initialProjects }: Props) {
+export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
@@ -79,7 +80,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
     }
   }, [currentProjectData?.title, title]);
 
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  // Sidebar is now fixed width, no expansion state needed
 
   const handleProjectRenamed = useCallback((newTitle: string) => {
     setTitle(newTitle);
@@ -158,6 +159,7 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
         <div className="flex-1 overflow-hidden">
           <MobileWorkspaceLayout
             projectId={projectId}
+            userId={userId}
             initialProps={initialProps}
             projects={userProjects}
             onProjectRename={handleProjectRenamed}
@@ -188,21 +190,21 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
       
       {/* Main container with horizontal buffer zones on both sides */}
       <div className="flex-1 relative overflow-hidden px-[10px]">
-        {/* Main Content Area - Adjusts position based on sidebar expanded state */}
+        {/* Main Content Area - Fixed position with sidebar width */}
         <div
           className="absolute inset-0 z-0 bg-white dark:bg-gray-900 rounded-lg overflow-hidden" 
           style={{
-            left: isSidebarExpanded ? 'calc(10rem + 20px)' : 'calc(3rem + 15px + 10px)', 
+            left: 'calc(4rem + 20px)', // Fixed sidebar width of 4rem + 10px left margin + 10px gap
             right: '10px',
             top: '0',
-            bottom: '10px',
-            transition: 'left 0.3s cubic-bezier(0.4,0,0.2,1)'
+            bottom: '10px'
           }}
         >
           <div className="h-full flex flex-col overflow-hidden relative">
             <WorkspaceContentAreaG
               ref={workspaceContentAreaRef}
               projectId={projectId}
+              userId={userId}
               initialProps={initialProps}
               projects={userProjects}
               onProjectRename={handleProjectRenamed}
@@ -210,13 +212,11 @@ export default function GenerateWorkspaceRoot({ projectId, initialProps, initial
           </div>
         </div>
         
-        {/* Sidebar with absolute positioning that adjusts width based on expanded state */}
+        {/* Sidebar with fixed positioning */}
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
             onAddPanel={handleAddPanel}
-            isCollapsed={!isSidebarExpanded}
-            onToggleCollapse={() => setIsSidebarExpanded(!isSidebarExpanded)}
           />
         </div>
       </div>

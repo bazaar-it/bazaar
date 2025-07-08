@@ -111,6 +111,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     return (
       <GenerateWorkspaceRoot
         projectId={projectId}
+        userId={session.user.id}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={actualInitialProps}
       />

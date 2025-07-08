@@ -5,6 +5,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
+import { NewProjectButton } from "~/components/client/NewProjectButton";
 
 // Lazy load heavy components
 const LoginModal = lazy(() => import("./login/page"));
@@ -28,9 +29,8 @@ export default function HomePage() {
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
-      // Redirect to /projects/new which handles idempotent project creation
-      // This ensures we don't create duplicate projects on multiple clicks
-      router.push('/projects/new');
+      // User is logged in - the NewProjectButton will handle quick create with landscape format
+      return;
     } else {
       setIntendedAction('try-for-free');
       setShowLogin(true);
@@ -133,13 +133,24 @@ export default function HomePage() {
         </div>
         
         <div className="w-full text-center">
-          <button
-            onClick={handleTryForFree}
-            disabled={false}
-            className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
-          >
-            Try for Free
-          </button>
+          {status === "authenticated" && session?.user ? (
+            <NewProjectButton
+              enableQuickCreate={true}
+              disableFormatDropdown={true}
+              className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
+              variant="default"
+            >
+              Try for Free
+            </NewProjectButton>
+          ) : (
+            <button
+              onClick={handleTryForFree}
+              disabled={false}
+              className="inline-block bg-black text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-800 transition-colors shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 animate-pop-in"
+            >
+              Try for Free
+            </button>
+          )}
           <p className="text-center text-gray-500 text-sm mt-3">
             No credit card required
           </p>
@@ -288,7 +299,7 @@ export default function HomePage() {
               </svg>
             </button>
             <Suspense fallback={<div className="p-8">Loading...</div>}>
-              <LoginModal redirectTo='/projects/new' />
+              <LoginModal redirectTo='/projects/quick-create' />
             </Suspense>
           </div>
         </div>

@@ -191,7 +191,7 @@ export const generateScene = protectedProcedure
         chatResponse: orchestratorResponse.chatResponse,
       };
 
-      // 6. Update or create assistant's response
+      // 6. ✅ IMMEDIATE DELIVERY: Update or create assistant's response and deliver to chat immediately
       let assistantMessageId: string | undefined;
       
       if (input.assistantMessageId) {
@@ -200,20 +200,21 @@ export const generateScene = protectedProcedure
         await db.update(messages)
           .set({
             content: decision.chatResponse || "Processing your request...",
+            status: 'success', // Mark as success immediately for user feedback delivery
             updatedAt: new Date(),
           })
           .where(eq(messages.id, input.assistantMessageId));
-        console.log(`[${response.getRequestId()}] Updated existing assistant message: ${assistantMessageId}`);
+        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Updated assistant message delivered to chat: ${assistantMessageId}`);
       } else if (decision.chatResponse) {
         // Create new message if no SSE message exists (fallback)
         const newAssistantMessage = await messageService.createMessage({
           projectId,
           content: decision.chatResponse,
           role: "assistant",
-          status: "pending",
+          status: "success", // Mark as success immediately for user feedback delivery
         });
         assistantMessageId = newAssistantMessage?.id;
-        console.log(`[${response.getRequestId()}] Created new assistant message: ${assistantMessageId}`);
+        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
       }
 
       // 7. Execute the tool
@@ -231,7 +232,13 @@ export const generateScene = protectedProcedure
         hasScene: !!toolResult.scene,
         sceneId: toolResult.scene?.id,
         sceneName: toolResult.scene?.name,
+        additionalMessageIds: toolResult.additionalMessageIds?.length || 0,
       });
+
+      // ✅ LOG ADDITIONAL SCENE PLAN MESSAGE IDs for debugging
+      if (toolResult.additionalMessageIds?.length) {
+        console.log(`[${response.getRequestId()}] ✅ SCENE PLANNER: Created ${toolResult.additionalMessageIds.length} scene plan messages:`, toolResult.additionalMessageIds);
+      }
 
       // 8. Update assistant message status after execution
       if (assistantMessageId && toolResult.success) {
@@ -244,18 +251,58 @@ export const generateScene = protectedProcedure
       }
 
       // 9. Return universal response
+      // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
       if (!toolResult.scene) {
-        return response.error(
-          ErrorCode.INTERNAL_ERROR,
-          "Tool execution succeeded but no scene was created",
-          'scene.create',
-          'scene'
-        ) as any as SceneCreateResponse;
+        if (decision.toolName === 'scenePlanner') {
+          // Scene planner succeeded - return success with additional message IDs
+          const successResponse = response.success(
+            null, // No scene data since scene planner doesn't create scenes
+            'scene.create',
+            'scene',
+            [] // No scene IDs since no scenes were created
+          );
+          
+          return {
+            ...successResponse,
+            context: {
+              reasoning: decision.reasoning,
+              chatResponse: decision.chatResponse,
+            },
+            assistantMessageId,
+            additionalMessageIds: toolResult.additionalMessageIds || [],
+          } as unknown as SceneCreateResponse;
+        } else {
+          // Other tools should always return a scene
+          return response.error(
+            ErrorCode.INTERNAL_ERROR,
+            "Tool execution succeeded but no scene was created",
+            'scene.create',
+            'scene'
+          ) as any as SceneCreateResponse;
+        }
       }
 
       // Scene is already a proper SceneEntity from the database
       // Determine the correct operation based on the tool used
-      const operation = decision.toolName ? TOOL_OPERATION_MAP[decision.toolName] : 'scene.create';
+      // Map all operations to valid API response operations
+      let operation: 'scene.create' | 'scene.update' | 'scene.delete' = 'scene.create';
+      if (decision.toolName) {
+        const toolOp = TOOL_OPERATION_MAP[decision.toolName];
+        switch (toolOp) {
+          case 'scene.create':
+          case 'multi-scene.create': // Map multi-scene to regular scene.create
+            operation = 'scene.create';
+            break;
+          case 'scene.update':
+            operation = 'scene.update';
+            break;
+          case 'scene.delete':
+            operation = 'scene.delete';
+            break;
+          default:
+            operation = 'scene.create';
+        }
+      }
       
       const successResponse = response.success(
         toolResult.scene, 
@@ -272,6 +319,8 @@ export const generateScene = protectedProcedure
           chatResponse: decision.chatResponse,
         },
         assistantMessageId, // Include the assistant message ID
+        // ✅ INCLUDE ADDITIONAL MESSAGE IDs FOR CLIENT SYNC
+        additionalMessageIds: toolResult.additionalMessageIds || [],
       } as SceneCreateResponse;
 
     } catch (error) {
