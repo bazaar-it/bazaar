@@ -232,7 +232,13 @@ export const generateScene = protectedProcedure
         hasScene: !!toolResult.scene,
         sceneId: toolResult.scene?.id,
         sceneName: toolResult.scene?.name,
+        additionalMessageIds: toolResult.additionalMessageIds?.length || 0,
       });
+
+      // ✅ LOG ADDITIONAL SCENE PLAN MESSAGE IDs for debugging
+      if (toolResult.additionalMessageIds?.length) {
+        console.log(`[${response.getRequestId()}] ✅ SCENE PLANNER: Created ${toolResult.additionalMessageIds.length} scene plan messages:`, toolResult.additionalMessageIds);
+      }
 
       // 8. Update assistant message status after execution
       if (assistantMessageId && toolResult.success) {
@@ -245,13 +251,35 @@ export const generateScene = protectedProcedure
       }
 
       // 9. Return universal response
+      // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
       if (!toolResult.scene) {
-        return response.error(
-          ErrorCode.INTERNAL_ERROR,
-          "Tool execution succeeded but no scene was created",
-          'scene.create',
-          'scene'
-        ) as any as SceneCreateResponse;
+        if (decision.toolName === 'scenePlanner') {
+          // Scene planner succeeded - return success with additional message IDs
+          const successResponse = response.success(
+            null, // No scene data since scene planner doesn't create scenes
+            'scene.create',
+            'scene',
+            [] // No scene IDs since no scenes were created
+          );
+          
+          return {
+            ...successResponse,
+            context: {
+              reasoning: decision.reasoning,
+              chatResponse: decision.chatResponse,
+            },
+            assistantMessageId,
+            additionalMessageIds: toolResult.additionalMessageIds || [],
+          } as unknown as SceneCreateResponse;
+        } else {
+          // Other tools should always return a scene
+          return response.error(
+            ErrorCode.INTERNAL_ERROR,
+            "Tool execution succeeded but no scene was created",
+            'scene.create',
+            'scene'
+          ) as any as SceneCreateResponse;
+        }
       }
 
       // Scene is already a proper SceneEntity from the database
@@ -291,6 +319,8 @@ export const generateScene = protectedProcedure
           chatResponse: decision.chatResponse,
         },
         assistantMessageId, // Include the assistant message ID
+        // ✅ INCLUDE ADDITIONAL MESSAGE IDs FOR CLIENT SYNC
+        additionalMessageIds: toolResult.additionalMessageIds || [],
       } as SceneCreateResponse;
 
     } catch (error) {

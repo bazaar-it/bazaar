@@ -33,14 +33,26 @@ function compileSceneCode(scene: any): React.ComponentType | null {
       }
     }
     
+    // ✅ FIXED: Check if code already has Remotion destructuring
+    const hasRemotionDestructuring = compiledCode.includes('window.Remotion');
+    
+    let finalCode;
+    if (hasRemotionDestructuring) {
+      // ✅ Code already has destructuring, use as-is
+      finalCode = compiledCode;
+    } else {
+      // ✅ Code needs destructuring, add it
+      finalCode = `
+        const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random, Sequence, Audio, Video, Img, staticFile } = window.Remotion || {};
+        ${compiledCode}
+      `;
+    }
+    
     // Create function that returns the component
     const componentFunction = new Function(
       'React',
       'window',
-      `
-      const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random, Sequence, Audio, Video, Img, staticFile } = window.Remotion || {};
-      ${compiledCode}
-      `
+      finalCode
     );
     
     // Execute and get the component
@@ -179,7 +191,7 @@ export const MainComposition: React.FC = () => {
           scenes: [],
           projectId: '',
         }}
-        calculateMetadata={({ props }) => {
+        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string } }) => {
           // Calculate total duration from scenes
           const totalDuration = (props.scenes || []).reduce(
             (sum: number, scene: any) => sum + (scene.duration || 150),

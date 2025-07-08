@@ -14,9 +14,13 @@ interface ChatMessageProps {
   onRevert?: (messageId: string) => void;
   hasIterations?: boolean;
   userId?: string;
+  onEditScenePlan?: (prompt: string) => void;
 }
 
-export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId }: ChatMessageProps) {
+export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId, onEditScenePlan }: ChatMessageProps) {
+  // Get tRPC utils for cache invalidation
+  const utils = api.useUtils();
+  
   // Only query if hasIterations prop not provided (backward compatibility)
   const { data: iterations, isLoading: isChecking } = api.generation.getMessageIterations.useQuery(
     { messageId: message.id! },
@@ -28,17 +32,32 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   
   // Scene creation mutation with comprehensive error handling
   const createSceneMutation = api.createSceneFromPlan.createScene.useMutation({
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       console.log('[ChatMessage] Scene creation result:', result);
       try {
         if (result?.success) {
           console.log('[ChatMessage] Scene created successfully:', result.scene?.name);
           toast.success(`Scene created: ${result.scene?.name || 'Unnamed Scene'}`);
           
-          // Refresh the page to show the new scene and updated scene plan message
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500); // Slightly longer delay to show the success toast
+          // Invalidate tRPC cache to refresh data
+          if (projectId) {
+            await utils.generation.getProjectScenes.invalidate({ projectId });
+            await utils.chat.getMessages.invalidate({ projectId });
+          }
+          
+          // Dispatch custom events to notify components of scene creation
+          window.dispatchEvent(new CustomEvent('scene-created', { 
+            detail: { 
+              sceneId: result.scene?.id,
+              sceneName: result.scene?.name,
+              projectId 
+            } 
+          }));
+          
+          // Notify video player to refresh
+          window.dispatchEvent(new CustomEvent('videostate-update', {
+            detail: { projectId, type: 'scene-added' }
+          }));
         } else {
           console.error('[ChatMessage] Scene creation failed:', result?.error || result?.message);
           toast.error(`Failed to create scene: ${result?.message || result?.error || 'Unknown error'}`);
@@ -153,6 +172,14 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     }
   };
 
+  // Handle edit scene plan click
+  const handleEditScenePlanClick = () => {
+    if (isScenePlan && scenePlanData && onEditScenePlan) {
+      const prompt = scenePlanData.scenePlan.prompt;
+      onEditScenePlan(prompt);
+    }
+  };
+
   // Define different colors for scene plan messages
   const getScenePlanColors = (sceneNumber: number) => {
     const colors = [
@@ -245,23 +272,40 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                     <span className="text-gray-300">•</span>
                     <span className="capitalize text-gray-600">{scenePlanData.scenePlan.toolType}</span>
                   </div>
-                  <button
-                    onClick={handleCreateSceneClick}
-                    disabled={createSceneMutation.isPending}
-                    className="flex items-center gap-1 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors"
-                  >
-                    {createSceneMutation.isPending ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3 w-3" />
-                        <span>Create Scene</span>
-                      </>
+                  
+                  <div className="flex items-center gap-1">
+                    {/* Edit button */}
+                    {onEditScenePlan && (
+                      <button
+                        onClick={handleEditScenePlanClick}
+                        className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium transition-colors"
+                        title="Edit prompt"
+                      >
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                     )}
-                  </button>
+                    
+                    {/* Create Scene button */}
+                    <button
+                      onClick={handleCreateSceneClick}
+                      disabled={createSceneMutation.isPending}
+                      className="flex items-center gap-1 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors"
+                    >
+                      {createSceneMutation.isPending ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          <span>Create Scene</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "~/components/ui/button";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, MonitorIcon, SmartphoneIcon, SquareIcon } from "lucide-react";
 import { FormatSelectorModal } from "./FormatSelectorModal";
 import { type VideoFormat } from "~/app/projects/new/FormatSelector";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
+import { useLastUsedFormat } from "~/hooks/use-last-used-format";
 
 interface NewProjectButtonProps {
   className?: string;
@@ -17,6 +18,7 @@ interface NewProjectButtonProps {
   onStart?: () => void;
   onProjectCreated?: (projectId: string) => void;
   children?: React.ReactNode; // Allow custom children content
+  enableQuickCreate?: boolean; // Enable quick create with last format + long press for options
 }
 
 export function NewProjectButton({ 
@@ -26,17 +28,65 @@ export function NewProjectButton({
   showIcon = false,
   onStart,
   onProjectCreated,
-  children
+  children,
+  enableQuickCreate = false
 }: NewProjectButtonProps = {}) {
   const router = useRouter();
   const { data: session } = useSession();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showFormatOptions, setShowFormatOptions] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null);
+  const { lastFormat, updateLastFormat } = useLastUsedFormat();
+  
+  // Refs for handling long press and hover
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef(false);
 
   // Check for existing projects (for title generation)
   const { data: existingProjects } = api.project.list.useQuery(undefined, {
     enabled: !!session?.user,
   });
+
+  // Add effect to listen for external close events
+  useEffect(() => {
+    const handleCloseFormatOptions = () => {
+      setShowFormatOptions(false);
+    };
+
+    const handleContainerMouseEnter = () => {
+      if (enableQuickCreate) {
+        setShowFormatOptions(true);
+      }
+    };
+
+    const handleContainerMouseLeave = () => {
+      if (enableQuickCreate) {
+        setTimeout(() => {
+          setShowFormatOptions(false);
+        }, 100);
+      }
+    };
+
+    if (enableQuickCreate) {
+      document.addEventListener('closeFormatDropdown', handleCloseFormatOptions);
+      
+      // Listen for events from the sidebar container
+      const container = document.querySelector('[data-new-project-container]');
+      if (container) {
+        container.addEventListener('mouseenter', handleContainerMouseEnter);
+        container.addEventListener('mouseleave', handleContainerMouseLeave);
+      }
+      
+      return () => {
+        document.removeEventListener('closeFormatDropdown', handleCloseFormatOptions);
+        if (container) {
+          container.removeEventListener('mouseenter', handleContainerMouseEnter);
+          container.removeEventListener('mouseleave', handleContainerMouseLeave);
+        }
+      };
+    }
+  }, [enableQuickCreate]);
 
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
@@ -77,6 +127,8 @@ export function NewProjectButton({
     if (!session?.user) return;
     
     setSelectedFormat(formatId);
+    // Update the last used format
+    updateLastFormat(formatId);
     
     // Generate unique title
     let title = "Untitled Video";
@@ -95,21 +147,136 @@ export function NewProjectButton({
         : `Untitled Video ${highestNumber + 1}`;
     }
     
+    // Hide format options and create project
+    setShowFormatOptions(false);
+    setIsModalOpen(false);
+    
     // Create project with selected format
     createProjectMutation.mutate({
       format: formatId
     });
   };
 
+  // Quick create with last used format
+  const handleQuickCreate = useCallback(() => {
+    // Call the onStart callback if provided
+    if (onStart) {
+      onStart();
+    }
+    
+    // If no session, redirect to login
+    if (!session?.user) {
+      router.push('/login');
+      return;
+    }
+    
+    // Hide dropdown if showing
+    setShowFormatOptions(false);
+    
+    // Create project with last used format (defaults to landscape)
+    handleFormatSelect(lastFormat);
+  }, [onStart, session?.user, router, lastFormat, handleFormatSelect]);
+
+  // Handle button click
+  const handleButtonClick = useCallback(() => {
+    // If it was a long press, don't handle the click
+    if (isLongPressRef.current) {
+      return;
+    }
+    
+    handleQuickCreate();
+  }, [handleQuickCreate]);
+
+  // Hover handlers
+  const handleMouseEnter = useCallback(() => {
+    if (!enableQuickCreate) return;
+    // Show dropdown on hover
+    setShowFormatOptions(true);
+  }, [enableQuickCreate]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!enableQuickCreate) return;
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    // Add a small delay before closing to prevent flickering when moving between elements
+    setTimeout(() => {
+      setShowFormatOptions(false);
+    }, 100);
+  }, [enableQuickCreate]);
+
+  // Long press handlers for mobile/touch
+  const handleMouseDown = useCallback(() => {
+    if (!enableQuickCreate) return;
+    
+    isLongPressRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      setShowFormatOptions(true);
+    }, 500); // 500ms for long press
+  }, [enableQuickCreate]);
+
+  const handleMouseUp = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    
+    // If it wasn't a long press, the mouse up will be handled by onClick
+    isLongPressRef.current = false;
+  }, []);
+
+  // Touch handlers for mobile
+  const handleTouchStart = useCallback(() => {
+    if (!enableQuickCreate) return;
+    
+    isLongPressRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      setShowFormatOptions(true);
+    }, 500);
+  }, [enableQuickCreate]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    
+    // If it wasn't a long press, do quick create
+    if (!isLongPressRef.current && enableQuickCreate) {
+      handleQuickCreate();
+    }
+  }, [enableQuickCreate, handleQuickCreate]);
+
+  // Format options data
+  const formatOptions = [
+    { id: 'landscape' as VideoFormat, label: 'Landscape', icon: MonitorIcon, subtitle: '16:9' },
+    { id: 'portrait' as VideoFormat, label: 'Portrait', icon: SmartphoneIcon, subtitle: '9:16' },
+    { id: 'square' as VideoFormat, label: 'Square', icon: SquareIcon, subtitle: '1:1' },
+  ];
+
   return (
-    <>
+    <div className="relative"
+      onMouseEnter={enableQuickCreate ? handleMouseEnter : undefined}
+      onMouseLeave={enableQuickCreate ? handleMouseLeave : undefined}
+    >
       <Button
-        onClick={handleCreateProject}
+        ref={buttonRef}
+        onClick={enableQuickCreate ? handleButtonClick : handleCreateProject}
+        onMouseDown={enableQuickCreate ? handleMouseDown : undefined}
+        onMouseUp={enableQuickCreate ? handleMouseUp : undefined}
+        onTouchStart={enableQuickCreate ? handleTouchStart : undefined}
+        onTouchEnd={enableQuickCreate ? handleTouchEnd : undefined}
         variant={variant}
         size={size}
         className={className}
+        disabled={createProjectMutation.isPending}
       >
-        {children ? children : (
+        {children ? (
+          children
+        ) : (
           <>
             {showIcon && <PlusIcon className="h-4 w-4 mr-2" />}
             New Project
@@ -117,12 +284,51 @@ export function NewProjectButton({
         )}
       </Button>
       
-      <FormatSelectorModal
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        onSelect={handleFormatSelect}
-        isCreating={createProjectMutation.isPending}
-      />
-    </>
+      {/* Format Options Dropdown */}
+      {enableQuickCreate && showFormatOptions && (
+        <div 
+          className="absolute top-0 left-full ml-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-[140px]"
+          onMouseEnter={() => setShowFormatOptions(true)}
+          onMouseLeave={() => setShowFormatOptions(false)}
+        >
+          <div className="p-2">
+            <div className="text-xs font-medium text-gray-500 mb-2 px-2">Format:</div>
+            {formatOptions.map((format) => {
+              const Icon = format.icon;
+              const isCurrentFormat = format.id === lastFormat;
+              
+              return (
+                <button
+                  key={format.id}
+                  onClick={() => handleFormatSelect(format.id)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:bg-gray-100 transition-colors ${
+                    isCurrentFormat ? 'bg-blue-50 border border-blue-200' : ''
+                  }`}
+                  disabled={createProjectMutation.isPending}
+                >
+                  <Icon className="w-3 h-3 text-gray-600" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">
+                      {format.label}
+                    </div>
+                    <div className="text-xs text-gray-500">{format.subtitle}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Legacy Modal for non-quick-create usage */}
+      {!enableQuickCreate && (
+        <FormatSelectorModal
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          onSelect={handleFormatSelect}
+          isCreating={createProjectMutation.isPending}
+        />
+      )}
+    </div>
   );
-} 
+}

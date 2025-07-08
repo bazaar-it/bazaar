@@ -22,7 +22,7 @@ export async function executeToolFromDecision(
   storyboard: any[],
   messageId?: string,
   onSceneComplete?: (scene: SceneEntity) => void  // NEW: Callback for real-time delivery
-): Promise<{ success: boolean; scene?: SceneEntity; scenes?: SceneEntity[]; partialFailures?: string[] }> {
+): Promise<{ success: boolean; scene?: SceneEntity; scenes?: SceneEntity[]; partialFailures?: string[]; additionalMessageIds?: string[] }> {
   const startTime = Date.now(); // Track generation time
   
   // Get project format for AI context
@@ -616,6 +616,9 @@ export async function executeToolFromDecision(
       
       console.log(`📋 [HELPERS] Created plan with ${plannerResult.data.scenePlans.length} scenes`);
       
+      // ✅ TRACK CREATED MESSAGE IDs for VideoState sync
+      const createdScenePlanMessageIds: string[] = [];
+      
       // ✅ SEQUENTIAL APPROACH: Create individual scene plan messages
       // Instead of executing scenes, we'll save the plans as special message types
       
@@ -656,32 +659,28 @@ export async function executeToolFromDecision(
            
 <!-- SCENE_PLAN_DATA:${JSON.stringify(scenePlanData)} -->`;
            
-           await messageService.createMessage({
+           const message = await messageService.createMessage({
              projectId,
              content,
              role: "assistant",
              status: "success",
              kind: "scene_plan"
            });
+           
+           // ✅ TRACK THE MESSAGE ID FOR CLIENT SYNC
+           if (message?.id) {
+             createdScenePlanMessageIds.push(message.id);
+             console.log(`📋 [HELPERS] Created scene plan message ${sceneNumber}: ${message.id}`);
+           }
          }
        }
       
-      // Return a dummy scene to satisfy the interface
-      // The real magic happens in the scene plan messages above
+      // ✅ NEW: Return no scene at all, only messages
+      // This prevents the dummy scene from being mistaken for real scene code
       return {
         success: true,
-        scene: {
-          id: 'scene-plan-placeholder',
-          name: `${plannerResult.data.scenePlans.length} Scene Plan`,
-          tsxCode: '// Scene plan created - use individual buttons to generate scenes',
-          duration: 90,
-          order: storyboard.length,
-          projectId,
-          props: {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          layoutJson: null
-        } as any
+        // No scene field - this prevents any scene from being created
+        additionalMessageIds: createdScenePlanMessageIds
       };
 
     default:
