@@ -15,6 +15,20 @@
       "when": 1751314925822,
       "tag": "0001_fair_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1751919655393,
+      "tag": "0002_clear_sebastian_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751919745174,
+      "tag": "0003_fat_lizard",
+      "breakpoints": true
     }
   ]
 }

@@ -207,6 +207,7 @@ export async function executeToolFromDecision(
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
         formatContext: projectFormat,
+        modelOverride: decision.toolContext.modelOverride, // Pass model override if provided
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);

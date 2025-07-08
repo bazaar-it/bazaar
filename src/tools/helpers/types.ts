@@ -118,6 +118,7 @@ export interface EditToolInput extends BaseToolInput {
     };
     analyzedAt: string;
   };
+  modelOverride?: string; // Optional model ID for overriding default model
 }
 
 export interface EditToolOutput extends BaseToolOutput {
@@ -323,6 +324,7 @@ export const editToolInputSchema = baseToolInputSchema.extend({
     }),
     analyzedAt: z.string(),
   }).optional().describe("Web analysis context with screenshots for brand matching"),
+  modelOverride: z.string().optional().describe("Optional model ID for overriding default model"),
 });
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({

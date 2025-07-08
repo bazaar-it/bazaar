@@ -44,6 +44,7 @@ export interface BrainDecision {
     imageUrls?: string[];
     videoUrls?: string[];
     errorDetails?: string;
+    modelOverride?: string; // Optional model ID for overriding default model
     webContext?: {
       originalUrl: string;
       screenshotUrls: {
@@ -82,7 +83,9 @@ export interface OrchestrationInput {
   prompt: string;
   projectId: string;
   userId: string;
-  userContext?: Record<string, unknown>;
+  userContext?: Record<string, unknown> & {
+    modelOverride?: string; // Optional model override for this request
+  };
   storyboardSoFar?: Array<{
     id: string;
     name: string;

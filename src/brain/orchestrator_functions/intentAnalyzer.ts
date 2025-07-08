@@ -188,7 +188,7 @@ Respond with JSON only.`;
           needsClarification: true,
           clarificationQuestion: parsed.clarificationQuestion,
           reasoning: parsed.reasoning,
-          toolName: null  // Explicitly null, not undefined
+          toolName: undefined  // Optional field, use undefined instead of null
         };
       }
     }

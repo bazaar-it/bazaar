@@ -33,6 +33,7 @@ export const users = createTable("user", (d) => ({
   }),
   image: d.text(),
   isAdmin: d.boolean().default(false).notNull(),
+  stripeCustomerId: d.text("stripe_customer_id").unique(),
   createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`),
 }));
@@ -837,3 +838,74 @@ export const exportAnalyticsRelations = relations(exportAnalytics, ({ one }) => 
     references: [exports.id],
   }),
 }));
+
+// --- Credit System Tables ---
+
+// User credit balances
+export const userCredits = createTable("user_credits", (d) => ({
+  userId: d.varchar("user_id", { length: 255 })
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  dailyCredits: d.integer("daily_credits").default(150).notNull(),
+  purchasedCredits: d.integer("purchased_credits").default(0).notNull(),
+  lifetimeCredits: d.integer("lifetime_credits").default(0).notNull(), // Total ever purchased
+  dailyResetAt: d.timestamp("daily_reset_at", { withTimezone: true }).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("user_credits_daily_reset_idx").on(t.dailyResetAt),
+]);
+
+export const userCreditsRelations = relations(userCredits, ({ one, many }) => ({
+  user: one(users, {
+    fields: [userCredits.userId],
+    references: [users.id],
+  }),
+  transactions: many(creditTransactions),
+}));
+
+// Credit transaction history
+export const creditTransactions = createTable("credit_transaction", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: d.text("type", {
+    enum: ["daily_grant", "purchase", "usage", "refund", "bonus", "adjustment"]
+  }).notNull(),
+  amount: d.integer("amount").notNull(), // Positive for additions, negative for usage
+  balance: d.integer("balance").notNull(), // Balance after transaction
+  description: d.text("description").notNull(),
+  metadata: d.jsonb("metadata"), // Additional data (e.g., what it was used for)
+  stripePaymentIntentId: d.text("stripe_payment_intent_id"), // For purchases
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("credit_transactions_user_idx").on(t.userId),
+  index("credit_transactions_type_idx").on(t.type),
+  index("credit_transactions_created_idx").on(t.createdAt),
+  index("credit_transactions_stripe_idx").on(t.stripePaymentIntentId),
+]);
+
+export const creditTransactionsRelations = relations(creditTransactions, ({ one }) => ({
+  user: one(users, {
+    fields: [creditTransactions.userId],
+    references: [users.id],
+  }),
+}));
+
+// Credit packages for purchase
+export const creditPackages = createTable("credit_package", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  name: d.varchar("name", { length: 100 }).notNull(),
+  credits: d.integer("credits").notNull(),
+  price: d.integer("price").notNull(), // In cents
+  stripePriceId: d.text("stripe_price_id").unique(), // Once we create in Stripe
+  bonusPercentage: d.integer("bonus_percentage").default(0).notNull(),
+  popular: d.boolean("popular").default(false).notNull(),
+  active: d.boolean("active").default(true).notNull(),
+  sortOrder: d.integer("sort_order").default(0).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("credit_packages_active_idx").on(t.active),
+  index("credit_packages_sort_idx").on(t.sortOrder),
+]);
