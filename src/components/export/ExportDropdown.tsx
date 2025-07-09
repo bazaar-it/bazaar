@@ -167,7 +167,7 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
           ) : (
             <>
               <Download className="h-4 w-4" />
-              Render
+              Download
               <ChevronDown className="h-3 w-3 opacity-50" />
             </>
           )}
@@ -259,12 +259,12 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
             {isRendering ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Rendering... {progress}%
+                Rendering {progress}%
               </>
             ) : (
               <>
                 <FileVideo className="h-3 w-3" />
-                Render as {format.toUpperCase()}
+                Download as {format.toUpperCase()}
               </>
             )}
           </DropdownMenuItem>

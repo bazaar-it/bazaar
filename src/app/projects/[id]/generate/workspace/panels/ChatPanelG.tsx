@@ -696,7 +696,6 @@ export default function ChatPanelG({
           uploadedImages={uploadedImages}
           onImagesChange={setUploadedImages}
           projectId={projectId}
-          disabled={isGenerating}
         />
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
@@ -722,12 +721,10 @@ export default function ChatPanelG({
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   placeholder={!message ? "Describe what you want to create" : ""}
-                  disabled={isGenerating}
                   className={cn(
                     "w-full resize-none bg-transparent border-none",
                     "px-3 py-1 text-sm leading-6",
                     "focus:outline-none focus:ring-0",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
                     "rounded-t-2xl"
                   )}
                   style={{
@@ -745,7 +742,6 @@ export default function ChatPanelG({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                    disabled={isGenerating}
                     aria-label="Upload images"
                   >
                     <ImageIcon className="h-4 w-4" />
@@ -760,14 +756,16 @@ export default function ChatPanelG({
                       return newMessage;
                     });
                   }}
-                  disabled={isGenerating}
                 />
                 </div>
 
                 <Button
                   type="submit"
                   disabled={!message.trim() || isGenerating}
-                  className="w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0"
+                  className={cn(
+                    "w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0",
+                    isGenerating && "opacity-60"
+                  )}
                 >
                   {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                 </Button>

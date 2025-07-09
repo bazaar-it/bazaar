@@ -1389,7 +1389,7 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow flex items-center justify-center p-1 sm:p-4">
+      <div className="relative flex-grow flex items-center justify-center">
         {componentImporter && playerProps ? (
           <div 
             className={cn(

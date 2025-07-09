@@ -56,7 +56,9 @@ export function PlaybackSpeedSlider({
           title="Playback Speed"
         >
           <PlayIcon className="h-3 w-3 mr-1" />
-          {currentSpeed}x
+          <span className="inline-block w-[2.5rem] text-left">
+            {currentSpeed}x
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent 

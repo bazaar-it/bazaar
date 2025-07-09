@@ -42,17 +42,11 @@ export function NewProjectButton({
   
   // Refs for handling long press and hover
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef(false);
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Check for existing projects (for title generation)
-  const { data: existingProjects } = api.project.list.useQuery(undefined, {
-    enabled: !!session?.user,
-  });
-
-  // Clear any pending close timeout
+  // Timeout functions for dropdown
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
       clearTimeout(closeTimeoutRef.current);
@@ -60,13 +54,17 @@ export function NewProjectButton({
     }
   }, []);
 
-  // Set a close timeout
   const setCloseTimeout = useCallback(() => {
     clearCloseTimeout();
     closeTimeoutRef.current = setTimeout(() => {
       setShowFormatOptions(false);
-    }, 300);
+    }, 100);
   }, [clearCloseTimeout]);
+
+  // Check for existing projects (for title generation)
+  const { data: existingProjects } = api.project.list.useQuery(undefined, {
+    enabled: !!session?.user,
+  });
 
   // Add effect to listen for external close events and cleanup
   useEffect(() => {
@@ -90,6 +88,19 @@ export function NewProjectButton({
     if (enableQuickCreate) {
       document.addEventListener('closeFormatDropdown', handleCloseFormatOptions);
       
+      // Listen for navigation events to close dropdown
+      const handleBeforeUnload = () => setShowFormatOptions(false);
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          setShowFormatOptions(false);
+        }
+      };
+      const handleRouteChange = () => setShowFormatOptions(false);
+      
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('popstate', handleRouteChange);
+      
       // Listen for events from the sidebar container
       const container = document.querySelector('[data-new-project-container]');
       if (container) {
@@ -105,6 +116,10 @@ export function NewProjectButton({
         }
         
         document.removeEventListener('closeFormatDropdown', handleCloseFormatOptions);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('popstate', handleRouteChange);
+        
         if (container) {
           container.removeEventListener('mouseenter', handleContainerMouseEnter);
           container.removeEventListener('mouseleave', handleContainerMouseLeave);
@@ -287,10 +302,10 @@ export function NewProjectButton({
       <Button
         ref={buttonRef}
         onClick={enableQuickCreate ? handleButtonClick : handleCreateProject}
-        onMouseDown={enableQuickCreate ? handleMouseDown : undefined}
-        onMouseUp={enableQuickCreate ? handleMouseUp : undefined}
-        onTouchStart={enableQuickCreate ? handleTouchStart : undefined}
-        onTouchEnd={enableQuickCreate ? handleTouchEnd : undefined}
+        onMouseDown={enableQuickCreate && !disableFormatDropdown ? handleMouseDown : undefined}
+        onMouseUp={enableQuickCreate && !disableFormatDropdown ? handleMouseUp : undefined}
+        onTouchStart={enableQuickCreate && !disableFormatDropdown ? handleTouchStart : undefined}
+        onTouchEnd={enableQuickCreate && !disableFormatDropdown ? handleTouchEnd : undefined}
         variant={variant}
         size={size}
         className={className}
@@ -309,19 +324,13 @@ export function NewProjectButton({
       {/* Format Options Dropdown */}
       {enableQuickCreate && !disableFormatDropdown && showFormatOptions && (
         <div 
-          ref={dropdownRef}
-          className="absolute bg-white border border-gray-200 rounded-lg shadow-lg min-w-[200px]"
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-[180px]"
           style={{
-            // Ensure dropdown is always visible and properly positioned
-            position: 'absolute',
-            left: 'calc(100% + 8px)',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            minWidth: '200px',
-            zIndex: 9999 // Very high z-index to get above all headers
+            left: 'calc(4rem + 20px)', // Same as workspace left positioning (4rem sidebar + 10px margin + 10px gap)
+            top: 'calc(68px + 10px)', // Header height (68px) + 10px buffer zone = 78px
           }}
-          onMouseEnter={clearCloseTimeout}
-          onMouseLeave={setCloseTimeout}
+          onMouseEnter={() => setShowFormatOptions(true)}
+          onMouseLeave={() => setShowFormatOptions(false)}
         >
           <div className="p-3">
             <div className="text-xs font-semibold text-gray-700 mb-3 px-1 uppercase tracking-wider">Format:</div>

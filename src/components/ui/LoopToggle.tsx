@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Repeat, Repeat1, ChevronDown } from "lucide-react";
 import { cn } from "~/lib/cn";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "~/components/ui/tooltip";
 
 export type LoopState = 'video' | 'off' | 'scene';
 
@@ -34,11 +35,9 @@ export function LoopToggle({
     e.preventDefault();
     e.stopPropagation();
     
-    // Cycle through states: video -> off -> scene -> video
+    // Toggle between video (all scenes) and scene (single scene)
     const nextState: LoopState = 
-      loopState === 'video' ? 'off' : 
-      loopState === 'off' ? 'scene' : 
-      'video';
+      loopState === 'video' ? 'scene' : 'video';
     
     console.log('[LoopToggle] State cycling:', loopState, '->', nextState);
     onStateChange(nextState);
@@ -55,27 +54,34 @@ export function LoopToggle({
   
   return (
     <div className="flex items-center gap-1">
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        className={cn(
-          "h-8 px-2 text-xs gap-1",
-          loopState === 'off' ? "text-gray-400 hover:text-gray-600" : "text-blue-600 hover:text-blue-700",
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+                      className={cn(
+          "h-8 px-2 text-xs gap-1 text-blue-600 hover:text-blue-700",
           className
         )}
-        onClick={handleToggleClick}
-        title={
-          loopState === 'video' ? "Loop video" : 
-          loopState === 'off' ? "Loop off" : 
-          "Loop scene"
-        }
-      >
-        {loopState === 'scene' ? (
-          <Repeat1 className="h-3.5 w-3.5" />
-        ) : (
-          <Repeat className="h-3.5 w-3.5" />
-        )}
-      </Button>
+              onClick={handleToggleClick}
+            >
+              {loopState === 'scene' ? (
+                <Repeat1 className="h-3.5 w-3.5" />
+              ) : (
+                <Repeat className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-[240px] text-center">
+            {loopState === 'video' ? (
+              "Loop Single Scene"
+            ) : (
+              "Loop All Scenes"
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       
       {/* Show scene selector only when in scene loop mode */}
       {loopState === 'scene' && scenes.length > 0 && (
