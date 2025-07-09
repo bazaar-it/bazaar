@@ -57,11 +57,18 @@ export function PreviewPanelG({
   useEffect(() => {
     if (dbScenes && dbScenes.length > 0 && currentProps) {
       console.log('[PreviewPanelG] Database scenes updated, syncing to VideoState:', dbScenes.length);
+      console.log('[PreviewPanelG] First scene from DB:', dbScenes[0]);
       
       // Convert database scenes to InputProps format
       let currentStart = 0;
       const convertedScenes = dbScenes.map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
+        
+        // Debug log to check if tsxCode exists
+        if (!dbScene.tsxCode) {
+          console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
+        }
+        
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
@@ -139,25 +146,48 @@ export function PreviewPanelG({
     const sceneId = scene.id;
     
     if (!sceneCode) {
-      console.warn(`[PreviewPanelG] Scene ${index} has no code`);
+      console.warn(`[PreviewPanelG] Scene ${index} has no code. Scene data:`, scene);
+      console.warn(`[PreviewPanelG] Looking for code at scene.data.code, found:`, (scene.data as any)?.code);
       return {
         isValid: false,
-        compiledCode: createFallbackScene(sceneName, index, 'No code found'),
+        compiledCode: createFallbackScene(sceneName, index, 'No code found', sceneId),
         componentName: `FallbackScene${index}`
       };
     }
 
     try {
       // Extract component name from the actual generated code
-      const componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
-      const componentName = componentNameMatch ? componentNameMatch[1] : `Scene${index}Component`;
+      // Handle both: export default function ComponentName and export default ComponentName
+      let componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
+      let componentName = componentNameMatch ? componentNameMatch[1] : null;
+      
+      // If no function export, check for const declaration and export
+      if (!componentName) {
+        const constMatch = sceneCode.match(/const\s+(\w+)\s*=\s*\(/);
+        if (constMatch) {
+          componentName = constMatch[1];
+        }
+      }
+      
+      // Fallback to generic name
+      if (!componentName) {
+        componentName = `Scene${index}Component`;
+      }
+      
+      // Log original code for debugging
+      console.log(`[PreviewPanelG] Original scene ${index} code (first 200 chars):`, sceneCode.substring(0, 200));
       
       // Clean the scene code for compilation (remove imports/exports that don't work in our system)
       let cleanSceneCode = sceneCode
         .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove remotion imports
         .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
         .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
-        .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`); // Remove export default
+        .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`) // Remove export default function
+        .replace(/export\s+default\s+\w+;?\s*/g, '') // Remove export default ComponentName
+        .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?\s*/g, ''); // Remove export const statements
+      
+      // Log cleaned code for debugging
+      console.log(`[PreviewPanelG] Cleaned scene ${index} code (first 200 chars):`, cleanSceneCode.substring(0, 200));
 
       // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
       const testCompositeCode = `
@@ -479,9 +509,12 @@ function FallbackScene${sceneIndex}() {
       URL.revokeObjectURL(componentBlobUrl);
     }
 
+    // Declare compiledScenes outside try block so it's accessible in catch block
+    let compiledScenes: any[] = [];
+
     try {
       // 🚨 FIXED: Compile each scene individually with ISOLATION (no cascade failures)
-      const compiledScenes = await Promise.all(
+      compiledScenes = await Promise.all(
         scenesWithCode.map((scene, index) => compileSceneDirectly(scene, index))
       );
       

@@ -302,6 +302,18 @@ FUNCTION NAME: ${input.functionName}`;
         FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       const transitionContext = getSmartTransitionContext(input.previousSceneCode);
+      // Extract key style elements from previous scene
+      const bgColorMatch = input.previousSceneCode.match(/backgroundColor:\s*["']([^"']+)["']/);
+      const bgGradientMatch = input.previousSceneCode.match(/background:\s*["'](linear-gradient[^"']+)["']/);
+      const primaryColorMatch = input.previousSceneCode.match(/color:\s*["']#([0-9a-fA-F]{6})["']/);
+      const fontFamilyMatch = input.previousSceneCode.match(/fontFamily:\s*["']([^"']+)["']/);
+      
+      const styleContext = `
+EXTRACTED STYLE FROM PREVIOUS SCENE:
+- Background: ${bgColorMatch ? bgColorMatch[1] : (bgGradientMatch ? bgGradientMatch[1] : 'Not found')}
+- Primary Text Color: ${primaryColorMatch ? '#' + primaryColorMatch[1] : 'Not found'}
+- Font Family: ${fontFamilyMatch ? fontFamilyMatch[1] : 'Inter'}`;
+
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 PREVIOUS SCENE REFERENCE:
@@ -309,12 +321,17 @@ PREVIOUS SCENE REFERENCE:
 ${transitionContext}
 \`\`\`
 
-IMPORTANT INSTRUCTIONS:
-1. Study the previous scene's visual style, colors, animation timing, and patterns
-2. Create a NEW scene that maintains visual consistency
-3. If previous elements exit in a direction, consider entering from the opposite
-4. Match the pacing and energy of the previous scene
-5. Use similar animation timing (if previous uses 8-12 frames, you should too)
+${styleContext}
+
+CRITICAL STYLE CONSISTENCY REQUIREMENTS:
+1. You MUST use the EXACT SAME background color/gradient as the previous scene
+2. You MUST use the SAME font family and similar text colors
+3. Study the previous scene's visual style, colors, animation timing, and patterns
+4. Create a NEW scene that maintains PERFECT visual consistency
+5. If the previous scene has a dark theme, your scene MUST also have a dark theme
+6. If the previous scene has specific brand colors (like #007AFF), use them consistently
+7. Match the pacing and energy of the previous scene
+8. Use similar animation timing (if previous uses 8-12 frames, you should too)
 
 FUNCTION NAME: ${input.functionName}`;
 
