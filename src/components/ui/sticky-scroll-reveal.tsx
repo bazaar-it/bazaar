@@ -66,7 +66,7 @@ export const StickyScroll: React.FC<StickyScrollProps> = ({
               return (
                 <div
                   key={item.title + index}
-                  className="my-32 first:mt-0 transition-all duration-500 ease-in-out"
+                  className="my-48 first:mt-0 transition-all duration-500 ease-in-out"
                   ref={(el) => {
                     cardRefs.current[index] = el;
                   }}
@@ -86,7 +86,7 @@ export const StickyScroll: React.FC<StickyScrollProps> = ({
                 </div>
               );
             })}
-            <div className="h-64" />
+            <div className="h-80" />
           </div>
         </div>
         <div

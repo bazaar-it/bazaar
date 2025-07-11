@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
 import RemotionVideoPlayerFixed from "~/components/RemotionVideoPlayerFixed";
+import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
 import { BazaarStickyScroll } from "~/components/BazaarStickyScroll";
 import MarketingGraphPlayer from "~/components/MarketingGraphPlayer";
 import MarketingElementPlayer from "~/components/MarketingElementPlayer";
@@ -69,8 +70,8 @@ export default function NewHomePage() {
       <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
-            <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium text-gray-600">V3</span>
+            <span className="text-3xl font-semibold text-gray-900">Bazaar</span>
+            <span className="text-base font-medium bg-gradient-to-r from-pink-600 to-orange-500 bg-clip-text text-transparent">V3</span>
           </div>
         </div>
         <div className="flex gap-4 items-center">
@@ -78,24 +79,120 @@ export default function NewHomePage() {
             <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
           ) : (
             <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+              <button className="text-base px-4 py-2 rounded hover:bg-pink-50 hover:text-pink-700 transition" onClick={() => setShowLogin(true)}>Login</button>
+              <button className="text-base px-4 py-2 font-semibold rounded bg-gradient-to-r from-pink-500 to-orange-500 text-white hover:from-pink-600 hover:to-orange-600 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
             </>
           )}
         </div>
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full relative overflow-hidden">
+        {/* Advanced Floating Particles - Hero Section Only */}
+        <div className="absolute top-0 left-0 right-0 h-96 pointer-events-none -z-10 overflow-hidden">
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes sparkleFloat1 {
+                0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+                10% { opacity: 1; }
+                90% { opacity: 1; }
+                100% { transform: translate(-20px, -100px) rotate(180deg); opacity: 0; }
+              }
+              @keyframes sparkleFloat2 {
+                0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+                15% { opacity: 1; }
+                85% { opacity: 1; }
+                100% { transform: translate(30px, -120px) rotate(-180deg); opacity: 0; }
+              }
+              @keyframes sparkleFloat3 {
+                0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+                20% { opacity: 1; }
+                80% { opacity: 1; }
+                100% { transform: translate(-40px, -80px) rotate(270deg); opacity: 0; }
+              }
+              @keyframes sparkleTwinkle {
+                0%, 100% { opacity: 0.2; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.2); }
+              }
+                             .sparkle-float-1 { animation: sparkleFloat1 8s linear infinite; }
+               .sparkle-float-2 { animation: sparkleFloat2 10s linear infinite; }
+               .sparkle-float-3 { animation: sparkleFloat3 12s linear infinite; }
+               .sparkle-twinkle { animation: sparkleTwinkle 2s ease-in-out infinite; }
+               
+               @keyframes movingGradient {
+                 0% { background-position: 0% 50%; }
+                 50% { background-position: 100% 50%; }
+                 100% { background-position: 0% 50%; }
+               }
+               .moving-gradient-text {
+                 background: linear-gradient(-45deg, #ec4899, #f97316, #ec4899, #f97316);
+                 background-size: 400% 400%;
+                 animation: movingGradient 12s ease-in-out infinite;
+                 -webkit-background-clip: text;
+                 -webkit-text-fill-color: transparent;
+                 background-clip: text;
+               }
+            `
+          }} />
+          
+          {/* Layer 1 - Small particles across full width */}
+          <div className="absolute top-8 left-[2%] w-0.5 h-0.5 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0s'}}></div>
+          <div className="absolute top-16 left-[8%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1s'}}></div>
+          <div className="absolute top-24 left-[15%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2s'}}></div>
+          <div className="absolute top-32 left-[22%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3s'}}></div>
+          <div className="absolute top-40 left-[29%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4s'}}></div>
+          <div className="absolute top-48 left-[36%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5s'}}></div>
+          <div className="absolute top-56 left-[43%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6s'}}></div>
+          <div className="absolute top-64 left-[50%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7s'}}></div>
+          <div className="absolute top-72 left-[57%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '8s'}}></div>
+          <div className="absolute top-80 left-[64%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0.5s'}}></div>
+          <div className="absolute top-88 left-[71%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.5s'}}></div>
+          <div className="absolute top-4 left-[78%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.5s'}}></div>
+          <div className="absolute top-12 left-[85%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.5s'}}></div>
+          <div className="absolute top-20 left-[92%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.5s'}}></div>
+          <div className="absolute top-28 left-[98%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.5s'}}></div>
+          
+          {/* Layer 2 - Medium particles across full width */}
+          <div className="absolute top-36 left-[5%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.2s'}}></div>
+          <div className="absolute top-44 left-[12%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.2s'}}></div>
+          <div className="absolute top-52 left-[19%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.2s'}}></div>
+          <div className="absolute top-60 left-[26%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.2s'}}></div>
+          <div className="absolute top-68 left-[33%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.2s'}}></div>
+          <div className="absolute top-76 left-[40%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6.2s'}}></div>
+          <div className="absolute top-84 left-[47%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7.2s'}}></div>
+          <div className="absolute top-8 left-[54%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '0.8s'}}></div>
+          <div className="absolute top-16 left-[61%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '1.8s'}}></div>
+          <div className="absolute top-24 left-[68%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '2.8s'}}></div>
+          <div className="absolute top-32 left-[75%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '3.8s'}}></div>
+          <div className="absolute top-40 left-[82%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '4.8s'}}></div>
+          <div className="absolute top-48 left-[89%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '5.8s'}}></div>
+          <div className="absolute top-56 left-[96%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '6.8s'}}></div>
+          
+          {/* Layer 3 - Larger particles for depth */}
+          <div className="absolute top-64 left-[3%] w-1.5 h-1.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0.3s'}}></div>
+          <div className="absolute top-72 left-[11%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.3s'}}></div>
+          <div className="absolute top-80 left-[18%] w-1 h-1 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.3s'}}></div>
+          <div className="absolute top-88 left-[25%] w-1.5 h-1.5 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.3s'}}></div>
+          <div className="absolute top-4 left-[32%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.3s'}}></div>
+          <div className="absolute top-12 left-[39%] w-1.5 h-1.5 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.3s'}}></div>
+          <div className="absolute top-20 left-[46%] w-1 h-1 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6.3s'}}></div>
+          <div className="absolute top-28 left-[53%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7.3s'}}></div>
+          <div className="absolute top-36 left-[60%] w-1 h-1 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '0.1s'}}></div>
+          <div className="absolute top-44 left-[67%] w-1.5 h-1.5 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '1.1s'}}></div>
+          <div className="absolute top-52 left-[74%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '2.1s'}}></div>
+          <div className="absolute top-60 left-[81%] w-1.5 h-1.5 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '3.1s'}}></div>
+          <div className="absolute top-68 left-[88%] w-1 h-1 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '4.1s'}}></div>
+          <div className="absolute top-76 left-[95%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '5.1s'}}></div>
+        </div>
         {/* Announcement Banner */}
         <div className="w-full mb-8 flex justify-center">
           <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
-            <span className="bg-black text-white px-3 py-1 rounded-full text-sm font-medium">
+            <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
               V3 is Live!
             </span>
             <button 
               onClick={() => setShowVideo(true)}
-              className="text-gray-900 hover:text-gray-700 font-medium text-sm underline transition-colors"
+              className="text-pink-600 hover:text-pink-800 font-medium text-sm underline transition-colors"
             >
                                 Watch the video
             </button>
@@ -103,28 +200,46 @@ export default function NewHomePage() {
         </div>
         
         <div className="mb-16 w-full text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">From Screenshot to Software Demo Video - in seconds.</h1>
-          <p className="text-xl text-gray-600">Bazaar is an Ai video generator that turns prompts into motion graphic videos</p>
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-6 leading-tight text-gray-900">
+            <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md">
+              Screenshot
+              <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              {/* Screenshot crosshair icon at bottom left corner */}
+              <div className="absolute -bottom-3 -left-3 w-6 h-6 flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-600">
+                  <path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v8h8a1 1 0 1 1 0 2h-8v8a1 1 0 1 1-2 0v-8H3a1 1 0 1 1 0-2h8V3a1 1 0 0 1 1-1z"/>
+                </svg>
+              </div>
+            </span> to Demo Video - in seconds.
+          </h1>
+          <p className="text-xl text-gray-600">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
         <div className="w-full text-center">
           {status === "authenticated" && session?.user ? (
-            <NewProjectButton
-              enableQuickCreate={true}
-              disableFormatDropdown={true}
-              className="!inline-block !bg-black !text-white !px-10 !py-5 !rounded-lg !text-lg !font-semibold !hover:bg-gray-800 !shadow-lg !hover:shadow-xl !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none"
-              variant="ghost"
-            >
-              Try for Free
-            </NewProjectButton>
+            <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+              <NewProjectButton
+                enableQuickCreate={true}
+                disableFormatDropdown={true}
+                className="!inline-block !bg-white !text-black !px-6 !py-3 !rounded-lg !text-lg !font-semibold !hover:bg-gray-50 !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none"
+                variant="ghost"
+              >
+                Try for Free
+              </NewProjectButton>
+            </div>
           ) : (
-            <button
-              onClick={handleTryForFree}
-              disabled={false}
-              className="inline-block bg-black text-white px-10 py-5 rounded-lg text-lg font-semibold hover:bg-gray-800 shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
-            >
-              Try for Free
-            </button>
+            <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+              <button
+                onClick={handleTryForFree}
+                disabled={false}
+                className="inline-block bg-white text-black px-6 py-3 rounded-lg text-lg font-semibold hover:bg-gray-50 shadow-none hover:shadow-none transform hover:scale-[1.02] transition-all duration-200"
+              >
+                Try for Free
+              </button>
+            </div>
           )}
           <p className="text-center text-gray-500 text-sm mt-4">
             No credit card required
@@ -133,21 +248,38 @@ export default function NewHomePage() {
         
         {/* Example videos section */}
         <section className="mt-20 w-full">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Create entire videos from a single prompt</h2>
-          
           {/* Remotion Video Player */}
           <div className="flex justify-center w-full">
-            <div style={{ width: '70%' }}>
+            <div style={{ width: '85%' }}>
                                 <RemotionVideoPlayerFixed />
             </div>
           </div>
         </section>
 
-        {/* UI meets AI Section */}
+        {/* Create entire videos section */}
         <section className="mt-32 w-full">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">UI, meet AI</h2>
-            <p className="text-xl text-gray-600">Turn code into content</p>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+              Create entire videos from a{' '}
+              <span className="relative inline-block">
+                <span className="moving-gradient-text">single prompt</span>
+              </span>
+            </h2>
+          </div>
+          
+          {/* Generating Scene Plan Player */}
+          <div className="flex justify-center w-full">
+            <div style={{ width: '70%' }}>
+              <GeneratingScenePlanPlayer />
+            </div>
+          </div>
+        </section>
+
+        {/* UI meets AI Section */}
+        <section className="mt-32 w-full py-20 -mx-4 px-4 bg-gradient-to-b from-pink-50/20 to-white">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">Turn Code into Content.</h2>
+            <p className="text-xl text-gray-600">Add screenshots or paste code into the chat and Bazaar will bring it to life.</p>
           </div>
           
           {/* Tabs */}
@@ -163,8 +295,8 @@ export default function NewHomePage() {
                   onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`px-6 py-3 rounded-md font-medium transition-all duration-200 ${
                     activeTab === tab.id
-                      ? 'bg-white text-black shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 shadow-sm ring-1 ring-pink-200'
+                      : 'text-gray-600 hover:text-pink-600'
                   }`}
                 >
                   {tab.label}
@@ -179,6 +311,24 @@ export default function NewHomePage() {
               {activeTab === 'graphs' && <MarketingGraphPlayer />}
               {activeTab === 'elements' && <MarketingElementPlayer />}
               {activeTab === 'components' && <MarketingComponentPlayer />}
+            </div>
+          </div>
+        </section>
+
+        {/* From Prompt to Perfection Section */}
+        <section className="mt-32 w-full">
+          <div className="text-center mb-8">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+              <span className="relative inline-block">
+                <span className="moving-gradient-text">Prompt</span>
+              </span> it to Perfection
+            </h2>
+          </div>
+          
+          {/* Video Player */}
+          <div className="flex justify-center w-full">
+            <div style={{ width: '70%' }}>
+              <MarketingComponentPlayer />
             </div>
           </div>
         </section>

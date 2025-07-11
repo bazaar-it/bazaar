@@ -11,7 +11,7 @@ interface IconifyIconProps {
   style?: React.CSSProperties;
 }
 
-const RemotionVideoPlayerFixed: React.FC = () => {
+const RemotionVideoPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const animationRef = useRef<number | null>(null);
 
@@ -85,6 +85,23 @@ const RemotionVideoPlayerFixed: React.FC = () => {
       const progress = (frame - inputMin) / (inputMax - inputMin);
       return outputMin + progress * (outputMax - outputMin);
     };
+
+    const spring = (config: { frame: number; fps: number; config: { damping: number; stiffness: number } }) => {
+      const { frame: f, config: springConfig } = config;
+      if (f <= 0) return 0;
+      
+      const { damping, stiffness } = springConfig;
+      const mass = 1;
+      const dampingRatio = damping / (2 * Math.sqrt(stiffness * mass));
+      const angularFreq = Math.sqrt(stiffness / mass);
+      
+      if (dampingRatio < 1) {
+        const dampedFreq = angularFreq * Math.sqrt(1 - dampingRatio * dampingRatio);
+        return 1 - Math.exp(-dampingRatio * angularFreq * f / 30) * Math.cos(dampedFreq * f / 30);
+      } else {
+        return 1 - Math.exp(-angularFreq * f / 30);
+      }
+    };
     
     const text = "Create a demo video of my app using the attached screenshots";
     const charCount = Math.floor(
@@ -127,14 +144,17 @@ const RemotionVideoPlayerFixed: React.FC = () => {
     // Image drop animation - slower timing
     const dropFrame = 200; // Match the cursor end frame for slower timing
     const imageDropped = frame >= dropFrame;
-    
-    // Remove spring animation for image stability - use simple opacity transition
-    const imageOpacity = imageDropped ? 1 : 0;
-    
-    // Calculate dynamic box height based on content
-    const baseHeight = 320;
-    const imageHeight = imageDropped ? 64 + 20 : 0; // Image height (64px) + gap (20px)
-    const boxHeight = baseHeight + imageHeight;
+    const boxResizeProgress = spring({
+      frame: frame - dropFrame,
+      fps: 30,
+      config: {
+        damping: 15,
+        stiffness: 100,
+      },
+    });
+
+    const boxHeight = imageDropped ? 
+      interpolate(boxResizeProgress, [0, 1], [320, 440]) : 320;
 
     // Check if image is over the drop zone - adjust for padding
     const searchBarTop = height / 2 - 160;
@@ -167,7 +187,7 @@ const RemotionVideoPlayerFixed: React.FC = () => {
         <div
           style={{
             width: "800px", // Scaled down for web
-            height: `${boxHeight * 0.5}px`, // Scaled down with dynamic height
+            height: `${boxHeight * 0.5}px`, // Scaled down
             background: boxBackground,
             borderRadius: "25px",
             padding: "24px",
@@ -205,29 +225,27 @@ const RemotionVideoPlayerFixed: React.FC = () => {
             )}
           </div>
           
-          {/* Image previews when dropped - now showing 3 images in a row, aligned to top */}
+          {/* Image previews when dropped - now showing 3 images in a row */}
           {imageDropped && (
             <div
               style={{
                 display: "flex",
-                gap: "8px", // Reduced gap
-                marginTop: "0px", // Align to top instead of negative margin
-                marginBottom: "16px", // Reduced bottom margin
-                opacity: imageOpacity, // Use simple opacity instead of spring animation
+                gap: "10px",
+                marginTop: "-10px",
+                marginBottom: "20px",
+                opacity: boxResizeProgress,
                 zIndex: 3,
                 position: "relative",
-                alignItems: "flex-start", // Ensure top alignment
               }}
             >
               {imageUrls.map((url, index) => (
                 <div
                   key={index}
                   style={{
-                    width: "64px", // 20% smaller (was 80px, now 64px)
+                    width: "80px",
                     borderRadius: "15px",
                     overflow: "hidden",
                     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-                    flexShrink: 0, // Prevent shrinking
                   }}
                 >
                   <img
@@ -235,9 +253,8 @@ const RemotionVideoPlayerFixed: React.FC = () => {
                     alt={`Preview ${index + 1}`}
                     style={{
                       width: "100%",
-                      height: "auto", // Maintain aspect ratio
+                      height: "auto",
                       display: "block",
-                      objectFit: "cover", // Ensure proper scaling
                     }}
                   />
                 </div>
@@ -314,9 +331,9 @@ const RemotionVideoPlayerFixed: React.FC = () => {
               style={{
                 position: "absolute",
                 top: "-50px",
-                left: "-72px", // Adjusted for smaller images
+                left: "-90px",
                 display: "flex",
-                gap: "6px", // Reduced gap
+                gap: "8px",
                 opacity: 0.8,
                 zIndex: 1001,
               }}
@@ -325,11 +342,10 @@ const RemotionVideoPlayerFixed: React.FC = () => {
                 <div
                   key={index}
                   style={{
-                    width: "48px", // 20% smaller (was 60px, now 48px)
+                    width: "60px",
                     borderRadius: "15px",
                     overflow: "hidden",
                     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
-                    flexShrink: 0, // Prevent shrinking
                   }}
                 >
                   <img
@@ -337,9 +353,8 @@ const RemotionVideoPlayerFixed: React.FC = () => {
                     alt={`Dragged ${index + 1}`}
                     style={{
                       width: "100%",
-                      height: "auto", // Maintain aspect ratio
+                      height: "auto",
                       display: "block",
-                      objectFit: "cover", // Ensure proper scaling
                     }}
                   />
                 </div>
@@ -396,4 +411,6 @@ const RemotionVideoPlayerFixed: React.FC = () => {
   );
 };
 
-export default RemotionVideoPlayerFixed; 
+
+
+export default RemotionVideoPlayer; 

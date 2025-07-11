@@ -6,7 +6,7 @@ const content = [
   {
     title: "Start with templates",
     description:
-      "Choose from 100+ ready-to-use layouts for demos, walkthroughs, and more.",
+      "Choose from 50+ ready-to-use templates that you can easily customise to match your brand.",
     content: (
       <div className="h-full w-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-semibold">
         <div className="text-center">
@@ -17,9 +17,9 @@ const content = [
     ),
   },
   {
-    title: "Frame your format",
+    title: "Perfect for any platform",
     description:
-      "Create for mobile, desktop, or square. Perfect for social, product pages, and pitch decks.",
+      "Create in vertical, portrait or square - Perfect for social, product pages, and pitch decks.",
     content: (
       <div className="h-full w-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
         <div className="text-center">
@@ -32,7 +32,7 @@ const content = [
   {
     title: "Download as MP4",
     description:
-      "Export your video in full HD — ready to publish anywhere.",
+      "Export your video in MP4, GIF, or WebP and always in full HD — ready to publish anywhere.",
     content: (
       <div className="h-full w-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white text-xl font-semibold">
         <div className="text-center">
