@@ -1,25 +1,35 @@
-import type { Metadata } from 'next';
-import { HoverImageGallery } from '~/components/ui/HoverImageGallery';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Our Story | Bazaar',
-  description: 'The story behind Bazaar - how Jack and Markus built an AI-powered video generation tool',
-};
+import { HoverImageGallery } from '~/components/ui/HoverImageGallery';
+import { useSession } from 'next-auth/react';
+import { useState, lazy, Suspense } from 'react';
+
+// Lazy load the login modal
+const LoginModal = lazy(() => import("../login/page"));
 
 export default function OurStoryPage() {
+  const { data: session, status } = useSession();
+  const [showLogin, setShowLogin] = useState(false);
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
+      {/* Header - Same as homepage */}
       <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
-          <div className="flex items-baseline gap-2 font-inter">
+          <a href="/" className="flex items-baseline gap-2 font-inter hover:opacity-80 transition-opacity">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
             <span className="text-base font-medium text-gray-600">V3</span>
-          </div>
+          </a>
         </div>
         <div className="flex gap-4 items-center">
-          <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition">Login</button>
-          <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition">Sign Up</button>
+          {status === "authenticated" ? (
+            <span className="text-base">Logged in as <b>{session?.user?.name ?? session?.user?.email}</b></span>
+          ) : (
+            <>
+              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
+              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+            </>
+          )}
         </div>
       </header>
 
@@ -72,6 +82,26 @@ export default function OurStoryPage() {
           </div>
         </div>
       </div>
+
+      {/* Login Modal Overlay */}
+      {showLogin && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl overflow-hidden w-auto max-w-sm relative">
+            <button 
+              className="absolute top-3 right-3 z-10 text-gray-500 hover:text-black w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors" 
+              onClick={() => setShowLogin(false)}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <Suspense fallback={<div className="p-8">Loading...</div>}>
+              <LoginModal redirectTo='/our-story' />
+            </Suspense>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
