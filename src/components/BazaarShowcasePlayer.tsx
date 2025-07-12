@@ -55,7 +55,7 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
         {/* Left Arrow */}
         <button
           onClick={goToPrevious}
-          className="absolute left-4 top-1/2 transform -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+          className="absolute left-8 top-1/2 transform -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
           aria-label="Previous video"
         >
           <svg 
@@ -79,7 +79,7 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
         {/* Right Arrow */}
         <button
           onClick={goToNext}
-          className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+          className="absolute right-8 top-1/2 transform -translate-y-1/2 z-10 bg-white/90 hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
           aria-label="Next video"
         >
           <svg 
@@ -107,7 +107,7 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
       </div>
 
       {/* Dots Indicator */}
-      <div className="flex justify-center mt-6 space-x-2">
+      <div className="flex justify-center mt-4 space-x-2">
         {showcaseVideos.map((_, index) => (
           <button
             key={index}
@@ -123,7 +123,7 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
       </div>
 
       {/* Video Counter */}
-      <div className="text-center mt-4 text-gray-600">
+      <div className="text-center mt-2 text-gray-600">
         <span className="text-sm">
           {currentVideoIndex + 1} of {showcaseVideos.length}
         </span>

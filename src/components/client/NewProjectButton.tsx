@@ -227,9 +227,14 @@ export function NewProjectButton({
     handleQuickCreate();
   }, [handleQuickCreate]);
 
-  // Hover handlers
+  // Hover handlers - only trigger when in sidebar context
   const handleMouseEnter = useCallback(() => {
     if (!enableQuickCreate || disableFormatDropdown) return;
+    
+    // Only show format options if we're in the sidebar context
+    const isInSidebar = buttonRef.current?.closest('[data-new-project-container]');
+    if (!isInSidebar) return;
+    
     clearCloseTimeout();
     setShowFormatOptions(true);
   }, [enableQuickCreate, disableFormatDropdown, clearCloseTimeout]);

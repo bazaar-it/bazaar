@@ -86,7 +86,7 @@ const MarketingVideoPlayer: React.FC = () => {
       return outputMin + progress * (outputMax - outputMin);
     };
     
-    const text = "Create a demo video of my app using the attached screenshots";
+    const text = "Create a demo video of my app";
     const charCount = Math.floor(
       interpolate(
         frame,
@@ -135,9 +135,12 @@ const MarketingVideoPlayer: React.FC = () => {
       Math.min(1, (frame - dropFrame) / 20) : 0; // 20 frame fade-in for crisp appearance
     
     // Calculate dynamic box height based on content with proper spacing
-    const baseHeight = 550; // Increased further from 450 to 550 to prevent icon overlap
-    const imageHeight = imageDropped ? 100 + 24 : 0; // Larger image area (100px) + gap (24px) for 80% sizing
-    const boxHeight = baseHeight + imageHeight;
+    const baseHeight = imageDropped ? 380 : 320; // Increased slightly to show bottom icons
+    const imageAreaHeight = imageDropped ? 100 : 0; // Space for images when dropped
+    const boxHeight = baseHeight + imageAreaHeight;
+    
+    // Keep consistent image size throughout
+    const imageHeight = 80;
 
     // Check if image is over the drop zone - adjust for new timing and position
     const searchBarTop = height / 2 - 160;
@@ -159,6 +162,18 @@ const MarketingVideoPlayer: React.FC = () => {
       "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/listing.png"
     ];
 
+    // Image natural sizes (simulate, or fetch if needed)
+    const imageHeights = [60, 60, 60]; // Use 60px as a base height for all
+    const imageWidths = [90, 90, 90]; // Use 90px as a base width for all
+
+    // Dragging state
+    const imageDraggedX = interpolate(cursorProgress, [0, 1], [startX, endX]);
+    const imageDraggedY = interpolate(cursorProgress, [0, 1], [startY, endY]) + Math.sin(cursorProgress * Math.PI) * arcHeight;
+
+    // Increase image size
+    const droppedImageHeight = 100;
+    const draggedImageHeight = 80;
+
     return (
       <div style={{ 
         position: 'relative', 
@@ -167,164 +182,180 @@ const MarketingVideoPlayer: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        padding: '20px' // Add 20px padding around the entire container
+        padding: '20px'
       }}>
         <div
           style={{
-            width: "800px", // Scaled down for web
-            height: `${boxHeight * 0.5}px`, // Scaled down with dynamic height
-            background: boxBackground, // Restored background for text box visibility
+            width: "800px",
+            height: `${boxHeight * 0.5}px`,
+            background: boxBackground,
             borderRadius: "25px",
             padding: "24px",
-            paddingBottom: "24px", // Reduced padding since we have more height now
+            paddingBottom: "24px",
             paddingTop: "24px",
             opacity,
             boxShadow: "none",
             position: "relative",
-            transition: "height 0.6s ease", // Removed background and transform transitions
+            transition: "height 0.6s ease",
             display: "flex",
             flexDirection: "column",
-            // Removed transform scale animation
-            overflow: "hidden", // Prevent any content from spilling outside
+            overflow: "hidden",
           }}
         >
-          {/* Image previews when dropped - properly positioned at top with 80% sizing */}
+          {/* Image previews when dropped - consistent size */}
           {imageDropped && (
             <div
               style={{
                 display: "flex",
-                gap: "12px", // Comfortable gap for larger images
-                marginTop: "0px", // Top alignment
-                marginBottom: "16px", // Space between images and text
-                opacity: imageOpacity, // Smooth fade-in
+                gap: "24px",
+                marginTop: "0px",
+                marginBottom: "20px",
+                opacity: imageOpacity,
                 zIndex: 3,
-                alignItems: "center", // Center align the images vertically
-                justifyContent: "flex-start", // Left align the images
-                minHeight: "50px", // Reserve minimum space for images
+                alignItems: "flex-end",
+                justifyContent: "flex-start",
+                minHeight: `${imageHeight}px`,
               }}
             >
               {imageUrls.map((url, index) => (
-                <div
+                <img
                   key={index}
+                  src={url}
+                  alt={`Preview ${index + 1}`}
                   style={{
-                    width: "50px", // 80% of original 60px
-                    height: "50px", // 80% of original 60px
-                    backgroundImage: `url(${url})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    borderRadius: "6px", // 80% of original 8px
-                    border: "2px solid #1976D2", // Slighter thicker border for visibility
-                    opacity: imageOpacity, // Individual opacity for each image
-                    transform: dropInProgress ? `scale(${Math.min(1, (frame - dropFrame) / 10)})` : "scale(1)", // Quick scale animation
-                    transition: "transform 0.2s ease", // Smooth transform
+                    height: `${imageHeight}px`,
+                    width: "auto",
+                    borderRadius: "12px",
+                    background: "#fff",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                    objectFit: "contain",
+                    margin: 0,
                   }}
                 />
               ))}
             </div>
           )}
 
-          {/* Text input area */}
+          {/* Dragging images with cursor - consistent size */}
+          {isDragging && (
+            <div
+              style={{
+                position: "absolute",
+                left: `${imageDraggedX * 0.5}px`,
+                top: `${imageDraggedY * 0.5}px`,
+                transform: "translate(-50%, -50%)",
+                zIndex: 20,
+                display: "flex",
+                gap: "20px",
+                pointerEvents: "none",
+              }}
+            >
+              {imageUrls.map((url, index) => (
+                <img
+                  key={index}
+                  src={url}
+                  alt={`Dragged ${index + 1}`}
+                  style={{
+                    height: `${imageHeight}px`,
+                    width: "auto",
+                    borderRadius: "12px",
+                    background: "#fff",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                    objectFit: "contain",
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Text input area - consistent size and left-aligned */}
           <div style={{ 
             display: "flex", 
-            alignItems: "center",
+            alignItems: "flex-start",
             flex: 1,
-            marginTop: imageDropped ? "0px" : "20px", // Adjust spacing based on image presence
+            marginTop: imageDropped ? "0px" : "20px",
           }}>
             <div style={{ 
               flex: 1, 
-              fontSize: "20px", 
+              fontSize: "32px", 
               color: "#333",
               fontFamily: "system-ui, -apple-system, sans-serif",
               fontWeight: "400",
-              lineHeight: "1.4",
-              minHeight: "60px", // Reserve space for text
+              lineHeight: "1.3",
+              minHeight: "80px",
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-start",
+              justifyContent: "flex-start",
             }}>
               {text.slice(0, charCount)}
               {charCount < text.length && cursorVisible && (
-                <span style={{ color: "#333", fontSize: "20px" }}>|</span>
+                <span style={{ color: "#333", fontSize: "32px" }}>|</span>
               )}
             </div>
           </div>
 
-          {/* Bottom action bar */}
+          {/* Bottom action bar - no white background on icons */}
           <div style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            paddingTop: "16px", // Space above the action bar
-            borderTop: imageDropped ? "1px solid #E0E0E0" : "none", // Optional visual separator when images are present
-            marginTop: "auto", // Push to bottom
+            paddingTop: "16px",
+            borderTop: "none",
+            marginTop: "auto",
+            background: "transparent",
+            borderRadius: "0 0 20px 20px",
+            boxShadow: "none",
           }}>
             <div style={{
               display: "flex",
               alignItems: "center",
-              gap: "12px",
+              gap: "16px",
               opacity: iconProgress,
             }}>
               <div style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "6px",
-                backgroundColor: "#F0F0F0",
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                backgroundColor: "transparent",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#666",
-                fontSize: "16px",
+                color: "#888",
+                fontSize: "24px",
               }}>
                 <IconifyIcon icon="material-symbols:image-outline" />
               </div>
               <div style={{
-                width: "32px",
-                height: "32px",
-                borderRadius: "6px",
-                backgroundColor: "#F0F0F0",
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                backgroundColor: "transparent",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#666",
-                fontSize: "16px",
+                color: "#888",
+                fontSize: "24px",
               }}>
                 <IconifyIcon icon="material-symbols:mic-outline" />
               </div>
             </div>
             <div style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "8px",
-              backgroundColor: "#2196F3",
+              width: "44px",
+              height: "44px",
+              borderRadius: "50%",
+              backgroundColor: "#222",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontSize: "16px",
+              fontSize: "28px",
               opacity: iconProgress,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
             }}>
               <IconifyIcon icon="material-symbols:send" />
             </div>
           </div>
         </div>
-
-        {/* Cursor with pointer icon - only show when in progress */}
-        {frame >= cursorStartFrame && frame < dropFrame && (
-          <div
-            style={{
-              position: "absolute",
-              left: `${cursorX * 0.5}px`, // Scale down cursor position
-              top: `${cursorY * 0.5}px`, // Scale down cursor position
-              transform: "translate(-50%, -50%)",
-              zIndex: 10,
-              fontSize: "24px", // Slightly smaller for web
-              color: "#333",
-              filter: "drop-shadow(1px 1px 2px rgba(0,0,0,0.3))",
-              pointerEvents: "none",
-            }}
-          >
-            <IconifyIcon icon="tabler:pointer" />
-          </div>
-        )}
       </div>
     );
   };
@@ -334,8 +365,8 @@ const MarketingVideoPlayer: React.FC = () => {
       <div style={{
         position: 'relative',
         width: '100%',
-        height: '600px', // Fixed height for consistent display
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        height: '400px', // Reduced from 600px to make it more compact
+        background: 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

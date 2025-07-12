@@ -61,7 +61,7 @@ export function LoopToggle({
               variant="ghost" 
               size="sm" 
                       className={cn(
-          "h-8 px-2 text-xs gap-1 text-blue-600 hover:text-blue-700",
+          "h-8 px-2 text-xs gap-1 text-gray-600 hover:text-gray-700",
           className
         )}
               onClick={handleToggleClick}
