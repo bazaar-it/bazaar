@@ -68,7 +68,7 @@ export default function NewHomePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full relative overflow-hidden">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
@@ -107,13 +107,13 @@ export default function NewHomePage() {
           <p className="text-xl text-gray-600">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
-        <div className="w-full text-center mb-4">
+        <div className="w-full text-center mb-0">
           {status === "authenticated" && session?.user ? (
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
               <NewProjectButton
                 enableQuickCreate={true}
                 disableFormatDropdown={false}
-                className="!inline-block !bg-white !px-8 !py-4 !rounded-lg !text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                className="!block !w-full !bg-white !px-8 !py-4 !rounded-lg !text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
                 variant="ghost"
               >
                 Start Creating Now
@@ -141,15 +141,15 @@ export default function NewHomePage() {
               </button>
             </div>
           )}
-          <p className="text-center text-gray-500 text-sm mt-4">
+          <p className="text-center text-gray-500 text-sm mt-2">
             No credit card required
           </p>
         </div>
         
         {/* Example videos section */}
-        <section className="mt-20 w-full">
+        <section className="w-full -mt-20">
           {/* Marketing Video Player */}
-          <div className="flex justify-center w-full mb-4">
+          <div className="flex justify-center w-full">
             <div style={{ width: '95%' }}>
               <MarketingVideoPlayer />
             </div>
@@ -157,7 +157,7 @@ export default function NewHomePage() {
         </section>
 
         {/* Create entire videos section */}
-        <section className="mt-32 w-full">
+        <section className="mt-0 w-full">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
               Create <span className="moving-gradient-text">entire videos</span> from a single prompt
@@ -222,7 +222,7 @@ export default function NewHomePage() {
         <section className="mt-16 w-full py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
-              50+ Templates to Choose From
+              50+ Templates to Start From
             </h2>
           </div>
           
@@ -230,11 +230,9 @@ export default function NewHomePage() {
           <div className="mb-12">
             <TemplateScrollGrid />
           </div>
-        </section>
-
-        {/* Create Now Section */}
-        <section className="mt-16 w-full py-20 -mx-4 px-4 bg-gradient-to-b from-pink-50/20 to-white">
-          <div className="text-center">
+          
+          {/* Start Creating Now Button */}
+          <div className="text-center mt-5">
             {status === "authenticated" && session?.user ? (
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <NewProjectButton
@@ -270,6 +268,8 @@ export default function NewHomePage() {
             )}
           </div>
         </section>
+
+
       </main>
 
 

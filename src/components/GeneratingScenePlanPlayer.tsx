@@ -7,7 +7,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
 
   useEffect(() => {
     const animate = () => {
-      setCurrentFrame(prev => (prev + 1) % 300); // 10 seconds at 30fps
+      setCurrentFrame(prev => (prev + 1) % 360); // 12 seconds at 30fps
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -68,7 +68,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
   };
 
   const ChatInterface: React.FC = () => {
-    const frame = currentFrame - 60; // Start after 2 seconds of shimmer
+    const frame = currentFrame - 120; // Start after 4 seconds of shimmer
     
     const scenes = [
       { id: 1, title: "Intro Animation", description: "Using the brand identity extracted from the provided images, so we'll create a scene animating in your logo and tagline with a subtle spring effect", type: "Animation" },
@@ -282,33 +282,25 @@ const GeneratingScenePlanPlayer: React.FC = () => {
               )}
 
               {message.type === 'action' && (
-                <div style={{
-                  background: 'transparent',
-                  padding: '16px',
+                <button style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  padding: '12px 24px',
+                  background: '#ffffff',
+                  border: '2px solid transparent',
                   borderRadius: '12px',
-                  alignSelf: 'flex-start',
-                  textAlign: 'left',
-                  width: '100%'
+                  color: '#000000',
+                  cursor: 'pointer',
+                  fontFamily: 'Inter, sans-serif',
+                  width: 'auto',
+                  backgroundImage: 'linear-gradient(white, white), linear-gradient(90deg, #ec4899, #f97316)',
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box',
+                  position: 'relative',
+                  alignSelf: 'flex-start'
                 }}>
-                  <button style={{
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    padding: '12px 24px',
-                    background: '#ffffff',
-                    border: '2px solid transparent',
-                    borderRadius: '12px',
-                    color: '#000000',
-                    cursor: 'pointer',
-                    fontFamily: 'Inter, sans-serif',
-                    width: 'auto',
-                    backgroundImage: 'linear-gradient(white, white), linear-gradient(90deg, #ec4899, #f97316)',
-                    backgroundOrigin: 'border-box',
-                    backgroundClip: 'padding-box, border-box',
-                    position: 'relative'
-                  }}>
-                    Create all scenes
-                  </button>
-                </div>
+                  Create all scenes
+                </button>
               )}
             </div>
           ))}
@@ -317,8 +309,8 @@ const GeneratingScenePlanPlayer: React.FC = () => {
     );
   };
 
-  // Show shimmer for first 2 seconds (60 frames), then chat interface
-  const showShimmer = currentFrame < 60;
+  // Show shimmer for first 4 seconds (120 frames), then chat interface
+  const showShimmer = currentFrame < 120;
 
   return (
     <>
@@ -339,7 +331,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
       <div 
         style={{ 
           width: '60%', 
-          aspectRatio: '0.65/1',
+          aspectRatio: '0.72/1',
           background: 'transparent',
           borderRadius: '16px',
           overflow: 'hidden',

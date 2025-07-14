@@ -102,7 +102,7 @@ const DynamicFormatTitle: React.FC = () => {
 
   return (
     <div className="text-center mb-8">
-      <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+      <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900" style={{ marginLeft: '40px' }}>
         Create in{' '}
         <span className="inline-block min-w-[280px] text-left">
           {displayText}

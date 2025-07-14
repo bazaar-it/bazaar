@@ -1,32 +1,35 @@
 "use client";
 import { useState } from "react";
 import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
+import AirbnbVideoPlayer from "~/components/AirbnbVideoPlayer";
 
 interface BazaarShowcasePlayerProps {
   className?: string;
 }
 
 export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayerProps) {
-  // Example video data - replace with actual videos later
+  // Video showcase data with different player types
   const showcaseVideos = [
     {
       id: 1,
-      title: "SaaS Dashboard Demo",
-      description: "Modern dashboard interface with smooth animations",
-      // Using existing video for now
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations/aiCoding.mp4"
+      title: "Demo Video Creation",
+      description: "Create professional demo videos from screenshots",
+      type: "marketing",
+      component: MarketingVideoPlayer
     },
     {
       id: 2,
-      title: "Mobile App Showcase",
-      description: "iOS app interface with interactive elements",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations/Prompt%20input.mp4"
+      title: "Airbnb App Demo",
+      description: "Property browsing and booking interaction",
+      type: "airbnb",
+      component: AirbnbVideoPlayer
     },
     {
       id: 3,
-      title: "E-commerce Product Demo",
-      description: "Product showcase with cart animations",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations/firework.mp4"
+      title: "SaaS Dashboard Demo",
+      description: "Coming soon - Interactive dashboard showcase",
+      type: "marketing",
+      component: MarketingVideoPlayer
     }
   ];
 
@@ -102,7 +105,10 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
 
         {/* Video Player */}
         <div className="w-full">
-          <MarketingVideoPlayer key={currentVideo.id} />
+          {(() => {
+            const VideoComponent = currentVideo.component;
+            return <VideoComponent key={currentVideo.id} />;
+          })()}
         </div>
       </div>
 
@@ -122,11 +128,19 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
         ))}
       </div>
 
-      {/* Video Counter */}
-      <div className="text-center mt-2 text-gray-600">
-        <span className="text-sm">
-          {currentVideoIndex + 1} of {showcaseVideos.length}
-        </span>
+      {/* Video Info */}
+      <div className="text-center mt-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+          {currentVideo.title}
+        </h3>
+        <p className="text-sm text-gray-600 mb-2">
+          {currentVideo.description}
+        </p>
+        <div className="text-gray-500">
+          <span className="text-sm">
+            {currentVideoIndex + 1} of {showcaseVideos.length}
+          </span>
+        </div>
       </div>
     </div>
   );
