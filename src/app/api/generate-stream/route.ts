@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
   const userMessage = searchParams.get('message');
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
+  const modelOverride = searchParams.get('modelOverride');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -160,7 +161,8 @@ export async function GET(request: NextRequest) {
         userMessageId: userMsg.id,
         userMessage: userMessage,
         imageUrls: parsedImageUrls,
-        videoUrls: parsedVideoUrls
+        videoUrls: parsedVideoUrls,
+        modelOverride: modelOverride
       })));
 
     } catch (error) {

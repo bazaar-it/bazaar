@@ -4,7 +4,7 @@ import { api } from '~/trpc/react';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[] }) => void;
+  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; modelOverride?: string }) => void;
   onComplete?: () => void;
   onError?: (error: string) => void;
 }
@@ -19,7 +19,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
   const generate = useCallback(async (
     userMessage: string,
     imageUrls?: string[],
-    videoUrls?: string[]
+    videoUrls?: string[],
+    modelOverride?: string
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -38,6 +39,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     
     if (videoUrls?.length) {
       params.append('videoUrls', JSON.stringify(videoUrls));
+    }
+    
+    if (modelOverride) {
+      params.append('modelOverride', modelOverride);
     }
 
     // Create new EventSource
@@ -59,7 +64,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             onMessageCreated?.(undefined, {
               userMessage: data.userMessage,
               imageUrls: data.imageUrls,
-              videoUrls: data.videoUrls
+              videoUrls: data.videoUrls,
+              modelOverride: data.modelOverride
             });
             eventSource.close();
             break;

@@ -85,6 +85,7 @@ export class Orchestrator {
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
             videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
+            modelOverride: input.userContext?.modelOverride, // Pass model override if provided
           },
           workflow: toolSelection.workflow,
         }

@@ -24,6 +24,7 @@ export const generateScene = protectedProcedure
     userContext: z.object({
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
+      modelOverride: z.string().optional(), // Optional model ID for overriding default model
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
   }))
@@ -131,6 +132,7 @@ export const generateScene = protectedProcedure
         userContext: {
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
+          modelOverride: userContext?.modelOverride,
         },
       });
 

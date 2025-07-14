@@ -130,6 +130,46 @@ export function resolveModel(
 }
 
 // =============================================================================
+// INDIVIDUAL MODEL CONFIGURATIONS
+// =============================================================================
+
+// Map of available models that can be selected for overrides
+export const INDIVIDUAL_MODELS: Record<string, ModelConfig> = {
+  // Anthropic models
+  'claude-3-5-haiku-20241022': {
+    provider: 'anthropic',
+    model: 'claude-3-5-haiku-20241022',
+    temperature: 0.3,
+    maxTokens: 8000
+  },
+  'claude-sonnet-4-20250514': {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-20250514',
+    temperature: 0.3,
+    maxTokens: 16000
+  },
+  
+  // OpenAI models
+  'gpt-4o-mini': {
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    temperature: 0.3,
+    maxTokens: 4000
+  },
+  'gpt-4.1': {
+    provider: 'openai',
+    model: 'gpt-4.1',
+    temperature: 0.3,
+    maxTokens: 16000
+  }
+};
+
+// Helper to get a specific model configuration by ID
+export function getIndividualModel(modelId: string): ModelConfig | null {
+  return INDIVIDUAL_MODELS[modelId] || null;
+}
+
+// =============================================================================
 // PROVIDER CLIENT REGISTRY
 // =============================================================================
 

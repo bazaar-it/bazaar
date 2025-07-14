@@ -16,6 +16,7 @@ import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/co
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
+import { ModelSelector } from "~/components/ui/ModelSelector";
 
 
 // Component message representation for UI display
@@ -45,6 +46,7 @@ export default function ChatPanelG({
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -239,7 +241,7 @@ export default function ChatPanelG({
     }, 50);
     
     // Let SSE handle DB sync in background
-    generateSSE(trimmedMessage, imageUrls, videoUrls);
+    generateSSE(trimmedMessage, imageUrls, videoUrls, selectedModel);
   };
 
   // Handle keyboard events for textarea
@@ -440,7 +442,7 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [], videoUrls = [] } = data;
+        const { userMessage, imageUrls = [], videoUrls = [], modelOverride } = data;
         
         try {
           const result = await generateSceneMutation.mutateAsync({
@@ -449,6 +451,7 @@ export default function ChatPanelG({
             userContext: {
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+              modelOverride: modelOverride,
             },
             // Don't pass assistantMessageId - let mutation create it
           });
@@ -682,6 +685,15 @@ export default function ChatPanelG({
 
       {/* Input area */}
       <div className="p-4">
+        {/* Model selector */}
+        <div className="mb-2">
+          <ModelSelector
+            value={selectedModel}
+            onChange={setSelectedModel}
+            showDescription={false}
+            className="w-full max-w-xs"
+          />
+        </div>
 
         {/* Auto-fix error banner */}
         <AutoFixErrorBanner

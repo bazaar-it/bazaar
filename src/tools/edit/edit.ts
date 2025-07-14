@@ -1,6 +1,6 @@
 import { BaseMCPTool } from "~/tools/helpers/base";
 import { AIClientService } from "~/server/services/ai/aiClient.service";
-import { getModel } from "~/config/models.config";
+import { getModel, getIndividualModel } from "~/config/models.config";
 import { getSystemPrompt } from "~/config/prompts.config";
 import type { EditToolInput, EditToolOutput } from "~/tools/helpers/types";
 import { editToolInputSchema } from "~/tools/helpers/types";
@@ -152,7 +152,18 @@ Please edit the code according to the user request. Return the complete modified
       });
 
       // Use the AI to edit the code
-      const modelConfig = getModel('editScene');
+      // Check if there's a model override
+      let modelConfig = getModel('editScene');
+      if (input.modelOverride) {
+        const overrideModel = getIndividualModel(input.modelOverride);
+        if (overrideModel) {
+          console.log(`🔄 [EDIT TOOL] Using override model: ${input.modelOverride}`);
+          modelConfig = overrideModel;
+        } else {
+          console.warn(`⚠️ [EDIT TOOL] Model override ${input.modelOverride} not found, using default`);
+        }
+      }
+      
       const systemPrompt = getSystemPrompt('CODE_EDITOR');
       
       const response = await AIClientService.generateResponse(
@@ -205,20 +216,47 @@ Please edit the code according to the user request. Return the complete modified
     try {
       // Try direct JSON parse first
       return JSON.parse(content);
-    } catch {
+    } catch (e) {
+      console.log('🔍 [EDIT TOOL] Direct JSON parse failed, trying extraction...');
+      console.log('🔍 [EDIT TOOL] Raw response (first 500 chars):', content.substring(0, 500));
+      
       // Try to extract JSON from markdown code blocks
       const jsonMatch = content.match(/```(?:json)?\s*({[\s\S]*?})\s*```/);
       if (jsonMatch?.[1]) {
-        return JSON.parse(jsonMatch[1]);
+        try {
+          return JSON.parse(jsonMatch[1]);
+        } catch (e2) {
+          console.error('🔍 [EDIT TOOL] Failed to parse extracted JSON from markdown:', e2);
+          console.log('🔍 [EDIT TOOL] Extracted content:', jsonMatch[1].substring(0, 200));
+        }
       }
       
       // Try to find JSON object in the content
       const objectMatch = content.match(/{[\s\S]*}/);
       if (objectMatch?.[0]) {
-        return JSON.parse(objectMatch[0]);
+        try {
+          return JSON.parse(objectMatch[0]);
+        } catch (e3) {
+          console.error('🔍 [EDIT TOOL] Failed to parse extracted JSON object:', e3);
+          console.log('🔍 [EDIT TOOL] Extracted object:', objectMatch[0].substring(0, 200));
+        }
       }
       
-      throw new Error('Could not extract JSON from response');
+      // If all JSON parsing fails, try to construct a response manually
+      console.warn('⚠️ [EDIT TOOL] All JSON parsing failed, attempting manual extraction...');
+      
+      // Look for code blocks that might contain the code
+      const codeMatch = content.match(/```(?:tsx?|javascript|jsx)?\s*([\s\S]*?)\s*```/);
+      if (codeMatch?.[1]) {
+        console.log('✅ [EDIT TOOL] Found code block, constructing response manually');
+        return {
+          code: codeMatch[1],
+          reasoning: 'Code extracted from response',
+          changes: ['Applied requested changes']
+        };
+      }
+      
+      throw new Error('Could not extract JSON or code from response. Response: ' + content.substring(0, 500));
     }
   }
 
