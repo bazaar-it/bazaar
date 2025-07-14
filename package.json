@@ -70,6 +70,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@heroicons/react": "^2.2.0",
+    "@iconify-icons/logos": "^1.2.36",
     "@iconify/json": "^2.2.354",
     "@iconify/react": "^6.0.0",
     "@iconify/utils": "^2.3.0",

@@ -33,7 +33,7 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
     }
   ];
 
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(1);
 
   const goToPrevious = () => {
     setCurrentVideoIndex((prev) => 

@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
+import { Icon } from '@iconify/react';
+import airbnbIcon from '@iconify-icons/logos/airbnb';
 
 const AirbnbVideoPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -13,7 +15,7 @@ const AirbnbVideoPlayer: React.FC = () => {
     
     const animate = (timestamp: number) => {
       if (isPlaying && timestamp - lastTimestamp >= frameInterval) {
-        setCurrentFrame(prev => (prev + 1) % 300); // 10 seconds at 30fps
+        setCurrentFrame(prev => (prev + 1) % 600); // 20 seconds at 30fps
         lastTimestamp = timestamp;
       }
       animationRef.current = requestAnimationFrame(animate);
@@ -48,6 +50,1088 @@ const AirbnbVideoPlayer: React.FC = () => {
     }
     
     return outputMin + progress * (outputMax - outputMin);
+  };
+
+  const BookingPage: React.FC<{ frame: number }> = ({ frame }) => {
+    const adjustedFrame = frame - 420; // Adjust for when this page starts
+
+    return (
+      <div style={{
+        width: '390px',
+        height: '844px',
+        background: '#000',
+        borderRadius: '40px',
+        padding: '8px',
+        position: 'relative',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: '#ffffff',
+          borderRadius: '32px',
+          overflow: 'hidden',
+          position: 'relative'
+        }}>
+          {/* Dynamic Island */}
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '126px',
+            height: '37px',
+            background: '#000',
+            borderRadius: '19px',
+            zIndex: 100
+          }} />
+
+          {/* Status bar */}
+          <div style={{
+            height: '44px',
+            background: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px',
+            fontSize: '17px',
+            fontWeight: '600',
+            color: '#000',
+            paddingTop: '10px'
+          }}>
+            <div>4:04</div>
+            <div></div>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center', fontSize: '16px' }}>
+              <div style={{ display: 'flex', gap: '2px', alignItems: 'end', height: '12px' }}>
+                <div style={{ width: '3px', height: '3px', background: '#000', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '6px', background: '#000', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '9px', background: '#000', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '12px', background: '#000', borderRadius: '0.5px' }}></div>
+              </div>
+              <div style={{ width: '15px', height: '15px' }}>
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 3C6.686 3 3.686 4.342 1.582 6.582L2.996 8.004C4.634 6.362 7.134 5.5 10 5.5s5.366.862 7.004 2.504l1.414-1.422C16.314 4.342 13.314 3 10 3zm0 4c-2.209 0-4.209.672-5.586 1.918l1.414 1.414C6.791 9.475 8.291 9 10 9s3.209.475 4.172 1.332l1.414-1.414C14.209 7.672 12.209 7 10 7zm0 4c-1.105 0-2.105.336-2.879.904L10 14.5l2.879-2.596C12.105 11.336 11.105 11 10 11zm0 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                </svg>
+              </div>
+              <div style={{ width: '24px', height: '12px', position: 'relative' }}>
+                <div style={{
+                  width: '22px',
+                  height: '11px',
+                  border: '1px solid #000',
+                  borderRadius: '2px',
+                  position: 'relative'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    background: '#000',
+                    borderRadius: '1px'
+                  }}></div>
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: '3px',
+                  width: '1px',
+                  height: '5px',
+                  background: '#000',
+                  borderRadius: '0 1px 1px 0'
+                }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Header */}
+          <div style={{
+            padding: '0 24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '32px'
+          }}>
+            <h1 style={{
+              fontSize: '32px',
+              fontWeight: '600',
+              color: '#222',
+              margin: 0
+            }}>
+              Review and continue
+            </h1>
+            <div style={{
+              width: '24px',
+              height: '24px',
+              cursor: 'pointer'
+            }}>
+              <svg viewBox="0 0 24 24" fill="#717171">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+              </svg>
+            </div>
+          </div>
+
+          {/* Property Card */}
+          <div style={{
+            margin: '0 24px 32px',
+            background: '#f7f7f7',
+            borderRadius: '12px',
+            padding: '16px',
+            display: 'flex',
+            gap: '16px'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '8px',
+              background: 'url(https://images.unsplash.com/photo-1586105251261-72a756497a11?w=400)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}></div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#222',
+                margin: '0 0 4px 0'
+              }}>
+                Apartment Les Gets, 1 bedroom, 4 pers.
+              </h3>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <div style={{
+                  background: '#222',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  padding: '2px 6px',
+                  borderRadius: '4px'
+                }}>
+                  ★ New
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Trip Details */}
+          <div style={{
+            margin: '0 24px 32px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '12px'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#222',
+                margin: 0
+              }}>
+                Trip details
+              </h3>
+              <button style={{
+                background: '#f7f7f7',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}>
+                Change
+              </button>
+            </div>
+            <div style={{
+              fontSize: '16px',
+              color: '#222',
+              marginBottom: '4px'
+            }}>
+              Jul 18 – 28, 2025
+            </div>
+            <div style={{
+              fontSize: '16px',
+              color: '#222'
+            }}>
+              1 adult
+            </div>
+          </div>
+
+          {/* Total Price */}
+          <div style={{
+            margin: '0 24px 24px'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '8px'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#222',
+                margin: 0
+              }}>
+                Total price
+              </h3>
+              <button style={{
+                background: '#f7f7f7',
+                border: 'none',
+                borderRadius: '20px',
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}>
+                Details
+              </button>
+            </div>
+            <div style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#222',
+              marginBottom: '16px'
+            }}>
+              € 962.00 including taxes <span style={{ textDecoration: 'underline' }}>EUR</span>
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: '#717171'
+            }}>
+              This reservation is non-refundable. <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Full policy</span>
+            </div>
+          </div>
+
+          {/* Payment Options */}
+          <div style={{
+            margin: '0 24px 32px'
+          }}>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#222',
+              margin: '0 0 16px 0'
+            }}>
+              Choose when to pay
+            </h3>
+            
+            {/* Pay now option */}
+            <div style={{
+              border: '2px solid #222',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '12px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#222'
+              }}>
+                Pay € 962.00 now
+              </div>
+              <div style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                background: '#222',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: 'white'
+                }}></div>
+              </div>
+            </div>
+
+            {/* Klarna option */}
+            <div style={{
+              border: '1px solid #dddddd',
+              borderRadius: '12px',
+              padding: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start'
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#222',
+                  marginBottom: '4px'
+                }}>
+                  Pay in 3 payments with Klarna
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#717171'
+                }}>
+                  Split your purchase into 3 payments of €<br />
+                  320.66 (0% APR). <span style={{ textDecoration: 'underline' }}>More info</span>
+                </div>
+              </div>
+              <div style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                border: '2px solid #dddddd',
+                marginLeft: '16px',
+                marginTop: '2px'
+              }}></div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{
+            position: 'absolute',
+            bottom: '120px',
+            left: '24px',
+            right: '24px',
+            height: '4px',
+            background: '#f0f0f0',
+            borderRadius: '2px'
+          }}>
+            <div style={{
+              width: '25%',
+              height: '100%',
+              background: '#222',
+              borderRadius: '2px'
+            }}></div>
+          </div>
+
+          {/* Next Button */}
+          <div style={{
+            position: 'absolute',
+            bottom: '50px',
+            left: '24px',
+            right: '24px'
+          }}>
+            <button style={{
+              width: '100%',
+              background: '#222',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '16px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}>
+              Next
+            </button>
+          </div>
+
+          {/* Home Indicator */}
+          <div style={{
+            position: 'absolute',
+            bottom: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '134px',
+            height: '5px',
+            background: '#000',
+            borderRadius: '3px',
+            opacity: 0.3
+          }} />
+        </div>
+      </div>
+    );
+  };
+
+  const ProductDetailPage: React.FC<{ frame: number }> = ({ frame }) => {
+    const adjustedFrame = frame - 240; // Adjust for when this page starts
+    
+    // Scroll animation for the detail page
+    const detailScrollY = interpolate(
+      adjustedFrame,
+      [60, 180],
+      [0, -800],
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeInOut" }
+    );
+
+    // Reserve button click effect
+    const isReserveClicked = frame >= 390 && frame < 420;
+
+    return (
+      <div style={{
+        width: '390px',
+        height: '844px',
+        background: '#000',
+        borderRadius: '40px',
+        padding: '8px',
+        position: 'relative',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: '#ffffff',
+          borderRadius: '32px',
+          overflow: 'hidden',
+          position: 'relative'
+        }}>
+          {/* Dynamic Island */}
+          <div style={{
+            position: 'absolute',
+            top: '10px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '126px',
+            height: '37px',
+            background: '#000',
+            borderRadius: '19px',
+            zIndex: 100
+          }} />
+
+          {/* Status bar */}
+          <div style={{
+            height: '44px',
+            background: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 20px',
+            fontSize: '17px',
+            fontWeight: '600',
+            color: '#fff',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 90,
+            paddingTop: '10px'
+          }}>
+            <div>9:41</div>
+            <div></div>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center', fontSize: '16px' }}>
+              <div style={{ display: 'flex', gap: '2px', alignItems: 'end', height: '12px' }}>
+                <div style={{ width: '3px', height: '3px', background: '#fff', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '6px', background: '#fff', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '9px', background: '#fff', borderRadius: '0.5px' }}></div>
+                <div style={{ width: '3px', height: '12px', background: '#fff', borderRadius: '0.5px' }}></div>
+              </div>
+              <div style={{ width: '15px', height: '15px' }}>
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M10 3C6.686 3 3.686 4.342 1.582 6.582L2.996 8.004C4.634 6.362 7.134 5.5 10 5.5s5.366.862 7.004 2.504l1.414-1.422C16.314 4.342 13.314 3 10 3zm0 4c-2.209 0-4.209.672-5.586 1.918l1.414 1.414C6.791 9.475 8.291 9 10 9s3.209.475 4.172 1.332l1.414-1.414C14.209 7.672 12.209 7 10 7zm0 4c-1.105 0-2.105.336-2.879.904L10 14.5l2.879-2.596C12.105 11.336 11.105 11 10 11zm0 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                </svg>
+              </div>
+              <div style={{ width: '24px', height: '12px', position: 'relative' }}>
+                <div style={{
+                  width: '22px',
+                  height: '11px',
+                  border: '1px solid #fff',
+                  borderRadius: '2px',
+                  position: 'relative'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    background: '#fff',
+                    borderRadius: '1px'
+                  }}></div>
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  right: '-2px',
+                  top: '3px',
+                  width: '1px',
+                  height: '5px',
+                  background: '#fff',
+                  borderRadius: '0 1px 1px 0'
+                }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Navigation */}
+          <div style={{
+            position: 'absolute',
+            top: '50px',
+            left: '0',
+            right: '0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '0 20px',
+            zIndex: 80
+          }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              background: '#fff',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            }}>
+              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="#000">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+              </svg>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                background: '#fff',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+                <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="#000">
+                  <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+                </svg>
+              </div>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                background: '#fff',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+              }}>
+                <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div style={{
+            transform: `translateY(${detailScrollY}px)`,
+            transition: 'transform 0.1s ease-out'
+          }}>
+            {/* Main Image */}
+            <div style={{
+              height: '375px',
+              background: 'url(https://images.unsplash.com/photo-1571055107559-3e67626fa8be?w=800)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              position: 'relative'
+            }}>
+              {/* Photo counter */}
+              <div style={{
+                position: 'absolute',
+                bottom: '16px',
+                right: '16px',
+                background: 'rgba(0,0,0,0.6)',
+                color: 'white',
+                padding: '6px 12px',
+                borderRadius: '16px',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}>
+                3 / 42
+              </div>
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: '24px' }}>
+              {/* Title */}
+              <h1 style={{
+                fontSize: '26px',
+                fontWeight: '600',
+                color: '#222',
+                margin: '0 0 8px 0',
+                lineHeight: '1.2'
+              }}>
+                Desert dream oasis with spa
+              </h1>
+
+              {/* Location */}
+              <div style={{
+                fontSize: '16px',
+                color: '#717171',
+                marginBottom: '8px'
+              }}>
+                Entire home in Yucca Valley, California
+              </div>
+
+              {/* Details */}
+              <div style={{
+                fontSize: '16px',
+                color: '#717171',
+                marginBottom: '24px'
+              }}>
+                4 guests • 2 bedrooms • 2 beds • 1 bath
+              </div>
+
+              {/* Rating and Reviews */}
+              <div style={{
+                background: '#f7f7f7',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>4.97</div>
+                  <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} style={{ fontSize: '12px' }}>★</div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center', padding: '0 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="#FF385C">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600' }}>Guest</div>
+                      <div style={{ fontSize: '14px', fontWeight: '600' }}>favorite</div>
+                    </div>
+                    <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="#FF385C">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>156</div>
+                  <div style={{ fontSize: '14px', color: '#717171', textDecoration: 'underline' }}>Reviews</div>
+                </div>
+              </div>
+
+              {/* Host Section */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '24px'
+              }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: 'url(https://images.unsplash.com/photo-1494790108755-2616b612b1-1c35-32f1-be1d-b90e88cbaa18d5f?w=200)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  marginRight: '16px',
+                  position: 'relative'
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-2px',
+                    right: '-2px',
+                    width: '20px',
+                    height: '20px',
+                    background: '#FF385C',
+                    borderRadius: '50%',
+                    border: '2px solid white'
+                  }}></div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '22px', fontWeight: '600', marginBottom: '4px' }}>
+                    Hosted by Jessica
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#717171' }}>
+                    Superhost • 2 years hosting
+                  </div>
+                </div>
+              </div>
+
+              {/* Self Check-in */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '16px',
+                marginBottom: '32px'
+              }}>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  marginTop: '4px'
+                }}>
+                  <svg viewBox="0 0 24 24" fill="#000">
+                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>
+                    Self check-in
+                  </div>
+                  <div style={{ fontSize: '16px', color: '#717171' }}>
+                    Check yourself in with the smart lock.
+                  </div>
+                </div>
+              </div>
+
+                             {/* Reviews Section */}
+               <div style={{
+                 background: '#f7f7f7',
+                 borderRadius: '12px',
+                 padding: '32px 24px',
+                 marginBottom: '24px',
+                 textAlign: 'center'
+               }}>
+                 {/* Large Rating with Decorative Elements */}
+                 <div style={{
+                   display: 'flex',
+                   alignItems: 'center',
+                   justifyContent: 'center',
+                   marginBottom: '16px',
+                   gap: '24px'
+                 }}>
+                   {/* Left decorative wreath */}
+                   <div>
+                     <svg width={50} height={80} viewBox="0 0 50 80" fill="none">
+                       <path d="M8 20C8 16 10 12 14 10C18 8 22 10 24 14C26 18 24 22 20 24C16 26 12 24 10 20C8 24 6 28 8 32C10 36 14 38 18 36C22 34 24 30 22 26C20 22 16 20 12 22C8 24 6 28 8 32C10 36 14 38 18 36C22 34 24 30 22 26C24 30 28 32 32 30C36 28 38 24 36 20C34 16 30 14 26 16C22 18 20 22 22 26C24 30 28 32 32 30C36 28 38 24 36 20" 
+                             stroke="#8B8B8B" 
+                             strokeWidth="1.5" 
+                             fill="none"/>
+                       <ellipse cx="12" cy="18" rx="3" ry="6" fill="#8B8B8B" transform="rotate(-20 12 18)"/>
+                       <ellipse cx="18" cy="28" rx="2.5" ry="5" fill="#8B8B8B" transform="rotate(-10 18 28)"/>
+                       <ellipse cx="24" cy="38" rx="2" ry="4" fill="#8B8B8B" transform="rotate(5 24 38)"/>
+                       <ellipse cx="28" cy="48" rx="1.5" ry="3" fill="#8B8B8B" transform="rotate(15 28 48)"/>
+                     </svg>
+                   </div>
+                   
+                   {/* Main Rating */}
+                   <div style={{
+                     fontSize: '80px',
+                     fontWeight: '600',
+                     color: '#222',
+                     lineHeight: '1'
+                   }}>
+                     4.97
+                   </div>
+                   
+                   {/* Right decorative wreath */}
+                   <div style={{ transform: 'scaleX(-1)' }}>
+                     <svg width={50} height={80} viewBox="0 0 50 80" fill="none">
+                       <path d="M8 20C8 16 10 12 14 10C18 8 22 10 24 14C26 18 24 22 20 24C16 26 12 24 10 20C8 24 6 28 8 32C10 36 14 38 18 36C22 34 24 30 22 26C20 22 16 20 12 22C8 24 6 28 8 32C10 36 14 38 18 36C22 34 24 30 22 26C24 30 28 32 32 30C36 28 38 24 36 20C34 16 30 14 26 16C22 18 20 22 22 26C24 30 28 32 32 30C36 28 38 24 36 20" 
+                             stroke="#8B8B8B" 
+                             strokeWidth="1.5" 
+                             fill="none"/>
+                       <ellipse cx="12" cy="18" rx="3" ry="6" fill="#8B8B8B" transform="rotate(-20 12 18)"/>
+                       <ellipse cx="18" cy="28" rx="2.5" ry="5" fill="#8B8B8B" transform="rotate(-10 18 28)"/>
+                       <ellipse cx="24" cy="38" rx="2" ry="4" fill="#8B8B8B" transform="rotate(5 24 38)"/>
+                       <ellipse cx="28" cy="48" rx="1.5" ry="3" fill="#8B8B8B" transform="rotate(15 28 48)"/>
+                     </svg>
+                   </div>
+                 </div>
+                 
+                 <div style={{
+                   fontSize: '18px',
+                   fontWeight: '600',
+                   color: '#222',
+                   marginBottom: '8px'
+                 }}>
+                   Guest favorite
+                 </div>
+                 
+                 <div style={{
+                   fontSize: '15px',
+                   color: '#717171',
+                   lineHeight: '1.4',
+                   maxWidth: '280px',
+                   margin: '0 auto'
+                 }}>
+                   One of the most loved homes on Airbnb<br />
+                   based on ratings, reviews, and reliability
+                 </div>
+               </div>
+
+               {/* Rating Breakdown */}
+               <div style={{
+                 display: 'grid',
+                 gridTemplateColumns: '1fr 1fr 1fr',
+                 gap: '24px',
+                 marginBottom: '32px'
+               }}>
+                 <div>
+                   <div style={{ marginBottom: '16px' }}>
+                     <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', textAlign: 'left' }}>Overall rating</div>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                       {[5,4,3,2,1].map(rating => (
+                         <div key={rating} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#717171' }}>
+                           <span style={{ width: '8px' }}>{rating}</span>
+                           <div style={{
+                             width: '80px',
+                             height: '3px',
+                             background: '#e0e0e0',
+                             borderRadius: '2px',
+                             overflow: 'hidden'
+                           }}>
+                             <div style={{
+                               width: rating === 5 ? '100%' : rating === 4 ? '8%' : '3%',
+                               height: '100%',
+                               background: '#222',
+                               borderRadius: '2px'
+                             }}></div>
+                           </div>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div style={{ textAlign: 'center' }}>
+                   <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>5.0</div>
+                   <div style={{ fontSize: '14px', color: '#717171', marginBottom: '8px' }}>Cleanliness</div>
+                   <div style={{
+                     width: '24px',
+                     height: '24px',
+                     margin: '0 auto'
+                   }}>
+                     <svg viewBox="0 0 24 24" fill="none" stroke="#717171" strokeWidth="2">
+                       <path d="M8 2C6.9 2 6 2.9 6 4V8C6 9.1 6.9 10 8 10C9.1 10 10 9.1 10 8V4C10 2.9 9.1 2 8 2Z"/>
+                       <path d="M8 10L16 18"/>
+                       <path d="M16 14L20 18"/>
+                       <circle cx="16" cy="16" r="2"/>
+                     </svg>
+                   </div>
+                 </div>
+                 
+                 <div style={{ textAlign: 'center' }}>
+                   <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>5.0</div>
+                   <div style={{ fontSize: '14px', color: '#717171', marginBottom: '8px' }}>Accuracy</div>
+                   <div style={{
+                     width: '24px',
+                     height: '24px',
+                     margin: '0 auto'
+                   }}>
+                     <svg viewBox="0 0 24 24" fill="none" stroke="#717171" strokeWidth="2">
+                       <circle cx="12" cy="12" r="10"/>
+                       <path d="m9 12 2 2 4-4"/>
+                     </svg>
+                   </div>
+                 </div>
+               </div>
+
+               {/* Second Row of Categories */}
+               <div style={{
+                 display: 'grid',
+                 gridTemplateColumns: '1fr 1fr 1fr',
+                 gap: '24px',
+                 marginBottom: '32px'
+               }}>
+                 <div style={{ textAlign: 'center' }}>
+                   <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>5.0</div>
+                   <div style={{ fontSize: '14px', color: '#717171', marginBottom: '8px' }}>Check-in</div>
+                   <div style={{
+                     width: '24px',
+                     height: '24px',
+                     margin: '0 auto'
+                   }}>
+                     <svg viewBox="0 0 24 24" fill="none" stroke="#717171" strokeWidth="2">
+                       <circle cx="8" cy="8" r="6"/>
+                       <path d="M16 16L22 22"/>
+                       <circle cx="8" cy="8" r="2"/>
+                     </svg>
+                   </div>
+                 </div>
+                 <div></div>
+                 <div></div>
+               </div>
+
+               {/* Reviews Header */}
+               <div style={{
+                 display: 'flex',
+                 justifyContent: 'space-between',
+                 alignItems: 'center',
+                 marginBottom: '16px'
+               }}>
+                 <h2 style={{
+                   fontSize: '22px',
+                   fontWeight: '600',
+                   color: '#222',
+                   margin: 0
+                 }}>
+                   156 reviews
+                 </h2>
+                                    <button style={{
+                     background: '#f7f7f7',
+                     border: '1px solid #dddddd',
+                     borderRadius: '20px',
+                     padding: '8px 16px',
+                     fontSize: '14px',
+                     fontWeight: '600',
+                     display: 'flex',
+                     alignItems: 'center',
+                     gap: '8px',
+                     cursor: 'pointer'
+                   }}>
+                     Highest rated
+                     <svg width={12} height={12} viewBox="0 0 24 24" fill="#717171">
+                       <path d="M7 10l5 5 5-5z"/>
+                     </svg>
+                   </button>
+               </div>
+
+               {/* Search Reviews */}
+               <div style={{
+                 background: '#f7f7f7',
+                 borderRadius: '25px',
+                 padding: '12px 16px',
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: '12px',
+                 marginBottom: '24px'
+               }}>
+                 <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="#717171">
+                   <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                 </svg>
+                 <div style={{
+                   fontSize: '16px',
+                   color: '#717171',
+                   flex: 1
+                 }}>
+                   Search all reviews
+                 </div>
+               </div>
+
+               {/* Individual Review */}
+               <div style={{
+                 marginBottom: '24px'
+               }}>
+                 <div style={{
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '12px',
+                   marginBottom: '12px'
+                 }}>
+                   <div style={{
+                     width: '48px',
+                     height: '48px',
+                     borderRadius: '50%',
+                     background: 'url(https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200)',
+                     backgroundSize: 'cover',
+                     backgroundPosition: 'center'
+                   }}></div>
+                   <div>
+                     <div style={{
+                       fontSize: '16px',
+                       fontWeight: '600',
+                       color: '#222',
+                       marginBottom: '2px'
+                     }}>
+                       Allison
+                     </div>
+                     <div style={{
+                       fontSize: '14px',
+                       color: '#717171'
+                     }}>
+                       Oak Ridge North, TX
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div style={{
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '8px',
+                   marginBottom: '12px'
+                 }}>
+                   <div style={{ display: 'flex', gap: '1px' }}>
+                     {[1,2,3,4,5].map(i => (
+                       <span key={i} style={{ fontSize: '14px' }}>★</span>
+                     ))}
+                   </div>
+                   <span style={{ fontSize: '14px', color: '#717171' }}>7 months ago</span>
+                   <span style={{ fontSize: '14px', color: '#717171' }}>•</span>
+                   <span style={{ fontSize: '14px', color: '#717171' }}>Stayed with kids</span>
+                 </div>
+                 
+                 <div style={{
+                   fontSize: '16px',
+                   color: '#222',
+                   lineHeight: '1.5'
+                 }}>
+                   A little gem in the middle of the desert! We loved the seclusion and privacy that came with it. We saw some quail and a jackrabbit while lounging by the fire too. It's always fun to see the wildlife right from your patio!
+                 </div>
+               </div>
+
+               {/* Add more space for additional scrolling */}
+               <div style={{ height: '200px' }}></div>
+            </div>
+          </div>
+
+          {/* Bottom Price/Reserve Section */}
+          <div style={{
+            position: 'absolute',
+            bottom: '0',
+            left: '0',
+            right: '0',
+            height: '100px',
+            background: '#fff',
+            borderTop: '1px solid #DDDDDD',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 24px 32px 24px'
+          }}>
+            <div>
+              <div style={{
+                fontSize: '22px',
+                fontWeight: '600',
+                color: '#222',
+                marginBottom: '4px'
+              }}>
+                $782
+              </div>
+              <div style={{
+                fontSize: '16px',
+                color: '#717171',
+                textDecoration: 'underline'
+              }}>
+                Total before taxes
+              </div>
+              <div style={{
+                fontSize: '16px',
+                color: '#717171',
+                fontWeight: '600'
+              }}>
+                Dec 11 – 14
+              </div>
+            </div>
+            <button style={{
+              background: isReserveClicked ? '#C4183F' : '#E51E53',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '14px 24px',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transform: isReserveClicked ? 'scale(0.95)' : 'scale(1)',
+              transition: 'all 0.1s ease'
+            }}>
+              Reserve
+            </button>
+          </div>
+
+          {/* Home Indicator */}
+          <div style={{
+            position: 'absolute',
+            bottom: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '134px',
+            height: '5px',
+            background: '#000',
+            borderRadius: '3px',
+            opacity: 0.3
+          }} />
+        </div>
+      </div>
+    );
   };
 
   const AirbnbApp: React.FC = () => {
@@ -88,10 +1172,12 @@ const AirbnbVideoPlayer: React.FC = () => {
             justifyContent: 'center',
             marginBottom: '24px'
           }}>
-            <img 
-              src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iMTYxIiB2aWV3Qm94PSIwIDAgNTEyIDE2MSI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTE0Ny41MDggMTEzLjk5NmMtLjcyLTIuMDIyLTEuNTYyLTMuOTc4LTIuMzYzLTUuNzlhNTQxIDU0MSAwIDAgMC0zLjc3Mi04LjI4MmwtLjEtLjIxNWExODUzIDE4NTMgMCAwIDAtMzUuNTMtNzIuNjY4bC0uNTI5LTEuMDI0YTQ3MyA0NzMgMCAwIDAtMy45MjYtNy41MDVBNDguOCA0OC44IDAgMCAwIDk1LjUxIDkuNjJhMjYuOSAyNi45IDAgMCAwLTkuMjQ4LTcuMDk4YTI2Ljk1IDI2Ljk1IDAgMCAwLTIyLjc3Ni4wMDNhMjYuOSAyNi45IDAgMCAwLTkuMjQ2IDcuMWE0OSA0OSAwIDAgMC01Ljc3MyA4Ljg5YTQ4MSA0ODEgMCAwIDAtMy45NjIgNy41NzRsLS40OS45NUExODU1IDE4NTUgMCAwIDAgOC40ODQgOTkuNzFsLS4xNjIuMzVhNTQ3IDU0NyAwIDAgMC0zLjcwOSA4LjE0NWMtLjggMS44MTEtMS42NDEgMy43NjYtMi4zNjIgNS43OTNhMzUuNSAzNS41IDAgMCAwLTEuOTE2IDE3LjMwOGEzNC4yIDM0LjIgMCAwIDAgNi45MjQgMTYuMTczYTM0LjMgMzQuMyAwIDAgMCAxNC4wNTUgMTAuNjA2YTM0LjkgMzQuOSAwIDAgMCAxMy4xNTEgMi41NDRxMi4xMjYgMCA0LjIzOC0uMjQ3YTQzLjIgNDMuMiAwIDAgMCAxNi4xNzItNS40NTZjNi41MjMtMy42NjUgMTIuOTY2LTkuMDM2IDIwLjAwNC0xNi43MTFjNy4wMzggNy42NzUgMTMuNDggMTMuMDQ2IDIwLjAwNCAxNi43MWE0My4yIDQzLjIgMCAwIDAgMTYuMTcyIDUuNDU3YTM3IDM3IDAgMCAwIDQuMjM4LjI0N2M0LjUwNy4wMSA4Ljk3My0uODU0IDEzLjE1LTIuNTQ0YTM0LjMgMzQuMyAwIDAgMCAxNC4wNTYtMTAuNjA2YTM0LjIgMzQuMiAwIDAgMCA2LjkyNC0xNi4xNzNhMzUuNTQgMzUuNTQgMCAwIDAtMS45MTUtMTcuMzFtLTcyLjYyOSA4LjM2N2MtOC43MTMtMTEuMDQ0LTE0LjMwMy0yMS4zLTE2LjI2NS0yOS44OTdhMjYuNCAyNi40IDAgMCAxLS41Ni05Ljg1N2ExNi4xIDE2LjEgMCAwIDEgMi41OTMtNi43MzlhMTcuOTUgMTcuOTUgMCAwIDEgNi4zMDItNS4xNWExOCAxOCAwIDAgMSAxNS44NjIuMDAyYTE3Ljk1IDE3Ljk1IDAgMCAxIDYuMzAxIDUuMTVhMTYuMSAxNi4xIDAgMCAxIDIuNTkzIDYuNzRhMjYuNSAyNi41IDAgMCAxLS41NjIgOS44NmMtMS45NjQgOC41OTctNy41NTMgMTguODUtMTYuMjY0IDI5Ljg5MW02NC4zNjggNy40ODlhMjMuOSAyMy45IDAgMCAxLTQuODQxIDExLjMwN2EyMy45NyAyMy45NyAwIDAgMS05LjgyOCA3LjQxNmEyNS4wNSAyNS4wNSAwIDAgMS0xMi4zMzYgMS42MTRhMzIuNiAzMi42IDAgMCAxLTEyLjMxNy00LjIwN2MtNS44MDctMy4yNjItMTEuNjg1LTguMjctMTguMy0xNS42MTdjMTAuNTMtMTIuOTgzIDE3LjEwNi0yNC45NSAxOS41NC0zNS42MWEzNi42IDM2LjYgMCAwIDAgLjctMTMuN2EyNi4zIDI2LjMgMCAwIDAtNC4yNzQtMTAuOTg1YTI4LjIgMjguMiAwIDAgMC05Ljk4OS04LjQyN2EyOC4yNiAyOC4yNiAwIDAgMC0yNS40NDQgMGEyOC4yIDI4LjIgMCAwIDAtOS45OSA4LjQyNWEyNi4zIDI2LjMgMCAwIDAtNC4yNzQgMTAuOTgxYTM2LjYgMzYuNiAwIDAgMCAuNjk2IDEzLjY5NmMyLjQzMyAxMC42NjMgOS4wMDkgMjIuNjM0IDE5LjU0MiAzNS42MjFjLTYuNjE0IDcuMzQ2LTEyLjQ5MiAxMi4zNTQtMTguMjk5IDE1LjYxN2EzMi42IDMyLjYgMCAwIDEtMTIuMzE3IDQuMjA2YTI1LjA1IDI1LjA1IDAgMCAxLTEyLjMzNy0xLjYxNGEyNCAyNCAwIDAgMS05LjgyNy03LjQxNWEyMy45IDIzLjkgMCAwIDEtNC44NC0xMS4zMDhhMjUuMiAyNS4yIDAgMCAxIDEuNDI2LTEyLjQyYy41NzQtMS42MTYgMS4yNDctMy4yIDIuMDgtNS4wODRhNTQzIDU0MyAwIDAgMSAzLjYzOS03Ljk5MWwuMTYyLS4zNTJhMTg0NCAxODQ0IDAgMCAxIDM1LjMzNi03Mi4yNjZsLjQ5Mi0uOTU1YzEuMjYtMi40NDMgMi41NjItNC45NyAzLjg3Ni03LjQxMWEzOS43IDM5LjcgMCAwIDEgNC41MzktNy4wODdhMTYuNjUgMTYuNjUgMCAwIDEgMjUuNjMxLS4wMDJhMzkuNSAzOS41IDAgMCAxIDQuNTQgNy4wODRjMS4zMDEgMi40MiAyLjU5MiA4LjkyNCAzLjg0MSA3LjM0NWwuNTMgMS4wMjdhMTg0MiAxODQyIDAgMCAxIDM1LjMzNSA3Mi4yNjdsLjEuMjE2YzEuMjMgMi42NjMgMi41MDMgNS40MTUgMy43MDEgOC4xMjZjLjgzNCAxLjg4NiAxLjUwOCAzLjQ3MiAyLjA4MSA1LjA4MmEyNS4yIDI1LjIgMCAwIDEgMS40MjYgMTIuNDJtNjkuOTkzLTguNzgxcS02LjAxNSAwLTExLjA3LTIuNDExYy0zLjM3LTEuNjA4LTYuMjU3LTMuODYtOC44MjQtNi43NTNzLTQuNDkyLTYuMjctNS45MzctOS45NjljLTEuNDQ0LTMuODU5LTIuMDg2LTguMDQtMi4wODYtMTIuNTQxcy44MDMtOC44NDQgMi4yNDctMTIuNzAzczMuNTMtNy4yMzUgNi4wOTctMTAuMjljMi41NjctMi44OTQgNS42MTUtNS4zMDYgOS4xNDUtNi45MTRzNy4yMi0yLjQxMiAxMS4zOTItMi40MTJjNC4wMSAwIDcuNTQuODA0IDEwLjc1IDIuNTczYzMuMjA5IDEuNjA4IDUuNzc2IDQuMDIgNy44NjEgNy4wNzRsLjQ4Mi03Ljg3OGgxNC43NnY2MC42MTdoLTE0Ljc2bC0uNDgyLTguODQzYy0yLjA4NSAzLjIxNS00LjgxMyA1Ljc4OC04LjM0MyA3LjcxN2MtMy4yMDkgMS43Ny03LjA2IDIuNzM0LTExLjIzMSAyLjczNG0zLjg1Mi0xNC40N2MyLjg4OCAwIDUuNDU1LS44MDQgNy44NjItMi4yNTFjMi4yNDYtMS42MDggNC4wMS0zLjY5OCA1LjQ1NS02LjI3YzEuMjgzLTIuNTczIDEuOTI1LTUuNjI4IDEuOTI1LTkuMDA1cy0uNjQyLTYuNDMyLTEuOTI1LTkuMDA0Yy0xLjI4NC0yLjU3My0zLjIxLTQuNjYzLTUuNDU1LTYuMjdjLTIuMjQ3LTEuNjA5LTQuOTc0LTIuMjUyLTcuODYyLTIuMjUycy01LjQ1NS44MDQtNy44NjIgMi4yNTFjLTIuMjQ2IDEuNjA4LTQuMDExIDMuNjk4LTUuNDU1IDYuMjdjLTEuMjg0IDIuNTczLTEuOTI2IDUuNjI4LTEuOTI2IDkuMDA1cy42NDIgNi40MzIgMS45MjYgOS4wMDRjMS4yODMgMi41NzMgMy4yMDkgNC42NjMgNS40NTUgNi4yN2MyLjQwNyAxLjQ0OCA0Ljk3NCAyLjI1MiA3Ljg2MiAyLjI1Mm01Ni4xNTYtNjQuMTU1YzAgMS43NjktLjMyMSAzLjM3Ny0xLjEyNCA0LjY2M2E5LjMgOS4zIDAgMCAxLTMuMzY5IDMuMjE2Yy0xLjQ0NC44MDQtMy4wNDggMS4xMjUtNC42NTIgMS4xMjVzLTMuMjEtLjMyMS00LjY1NC0xLjEyNWE5LjMgOS4zIDAgMCAxLTMuMzY5LTMuMjE2Yy0uODAyLTEuNDQ3LTEuMTIzLTIuODk0LTEuMTIzLTQuNjYzYzAtMS43NjguMzItMy4zNzYgMS4xMjMtNC42NjNjLjgwMi0xLjQ0NyAxLjkyNS0yLjQxMSAzLjM3LTMuMjE1YzEuNDQzLS44MDQgMy4wNDgtMS4xMjYgNC42NTMtMS4xMjZzMy4yMDguMzIyIDQuNjUyIDEuMTI2YTkuMyA5LjMgMCAwIDEgMy4zNyAzLjIxNWMuNjQxIDEuMjg3IDEuMTIzIDIuNzM0IDEuMTIzIDQuNjYzbS0xNy4xNjggNzYuODU3VjU4LjY4NWgxNi4wNDR2NjAuNjE3em01OC44ODQtNDQuN3YuMTYyYy0uODAyLS4zMjItMS43NjUtLjQ4My0yLjU2OC0uNjQzYy0uOTYyLS4xNjEtMS43NjUtLjE2MS0yLjcyNy0uMTYxYy00LjQ5MyAwLTcuODYyIDEuMjg2LTEwLjEwOCA0LjAyYy0yLjQwNyAyLjczMy0zLjUzIDYuNTkyLTMuNTMgMTEuNTc2djI5Ljc0NmgtMTYuMDQ0VjU4LjY4NWgxNC43NmwuNDgyIDkuMTY1YzEuNjA0LTMuMjE2IDMuNTMtNS42MjggNi4yNTctNy4zOTZjMi41NjctMS43NyA1LjYxNS0yLjU3MyA5LjE0NS0yLjU3M2MxLjEyNCAwIDIuMjQ3LjE2IDMuMjEuMzIxYy40OCUxNjEuODAxLjE2MSAxLjEyMy4zMjJ6bTYuNDE3IDQ0Ljd2LTg1LjU0aDE2LjA0NXYzMi42NGMyLjI0Ni0yLjg5MyA4LjgxMy01LjE0NSA4LjAyMi02LjkxM2MzLjIxLTEuNjA4IDYuNzQtMi41NzMgMTAuNzUtMi41NzNxNi4wMTYgMCAxMS4wNyAyLjQxMmMzLjM3IDEuNjA4IDYuMjU4IDMuODU5IDguODI1IDYuNzUzYzIuNTY4IDIuODk0IDQuNDkzIDYuMjcxIDUuOTM3IDkuOTdjMS40NDQgMy44NTggMi4wODUgOC4wMzggMi4wODUgMTIuNTRjMCA0LjUwMy0uODAyIDguODQ0LTIuMjQ1IDEyLjcwM2MtMS40NDUgMy44NTktMy41MyA3LjIzNS02LjA5OCAxMC4yOWMtMi41NjcgMi44OTUtNS42MTUgNS4zMDYtOS4xNDUgNi45MTRzLTcuMjIgMi40MTItMTEuMzkxIDIuNDEyYy00LjAxMiAwLTcuNTQxLS44MDQtMTAuNzUtMi41NzNjLTMuMjEtMS42MDgtNS43NzctNC4wMi03Ljg2Mi03LjA3NGwtLjQ4MiA3Ljg3OHptMzAuOTY2LTEyLjcwMmMyLjg4OSAwIDUuNDU2LS44MDQgNy44NjItMi4yNTFjMi4yNDYtMS42MDggNC4wMTEtMy42OTggNS40NTUtNi4yN2MxLjI4NC0yLjU3MyAxLjkyNi01LjYyOCAxLjkyNi05LjAwNXMtLjY0Mi02LjQzMi0xLjkyNi05LjAwNGMtMS40NDQtMi41NzMtMy4yMDktNC42NjMtNS40NTUtNi4yN2MtMi4yNDYtMS42MDktNC45NzMtMi4yNTItNy44NjItMi4yNTJjLTIuODg4IDAtNS40NTUuODA0LTcuODYxIDIuMjUxYy0yLjI0NyAxLjYwOC00LjAxMiAzLjY5OC01LjQ1NiA2LjI3Yy0xLjI4MyAyLjU3My0xLjkyNSA1LjYyOC0xLjkyNSA5LjAwNXMuNjQyIDYuNDMyIDEuOTI1IDkuMDA0YzEuMjg0IDIuNTczIDMuMjEgNC42NjMgNS40NTYgNi4yN2MyLjQwNiAxLjQ0OCA0Ljk3MyAyLjI1MiA3Ljg2MSAyLjI1Mm0zNy44NjYgMTIuNzAyVjU4LjY4NWgxNC43NmwuNDgyIDcuODc5YzEuNzY1LTIuODk1IDQuMTcxLTUuMTQ2IDcuMjItNi45MTRjMy4wNDgtMS43NjkgNi41NzgtMi41NzMgMTAuNTktMi41NzNjNC40OTIgMCA4LjM0MiAxLjEyNSAxMS41NTEgMy4yMTZjMy4zNyAyLjA5IDUuOTM3IDUuMTQ1IDcuNzAyIDkuMDA0czIuNzI3IDguNTIxIDIuNzI3IDEzLjgyOHYzNi4zMzhoLTE2LjA0NFY4NS4yMTVjMC00LjE4LS45NjMtNy41NTctMi44ODgtOS45N2MtMS45MjUtMi40MS00LjQ5My0zLjY5Ny03Ljg2Mi0zLjY5N2MtMi40MDcgMC00LjQ5My40ODItNi40MTggMS42MDhjLTEuNzY1IDEuMTI1LTMuMjA5IDIuNTcyLTQuMzMyIDQuNjYzYy0xLjEyMyAxLjkyOS0xLjYwNCA0LjM0LTEuNjA0IDYuNzUzdjM0Ljczem02My4wNTQgMHYtODUuNTRoMTYuMDQ1djMyLjY0YzIuMjQ2LTIuODkzIDQuODEzLTUuMTQ1IDguMDIyLTYuOTEzYzMuMjEtMS42MDggNi43NC0yLjU3MyAxMC43NS0yLjU3M3E2LjAxOCAwIDExLjA3MSAyLjQxMmMzLjM3IDEuNjA4IDYuMjU3IDMuODU5IDguODI0IDYuNzUzYzIuNTcgMi44OTQgNC40OTIgNi4yNzEgNS45MzggOS45N2MxLjQ0NiAzLjg1OCAyLjA4MyA4LjAzOCAyLjA4MyAxMi41NGMwIDQuNTAzLS43OTggOC44NDQtMi4yNDQgMTIuNzAzYy0xLjQ0NSAzLjg1OS0zLjUyOSA3LjIzNS02LjA5OSAxMC4yOWMtMi41NjYgMi44OTUtNS42MTQgNS4zMDYtOS4xNDQgNi45MTRzLTcuMjIgMi40MTItMTEuMzkxIDIuNDEyYy00LjAxMSAwLTcuNTQxLS44MDQtMTAuNzUtMi41NzNjLTMuMjEtMS42MDgtNS43NzYtNC4wMi03Ljg2Mi03LjA3NGwtLjQ4MSA3Ljg3OHptMzEuMTI3LTEyLjcwMmMyLjg4OCAwIDUuNDU1LS44MDQgNy44NjItMi4yNTFjMi4yNDYtMS42MDggNC4wMS0zLjY5OCA1LjQ1NS02LjI3YzEuMjg0LTIuNTczIDEuOTI2LTUuNjI4IDEuOTI2LTkuMDA1cy0uNjQyLTYuNDMyLTEuOTI2LTkuMDA0Yy0xLjI4My0yLjU3My0zLjIwOS00LjY2My01LjQ1NS02LjI3Yy0yLjI0Ny0xLjYwOS00Ljk3NC0yLjI1Mi03Ljg2Mi0yLjI1MnMtNS40NTUuODA0LTcuODYyIDIuMjUxYy0yLjI0NiAxLjYwOC00LjAxIDMuNjk4LTUuNDU1IDYuMjdjLTEuNDQ0IDMDU3My0xLjkyNiA1LjYyOC0xLjkyNiA5LjAwNXMuNjQzIDYuNDMyIDEuOTI2IDkuMDA0YzEuMjg0IDIuNTczIDMuMjEgNC42NjMgNS40NTUgNi4yN2MyLjQwNyAxLjQ0OCA0LjgxNCAyLjI1MiA3Ljg2MiAyLjI1MiIvPjwvc3ZnPg=="
-              alt="Airbnb"
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            <Icon 
+              icon={airbnbIcon} 
+              style={{ 
+                fontSize: '120px', 
+                color: 'white'
+              }} 
             />
           </div>
           
@@ -119,31 +1205,58 @@ const AirbnbVideoPlayer: React.FC = () => {
         padding: '0 20px',
         fontSize: '17px',
         fontWeight: '600',
-        color: '#000'
+        color: '#000',
+        position: 'relative',
+        zIndex: 50,
+        paddingTop: '10px' // Account for Dynamic Island
       }}>
         <div>9:41</div>
-        <div style={{ 
-          background: '#000', 
-          width: '128px', 
-          height: '30px', 
-          borderRadius: '15px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ width: '6px', height: '6px', background: '#4285f4', borderRadius: '50%' }}></div>
-        </div>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '16px' }}>
-          <span>•••</span>
-          <div style={{ width: '16px', height: '16px' }}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2 17h20v2H2zm1.15-4.05L4 11.47l.85 1.48 1.3-.75-.85-1.48-1.3.75zm6.7-3.9L11 8.47l.85 1.48 1.3-.75-.85-1.48-1.3.75zm6.7-3.9L17 4.47l.85 1.48 1.3-.75-.85-1.48-1.3.75z"/>
+        {/* Removed duplicate center element - using Dynamic Island instead */}
+        <div></div>
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center', fontSize: '16px' }}>
+          {/* Signal Strength - 4 bars iOS style */}
+          <div style={{ display: 'flex', gap: '2px', alignItems: 'end', height: '12px' }}>
+            <div style={{ width: '3px', height: '3px', background: '#000', borderRadius: '0.5px' }}></div>
+            <div style={{ width: '3px', height: '6px', background: '#000', borderRadius: '0.5px' }}></div>
+            <div style={{ width: '3px', height: '9px', background: '#000', borderRadius: '0.5px' }}></div>
+            <div style={{ width: '3px', height: '12px', background: '#000', borderRadius: '0.5px' }}></div>
+          </div>
+          
+          {/* WiFi Icon - iOS style */}
+          <div style={{ width: '15px', height: '15px' }}>
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 3C6.686 3 3.686 4.342 1.582 6.582L2.996 8.004C4.634 6.362 7.134 5.5 10 5.5s5.366.862 7.004 2.504l1.414-1.422C16.314 4.342 13.314 3 10 3zm0 4c-2.209 0-4.209.672-5.586 1.918l1.414 1.414C6.791 9.475 8.291 9 10 9s3.209.475 4.172 1.332l1.414-1.414C14.209 7.672 12.209 7 10 7zm0 4c-1.105 0-2.105.336-2.879.904L10 14.5l2.879-2.596C12.105 11.336 11.105 11 10 11zm0 4a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
             </svg>
           </div>
-          <div style={{ width: '16px', height: '16px' }}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33c0 .74.6 1.34 1.33 1.34h8.34c.73 0 1.33-.6 1.33-1.33V5.33C17 4.6 16.4 4 15.67 4zm-4 14.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-            </svg>
+          
+          {/* Battery Icon - iOS style with 100% fill */}
+          <div style={{ width: '24px', height: '12px', position: 'relative' }}>
+            {/* Battery outline */}
+            <div style={{
+              width: '22px',
+              height: '11px',
+              border: '1px solid #000',
+              borderRadius: '2px',
+              position: 'relative'
+            }}>
+              {/* Battery fill (100%) */}
+              <div style={{
+                width: '100%',
+                height: '100%',
+                background: '#000',
+                borderRadius: '1px'
+              }}></div>
+            </div>
+            {/* Battery tip */}
+            <div style={{
+              position: 'absolute',
+              right: '-2px',
+              top: '3px',
+              width: '1px',
+              height: '5px',
+              background: '#000',
+              borderRadius: '0 1px 1px 0'
+            }}></div>
           </div>
         </div>
       </div>
@@ -154,43 +1267,65 @@ const AirbnbVideoPlayer: React.FC = () => {
       <div style={{
         padding: '16px',
         background: '#ffffff',
-        borderBottom: '1px solid #f0f0f0'
+        position: 'relative',
+        zIndex: 40
       }}>
+        {/* Rounded search container */}
         <div style={{
+          background: '#f7f7f7',
+          borderRadius: '25px',
+          padding: '12px 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '12px'
+          gap: '12px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
         }}>
+          {/* Search icon */}
           <div style={{
-            width: '32px',
-            height: '32px',
+            width: '20px',
+            height: '20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
+            <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="#000">
               <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
             </svg>
           </div>
+          
+          {/* Text content */}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '16px', fontWeight: '600', color: '#000', marginBottom: '2px' }}>
+            <div style={{ 
+              fontSize: '16px', 
+              fontWeight: '600', 
+              color: '#000', 
+              marginBottom: '2px',
+              lineHeight: '1.2'
+            }}>
               Joshua Tree
             </div>
-            <div style={{ fontSize: '14px', color: '#666' }}>
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#717171',
+              lineHeight: '1.2'
+            }}>
               Dec 11 - 14 • 2 guests
             </div>
           </div>
+          
+          {/* Filter icon */}
           <div style={{
             width: '32px',
             height: '32px',
-            border: '1px solid #ddd',
-            borderRadius: '16px',
+            border: '1px solid #dddddd',
+            borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            background: '#ffffff'
           }}>
-            <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.82,11.69,4.82,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+            <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="#717171">
+              <path d="M7 6h10l-5.01 6.3L7 6zm-2.75-.39C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.73-4.8 5.75-7.39c.51-.66.04-1.61-.79-1.61H5.04c-.83 0-1.3.95-.79 1.61z"/>
             </svg>
           </div>
         </div>
@@ -211,6 +1346,7 @@ const AirbnbVideoPlayer: React.FC = () => {
     }) => {
       const adjustedFrame = frame - 90; // Adjust for logo screen
       const isHighlighted = adjustedFrame >= 60 && adjustedFrame < 120 && index === 0; // Highlight first property
+      const isTapped = adjustedFrame >= 120 && adjustedFrame < 150 && index === 0; // Tap animation
       
       return (
         <div style={{
@@ -218,8 +1354,9 @@ const AirbnbVideoPlayer: React.FC = () => {
           borderRadius: '12px',
           overflow: 'hidden',
           marginBottom: '16px',
-          transform: isHighlighted ? 'scale(1.02)' : 'scale(1)',
-          transition: 'all 0.3s ease'
+          transform: isTapped ? 'scale(0.98)' : (isHighlighted ? 'scale(1.02)' : 'scale(1)'),
+          transition: 'all 0.3s ease',
+          opacity: isTapped ? 0.7 : 1
         }}>
           <div style={{
             height: '320px',
@@ -397,6 +1534,16 @@ const AirbnbVideoPlayer: React.FC = () => {
       </div>
     );
 
+    // Show booking page after frame 420 (14 seconds)
+    if (frame >= 420) {
+      return <BookingPage frame={frame} />;
+    }
+
+    // Show product detail page after frame 240 (8 seconds)
+    if (frame >= 240) {
+      return <ProductDetailPage frame={frame} />;
+    }
+
     // Scroll animation - adjusted for new timing
     const adjustedFrame = frame - 90; // Adjust for logo screen
     const scrollY = interpolate(
@@ -432,60 +1579,86 @@ const AirbnbVideoPlayer: React.FC = () => {
 
     return (
       <div style={{
-        width: '375px',
-        height: '812px',
-        background: '#ffffff',
-        overflow: 'hidden',
+        width: '390px',
+        height: '844px',
+        background: '#000',
+        borderRadius: '40px',
+        padding: '8px',
         position: 'relative',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
         fontFamily: 'system-ui, -apple-system, sans-serif'
       }}>
-        <StatusBar />
-        <SearchHeader />
-        
-        {/* Properties list with scroll animation */}
+        {/* iPhone Frame */}
         <div style={{
-          padding: '16px',
-          paddingBottom: '100px',
-          transform: `translateY(${scrollY}px)`,
-          transition: 'transform 0.1s ease-out',
+          width: '100%',
           height: '100%',
-          overflowY: 'hidden'
+          background: '#ffffff',
+          borderRadius: '32px',
+          overflow: 'hidden',
+          position: 'relative'
         }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0px'
-          }}>
-            {properties.map((property, index) => (
-              <PropertyCard key={index} {...property} index={index} />
-            ))}
-          </div>
-        </div>
-
-        <BottomNav />
-
-        {/* Booking overlay that appears when property is highlighted */}
-        {adjustedFrame >= 90 && adjustedFrame < 150 && (
+          {/* Dynamic Island */}
           <div style={{
             position: 'absolute',
-            bottom: '100px',
-            left: '20px',
-            right: '20px',
-            background: '#ff5a5f',
-            borderRadius: '12px',
-            padding: '16px',
-            color: 'white',
-            textAlign: 'center',
-            animation: adjustedFrame < 105 ? 'slideUp 0.5s ease-out' : 'none'
+            top: '10px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '126px',
+            height: '37px',
+            background: '#000',
+            borderRadius: '19px',
+            zIndex: 100
+          }} />
+          
+          {/* Fixed Header Area */}
+          <div style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 60,
+            background: '#ffffff'
           }}>
-            <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-              Reserve this place?
-            </div>
-            <div style={{ fontSize: '14px', opacity: 0.9 }}>
-              $782 × 3 nights = $2,346 total
+            <StatusBar />
+            <SearchHeader />
+          </div>
+          
+          {/* Scrollable Properties Content */}
+          <div style={{
+            flex: 1,
+            overflowY: 'hidden',
+            paddingBottom: '100px'
+          }}>
+            <div style={{
+              padding: '16px',
+              transform: `translateY(${scrollY}px)`,
+              transition: 'transform 0.1s ease-out'
+            }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0px'
+              }}>
+                {properties.map((property, index) => (
+                  <PropertyCard key={index} {...property} index={index} />
+                ))}
+              </div>
             </div>
           </div>
-        )}
+
+          <BottomNav />
+          
+          {/* Home Indicator */}
+          <div style={{
+            position: 'absolute',
+            bottom: '8px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '134px',
+            height: '5px',
+            background: '#000',
+            borderRadius: '3px',
+            opacity: 0.3
+          }} />
+        </div>
       </div>
     );
   };
