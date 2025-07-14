@@ -29,10 +29,11 @@ DECISION PROCESS:
 4. Consider any images provided in the conversation
 
 MULTI-SCENE DETECTION:
-- Use "scenePlanner" for broad requests like: "make an ad for...", "create a video about...", "tell the story of...", "show the process of..."
+- Use "scenePlanner" ONLY for explicitly multi-step requests like: "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish", "create a multi-part series", "build a full marketing funnel"
+- Use "addScene" for most creation requests: "make an ad for...", "create a video about...", "show our product"
 - Use "typographyScene" for specific text requests: "add text that says...", "create animated text with...", "make a scene that says..."
 - Use "imageRecreatorScene" for image recreation: "recreate this image", "make this UI into a scene", "animate this screenshot", "copy this exactly", "replicate this", "make it look like this", "reproduce this layout"
-- Use focused tools for specific requests vs. general addScene for mixed content
+- BIAS TOWARD ACTION: When in doubt between scenePlanner and addScene, choose addScene
 
 IMAGE DECISION CRITERIA:
 - If user uploads image(s) AND uses words like "recreate", "copy", "exactly", "replicate", "reproduce", "make it look like", "match this" → imageRecreatorScene

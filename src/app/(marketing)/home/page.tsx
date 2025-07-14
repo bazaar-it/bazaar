@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayerRemotion";
 import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import TemplateScrollGrid from "~/components/TemplateScrollGrid";
@@ -48,7 +48,7 @@ export default function NewHomePage() {
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
       {/* Header */}
-      <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
+      <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
@@ -68,7 +68,7 @@ export default function NewHomePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
@@ -87,8 +87,8 @@ export default function NewHomePage() {
           </div>
         </div>
         
-        <div className="mb-16 w-full text-center">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-6 leading-tight text-gray-900">
+        <div className="mb-8 md:mb-16 w-full text-center">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-4 md:mb-6 leading-tight text-gray-900 px-2">
             <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md mr-2">
               Screenshot
               <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
@@ -104,16 +104,16 @@ export default function NewHomePage() {
             </span>
             <span className="ml-3">to Demo Video — in seconds</span>
           </h1>
-          <p className="text-xl text-gray-600">Bazaar is an AI video generator for creating software demo videos.</p>
+          <p className="text-lg md:text-xl text-gray-600 px-4">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
-        <div className="w-full text-center mb-0">
+        <div className="w-full text-center mb-8 md:mb-16">
           {status === "authenticated" && session?.user ? (
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
               <NewProjectButton
                 enableQuickCreate={true}
                 disableFormatDropdown={false}
-                className="!block !w-full !bg-white !px-8 !py-4 !rounded-lg !text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
+                className="!block !w-full !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
                 variant="ghost"
               >
                 Start Creating Now
@@ -128,7 +128,7 @@ export default function NewHomePage() {
                   setTryForFreeLoading(false);
                 }}
                 disabled={tryForFreeLoading}
-                className="inline-block bg-white px-6 py-3 rounded-lg text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
               >
                 {tryForFreeLoading ? (
                   <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -147,10 +147,10 @@ export default function NewHomePage() {
         </div>
         
         {/* Example videos section */}
-        <section className="w-full -mt-20">
+        <section className="w-full mt-8">
           {/* Marketing Video Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '95%' }}>
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-7xl">
               <MarketingVideoPlayer />
             </div>
           </div>
@@ -158,24 +158,24 @@ export default function NewHomePage() {
 
         {/* Create entire videos section */}
         <section className="mt-0 w-full">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+          <div className="text-center mb-8 md:mb-16">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               Create <span className="moving-gradient-text">entire videos</span> from a single prompt
             </h2>
           </div>
           
           {/* Generating Scene Plan Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '70%' }}>
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
               <GeneratingScenePlanPlayer />
             </div>
           </div>
         </section>
 
         {/* Prompt it to Perfection Section */}
-        <section className="mt-32 w-full">
+        <section className="mt-16 md:mt-32 w-full">
           <div className="text-center mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               <span className="relative inline-block">
                 <span className="moving-gradient-text">Prompt</span>
               </span> it to Perfection
@@ -183,45 +183,45 @@ export default function NewHomePage() {
           </div>
           
           {/* Video Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '70%' }}>
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
               <MarketingComponentPlayer />
             </div>
           </div>
         </section>
 
         {/* Showcase of Three Bazaar Videos Section */}
-        <section className="mt-16 w-full py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/50">
+        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/50">
           <div className="text-center mb-8">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               Made with <span className="moving-gradient-text">Bazaar</span>
             </h2>
           </div>
           
           {/* Bazaar Showcase Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '80%' }}>
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-6xl">
               <BazaarShowcasePlayer />
             </div>
           </div>
         </section>
 
         {/* Create in Horizontal, Vertical, Square with Morphing Section */}
-        <section className="mt-16 w-full py-20 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
+        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
           <DynamicFormatTitle />
           
           {/* Aspect Ratio Transition Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '70%' }}>
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
               <AspectRatioTransitionPlayer />
             </div>
           </div>
         </section>
 
         {/* 50 Templates Section */}
-        <section className="mt-16 w-full py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
+          <div className="text-center mb-8 md:mb-16">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               50+ Templates to Start From
             </h2>
           </div>
@@ -238,7 +238,7 @@ export default function NewHomePage() {
                 <NewProjectButton
                   enableQuickCreate={true}
                   disableFormatDropdown={false}
-                  className="!inline-block !bg-white !px-8 !py-4 !rounded-lg !text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="!inline-block !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
                   variant="ghost"
                 >
                   Start Creating Now
@@ -253,7 +253,7 @@ export default function NewHomePage() {
                     setTryForFreeLoading(false);
                   }}
                   disabled={tryForFreeLoading}
-                  className="inline-block bg-white px-6 py-3 rounded-lg text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
                 >
                   {tryForFreeLoading ? (
                     <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

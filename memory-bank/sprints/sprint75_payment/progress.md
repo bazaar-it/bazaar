@@ -39,6 +39,23 @@
 - Credit balance checked before each operation
 - Immediate credit addition after payment
 
+### 2025-07-14: Apple Pay Integration
+- Created comprehensive Apple Pay integration guide
+- Designed mobile-optimized credit purchase flow
+- Key features documented:
+  - Domain verification process
+  - Apple Pay detection and button implementation
+  - Credit package selection UI
+  - Fallback to Stripe Checkout for non-Apple Pay users
+  - Instant credit delivery after payment
+- Benefits highlighted:
+  - 2-3x higher conversion than traditional checkout
+  - Perfect for mobile users (40%+ of traffic)
+  - Biometric authentication security
+  - One-touch purchase experience
+- Implementation phases planned (8 days total)
+- Monitoring and analytics setup defined
+
 ## Next Immediate Steps
 1. Calculate exact API costs for proper margin analysis
 2. Finalize credit packages and pricing
@@ -46,11 +63,16 @@
 4. Design credit system database schema
 5. Build CreditService class
 6. Implement pre-export credit checks
+7. **NEW**: Set up Apple Pay domain verification
+8. **NEW**: Create Apple Pay button component
+9. **NEW**: Test Apple Pay flow on real devices
 
 ## Blockers
 - None currently
 
 ## References
 - [Stripe Integration Analysis](./stripe-integration-analysis.md)
+- [Credit-Based Pricing Strategy](./credit-based-pricing-strategy.md)
+- [Apple Pay Integration Guide](./apple-pay-integration-guide.md)
 - [Sprint TODO List](./TODO.md)
 - [t3dotgg Recommendations](https://github.com/t3dotgg/stripe-recommendations)

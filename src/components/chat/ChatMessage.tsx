@@ -56,8 +56,12 @@ function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { project
     <button
       onClick={() => createAllMutation.mutate({ projectId, userId })}
       disabled={createAllMutation.isPending}
-      className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors ml-1"
-      title={`Create all ${totalScenePlans} scenes`}
+      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ml-1 ${
+        createAllMutation.isPending 
+          ? 'bg-orange-500 text-white cursor-wait' 
+          : 'bg-blue-600 hover:bg-blue-700 text-white'
+      }`}
+      title={createAllMutation.isPending ? 'Creating all scenes...' : `Create all ${totalScenePlans} scenes`}
     >
       {createAllMutation.isPending ? (
         <>
@@ -165,6 +169,9 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   // Check if this is a scene plan message
   const isScenePlan = message.kind === 'scene_plan';
   
+  // Check if this is the main scene plan overview message (contains Create All button)
+  const isScenePlanOverview = message.message.includes('<!-- SCENE_PLAN_OVERVIEW:');
+  
   // Check if this is a scene creation success message
   const isSceneSuccess = message.kind === 'status' && 
     message.status === 'success' && 
@@ -178,6 +185,20 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
         return JSON.parse(match[1]);
       } catch (e) {
         console.warn('Failed to parse scene plan data:', e);
+        return null;
+      }
+    }
+    return null;
+  })() : null;
+  
+  // Extract scene plan overview data if available
+  const scenePlanOverviewData = isScenePlanOverview ? (() => {
+    const match = message.message.match(/<!-- SCENE_PLAN_OVERVIEW:(.*) -->/);
+    if (match && match[1]) {
+      try {
+        return JSON.parse(match[1]);
+      } catch (e) {
+        console.warn('Failed to parse scene plan overview data:', e);
         return null;
       }
     }
@@ -313,12 +334,39 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                 <span>
                   {message.message
                     .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
+                    .replace(/<!-- SCENE_PLAN_OVERVIEW:.*? -->/, '')
                     .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
                     .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
                     .trim()}
                 </span>
               )}
             </div>
+            
+            {/* Scene plan overview actions (Create All button) */}
+            {isScenePlanOverview && scenePlanOverviewData && (
+              <div className="mt-2 pt-2 border-t border-gray-200/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-gray-500">{formatTimestamp(message.timestamp)}</span>
+                    <span className="text-gray-300">•</span>
+                    <span className="bg-blue-100 px-2 py-0.5 rounded-full font-medium text-blue-700">
+                      {scenePlanOverviewData.totalScenePlans} Scenes Planned
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    {/* Create All button in the main planning message */}
+                    {scenePlanOverviewData.totalScenePlans > 1 && projectId && userId && (
+                      <CreateAllScenesButton 
+                        projectId={projectId}
+                        userId={userId}
+                        totalScenePlans={scenePlanOverviewData.totalScenePlans}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Scene plan actions */}
             {isScenePlan && scenePlanData && (
@@ -329,7 +377,11 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                     <span className="text-gray-300">•</span>
                     <span className="bg-gray-100 px-2 py-0.5 rounded-full font-medium text-gray-700">Scene {scenePlanData.sceneNumber}</span>
                     <span className="text-gray-300">•</span>
-                    <span className="capitalize text-gray-600">{scenePlanData.scenePlan.toolType}</span>
+                    <span className="text-gray-600">
+                      {scenePlanData.scenePlan.toolType === 'typography' ? 'Text Animation' : 
+                       scenePlanData.scenePlan.toolType === 'recreate' ? 'Image Recreation' : 
+                       'Motion Graphics'}
+                    </span>
                   </div>
                   
                   <div className="flex items-center gap-1">
@@ -350,7 +402,11 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                     <button
                       onClick={handleCreateSceneClick}
                       disabled={createSceneMutation.isPending}
-                      className="flex items-center gap-1 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-2 py-1 rounded text-xs font-medium transition-colors"
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        createSceneMutation.isPending 
+                          ? 'bg-blue-500 text-white cursor-wait' 
+                          : 'bg-gray-800 hover:bg-gray-900 text-white'
+                      }`}
                     >
                       {createSceneMutation.isPending ? (
                         <>
@@ -364,15 +420,6 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                         </>
                       )}
                     </button>
-                    
-                    {/* Create All button - only show on first scene plan */}
-                    {isFirstScenePlan && totalScenePlans && totalScenePlans > 1 && projectId && userId && (
-                      <CreateAllScenesButton 
-                        projectId={projectId}
-                        userId={userId}
-                        totalScenePlans={totalScenePlans}
-                      />
-                    )}
                   </div>
                 </div>
               </div>

@@ -17,6 +17,7 @@ import {
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { ExportDropdown } from "~/components/export/ExportDropdown";
+import { PromptUsageDropdown } from "~/components/usage/PromptUsageDropdown";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -212,6 +213,8 @@ export default function AppHeader({
                     <p className="text-xs text-muted-foreground mt-0.5">{user.email}</p>
                   )}
                 </div>
+                <DropdownMenuSeparator />
+                <PromptUsageDropdown />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
                   onClick={handleLogout}

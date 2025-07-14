@@ -25,6 +25,17 @@ export class UnifiedCodeProcessor {
     duration: number;
     reasoning: string;
   } {
+    // 🚨 DEBUG: Check for mysterious "x" prefix
+    if (rawOutput.trim().startsWith('x')) {
+      console.error('🚨 [UNIFIED PROCESSOR] FOUND "x" PREFIX!', {
+        toolName,
+        userPrompt: userPrompt.substring(0, 100),
+        rawOutputFirst50: rawOutput.substring(0, 50),
+        functionName,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     // Clean and process code (same logic as original CodeGeneratorService)
     let cleanCode = rawOutput.trim();
     cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');

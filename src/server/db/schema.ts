@@ -668,8 +668,8 @@ export const sharedVideos = createTable(
   "shared_video",
   (d) => ({
     id: d.varchar({ length: 255 }).notNull().primaryKey().$defaultFn(() => crypto.randomUUID()),
-    projectId: d.uuid().notNull().references(() => projects.id),
-    userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
+    projectId: d.uuid().notNull().references(() => projects.id, { onDelete: "cascade" }),
+    userId: d.varchar({ length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
     title: d.varchar({ length: 255 }),
     description: d.text(),
     videoUrl: d.varchar({ length: 500 }), // R2 public URL
@@ -909,3 +909,57 @@ export const creditPackages = createTable("credit_package", (d) => ({
   index("credit_packages_active_idx").on(t.active),
   index("credit_packages_sort_idx").on(t.sortOrder),
 ]);
+
+// --- Simple Usage Limits & Tracking Tables ---
+
+// Simple configurable limits (free tier only, pro tier uses credits)
+export const usageLimits = createTable("usage_limit", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  limitKey: d.varchar("limit_key", { length: 100 }).notNull().unique(),
+  freeTierLimit: d.integer("free_tier_limit").default(0).notNull(),
+  description: d.text("description"),
+  resetPeriod: d.varchar("reset_period", { length: 20 }).default("daily").notNull(), // 'daily', 'per_project', 'never'
+  isActive: d.boolean("is_active").default(true).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("usage_limits_active_idx").on(t.isActive),
+  index("usage_limits_reset_period_idx").on(t.resetPeriod),
+]);
+
+// Daily usage tracking per user
+export const userUsage = createTable("user_usage", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  date: d.date("date").notNull(),
+  usageType: d.varchar("usage_type", { length: 50 }).notNull(), // 'prompts', 'projects', 'exports'
+  count: d.integer("count").default(0).notNull(),
+  projectId: d.uuid("project_id").references(() => projects.id, { onDelete: "set null" }), // For per-project limits
+  metadata: d.jsonb("metadata"), // Additional usage details
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("user_usage_user_date_idx").on(t.userId, t.date),
+  index("user_usage_type_idx").on(t.usageType),
+  index("user_usage_project_idx").on(t.projectId),
+  // Ensure unique usage per user per date per type
+  uniqueIndex("user_usage_unique_idx").on(t.userId, t.date, t.usageType),
+]);
+
+// Relations for usage tables
+export const usageLimitsRelations = relations(usageLimits, ({ many }) => ({
+  // No direct relations needed for configuration table
+}));
+
+export const userUsageRelations = relations(userUsage, ({ one }) => ({
+  user: one(users, {
+    fields: [userUsage.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [userUsage.projectId],
+    references: [projects.id],
+  }),
+}));

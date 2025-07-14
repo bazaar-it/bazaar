@@ -77,7 +77,7 @@ const MarketingComponentPlayer: React.FC = () => {
     const boxHeight = 320; // Fixed height, no longer resizes for image
 
     // Simple icon component with SVG fallbacks
-    const IconifyIcon = ({ icon, style }: { icon: string; style?: React.CSSProperties }) => {
+    const IconifyIcon = ({ icon, style, className }: { icon: string; style?: React.CSSProperties; className?: string }) => {
       const getIconSVG = (iconName: string) => {
         switch (iconName) {
           case 'material-symbols:image-outline':
@@ -104,7 +104,7 @@ const MarketingComponentPlayer: React.FC = () => {
       };
 
       return (
-        <div style={{ ...style, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className={className} style={{ ...style, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           {getIconSVG(icon)}
         </div>
       );
@@ -115,22 +115,24 @@ const MarketingComponentPlayer: React.FC = () => {
     return (
       <>
         <div
+          className="marketing-component-container"
           style={{
-            width: "800px", // Scaled down for web (was 1600px)
+            width: "100%", // Responsive width
+            maxWidth: "800px", // Maximum width for desktop
             height: `${boxHeight * 0.5}px`, // Scaled down
             background: "#F5F5F5",
             borderRadius: "25px", // Scaled down from 50px
-            padding: "24px", // Scaled down from 48px
             paddingBottom: "80px", // Extra bottom padding to prevent overlap with icons
             opacity,
             boxShadow: "none", // Removed shadow
             position: "relative",
             transition: "height 0.3s ease",
+            margin: "0 auto",
           }}
         >
           <div
+            className="marketing-component-text"
             style={{
-              fontSize: "28px", // Reduced from 32px to fit better
               fontFamily: "Inter, sans-serif",
               color: "#000000",
               opacity: 0.8,
@@ -164,16 +166,16 @@ const MarketingComponentPlayer: React.FC = () => {
           >
             <IconifyIcon
               icon="material-symbols:image-outline"
+              className="marketing-component-icon"
               style={{
-                fontSize: "36px", // Scaled down from 72px
                 color: "#666666",
                 cursor: "pointer",
               }}
             />
             <IconifyIcon
               icon="material-symbols:mic-outline"
+              className="marketing-component-icon"
               style={{
-                fontSize: "36px", // Scaled down from 72px
                 color: "#666666",
                 cursor: "pointer",
               }}
@@ -190,21 +192,20 @@ const MarketingComponentPlayer: React.FC = () => {
             }}
           >
             <div
+              className="marketing-send-button"
               style={{
-                width: "60px", // Scaled down from 120px
-                height: "60px", // Scaled down from 120px
                 borderRadius: "50%",
                 background: "#333333",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                cursor: "pointer",
+                cursor: "pointer"
               }}
             >
               <IconifyIcon
                 icon="material-symbols:send"
+                className="marketing-component-icon"
                 style={{
-                  fontSize: "30px", // Scaled down from 60px
                   color: "#FFFFFF",
                 }}
               />
@@ -240,19 +241,66 @@ const MarketingComponentPlayer: React.FC = () => {
   };
 
   return (
-    <div 
-      style={{ 
-        width: '100%', 
-        aspectRatio: '3/1', // Changed to an even more compact ratio
-        background: '#FFFFFF',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        boxShadow: 'none', // Removed shadow
-        position: 'relative'
-      }}
-    >
-      <PromptUI />
-    </div>
+    <>
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .marketing-component-text {
+            font-size: 28px;
+          }
+          
+          .marketing-component-icon {
+            font-size: 36px;
+          }
+          
+          .marketing-component-container {
+            padding: 24px;
+          }
+          
+          .marketing-send-button {
+            width: 60px;
+            height: 60px;
+            bottom: 20px;
+            right: 24px;
+          }
+          
+          @media (max-width: 768px) {
+            .marketing-component-text {
+              font-size: 18px !important;
+            }
+            
+            .marketing-component-icon {
+              font-size: 24px !important;
+            }
+            
+            .marketing-component-container {
+              padding: 16px !important;
+              padding-bottom: 70px !important; /* Ensure space for button */
+              min-height: 140px !important; /* Ensure minimum height for button visibility */
+            }
+            
+            .marketing-send-button {
+              width: 50px !important;
+              height: 50px !important;
+              bottom: 16px !important;
+              right: 16px !important;
+            }
+          }
+        `
+      }} />
+      <div 
+        style={{ 
+          width: '100%', 
+          aspectRatio: '3/1', // Changed to an even more compact ratio
+          background: '#FFFFFF',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          boxShadow: 'none', // Removed shadow
+          position: 'relative'
+        }}
+      >
+        <PromptUI />
+      </div>
+    </>
   );
 };
 

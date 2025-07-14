@@ -7,7 +7,7 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
@@ -16,7 +16,6 @@ import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/co
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
-import { ModelSelector } from "~/components/ui/ModelSelector";
 
 
 // Component message representation for UI display
@@ -47,6 +46,7 @@ export default function ChatPanelG({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -433,6 +433,47 @@ export default function ChatPanelG({
     }
   }, [projectId, revertMutation, utils, getCurrentProps, replace, updateScene, updateAndRefresh]);
 
+  // Enhance prompt mutation
+  const enhancePromptMutation = api.generation.enhancePrompt.useMutation({
+    onSuccess: (result) => {
+      setMessage(result.enhancedPrompt);
+      // Auto-resize the textarea after setting enhanced prompt
+      setTimeout(() => {
+        adjustTextareaHeight();
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          // Move cursor to end
+          const length = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(length, length);
+        }
+      }, 50);
+    },
+    onError: (error) => {
+      console.error('Failed to enhance prompt:', error);
+      toast.error('Failed to enhance prompt');
+    }
+  });
+
+  // Handle enhance prompt
+  const handleEnhancePrompt = useCallback(async () => {
+    if (!message.trim() || isEnhancing || isGenerating) return;
+    
+    setIsEnhancing(true);
+    
+    try {
+      await enhancePromptMutation.mutateAsync({
+        prompt: message.trim()
+      });
+      
+      toast.success('Prompt enhanced!', {
+        description: 'Your prompt has been expanded with more detail',
+        duration: 2000
+      });
+    } finally {
+      setIsEnhancing(false);
+    }
+  }, [message, isEnhancing, isGenerating, enhancePromptMutation]);
+
   // Use SSE generation hook
   const { generate: generateSSE, cleanup: cancelSSE } = useSSEGeneration({
     projectId,
@@ -685,15 +726,6 @@ export default function ChatPanelG({
 
       {/* Input area */}
       <div className="p-4">
-        {/* Model selector */}
-        <div className="mb-2">
-          <ModelSelector
-            value={selectedModel}
-            onChange={setSelectedModel}
-            showDescription={false}
-            className="w-full max-w-xs"
-          />
-        </div>
 
         {/* Auto-fix error banner */}
         <AutoFixErrorBanner
@@ -753,7 +785,7 @@ export default function ChatPanelG({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                     aria-label="Upload images"
                   >
                     <ImageIcon className="h-4 w-4" />
@@ -768,7 +800,28 @@ export default function ChatPanelG({
                       return newMessage;
                     });
                   }}
-                />
+                  />
+
+                  {/* Enhance Prompt Button */}
+                  <button
+                    type="button"
+                    onClick={handleEnhancePrompt}
+                    disabled={!message.trim() || isEnhancing || isGenerating}
+                    className={cn(
+                      "p-1 rounded-full transition-all duration-200",
+                      message.trim() && !isEnhancing && !isGenerating
+                        ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                        : "text-gray-400 cursor-not-allowed"
+                    )}
+                    aria-label="Enhance prompt"
+                    title="Enhance your prompt with more detail"
+                  >
+                    {isEnhancing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
 
                 <Button

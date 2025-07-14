@@ -827,7 +827,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                       </Panel>
                       {/* Add resize handle between panels but not after the last one */}
                       {idx < openPanels.length - 1 && (
-                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-blue-400 transition-colors" data-panel-resize-handle-id={`horizontal-${idx}`} />
+                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
                       )}
                     </React.Fragment>
                   ))}

@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/(marketing)/page.tsx
 "use client";
 import Image from "next/image";
 import { useState, useEffect, lazy, Suspense } from "react";
@@ -6,28 +6,32 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import RemotionVideoPlayer from "~/components/RemotionVideoPlayer";
-import { BazaarStickyScroll } from "~/components/BazaarStickyScroll";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayerRemotion";
+import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
+import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
+import TemplateScrollGrid from "~/components/TemplateScrollGrid";
+import BazaarShowcasePlayer from "~/components/BazaarShowcasePlayer";
+import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
+import DynamicFormatTitle from "~/components/DynamicFormatTitle";
+import ParticleEffect from "~/components/marketing/ParticleEffect";
 
 // Lazy load heavy components
 const LoginModal = lazy(() => import("./login/page"));
 const EmailSubscriptionForm = dynamic(() => import("~/components/marketing/EmailSubscriptionForm"), { ssr: false });
 
-
-
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [showLogin, setShowLogin] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [activeTab, setActiveTab] = useState<'graphs' | 'elements' | 'components'>('graphs');
   // State for login modal only
   // removed mounted state to render immediately
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   const router = useRouter();
   
-  // Email subscription state (mutation moved to EmailSubscriptionForm component)
-  const [emailSubmitState, setEmailSubmitState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [emailErrorMessage, setEmailErrorMessage] = useState<string>('');
-  // Removed - now handled in EmailSubscriptionForm component
+
+  // Add loading state for unauthenticated Try for Free button
+  const [tryForFreeLoading, setTryForFreeLoading] = useState(false);
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
@@ -39,38 +43,16 @@ export default function HomePage() {
     }
   };
 
-  // Email submit handler moved to EmailSubscriptionForm component
-
-  // Removed - now handled in FAQSection component
-
-  // Example video cards data
-  const exampleCards = [
-    {
-      prompt: "Create a line-by-line animation of code being generated",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//aiCoding.mp4",
-    },
-    {
-      prompt: "Create a prompt input box with type writer effect",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//Prompt%20input.mp4",
-    },
-    {
-      prompt: "Create exploding fireworks",
-      videoUrl: "https://dnauvvkfpmtquaysfdvm.supabase.co/storage/v1/object/public/animations//firework.mp4",
-    },
-  ];
-
-
-
 
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
       {/* Header */}
-      <header className="w-full h-20 border-b shadow-sm flex items-center px-12 justify-between bg-white z-10">
+      <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium text-gray-600">V3</span>
+            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
           </div>
         </div>
         <div className="flex gap-4 items-center">
@@ -86,67 +68,206 @@ export default function HomePage() {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-6xl mx-auto w-full">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
+        {/* Advanced Floating Particles - Hero Section Only */}
+        <ParticleEffect />
+
         {/* Announcement Banner */}
         <div className="w-full mb-8 flex justify-center">
           <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
-            <span className="bg-black text-white px-3 py-1 rounded-full text-sm font-medium">
+            <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
               V3 is Live!
             </span>
             <button 
               onClick={() => setShowVideo(true)}
-              className="text-gray-900 hover:text-gray-700 font-medium text-sm underline transition-colors"
+              className="text-pink-600 hover:text-pink-800 font-medium text-sm underline transition-colors"
             >
                                 Watch the video
             </button>
           </div>
         </div>
         
-        <div className="mb-16 w-full text-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-6 leading-tight">Screenshot to Demo Video - in seconds.</h1>
-          <p className="text-xl text-gray-600">Bazaar is an AI video generator that turns prompts into motion graphic videos</p>
+        <div className="mb-8 md:mb-16 w-full text-center">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-4 md:mb-6 leading-tight text-gray-900 px-2">
+            <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md mr-2">
+              Screenshot
+              <div className="absolute -top-1 -left-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white border border-gray-400 rounded-sm"></div>
+              {/* Screenshot crosshair icon at bottom left corner */}
+              <div className="absolute -bottom-3 -left-3 w-6 h-6 flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-600">
+                  <path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v8h8a1 1 0 1 1 0 2h-8v8a1 1 0 1 1-2 0v-8H3a1 1 0 1 1 0-2h8V3a1 1 0 0 1 1-1z"/>
+                </svg>
+              </div>
+            </span>
+            <span className="ml-3">to Demo Video — in seconds</span>
+          </h1>
+          <p className="text-lg md:text-xl text-gray-600 px-4">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
-        <div className="w-full text-center">
+        <div className="w-full text-center mb-8 md:mb-16">
           {status === "authenticated" && session?.user ? (
-            <NewProjectButton
-              enableQuickCreate={true}
-              disableFormatDropdown={true}
-              className="!inline-block !bg-black !text-white !px-10 !py-5 !rounded-lg !text-lg !font-semibold !hover:bg-gray-800 !shadow-lg !hover:shadow-xl !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none"
-              variant="ghost"
-            >
-              Try for Free
-            </NewProjectButton>
+            <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+              <NewProjectButton
+                enableQuickCreate={true}
+                disableFormatDropdown={false}
+                className="!block !w-full !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
+                variant="ghost"
+              >
+                Start Creating Now
+              </NewProjectButton>
+            </div>
           ) : (
-            <button
-              onClick={handleTryForFree}
-              disabled={false}
-              className="inline-block bg-black text-white px-10 py-5 rounded-lg text-lg font-semibold hover:bg-gray-800 shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200"
-            >
-              Try for Free
-            </button>
+            <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+              <button
+                onClick={async () => {
+                  setTryForFreeLoading(true);
+                  await handleTryForFree();
+                  setTryForFreeLoading(false);
+                }}
+                disabled={tryForFreeLoading}
+                className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+              >
+                {tryForFreeLoading ? (
+                  <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                  </svg>
+                ) : (
+                  "Try for Free"
+                )}
+              </button>
+            </div>
           )}
-          <p className="text-center text-gray-500 text-sm mt-4">
+          <p className="text-center text-gray-500 text-sm mt-2">
             No credit card required
           </p>
         </div>
         
         {/* Example videos section */}
-        <section className="mt-20 w-full">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">Create entire videos from a single prompt</h2>
-          
-          {/* Remotion Video Player */}
-          <div className="flex justify-center w-full">
-            <div style={{ width: '70%' }}>
-              <RemotionVideoPlayer />
+        <section className="w-full mt-8">
+          {/* Marketing Video Player */}
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-7xl">
+              <MarketingVideoPlayer />
             </div>
           </div>
         </section>
 
-        {/* Sticky Scroll Features Section */}
-        <section className="mt-24 w-full">
-          <BazaarStickyScroll />
+        {/* Create entire videos section */}
+        <section className="mt-0 w-full">
+          <div className="text-center mb-8 md:mb-16">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
+              Create <span className="moving-gradient-text">entire videos</span> from a single prompt
+            </h2>
+          </div>
+          
+          {/* Generating Scene Plan Player */}
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
+              <GeneratingScenePlanPlayer />
+            </div>
+          </div>
         </section>
+
+        {/* Prompt it to Perfection Section */}
+        <section className="mt-16 md:mt-32 w-full">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
+              <span className="relative inline-block">
+                <span className="moving-gradient-text">Prompt</span>
+              </span> it to Perfection
+            </h2>
+          </div>
+          
+          {/* Video Player */}
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
+              <MarketingComponentPlayer />
+            </div>
+          </div>
+        </section>
+
+        {/* Showcase of Three Bazaar Videos Section - COMMENTED OUT: Not finished yet */}
+        {/* <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/50">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
+              Made with <span className="moving-gradient-text">Bazaar</span>
+            </h2>
+          </div>
+          
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-6xl">
+              <BazaarShowcasePlayer />
+            </div>
+          </div>
+        </section> */}
+
+        {/* Create in Horizontal, Vertical, Square with Morphing Section */}
+        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
+          <DynamicFormatTitle />
+          
+          {/* Aspect Ratio Transition Player */}
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-5xl">
+              <AspectRatioTransitionPlayer />
+            </div>
+          </div>
+        </section>
+
+        {/* 50 Templates Section */}
+        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
+          <div className="text-center mb-8 md:mb-16">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
+              50+ Templates to Start From
+            </h2>
+          </div>
+          
+          {/* Template Scroll Grid with Real Images */}
+          <div className="mb-12">
+            <TemplateScrollGrid />
+          </div>
+          
+          {/* Start Creating Now Button */}
+          <div className="text-center mt-5">
+            {status === "authenticated" && session?.user ? (
+              <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+                <NewProjectButton
+                  enableQuickCreate={true}
+                  disableFormatDropdown={false}
+                  className="!inline-block !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  variant="ghost"
+                >
+                  Start Creating Now
+                </NewProjectButton>
+              </div>
+            ) : (
+              <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
+                <button
+                  onClick={async () => {
+                    setTryForFreeLoading(true);
+                    await handleTryForFree();
+                    setTryForFreeLoading(false);
+                  }}
+                  disabled={tryForFreeLoading}
+                  className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                >
+                  {tryForFreeLoading ? (
+                    <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8v8z"></path>
+                    </svg>
+                  ) : (
+                    "Start Creating Now"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
       </main>
 
       {/* Email Sign-Up Section */}
@@ -202,6 +323,15 @@ export default function HomePage() {
           </div>
         </div>
       )}
+      <style jsx global>{`
+  .bazaar-gradient-hover {
+    transition: background 0.3s, color 0.3s;
+  }
+  .bazaar-gradient-hover:hover {
+    background: linear-gradient(90deg, #ec4899 0%, #f97316 100%) !important;
+    color: #fff !important;
+  }
+`}</style>
     </div>
   );
 }

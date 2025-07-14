@@ -2,6 +2,7 @@ import { BaseMCPTool } from "~/tools/helpers/base";
 import { SCENE_PLANNER } from "~/config/prompts/active/scene-planner";
 import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel } from "~/config/models.config";
+import { codeGenerator } from "~/tools/add/add_helpers/CodeGeneratorNEW";
 import type { ScenePlannerToolInput, ScenePlannerToolOutput, ScenePlan } from "~/tools/helpers/types";
 import { scenePlannerToolInputSchema } from "~/tools/helpers/types";
 
@@ -49,11 +50,18 @@ export class ScenePlannerTool extends BaseMCPTool<ScenePlannerToolInput, ScenePl
         };
       }
       
+      // 🚀 IMMEDIATE RETURN: Give scene plans to user right away
+      console.log('📝 [SCENE PLANNER] Returning scene plans immediately to user');
+      
       return {
         success: true,
         scenePlans,
-        reasoning: `Planned ${scenePlans.length} scenes for multi-scene video`,
-        chatResponse: `📝 I've planned ${scenePlans.length} scenes for your video`,
+        // No firstScene here - we'll generate it separately in the backend
+        reasoning: `Planned ${scenePlans.length} scenes for your video`,
+        chatResponse: `📝 I've planned ${scenePlans.length} scenes for your video and I'm creating the first one now!`,
+        // Mark that we should auto-generate scene 1 in the background
+        shouldAutoGenerateFirstScene: true,
+        firstScenePlan: scenePlans[0] // Pass the plan for background generation
       };
     } catch (error) {
       return {
@@ -185,6 +193,23 @@ export class ScenePlannerTool extends BaseMCPTool<ScenePlannerToolInput, ScenePl
     }
     
     return styles.length > 0 ? styles.join(' | ') : 'Basic styling';
+  }
+
+  /**
+   * Generate unique component name using a stable ID
+   */
+  private generateFunctionName(): string {
+    const uniqueId = this.generateUniqueId();
+    return `Scene_${uniqueId}`;
+  }
+
+  /**
+   * Generate a unique 8-character ID
+   */
+  private generateUniqueId(): string {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 6);
+    return (timestamp + random).substring(0, 8);
   }
 
   private parseScenePlans(content: string): ScenePlan[] {

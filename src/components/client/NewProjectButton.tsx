@@ -132,11 +132,13 @@ export function NewProjectButton({
   const createProjectMutation = api.project.create.useMutation({
     onSuccess: (result) => {
       console.log(`Created project with format: ${selectedFormat}`);
+      console.log(`Navigating to: /projects/${result.projectId}/generate`);
       setIsModalOpen(false);
       if (onProjectCreated) {
         onProjectCreated(result.projectId);
       }
-      router.push(`/projects/${result.projectId}/generate`);
+      // Use window.location for more reliable navigation
+      window.location.href = `/projects/${result.projectId}/generate`;
     },
     onError: (error) => {
       console.error("Failed to create project:", error);
@@ -217,6 +219,20 @@ export function NewProjectButton({
     handleFormatSelect(lastFormat);
   }, [onStart, session?.user, router, lastFormat, handleFormatSelect]);
 
+  // Detect if we're on mobile
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // Handle button click
   const handleButtonClick = useCallback(() => {
     // If it was a long press, don't handle the click
@@ -224,8 +240,13 @@ export function NewProjectButton({
       return;
     }
     
-    handleQuickCreate();
-  }, [handleQuickCreate]);
+    // On mobile, always show format selector modal
+    if (isMobile && enableQuickCreate) {
+      handleCreateProject();
+    } else {
+      handleQuickCreate();
+    }
+  }, [handleQuickCreate, handleCreateProject, isMobile, enableQuickCreate]);
 
   // Hover handlers - only trigger when in sidebar context
   const handleMouseEnter = useCallback(() => {
@@ -248,16 +269,16 @@ export function NewProjectButton({
     setCloseTimeout();
   }, [enableQuickCreate, disableFormatDropdown, setCloseTimeout]);
 
-  // Long press handlers for mobile/touch
+  // Long press handlers for desktop only
   const handleMouseDown = useCallback(() => {
-    if (!enableQuickCreate || disableFormatDropdown) return;
+    if (!enableQuickCreate || disableFormatDropdown || isMobile) return;
     
     isLongPressRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
       isLongPressRef.current = true;
       setShowFormatOptions(true);
     }, 500); // 500ms for long press
-  }, [enableQuickCreate, disableFormatDropdown]);
+  }, [enableQuickCreate, disableFormatDropdown, isMobile]);
 
   const handleMouseUp = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -269,28 +290,16 @@ export function NewProjectButton({
     isLongPressRef.current = false;
   }, []);
 
-  // Touch handlers for mobile
+  // Touch handlers for mobile - disabled since we use modal on mobile
   const handleTouchStart = useCallback(() => {
-    if (!enableQuickCreate || disableFormatDropdown) return;
-    
-    isLongPressRef.current = false;
-    longPressTimerRef.current = setTimeout(() => {
-      isLongPressRef.current = true;
-      setShowFormatOptions(true);
-    }, 500);
-  }, [enableQuickCreate, disableFormatDropdown]);
+    // Disabled on mobile - we show modal instead
+    return;
+  }, []);
 
   const handleTouchEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    
-    // If it wasn't a long press, do quick create
-    if (!isLongPressRef.current && enableQuickCreate) {
-      handleQuickCreate();
-    }
-  }, [enableQuickCreate, handleQuickCreate]);
+    // Disabled on mobile - we show modal instead
+    return;
+  }, []);
 
   // Format options data
   const formatOptions = [
@@ -372,8 +381,8 @@ export function NewProjectButton({
         </div>
       )}
       
-      {/* Legacy Modal for non-quick-create usage */}
-      {!enableQuickCreate && (
+      {/* Format Selector Modal - shown on mobile or when quick create is disabled */}
+      {(!enableQuickCreate || isMobile) && (
         <FormatSelectorModal
           open={isModalOpen}
           onOpenChange={setIsModalOpen}

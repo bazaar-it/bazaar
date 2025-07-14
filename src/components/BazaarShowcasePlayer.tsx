@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
-import AirbnbVideoPlayer from "~/components/AirbnbVideoPlayer";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayerRemotion";
+import AirbnbVideoPlayer from "~/components/AirbnbVideoPlayerProper";
 
 interface BazaarShowcasePlayerProps {
   className?: string;
@@ -19,21 +19,21 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
     },
     {
       id: 2,
-      title: "Airbnb App Demo",
-      description: "Property browsing and booking interaction",
-      type: "airbnb",
-      component: AirbnbVideoPlayer
+      title: "SaaS Dashboard Demo",
+      description: "Interactive dashboard showcase with analytics",
+      type: "marketing",
+      component: MarketingVideoPlayer
     },
     {
       id: 3,
-      title: "SaaS Dashboard Demo",
-      description: "Coming soon - Interactive dashboard showcase",
+      title: "E-commerce Flow",
+      description: "Product browsing and checkout experience",
       type: "marketing",
       component: MarketingVideoPlayer
     }
   ];
 
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(1);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
 
   const goToPrevious = () => {
     setCurrentVideoIndex((prev) => 

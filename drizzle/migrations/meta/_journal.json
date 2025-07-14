@@ -29,6 +29,13 @@
       "when": 1751919745174,
       "tag": "0003_fat_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752496965716,
+      "tag": "0004_empty_hercules",
+      "breakpoints": true
     }
   ]
 }

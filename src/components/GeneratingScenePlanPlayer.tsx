@@ -6,8 +6,10 @@ const GeneratingScenePlanPlayer: React.FC = () => {
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
+    let frameCount = 0;
     const animate = () => {
-      setCurrentFrame(prev => (prev + 1) % 360); // 12 seconds at 30fps
+      frameCount = (frameCount + 1) % 360; // 12 seconds at 30fps
+      setCurrentFrame(frameCount);
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -29,7 +31,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
     const backgroundPosition = `${shimmerProgress * 200 - 100}% 0%`;
 
     return (
-      <div style={{ 
+      <div className="generating-scene-container" style={{ 
         position: 'relative', 
         width: '100%', 
         height: '100%', 
@@ -38,16 +40,15 @@ const GeneratingScenePlanPlayer: React.FC = () => {
         justifyContent: 'center',
         background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
         borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        padding: '60px 40px'
+        border: '1px solid #e2e8f0'
       }}>
         <div style={{
           position: 'relative',
           display: 'inline-block'
         }}>
           <div
+            className="generating-scene-text"
             style={{
-              fontSize: "32px",
               fontFamily: "Inter, sans-serif",
               fontWeight: "600",
               position: 'relative',
@@ -69,6 +70,16 @@ const GeneratingScenePlanPlayer: React.FC = () => {
 
   const ChatInterface: React.FC = () => {
     const frame = currentFrame - 120; // Start after 4 seconds of shimmer
+    const [isMobile, setIsMobile] = useState(false);
+    
+    useEffect(() => {
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth <= 768);
+      };
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }, []);
     
     const scenes = [
       { id: 1, title: "Intro Animation", description: "Using the brand identity extracted from the provided images, so we'll create a scene animating in your logo and tagline with a subtle spring effect", type: "Animation" },
@@ -88,6 +99,13 @@ const GeneratingScenePlanPlayer: React.FC = () => {
       };
       timestamp: string;
     }
+
+    // Auto-scroll effect - calculate scroll position based on number of visible messages
+    const getScrollPosition = (numMessages: number) => {
+      if (numMessages <= 1) return 0;
+      // Each message is roughly 120px height + gap, scroll down as more appear
+      return Math.min((numMessages - 1) * 100, 200); // Max 200px scroll
+    };
 
     // Simplified timing - always show some messages for testing
     const getVisibleMessages = (): Message[] => {
@@ -152,6 +170,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
     };
 
     const visibleMessages = getVisibleMessages();
+    const scrollPosition = isMobile ? getScrollPosition(visibleMessages.length) : 0;
 
     return (
       <div style={{
@@ -198,11 +217,16 @@ const GeneratingScenePlanPlayer: React.FC = () => {
         <div style={{
           flex: 1,
           padding: '16px',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
+          overflow: isMobile ? 'hidden' : 'auto', // Only hide scrollbar on mobile
+          position: 'relative'
         }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            transform: `translateY(-${scrollPosition}px)`,
+            transition: scrollPosition > 0 ? 'transform 0.8s ease-out' : 'none'
+          }}>
           {visibleMessages.map((message) => (
             <div key={message.id} style={{
               display: 'flex',
@@ -304,6 +328,7 @@ const GeneratingScenePlanPlayer: React.FC = () => {
               )}
             </div>
           ))}
+          </div>
         </div>
       </div>
     );
@@ -326,17 +351,36 @@ const GeneratingScenePlanPlayer: React.FC = () => {
               transform: translateY(0);
             }
           }
+          
+          .generating-scene-container {
+            padding: 60px 40px;
+          }
+          
+          .generating-scene-text {
+            font-size: 32px;
+          }
+          
+          @media (max-width: 768px) {
+            .generating-scene-container {
+              padding: 30px 15px !important;
+            }
+            
+            .generating-scene-text {
+              font-size: 20px !important;
+            }
+          }
         `
       }} />
       <div 
+        className="w-full md:w-4/5 lg:w-3/5 xl:w-1/2"
         style={{ 
-          width: '60%', 
           aspectRatio: '0.72/1',
           background: 'transparent',
           borderRadius: '16px',
           overflow: 'hidden',
           position: 'relative',
-          margin: '0 auto'
+          margin: '0 auto',
+          maxWidth: '500px'
         }}
       >
         {showShimmer ? <GeneratingContent /> : <ChatInterface />}

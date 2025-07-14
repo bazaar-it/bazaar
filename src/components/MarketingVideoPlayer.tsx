@@ -17,12 +17,23 @@ const MarketingVideoPlayer: React.FC = () => {
 
   useEffect(() => {
     let lastTimestamp = 0;
-    const targetFPS = 60;
+    const targetFPS = 30; // Reduced from 60 to 30 for smoother performance
     const frameInterval = 1000 / targetFPS;
     
     const animate = (timestamp: number) => {
       if (timestamp - lastTimestamp >= frameInterval) {
-        setCurrentFrame(prev => (prev + 1) % 420); // Set to 420 frames (14 seconds at 30fps) - 4 second pause after animation completes
+        setCurrentFrame(prev => {
+          const next = prev + 1;
+          // Add a pause at the end
+          if (next >= 420) {
+            // Hold for 2 seconds (60 frames at 30fps)
+            if (next >= 480) {
+              return 0; // Reset
+            }
+            return next;
+          }
+          return next;
+        });
         lastTimestamp = timestamp;
       }
       animationRef.current = requestAnimationFrame(animate);

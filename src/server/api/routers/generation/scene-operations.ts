@@ -8,6 +8,8 @@ import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
 import { TOOL_OPERATION_MAP } from "~/lib/types/ai/brain.types";
 import { executeToolFromDecision } from "./helpers";
+import { UsageService } from "~/server/services/usage/usage.service";
+import { createSceneFromPlanRouter } from "./create-scene-from-plan";
 
 // Import universal response types and helpers
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
@@ -50,6 +52,21 @@ export const generateScene = protectedProcedure
           "Project not found or access denied",
           'scene.create',
           'scene'
+        ) as any as SceneCreateResponse;
+      }
+
+      // 1.5. Check prompt usage limits
+      const usageCheck = await UsageService.checkPromptUsage(userId);
+      if (!usageCheck.allowed) {
+        return response.error(
+          ErrorCode.RATE_LIMIT,
+          usageCheck.message || "Daily prompt limit reached",
+          'scene.create',
+          'scene',
+          {
+            used: usageCheck.used,
+            limit: usageCheck.limit
+          }
         ) as any as SceneCreateResponse;
       }
 
@@ -256,7 +273,42 @@ export const generateScene = protectedProcedure
       // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
       if (!toolResult.scene) {
         if (decision.toolName === 'scenePlanner') {
-          // Scene planner succeeded - return success with additional message IDs
+          // Scene planner succeeded - increment usage
+          await UsageService.incrementPromptUsage(userId);
+          
+          // 🚀 BACKGROUND SCENE 1 GENERATION: Start generating first scene in background
+          // This happens AFTER returning the response to give immediate feedback
+          setTimeout(async () => {
+            try {
+              console.log('🚀 [SCENE-OPS] Starting background generation of scene 1...');
+              
+              // Get the first scene plan from the additional message IDs
+              if (toolResult.additionalMessageIds && toolResult.additionalMessageIds.length > 0) {
+                const firstScenePlanMessageId = toolResult.additionalMessageIds[0];
+                
+                // Call the existing create scene API to generate scene 1
+                // This will create the scene and add the "generated" indicator
+                console.log('🚀 [SCENE-OPS] Triggering scene creation for first plan message:', firstScenePlanMessageId);
+                
+                // Call the createScene mutation directly
+                const createSceneResult = await createSceneFromPlanRouter.createCallers({}).createScene({
+                  messageId: firstScenePlanMessageId,
+                  projectId: projectId,
+                  userId: userId
+                });
+                
+                if (createSceneResult.success) {
+                  console.log('✅ [SCENE-OPS] Background scene 1 generated successfully:', createSceneResult.scene?.name);
+                } else {
+                  console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', createSceneResult.error);
+                }
+              }
+            } catch (error) {
+              console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', error);
+            }
+          }, 100); // Small delay to ensure response is sent first
+          
+          // Return success with additional message IDs
           const successResponse = response.success(
             null, // No scene data since scene planner doesn't create scenes
             'scene.create',
@@ -305,6 +357,9 @@ export const generateScene = protectedProcedure
             operation = 'scene.create';
         }
       }
+      
+      // Increment usage on successful generation
+      await UsageService.incrementPromptUsage(userId);
       
       const successResponse = response.success(
         toolResult.scene, 

@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import ChatPanelG from './panels/ChatPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import type { InputProps } from '~/lib/types/video/input-props';
-import { MessageSquareIcon, LayoutTemplateIcon, FolderIcon, PlusIcon } from 'lucide-react';
+import { MessageSquareIcon, LayoutTemplateIcon, FolderIcon, PlusIcon, Smartphone, Monitor, Square } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { useRouter } from 'next/navigation';
 import { api } from '~/trpc/react';
@@ -79,13 +79,73 @@ export function MobileWorkspaceLayout({
     { id: 'newproject' as MobilePanel, label: 'New', icon: PlusIcon },
   ];
 
+  // Get video format from props
+  const videoFormat = initialProps?.meta?.format || 'landscape';
+  const [previewHeight, setPreviewHeight] = useState({ minHeight: '200px', maxHeight: '50vh' });
+  
+  // Calculate optimal preview height based on format
+  useEffect(() => {
+    const calculateHeight = () => {
+      const viewportHeight = window.innerHeight;
+      const bottomNavHeight = 56; // Approximate height of bottom nav
+      const availableHeight = viewportHeight - bottomNavHeight;
+      
+      let newHeight;
+      switch (videoFormat) {
+        case 'portrait':
+          // Portrait videos need more height
+          newHeight = {
+            minHeight: '300px',
+            maxHeight: `${Math.min(availableHeight * 0.65, 600)}px`
+          };
+          break;
+        case 'square':
+          // Square videos need moderate height
+          newHeight = {
+            minHeight: '250px',
+            maxHeight: `${Math.min(availableHeight * 0.5, 400)}px`
+          };
+          break;
+        case 'landscape':
+        default:
+          // Landscape videos need less height
+          newHeight = {
+            minHeight: '200px',
+            maxHeight: `${Math.min(availableHeight * 0.4, 350)}px`
+          };
+      }
+      
+      setPreviewHeight(newHeight);
+    };
+    
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    
+    return () => window.removeEventListener('resize', calculateHeight);
+  }, [videoFormat]);
+
+  // Get format icon and label
+  const getFormatInfo = () => {
+    switch (videoFormat) {
+      case 'portrait':
+        return { icon: <Smartphone className="h-3 w-3" />, label: '9:16' };
+      case 'square':
+        return { icon: <Square className="h-3 w-3" />, label: '1:1' };
+      case 'landscape':
+      default:
+        return { icon: <Monitor className="h-3 w-3" />, label: '16:9' };
+    }
+  };
+
+  const formatInfo = getFormatInfo();
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Preview Panel - Dynamic aspect ratio based on format */}
-      <div className="w-full bg-white flex items-center justify-center" style={{ 
-        minHeight: '200px',
-        maxHeight: '60vh' // Increased from 50vh to give more space for portrait videos
-      }}>
+      <div 
+        className="w-full bg-white flex items-center justify-center transition-all duration-300 relative"
+        style={previewHeight}
+      >
         <PreviewPanelG projectId={projectId} initial={initialProps} selectedSceneId={selectedSceneId} />
       </div>
 

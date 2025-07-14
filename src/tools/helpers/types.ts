@@ -220,6 +220,13 @@ export interface ScenePlan {
 
 export interface ScenePlannerToolOutput extends BaseToolOutput {
   scenePlans: ScenePlan[];
+  firstScene?: {
+    tsxCode: string;
+    name: string;
+    duration: number;
+  };
+  shouldAutoGenerateFirstScene?: boolean;
+  firstScenePlan?: ScenePlan;
 }
 
 // ============================================================================

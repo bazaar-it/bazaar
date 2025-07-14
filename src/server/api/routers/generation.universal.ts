@@ -14,6 +14,7 @@ import {
   revertToIteration 
 } from "./generation/iteration-operations";
 import { addTemplate } from "./generation/template-operations";
+import { enhancePrompt } from "./generation/prompt-operations";
 
 export const generationUniversalRouter = createTRPCRouter({
   // Scene operations
@@ -30,4 +31,7 @@ export const generationUniversalRouter = createTRPCRouter({
   
   // Template operations
   addTemplate,
+  
+  // Prompt operations
+  enhancePrompt,
 });

@@ -1,38 +1,284 @@
 // src/components/marketing/ParticleEffect.tsx
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+
+interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  baseX: number;
+  baseY: number;
+  size: number;
+  color: string;
+  speed: number;
+  angle: number;
+  opacity: number;
+  element: HTMLDivElement | null;
+}
 
 export default function ParticleEffect() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const animationRef = useRef<number>();
+  const buttonTargetRef = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+
+  useEffect(() => {
+    // Disable particles on mobile devices
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
+      console.log('Particles disabled on mobile for performance');
+      return;
+    }
+
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    
+    // Get the actual document height to cover the full landing page
+    const documentHeight = Math.max(
+      document.body.scrollHeight,
+      document.body.offsetHeight,
+      document.documentElement.clientHeight,
+      document.documentElement.scrollHeight,
+      document.documentElement.offsetHeight
+    );
+    
+    // Set container height to match document
+    container.style.height = `${documentHeight}px`;
+    
+    // Create particles across full page
+    const particleCount = 250; // Even more particles for rich visual density
+    const particles: Particle[] = [];
+    
+    const colors = [
+      'rgb(236, 72, 153)', // pink-500
+      'rgb(249, 115, 22)', // orange-500
+      'rgb(251, 146, 60)', // orange-400
+      'rgb(244, 114, 182)', // pink-400
+      'rgb(252, 165, 165)', // red-300
+      'rgb(253, 186, 116)', // orange-300
+    ];
+
+    for (let i = 0; i < particleCount; i++) {
+      const size = Math.random() * 6 + 2; // 2-8px
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * documentHeight; // Spread across full document height
+      
+      const particle: Particle = {
+        id: i,
+        x,
+        y,
+        baseX: x,
+        baseY: y,
+        size,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speed: Math.random() * 0.5 + 0.2,
+        angle: Math.random() * Math.PI * 2,
+        opacity: Math.random() * 0.6 + 0.2,
+        element: null
+      };
+
+      // Create DOM element
+      const element = document.createElement('div');
+      element.style.position = 'absolute';
+      element.style.width = `${size}px`;
+      element.style.height = `${size}px`;
+      element.style.backgroundColor = particle.color;
+      element.style.borderRadius = '50%';
+      element.style.pointerEvents = 'none';
+      element.style.opacity = particle.opacity.toString();
+      element.style.transition = 'transform 0.1s ease-out';
+      element.style.willChange = 'transform';
+      
+      container.appendChild(element);
+      particle.element = element;
+      particles.push(particle);
+    }
+
+    particlesRef.current = particles;
+
+    // Mouse move handler
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseRef.current = {
+        x: e.clientX,
+        y: e.clientY + window.scrollY // Add scroll position to get page coordinates
+      };
+    };
+
+    // Animation loop
+    let lastTime = 0;
+    const animate = (currentTime: number) => {
+      if (currentTime - lastTime < 16) { // ~60fps
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastTime = currentTime;
+
+      particles.forEach(particle => {
+        if (!particle.element) return;
+
+        // Base floating movement (more stable)
+        particle.angle += particle.speed * 0.01; // Slower for stability
+        const baseOffsetX = Math.sin(particle.angle) * 15; // Reduced amplitude
+        const baseOffsetY = Math.cos(particle.angle) * 12;
+
+        let targetX = mouseRef.current.x;
+        let targetY = mouseRef.current.y;
+        let isButtonMode = false;
+
+        // Check if button is being hovered
+        if (buttonTargetRef.current.active) {
+          targetX = buttonTargetRef.current.x;
+          targetY = buttonTargetRef.current.y;
+          isButtonMode = true;
+          
+          // Debug: log first particle's targeting (only occasionally to avoid spam)
+          if (particle.id === 0 && Math.random() < 0.01) {
+            console.log('Particle targeting button at:', { targetX, targetY, particleBase: { x: particle.baseX, y: particle.baseY } });
+          }
+        }
+
+        // Calculate distance to target (mouse or button)
+        const dx = targetX - particle.baseX;
+        const dy = targetY - particle.baseY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        let attractionX = 0;
+        let attractionY = 0;
+
+        if (isButtonMode) {
+          // DRAMATIC button mode - particles swarm to button from across the screen
+          const maxButtonDistance = 600; // Much larger radius for button mode
+          if (distance < maxButtonDistance && distance > 0) {
+            const force = (maxButtonDistance - distance) / maxButtonDistance;
+            const strength = force * 2.5; // Super strong attraction
+            
+            attractionX = (dx / distance) * strength * 150; // Very dramatic pull
+            attractionY = (dy / distance) * strength * 150;
+          }
+        } else {
+          // Normal mouse mode - more stable and gentle
+          const maxDistance = 180; // Slightly smaller radius for stability
+          if (distance < maxDistance && distance > 0) {
+            const force = (maxDistance - distance) / maxDistance;
+            const strength = force * 0.4; // More controlled strength
+            
+            attractionX = (dx / distance) * strength * 50; // More stable movement
+            attractionY = (dy / distance) * strength * 50;
+          }
+        }
+
+        // Combine movements with easing for stability
+        const finalX = particle.baseX + baseOffsetX + (attractionX * 0.8); // Damping factor
+        const finalY = particle.baseY + baseOffsetY + (attractionY * 0.8);
+
+        // Update particle position
+        particle.x = finalX;
+        particle.y = finalY;
+
+        // Apply transform
+        particle.element.style.transform = `translate(${finalX}px, ${finalY}px)`;
+        
+        // Dynamic opacity
+        const maxOpacityDistance = isButtonMode ? 600 : 180;
+        if (distance < maxOpacityDistance) {
+          const force = (maxOpacityDistance - distance) / maxOpacityDistance;
+          const proximityOpacity = 0.3 + (force * 0.7);
+          particle.element.style.opacity = Math.min(proximityOpacity, 1).toString();
+        } else {
+          particle.element.style.opacity = particle.opacity.toString();
+        }
+      });
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    // Start animation
+    animationRef.current = requestAnimationFrame(animate);
+
+    // Button hover detection - more comprehensive approach
+    const handleButtonHover = () => {
+      // Look for all elements that might contain our buttons
+      const allElements = document.querySelectorAll('button, [role="button"], .NewProjectButton, [class*="NewProject"]');
+      
+      console.log(`Found ${allElements.length} potential button elements`); // Debug
+      
+      allElements.forEach((element, index) => {
+        const buttonText = element.textContent?.toLowerCase() || '';
+        console.log(`Element ${index}: "${buttonText.slice(0, 30)}..."`); // Debug
+        
+        if (buttonText.includes('start creating now') || buttonText.includes('try for free')) {
+          console.log('Found target button:', buttonText); // Debug
+          
+          element.addEventListener('mouseenter', (e) => {
+            const rect = (e.target as HTMLElement).getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            buttonTargetRef.current = {
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2 + scrollTop,
+              active: true
+            };
+            console.log('Button hover - rect:', rect, 'scroll:', scrollTop, 'final:', buttonTargetRef.current);
+          });
+          
+          element.addEventListener('mouseleave', () => {
+            buttonTargetRef.current.active = false;
+            console.log('Button hover ended');
+          });
+        }
+      });
+    };
+
+    // Set up button hover detection with multiple attempts
+    setTimeout(handleButtonHover, 100);
+    setTimeout(handleButtonHover, 500);
+    setTimeout(handleButtonHover, 1000);
+
+    // Add mouse listener
+    document.addEventListener('mousemove', handleMouseMove);
+
+    // Handle window resize to disable on mobile
+    const handleResize = () => {
+      const nowMobile = window.innerWidth < 768;
+      if (nowMobile && animationRef.current) {
+        // Clean up particles if switching to mobile
+        cancelAnimationFrame(animationRef.current);
+        particles.forEach(particle => {
+          if (particle.element && particle.element.parentNode) {
+            particle.element.parentNode.removeChild(particle.element);
+          }
+        });
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      document.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('resize', handleResize);
+      
+      // Remove particle elements
+      particles.forEach(particle => {
+        if (particle.element && particle.element.parentNode) {
+          particle.element.parentNode.removeChild(particle.element);
+        }
+      });
+    };
+  }, []);
+
   return (
-    <div className="absolute top-0 left-0 right-0 h-96 pointer-events-none -z-10 overflow-hidden">
+    <>
+      <div 
+        ref={containerRef}
+        className="absolute top-0 left-0 w-full pointer-events-none -z-10 overflow-hidden"
+      />
       <style dangerouslySetInnerHTML={{
         __html: `
-          @keyframes sparkleFloat1 {
-            0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { transform: translate(-20px, -100px) rotate(180deg); opacity: 0; }
-          }
-          @keyframes sparkleFloat2 {
-            0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
-            15% { opacity: 1; }
-            85% { opacity: 1; }
-            100% { transform: translate(30px, -120px) rotate(-180deg); opacity: 0; }
-          }
-          @keyframes sparkleFloat3 {
-            0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
-            20% { opacity: 1; }
-            80% { opacity: 1; }
-            100% { transform: translate(-40px, -80px) rotate(270deg); opacity: 0; }
-          }
-          @keyframes sparkleTwinkle {
-            0%, 100% { opacity: 0.2; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
-          }
-          .sparkle-float-1 { animation: sparkleFloat1 8s linear infinite; }
-          .sparkle-float-2 { animation: sparkleFloat2 10s linear infinite; }
-          .sparkle-float-3 { animation: sparkleFloat3 12s linear infinite; }
-          .sparkle-twinkle { animation: sparkleTwinkle 2s ease-in-out infinite; }
-          
           @keyframes movingGradient {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -48,55 +294,6 @@ export default function ParticleEffect() {
           }
         `
       }} />
-      
-      {/* Layer 1 - Small particles across full width */}
-      <div className="absolute top-8 left-[2%] w-0.5 h-0.5 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0s'}}></div>
-      <div className="absolute top-16 left-[8%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1s'}}></div>
-      <div className="absolute top-24 left-[15%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2s'}}></div>
-      <div className="absolute top-32 left-[22%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3s'}}></div>
-      <div className="absolute top-40 left-[29%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4s'}}></div>
-      <div className="absolute top-48 left-[36%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5s'}}></div>
-      <div className="absolute top-56 left-[43%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6s'}}></div>
-      <div className="absolute top-64 left-[50%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7s'}}></div>
-      <div className="absolute top-72 left-[57%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '8s'}}></div>
-      <div className="absolute top-80 left-[64%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0.5s'}}></div>
-      <div className="absolute top-88 left-[71%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.5s'}}></div>
-      <div className="absolute top-4 left-[78%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.5s'}}></div>
-      <div className="absolute top-12 left-[85%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.5s'}}></div>
-      <div className="absolute top-20 left-[92%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.5s'}}></div>
-      <div className="absolute top-28 left-[98%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.5s'}}></div>
-      
-      {/* Layer 2 - Medium particles across full width */}
-      <div className="absolute top-36 left-[5%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.2s'}}></div>
-      <div className="absolute top-44 left-[12%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.2s'}}></div>
-      <div className="absolute top-52 left-[19%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.2s'}}></div>
-      <div className="absolute top-60 left-[26%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.2s'}}></div>
-      <div className="absolute top-68 left-[33%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.2s'}}></div>
-      <div className="absolute top-76 left-[40%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6.2s'}}></div>
-      <div className="absolute top-84 left-[47%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7.2s'}}></div>
-      <div className="absolute top-8 left-[54%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '0.8s'}}></div>
-      <div className="absolute top-16 left-[61%] w-0.5 h-0.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '1.8s'}}></div>
-      <div className="absolute top-24 left-[68%] w-1 h-1 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '2.8s'}}></div>
-      <div className="absolute top-32 left-[75%] w-0.5 h-0.5 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '3.8s'}}></div>
-      <div className="absolute top-40 left-[82%] w-1 h-1 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '4.8s'}}></div>
-      <div className="absolute top-48 left-[89%] w-0.5 h-0.5 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '5.8s'}}></div>
-      <div className="absolute top-56 left-[96%] w-1 h-1 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '6.8s'}}></div>
-      
-      {/* Layer 3 - Larger particles for depth */}
-      <div className="absolute top-64 left-[3%] w-1.5 h-1.5 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '0.3s'}}></div>
-      <div className="absolute top-72 left-[11%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '1.3s'}}></div>
-      <div className="absolute top-80 left-[18%] w-1 h-1 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '2.3s'}}></div>
-      <div className="absolute top-88 left-[25%] w-1.5 h-1.5 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '3.3s'}}></div>
-      <div className="absolute top-4 left-[32%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '4.3s'}}></div>
-      <div className="absolute top-12 left-[39%] w-1.5 h-1.5 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '5.3s'}}></div>
-      <div className="absolute top-20 left-[46%] w-1 h-1 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '6.3s'}}></div>
-      <div className="absolute top-28 left-[53%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '7.3s'}}></div>
-      <div className="absolute top-36 left-[60%] w-1 h-1 bg-orange-400 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '0.1s'}}></div>
-      <div className="absolute top-44 left-[67%] w-1.5 h-1.5 bg-pink-500 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '1.1s'}}></div>
-      <div className="absolute top-52 left-[74%] w-1 h-1 bg-orange-500 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '2.1s'}}></div>
-      <div className="absolute top-60 left-[81%] w-1.5 h-1.5 bg-pink-300 rounded-full sparkle-float-3 sparkle-twinkle" style={{animationDelay: '3.1s'}}></div>
-      <div className="absolute top-68 left-[88%] w-1 h-1 bg-orange-300 rounded-full sparkle-float-1 sparkle-twinkle" style={{animationDelay: '4.1s'}}></div>
-      <div className="absolute top-76 left-[95%] w-1.5 h-1.5 bg-pink-400 rounded-full sparkle-float-2 sparkle-twinkle" style={{animationDelay: '5.1s'}}></div>
-    </div>
+    </>
   );
 } 
