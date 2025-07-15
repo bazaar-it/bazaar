@@ -36,6 +36,13 @@
       "when": 1752496965716,
       "tag": "0004_empty_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1752537539199,
+      "tag": "0005_rapid_random",
+      "breakpoints": true
     }
   ]
 }

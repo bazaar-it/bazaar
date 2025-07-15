@@ -57,7 +57,7 @@ export const paymentRouter = createTRPCRouter({
         payment_method_types: ['card'],
         line_items: [{
           price_data: {
-            currency: 'usd',
+            currency: 'eur',
             product_data: {
               name: pkg.name,
               description: `${pkg.credits} prompts for your video projects`,
