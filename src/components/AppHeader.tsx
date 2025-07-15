@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -16,8 +16,9 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
-import { ExportDropdown } from "~/components/export/ExportDropdown";
 import { PromptUsageDropdown } from "~/components/usage/PromptUsageDropdown";
+import { generateCleanFilename } from "~/lib/utils/filename";
+import React from "react";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -70,6 +71,8 @@ export default function AppHeader({
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
   const [isSharing, setIsSharing] = useState(false);
+  const [renderId, setRenderId] = useState<string | null>(null);
+  const [hasDownloaded, setHasDownloaded] = useState(false);
 
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
@@ -90,6 +93,66 @@ export default function AppHeader({
     },
   });
 
+  // Export/render mutations
+  const startRender = api.render.startRender.useMutation({
+    onSuccess: (data) => {
+      setRenderId(data.renderId);
+      toast.info("Render started! This may take a few minutes...");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const { data: renderStatus } = api.render.getRenderStatus.useQuery(
+    { renderId: renderId! },
+    {
+      enabled: !!renderId,
+      refetchInterval: (query) => {
+        const data = query.state.data;
+        if (data?.status === 'completed' || data?.status === 'failed') {
+          return false;
+        }
+        return 1000;
+      },
+    }
+  );
+
+  // Handle export completion - auto-download
+  React.useEffect(() => {
+    if (renderStatus?.status === 'completed' && renderId && renderStatus.outputUrl && !hasDownloaded) {
+      setHasDownloaded(true);
+      toast.success('Render complete! Starting download...');
+      
+      // Auto-download after a short delay
+      setTimeout(async () => {
+        try {
+          const response = await fetch(renderStatus.outputUrl!);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = generateCleanFilename(projectTitle || "video", "1080p", "mp4");
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          
+          // Reset state after successful download
+          setTimeout(() => {
+            setRenderId(null);
+            setHasDownloaded(false);
+          }, 1500);
+        } catch (error) {
+          console.error('Download failed:', error);
+          toast.error('Download failed');
+        }
+      }, 1000);
+    }
+  }, [renderStatus, renderId, hasDownloaded, projectTitle]);
+
   const handleShare = () => {
     if (!projectId) return;
     
@@ -97,6 +160,17 @@ export default function AppHeader({
     createShare.mutate({
       projectId,
       title: projectTitle,
+    });
+  };
+
+  const handleDownload = () => {
+    if (!projectId || startRender.isPending) return;
+    
+    // Trigger MP4 export at 1080p (high quality)
+    startRender.mutate({
+      projectId,
+      format: "mp4",
+      quality: "high", // 1080p maps to "high"
     });
   };
 
@@ -191,8 +265,21 @@ export default function AppHeader({
               {isSharing ? "Copied!" : "Share"}
             </Button>
             
-            {/* Export dropdown */}
-            <ExportDropdown projectId={projectId} projectTitle={projectTitle} size="sm" className="rounded-[15px] shadow-sm" />
+            {/* Download button - MP4 1080p */}
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-2 rounded-[15px] shadow-sm bg-black hover:bg-gray-800 text-white"
+              onClick={handleDownload}
+              disabled={startRender.isPending || !!renderId}
+            >
+              {startRender.isPending || !!renderId ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <DownloadIcon className="h-4 w-4" />
+              )}
+              {startRender.isPending || !!renderId ? "Rendering..." : "Download"}
+            </Button>
           </>
         )}
         

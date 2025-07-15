@@ -113,6 +113,7 @@
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
     "@trpc/server": "^11.0.0",
+    "@types/stripe": "^8.0.416",
     "@vercel/analytics": "^1.5.0",
     "ai": "^4.3.16",
     "axios": "^1.9.0",

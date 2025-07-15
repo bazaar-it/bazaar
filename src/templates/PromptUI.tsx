@@ -138,7 +138,6 @@ const SearchBar = ({ opacity }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
               borderRadius: iconSize * 0.17,
             }}
           >
@@ -160,7 +159,6 @@ const SearchBar = ({ opacity }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
               borderRadius: iconSize * 0.17,
             }}
           >
@@ -366,7 +364,6 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
               borderRadius: iconSize * 0.17,
             }}
           >
@@ -388,7 +385,6 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
               borderRadius: iconSize * 0.17,
             }}
           >
