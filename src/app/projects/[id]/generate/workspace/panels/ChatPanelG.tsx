@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
@@ -44,6 +45,7 @@ export default function ChatPanelG({
 }: ChatPanelGProps) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
   const [generationComplete, setGenerationComplete] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -234,6 +236,7 @@ export default function ChatPanelG({
     setMessage("");
     setUploadedImages([]);
     setIsGenerating(true);
+    setGenerationPhase('thinking'); // Start in thinking phase
     
     // Immediately scroll to bottom after adding messages
     setTimeout(() => {
@@ -327,6 +330,7 @@ export default function ChatPanelG({
   useEffect(() => {
     setMessage("");
     setIsGenerating(false);
+    setGenerationPhase('thinking');
     setGenerationComplete(false);
     setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
     
@@ -485,6 +489,9 @@ export default function ChatPanelG({
       if (data?.userMessage) {
         const { userMessage, imageUrls = [], videoUrls = [], modelOverride } = data;
         
+        // Switch to generating phase when SSE is ready and we start the mutation
+        setGenerationPhase('generating');
+        
         try {
           const result = await generateSceneMutation.mutateAsync({
             projectId,
@@ -525,6 +532,7 @@ export default function ChatPanelG({
             
             // Hide the pulsating message immediately when we have the real message
             setIsGenerating(false);
+            setGenerationPhase('thinking'); // Reset phase
           }
           
           // ✅ NEW: Add scene plan messages to VideoState immediately
@@ -651,6 +659,7 @@ export default function ChatPanelG({
           // No optimistic messages to clean up
         } finally {
           setIsGenerating(false);
+          setGenerationPhase('thinking'); // Reset to thinking phase
           setGenerationComplete(true);
           
           // Always invalidate scenes to ensure UI is in sync with database
@@ -665,6 +674,7 @@ export default function ChatPanelG({
       console.error('[ChatPanelG] SSE error:', error);
       toast.error(error);
       setIsGenerating(false);
+      setGenerationPhase('thinking'); // Reset to thinking phase
     }
   });
 
@@ -716,7 +726,7 @@ export default function ChatPanelG({
         {isGenerating && (
           <div className="flex justify-start mb-4">
             <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
-              <GeneratingMessage />
+              <GeneratingMessage phase={generationPhase} />
             </div>
           </div>
         )}
@@ -801,39 +811,49 @@ export default function ChatPanelG({
                     });
                   }}
                   />
-
-                  {/* Enhance Prompt Button */}
-                  <button
-                    type="button"
-                    onClick={handleEnhancePrompt}
-                    disabled={!message.trim() || isEnhancing || isGenerating}
-                    className={cn(
-                      "p-1 rounded-full transition-all duration-200",
-                      message.trim() && !isEnhancing && !isGenerating
-                        ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                        : "text-gray-400 cursor-not-allowed"
-                    )}
-                    aria-label="Enhance prompt"
-                    title="Enhance your prompt with more detail"
-                  >
-                    {isEnhancing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                  </button>
                 </div>
 
-                <Button
-                  type="submit"
-                  disabled={!message.trim() || isGenerating}
-                  className={cn(
-                    "w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0",
-                    isGenerating && "opacity-60"
-                  )}
-                >
-                  {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                </Button>
+                <div className="flex gap-2 items-center">
+                  {/* Enhance Prompt Button */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleEnhancePrompt}
+                          disabled={!message.trim() || isEnhancing || isGenerating}
+                          className={cn(
+                            "p-1 rounded-full transition-all duration-200",
+                            message.trim() && !isEnhancing && !isGenerating
+                              ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                              : "text-gray-400 cursor-not-allowed"
+                          )}
+                          aria-label="Enhance prompt"
+                        >
+                          {isEnhancing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enhance Prompt</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <Button
+                    type="submit"
+                    disabled={!message.trim() || isGenerating}
+                    className={cn(
+                      "w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0",
+                      isGenerating && "opacity-60"
+                    )}
+                  >
+                    {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

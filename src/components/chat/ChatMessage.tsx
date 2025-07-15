@@ -177,6 +177,14 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     message.status === 'success' && 
     message.message.includes('created successfully');
   
+  // Extract scene number from success message for color matching
+  const extractSceneNumberFromSuccess = (successMessage: string): number | null => {
+    const match = successMessage.match(/Scene (\d+) created successfully/);
+    return match && match[1] ? parseInt(match[1]) : null;
+  };
+  
+  const successSceneNumber = isSceneSuccess ? extractSceneNumberFromSuccess(message.message) : null;
+  
   // Extract scene plan data if available
   const scenePlanData = isScenePlan ? (() => {
     const match = message.message.match(/<!-- SCENE_PLAN_DATA:(.*) -->/);
@@ -285,6 +293,8 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
             ? "bg-black text-white rounded-2xl px-4 py-3"
             : isScenePlan && scenePlanData
             ? `${getScenePlanColors(scenePlanData.sceneNumber)} text-gray-900 rounded-xl px-3 py-2`
+            : isSceneSuccess && successSceneNumber
+            ? `${getScenePlanColors(successSceneNumber)} text-gray-900 rounded-xl px-3 py-2`
             : isSceneSuccess
             ? "bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-800 rounded-xl px-3 py-2"
             : "bg-gray-100 text-gray-900 rounded-2xl px-4 py-3"
@@ -405,7 +415,7 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                       className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                         createSceneMutation.isPending 
                           ? 'bg-blue-500 text-white cursor-wait' 
-                          : 'bg-gray-800 hover:bg-gray-900 text-white'
+                          : 'bg-black hover:bg-gray-800 text-white'
                       }`}
                     >
                       {createSceneMutation.isPending ? (
@@ -416,7 +426,7 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                       ) : (
                         <>
                           <Play className="h-3 w-3" />
-                          <span>Create Scene</span>
+                          <span>Create</span>
                         </>
                       )}
                     </button>
@@ -425,8 +435,8 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
               </div>
             )}
             
-            {/* Timestamp and action buttons - hidden for scene plan messages since they have their own footer */}
-            {!isScenePlan && (
+            {/* Timestamp and action buttons - hidden for scene plan messages and scene plan overview messages since they have their own footer */}
+            {!isScenePlan && !isScenePlanOverview && (
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs opacity-50">{formatTimestamp(message.timestamp)}</span>
                 <div className="flex items-center gap-2">

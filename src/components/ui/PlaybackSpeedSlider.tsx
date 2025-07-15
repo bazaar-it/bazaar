@@ -11,6 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
 interface PlaybackSpeedSliderProps {
   currentSpeed: number;
@@ -114,19 +115,27 @@ export function PlaybackSpeedSlider({
   
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className={`h-8 px-2 text-xs font-mono ${className}`}
-          title="Playback Speed"
-        >
-          <ChevronsUp className="h-3 w-3 mr-1 rotate-90" />
-          <span className="inline-block w-[2.5rem] text-left">
-            {currentSpeed.toFixed(1)}x
-          </span>
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={`h-8 px-2 text-xs font-mono ${className}`}
+              >
+                <ChevronsUp className="h-3 w-3 mr-1 rotate-90" />
+                <span className="inline-block w-[2.5rem] text-left">
+                  {currentSpeed.toFixed(1)}x
+                </span>
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Playback Speed</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent 
         align="end" 
         className="w-48 p-3"

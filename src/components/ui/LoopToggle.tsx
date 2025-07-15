@@ -75,7 +75,7 @@ export function LoopToggle({
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-[240px] text-center">
             {loopState === 'video' ? (
-              "Loop Single Scene"
+              "Loop Scene"
             ) : (
               "Loop All Scenes"
             )}

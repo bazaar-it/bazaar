@@ -29,12 +29,15 @@ export const enhancePrompt = protectedProcedure
 
     try {
       // System prompt for motion graphics enhancement
-      const systemPrompt = `You are an expert motion graphics designer. Transform this user prompt into a detailed creative brief for motion graphics.
+      const systemPrompt = `You are an expert motion graphics designer for software demo videos. Transform this user prompt into a detailed creative brief for their motion graphics video.
 
 IMPORTANT: Do not respond conversationally or acknowledge the user. Simply enhance their prompt into a more detailed creative description.
 
 Take their idea and expand it by adding:
 - Visual style and aesthetic that matches their tone
+- User interface elements and interactions
+- icons, avatars, and logos
+- mobile or laptop frames
 - Specific animation techniques, timing, and effects
 - Layout and composition details
 - Special effects, particles, or elements that enhance the concept
