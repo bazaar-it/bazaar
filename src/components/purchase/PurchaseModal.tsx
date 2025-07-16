@@ -9,44 +9,25 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { api } from "~/trpc/react";
-import { ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { Skeleton } from "~/components/ui/skeleton";
 
 interface PurchaseModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-// New pricing structure matching user requirements
-const packages = [
-  {
-    id: "starter",
-    price: 1000, // €10.00 in cents
-    prompts: 33,
-    pricePerPrompt: 0.30,
-    description: "Perfect for trying things out.",
-    discount: null // Base rate, no discount
-  },
-  {
-    id: "popular",
-    price: 2500, // €25.00 in cents
-    prompts: 125,
-    pricePerPrompt: 0.20,
-    description: "More prompts, better value.",
-    discount: 33 // 33% discount from base rate
-  },
-  {
-    id: "power",
-    price: 10000, // €100.00 in cents
-    prompts: 1000,
-    pricePerPrompt: 0.10,
-    description: "Best value for power users.",
-    discount: 67 // 67% discount from base rate
-  }
-];
+// Helper function to calculate discount percentage
+function calculateDiscount(pricePerPrompt: number, baseRate: number = 30): number | null {
+  if (pricePerPrompt >= baseRate) return null;
+  return Math.round(((baseRate - pricePerPrompt) / baseRate) * 100);
+}
 
 export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
   const [processingPackageId, setProcessingPackageId] = useState<string | null>(null);
+  
+  // Fetch packages from database
+  const { data: packages, isLoading } = api.payment.getPackages.useQuery();
   
   const createCheckout = api.payment.createCheckout.useMutation({
     onSuccess: (data) => {
@@ -77,7 +58,15 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
-          {packages.map((pkg) => (
+          {isLoading ? (
+            // Loading skeletons
+            <>
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </>
+          ) : packages ? (
+            packages.map((pkg) => (
             <div
               key={pkg.id}
               className="border rounded-lg p-4 transition-all hover:shadow-md hover:border-gray-300"
@@ -89,14 +78,19 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
                       <div className="text-2xl font-bold text-gray-900">
                         €{pkg.price / 100}
                       </div>
-                      {pkg.discount && (
+                      {pkg.popular && (
+                        <div className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
+                          POPULAR
+                        </div>
+                      )}
+                      {calculateDiscount(pkg.pricePerPrompt / 100) && (
                         <div className="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded">
-                          {pkg.discount}% off
+                          {calculateDiscount(pkg.pricePerPrompt / 100)}% off
                         </div>
                       )}
                     </div>
                     <div className="text-base text-gray-800 mb-2">
-                      Get <span className="font-bold">{pkg.prompts}</span> prompts at <span className="font-bold">€{pkg.pricePerPrompt.toFixed(2)}</span> each
+                      Get <span className="font-bold">{pkg.promptCount}</span> prompts at <span className="font-bold">€{(pkg.pricePerPrompt / 100).toFixed(2)}</span> each
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {pkg.description}
@@ -120,7 +114,12 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
                 </div>
               </div>
             </div>
-          ))}
+          ))
+          ) : (
+            <div className="text-center text-muted-foreground">
+              No packages available
+            </div>
+          )}
         </div>
 
         {/* Footer message */}
