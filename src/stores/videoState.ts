@@ -73,6 +73,9 @@ interface VideoState {
   lastSyncTime: number;
   pendingDbSync: Record<string, boolean>; // Track which projects need DB sync
   
+  // Track which scene plan messages are currently generating
+  generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
+  
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
   replace: (projectId: string, newProps: InputProps) => void;
@@ -117,6 +120,11 @@ interface VideoState {
   
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
+  
+  // Scene generation tracking
+  setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
+  isSceneGenerating: (projectId: string, messageId: string) => boolean;
+  clearAllGeneratingScenes: (projectId: string) => void;
 }
 
 export const useVideoState = create<VideoState>((set, get) => ({
@@ -127,6 +135,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
   selectedScenes: {},
   lastSyncTime: 0,
   pendingDbSync: {},
+  generatingScenes: {},
   
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
@@ -1038,4 +1047,40 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       };
     }),
+    
+  // Scene generation tracking methods
+  setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) =>
+    set((state) => {
+      const currentSet = state.generatingScenes[projectId] || new Set<string>();
+      const newSet = new Set(currentSet);
+      
+      if (isGenerating) {
+        newSet.add(messageId);
+      } else {
+        newSet.delete(messageId);
+      }
+      
+      return {
+        ...state,
+        generatingScenes: {
+          ...state.generatingScenes,
+          [projectId]: newSet
+        }
+      };
+    }),
+    
+  isSceneGenerating: (projectId: string, messageId: string) => {
+    const state = get();
+    const projectSet = state.generatingScenes[projectId];
+    return projectSet ? projectSet.has(messageId) : false;
+  },
+  
+  clearAllGeneratingScenes: (projectId: string) =>
+    set((state) => ({
+      ...state,
+      generatingScenes: {
+        ...state.generatingScenes,
+        [projectId]: new Set<string>()
+      }
+    })),
 }));

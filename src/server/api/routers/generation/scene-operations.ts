@@ -291,7 +291,12 @@ export const generateScene = protectedProcedure
                   // This will create the scene and add the "generated" indicator
                   console.log('🚀 [SCENE-OPS] Triggering scene creation for first plan message:', firstScenePlanMessageId);
                   
+                  // Store the generating state in a way the frontend can access
+                  // We'll emit this through the SSE stream or custom event
+                  console.log(`[SCENE-OPS] Marking scene ${firstScenePlanMessageId} as auto-generating`);
+                  
                   // Call the createScene mutation directly using the current context
+                  // The UI will show loading state via the generatingScenes tracking
                   const createSceneResult = await createSceneFromPlanRouter.createCaller(ctx).createScene({
                     messageId: firstScenePlanMessageId,
                     projectId: projectId,

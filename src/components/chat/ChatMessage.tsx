@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Undo2, AlertCircle, Play } from 'lucide-react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
+import { useVideoState } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
 import { api } from '~/trpc/react';
 import { toast } from 'sonner';
@@ -19,10 +20,16 @@ interface ChatMessageProps {
   totalScenePlans?: number;
 }
 
-// Create All Scenes Button Component
-function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { projectId: string; userId: string; totalScenePlans: number }) {
+// Create All Scenes Button Component  
+function CreateAllScenesButton({ projectId, userId, totalScenePlans, scenePlanMessageIds }: { 
+  projectId: string; 
+  userId: string; 
+  totalScenePlans: number;
+  scenePlanMessageIds?: string[];
+}) {
   const utils = api.useUtils();
   const [hasBeenClicked, setHasBeenClicked] = React.useState(false);
+  const { setSceneGenerating, clearAllGeneratingScenes } = useVideoState();
   
   const createAllMutation = api.createSceneFromPlan.createAllScenes.useMutation({
     onSuccess: async (result) => {
@@ -51,12 +58,24 @@ function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { project
     onError: (error) => {
       toast.error(`Error: ${error.message}`);
     },
+    onSettled: () => {
+      // Clear all generating states when mutation completes
+      clearAllGeneratingScenes(projectId);
+    }
   });
   
   return (
     <button
       onClick={() => {
         setHasBeenClicked(true);
+        
+        // Mark all scene plan messages as generating
+        if (scenePlanMessageIds) {
+          scenePlanMessageIds.forEach(messageId => {
+            setSceneGenerating(projectId, messageId, true);
+          });
+        }
+        
         createAllMutation.mutate({ projectId, userId });
       }}
       disabled={createAllMutation.isPending || hasBeenClicked}
@@ -103,6 +122,9 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
+  // Get scene generation state from videoState
+  const { isSceneGenerating, setSceneGenerating } = useVideoState();
+  
   // Only query if hasIterations prop not provided (backward compatibility)
   const { data: iterations, isLoading: isChecking } = api.generation.getMessageIterations.useQuery(
     { messageId: message.id! },
@@ -114,6 +136,12 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   
   // Scene creation mutation with comprehensive error handling
   const createSceneMutation = api.createSceneFromPlan.createScene.useMutation({
+    onMutate: () => {
+      // Mark this scene as generating when mutation starts
+      if (projectId && message.id) {
+        setSceneGenerating(projectId, message.id, true);
+      }
+    },
     onSuccess: async (result) => {
       console.log('[ChatMessage] Scene creation result:', result);
       try {
@@ -172,6 +200,12 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
         toast.error('Failed to create scene - unexpected error');
       }
     },
+    onSettled: () => {
+      // Clear generating state when mutation completes (success or error)
+      if (projectId && message.id) {
+        setSceneGenerating(projectId, message.id, false);
+      }
+    }
   });
   
   // Check if any iterations have actual code changes (not just duration/metadata changes)
@@ -203,6 +237,10 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   };
   
   const successSceneNumber = isSceneSuccess ? extractSceneNumberFromSuccess(message.message) : null;
+  
+  // Check if this specific scene plan is currently generating
+  const isCurrentlyGenerating = isScenePlan && message.id && projectId ? 
+    isSceneGenerating(projectId, message.id) : false;
   
   // Extract scene plan data if available
   const scenePlanData = isScenePlan ? (() => {
@@ -382,6 +420,7 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                         projectId={projectId}
                         userId={userId}
                         totalScenePlans={scenePlanOverviewData.totalScenePlans}
+                        scenePlanMessageIds={scenePlanOverviewData.scenePlanMessageIds}
                       />
                     )}
                   </div>
@@ -422,14 +461,14 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
                     {/* Create Scene button */}
                     <button
                       onClick={handleCreateSceneClick}
-                      disabled={createSceneMutation.isPending}
+                      disabled={createSceneMutation.isPending || isCurrentlyGenerating}
                       className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
-                        createSceneMutation.isPending 
+                        createSceneMutation.isPending || isCurrentlyGenerating
                           ? 'bg-blue-500 text-white cursor-wait' 
                           : 'bg-black hover:bg-gray-800 text-white'
                       }`}
                     >
-                      {createSceneMutation.isPending ? (
+                      {(createSceneMutation.isPending || isCurrentlyGenerating) ? (
                         <>
                           <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
                           <span>Creating...</span>

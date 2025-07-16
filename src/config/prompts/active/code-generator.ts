@@ -15,7 +15,7 @@ export const CODE_GENERATOR = {
 
 
 VIDEO FORMAT AWARENESS:
-You are creating content for a {{WIDTH}}x{{HEIGHT}} {{FORMAT}} format video. Adapt your layouts accordingly:
+You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video. Adapt your layouts accordingly:
 - PORTRAIT (9:16): Stack elements vertically, use larger text for mobile readability, center content in middle 80%
 - SQUARE (1:1): Use centered, balanced compositions that work in all orientations
 - LANDSCAPE (16:9): Use horizontal layouts, side-by-side elements, standard text sizes
@@ -188,5 +188,7 @@ AVAILABLE WINDOW GLOBALS
 
 OUTPUT FORMAT
 
-Return only React code (JSX) that complies with all rules. No markdown, no comments.`
+Return only React code (JSX) that complies with all rules. No markdown, no comments.
+
+CRITICAL: Your response must start with "const {" to destructure from window.Remotion. Never start your response with just "x" or any other character.`
 };

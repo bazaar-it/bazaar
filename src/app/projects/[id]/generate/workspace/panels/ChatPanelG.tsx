@@ -63,7 +63,7 @@ export default function ChatPanelG({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -335,6 +335,30 @@ export default function ChatPanelG({
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
+
+  // Auto-mark first scene plan as generating (simulates auto-generation)
+  useEffect(() => {
+    const scenePlanMessages = componentMessages.filter(msg => 
+      msg.kind === 'scene_plan' && !msg.isUser
+    );
+    
+    if (scenePlanMessages.length > 0) {
+      const firstScenePlan = scenePlanMessages[0];
+      
+      // Auto-generate Scene 1 with a small delay to simulate the behavior
+      setTimeout(() => {
+        if (firstScenePlan?.id && projectId) {
+          console.log('[ChatPanelG] Auto-marking first scene as generating:', firstScenePlan.id);
+          setSceneGenerating(projectId, firstScenePlan.id, true);
+          
+          // Clear after 5 seconds (scene creation usually completes by then)
+          setTimeout(() => {
+            setSceneGenerating(projectId, firstScenePlan.id, false);
+          }, 5000);
+        }
+      }, 500);
+    }
+  }, [componentMessages, projectId, setSceneGenerating]);
 
 
 

@@ -1177,21 +1177,17 @@ export default function FallbackComposition() {
         maxWidth: '500px'
       }}>
         <h2 style={{ color: '#d32f2f', marginBottom: '16px', fontSize: '24px' }}>
-          🔧 Scene Compilation Issue
+          ⚡ Oops, it broke
         </h2>
         <p style={{ color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
-          ${problematicSceneInfo 
-            ? `Error in ${problematicSceneInfo.sceneName}: ${problematicSceneInfo.variableName ? `Variable '${problematicSceneInfo.variableName}' is not defined` : 'Compilation failed'}`
-            : 'There was an issue compiling the scenes'}
+          But don't worry, we already have an agent on it.
         </p>
         <p style={{ color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
-          Don't worry! You can:
+          Give it a couple of seconds.
         </p>
-        <ul style={{ color: '#666', textAlign: 'left', lineHeight: '1.5' }}>
-          <li>Try refreshing the preview</li>
-          <li>Check the code in Monaco editor</li>
-          <li>Simplify your animation prompts</li>
-        </ul>
+        <p style={{ color: '#666', marginBottom: '16px', lineHeight: '1.5', fontWeight: 'bold' }}>
+          Thanks for reading. You are awesome! 🎉
+        </p>
       </div>
     </AbsoluteFill>
   );
