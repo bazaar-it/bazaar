@@ -24,6 +24,37 @@ export function detectProblematicScene(
 ): SceneErrorInfo | null {
   const errorMessage = error.message;
   
+  // Check for duplicate identifier errors (like "Identifier 'currentFrame' has already been declared")
+  const duplicateIdentifierMatch = errorMessage.match(/Identifier '(\w+)' has already been declared/);
+  if (duplicateIdentifierMatch) {
+    const variableName = duplicateIdentifierMatch[1];
+    
+    // Check each scene for duplicate declarations of this variable
+    for (let i = 0; i < compiledScenes.length; i++) {
+      const scene = compiledScenes[i];
+      if (scene && scene.isValid && scene.compiledCode) {
+        // Count occurrences of variable declarations
+        const declarationPattern = new RegExp(`(let|const|var)\\s+${variableName}\\b`, 'g');
+        const matches = scene.compiledCode.match(declarationPattern);
+        
+        if (matches && matches.length > 1) {
+          // Found the problematic scene with duplicate declarations
+          const originalScene = originalScenes[i];
+          const sceneName = originalScene?.data?.name || originalScene?.name || `Scene ${i + 1}`;
+          
+          return {
+            sceneIndex: i,
+            sceneName,
+            sceneId: originalScene?.id || '',
+            errorMessage: `Duplicate declaration of '${variableName}' in ${sceneName}`,
+            variableName,
+            lineNumber: undefined
+          };
+        }
+      }
+    }
+  }
+  
   // Try to extract undefined variable name
   const undefinedVarMatch = errorMessage.match(/(\w+) is not defined/);
   if (undefinedVarMatch) {
@@ -35,7 +66,7 @@ export function detectProblematicScene(
       if (scene && scene.isValid && scene.compiledCode.includes(variableName)) {
         // Found the problematic scene
         const originalScene = originalScenes[i];
-        const sceneName = originalScene?.data?.name || `Scene ${i + 1}`;
+        const sceneName = originalScene?.data?.name || originalScene?.name || `Scene ${i + 1}`;
         
         // Try to find line number
         const lines = scene.compiledCode.split('\n');

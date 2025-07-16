@@ -12,6 +12,12 @@ interface Scene {
 
 const DEBUG_AUTOFIX = true; // Temporarily enable for debugging
 
+// Cost control constants - CRITICAL FOR API BUDGET
+const MAX_FIXES_PER_SESSION = 10; // Maximum total fixes in a session
+const MAX_FIXES_PER_SCENE = 3; // Already enforced per scene
+const COOLDOWN_PERIOD_MS = 60000; // 1 minute cooldown after hitting limits
+const FIX_HISTORY_WINDOW_MS = 300000; // 5 minute sliding window for rate limiting
+
 export function useAutoFix(projectId: string, scenes: Scene[]) {
   console.log('[SILENT FIX] Hook initialized with projectId:', projectId, 'scenes:', scenes.length);
   console.log('[SILENT FIX] Hook mounted at:', new Date().toISOString());
@@ -27,6 +33,10 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
 
   // Track scenes that are currently being fixed to avoid re-adding errors
   const [fixingScenes, setFixingScenes] = useState<Set<string>>(new Set());
+  
+  // Cost control state
+  const [fixHistory, setFixHistory] = useState<number[]>([]); // Timestamps of recent fixes
+  const [isInCooldown, setIsInCooldown] = useState(false);
 
   // Helper function to convert database scenes to InputProps format
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -148,6 +158,37 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     const queueItem = autoFixQueue.get(sceneId);
     if (!queueItem) return;
     
+    // Check if we're in cooldown
+    if (isInCooldown) {
+      console.warn('[SILENT FIX] ⚠️ In cooldown period, skipping auto-fix');
+      autoFixQueue.delete(sceneId);
+      return;
+    }
+    
+    // Clean up old fix history entries (older than window)
+    const now = Date.now();
+    const recentHistory = fixHistory.filter(timestamp => 
+      now - timestamp < FIX_HISTORY_WINDOW_MS
+    );
+    setFixHistory(recentHistory);
+    
+    // Check if we've hit the rate limit
+    if (recentHistory.length >= MAX_FIXES_PER_SESSION) {
+      console.error('[SILENT FIX] 🛑 RATE LIMIT: Reached maximum fixes per session!');
+      console.error(`[SILENT FIX] ${recentHistory.length} fixes in the last ${FIX_HISTORY_WINDOW_MS / 60000} minutes`);
+      
+      // Enter cooldown
+      setIsInCooldown(true);
+      setTimeout(() => {
+        setIsInCooldown(false);
+        console.log('[SILENT FIX] Cooldown period ended');
+      }, COOLDOWN_PERIOD_MS);
+      
+      // Clear all queued fixes to prevent further attempts
+      autoFixQueue.clear();
+      return;
+    }
+    
     // Check if scene still exists
     const sceneStillExists = scenes.some(s => s.id === sceneId);
     if (!sceneStillExists) {
@@ -188,6 +229,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     
     // Execute fix with progressive strategy
     try {
+      // Record this fix attempt in history
+      setFixHistory(prev => [...prev, Date.now()]);
+      
       await executeAutoFix(sceneId, queueItem.errorDetails, queueItem.attempts);
       
       // Success - already cleaned up in executeAutoFix
@@ -208,7 +252,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         processAutoFixQueue(sceneId);
       }, retryDelay);
     }
-  }, [scenes, executeAutoFix, autoFixQueue]);
+  }, [scenes, executeAutoFix, autoFixQueue, isInCooldown, fixHistory]);
 
   // Listen for preview panel errors
   useEffect(() => {
@@ -231,6 +275,12 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         if (DEBUG_AUTOFIX) {
           console.log('[SILENT FIX] Ignoring error for scene being fixed:', sceneId);
         }
+        return;
+      }
+      
+      // Check if we're in cooldown - still add to queue but warn
+      if (isInCooldown) {
+        console.warn('[SILENT FIX] ⚠️ ERROR DETECTED BUT IN COOLDOWN - Auto-fix disabled temporarily');
         return;
       }
       

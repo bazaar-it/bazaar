@@ -13,7 +13,8 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     name: scene.name,
     id: scene.id,
     duration: scene.duration,
-    codePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'No jsCode'
+    codePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'No jsCode',
+    tsxCodePreview: scene.tsxCode ? scene.tsxCode.substring(0, 100) + '...' : 'No tsxCode'
   });
   
   // Use the duration that was already extracted and passed down
@@ -75,7 +76,16 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           if (typeof Scene !== 'undefined') return Scene;
           if (typeof MyScene !== 'undefined') return MyScene;
           
+          // Check if we have any function that looks like a component
+          const allVars = Object.keys(this || {});
+          const componentVar = allVars.find(v => v.includes('Scene') || v.includes('Component'));
+          if (componentVar && typeof this[componentVar] === 'function') {
+            console.log('Found component via variable scan:', componentVar);
+            return this[componentVar];
+          }
+          
           console.error('No component found in scene code');
+          console.error('Available variables:', Object.keys(this || {}));
           return null;
         } catch (e) {
           console.error('Scene component factory error:', e);
@@ -113,7 +123,12 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     }
   }
   
-  // Fallback: Show scene metadata
+  // Fallback: Show scene metadata with diagnostic info
+  const errorReason = !scene.jsCode ? 
+    (scene.tsxCode && scene.tsxCode.match(/^const\s+script_\w+\s*=\s*\[/) ? 
+      'Scene contains only script metadata' : 'No compiled JavaScript code') : 
+    'Failed to render component';
+  
   return (
     <AbsoluteFill
       style={{
@@ -146,8 +161,11 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           maxWidth: '600px',
           margin: '0 auto',
         }}>
-          <p style={{ fontSize: '1rem', opacity: 0.7 }}>
+          <p style={{ fontSize: '1rem', opacity: 0.7, marginBottom: '1rem' }}>
             {scene.id}
+          </p>
+          <p style={{ fontSize: '0.875rem', opacity: 0.5, color: '#ef4444' }}>
+            {errorReason}
           </p>
         </div>
       </div>

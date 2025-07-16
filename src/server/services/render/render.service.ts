@@ -76,6 +76,26 @@ async function preprocessSceneForLambda(scene: any) {
     return scene;
   }
   
+  // Check if this is just a script array without a component
+  const scriptArrayMatch = tsxCode.match(/^const\s+script_\w+\s*=\s*\[[\s\S]*\];\s*$/);
+  if (scriptArrayMatch && !tsxCode.includes('export default') && !tsxCode.includes('function')) {
+    console.error(`[Preprocess] Scene ${scene.id} contains only a script array, no component!`);
+    console.log(`[Preprocess] Script-only code:`, tsxCode.substring(0, 500));
+    // Return scene without transformation - MainCompositionSimple will handle fallback
+    return {
+      ...scene,
+      jsCode: null,
+      compiledCode: null,
+      tsxCode: tsxCode,
+    };
+  }
+  
+  // Log if the original code seems incomplete
+  if (!tsxCode.includes('export default function') && !tsxCode.includes('function Scene')) {
+    console.warn(`[Preprocess] Scene ${scene.id} code might be incomplete - no export default function found`);
+    console.log(`[Preprocess] Original code preview:`, tsxCode.substring(0, 300));
+  }
+  
   try {
     // Import sucrase for server-side compilation
     const { transform } = require('sucrase');
@@ -94,9 +114,10 @@ async function preprocessSceneForLambda(scene: any) {
       remotionComponents.push(...remotionMatch[1].split(',').map((h: string) => h.trim()));
     }
     
-    // Remove the window.Remotion destructuring line (we'll provide it differently)
+    // Remove ONLY the window.Remotion destructuring line (we'll provide it differently)
+    // Make sure to only match the specific line, not remove other code
     transformedCode = transformedCode.replace(
-      /const\s*{\s*[^}]+\s*}\s*=\s*window\.Remotion\s*;?/g,
+      /const\s*{\s*[^}]+\s*}\s*=\s*window\.Remotion\s*;?\n?/g,
       ''
     );
     
@@ -126,11 +147,30 @@ async function preprocessSceneForLambda(scene: any) {
     // Replace export default with a direct assignment
     transformedCode = transformedCode.replace(
       /export\s+default\s+function\s+(\w+)/g,
-      '\nconst Component = function $1'
+      'const Component = function $1'
     );
     
+    // Also handle arrow function exports
+    transformedCode = transformedCode.replace(
+      /export\s+default\s+(\w+)\s*=\s*\(/g,
+      'const Component = $1 = ('
+    );
+    
+    // Check if we have a Component function
+    if (!transformedCode.includes('const Component = function') && !transformedCode.includes('const Component =')) {
+      // Try to find any function that looks like a component
+      const functionMatch = transformedCode.match(/(?:function|const)\s+(\w*Scene\w*)\s*[=(]/);
+      if (functionMatch) {
+        console.log(`[Preprocess] Found component function: ${functionMatch[1]}, aliasing to Component`);
+        transformedCode = transformedCode + `\n\nconst Component = ${functionMatch[1]};`;
+      } else {
+        console.warn(`[Preprocess] No Component function found after transformation for scene ${scene.id}`);
+        console.log(`[Preprocess] Transformed code snippet:`, transformedCode.substring(0, 200));
+      }
+    }
+    
     // Ensure the component is returned at the end
-    if (!transformedCode.includes('return Component;')) {
+    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('return Component;')) {
       transformedCode = transformedCode + '\n\nreturn Component;';
     }
     
@@ -153,8 +193,19 @@ async function preprocessSceneForLambda(scene: any) {
     );
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
-    console.log(`[Preprocess] Original code starts with:`, tsxCode.substring(0, 100));
-    console.log(`[Preprocess] Transformed code starts with:`, transformedCode.substring(0, 100));
+    console.log(`[Preprocess] Original code length:`, tsxCode.length);
+    console.log(`[Preprocess] Transformed code length:`, transformedCode.length);
+    console.log(`[Preprocess] Original has export default:`, tsxCode.includes('export default'));
+    console.log(`[Preprocess] Transformed has Component:`, transformedCode.includes('const Component'));
+    console.log(`[Preprocess] First 500 chars of original:`, tsxCode.substring(0, 500));
+    console.log(`[Preprocess] First 500 chars of transformed:`, transformedCode.substring(0, 500));
+    
+    // Check if we have a script array that might be overwriting our component
+    const scriptMatch = transformedCode.match(/const\s+script_\w+\s*=\s*\[/);
+    if (scriptMatch) {
+      console.log(`[Preprocess] WARNING: Found script array that might be the only content`);
+      console.log(`[Preprocess] Script array starts at position:`, scriptMatch.index);
+    }
     
     // Return scene with compiled JavaScript code
     return {

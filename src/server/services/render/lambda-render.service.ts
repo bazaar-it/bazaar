@@ -9,10 +9,8 @@ export interface LambdaRenderConfig extends RenderConfig {
   webhookUrl?: string;
 }
 
-// Cache the serve URL for better performance
-let cachedServeUrl: string | null = null;
-let lastDeployTime = 0;
-const DEPLOY_CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+// Use pre-deployed site URL (deployed via CLI: npx remotion lambda sites create)
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
 
 // Check if Lambda is properly configured
 function checkLambdaConfig() {
@@ -32,43 +30,6 @@ function checkLambdaConfig() {
   }
 }
 
-// Deploy site to S3 (cached for performance)
-async function deployComposition() {
-  const now = Date.now();
-  
-  // Use cached URL if recent
-  if (cachedServeUrl && (now - lastDeployTime < DEPLOY_CACHE_DURATION)) {
-    console.log("[LambdaRender] Using cached serve URL");
-    return cachedServeUrl;
-  }
-  
-  console.log("[LambdaRender] Deploying composition to S3...");
-  
-  try {
-    // Dynamic import to avoid bundling issues
-    const { deploySite } = await import("@remotion/lambda");
-    
-    const { serveUrl } = await deploySite({
-      entryPoint: "./src/remotion/index.tsx",
-      bucketName: process.env.REMOTION_BUCKET_NAME!,
-      region: process.env.AWS_REGION as AwsRegion,
-      options: {
-        onBundleProgress: (progress) => {
-          console.log(`[LambdaRender] Bundle progress: ${Math.round(progress * 100)}%`);
-        },
-      },
-    });
-    
-    cachedServeUrl = serveUrl;
-    lastDeployTime = now;
-    
-    console.log(`[LambdaRender] Composition deployed: ${serveUrl}`);
-    return serveUrl;
-  } catch (error) {
-    console.error("[LambdaRender] Failed to deploy composition:", error);
-    throw new Error("Failed to deploy composition to S3. Check AWS credentials and permissions.");
-  }
-}
 
 // Main Lambda rendering function
 export async function renderVideoOnLambda({
@@ -87,8 +48,9 @@ export async function renderVideoOnLambda({
   const settings = qualitySettings[quality];
   
   try {
-    // Deploy composition to S3
-    const serveUrl = await deployComposition();
+    // Use pre-deployed site URL
+    const serveUrl = DEPLOYED_SITE_URL;
+    console.log(`[LambdaRender] Using serve URL: ${serveUrl}`);
     
     // Calculate total duration
     const totalDuration = scenes.reduce((sum, scene) => {
@@ -98,6 +60,8 @@ export async function renderVideoOnLambda({
     console.log(`[LambdaRender] Starting render job...`);
     console.log(`[LambdaRender] Total duration: ${totalDuration} frames`);
     console.log(`[LambdaRender] Format: ${format}, Quality: ${quality}`);
+    console.log(`[LambdaRender] Scenes: ${scenes.length}`);
+    console.log(`[LambdaRender] Resolution: ${settings.resolution.width}x${settings.resolution.height}`);
     
     // Dynamic import to avoid bundling issues
     const { renderMediaOnLambda } = await import("@remotion/lambda");
@@ -111,6 +75,8 @@ export async function renderVideoOnLambda({
       inputProps: {
         scenes,
         projectId,
+        width: settings.resolution.width,
+        height: settings.resolution.height,
       },
       codec: format === 'gif' ? 'gif' : 'h264',
       imageFormat: format === 'gif' ? 'png' : 'jpeg',

@@ -59,7 +59,7 @@ TECHNICAL REQUIREMENTS
 7. Calculate all sequence timing using forEach loop BEFORE the return statement - never mutate variables inside map functions during render.
 8. Use simple opacity interpolation for animations - avoid complex helper components.
 9. Declare the component function with "export default function Scene_[ID]()" - never use separate "function" declaration followed by "export default".
-10. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function.
+10. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: Never use "currentFrame" as a variable name - use "accumulatedFrames" or similar to avoid conflicts with Remotion's useCurrentFrame.
 11. Quote every CSS value and use exactly one transform per element.
 12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
 13. ALWAYS export the total duration at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
@@ -74,7 +74,7 @@ AVAILABLE WINDOW GLOBALS
   • window.React: React library (do not destructure)
   • window.HeroiconsSolid or Outline: Icons (do not destructure)
   • window.LucideIcons: Icons (do not destructure)
-  • window.IconifyIcon: 200,000+ icons (do not destructure)
+  • window.IconifyIcon: 200,000+ icons (do not destructure) - Usage: <window.IconifyIcon icon="mdi:home" style={{fontSize: "24px"}} />
   • window.RemotionShapes: Pre-built shapes (do not destructure)
   • window.Rough: Hand-drawn graphic styles (do not destructure)
   • window.RemotionGoogleFonts: Font loader (do not destructure)

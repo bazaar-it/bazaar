@@ -87,7 +87,7 @@ AVAILABLE WINDOW GLOBALS
 • window.React: React library (do not destructure)
 • window.HeroiconsSolid or Outline: Icons (do not destructure)
 • window.LucideIcons: Icons (do not destructure)
-• window.IconifyIcon: 200,000+ icons (do not destructure)
+• window.IconifyIcon: 200,000+ icons (do not destructure) - Usage: <window.IconifyIcon icon="mdi:home" style={{fontSize: "24px"}} />
 • window.RemotionShapes: Pre-built shapes (do not destructure)
 • window.Rough: Hand-drawn graphic styles (do not destructure)
 • window.RemotionGoogleFonts: Font loader (do not destructure)

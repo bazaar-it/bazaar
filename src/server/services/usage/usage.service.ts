@@ -1,5 +1,5 @@
 import { db } from "~/server/db";
-import { userUsage, usageLimits, userCredits } from "~/server/db/schema";
+import { userUsage, usageLimits, userCredits, users } from "~/server/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getUserLocalDate } from "~/lib/utils/timezone";
@@ -11,6 +11,22 @@ export class UsageService {
    * @param userTimezone - User's timezone (passed from client)
    */
   static async checkPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<{ allowed: boolean; used: number; limit: number; message?: string }> {
+    // Check if user is admin first
+    const [user] = await db.select({ isAdmin: users.isAdmin })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    // Admins have unlimited prompts
+    if (user?.isAdmin) {
+      return {
+        allowed: true,
+        used: 0,
+        limit: 999999, // Show a high number for UI purposes
+        message: "Admin - Unlimited prompts"
+      };
+    }
+    
     // Get today's date in user's timezone
     const today = getUserLocalDate(userTimezone);
     
@@ -56,6 +72,17 @@ export class UsageService {
    * @param userTimezone - User's timezone (passed from client)
    */
   static async incrementPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<void> {
+    // Check if user is admin first
+    const [user] = await db.select({ isAdmin: users.isAdmin })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    // Skip incrementing for admins
+    if (user?.isAdmin) {
+      return;
+    }
+    
     const today = getUserLocalDate(userTimezone);
     
     await db.insert(userUsage)
@@ -80,6 +107,22 @@ export class UsageService {
    * @param userTimezone - User's timezone (passed from client)
    */
   static async getTodayPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<{ used: number; limit: number; remaining: number; purchased: number }> {
+    // Check if user is admin first
+    const [user] = await db.select({ isAdmin: users.isAdmin })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    // Admins have unlimited prompts
+    if (user?.isAdmin) {
+      return {
+        used: 0,
+        limit: 999999,
+        remaining: 999999,
+        purchased: 0
+      };
+    }
+    
     const today = getUserLocalDate(userTimezone);
     
     // Get limit

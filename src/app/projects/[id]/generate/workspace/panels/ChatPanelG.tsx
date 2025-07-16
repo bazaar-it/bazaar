@@ -135,6 +135,10 @@ export default function ChatPanelG({
   // 🚨 NEW: Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
+  // Use auto-fix hook early to ensure consistent hook order
+  // IMPORTANT: This must be called before any conditional logic
+  useAutoFix(projectId, scenes);
+  
   // Helper function to convert database scenes to InputProps format (same as page.tsx)
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
     let currentStart = 0;
@@ -338,7 +342,7 @@ export default function ChatPanelG({
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
 
-  // Auto-mark first scene plan as generating (simulates auto-generation)
+  // Auto-mark first scene plan as generating and poll for completion
   useEffect(() => {
     const scenePlanMessages = componentMessages.filter(msg => 
       msg.kind === 'scene_plan' && !msg.isUser
@@ -347,28 +351,74 @@ export default function ChatPanelG({
     if (scenePlanMessages.length > 0) {
       const firstScenePlan = scenePlanMessages[0];
       
-      // Auto-generate Scene 1 with a small delay to simulate the behavior
-      setTimeout(() => {
+      // Auto-generate Scene 1 with a small delay
+      const timeoutId = setTimeout(() => {
         if (firstScenePlan?.id && projectId) {
           console.log('[ChatPanelG] Auto-marking first scene as generating:', firstScenePlan.id);
           setSceneGenerating(projectId, firstScenePlan.id, true);
           
-          // Clear after 5 seconds (scene creation usually completes by then)
-          setTimeout(() => {
-            setSceneGenerating(projectId, firstScenePlan.id, false);
-          }, 5000);
+          // Poll for completion by checking message updates
+          let pollCount = 0;
+          const maxPolls = 30; // 30 seconds max
+          
+          const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            try {
+              // Refetch messages to check if scene was created
+              await utils.chat.getMessages.invalidate({ projectId });
+              
+              // Check if the message has been updated to show completion
+              const currentMessages = await utils.chat.getMessages.fetch({ projectId });
+              const updatedMessage = currentMessages.find(msg => msg.id === firstScenePlan.id);
+              
+              if (updatedMessage && (
+                updatedMessage.content.includes('created successfully') ||
+                updatedMessage.kind === 'status'
+              )) {
+                // Scene created successfully
+                console.log('[ChatPanelG] Scene creation completed for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              } else if (updatedMessage && (
+                updatedMessage.content.includes('Failed')
+              )) {
+                // Scene creation failed
+                console.log('[ChatPanelG] Scene creation failed for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              } else if (pollCount >= maxPolls) {
+                // Timeout - stop polling
+                console.log('[ChatPanelG] Scene creation timeout for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              }
+            } catch (error) {
+              console.error('[ChatPanelG] Error polling for scene creation:', error);
+              setSceneGenerating(projectId, firstScenePlan.id, false);
+              clearInterval(pollInterval);
+            }
+          }, 1000); // Poll every second
+          
+          // Store interval ID for cleanup
+          return () => {
+            clearInterval(pollInterval);
+          };
         }
       }, 500);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
-  }, [componentMessages, projectId, setSceneGenerating]);
+  }, [componentMessages, projectId, setSceneGenerating, utils]);
 
 
 
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
-  // Use auto-fix hook (now completely silent)
-  useAutoFix(projectId, scenes);
+  // NOTE: useAutoFix moved to top of component to ensure consistent hook order
 
   // No need for pendingMessageRef - data will come from SSE
   
@@ -534,13 +584,25 @@ export default function ChatPanelG({
           // The result contains the actual response
           const responseData = result as any;
           
-          // Check if this is a rate limit error
-          if (!responseData.success && responseData.code === 'RATE_LIMITED') {
-            console.log('[ChatPanelG] Rate limit reached, showing purchase modal');
-            setIsPurchaseModalOpen(true);
-            // Note: We don't remove the user's message - it's already been sent and counted
-            // The error will be shown to the user
-            return;
+          // Check if the response indicates an error (success: false)
+          if (responseData?.meta?.success === false || responseData?.error) {
+            const errorMessage = responseData?.error?.message || '';
+            console.log('[ChatPanelG] Generation failed with error:', errorMessage);
+            
+            // Check if this is a rate limit error
+            if (errorMessage.includes('Daily limit reached') || 
+                errorMessage.includes('Buy more prompts') ||
+                errorMessage.includes('prompt limit') ||
+                responseData?.error?.code === 'RATE_LIMITED') {
+              console.log('[ChatPanelG] Rate limit reached, showing purchase modal');
+              setIsPurchaseModalOpen(true);
+              toast.error('You\'ve reached your daily prompt limit. Please purchase more prompts to continue.');
+              return;
+            } else {
+              // Show other error messages
+              toast.error(errorMessage || 'Failed to generate scene');
+              return;
+            }
           }
           
           // Get the assistant message ID from the response
@@ -689,11 +751,36 @@ export default function ChatPanelG({
           
         } catch (error: any) {
           console.error('[ChatPanelG] Generation failed:', error);
+          console.log('[ChatPanelG] Error structure:', {
+            message: error?.message,
+            code: error?.code,
+            cause: error?.data?.cause,
+            data: error?.data,
+            shape: error?.shape,
+            fullError: JSON.stringify(error, null, 2)
+          });
           
           // Check if this is a rate limit error from the mutation
-          if (error?.data?.code === 'RATE_LIMITED' || error?.message?.includes('RATE_LIMITED')) {
+          // In the catch block, we only have the error object
+          const errorMessage = error?.message || '';
+          
+          const isRateLimitError = 
+            errorMessage.includes('Daily limit reached') ||
+            errorMessage.includes('Buy more prompts') ||
+            errorMessage.includes('prompt limit') ||
+            error?.data?.cause?.code === 'RATE_LIMITED';
+            
+          console.log('[ChatPanelG] Error message:', errorMessage);
+          console.log('[ChatPanelG] Is rate limit error?', isRateLimitError);
+          
+          if (isRateLimitError) {
             console.log('[ChatPanelG] Rate limit error caught, showing purchase modal');
             setIsPurchaseModalOpen(true);
+            // Also show a toast to confirm
+            toast.error('You\'ve reached your daily prompt limit. Please purchase more prompts to continue.');
+          } else {
+            // Show generic error message
+            toast.error(errorMessage || 'Failed to generate scene');
           }
           
           // No optimistic messages to clean up

@@ -220,7 +220,10 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
   const isErrorMessage = message.status === 'error' && message.message.includes('Scene Compilation Error');
   
   // Check if this is a scene plan message
-  const isScenePlan = message.kind === 'scene_plan';
+  // Check if this is a scene plan that hasn't been created yet
+  const isScenePlan = message.kind === 'scene_plan' && 
+                      !message.message.includes('created successfully') &&
+                      message.status !== 'success';
   
   // Check if this is the main scene plan overview message (contains Create All button)
   const isScenePlanOverview = message.message.includes('<!-- SCENE_PLAN_OVERVIEW:');

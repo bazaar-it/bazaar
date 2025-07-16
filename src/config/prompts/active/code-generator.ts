@@ -16,8 +16,8 @@ export const CODE_GENERATOR = {
 
 VIDEO FORMAT AWARENESS:
 You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video. Adapt your layouts accordingly:
-- PORTRAIT (9:16): Stack elements vertically, use larger text for mobile readability, center content in middle 80%
-- SQUARE (1:1): Use centered, balanced compositions that work in all orientations
+- PORTRAIT (9:16): Stack elements vertically, use larger text for mobile readability. ALWAYS center content using position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)". Content should occupy middle 80% of width.
+- SQUARE (1:1): Use centered, balanced compositions that work in all orientations. Use absolute positioning with transform: "translate(-50%, -50%)" for centering.
 - LANDSCAPE (16:9): Use horizontal layouts, side-by-side elements, standard text sizes
 
 MOTION GRAPHICS PHILOSOPHY
@@ -60,7 +60,8 @@ Subtitle overlapping (frames 45 to 90)
 ⸻
 
 LAYOUT AND POSITIONING
-  • Single elements should be centered: absolute position, 50% from top and left, with transform to center
+  • CRITICAL: Single elements MUST be centered using: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
+  • This centering rule applies to ALL formats (portrait, square, landscape) - never skip it!
   • Maintain minimum 20px padding from screen edges
   • When using multiple elements: only do so when they must be seen together
   • Use flexbox layout for multiple elements and maintain clear hierarchy
@@ -158,7 +159,7 @@ TECHNICAL REQUIREMENTS
 8. Calculate all sequence timing using forEach loop BEFORE the return statement - never mutate variables inside map functions during render.
 9. Use simple opacity interpolation for animations - avoid complex helper components.
 10. Declare the component function with "export default function Scene_[ID]()" - never use separate "function" declaration followed by "export default".
-11. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function.
+11. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: Never use "currentFrame" as a variable name - use "accumulatedFrames" or similar to avoid conflicts with Remotion's useCurrentFrame.
 11. Quote every CSS value and use exactly one transform per element.
 12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
 13. CRITICAL CSS RULES:
@@ -180,7 +181,7 @@ AVAILABLE WINDOW GLOBALS
   • window.React: React library (do not destructure)
   • window.HeroiconsSolid or Outline: Icons (do not destructure)
   • window.LucideIcons: Icons (do not destructure)
-  • window.IconifyIcon: 200,000+ icons (do not destructure)
+  • window.IconifyIcon: 200,000+ icons (do not destructure) - Usage: <window.IconifyIcon icon="mdi:home" style={{fontSize: "24px"}} />
   • window.RemotionShapes: Pre-built shapes (do not destructure)
   • window.Rough: Hand-drawn graphic styles (do not destructure)
   • window.RemotionGoogleFonts: Font loader (do not destructure)

@@ -10,6 +10,7 @@ import { TOOL_OPERATION_MAP } from "~/lib/types/ai/brain.types";
 import { executeToolFromDecision } from "./helpers";
 import { UsageService } from "~/server/services/usage/usage.service";
 import { createSceneFromPlanRouter } from "./create-scene-from-plan";
+import { TRPCError } from "@trpc/server";
 
 // Import universal response types and helpers
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
@@ -58,16 +59,16 @@ export const generateScene = protectedProcedure
       // 1.5. Check prompt usage limits
       const usageCheck = await UsageService.checkPromptUsage(userId);
       if (!usageCheck.allowed) {
-        return response.error(
-          ErrorCode.RATE_LIMITED,
-          usageCheck.message || "Daily prompt limit reached",
-          'scene.create',
-          'scene',
-          {
+        // Throw TRPCError for proper error handling in the client
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: usageCheck.message || "Daily prompt limit reached",
+          cause: {
+            code: 'RATE_LIMITED',
             used: usageCheck.used,
             limit: usageCheck.limit
           }
-        ) as any as SceneCreateResponse;
+        });
       }
 
       // 2. Build storyboard context
