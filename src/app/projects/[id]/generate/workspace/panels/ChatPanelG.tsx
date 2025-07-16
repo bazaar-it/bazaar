@@ -16,6 +16,7 @@ import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/co
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
+import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 
 
 // Component message representation for UI display
@@ -48,6 +49,7 @@ export default function ChatPanelG({
   const [generationComplete, setGenerationComplete] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
   const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -532,6 +534,15 @@ export default function ChatPanelG({
           // The result contains the actual response
           const responseData = result as any;
           
+          // Check if this is a rate limit error
+          if (!responseData.success && responseData.code === 'RATE_LIMITED') {
+            console.log('[ChatPanelG] Rate limit reached, showing purchase modal');
+            setIsPurchaseModalOpen(true);
+            // Note: We don't remove the user's message - it's already been sent and counted
+            // The error will be shown to the user
+            return;
+          }
+          
           // Get the assistant message ID from the response
           const assistantMessageId = responseData.assistantMessageId;
           
@@ -676,8 +687,14 @@ export default function ChatPanelG({
               }
             }
           
-        } catch (error) {
+        } catch (error: any) {
           console.error('[ChatPanelG] Generation failed:', error);
+          
+          // Check if this is a rate limit error from the mutation
+          if (error?.data?.code === 'RATE_LIMITED' || error?.message?.includes('RATE_LIMITED')) {
+            console.log('[ChatPanelG] Rate limit error caught, showing purchase modal');
+            setIsPurchaseModalOpen(true);
+          }
           
           // No optimistic messages to clean up
         } finally {
@@ -695,7 +712,15 @@ export default function ChatPanelG({
     },
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
-      toast.error(error);
+      
+      // Check if this is a rate limit error
+      if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
+        console.log('[ChatPanelG] Rate limit error from SSE, showing purchase modal');
+        setIsPurchaseModalOpen(true);
+      } else {
+        toast.error(error);
+      }
+      
       setIsGenerating(false);
       setGenerationPhase('thinking'); // Reset to thinking phase
     }
@@ -886,6 +911,12 @@ export default function ChatPanelG({
           />
         </form>
       </div>
+      
+      {/* Purchase Modal */}
+      <PurchaseModal 
+        isOpen={isPurchaseModalOpen} 
+        onClose={() => setIsPurchaseModalOpen(false)} 
+      />
     </div>
   );
 }
