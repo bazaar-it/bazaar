@@ -5,7 +5,7 @@
 **All development work MUST follow these guidelines:**
 
 ### Sprint-Based Workflow
-- **Current Sprint**: Sprint 48 - Mobile Support (check `/memory-bank/sprints/sprint48/` for context)
+- **Current Sprint**: Sprint 73 - Silent Progressive Auto-Fix (check `/memory-bank/sprints/sprint73_auto_autofixer/` for context)
 - **Documentation First**: For complex tasks, create analysis docs in sprint folder before coding
 - **Progress Tracking**: Update `/memory-bank/progress.md` AND sprint-specific progress files
 - **Memory Bank**: Always check relevant docs in `/memory-bank/` before starting work
@@ -309,7 +309,7 @@ Building → Storage → Preview → Chat Updates
 ### 5. Enhanced Chat Features
 - **Voice Input**: Voice-to-text transcription for chat
 - **Image Upload**: Advanced image compression and R2 storage
-- **Auto-Fix**: One-click error fixing with humorous feedback
+- **Auto-Fix**: Silent progressive error fixing (Sprint 73 - completely automatic)
 - **Modular Components**: ChatMessage, ChatWelcome, GeneratingMessage
 - **Real-time Streaming**: Live updates via SSE connection
 
@@ -477,15 +477,21 @@ RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 
 ## Current Development Context
 
-### Sprint 48 Focus - Mobile Support
+### Sprint 73 Focus - Silent Progressive Auto-Fix
+- Completely automatic error fixing (zero user intervention)
+- Progressive fix strategy (minimal → comprehensive → rewrite)
+- Smart loop detection and prevention
+- Direct tool execution (bypassing brain orchestrator)
+
+### Previous Sprint 48 - Mobile Support
 - Multi-format video support (mobile, square, desktop)
 - Dynamic preview dimensions (no multi-preview panel)
 - Format-specific AI generation guidelines
 - Social media platform optimization
 
 ### Recent Achievements
+- **Silent Auto-Fix (Sprint 73)**: Progressive error fixing with zero user intervention
 - **SSE Chat Streaming**: Eliminated duplicate messages
-- **Auto-Fix System**: Automatic error detection and repair
 - **Chat Modularization**: 44% code reduction in ChatPanelG
 - **Duration Standardization**: Fixed hardcoded frame issues
 - **Voice & Image Input**: Enhanced media capabilities
@@ -494,8 +500,35 @@ RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 - **Evaluation Framework**: `/src/lib/evals/` - DO NOT DELETE
 - **Generation Tools**: `/src/tools/` - Core AI pipeline
 - **SSE Generation**: `/src/app/api/generate-stream/` - Real-time chat
-- **Auto-Fix Hook**: `/src/hooks/use-auto-fix.ts` - Error handling
+- **Auto-Fix Hook**: `/src/hooks/use-auto-fix.ts` - Silent progressive error fixing
 - **Chat Components**: `/src/components/chat/` - Modular UI
+
+### Silent Auto-Fix System (Sprint 73)
+
+#### Overview
+The auto-fix system now operates completely silently in the background, automatically fixing scene compilation errors without any user intervention. When an error occurs, the system:
+
+1. **Detects** errors via PreviewPanelG events
+2. **Queues** fixes with 2-second debounce
+3. **Attempts** progressive fixes:
+   - **Attempt 1**: Minimal targeted fix
+   - **Attempt 2**: Comprehensive error resolution
+   - **Attempt 3**: Complete component rewrite
+4. **Prevents** infinite loops with smart detection
+
+#### Key Features
+- **Zero UI**: No error banners, toasts, or notifications
+- **Progressive Strategy**: Each retry is more aggressive
+- **Loop Detection**: Skips to rewrite if same error repeats
+- **Safety Limits**: Max 3 attempts with exponential backoff
+
+#### Implementation
+- **Hook**: `/src/hooks/use-auto-fix.ts` - Core silent logic
+- **Types**: `/src/lib/types/auto-fix.ts` - Type definitions
+- **Deleted**: `AutoFixErrorBanner.tsx` - No UI needed
+
+#### Debug Mode
+In development, watch console for `[SILENT FIX]` logs to monitor auto-fix activity.
 
 ## Contributing Guidelines
 

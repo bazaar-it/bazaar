@@ -184,6 +184,27 @@ Please edit the code according to the user request. Return the complete modified
       if (!parsed.code || typeof parsed.code !== 'string' || parsed.code.trim().length < 100) {
         throw new Error(`Invalid code returned`);
       }
+      
+      // 🚨 FIX: Replace incorrect currentFrame variable naming
+      if (parsed.code.includes('const currentFrame = useCurrentFrame()')) {
+        console.warn('🚨 [EDIT TOOL] Fixing currentFrame naming issue');
+        parsed.code = parsed.code.replace(/const currentFrame = useCurrentFrame\(\)/g, 'const frame = useCurrentFrame()');
+        // Also replace any usage of currentFrame variable (but not in destructuring)
+        parsed.code = parsed.code.replace(/(?<!\{[^}]*)(\bcurrentFrame\b)(?![^{]*\}\s*=\s*window\.Remotion)/g, 'frame');
+      }
+      
+      // 🚨 FIX: If there's both frame and currentFrame declared, remove currentFrame
+      if (parsed.code.includes('const frame = useCurrentFrame()') && parsed.code.includes('const currentFrame')) {
+        console.warn('🚨 [EDIT TOOL] Removing duplicate currentFrame declaration');
+        // Remove any line that declares currentFrame
+        parsed.code = parsed.code.replace(/^\s*const currentFrame\s*=.*$/gm, '');
+      }
+      
+      // 🚨 FIX: If AI destructured currentFrame instead of useCurrentFrame
+      if (parsed.code.match(/const\s*{[^}]*\bcurrentFrame\b[^}]*}\s*=\s*window\.Remotion/)) {
+        console.warn('🚨 [EDIT TOOL] Fixing incorrect destructuring of currentFrame');
+        parsed.code = parsed.code.replace(/(const\s*{[^}]*)(\bcurrentFrame\b)([^}]*}\s*=\s*window\.Remotion)/g, '$1useCurrentFrame$3');
+      }
 
       console.log('✅ [EDIT TOOL] Edit completed:', {
         originalLength: input.tsxCode.length,

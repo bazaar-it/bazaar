@@ -240,6 +240,11 @@ export default function TestComponent() {
             error: new Error(detailedError)
           }
         });
+        console.log('[PreviewPanelG] 🚀 Dispatching preview-scene-error event:', {
+          sceneId,
+          sceneName,
+          error: detailedError
+        });
         window.dispatchEvent(errorEvent);
       }
       

@@ -122,6 +122,7 @@ export const durationInFrames_ERROR = 180;`;
         projectId: input.projectId,
         previousSceneCode: input.previousSceneContext.tsxCode,
         projectFormat: input.projectFormat,
+        requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
       });
       
       const result = {
@@ -160,6 +161,7 @@ export const durationInFrames_ERROR = 180;`;
       functionName: functionName,
       projectId: input.projectId,
       projectFormat: input.projectFormat,
+      requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
     });
 
     // Return generated content - NO DATABASE!

@@ -2,6 +2,7 @@
 
 import { ContextBuilder } from "./orchestrator_functions/contextBuilder";
 import { IntentAnalyzer } from "./orchestrator_functions/intentAnalyzer";
+import { parseDurationFromPrompt } from "./utils/durationParser";
 import type { 
   OrchestrationInput, 
   OrchestrationOutput 
@@ -69,6 +70,12 @@ export class Orchestrator {
         };
       }
 
+      // Parse duration from user prompt
+      const requestedDurationFrames = parseDurationFromPrompt(input.prompt);
+      if (requestedDurationFrames) {
+        console.log(`🧠 [ORCHESTRATOR] Parsed duration from prompt: ${requestedDurationFrames} frames`);
+      }
+
       const result = {
         success: true,
         toolUsed: toolSelection.toolName,
@@ -81,6 +88,7 @@ export class Orchestrator {
             userPrompt: input.prompt,
             targetSceneId: toolSelection.targetSceneId,
             targetDuration: toolSelection.targetDuration,
+            requestedDurationFrames, // ADD THIS - explicit duration from prompt
             referencedSceneIds: toolSelection.referencedSceneIds,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
             videoUrls: (input.userContext?.videoUrls as string[]) || undefined,

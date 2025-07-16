@@ -38,7 +38,34 @@ export class UnifiedCodeProcessor {
     
     // Clean and process code (same logic as original CodeGeneratorService)
     let cleanCode = rawOutput.trim();
+    
+    // 🚨 FIX: Remove mysterious "x" prefix if present
+    if (cleanCode.startsWith('x\n') || cleanCode.startsWith('x ')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Removing "x" prefix from generated code');
+      cleanCode = cleanCode.substring(1).trim();
+    }
     cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+    
+    // 🚨 FIX: Replace incorrect currentFrame variable naming
+    if (cleanCode.includes('const currentFrame = useCurrentFrame()')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Fixing currentFrame naming issue');
+      cleanCode = cleanCode.replace(/const currentFrame = useCurrentFrame\(\)/g, 'const frame = useCurrentFrame()');
+      // Also replace any usage of currentFrame variable (but not in destructuring)
+      cleanCode = cleanCode.replace(/(?<!\{[^}]*)(\bcurrentFrame\b)(?![^{]*\}\s*=\s*window\.Remotion)/g, 'frame');
+    }
+    
+    // 🚨 FIX: If there's both frame and currentFrame declared, remove currentFrame
+    if (cleanCode.includes('const frame = useCurrentFrame()') && cleanCode.includes('const currentFrame')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Removing duplicate currentFrame declaration');
+      // Remove any line that declares currentFrame
+      cleanCode = cleanCode.replace(/^\s*const currentFrame\s*=.*$/gm, '');
+    }
+    
+    // 🚨 FIX: If AI destructured currentFrame instead of useCurrentFrame
+    if (cleanCode.match(/const\s*{[^}]*\bcurrentFrame\b[^}]*}\s*=\s*window\.Remotion/)) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Fixing incorrect destructuring of currentFrame');
+      cleanCode = cleanCode.replace(/(const\s*{[^}]*)(\bcurrentFrame\b)([^}]*}\s*=\s*window\.Remotion)/g, '$1useCurrentFrame$3');
+    }
     
     // Ensure single export default only (original CodeGeneratorService logic)
     if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
@@ -225,6 +252,7 @@ export class UnifiedCodeProcessor {
     userPrompt: string;
     functionName: string;
     projectId: string;
+    requestedDurationFrames?: number;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -243,9 +271,16 @@ export class UnifiedCodeProcessor {
         FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+      let userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+
+      // Add duration constraint if specified
+      if (input.requestedDurationFrames) {
+        userPrompt += `\n\nDURATION REQUIREMENT: The scene MUST be exactly ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).`;
+        userPrompt += `\nEnsure all animations complete before frame ${input.requestedDurationFrames - 10}.`;
+        userPrompt += `\nExport the duration: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};`;
+      }
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -295,6 +330,7 @@ FUNCTION NAME: ${input.functionName}`;
     functionName: string;
     projectId: string;
     previousSceneCode: string;
+    requestedDurationFrames?: number;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -325,7 +361,7 @@ EXTRACTED STYLE FROM PREVIOUS SCENE:
 - Primary Text Color: ${primaryColorMatch ? '#' + primaryColorMatch[1] : 'Not found'}
 - Font Family: ${fontFamilyMatch ? fontFamilyMatch[1] : 'Inter'}`;
 
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+      let userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 PREVIOUS SCENE REFERENCE:
 \`\`\`tsx
@@ -345,6 +381,13 @@ CRITICAL STYLE CONSISTENCY REQUIREMENTS:
 8. Use similar animation timing (if previous uses 8-12 frames, you should too)
 
 FUNCTION NAME: ${input.functionName}`;
+
+      // Add duration constraint if specified
+      if (input.requestedDurationFrames) {
+        userPrompt += `\n\nDURATION REQUIREMENT: The scene MUST be exactly ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).`;
+        userPrompt += `\nAdjust all animations to fit within this duration.`;
+        userPrompt += `\nExport: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};`;
+      }
 
       const messages = [
         { role: 'user' as const, content: userPrompt }

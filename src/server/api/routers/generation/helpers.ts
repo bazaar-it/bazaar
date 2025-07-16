@@ -68,6 +68,7 @@ export async function executeToolFromDecision(
         userPrompt: decision.toolContext.userPrompt,
         projectId,
         userId,
+        requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
@@ -203,6 +204,7 @@ export async function executeToolFromDecision(
         userPrompt: decision.toolContext.userPrompt,
         projectId,
         userId,
+        requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneId: decision.toolContext.targetSceneId,
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
         currentDuration: sceneToEdit.duration,

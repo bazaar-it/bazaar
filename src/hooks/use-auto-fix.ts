@@ -1,29 +1,32 @@
 "use client";
 
 import { useState, useCallback, useEffect } from 'react';
-import { toast } from 'sonner';
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
-import type { ErrorDetails } from '~/components/chat/AutoFixErrorBanner';
+import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
 
 interface Scene {
   id: string;
   [key: string]: any;
 }
 
+const DEBUG_AUTOFIX = true; // Temporarily enable for debugging
+
 export function useAutoFix(projectId: string, scenes: Scene[]) {
-  const [sceneErrors, setSceneErrors] = useState<Map<string, ErrorDetails>>(new Map());
+  console.log('[SILENT FIX] Hook initialized with projectId:', projectId, 'scenes:', scenes.length);
+  console.log('[SILENT FIX] Hook mounted at:', new Date().toISOString());
+  const [autoFixQueue] = useState<Map<string, AutoFixQueueItem>>(new Map());
   const generateSceneMutation = api.generation.generateScene.useMutation();
   const utils = api.useUtils();
   const { refetch: refetchScenes } = api.generation.getProjectScenes.useQuery({ projectId });
   
   const { 
     getCurrentProps, 
-    updateAndRefresh, 
-    addUserMessage, 
-    addAssistantMessage, 
-    updateMessage
+    updateAndRefresh
   } = useVideoState();
+
+  // Track scenes that are currently being fixed to avoid re-adding errors
+  const [fixingScenes, setFixingScenes] = useState<Set<string>>(new Set());
 
   // Helper function to convert database scenes to InputProps format
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -60,194 +63,230 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     };
   }, [getCurrentProps]);
 
-  const handleAutoFix = useCallback(async (sceneId: string) => {
-    const errorDetails = sceneErrors.get(sceneId);
-    if (!errorDetails) {
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: No error details for scene:', sceneId);
-      return;
+  // Silent auto-fix execution with progressive strategy
+  const executeAutoFix = useCallback(async (sceneId: string, errorDetails: ErrorDetails, attemptNumber: number = 1) => {
+    if (DEBUG_AUTOFIX) {
+      console.log('[SILENT FIX] Executing fix attempt', attemptNumber, 'for:', sceneId, errorDetails);
     }
+
+    // Progressive fix prompts based on attempt number
+    let fixPrompt: string;
     
-    // Check if scene still exists
-    const sceneStillExists = scenes.some(s => s.id === sceneId);
-    if (!sceneStillExists) {
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Scene no longer exists:', sceneId);
-      // Clean up the error
-      setSceneErrors(prev => {
-        const next = new Map(prev);
-        next.delete(sceneId);
-        return next;
-      });
-      return;
+    if (attemptNumber === 1) {
+      // Attempt 1: Quick targeted fix
+      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". Use the fixBrokenScene tool to fix ONLY this specific error. Make minimal changes.`;
+    } else if (attemptNumber === 2) {
+      // Attempt 2: Comprehensive fix
+      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". Use fixBrokenScene tool to fix ALL compilation errors, check imports, undefined variables, and syntax issues. Be more thorough this time.`;
+    } else {
+      // Attempt 3: Nuclear option - rewrite
+      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}". Use fixBrokenScene tool to REWRITE this component using simpler, more reliable code that will definitely compile. Keep the same visual output but prioritize making it work.`;
     }
-    
-    // More explicit prompt for brain orchestrator
-    const fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". This scene needs to be fixed using the fixBrokenScene tool. The broken code is in the scene with ID ${sceneId}.`;
-    
-    console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Starting autofix flow:', {
-      sceneId: sceneId,
-      sceneName: errorDetails.sceneName,
-      errorMessage: errorDetails.errorMessage,
-      fixPrompt: fixPrompt
-    });
-    
-    // ✅ IMMEDIATE: Add user message to chat right away (like normal chat)
-    addUserMessage(projectId, fixPrompt);
-    
-    // Mark this scene as being fixed
-    setFixingScenes(prev => new Set(prev).add(sceneId));
-    
-    // ✅ IMMEDIATE: Clear the error banner right away
-    setSceneErrors(prev => {
-      const next = new Map(prev);
-      next.delete(sceneId);
-      return next;
-    });
-    
-    console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Sending fix request to backend...');
     
     try {
+      // Mark as fixing
+      setFixingScenes(prev => new Set(prev).add(sceneId));
+
+      // Call generation API silently - no chat messages
       const result = await generateSceneMutation.mutateAsync({
         projectId,
         userMessage: fixPrompt,
-        userContext: {
-          imageUrls: undefined
-        }
+        userContext: { imageUrls: undefined }
       });
 
-      // ✅ CRITICAL: Force complete state refresh after successful fix
       const responseData = result as any;
       
-      // Get the real assistant message ID from the response
-      const realAssistantMessageId = responseData.assistantMessageId;
-      
-      if (realAssistantMessageId) {
-        // Add the real assistant message to VideoState (same as ChatPanelG)
-        const aiResponse = responseData.context?.chatResponse || 
-                          responseData.chatResponse || 
-                          responseData.message || 
-                          '✅ Scene error fixed successfully!';
-        
-        // Add the real assistant message to VideoState
-        addAssistantMessage(projectId, realAssistantMessageId, aiResponse);
-        updateMessage(projectId, realAssistantMessageId, {
-          status: 'success'
-        });
-      }
-      
       if (responseData.data || responseData.meta?.success) {
-        console.log('[useAutoFix] 🔧 Auto-fix successful, force refreshing all state...');
+        if (DEBUG_AUTOFIX) {
+          console.log('[SILENT FIX] Fix successful, refreshing state...');
+        }
         
-        // ✅ STEP 1: Invalidate tRPC cache FIRST
-        console.log('[useAutoFix] ♻️ Auto-fix: Invalidating tRPC cache...');
+        // Invalidate tRPC cache
         await utils.generation.getProjectScenes.invalidate({ projectId });
         
-        // ✅ STEP 2: Fetch latest scene data
-        console.log('[useAutoFix] 🔄 Auto-fix: Fetching fresh scenes...');
+        // Fetch latest scene data
         const updatedScenes = await refetchScenes();
         
         if (updatedScenes.data && updatedScenes.data.length > 0) {
-          // ✅ STEP 3: Convert and update with guaranteed refresh
+          // Convert and update with guaranteed refresh
           const updatedProps = convertDbScenesToInputProps(updatedScenes.data);
-          
-          console.log('[useAutoFix] 🚀 Auto-fix: Using updateAndRefresh for guaranteed sync...');
           updateAndRefresh(projectId, () => updatedProps);
           
-          console.log('[useAutoFix] ✅ Auto-fix complete - preview should show fixed scene');
+          if (DEBUG_AUTOFIX) {
+            console.log('[SILENT FIX] Scene fixed and state updated');
+          }
         }
+        
+        // Success - remove from queue
+        autoFixQueue.delete(sceneId);
+        
+        // Dispatch success event for PreviewPanel
+        const successEvent = new CustomEvent('scene-fixed', {
+          detail: { sceneId }
+        });
+        window.dispatchEvent(successEvent);
       }
-      
     } catch (error) {
-      console.error('Auto-fix failed:', error);
-      
-      // Create error message
-      const errorMessageId = `assistant-error-${Date.now()}`;
-      addAssistantMessage(projectId, errorMessageId, `Auto-fix failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      updateMessage(projectId, errorMessageId, {
-        status: 'error'
-      });
+      if (DEBUG_AUTOFIX) {
+        console.error('[SILENT FIX] Fix failed:', error);
+      }
+      throw error; // Re-throw for retry logic
     } finally {
-      // Error already cleaned up at the start
-      
-      // Remove from fixing set after a delay to allow preview to refresh
+      // Remove from fixing set after a delay
       setTimeout(() => {
         setFixingScenes(prev => {
           const next = new Set(prev);
           next.delete(sceneId);
           return next;
         });
-      }, 2000); // 2 second delay to ensure preview has refreshed
+      }, 2000);
     }
-  }, [sceneErrors, scenes, projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, addUserMessage, addAssistantMessage, updateMessage]);
+  }, [projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, autoFixQueue]);
 
-  // Track scenes that are currently being fixed to avoid re-adding errors
-  const [fixingScenes, setFixingScenes] = useState<Set<string>>(new Set());
+  // Process queued fixes with progressive strategy
+  const processAutoFixQueue = useCallback(async (sceneId: string) => {
+    const queueItem = autoFixQueue.get(sceneId);
+    if (!queueItem) return;
+    
+    // Check if scene still exists
+    const sceneStillExists = scenes.some(s => s.id === sceneId);
+    if (!sceneStillExists) {
+      autoFixQueue.delete(sceneId);
+      return;
+    }
+    
+    // Check retry limits
+    if (queueItem.attempts >= 3) {
+      // Max retries reached, give up silently
+      autoFixQueue.delete(sceneId);
+      
+      if (DEBUG_AUTOFIX) {
+        console.error(`[SILENT FIX] Giving up on ${queueItem.errorDetails.sceneName} after 3 attempts`);
+      }
+      return;
+    }
+    
+    // Check if we're seeing the same error repeatedly
+    const currentError = queueItem.errorDetails.errorMessage;
+    const isRepeatingError = queueItem.previousErrors?.includes(currentError);
+    
+    if (isRepeatingError && queueItem.attempts >= 2) {
+      // Same error after multiple attempts - skip to final rewrite
+      queueItem.attempts = 3;
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Same error repeating, jumping to rewrite attempt');
+      }
+    }
+    
+    // Update attempt count and track error
+    queueItem.attempts++;
+    queueItem.lastAttemptTime = Date.now();
+    if (!queueItem.previousErrors) {
+      queueItem.previousErrors = [];
+    }
+    queueItem.previousErrors.push(currentError);
+    
+    // Execute fix with progressive strategy
+    try {
+      await executeAutoFix(sceneId, queueItem.errorDetails, queueItem.attempts);
+      
+      // Success - already cleaned up in executeAutoFix
+      if (DEBUG_AUTOFIX) {
+        console.log(`[SILENT FIX] Successfully fixed ${queueItem.errorDetails.sceneName} on attempt ${queueItem.attempts}`);
+      }
+      
+    } catch (error) {
+      // Failed, schedule retry with progressive delay
+      if (DEBUG_AUTOFIX) {
+        console.error(`[SILENT FIX] Attempt ${queueItem.attempts} failed:`, error);
+      }
+      
+      // Progressive retry delays: 5s, 10s, 20s
+      const retryDelay = Math.min(5000 * Math.pow(2, queueItem.attempts - 1), 20000);
+      
+      setTimeout(() => {
+        processAutoFixQueue(sceneId);
+      }, retryDelay);
+    }
+  }, [scenes, executeAutoFix, autoFixQueue]);
 
   // Listen for preview panel errors
   useEffect(() => {
+    console.log('[SILENT FIX] Setting up event listeners in useEffect at:', new Date().toISOString());
+    console.log('[SILENT FIX] Current autoFixQueue size:', autoFixQueue.size);
+    console.log('[SILENT FIX] Current fixingScenes:', Array.from(fixingScenes));
+    
     const handlePreviewError = (event: CustomEvent) => {
+      console.log('[SILENT FIX] ======== PREVIEW ERROR EVENT RECEIVED ========');
+      console.log('[SILENT FIX] Event timestamp:', new Date().toISOString());
+      console.log('[SILENT FIX] Event detail:', JSON.stringify(event.detail, null, 2));
       const { sceneId, sceneName, error } = event.detail;
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Preview error detected:', { 
-        sceneId, 
-        sceneName, 
-        error: error?.message || String(error),
-        errorType: typeof error,
-        fullEvent: event.detail 
-      });
+      
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Error detected:', { sceneId, sceneName, error: error?.message });
+      }
       
       // Don't track errors for scenes that are currently being fixed
       if (fixingScenes.has(sceneId)) {
-        console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Ignoring error for scene being fixed:', sceneId);
+        if (DEBUG_AUTOFIX) {
+          console.log('[SILENT FIX] Ignoring error for scene being fixed:', sceneId);
+        }
         return;
       }
       
-      // Track scene error with Map
-      setSceneErrors(prev => {
-        const next = new Map(prev);
-        next.set(sceneId, {
+      // Check if already in queue
+      const existingItem = autoFixQueue.get(sceneId);
+      
+      // Clear existing debounce timer
+      if (existingItem?.debounceTimer) {
+        clearTimeout(existingItem.debounceTimer);
+      }
+      
+      // Create/update queue item
+      const queueItem: AutoFixQueueItem = {
+        sceneId,
+        errorDetails: {
           sceneName,
           errorMessage: error?.message || String(error),
           timestamp: Date.now()
-        });
-        return next;
-      });
-
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Error state updated for scene:', sceneId);
+        },
+        attempts: existingItem?.attempts || 0,
+        firstErrorTime: existingItem?.firstErrorTime || Date.now(),
+        lastAttemptTime: 0,
+        previousErrors: existingItem?.previousErrors || []
+      };
+      
+      // Set debounce timer (2 seconds)
+      queueItem.debounceTimer = setTimeout(() => {
+        processAutoFixQueue(sceneId);
+      }, 2000);
+      
+      // Add to queue
+      autoFixQueue.set(sceneId, queueItem);
+      
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Queued for auto-fix after debounce:', sceneId);
+      }
     };
 
-    // Also listen for direct autofix triggers from error boundaries
-    const handleDirectAutoFix = (event: CustomEvent) => {
-      const { sceneId, sceneName, error } = event.detail;
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Direct autofix trigger received:', { 
-        sceneId, 
-        sceneName, 
-        error 
-      });
-      
-      // Set error state and immediately trigger autofix
-      setSceneErrors(prev => {
-        const next = new Map(prev);
-        next.set(sceneId, {
-          sceneName,
-          errorMessage: error?.message || String(error),
-          timestamp: Date.now()
-        });
-        return next;
-      });
-      
-      // Immediately trigger autofix without waiting for button click
-      setTimeout(() => {
-        handleAutoFix(sceneId);
-      }, 100);
-    };
-
-    // Clean up stale errors when scenes are removed
+    // Clean up when scenes are deleted
     const handleSceneDeleted = (event: CustomEvent) => {
       const { sceneId } = event.detail;
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Scene deleted, cleaning up error state:', sceneId);
       
-      setSceneErrors(prev => {
-        if (!prev.has(sceneId)) return prev;
-        const next = new Map(prev);
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Scene deleted, cleaning up:', sceneId);
+      }
+      
+      // Clear from queue
+      const queueItem = autoFixQueue.get(sceneId);
+      if (queueItem?.debounceTimer) {
+        clearTimeout(queueItem.debounceTimer);
+      }
+      autoFixQueue.delete(sceneId);
+      
+      // Remove from fixing set
+      setFixingScenes(prev => {
+        const next = new Set(prev);
         next.delete(sceneId);
         return next;
       });
@@ -256,16 +295,19 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     // Listen for successful scene fixes
     const handleSceneFixed = (event: CustomEvent) => {
       const { sceneId } = event.detail;
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Scene fixed successfully, clearing error:', sceneId);
       
-      setSceneErrors(prev => {
-        if (!prev.has(sceneId)) return prev;
-        const next = new Map(prev);
-        next.delete(sceneId);
-        return next;
-      });
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Scene fixed event received:', sceneId);
+      }
       
-      // Also remove from fixing set
+      // Clean up queue
+      const queueItem = autoFixQueue.get(sceneId);
+      if (queueItem?.debounceTimer) {
+        clearTimeout(queueItem.debounceTimer);
+      }
+      autoFixQueue.delete(sceneId);
+      
+      // Remove from fixing set
       setFixingScenes(prev => {
         const next = new Set(prev);
         next.delete(sceneId);
@@ -273,23 +315,38 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       });
     };
 
-    console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Setting up preview-scene-error listener');
+    console.log('[SILENT FIX] 🎯 Adding event listeners NOW');
+    
+    // Test that events work
+    const testListener = () => {
+      console.log('[SILENT FIX] Test event received - event system is working!');
+    };
+    window.addEventListener('test-event', testListener);
+    window.dispatchEvent(new CustomEvent('test-event'));
+    window.removeEventListener('test-event', testListener);
+    
     window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
-    window.addEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
+    console.log('[SILENT FIX] ✅ Event listener for preview-scene-error added');
     window.addEventListener('scene-deleted', handleSceneDeleted as EventListener);
     window.addEventListener('scene-fixed', handleSceneFixed as EventListener);
     
     return () => {
-      console.log('[useAutoFix] 🔧 AUTOFIX DEBUG: Removing preview-scene-error listener');
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] Removing event listeners');
+      }
       window.removeEventListener('preview-scene-error', handlePreviewError as EventListener);
-      window.removeEventListener('trigger-autofix', handleDirectAutoFix as EventListener);
       window.removeEventListener('scene-deleted', handleSceneDeleted as EventListener);
       window.removeEventListener('scene-fixed', handleSceneFixed as EventListener);
+      
+      // Clear all timers on unmount
+      autoFixQueue.forEach(item => {
+        if (item.debounceTimer) {
+          clearTimeout(item.debounceTimer);
+        }
+      });
     };
-  }, [handleAutoFix, scenes, fixingScenes]);
+  }, [processAutoFixQueue, fixingScenes]); // Removed autoFixQueue from deps - it's a stable Map ref
 
-  return {
-    sceneErrors,
-    handleAutoFix
-  };
+  // Return empty object - no UI interaction needed
+  return {};
 }

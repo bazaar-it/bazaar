@@ -12,6 +12,7 @@ export interface BaseToolInput {
   userPrompt: string;
   projectId: string;  // For context only, not DB access
   userId?: string;    // For context only, not DB access
+  requestedDurationFrames?: number;  // Explicit duration from user prompt (e.g. "5 seconds" = 150)
   formatContext?: {
     format: 'landscape' | 'portrait' | 'square';
     width: number;

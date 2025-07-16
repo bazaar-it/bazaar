@@ -139,8 +139,16 @@ If an image is provided, follow the users instructions exactly. They may want yo
  • If no instructions are provided, identify the core visual message and distill it into short, simple messages.
 ⸻
 
+🚨 CRITICAL VARIABLE NAMING RULES (MUST FOLLOW TO AVOID ERRORS):
+- When destructuring from window.Remotion, ALWAYS use: const { AbsoluteFill, useCurrentFrame, ... } = window.Remotion;
+- NEVER destructure 'currentFrame' - it doesn't exist. The function is called 'useCurrentFrame'.
+- After destructuring, ALWAYS call: const frame = useCurrentFrame();
+- NEVER use 'currentFrame' as a variable name anywhere in your code.
+
 TECHNICAL REQUIREMENTS
 1. Only destructure from window.Remotion (AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Video, Img).
+   CRITICAL: After destructuring, call useCurrentFrame like this: const frame = useCurrentFrame(); 
+   NEVER use 'currentFrame' as a variable name - always use 'frame' to avoid naming conflicts.
 2. Access React via window.React; no other destructuring.
 3. Generate unique 8-character ID for function name only (Scene_ID). Use normal variable names for all internal variables EXCEPT sequences array.
 4. Script array must be declared at top-level outside the component function. Use unique names based on the function ID (e.g., if function is Scene_ABC123, use script_ABC123).
@@ -158,11 +166,12 @@ TECHNICAL REQUIREMENTS
     - Use either all shorthand or all longhand properties consistently
     - For transforms, compose all transforms in a single string: transform: \`translate(-50%, -50%) scale(\${scale})\`
     - Never set transform property multiple times on the same element
-14. POSITIONING RULES:
+14. FRAME VARIABLE NAMING: Always use 'const frame = useCurrentFrame();' - NEVER 'const currentFrame = useCurrentFrame();'
+15. POSITIONING RULES:
     - For centered elements: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
     - If adding additional transforms, compose them: transform: \`translate(-50%, -50%) scale(\${scale}) rotate(\${rotate}deg)\`
     - Always test that elements appear correctly centered, not in top-left corner
-15. ALWAYS export the total duration at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
+16. ALWAYS export the total duration at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
 
 ⸻
 

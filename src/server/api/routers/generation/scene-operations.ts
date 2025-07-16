@@ -59,7 +59,7 @@ export const generateScene = protectedProcedure
       const usageCheck = await UsageService.checkPromptUsage(userId);
       if (!usageCheck.allowed) {
         return response.error(
-          ErrorCode.RATE_LIMIT,
+          ErrorCode.RATE_LIMITED,
           usageCheck.message || "Daily prompt limit reached",
           'scene.create',
           'scene',
@@ -286,21 +286,23 @@ export const generateScene = protectedProcedure
               if (toolResult.additionalMessageIds && toolResult.additionalMessageIds.length > 0) {
                 const firstScenePlanMessageId = toolResult.additionalMessageIds[0];
                 
-                // Call the existing create scene API to generate scene 1
-                // This will create the scene and add the "generated" indicator
-                console.log('🚀 [SCENE-OPS] Triggering scene creation for first plan message:', firstScenePlanMessageId);
-                
-                // Call the createScene mutation directly
-                const createSceneResult = await createSceneFromPlanRouter.createCallers({}).createScene({
-                  messageId: firstScenePlanMessageId,
-                  projectId: projectId,
-                  userId: userId
-                });
-                
-                if (createSceneResult.success) {
-                  console.log('✅ [SCENE-OPS] Background scene 1 generated successfully:', createSceneResult.scene?.name);
-                } else {
-                  console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', createSceneResult.error);
+                if (firstScenePlanMessageId) {
+                  // Call the existing create scene API to generate scene 1
+                  // This will create the scene and add the "generated" indicator
+                  console.log('🚀 [SCENE-OPS] Triggering scene creation for first plan message:', firstScenePlanMessageId);
+                  
+                  // Call the createScene mutation directly using the current context
+                  const createSceneResult = await createSceneFromPlanRouter.createCaller(ctx).createScene({
+                    messageId: firstScenePlanMessageId,
+                    projectId: projectId,
+                    userId: userId
+                  });
+                  
+                  if (createSceneResult.success) {
+                    console.log('✅ [SCENE-OPS] Background scene 1 generated successfully:', createSceneResult.scene?.name);
+                  } else {
+                    console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', createSceneResult.error);
+                  }
                 }
               }
             } catch (error) {

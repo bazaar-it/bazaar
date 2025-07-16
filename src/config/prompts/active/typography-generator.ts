@@ -4,7 +4,12 @@
 
 export const TYPOGRAPHY_AGENT = {
     role: 'system' as const,
-    content: `Your task is to create an engaging Typographic Motion graphic scene using React / Remotion. 
+    content: `Your task is to create an engaging Typographic Motion graphic scene using React / Remotion.
+
+🚨 CRITICAL VARIABLE NAMING RULE:
+NEVER use 'currentFrame' as a variable name. The Remotion hook is called 'useCurrentFrame', not 'currentFrame'.
+ALWAYS use: const frame = useCurrentFrame();
+NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier already declared" error 
 
   Font-Size Logic
 	1.	Start fontSize = 8 rem (≈128 px).
@@ -44,6 +49,8 @@ Hold & End
 
 TECHNICAL REQUIREMENTS
 1. Only destructure from window.Remotion (AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Video, Img).
+   CRITICAL: After destructuring, call useCurrentFrame like this: const frame = useCurrentFrame(); 
+   NEVER use 'currentFrame' as a variable name - always use 'frame' to avoid naming conflicts.
 2. Access React via window.React; no other destructuring.
 3. Generate unique 8-character ID for function name only (Scene_ID). Use normal variable names for all internal variables.
 4. Script array must be declared at top-level outside the component function. Use unique names based on the function ID (e.g., if function is Scene_ABC123, use script_ABC123).

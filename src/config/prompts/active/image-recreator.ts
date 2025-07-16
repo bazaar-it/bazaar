@@ -8,6 +8,11 @@ export const IMAGE_RECREATOR = {
   role: 'system' as const,
   content: `Your task is to follow the user's prompt and exactly recreate either the whole image or a segment of it for a scene in a motion graphic video.
 
+🚨 CRITICAL VARIABLE NAMING RULE:
+NEVER use 'currentFrame' as a variable name. The Remotion hook is called 'useCurrentFrame', not 'currentFrame'.
+ALWAYS use: const frame = useCurrentFrame();
+NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier already declared" error
+
 If you are recreating a segment of the image, place the requested segment(s) in a container to ensure it's perfectly positioned and proportionally scaled.
 
 Animation – You can stagger the entrance of each component sequentially, but maintain harmony and fluidity.

@@ -2,14 +2,17 @@ import { db } from "~/server/db";
 import { userUsage, usageLimits, userCredits } from "~/server/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { getUserLocalDate } from "~/lib/utils/timezone";
 
 export class UsageService {
   /**
    * Check if user can use a prompt
+   * @param userId - User ID
+   * @param userTimezone - User's timezone (passed from client)
    */
-  static async checkPromptUsage(userId: string): Promise<{ allowed: boolean; used: number; limit: number; message?: string }> {
-    // Get today's date
-    const today = new Date().toISOString().split('T')[0];
+  static async checkPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<{ allowed: boolean; used: number; limit: number; message?: string }> {
+    // Get today's date in user's timezone
+    const today = getUserLocalDate(userTimezone);
     
     // Get daily prompt limit
     const [limitConfig] = await db.select()
@@ -49,9 +52,11 @@ export class UsageService {
   
   /**
    * Increment prompt usage
+   * @param userId - User ID
+   * @param userTimezone - User's timezone (passed from client)
    */
-  static async incrementPromptUsage(userId: string): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+  static async incrementPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<void> {
+    const today = getUserLocalDate(userTimezone);
     
     await db.insert(userUsage)
       .values({
@@ -71,9 +76,11 @@ export class UsageService {
   
   /**
    * Get user's prompt usage for today
+   * @param userId - User ID
+   * @param userTimezone - User's timezone (passed from client)
    */
-  static async getTodayPromptUsage(userId: string): Promise<{ used: number; limit: number; remaining: number; purchased: number }> {
-    const today = new Date().toISOString().split('T')[0];
+  static async getTodayPromptUsage(userId: string, userTimezone: string = "UTC"): Promise<{ used: number; limit: number; remaining: number; purchased: number }> {
+    const today = getUserLocalDate(userTimezone);
     
     // Get limit
     const [limitConfig] = await db.select()

@@ -12,7 +12,6 @@ import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
-import { AutoFixErrorBanner } from "~/components/chat/AutoFixErrorBanner";
 import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/components/chat/ImageUpload";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
@@ -342,8 +341,8 @@ export default function ChatPanelG({
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
-  // Use auto-fix hook
-  const { sceneErrors, handleAutoFix } = useAutoFix(projectId, scenes);
+  // Use auto-fix hook (now completely silent)
+  useAutoFix(projectId, scenes);
 
   // No need for pendingMessageRef - data will come from SSE
   
@@ -688,8 +687,9 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {componentMessages.map((msg, index) => {
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-4">
+          {componentMessages.map((msg, index) => {
           // Find all scene plan messages
           const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
           const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
@@ -720,30 +720,24 @@ export default function ChatPanelG({
               totalScenePlans={totalScenePlans}
             />
           );
-        })}
-        
-        {/* Show pulsating message UI when generating */}
-        {isGenerating && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
-              <GeneratingMessage phase={generationPhase} />
+          })}
+          
+          {/* Show pulsating message UI when generating */}
+          {isGenerating && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+                <GeneratingMessage phase={generationPhase} />
+              </div>
             </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input area */}
       <div className="p-4">
 
-        {/* Auto-fix error banner */}
-        <AutoFixErrorBanner
-          scenes={scenes}
-          sceneErrors={sceneErrors}
-          onAutoFix={handleAutoFix}
-          isGenerating={isGenerating}
-        />
 
         {/* Image upload preview area */}
         <ImageUpload

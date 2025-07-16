@@ -22,6 +22,7 @@ interface ChatMessageProps {
 // Create All Scenes Button Component
 function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { projectId: string; userId: string; totalScenePlans: number }) {
   const utils = api.useUtils();
+  const [hasBeenClicked, setHasBeenClicked] = React.useState(false);
   
   const createAllMutation = api.createSceneFromPlan.createAllScenes.useMutation({
     onSuccess: async (result) => {
@@ -54,23 +55,41 @@ function CreateAllScenesButton({ projectId, userId, totalScenePlans }: { project
   
   return (
     <button
-      onClick={() => createAllMutation.mutate({ projectId, userId })}
-      disabled={createAllMutation.isPending}
-      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ml-1 ${
+      onClick={() => {
+        setHasBeenClicked(true);
+        createAllMutation.mutate({ projectId, userId });
+      }}
+      disabled={createAllMutation.isPending || hasBeenClicked}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ml-1 ${
         createAllMutation.isPending 
-          ? 'bg-orange-500 text-white cursor-wait' 
-          : 'bg-blue-600 hover:bg-blue-700 text-white'
+          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm cursor-wait' 
+          : hasBeenClicked
+          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          : 'bg-gradient-to-r from-gray-800 to-gray-900 hover:from-black hover:to-gray-800 text-white shadow-sm hover:shadow-md transform hover:scale-[1.02]'
       }`}
-      title={createAllMutation.isPending ? 'Creating all scenes...' : `Create all ${totalScenePlans} scenes`}
+      title={
+        createAllMutation.isPending 
+          ? 'Creating all scenes...' 
+          : hasBeenClicked 
+          ? 'Scenes already created' 
+          : `Create all ${totalScenePlans} scenes`
+      }
     >
       {createAllMutation.isPending ? (
         <>
-          <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
+          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
           <span>Creating All...</span>
+        </>
+      ) : hasBeenClicked ? (
+        <>
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>Created</span>
         </>
       ) : (
         <>
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
           </svg>
           <span>Create All ({totalScenePlans})</span>
@@ -226,19 +245,11 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     }
   };
 
-  // Handle auto-fix click - extract scene ID from error message content
+  // DISABLED: Old auto-fix system replaced by silent auto-fix
   const handleAutoFixClick = () => {
-    if (isErrorMessage && message.message) {
-      // Extract scene ID from the message content using regex
-      const sceneIdMatch = message.message.match(/\*\*Scene ID:\*\* ([a-f0-9-]{36})/);
-      if (sceneIdMatch && sceneIdMatch[1]) {
-        const sceneId = sceneIdMatch[1];
-        // Trigger auto-fix by dispatching custom event
-        window.dispatchEvent(new CustomEvent('autofix-scene', { detail: { sceneId } }));
-      } else {
-        console.warn('[ChatMessage] Could not extract scene ID from error message:', message.message);
-      }
-    }
+    console.warn('[ChatMessage] Manual auto-fix disabled - using silent auto-fix system');
+    // Old auto-fix implementation removed to prevent conflicts
+    // The new silent auto-fix system handles all error fixes automatically
   };
 
   // Handle create scene click

@@ -43,6 +43,7 @@ export interface BrainDecision {
     userPrompt: string;
     targetSceneId?: string;
     targetDuration?: number; // For trim operations
+    requestedDurationFrames?: number; // Explicit duration from user prompt (e.g. "5 seconds" = 150)
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     videoUrls?: string[];
