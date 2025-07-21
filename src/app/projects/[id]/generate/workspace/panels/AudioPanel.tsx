@@ -6,7 +6,7 @@ import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Slider } from "~/components/ui/slider";
-import { Music, Upload, Play, Pause, Scissors, Volume2, X, Check } from "lucide-react";
+import { Music, Upload, Play, Pause, Scissors, Volume2, X, Check, Zap, Volume1 } from "lucide-react";
 import { useVideoState } from "~/stores/videoState";
 import { toast } from "sonner";
 import { api } from "~/trpc/react";
@@ -23,6 +23,10 @@ interface AudioTrack {
   startTime: number;
   endTime: number;
   volume: number;
+  // Phase 1 enhancements
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
+  playbackRate?: number;
 }
 
 export function AudioPanel({ projectId }: AudioPanelProps) {
@@ -171,6 +175,48 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     
     if (audioRef.current) {
       audioRef.current.volume = value[0];
+    }
+  };
+
+  // Phase 1 Enhancement Handlers
+  const handleFadeInChange = (value: number[]) => {
+    if (!audioTrack) return;
+    
+    const updatedTrack = {
+      ...audioTrack,
+      fadeInDuration: value[0]
+    };
+    
+    setAudioTrack(updatedTrack);
+    updateProjectAudio(projectId, updatedTrack);
+  };
+
+  const handleFadeOutChange = (value: number[]) => {
+    if (!audioTrack) return;
+    
+    const updatedTrack = {
+      ...audioTrack,
+      fadeOutDuration: value[0]
+    };
+    
+    setAudioTrack(updatedTrack);
+    updateProjectAudio(projectId, updatedTrack);
+  };
+
+  const handleSpeedChange = (value: number[]) => {
+    if (!audioTrack) return;
+    
+    const updatedTrack = {
+      ...audioTrack,
+      playbackRate: value[0]
+    };
+    
+    setAudioTrack(updatedTrack);
+    updateProjectAudio(projectId, updatedTrack);
+    
+    // Update HTML audio element playback rate for preview
+    if (audioRef.current) {
+      audioRef.current.playbackRate = value[0];
     }
   };
 
@@ -365,6 +411,63 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
               />
               <p className="text-sm text-gray-600 mt-2">
                 {Math.round(audioTrack.volume * 100)}%
+              </p>
+            </Card>
+
+            {/* Fade Effects */}
+            <Card className="p-4">
+              <h4 className="font-medium mb-4 flex items-center gap-2">
+                <Volume1 className="w-4 h-4" />
+                Fade Effects
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <Label>Fade In: {(audioTrack.fadeInDuration || 0).toFixed(1)}s</Label>
+                  <Slider
+                    value={[audioTrack.fadeInDuration || 0]}
+                    onValueChange={handleFadeInChange}
+                    max={5}
+                    step={0.1}
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label>Fade Out: {(audioTrack.fadeOutDuration || 0).toFixed(1)}s</Label>
+                  <Slider
+                    value={[audioTrack.fadeOutDuration || 0]}
+                    onValueChange={handleFadeOutChange}
+                    max={5}
+                    step={0.1}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                Smooth audio transitions at start and end
+              </p>
+            </Card>
+
+            {/* Speed Control */}
+            <Card className="p-4">
+              <h4 className="font-medium mb-4 flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Playback Speed
+              </h4>
+              <Slider
+                value={[audioTrack.playbackRate || 1]}
+                onValueChange={handleSpeedChange}
+                min={0.5}
+                max={2}
+                step={0.1}
+                className="mt-2"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-2">
+                <span>0.5x (Slow)</span>
+                <span>{(audioTrack.playbackRate || 1).toFixed(1)}x</span>
+                <span>2.0x (Fast)</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Change playback speed without affecting pitch
               </p>
             </Card>
 

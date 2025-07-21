@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 import { nanoid } from 'nanoid';
-import { Loader2, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import { Loader2, CheckCircleIcon, XCircleIcon, Music } from 'lucide-react';
 
 export interface UploadedMedia {
   id: string;
@@ -21,6 +21,7 @@ interface MediaUploadProps {
   projectId: string;
   disabled?: boolean;
   onAudioSelect?: (audio: UploadedMedia) => void; // Callback when audio is selected for trimming
+  onAudioExtract?: (videoMedia: UploadedMedia) => void; // Callback when audio is extracted from video
 }
 
 export function MediaUpload({
@@ -28,7 +29,8 @@ export function MediaUpload({
   onMediaChange,
   projectId,
   disabled = false,
-  onAudioSelect
+  onAudioSelect,
+  onAudioExtract
 }: MediaUploadProps) {
   // Image compression utility
   const compressImage = async (file: File): Promise<File> => {
@@ -171,12 +173,28 @@ export function MediaUpload({
           {/* Only show media when fully loaded */}
           {media.url && media.status === 'uploaded' && media.isLoaded && (
             media.type === 'video' ? (
-              <video 
-                src={media.url} 
-                className="max-w-32 max-h-32 w-auto h-auto"
-                style={{ borderRadius: '15px' }}
-                muted
-              />
+              <div className="relative">
+                <video 
+                  src={media.url} 
+                  className="max-w-32 max-h-32 w-auto h-auto"
+                  style={{ borderRadius: '15px' }}
+                  muted
+                />
+                {/* Extract Audio Overlay */}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center" style={{ borderRadius: '15px' }}>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAudioExtract?.(media);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-800 p-2 rounded-full transition-all duration-200 flex items-center gap-1 text-xs font-medium"
+                  >
+                    <Music className="w-3 h-3" />
+                    Extract Audio
+                  </button>
+                </div>
+              </div>
             ) : media.type === 'audio' ? (
               <button
                 onClick={() => onAudioSelect?.(media)}

@@ -672,7 +672,8 @@ export default function SingleSceneComposition() {
       src: projectAudio.url,
       startFrom: Math.floor(projectAudio.startTime * 30), // Convert seconds to frames at 30fps
       endAt: Math.floor(projectAudio.endTime * 30),
-      volume: projectAudio.volume
+      volume: projectAudio.volume,
+      playbackRate: projectAudio.playbackRate || 1
     }),
     React.createElement(SingleSceneErrorBoundary)
   );
@@ -1092,6 +1093,7 @@ export default function MultiSceneComposition() {
           startFrom={Math.floor(projectAudio.startTime * 30)} // Convert seconds to frames at 30fps
           endAt={Math.floor(projectAudio.endTime * 30)}
           volume={projectAudio.volume}
+          playbackRate={projectAudio.playbackRate || 1}
         />
       )}
       <Loop durationInFrames={${totalDuration}}>

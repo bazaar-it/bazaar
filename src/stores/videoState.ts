@@ -59,6 +59,14 @@ interface AudioTrack {
   startTime: number;
   endTime: number;
   volume: number;
+  // Phase 1 enhancements
+  fadeInDuration?: number;  // Fade in duration in seconds
+  fadeOutDuration?: number; // Fade out duration in seconds
+  playbackRate?: number;    // Speed control (0.5 = half speed, 2 = double speed)
+  // Future enhancements
+  pitchShift?: number;      // Pitch adjustment in semitones
+  muted?: boolean;          // Mute toggle
+  loop?: boolean;           // Loop the audio
 }
 
 interface ProjectState {

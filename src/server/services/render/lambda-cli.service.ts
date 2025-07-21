@@ -13,8 +13,8 @@ export interface LambdaRenderConfig extends RenderConfig {
   renderHeight?: number;
 }
 
-// Use final fix version with all window references replaced
-const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-final-fix/index.html";
+// Use working deployment from Sprint 74
+const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
 
 // Main Lambda rendering function using CLI approach
 export async function renderVideoOnLambda({
@@ -41,6 +41,9 @@ export async function renderVideoOnLambda({
   
   // Get quality settings adjusted for format
   const settings = getQualityForFormat(quality, format);
+  
+  // Declare propsFile outside try block for proper cleanup scope
+  let propsFile: string | null = null;
   
   try {
     // Calculate total duration
@@ -99,7 +102,7 @@ export async function renderVideoOnLambda({
     const fs = require('fs');
     const path = require('path');
     const os = require('os');
-    const propsFile = path.join(os.tmpdir(), `remotion-props-${projectId}-${Date.now()}.json`);
+    propsFile = path.join(os.tmpdir(), `remotion-props-${projectId}-${Date.now()}.json`);
     const propsContent = JSON.stringify(inputProps, null, 2);
     fs.writeFileSync(propsFile, propsContent);
     console.log(`[LambdaRender] Props written to: ${propsFile}`);
@@ -213,14 +216,14 @@ export async function renderVideoOnLambda({
       outputUrl: undefined 
     };
   } catch (error) {
-    // Cleanup temp file on error
-    if (propsFile) {
-      try {
-        const fs = require('fs');
+    // Cleanup temp file on error - propsFile is declared above, so this should work
+    try {
+      const fs = require('fs');
+      if (propsFile) {
         fs.unlinkSync(propsFile);
-      } catch (cleanupError) {
-        // Ignore cleanup errors
       }
+    } catch (cleanupError) {
+      // Ignore cleanup errors
     }
     console.error("[LambdaRender] Render failed:", error);
     

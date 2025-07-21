@@ -66,7 +66,7 @@ export default function ChatPanelG({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -335,6 +335,35 @@ export default function ChatPanelG({
     imageHandlers.handleDrop(e);
     setIsDragOver(false);
   }, [imageHandlers]);
+
+  // Handle audio extraction from video
+  const handleAudioExtract = useCallback(async (videoMedia: UploadedMedia) => {
+    if (!videoMedia.url) {
+      toast.error('Video not ready for audio extraction');
+      return;
+    }
+    
+    console.log('[ChatPanelG] Extracting audio from video:', videoMedia.file.name);
+    
+    // Create an audio track using the video URL (Remotion can extract audio from video)
+    const audioTrack = {
+      id: nanoid(),
+      url: videoMedia.url, // Same URL - Remotion will handle audio extraction
+      name: videoMedia.file.name.replace(/\.(mp4|mov|webm|avi|mkv)$/i, '') + ' (Audio)',
+      duration: 30, // Default duration - will be updated when loaded
+      startTime: 0,
+      endTime: 30,
+      volume: 0.7, // Default volume
+      fadeInDuration: 0.5, // Nice default fade
+      fadeOutDuration: 0.5,
+      playbackRate: 1
+    };
+    
+    // Update project audio state
+    updateProjectAudio(projectId, audioTrack);
+    
+    toast.success(`Audio extracted from ${videoMedia.file.name}`);
+  }, [updateProjectAudio, projectId]);
 
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
@@ -891,6 +920,7 @@ export default function ChatPanelG({
           uploadedMedia={uploadedImages}
           onMediaChange={setUploadedImages}
           projectId={projectId}
+          onAudioExtract={handleAudioExtract}
         />
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
