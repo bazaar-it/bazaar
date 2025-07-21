@@ -15,6 +15,7 @@ import {
   PlusIcon,
   FolderIcon,
   LayoutTemplateIcon,
+  Music,
 } from "lucide-react";
 
 
@@ -40,11 +41,12 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Video, Code, Templates
+// Workspace panels in vertical order: Projects, Chat, Video, Audio, Code, Templates
 const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
   { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
+  { type: 'audio', id: 'audio', name: "Audio", icon: Music, href: "#audio", tooltip: "Audio Panel" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
 ];

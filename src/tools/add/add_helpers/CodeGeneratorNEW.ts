@@ -210,12 +210,21 @@ export class UnifiedCodeProcessor {
     console.log('🖼️ [UNIFIED PROCESSOR] IMAGE RECREATOR: Generating recreation scene');
     
     try {
-      // Build message content with text and images
+      // Build message content with text and images - include URLs in prompt text too!
+      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      const enhancedPrompt = `${input.userPrompt}
+
+UPLOADED IMAGES TO USE:
+${imageUrlsList}
+
+CRITICAL: You MUST use these exact image URLs above in your generated code with the Remotion <Img> component.`;
+
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
-        { type: 'text', text: input.userPrompt }
+        { type: 'text', text: enhancedPrompt }
       ];
       
       for (const url of input.imageUrls) {
+        console.log('🖼️ [IMAGE RECREATOR] Adding image URL to message:', url);
         messageContent.push({ 
           type: 'image_url', 
           image_url: { url } 
@@ -544,8 +553,16 @@ export default function ${input.functionName}() {
         FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
-      // Build user message for vision API - include the actual user prompt!
+      // Build user message for vision API - include the actual user prompt AND image URLs!
+      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+UPLOADED IMAGES TO USE IN YOUR CODE:
+${imageUrlsList}
+
+CRITICAL: You MUST use these exact image URLs in your generated code with the Remotion <Img> component.
+DO NOT generate placeholder URLs or use stock photos - use the URLs provided above.
 
 IMPORTANT: Study the image to understand the visual style, colors, typography, and design elements. Then create MOTION GRAPHICS that showcase these elements one at a time in sequence.
 

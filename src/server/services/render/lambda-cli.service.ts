@@ -13,8 +13,8 @@ export interface LambdaRenderConfig extends RenderConfig {
   renderHeight?: number;
 }
 
-// Use the deployed site URL from environment or the new fixed version
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-avatars/index.html";
+// Use final fix version with all window references replaced
+const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-final-fix/index.html";
 
 // Main Lambda rendering function using CLI approach
 export async function renderVideoOnLambda({
@@ -27,6 +27,8 @@ export async function renderVideoOnLambda({
   renderHeight,
 }: LambdaRenderConfig) {
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
+  console.log(`[LambdaRender] Using site URL: ${DEPLOYED_SITE_URL}`);
+  console.log(`[LambdaRender] REMOTION_SERVE_URL env var: ${process.env.REMOTION_SERVE_URL || 'not set'}`);
   
   // Check required environment variables
   if (!process.env.AWS_REGION || !process.env.REMOTION_FUNCTION_NAME || !process.env.REMOTION_BUCKET_NAME) {
@@ -66,13 +68,23 @@ export async function renderVideoOnLambda({
     
     // Prepare minimal input props for Lambda - only include pre-compiled jsCode
     const inputProps = {
-      scenes: scenes.map(scene => ({
-        id: scene.id,
-        name: scene.name,
-        duration: scene.duration,
-        jsCode: scene.jsCode || scene.compiledCode, // Use pre-compiled code
-        // Don't include tsxCode as it has problematic characters for CLI
-      })),
+      scenes: scenes.map(scene => {
+        // Log what we're actually sending for each scene
+        console.log(`[LambdaRender] Preparing scene ${scene.id} for Lambda:`, {
+          hasJsCode: !!scene.jsCode,
+          hasCompiledCode: !!scene.compiledCode,
+          jsCodeLength: scene.jsCode?.length || 0,
+          jsCodePreview: scene.jsCode ? scene.jsCode.substring(0, 200) + '...' : 'none'
+        });
+        
+        return {
+          id: scene.id,
+          name: scene.name,
+          duration: scene.duration,
+          jsCode: scene.jsCode || scene.compiledCode, // Use pre-compiled code
+          // Don't include tsxCode as it has problematic characters for CLI
+        };
+      }),
       projectId,
       width,
       height,
@@ -88,8 +100,22 @@ export async function renderVideoOnLambda({
     const path = require('path');
     const os = require('os');
     const propsFile = path.join(os.tmpdir(), `remotion-props-${projectId}-${Date.now()}.json`);
-    fs.writeFileSync(propsFile, JSON.stringify(inputProps));
+    const propsContent = JSON.stringify(inputProps, null, 2);
+    fs.writeFileSync(propsFile, propsContent);
     console.log(`[LambdaRender] Props written to: ${propsFile}`);
+    
+    // DEBUG: Also save a copy for debugging
+    const debugFile = `/tmp/last-render-props.json`;
+    fs.writeFileSync(debugFile, propsContent);
+    console.log(`[LambdaRender] Debug copy saved to: ${debugFile}`);
+    
+    // Debug: Log first 500 chars of each scene's jsCode
+    console.log(`[LambdaRender] Props file contents preview:`);
+    inputProps.scenes.forEach((scene, idx) => {
+      console.log(`[LambdaRender] Scene ${idx} jsCode (first 500 chars):`);
+      console.log(scene.jsCode?.substring(0, 500) || 'NO JSCODE');
+      console.log('---');
+    });
     
     // Build CLI command
     const cliArgs = [

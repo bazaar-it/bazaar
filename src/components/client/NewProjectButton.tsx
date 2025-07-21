@@ -240,13 +240,13 @@ export function NewProjectButton({
       return;
     }
     
-    // On mobile, always show format selector modal
-    if (isMobile && enableQuickCreate) {
-      handleCreateProject();
-    } else {
+    // Use quick create with last format when enabled, otherwise show format selector
+    if (enableQuickCreate) {
       handleQuickCreate();
+    } else {
+      handleCreateProject();
     }
-  }, [handleQuickCreate, handleCreateProject, isMobile, enableQuickCreate]);
+  }, [handleQuickCreate, handleCreateProject, enableQuickCreate]);
 
   // Hover handlers - only trigger when in sidebar context
   const handleMouseEnter = useCallback(() => {

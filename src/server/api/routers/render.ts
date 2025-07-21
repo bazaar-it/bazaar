@@ -89,6 +89,18 @@ export const renderRouter = createTRPCRouter({
 
       const renderId = crypto.randomUUID();
 
+      // Log the scenes we're sending to prepareRenderConfig
+      console.log(`[Render] Preparing render config with ${project.scenes.length} scenes`);
+      project.scenes.forEach((scene, idx) => {
+        console.log(`[Render] Scene ${idx}:`, {
+          id: scene.id,
+          name: scene.name,
+          hasTsxCode: !!scene.tsxCode,
+          tsxCodeLength: scene.tsxCode?.length || 0,
+          tsxCodePreview: scene.tsxCode ? scene.tsxCode.substring(0, 100) + '...' : 'none'
+        });
+      });
+
       // Prepare render configuration
       const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
@@ -96,6 +108,18 @@ export const renderRouter = createTRPCRouter({
         format: input.format,
         quality: input.quality,
         projectProps: project.props,
+      });
+      
+      // Log what prepareRenderConfig returned
+      console.log(`[Render] prepareRenderConfig returned:`);
+      renderConfig.scenes.forEach((scene, idx) => {
+        console.log(`[Render] Processed scene ${idx}:`, {
+          id: scene.id,
+          name: scene.name,
+          hasJsCode: !!scene.jsCode,
+          jsCodeLength: scene.jsCode?.length || 0,
+          jsCodePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'none'
+        });
       });
 
       if (isLambda) {

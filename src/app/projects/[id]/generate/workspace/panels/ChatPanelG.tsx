@@ -12,7 +12,8 @@ import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
-import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/components/chat/ImageUpload";
+import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
+import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
@@ -56,8 +57,8 @@ export default function ChatPanelG({
   const inputRef = useRef<HTMLInputElement>(null);
   
   
-  // 🚨 NEW: State for image uploads
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  // 🚨 NEW: State for media uploads
+  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -312,8 +313,8 @@ export default function ChatPanelG({
   }, [message, adjustTextareaHeight]);
 
 
-  // Create image upload handlers
-  const imageHandlers = createImageUploadHandlers(
+  // Create media upload handlers
+  const imageHandlers = createMediaUploadHandlers(
     uploadedImages,
     setUploadedImages,
     projectId
@@ -885,10 +886,10 @@ export default function ChatPanelG({
       <div className="p-4">
 
 
-        {/* Image upload preview area */}
-        <ImageUpload
-          uploadedImages={uploadedImages}
-          onImagesChange={setUploadedImages}
+        {/* Media upload preview area */}
+        <MediaUpload
+          uploadedMedia={uploadedImages}
+          onMediaChange={setUploadedImages}
           projectId={projectId}
         />
 

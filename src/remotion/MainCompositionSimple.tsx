@@ -17,12 +17,22 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     tsxCodePreview: scene.tsxCode ? scene.tsxCode.substring(0, 100) + '...' : 'No tsxCode'
   });
   
+  // CRITICAL DEBUG: Log the full jsCode to see what we're actually getting
+  if (scene.jsCode) {
+    console.log(`[DynamicScene] FULL jsCode for scene ${index}:`);
+    console.log(scene.jsCode);
+    console.log(`[DynamicScene] END jsCode for scene ${index}`);
+  }
+  
   // Use the duration that was already extracted and passed down
   const sceneDuration = scene.duration || 150;
   
   // If we have jsCode (pre-compiled JavaScript), try to render it
   if (scene.jsCode) {
     try {
+      console.log(`[DynamicScene] Attempting to create component from jsCode`);
+      console.log(`[DynamicScene] First 300 chars of jsCode:`, scene.jsCode.substring(0, 300));
+      
       // Create a component factory function
       const createComponent = new Function(
         'React',
@@ -67,25 +77,40 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           
           ${scene.jsCode}
           
+          // Log what we're trying to execute
+          console.log('[ComponentFactory] Executing scene code...');
+          
           // Try to return the component (it should be assigned to Component variable)
           if (typeof Component !== 'undefined') {
+            console.log('[ComponentFactory] Found Component variable');
             return Component;
           }
           
           // Fallback attempts
-          if (typeof Scene !== 'undefined') return Scene;
-          if (typeof MyScene !== 'undefined') return MyScene;
-          
-          // Check if we have any function that looks like a component
-          const allVars = Object.keys(this || {});
-          const componentVar = allVars.find(v => v.includes('Scene') || v.includes('Component'));
-          if (componentVar && typeof this[componentVar] === 'function') {
-            console.log('Found component via variable scan:', componentVar);
-            return this[componentVar];
+          if (typeof Scene !== 'undefined') {
+            console.log('[ComponentFactory] Found Scene variable');
+            return Scene;
+          }
+          if (typeof MyScene !== 'undefined') {
+            console.log('[ComponentFactory] Found MyScene variable');
+            return MyScene;
           }
           
-          console.error('No component found in scene code');
-          console.error('Available variables:', Object.keys(this || {}));
+          // Check if we have any function that looks like a component
+          const localVars = Object.getOwnPropertyNames(this || {});
+          console.log('[ComponentFactory] Available local variables:', localVars);
+          
+          // Try to find a component-like function
+          for (const varName of localVars) {
+            if ((varName.includes('Scene') || varName.includes('Component')) && typeof this[varName] === 'function') {
+              console.log('[ComponentFactory] Found component via variable scan:', varName);
+              return this[varName];
+            }
+          }
+          
+          console.error('[ComponentFactory] No component found in scene code');
+          console.error('[ComponentFactory] typeof Component:', typeof Component);
+          console.error('[ComponentFactory] typeof Scene:', typeof Scene);
           return null;
         } catch (e) {
           console.error('Scene component factory error:', e);
@@ -115,19 +140,25 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       );
       
       if (ComponentFactory) {
+        console.log(`[DynamicScene] Successfully created component factory for scene ${index}`);
         // Render the component
         return <ComponentFactory />;
+      } else {
+        console.error(`[DynamicScene] Component factory returned null/undefined for scene ${index}`);
       }
     } catch (error) {
-      console.error(`Failed to render scene ${index}:`, error);
+      console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
+      console.error(`[DynamicScene] Error details:`, {
+        message: error.message,
+        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+      });
     }
   }
   
   // Fallback: Show scene metadata with diagnostic info
   const errorReason = !scene.jsCode ? 
-    (scene.tsxCode && scene.tsxCode.match(/^const\s+script_\w+\s*=\s*\[/) ? 
-      'Scene contains only script metadata' : 'No compiled JavaScript code') : 
-    'Failed to render component';
+    'No compiled JavaScript code' : 
+    'Failed to render component (check logs for details)';
   
   return (
     <AbsoluteFill

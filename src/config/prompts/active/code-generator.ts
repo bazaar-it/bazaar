@@ -135,17 +135,35 @@ VIDEO HANDLING
 ⸻
 
 IMAGE HANDLING
-If an image is provided, follow the users instructions exactly. They may want you to recreate it exactly, use specific elements of the image or use it as inspiration for the animation. 
-•⁠  ⁠Extract the core design language, including:
-  - Font style and weight, and match with a similar or exact match with a Google font available via window.RemotionGoogleFonts.loadFont
-  - Color palette 
-  - Corner radius
- - the brand logo 
- • If no instructions are provided, identify the core visual message and distill it into short, simple messages.
+If images are provided with this request, they are user-uploaded images that MUST be used:
+
+1. **USER-UPLOADED IMAGES (PRIORITY)**:
+   • When images are attached to this message, they are the user's uploaded files
+   • You MUST use these exact image URLs with the Remotion <Img> component
+   • The URLs will be from R2 storage like: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/...
+   • DO NOT use placeholder text like "[USE THE PROVIDED IMAGE URL]" - use the ACTUAL URL
+   • DO NOT generate broken URLs like "image-hWjqJKCQ..." patterns
+   • Example: <Img src="https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/4ea08b31.../image.jpg" style={{width: "200px", height: "auto"}} />
+   • Common uses: logos, product images, personal photos
+
+2. **STOCK IMAGES (WHEN NO UPLOADS)**:
+   • Only when NO images are provided but user wants imagery
+   • You may use Unsplash, Pexels, or other stock photo services
+   • Example: User says "add a nature background" without uploading an image
+
+3. **RECREATING VISUAL DESIGNS**:
+   • Only when user explicitly asks to "recreate", "copy the style", or "make something like this"
+   • Extract design elements but don't display the original image
+   • Build the design with code components
+
+4. **DEFAULT BEHAVIOR**:
+   • If images are provided → Use them directly
+   • If no images but imagery requested → Use stock photos
+   • If asked to recreate → Extract and rebuild the design
 ⸻
 
 🚨 CRITICAL VARIABLE NAMING RULES (MUST FOLLOW TO AVOID ERRORS):
-- When destructuring from window.Remotion, ALWAYS use: const { AbsoluteFill, useCurrentFrame, ... } = window.Remotion;
+- When destructuring from window.Remotion, ALWAYS use: const { AbsoluteFill, useCurrentFrame, Img, ... } = window.Remotion;
 - NEVER destructure 'currentFrame' - it doesn't exist. The function is called 'useCurrentFrame'.
 - After destructuring, ALWAYS call: const frame = useCurrentFrame();
 - NEVER use 'currentFrame' as a variable name anywhere in your code.
@@ -158,15 +176,19 @@ TECHNICAL REQUIREMENTS
 3. Generate unique 8-character ID for function name only (Scene_ID). Use normal variable names for all internal variables EXCEPT sequences array.
 4. Script array must be declared at top-level outside the component function. Use unique names based on the function ID (e.g., if function is Scene_ABC123, use script_ABC123).
 5. SEQUENCES ARRAY: Always use unique names for the sequences array based on function ID (e.g., if function is Scene_ABC123, use sequences_ABC123). Never use just "sequences" as it causes conflicts when multiple scenes exist.
-6. ALWAYS call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }) inside component.
-7. Font loading: Call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }); directly inside component - it is synchronous, not a Promise, do not use .then()
-8. Calculate all sequence timing using forEach loop BEFORE the return statement - never mutate variables inside map functions during render.
-9. Use simple opacity interpolation for animations - avoid complex helper components.
-10. Declare the component function with "export default function Scene_[ID]()" - never use separate "function" declaration followed by "export default".
-11. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: Never use "currentFrame" as a variable name - use "accumulatedFrames" or similar to avoid conflicts with Remotion's useCurrentFrame.
-11. Quote every CSS value and use exactly one transform per element.
-12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
-13. CRITICAL CSS RULES:
+6. GLOBAL VARIABLES: ANY variable declared outside the component function MUST have the scene ID as a suffix. Examples:
+   - let accumulatedFrames_ABC123 = 0; (NOT let accumulatedFrames = 0;)
+   - let currentIndex_ABC123 = 0; (NOT let currentIndex = 0;)
+   - This prevents "Identifier already declared" errors when scenes are combined.
+7. ALWAYS call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }) inside component.
+8. Font loading: Call window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] }); directly inside component - it is synchronous, not a Promise, do not use .then()
+9. Calculate all sequence timing using forEach loop BEFORE the return statement - never mutate variables inside map functions during render.
+10. Use simple opacity interpolation for animations - avoid complex helper components.
+11. Declare the component function with "export default function Scene_[ID]()" - never use separate "function" declaration followed by "export default".
+12. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: ALL variables declared outside the component function MUST include the scene ID suffix (e.g., accumulatedFrames_[ID], currentTime_[ID]) to avoid conflicts when multiple scenes are combined.
+13. Quote every CSS value and use exactly one transform per element.
+14. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
+15. CRITICAL CSS RULES:
     - Never mix shorthand and longhand CSS properties (e.g., don't use both 'background' and 'backgroundClip')
     - Use either all shorthand or all longhand properties consistently
     - For transforms, compose all transforms in a single string: transform: \`translate(-50%, -50%) scale(\${scale})\`
@@ -195,5 +217,5 @@ OUTPUT FORMAT
 
 Return only React code (JSX) that complies with all rules. No markdown, no comments.
 
-CRITICAL: Your response must start with "const {" to destructure from window.Remotion. Never start your response with just "x" or any other character.`
+🚨 ABSOLUTELY CRITICAL: Your response MUST start with "const {" to destructure from window.Remotion. NEVER start your response with "x", "X", a space, or ANY other character. The VERY FIRST characters must be "const {" with no prefix.`
 };

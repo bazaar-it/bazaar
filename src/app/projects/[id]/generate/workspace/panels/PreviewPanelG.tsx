@@ -125,8 +125,9 @@ export function PreviewPanelG({
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
   
-  // Get scenes from reactive state
+  // Get scenes and audio from reactive state
   const scenes = currentProps?.scenes || [];
+  const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
   
   // Calculate scene boundaries for scene loop functionality
   const sceneRanges = useMemo(() => {
@@ -663,7 +664,18 @@ class SingleSceneErrorBoundary extends React.Component {
 }
 
 export default function SingleSceneComposition() {
-  return React.createElement(SingleSceneErrorBoundary);
+  // Get audio from props
+  const projectAudio = window.projectAudio;
+  
+  return React.createElement(AbsoluteFill, {},
+    projectAudio && projectAudio.url && React.createElement(Audio, {
+      src: projectAudio.url,
+      startFrom: Math.floor(projectAudio.startTime * 30), // Convert seconds to frames at 30fps
+      endAt: Math.floor(projectAudio.endTime * 30),
+      volume: projectAudio.volume
+    }),
+    React.createElement(SingleSceneErrorBoundary)
+  );
 }
         `;
 
@@ -684,6 +696,10 @@ export default function SingleSceneComposition() {
         setComponentBlobUrl(newBlobUrl);
         
         console.log('[PreviewPanelG] Created new single scene blob URL:', newBlobUrl);
+        
+        // Set audio data in window before importing
+        const projectState = useVideoState.getState().projects[projectId];
+        (window as any).projectAudio = projectState?.audio || null;
         
         // Import the module
         console.log('[PreviewPanelG] Importing single scene module from:', newBlobUrl);
@@ -708,7 +724,7 @@ export default function SingleSceneComposition() {
         const sceneImports: string[] = [];
         const sceneComponents: string[] = [];
         const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-        const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+        const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'Audio', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
 
         compiledScenes.forEach((compiled, index) => {
           const originalScene = scenesWithCode[index];
@@ -1065,8 +1081,19 @@ ${singleDestructuring}
 ${sceneImports.join('\n\n')}
 
 export default function MultiSceneComposition() {
+  // Get audio from props
+  const projectAudio = window.projectAudio;
+  
   return (
     <AbsoluteFill>
+      {projectAudio && projectAudio.url && (
+        <Audio
+          src={projectAudio.url}
+          startFrom={Math.floor(projectAudio.startTime * 30)} // Convert seconds to frames at 30fps
+          endAt={Math.floor(projectAudio.endTime * 30)}
+          volume={projectAudio.volume}
+        />
+      )}
       <Loop durationInFrames={${totalDuration}}>
         <Series>
           ${sceneComponents.join('\n          ')}
@@ -1094,6 +1121,10 @@ export default function MultiSceneComposition() {
         setComponentBlobUrl(newBlobUrl);
         
         console.log('[PreviewPanelG] Created new multi-scene blob URL:', newBlobUrl);
+        
+        // Set audio data in window before importing
+        const projectState = useVideoState.getState().projects[projectId];
+        (window as any).projectAudio = projectState?.audio || null;
         
         // Import the module
         console.log('[PreviewPanelG] Importing multi-scene module from:', newBlobUrl);
@@ -1267,7 +1298,7 @@ export default function FallbackComposition() {
         clearTimeout(compilationDebounceTimer);
       }
     };
-  }, [scenes, compileMultiSceneComposition]);
+  }, [scenes.length, scenes.map(s => `${s.id}-${s.data?.code?.length || 0}`).join(','), projectAudio?.url, projectAudio?.startTime, projectAudio?.endTime, projectAudio?.volume, compileMultiSceneComposition]);
 
 
   // Manual refresh

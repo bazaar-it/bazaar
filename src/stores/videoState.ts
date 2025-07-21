@@ -51,12 +51,23 @@ export type DbMessage = {
 }
 
 // Define ProjectState interface
+interface AudioTrack {
+  id: string;
+  url: string;
+  name: string;
+  duration: number;
+  startTime: number;
+  endTime: number;
+  volume: number;
+}
+
 interface ProjectState {
   props: InputProps;
   chatHistory: ChatMessage[];
   dbMessagesLoaded: boolean;
   activeStreamingMessageId?: string | null;
   refreshToken?: string;
+  audio?: AudioTrack | null;
 }
 
 interface VideoState {
@@ -111,6 +122,7 @@ interface VideoState {
   addScene: (projectId: string, scene: any) => void;
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
+  updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
   
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) => void;
@@ -797,6 +809,32 @@ export const useVideoState = create<VideoState>((set, get) => ({
             },
             refreshToken: newRefreshToken,
             lastUpdated: Date.now(), // Track when updated
+          }
+        }
+      };
+    }),
+
+  updateProjectAudio: (projectId: string, audio: AudioTrack | null) =>
+    set((state) => {
+      console.log('[VideoState.updateProjectAudio] ⚡ Updating audio:', audio);
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.updateProjectAudio] ❌ Project not found:', projectId);
+        return state;
+      }
+      
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            audio,
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now(),
           }
         }
       };

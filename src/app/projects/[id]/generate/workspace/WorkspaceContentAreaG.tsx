@@ -17,6 +17,7 @@ import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
+import { AudioPanel } from './panels/AudioPanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -31,6 +32,7 @@ const PANEL_COMPONENTS_G = {
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
   myprojects: MyProjectsPanelG,
+  audio: AudioPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -40,6 +42,7 @@ const PANEL_LABELS_G = {
   storyboard: 'Storyboard',
   templates: 'Templates',
   myprojects: 'My Projects',
+  audio: 'Audio',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -747,6 +750,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'myprojects':
           return <MyProjectsPanelG 
             currentProjectId={projectId} 
+          />;
+        case 'audio':
+          return <AudioPanel 
+            projectId={projectId} 
           />;
         default:
           return null;

@@ -65,29 +65,74 @@ async function preprocessSceneForLambda(scene: any) {
     name: scene.name,
     hasTsxCode: !!scene.tsxCode,
     hasData: !!scene.data,
-    dataKeys: scene.data ? Object.keys(scene.data) : []
+    dataKeys: scene.data ? Object.keys(scene.data) : [],
+    codeLength: scene.tsxCode?.length || 0
   });
   
-  // Check both direct tsxCode and nested data.code
-  const tsxCode = scene.tsxCode || (scene.data && scene.data.code);
+  // Database scenes have tsxCode directly, not in data.code
+  const tsxCode = scene.tsxCode;
   
-  if (!tsxCode) {
-    console.log(`[Preprocess] No code found for scene ${scene.id}`);
+  if (!tsxCode || tsxCode.trim().length === 0) {
+    console.error(`[Preprocess] No code found for scene ${scene.id} - scene structure:`, {
+      hasId: !!scene.id,
+      hasName: !!scene.name,
+      hasTsxCode: !!scene.tsxCode,
+      tsxCodeType: typeof scene.tsxCode,
+      keys: Object.keys(scene)
+    });
     return scene;
   }
   
   // Check if this is just a script array without a component
-  const scriptArrayMatch = tsxCode.match(/^const\s+script_\w+\s*=\s*\[[\s\S]*\];\s*$/);
-  if (scriptArrayMatch && !tsxCode.includes('export default') && !tsxCode.includes('function')) {
-    console.error(`[Preprocess] Scene ${scene.id} contains only a script array, no component!`);
-    console.log(`[Preprocess] Script-only code:`, tsxCode.substring(0, 500));
-    // Return scene without transformation - MainCompositionSimple will handle fallback
-    return {
-      ...scene,
-      jsCode: null,
-      compiledCode: null,
-      tsxCode: tsxCode,
-    };
+  // Use non-greedy match to avoid matching beyond the first script array
+  const hasScriptArray = tsxCode.match(/const\s+script_\w+\s*=\s*\[[\s\S]*?\];/);
+  const hasExportDefault = tsxCode.includes('export default');
+  
+  // More comprehensive check for function/component definitions
+  const hasComponentFunction = 
+    tsxCode.includes('export default function') ||
+    tsxCode.includes('function Scene') ||
+    tsxCode.match(/const\s+\w+\s*=\s*\([^)]*\)\s*=>\s*[({]/) || // Arrow function component
+    tsxCode.match(/function\s+\w+\s*\([^)]*\)\s*{/) || // Regular function
+    tsxCode.match(/const\s+\w+\s*=\s*function/) || // Function expression
+    tsxCode.match(/export\s+default\s+\w+/); // Export default variable
+  
+  // Only flag as incomplete if we have ONLY a script array and nothing else
+  if (hasScriptArray && !hasExportDefault && !hasComponentFunction) {
+    console.error(`[Preprocess] WARNING: Scene ${scene.id} appears to contain only a script array without a component!`);
+    console.log(`[Preprocess] Code structure analysis:`, {
+      hasScriptArray: !!hasScriptArray,
+      hasExportDefault,
+      hasComponentFunction: !!hasComponentFunction,
+      codePreview: tsxCode.substring(0, 200) + '...'
+    });
+    
+    // Double-check: Try to find ANY component-like pattern after the script array
+    const scriptArrayMatch = hasScriptArray[0];
+    const scriptArrayEndIndex = hasScriptArray.index + scriptArrayMatch.length;
+    const codeAfterScript = tsxCode.substring(scriptArrayEndIndex).trim();
+    
+    console.log(`[Preprocess] Checking code after script array:`, {
+      scriptArrayLength: scriptArrayMatch.length,
+      codeAfterScriptLength: codeAfterScript.length,
+      codeAfterScriptPreview: codeAfterScript.substring(0, 100) + '...'
+    });
+    
+    // Check if there's substantial code after the script array
+    if (codeAfterScript.length > 50 && (codeAfterScript.includes('return') || codeAfterScript.includes('function') || codeAfterScript.includes('=>'))) {
+      console.log(`[Preprocess] Found code after script array, scene is likely complete`);
+      // Continue processing - the scene has both script and component
+    } else {
+      console.error(`[Preprocess] CRITICAL: No component found in scene ${scene.id}. This will fail in Lambda.`);
+      // Return scene without transformation - this will likely fail but at least we'll see the error
+      return {
+        ...scene,
+        jsCode: null,
+        compiledCode: null,
+        tsxCode: tsxCode,
+        error: 'No React component found in scene code - only script array found'
+      };
+    }
   }
   
   // Log if the original code seems incomplete
@@ -183,6 +228,13 @@ async function preprocessSceneForLambda(scene: any) {
       '// Font loading removed for Lambda'
     );
     
+    // Replace ALL remaining window.IconifyIcon references with simple div placeholders
+    // This handles any complex cases that weren't caught by the SVG replacement
+    transformedCode = transformedCode.replace(
+      /window\.IconifyIcon/g,
+      '"div"'
+    );
+    
     // Replace window.IconifyIcon with actual SVG icons
     transformedCode = await replaceIconifyIcons(transformedCode);
     
@@ -193,17 +245,24 @@ async function preprocessSceneForLambda(scene: any) {
     );
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
-    console.log(`[Preprocess] Original code length:`, tsxCode.length);
-    console.log(`[Preprocess] Transformed code length:`, transformedCode.length);
-    console.log(`[Preprocess] Original has export default:`, tsxCode.includes('export default'));
-    console.log(`[Preprocess] Transformed has Component:`, transformedCode.includes('const Component'));
-    console.log(`[Preprocess] First 500 chars of original:`, tsxCode.substring(0, 500));
-    console.log(`[Preprocess] First 500 chars of transformed:`, transformedCode.substring(0, 500));
+    console.log(`[Preprocess] Transformation summary:`, {
+      sceneId: scene.id,
+      sceneName: scene.name,
+      originalCodeLength: tsxCode.length,
+      transformedCodeLength: transformedCode.length,
+      hasExportDefault: tsxCode.includes('export default'),
+      hasComponent: transformedCode.includes('const Component'),
+      hasReturn: transformedCode.includes('return Component'),
+      remotionComponents: remotionComponents.length > 0 ? remotionComponents : 'none',
+      reactHooks: reactHooks.length > 0 ? reactHooks : 'none',
+      transformedCodePreview: transformedCode.substring(0, 200) + '...'
+    });
     
-    // Check if we have a script array that might be overwriting our component
+    // Check if we have a script array (this is normal - many scenes have both script arrays and components)
     const scriptMatch = transformedCode.match(/const\s+script_\w+\s*=\s*\[/);
-    if (scriptMatch) {
-      console.log(`[Preprocess] WARNING: Found script array that might be the only content`);
+    if (scriptMatch && !transformedCode.includes('const Component')) {
+      // Only warn if we have a script array but no component
+      console.log(`[Preprocess] WARNING: Found script array but no Component function`);
       console.log(`[Preprocess] Script array starts at position:`, scriptMatch.index);
     }
     
@@ -226,14 +285,16 @@ async function preprocessSceneForLambda(scene: any) {
 async function replaceIconifyIcons(code: string): Promise<string> {
   const { loadNodeIcon } = await import('@iconify/utils/lib/loader/node-loader');
   
-  // Find all IconifyIcon references
-  const iconRegex = /<window\.IconifyIcon\s+icon="([^"]+)"([^>]*?)\/>/g;
-  const matches = [...code.matchAll(iconRegex)];
+  // Find all IconifyIcon references - both JSX and React.createElement styles
+  const jsxIconRegex = /<window\.IconifyIcon\s+icon="([^"]+)"([^>]*?)\/>/g;
+  const createElementRegex = /React\.createElement\(window\.IconifyIcon,\s*\{[^}]*icon:\s*"([^"]+)"[^}]*\}[^)]*\)/g;
   
-  console.log(`[Preprocess] Found ${matches.length} icons to replace`);
+  // First handle JSX-style icons
+  const jsxMatches = [...code.matchAll(jsxIconRegex)];
+  console.log(`[Preprocess] Found ${jsxMatches.length} JSX-style icons to replace`);
   
-  // Process each icon
-  for (const match of matches) {
+  // Process JSX-style icons
+  for (const match of jsxMatches) {
     const [fullMatch, iconName, attrs = ''] = match;
     
     if (!iconName) {
@@ -295,6 +356,64 @@ async function replaceIconifyIcons(code: string): Promise<string> {
     }
   }
   
+  // Now handle React.createElement style icons
+  const createElementMatches = [...code.matchAll(createElementRegex)];
+  console.log(`[Preprocess] Found ${createElementMatches.length} React.createElement icons to replace`);
+  
+  for (const match of createElementMatches) {
+    const [fullMatch, iconName] = match;
+    
+    if (!iconName) {
+      console.warn(`[Preprocess] Empty icon name found in createElement, using placeholder`);
+      code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+      continue;
+    }
+    
+    try {
+      // Split icon name into collection and icon
+      const [collection, icon] = iconName.split(':');
+      
+      if (!collection || !icon) {
+        console.warn(`[Preprocess] Invalid icon name format "${iconName}" in createElement, using placeholder`);
+        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+        continue;
+      }
+      
+      // Load the icon data
+      const svgString = await loadNodeIcon(collection, icon);
+      
+      if (!svgString) {
+        console.warn(`[Preprocess] Icon "${iconName}" not found, using placeholder`);
+        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+        continue;
+      }
+      
+      // Convert SVG string to React.createElement format
+      // Extract viewBox and path data from SVG
+      const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
+      const pathMatch = svgString.match(/<path[^>]*d="([^"]+)"/);
+      
+      if (pathMatch && pathMatch[1]) {
+        const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
+        const pathData = pathMatch[1];
+        
+        // Create React.createElement for SVG
+        const svgElement = `React.createElement("svg", {viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor"}, React.createElement("path", {d:"${pathData}"}))`;
+        
+        console.log(`[Preprocess] Replaced createElement icon "${iconName}" with SVG`);
+        code = code.replace(fullMatch, svgElement);
+      } else {
+        console.warn(`[Preprocess] Could not extract path from icon "${iconName}", using placeholder`);
+        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+      }
+      
+    } catch (error) {
+      console.error(`[Preprocess] Failed to load icon "${iconName}":`, error);
+      // Fallback to placeholder
+      code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+    }
+  }
+  
   return code;
 }
 
@@ -335,6 +454,20 @@ export async function prepareRenderConfig({
     renderHeight = Math.round(renderWidth / projectAspectRatio);
   }
   
+  // Log incoming scenes structure
+  console.log(`[prepareRenderConfig] Processing ${scenes.length} scenes for Lambda`);
+  scenes.forEach((scene, index) => {
+    console.log(`[prepareRenderConfig] Scene ${index}:`, {
+      id: scene.id,
+      name: scene.name,
+      hasTsxCode: !!scene.tsxCode,
+      tsxCodeLength: scene.tsxCode?.length || 0,
+      duration: scene.duration,
+      order: scene.order,
+      keys: Object.keys(scene)
+    });
+  });
+
   // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
     scenes.map(scene => preprocessSceneForLambda({
@@ -344,8 +477,23 @@ export async function prepareRenderConfig({
     }))
   );
   
+  // Filter out any scenes that failed preprocessing
+  const validScenes = processedScenes.filter(scene => {
+    if (!scene.jsCode && !scene.compiledCode && scene.error) {
+      console.error(`[prepareRenderConfig] Skipping scene ${scene.id} due to preprocessing error:`, scene.error);
+      return false;
+    }
+    return true;
+  });
+  
+  if (validScenes.length === 0) {
+    throw new Error('No valid scenes to render after preprocessing');
+  }
+  
+  console.log(`[prepareRenderConfig] ${validScenes.length} of ${scenes.length} scenes passed preprocessing`);
+  
   // Calculate total duration
-  const totalDuration = processedScenes.reduce((sum, scene) => {
+  const totalDuration = validScenes.reduce((sum, scene) => {
     return sum + (scene.duration || 150); // Default 5 seconds at 30fps
   }, 0);
   
@@ -353,7 +501,7 @@ export async function prepareRenderConfig({
   
   return {
     projectId,
-    scenes: processedScenes,
+    scenes: validScenes,
     format,
     quality,
     settings,
@@ -363,7 +511,7 @@ export async function prepareRenderConfig({
     renderHeight,
     // This will be used by Lambda
     inputProps: {
-      scenes: processedScenes,
+      scenes: validScenes,
       projectId,
       width: renderWidth,
       height: renderHeight,

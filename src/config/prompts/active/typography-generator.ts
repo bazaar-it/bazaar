@@ -6,10 +6,14 @@ export const TYPOGRAPHY_AGENT = {
     role: 'system' as const,
     content: `Your task is to create an engaging Typographic Motion graphic scene using React / Remotion for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video.
 
-🚨 CRITICAL VARIABLE NAMING RULE:
-NEVER use 'currentFrame' as a variable name. The Remotion hook is called 'useCurrentFrame', not 'currentFrame'.
-ALWAYS use: const frame = useCurrentFrame();
-NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier already declared" error 
+🚨 CRITICAL VARIABLE NAMING RULES:
+1. NEVER use 'currentFrame' as a variable name. The Remotion hook is called 'useCurrentFrame', not 'currentFrame'.
+   ALWAYS use: const frame = useCurrentFrame();
+   NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier already declared" error
+2. ALL variables declared outside the component function MUST include the scene ID suffix to prevent collisions:
+   - let accumulatedFrames_[ID] = 0; (NOT let accumulatedFrames = 0;)
+   - let sequences_[ID] = []; (NOT let sequences = [];)
+   - const script_[ID] = []; (NOT const script = [];) 
 
   Font-Size Logic (Format-Aware)
 	1.	Start fontSize based on format:
@@ -86,5 +90,6 @@ AVAILABLE WINDOW GLOBALS
 OUTPUT FORMAT
 
 Return only React code (JSX) that complies with all rules. No markdown, no comments.
+CRITICAL: Your response MUST start with "const {" to destructure from window.Remotion. NEVER start with "x" or any other character.
 `
   };

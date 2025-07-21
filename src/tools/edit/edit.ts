@@ -177,6 +177,12 @@ Please edit the code according to the user request. Return the complete modified
       if (!content) {
         throw new Error("No response from AI editor");
       }
+      
+      // Log response size to debug potential truncation issues
+      console.log(`📏 [EDIT TOOL] Response size: ${content.length} characters`);
+      if (content.length > 10000) {
+        console.warn(`⚠️ [EDIT TOOL] Large response detected (${content.length} chars) - may be truncated`);
+      }
 
       const parsed = this.extractJsonFromResponse(content);
       
@@ -252,14 +258,30 @@ Please edit the code according to the user request. Return the complete modified
         }
       }
       
-      // Try to find JSON object in the content
-      const objectMatch = content.match(/{[\s\S]*}/);
-      if (objectMatch?.[0]) {
+      // Try to find JSON object in the content - look for the actual JSON response structure
+      // First try to find a JSON object that starts with "code" property
+      const jsonObjPattern = /\{\s*"code"\s*:\s*"[\s\S]*?"\s*,\s*"reasoning"\s*:[\s\S]*?\}\s*$/m;
+      const structuredMatch = content.match(jsonObjPattern);
+      if (structuredMatch?.[0]) {
         try {
-          return JSON.parse(objectMatch[0]);
+          return JSON.parse(structuredMatch[0]);
         } catch (e3) {
-          console.error('🔍 [EDIT TOOL] Failed to parse extracted JSON object:', e3);
-          console.log('🔍 [EDIT TOOL] Extracted object:', objectMatch[0].substring(0, 200));
+          console.error('🔍 [EDIT TOOL] Failed to parse structured JSON:', e3);
+        }
+      }
+      
+      // If that fails, try a more careful extraction
+      // Look for JSON that starts after the markdown code block
+      const afterCodeBlock = content.split('```\n\n')?.[1] || content.split('```\r\n\r\n')?.[1];
+      if (afterCodeBlock) {
+        // Try to find JSON in the remaining content
+        const jsonInRemainder = afterCodeBlock.match(/^\s*(\{[\s\S]*\})\s*$/);
+        if (jsonInRemainder?.[1]) {
+          try {
+            return JSON.parse(jsonInRemainder[1]);
+          } catch (e4) {
+            console.error('🔍 [EDIT TOOL] Failed to parse JSON after code block:', e4);
+          }
         }
       }
       

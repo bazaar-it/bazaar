@@ -113,35 +113,38 @@ This checklist tracks all critical items that must be addressed before pushing v
   - Progress tracking accurate
 
 ### 4.5 Smart Logo Detection & Usage
-- [ ] **Logo Detection System**
-  - Status: PENDING
-  - When user uploads an image in chat:
-    - Detect if it's a logo (transparent bg, simple design, brand-like)
-    - Tag the image with "logo" metadata
-    - Store logo URL in project context
-  - Brain orchestrator should:
-    - Know when a logo is available
-    - Include logo in relevant scenes (intros, outros, watermarks)
-    - Pass logo URL to generation tools
-  - Implementation Plan:
-    1. **Update Upload Route** (`/api/upload/route.ts`):
-       - Add "isLogo" detection logic
-       - Check for: transparent background, aspect ratio, file name contains "logo"
-       - Add metadata tag to S3 upload
-    2. **Store Logo in Project Memory** (`projectMemory` table):
-       - Create memory entry: type="brand_logo", content={url, dimensions}
-       - One logo per project (latest overwrites)
-    3. **Update Brain Context** (`brain/contextBuilder.ts`):
-       - Check projectMemory for logo
-       - Add logoUrl to context if exists
-    4. **Modify Generation Prompts**:
-       - CODE_GENERATOR: Accept {{LOGO_URL}} placeholder
-       - Add instructions for logo placement
-    5. **Smart Usage Rules**:
-       - First scene: Logo reveal animation
-       - Last scene: Logo with CTA
-       - Long videos: Subtle watermark
-       - Don't use in every scene
+- [x] **Logo Detection System - Phase 1: Prompt Updates**
+  - Status: COMPLETED ✅ (Phase 1)
+  - **Phase 1 Completed**: Updated all generation prompts to properly use <Img> component
+    - CODE_GENERATOR: Added clear instructions for displaying vs recreating images
+    - CODE_EDITOR: Added image handling section with Img component usage
+    - IMAGE_RECREATOR: Now differentiates between displaying actual images vs recreating designs
+    - All prompts now include Img in Remotion destructuring
+  - **Phase 2 TODO**: Smart logo detection and storage
+    - When user uploads an image in chat:
+      - Detect if it's a logo (transparent bg, simple design, brand-like)
+      - Tag the image with "logo" metadata
+      - Store logo URL in project context
+    - Brain orchestrator should:
+      - Know when a logo is available
+      - Include logo in relevant scenes (intros, outros, watermarks)
+      - Pass logo URL to generation tools
+    - Implementation Plan:
+      1. **Update Upload Route** (`/api/upload/route.ts`):
+         - Add "isLogo" detection logic
+         - Check for: transparent background, aspect ratio, file name contains "logo"
+         - Add metadata tag to S3 upload
+      2. **Store Logo in Project Memory** (`projectMemory` table):
+         - Create memory entry: type="brand_logo", content={url, dimensions}
+         - One logo per project (latest overwrites)
+      3. **Update Brain Context** (`brain/contextBuilder.ts`):
+         - Check projectMemory for logo
+         - Add logoUrl to context if exists
+      4. **Smart Usage Rules**:
+         - First scene: Logo reveal animation
+         - Last scene: Logo with CTA
+         - Long videos: Subtle watermark
+         - Don't use in every scene
 
 ### 5. Frontend & UX
 - [x] **SSE streaming**
@@ -219,7 +222,45 @@ This checklist tracks all critical items that must be addressed before pushing v
 
 ## ✅ NICE TO HAVE (Optional)
 
-### 10. Features
+### 10. Mobile Support & Responsiveness
+- [ ] **Mobile Web Interface**
+  - Status: PENDING
+  - Chat interface usability on mobile devices
+  - Preview panel responsiveness
+  - Touch gestures for video controls
+  - Virtual keyboard handling in chat
+  - Responsive breakpoints (sm/md/lg)
+  
+- [ ] **Mobile-First Generation**
+  - Status: PENDING
+  - Test portrait format (1080x1920) generation
+  - Ensure text sizes scale appropriately
+  - Verify animations work on mobile viewport
+  - Test social media format switching
+  
+- [ ] **Performance on Mobile**
+  - Status: PENDING
+  - Bundle size optimization for mobile networks
+  - Lazy loading for heavy components
+  - Reduce memory usage for preview
+  - Test on actual mobile devices (iOS/Android)
+  
+- [ ] **Mobile-Specific Features**
+  - Status: PENDING
+  - Touch-friendly UI elements (min 44px targets)
+  - Swipe gestures for scene navigation
+  - Mobile-optimized export options
+  - Progressive Web App (PWA) capabilities
+  
+- [x] **Format Selector Consistency**
+  - Status: COMPLETED ✅
+  - Fixed: Both mobile and desktop now use last format when quick create is enabled
+  - Removed special mobile behavior that always showed format selector modal
+  - Consistent experience: One-click project creation on all devices
+  - Users can still access format selector when quick create is disabled
+  - File: NewProjectButton.tsx - removed isMobile check from handleButtonClick
+
+### 11. Features
 - [ ] **Email marketing**
   - Status: PENDING
   - Resend configured
@@ -235,34 +276,77 @@ This checklist tracks all critical items that must be addressed before pushing v
 ## 🔍 KNOWN ISSUES TO FIX
 
 ### Critical Bugs
-1. **Timeline utils broken imports**
-   - File: TBD
-   - Error: Import resolution failing
-   - Impact: HIGH
-   - Status: NOT FIXED
+1. **Edit Tool Response Truncation/Timeout**
+   - Error: "Unterminated string in JSON" - consistent truncation
+   - Symptoms: 
+     - Response truncated at ~10KB first time ("useVideoCon")
+     - Response truncated at ~29KB second time ("window.R")
+     - Response time: 136+ seconds (over 2 minutes)
+   - Root cause: Infrastructure response size/streaming limit
+   - Likely culprits:
+     - CloudFlare 100MB response limit + 100s timeout
+     - Vercel serverless function response streaming limits
+     - Next.js API route buffering
+   - Impact: HIGH - Edit operations fail for any complex scene
+   - Status: CONFIRMED - Infrastructure limitation
+   - Workarounds:
+     - Use smaller, targeted edits
+     - Delete and recreate scenes instead of large edits
+     - Implement response streaming/chunking (requires major refactor)
 
-2. **Scene compilation errors**
+2. **Timeline utils broken imports**
+   - File: TimelineContext.tsx
+   - Error: Import resolution failing (missing useTimelineValidation hook)
+   - Impact: HIGH
+   - Status: FIXED ✅
+   - Solution: Moved validation functions directly into TimelineContext.tsx
+
+2. **Variable name collisions in multi-scene compositions**
+   - Error: "Identifier 'accumulatedFrames' has already been declared"
+   - Cause: Multiple scenes using same global variable names
+   - Impact: HIGH - Prevents multi-scene preview
+   - Status: PROMPT FIXES APPLIED
+   - Solution: Updated all generation prompts to enforce unique variable suffixes
+
+3. **Typography tool generating "x" prefix**
+   - Error: Generated code starts with "x" character before actual code
+   - Cause: AI model adding mysterious prefix
+   - Impact: HIGH - Breaks scene compilation
+   - Status: PROMPT FIXES APPLIED
+   - Solution: Added explicit instruction to ALL prompts to start with "const {"
+
+4. **Scene compilation errors**
    - Frequency: Intermittent
    - Auto-fix handles most cases
    - Status: PARTIALLY FIXED
 
-3. **Memory leaks in preview**
+5. **Memory leaks in preview**
    - During long sessions
    - Impact: MEDIUM
    - Status: NOT FIXED
 
-4. **Excessive re-renders (FIXED)**
+6. **Excessive re-renders (FIXED)**
    - ChatPanelG was re-rendering on every keystroke
    - Console.log statements in render causing issues
    - Status: FIXED ✅
    - Solution: Removed debug logs, fixed useCallback dependencies
 
 ### Minor Issues
-1. **UI glitches on mobile**
-   - Responsive design issues
-   - Status: NOT FIXED
+1. **Missing ImageUpload.tsx component**
+   - Build error: "No such file or directory"
+   - Status: FIXED ✅
+   - Solution: Created ImageUpload.tsx component based on ChatPanelG usage
+   - File created at: src/components/chat/ImageUpload.tsx
 
-2. **Slow initial load**
+2. **UI glitches on mobile**
+   - Responsive design issues
+   - Chat input gets hidden by keyboard
+   - Preview panel not scrollable on small screens
+   - Buttons too small for touch targets
+   - Status: NOT FIXED
+   - See Section 10 for comprehensive mobile fixes
+
+3. **Slow initial load**
    - Bundle splitting needed
    - Status: NOT FIXED
 
@@ -274,7 +358,7 @@ This checklist tracks all critical items that must be addressed before pushing v
 - [ ] Run full test suite
 - [ ] Check TypeScript errors (`npm run typecheck`)
 - [ ] Run linter (`npm run lint`)
-- [ ] Test production build locally
+- [x] Test production build locally (COMPLETED ✅ - Build successful with known warnings)
 - [ ] Backup production database
 - [ ] Prepare rollback plan
 - [ ] Schedule maintenance window

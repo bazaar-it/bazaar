@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 import { nanoid } from 'nanoid';
-import { Loader2, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import { Loader2, XCircleIcon } from 'lucide-react';
 
 export interface UploadedImage {
   id: string;
@@ -10,8 +10,7 @@ export interface UploadedImage {
   status: 'uploading' | 'uploaded' | 'error';
   url?: string;
   error?: string;
-  type?: 'image' | 'video';
-  isLoaded?: boolean; // Track if the actual media has loaded
+  isLoaded?: boolean; // Track if the actual image has loaded
 }
 
 interface ImageUploadProps {
@@ -72,8 +71,7 @@ export function ImageUpload({
     const newImages: UploadedImage[] = files.map(file => ({
       id: nanoid(),
       file,
-      status: 'uploading' as const,
-      type: file.type.startsWith('video/') ? 'video' : 'image'
+      status: 'uploading' as const
     }));
 
     // Add new images to the list
@@ -83,16 +81,9 @@ export function ImageUpload({
     // Upload each image to R2
     for (const image of newImages) {
       try {
-        // Only compress images, not videos
-        const fileToUpload = image.type === 'video' 
-          ? image.file 
-          : await compressImage(image.file);
+        const fileToUpload = await compressImage(image.file);
         
-        if (image.type === 'image') {
-          console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
-        } else {
-          console.log(`[ImageUpload] 🎥 Video upload: ${image.file.name} (${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
-        }
+        console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
         
         const formData = new FormData();
         formData.append('file', fileToUpload);
@@ -135,7 +126,7 @@ export function ImageUpload({
     onImagesChange(uploadedImages.filter(img => img.id !== imageId));
   }, [uploadedImages, onImagesChange]);
 
-  const handleMediaLoad = useCallback((imageId: string) => {
+  const handleImageLoad = useCallback((imageId: string) => {
     onImagesChange(
       uploadedImages.map(img => 
         img.id === imageId 
@@ -151,7 +142,7 @@ export function ImageUpload({
     <div className="mb-3 flex gap-2 flex-wrap">
       {uploadedImages.map((image) => (
         <div key={image.id} className="relative border bg-gray-50 flex items-center justify-center group" style={{ borderRadius: '15px' }}>
-          {/* Show loading spinner until media is fully loaded */}
+          {/* Show loading spinner until image is fully loaded */}
           {(image.status === 'uploading' || (image.status === 'uploaded' && (!image.url || !image.isLoaded))) && (
             <div className="w-24 h-24 flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -162,43 +153,24 @@ export function ImageUpload({
               <XCircleIcon className="h-6 w-6 text-red-500" />
             </div>
           )}
-          {/* Only show media when fully loaded */}
+          {/* Only show image when fully loaded */}
           {image.url && image.status === 'uploaded' && image.isLoaded && (
-            image.type === 'video' ? (
-              <video 
-                src={image.url} 
-                className="max-w-32 max-h-32 w-auto h-auto"
-                style={{ borderRadius: '15px' }}
-                muted
-              />
-            ) : (
-              <img 
-                src={image.url} 
-                alt="Upload preview" 
-                className="max-w-32 max-h-32 w-auto h-auto"
-                style={{ borderRadius: '15px' }}
-              />
-            )
+            <img 
+              src={image.url} 
+              alt="Upload preview" 
+              className="max-w-32 max-h-32 w-auto h-auto"
+              style={{ borderRadius: '15px' }}
+            />
           )}
           {/* Hidden preloader to trigger onLoad without affecting layout */}
           {image.url && image.status === 'uploaded' && !image.isLoaded && (
-            image.type === 'video' ? (
-              <video 
-                src={image.url} 
-                className="absolute opacity-0 pointer-events-none"
-                style={{ left: '-9999px' }}
-                muted
-                onLoadedData={() => handleMediaLoad(image.id)}
-              />
-            ) : (
-              <img 
-                src={image.url} 
-                alt="" 
-                className="absolute opacity-0 pointer-events-none"
-                style={{ left: '-9999px' }}
-                onLoad={() => handleMediaLoad(image.id)}
-              />
-            )
+            <img 
+              src={image.url} 
+              alt="" 
+              className="absolute opacity-0 pointer-events-none"
+              style={{ left: '-9999px' }}
+              onLoad={() => handleImageLoad(image.id)}
+            />
           )}
           {/* Delete button - always visible for uploaded images, hidden for uploading */}
           {image.status !== 'uploading' && (
@@ -267,8 +239,7 @@ export const createImageUploadHandlers = (
     const newImages: UploadedImage[] = files.map(file => ({
       id: nanoid(),
       file,
-      status: 'uploading' as const,
-      type: file.type.startsWith('video/') ? 'video' : 'image'
+      status: 'uploading' as const
     }));
 
     setUploadedImages([...uploadedImages, ...newImages]);
@@ -276,16 +247,9 @@ export const createImageUploadHandlers = (
     // Upload each image to R2
     for (const image of newImages) {
       try {
-        // Only compress images, not videos
-        const fileToUpload = image.type === 'video' 
-          ? image.file 
-          : await compressImage(image.file);
+        const fileToUpload = await compressImage(image.file);
         
-        if (image.type === 'image') {
-          console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
-        } else {
-          console.log(`[ImageUpload] 🎥 Video upload: ${image.file.name} (${(image.file.size / 1024 / 1024).toFixed(2)}MB)`);
-        }
+        console.log(`[ImageUpload] 🖼️ Image compressed: ${image.file.size} → ${fileToUpload.size} bytes`);
         
         const formData = new FormData();
         formData.append('file', fileToUpload);
@@ -341,7 +305,7 @@ export const createImageUploadHandlers = (
     e.preventDefault();
     
     const files = Array.from(e.dataTransfer.files).filter(file => 
-      file.type.startsWith('image/') || file.type.startsWith('video/')
+      file.type.startsWith('image/')
     );
     
     if (files.length > 0) {

@@ -83,7 +83,7 @@ export const durationInFrames_[ID] = totalFrames_edit;
 \`\`\`
 
 🎨 AVAILABLE WINDOW GLOBALS (pre-loaded for you):
-- window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, etc.)
+- window.Remotion - Core Remotion library (AbsoluteFill, interpolate, spring, Img, etc.)
 - window.React - React library (if needed for hooks, etc.)
 - window.IconifyIcon - Iconify icon component (200,000+ icons)
 - window.HeroiconsSolid / window.HeroiconsOutline - Icon components
@@ -95,9 +95,14 @@ export const durationInFrames_[ID] = totalFrames_edit;
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 
+📸 IMAGE HANDLING:
+- For user-uploaded images/logos: Use <Img src="url"> from Remotion to display the actual image
+- Only recreate images with code when explicitly asked to "recreate" or "copy the style"
+- Example: <Img src="https://example.com/logo.png" style={{width: "150px"}} />
+
 🏗️ **MANDATORY CODE STRUCTURE:**
 \`\`\`
-const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
+const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Img } = window.Remotion;
 
 // Data arrays MUST be at top level for proper scoping
 const script = [
