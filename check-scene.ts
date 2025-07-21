@@ -2,51 +2,57 @@ import { db } from "./src/server/db";
 import { scenes } from "./src/server/db/schema";
 import { eq } from "drizzle-orm";
 
-async function checkScene() {
-  const sceneId = "7a660806-91d0-4a8b-88a0-683c9e53dc9f";
+async function checkAndFixScene() {
+  const sceneId = "ff1c93d5-8d64-4682-9b7f-bbcd290f01ab";
   
-  console.log(`Checking scene with ID: ${sceneId}\n`);
+  // Get the scene
+  const scene = await db.query.scenes.findFirst({
+    where: eq(scenes.id, sceneId),
+  });
   
-  try {
-    // Query the scene
-    const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
-    });
+  if (!scene) {
+    console.log("Scene not found!");
+    return;
+  }
+  
+  console.log("Scene found:", scene.name);
+  
+  // Check for the broken URL
+  const brokenUrl = "https://files.bazaarvideo.com/uploads/1735047892_image.png";
+  const correctUrl = "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/4ea08b31-de1b-46aa-a6ab-3f921eeba4d0/images/1753141081712-1f7d83d0-661c-438f-9cd5-68a83e080cae.JPG";
+  
+  if (scene.tsxCode.includes(brokenUrl)) {
+    console.log("Found broken URL in scene code!");
+    console.log("Replacing with correct URL...");
     
-    if (!scene) {
-      console.log("Scene not found!");
-      return;
+    // Replace the URL
+    const updatedCode = scene.tsxCode.replace(new RegExp(brokenUrl, 'g'), correctUrl);
+    
+    // Update the scene in database
+    await db.update(scenes)
+      .set({ tsxCode: updatedCode })
+      .where(eq(scenes.id, sceneId));
+      
+    console.log("Scene updated successfully!");
+  } else {
+    console.log("Broken URL not found in scene code.");
+    console.log("Checking for any image URLs...");
+    
+    // Find all image URLs in the code
+    const imgRegex = /<Img[^>]*src=["']([^"']+)["'][^>]*>/g;
+    const matches = [...scene.tsxCode.matchAll(imgRegex)];
+    
+    if (matches.length > 0) {
+      console.log("Found image URLs:");
+      matches.forEach((match, index) => {
+        console.log(`${index + 1}. ${match[1]}`);
+      });
+    } else {
+      console.log("No image URLs found in the scene code.");
     }
-    
-    console.log("Scene found:");
-    console.log("Name:", scene.name);
-    console.log("Order:", scene.order);
-    console.log("Duration:", scene.duration);
-    console.log("Created:", scene.createdAt);
-    console.log("Updated:", scene.updatedAt);
-    console.log("\n--- TSX Code Preview (first 500 chars) ---");
-    console.log(scene.tsxCode.substring(0, 500));
-    console.log("\n--- Full TSX Code Length ---");
-    console.log(`${scene.tsxCode.length} characters`);
-    
-    // Check if it looks like metadata instead of actual code
-    if (scene.tsxCode.includes('"id":') && scene.tsxCode.includes('"projectId":')) {
-      console.log("\n⚠️  WARNING: TSX Code appears to contain JSON metadata instead of React code!");
-      console.log("\n--- Full TSX Code ---");
-      console.log(scene.tsxCode);
-    }
-    
-    // Also check props if any
-    if (scene.props) {
-      console.log("\n--- Scene Props ---");
-      console.log(JSON.stringify(scene.props, null, 2));
-    }
-    
-  } catch (error) {
-    console.error("Error querying scene:", error);
   }
   
   process.exit(0);
 }
 
-checkScene();
+checkAndFixScene().catch(console.error);

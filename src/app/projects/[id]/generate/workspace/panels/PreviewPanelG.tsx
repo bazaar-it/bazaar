@@ -162,13 +162,18 @@ export function PreviewPanelG({
 
   // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
+    // Get code from scene.data.code (the correct location based on the type)
     const sceneCode = (scene.data as any)?.code;
     const sceneName = (scene.data as any)?.name || scene.id;
     const sceneId = scene.id;
     
     if (!sceneCode) {
-      console.warn(`[PreviewPanelG] Scene ${index} has no code. Scene data:`, scene);
-      console.warn(`[PreviewPanelG] Looking for code at scene.data.code, found:`, (scene.data as any)?.code);
+      console.warn(`[PreviewPanelG] Scene ${index} has no code. Scene structure:`, {
+        id: scene.id,
+        hasDataCode: !!(scene.data as any)?.code,
+        dataKeys: scene.data ? Object.keys(scene.data) : [],
+        sceneKeys: Object.keys(scene)
+      });
       return {
         isValid: false,
         compiledCode: createFallbackScene(sceneName, index, 'No code found', sceneId),
@@ -513,6 +518,7 @@ function FallbackScene${sceneIndex}() {
 
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
+    // Filter scenes that have code in their data
     const scenesWithCode = scenes.filter(scene => (scene.data as any)?.code);
     
     if (scenesWithCode.length === 0) {
