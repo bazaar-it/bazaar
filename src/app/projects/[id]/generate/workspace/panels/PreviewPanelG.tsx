@@ -62,12 +62,11 @@ export function PreviewPanelG({
       const currentSceneIds = dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',');
       
       if (currentSceneIds === lastSyncedSceneIds) {
-        console.log('[PreviewPanelG] Database scenes unchanged, skipping sync');
+        // Database scenes unchanged, skipping sync
         return;
       }
       
-      console.log('[PreviewPanelG] Database scenes updated, syncing to VideoState:', dbScenes.length);
-      console.log('[PreviewPanelG] First scene from DB:', dbScenes[0]);
+      // Database scenes updated, syncing to VideoState
       setLastSyncedSceneIds(currentSceneIds);
       
       // Convert database scenes to InputProps format
@@ -129,6 +128,16 @@ export function PreviewPanelG({
   const scenes = currentProps?.scenes || [];
   const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
   
+  // Memoized scene fingerprint to prevent unnecessary re-renders
+  const scenesFingerprint = useMemo(() => {
+    return `${scenes.length}-${scenes.map(s => `${s.id}-${typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0}`).join(',')}`;
+  }, [scenes.length, scenes.map(s => s.id).join(','), scenes.map(s => typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0).join(',')]);
+  
+  // Memoized audio fingerprint to prevent unnecessary re-renders
+  const audioFingerprint = useMemo(() => {
+    return `${projectAudio?.url || ''}-${projectAudio?.startTime || 0}-${projectAudio?.endTime || 0}-${projectAudio?.volume || 1}`;
+  }, [projectAudio?.url, projectAudio?.startTime, projectAudio?.endTime, projectAudio?.volume]);
+  
   // Calculate scene boundaries for scene loop functionality
   const sceneRanges = useMemo(() => {
     let start = 0;
@@ -187,7 +196,7 @@ export function PreviewPanelG({
       }
       
       // Log original code for debugging
-      console.log(`[PreviewPanelG] Original scene ${index} code (first 200 chars):`, sceneCode.substring(0, 200));
+      // Original scene code processing
       
       // Clean the scene code for compilation (remove imports/exports that don't work in our system)
       let cleanSceneCode = sceneCode
@@ -199,7 +208,7 @@ export function PreviewPanelG({
         .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?\s*/g, ''); // Remove export const statements
       
       // Log cleaned code for debugging
-      console.log(`[PreviewPanelG] Cleaned scene ${index} code (first 200 chars):`, cleanSceneCode.substring(0, 200));
+      // Cleaned scene code processing
 
       // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
       const testCompositeCode = `
@@ -218,7 +227,7 @@ export default function TestComponent() {
         production: false,
       });
 
-      console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) compiled successfully`);
+      // Scene compiled successfully
       
       // 🚨 NEW: Dispatch success event to clear any existing errors
       const successEvent = new CustomEvent('scene-fixed', {
@@ -252,11 +261,7 @@ export default function TestComponent() {
             error: new Error(detailedError)
           }
         });
-        console.log('[PreviewPanelG] 🚀 Dispatching preview-scene-error event:', {
-          sceneId,
-          sceneName,
-          error: detailedError
-        });
+        // Dispatching preview-scene-error event for scene compilation error
         window.dispatchEvent(errorEvent);
       }
       
@@ -569,6 +574,11 @@ function FallbackScene${sceneIndex}() {
           });
         }
 
+        // Always include Audio if project has audio
+        if (projectAudio?.url) {
+          allImports.add('Audio');
+        }
+        
         const allImportsArray = Array.from(allImports);
         const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
 
@@ -668,7 +678,8 @@ export default function SingleSceneComposition() {
   const projectAudio = window.projectAudio;
   
   return React.createElement(AbsoluteFill, {},
-    projectAudio && projectAudio.url && React.createElement(Audio, {
+    // Audio support - check if Audio component exists before using it
+    projectAudio && projectAudio.url && typeof Audio !== 'undefined' && Audio && React.createElement(Audio, {
       src: projectAudio.url,
       startFrom: Math.floor(projectAudio.startTime * 30), // Convert seconds to frames at 30fps
       endAt: Math.floor(projectAudio.endTime * 30),
@@ -689,21 +700,26 @@ export default function SingleSceneComposition() {
           production: false,
         });
 
-        console.log('[PreviewPanelG] Sucrase transformation successful.');
+        // Sucrase transformation successful
+        
+        // Cleanup old blob URL before creating new one
+        if (componentBlobUrl) {
+          URL.revokeObjectURL(componentBlobUrl);
+        }
         
         // Create blob URL
         const blob = new Blob([transformedCode], { type: 'application/javascript' });
         const newBlobUrl = URL.createObjectURL(blob);
         setComponentBlobUrl(newBlobUrl);
         
-        console.log('[PreviewPanelG] Created new single scene blob URL:', newBlobUrl);
+        // Created new single scene blob URL
         
         // Set audio data in window before importing
         const projectState = useVideoState.getState().projects[projectId];
         (window as any).projectAudio = projectState?.audio || null;
         
         // Import the module
-        console.log('[PreviewPanelG] Importing single scene module from:', newBlobUrl);
+        // Importing single scene module
         const module = await import(/* webpackIgnore: true */ newBlobUrl);
         const Component = module.default;
         
@@ -711,12 +727,12 @@ export default function SingleSceneComposition() {
           throw new Error('No default export found in generated component');
         }
         
-        console.log('[PreviewPanelG] Single scene dynamic import successful.');
+        // Single scene dynamic import successful
         
         // 🚨 CRITICAL: Force new refresh token to guarantee RemotionPreview remount
         const newRefreshToken = `compiled-single-${Date.now()}-${Math.random()}`;
         setRefreshToken(newRefreshToken);
-        console.log('[PreviewPanelG] 🔄 Set new refresh token for single scene:', newRefreshToken);
+        // Set new refresh token for single scene
         
         setComponentImporter(() => () => Promise.resolve({ default: Component }));
         
@@ -962,7 +978,7 @@ function ${compiled.componentName}WithErrorBoundary() {
               
             } else {
               // 🚨 INVALID SCENE: Already has fallback code, just add it with error boundary
-              console.log(`[PreviewPanelG] 🛡️ ISOLATION: Scene ${index} failed compilation, using safe fallback`);
+              // Scene isolation: failed compilation, using safe fallback
               
               // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
               sceneImports.push(compiled.compiledCode);
@@ -1072,6 +1088,11 @@ function EmergencyScene${index}() {
         });
 
         // Create ONE destructuring statement with ALL unique imports
+        // Always include Audio if project has audio
+        if (projectAudio?.url) {
+          allImports.add('Audio');
+        }
+        
         const allImportsArray = Array.from(allImports);
         const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
 
@@ -1106,7 +1127,7 @@ export default function MultiSceneComposition() {
 }
         `;
 
-        console.log('[PreviewPanelG] Generated multi-scene composite code:', compositeCode);
+        // Generated multi-scene composite code
 
         // Transform with Sucrase
         const { code: transformedCode } = transform(compositeCode, {
@@ -1115,21 +1136,26 @@ export default function MultiSceneComposition() {
           production: false,
         });
 
-        console.log('[PreviewPanelG] Sucrase transformation successful.');
+        // Sucrase transformation successful
+        
+        // Cleanup old blob URL before creating new one
+        if (componentBlobUrl) {
+          URL.revokeObjectURL(componentBlobUrl);
+        }
         
         // Create blob URL
         const blob = new Blob([transformedCode], { type: 'application/javascript' });
         const newBlobUrl = URL.createObjectURL(blob);
         setComponentBlobUrl(newBlobUrl);
         
-        console.log('[PreviewPanelG] Created new multi-scene blob URL:', newBlobUrl);
+        // Created new multi-scene blob URL
         
         // Set audio data in window before importing
         const projectState = useVideoState.getState().projects[projectId];
         (window as any).projectAudio = projectState?.audio || null;
         
         // Import the module
-        console.log('[PreviewPanelG] Importing multi-scene module from:', newBlobUrl);
+        // Importing multi-scene module
         const module = await import(/* webpackIgnore: true */ newBlobUrl);
         const Component = module.default;
         
@@ -1137,12 +1163,12 @@ export default function MultiSceneComposition() {
           throw new Error('No default export found in generated component');
         }
         
-        console.log('[PreviewPanelG] Multi-scene dynamic import successful.');
+        // Multi-scene dynamic import successful
         
         // 🚨 CRITICAL: Force new refresh token to guarantee RemotionPreview remount
         const newRefreshToken = `compiled-multi-${Date.now()}-${Math.random()}`;
         setRefreshToken(newRefreshToken);
-        console.log('[PreviewPanelG] 🔄 Set new refresh token for multi scene:', newRefreshToken);
+        // Set new refresh token for multi scene
         
         setComponentImporter(() => () => Promise.resolve({ default: Component }));
       }
@@ -1169,7 +1195,7 @@ export default function MultiSceneComposition() {
         // We know which specific scene is problematic
         const problematicScene = scenesWithCode[problematicSceneInfo.sceneIndex];
         if (problematicScene) {
-          console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching error for specific scene:', problematicSceneInfo.sceneName);
+          // Compilation error: dispatching error for specific scene
           const errorEvent = new CustomEvent('preview-scene-error', {
             detail: {
               sceneId: problematicSceneInfo.sceneId,
@@ -1184,7 +1210,7 @@ export default function MultiSceneComposition() {
         // Fallback to first scene if we can't identify the specific one
         const firstSceneWithCode = scenesWithCode[0];
         if (firstSceneWithCode) {
-          console.log('[PreviewPanelG] 🔧 COMPILATION ERROR: Dispatching preview-scene-error event for autofixer');
+          // Compilation error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
             detail: {
               sceneId: firstSceneWithCode.id,
@@ -1198,7 +1224,7 @@ export default function MultiSceneComposition() {
       
       // IDIOT PROOF: Create a simple fallback that always works
       try {
-        console.log('[PreviewPanelG] Creating fallback composition...');
+        // Creating fallback composition
         const fallbackCode = `
 const { AbsoluteFill } = window.Remotion;
 
@@ -1257,7 +1283,7 @@ export default function FallbackComposition() {
         // 🚨 CRITICAL FIX: Dispatch error event even for fallback failures
         const firstSceneWithCode = scenesWithCode[0];
         if (firstSceneWithCode) {
-          console.log('[PreviewPanelG] 🔧 FALLBACK ERROR: Dispatching preview-scene-error event for autofixer');
+          // Fallback error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
             detail: {
               sceneId: firstSceneWithCode.id,
@@ -1287,7 +1313,7 @@ export default function FallbackComposition() {
       
       // Set new debounced timer
       const timer = setTimeout(() => {
-        console.log('[PreviewPanelG] Scenes changed (debounced), recompiling...');
+        // Scenes changed (debounced), recompiling
         compileMultiSceneComposition();
       }, 100); // 100ms debounce
       
@@ -1300,13 +1326,13 @@ export default function FallbackComposition() {
         clearTimeout(compilationDebounceTimer);
       }
     };
-  }, [scenes.length, scenes.map(s => `${s.id}-${s.data?.code?.length || 0}`).join(','), projectAudio?.url, projectAudio?.startTime, projectAudio?.endTime, projectAudio?.volume, compileMultiSceneComposition]);
+  }, [scenesFingerprint, audioFingerprint, compileMultiSceneComposition]);
 
 
   // Manual refresh
   const handleRefresh = useCallback(() => {
     if (scenes.length > 0) {
-      console.log('[PreviewPanelG] Manual refresh - recompiling multi-scene...');
+      // Manual refresh - recompiling multi-scene
       compileMultiSceneComposition();
     }
   }, [compileMultiSceneComposition]);
@@ -1316,7 +1342,7 @@ export default function FallbackComposition() {
     const handleSpeedChange = (event: CustomEvent) => {
       const speed = event.detail?.speed;
       if (typeof speed === 'number' && speed >= 0.1 && speed <= 4) {
-        console.log('[PreviewPanelG] Received speed change event:', speed);
+        // Received speed change event
         setPlaybackSpeed(speed);
         
         // Save preference per project
@@ -1342,7 +1368,7 @@ export default function FallbackComposition() {
         const speed = parseFloat(savedSpeed);
         if (speed >= 0.1 && speed <= 4) {
           setPlaybackSpeed(speed);
-          console.log('[PreviewPanelG] Loaded saved playback speed for project:', projectId, speed);
+          // Loaded saved playback speed for project
           
           // Dispatch event to update header display
           const event = new CustomEvent('playback-speed-loaded', { detail: { speed } });
@@ -1365,7 +1391,7 @@ export default function FallbackComposition() {
   useEffect(() => {
     const handleScenesCreatedBulk = (event: CustomEvent) => {
       if (event.detail?.projectId === projectId) {
-        console.log('[PreviewPanelG] Bulk scenes created, refreshing...');
+        // Bulk scenes created, refreshing
         // Force a re-render by updating refresh token
         setRefreshToken(`bulk-${Date.now()}`);
         // Recompile the scenes
@@ -1379,7 +1405,7 @@ export default function FallbackComposition() {
 
     const handleSceneCreated = (event: CustomEvent) => {
       if (event.detail?.projectId === projectId) {
-        console.log('[PreviewPanelG] Single scene created, refreshing...');
+        // Single scene created, refreshing
         setRefreshToken(`single-${Date.now()}`);
         if (scenes.length > 0) {
           setTimeout(() => {
@@ -1402,7 +1428,7 @@ export default function FallbackComposition() {
     const handleLoopStateChange = (event: CustomEvent) => {
       const state = event.detail?.state;
       if (state === 'video' || state === 'off' || state === 'scene') {
-        console.log('[PreviewPanelG] Received loop state change:', state);
+        // Received loop state change
         setLoopState(state);
         
         // Save preference per project
@@ -1435,7 +1461,7 @@ export default function FallbackComposition() {
       // Dispatch event to sync with header
       const event = new CustomEvent('loop-state-loaded', { detail: { state } });
       window.dispatchEvent(event);
-      console.log('[PreviewPanelG] Loop state initialized for project:', projectId, state);
+      // Loop state initialized for project
     } catch (error) {
       console.warn('[PreviewPanelG] Failed to load loop preference:', error);
       // Even on error, ensure default video loop
@@ -1443,6 +1469,18 @@ export default function FallbackComposition() {
     }
   }, [projectId]);
 
+  // Cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup blob URLs to prevent memory leaks
+      if (componentBlobUrl) {
+        URL.revokeObjectURL(componentBlobUrl);
+      }
+      
+      // Event listeners are already cleaned up in their respective useEffects
+      // but we could add additional cleanup here if needed
+    };
+  }, [componentBlobUrl]);
 
   // Player props
   const playerProps = useMemo(() => {

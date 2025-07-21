@@ -50,6 +50,14 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     }
   }, [projectId]);
 
+  // Update HTML audio element when audio track changes
+  useEffect(() => {
+    if (audioRef.current && audioTrack) {
+      audioRef.current.volume = audioTrack.volume;
+      audioRef.current.playbackRate = audioTrack.playbackRate || 1;
+    }
+  }, [audioTrack?.volume, audioTrack?.playbackRate]);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -311,6 +319,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
               onLoadedMetadata={() => {
                 if (audioRef.current) {
                   audioRef.current.volume = audioTrack.volume;
+                  audioRef.current.playbackRate = audioTrack.playbackRate || 1;
                 }
               }}
             />

@@ -214,9 +214,9 @@ async function preprocessSceneForLambda(scene: any) {
       }
     }
     
-    // Ensure the component is returned at the end
-    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('return Component;')) {
-      transformedCode = transformedCode + '\n\nreturn Component;';
+    // Ensure the component is exported and returned at the end
+    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('export default Component;')) {
+      transformedCode = transformedCode + '\n\nexport default Component;\nreturn Component;';
     }
     
     // Replace window.React with React
@@ -233,6 +233,19 @@ async function preprocessSceneForLambda(scene: any) {
     transformedCode = transformedCode.replace(
       /window\.IconifyIcon/g,
       '"div"'
+    );
+    
+    // Fix React.createElement calls with icon props - remove invalid icon prop
+    // Handle simple icon props
+    transformedCode = transformedCode.replace(
+      /React\.createElement\(\s*"div"\s*,\s*\{\s*icon:\s*"[^"]*"\s*,\s*([^}]+)\s*\}/g,
+      'React.createElement("div", { $1 }'
+    );
+    
+    // Handle complex multi-line icon props (like conditional expressions)
+    transformedCode = transformedCode.replace(
+      /React\.createElement\(\s*"div"\s*,\s*\{\s*icon:\s*[^,}]+\s*,\s*([^}]+)\s*\}/gs,
+      'React.createElement("div", { $1 }'
     );
     
     // Replace window.IconifyIcon with actual SVG icons
