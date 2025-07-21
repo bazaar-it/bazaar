@@ -574,9 +574,11 @@ function FallbackScene${sceneIndex}() {
           });
         }
 
-        // Always include Audio if project has audio
+        // Always include Audio and related functions if project has audio
         if (projectAudio?.url) {
           allImports.add('Audio');
+          allImports.add('useCurrentFrame');
+          allImports.add('interpolate');
         }
         
         const allImportsArray = Array.from(allImports);
@@ -673,19 +675,58 @@ class SingleSceneErrorBoundary extends React.Component {
   }
 }
 
+// Enhanced Audio Component with Fade Effects
+const EnhancedAudio = ({ audioData }) => {
+  const frame = useCurrentFrame();
+  const startFrame = Math.floor(audioData.startTime * 30);
+  const endFrame = Math.floor(audioData.endTime * 30);
+  const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
+  const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
+  const duration = endFrame - startFrame;
+  
+  // Calculate volume with fade effects
+  let volume = audioData.volume;
+  
+  // Apply fade in
+  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+    volume *= interpolate(
+      frame,
+      [startFrame, startFrame + fadeInFrames],
+      [0, 1],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+  }
+  
+  // Apply fade out
+  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+    volume *= interpolate(
+      frame,
+      [endFrame - fadeOutFrames, endFrame],
+      [1, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+  }
+  
+  // Only render if Audio is available
+  if (typeof Audio === 'undefined' || !Audio) {
+    return null;
+  }
+  
+  return React.createElement(Audio, {
+    src: audioData.url,
+    startFrom: startFrame,
+    endAt: endFrame,
+    volume: volume,
+    playbackRate: audioData.playbackRate || 1
+  });
+};
+
 export default function SingleSceneComposition() {
   // Get audio from props
   const projectAudio = window.projectAudio;
   
   return React.createElement(AbsoluteFill, {},
-    // Audio support - check if Audio component exists before using it
-    projectAudio && projectAudio.url && typeof Audio !== 'undefined' && Audio && React.createElement(Audio, {
-      src: projectAudio.url,
-      startFrom: Math.floor(projectAudio.startTime * 30), // Convert seconds to frames at 30fps
-      endAt: Math.floor(projectAudio.endTime * 30),
-      volume: projectAudio.volume,
-      playbackRate: projectAudio.playbackRate || 1
-    }),
+    projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
     React.createElement(SingleSceneErrorBoundary)
   );
 }
@@ -1088,9 +1129,11 @@ function EmergencyScene${index}() {
         });
 
         // Create ONE destructuring statement with ALL unique imports
-        // Always include Audio if project has audio
+        // Always include Audio and related functions if project has audio
         if (projectAudio?.url) {
           allImports.add('Audio');
+          allImports.add('useCurrentFrame');
+          allImports.add('interpolate');
         }
         
         const allImportsArray = Array.from(allImports);
@@ -1102,21 +1145,58 @@ ${singleDestructuring}
 
 ${sceneImports.join('\n\n')}
 
+// Enhanced Audio Component with Fade Effects
+const EnhancedAudio = ({ audioData }) => {
+  const frame = useCurrentFrame();
+  const startFrame = Math.floor(audioData.startTime * 30);
+  const endFrame = Math.floor(audioData.endTime * 30);
+  const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
+  const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
+  
+  // Calculate volume with fade effects
+  let volume = audioData.volume;
+  
+  // Apply fade in
+  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+    volume *= interpolate(
+      frame,
+      [startFrame, startFrame + fadeInFrames],
+      [0, 1],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+  }
+  
+  // Apply fade out
+  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+    volume *= interpolate(
+      frame,
+      [endFrame - fadeOutFrames, endFrame],
+      [1, 0],
+      { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+    );
+  }
+  
+  // Only render if Audio is available
+  if (typeof Audio === 'undefined' || !Audio) {
+    return null;
+  }
+  
+  return React.createElement(Audio, {
+    src: audioData.url,
+    startFrom: startFrame,
+    endAt: endFrame,
+    volume: volume,
+    playbackRate: audioData.playbackRate || 1
+  });
+};
+
 export default function MultiSceneComposition() {
   // Get audio from props
   const projectAudio = window.projectAudio;
   
   return (
     <AbsoluteFill>
-      {projectAudio && projectAudio.url && (
-        <Audio
-          src={projectAudio.url}
-          startFrom={Math.floor(projectAudio.startTime * 30)} // Convert seconds to frames at 30fps
-          endAt={Math.floor(projectAudio.endTime * 30)}
-          volume={projectAudio.volume}
-          playbackRate={projectAudio.playbackRate || 1}
-        />
-      )}
+      {projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio })}
       <Loop durationInFrames={${totalDuration}}>
         <Series>
           ${sceneComponents.join('\n          ')}
