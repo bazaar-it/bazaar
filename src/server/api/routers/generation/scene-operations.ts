@@ -273,67 +273,14 @@ export const generateScene = protectedProcedure
       // 9. Return universal response
       // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
       if (!toolResult.scene) {
+        /* [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
         if (decision.toolName === 'scenePlanner') {
           // Scene planner succeeded - increment usage
           await UsageService.incrementPromptUsage(userId);
-          
-          // 🚀 BACKGROUND SCENE 1 GENERATION: Start generating first scene in background
-          // This happens AFTER returning the response to give immediate feedback
-          setTimeout(async () => {
-            try {
-              console.log('🚀 [SCENE-OPS] Starting background generation of scene 1...');
-              
-              // Get the first scene plan from the additional message IDs
-              if (toolResult.additionalMessageIds && toolResult.additionalMessageIds.length > 0) {
-                const firstScenePlanMessageId = toolResult.additionalMessageIds[0];
-                
-                if (firstScenePlanMessageId) {
-                  // Call the existing create scene API to generate scene 1
-                  // This will create the scene and add the "generated" indicator
-                  console.log('🚀 [SCENE-OPS] Triggering scene creation for first plan message:', firstScenePlanMessageId);
-                  
-                  // Store the generating state in a way the frontend can access
-                  // We'll emit this through the SSE stream or custom event
-                  console.log(`[SCENE-OPS] Marking scene ${firstScenePlanMessageId} as auto-generating`);
-                  
-                  // Call the createScene mutation directly using the current context
-                  // The UI will show loading state via the generatingScenes tracking
-                  const createSceneResult = await createSceneFromPlanRouter.createCaller(ctx).createScene({
-                    messageId: firstScenePlanMessageId,
-                    projectId: projectId,
-                    userId: userId
-                  });
-                  
-                  if (createSceneResult.success) {
-                    console.log('✅ [SCENE-OPS] Background scene 1 generated successfully:', createSceneResult.scene?.name);
-                  } else {
-                    console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', createSceneResult.error);
-                  }
-                }
-              }
-            } catch (error) {
-              console.error('🚨 [SCENE-OPS] Background scene 1 generation failed:', error);
-            }
-          }, 100); // Small delay to ensure response is sent first
-          
-          // Return success with additional message IDs
-          const successResponse = response.success(
-            null, // No scene data since scene planner doesn't create scenes
-            'scene.create',
-            'scene',
-            [] // No scene IDs since no scenes were created
-          );
-          
-          return {
-            ...successResponse,
-            context: {
-              reasoning: decision.reasoning,
-              chatResponse: decision.chatResponse,
-            },
-            assistantMessageId,
-            additionalMessageIds: toolResult.additionalMessageIds || [],
-          } as unknown as SceneCreateResponse;
+          // ... (rest of scenePlanner logic)
+          return successResponse;
         } else {
+        */
           // Other tools should always return a scene
           return response.error(
             ErrorCode.INTERNAL_ERROR,
@@ -341,7 +288,7 @@ export const generateScene = protectedProcedure
             'scene.create',
             'scene'
           ) as any as SceneCreateResponse;
-        }
+        // }
       }
 
       // Scene is already a proper SceneEntity from the database
@@ -352,7 +299,7 @@ export const generateScene = protectedProcedure
         const toolOp = TOOL_OPERATION_MAP[decision.toolName];
         switch (toolOp) {
           case 'scene.create':
-          case 'multi-scene.create': // Map multi-scene to regular scene.create
+          // case 'multi-scene.create': // [DISABLED] Map multi-scene to regular scene.create
             operation = 'scene.create';
             break;
           case 'scene.update':

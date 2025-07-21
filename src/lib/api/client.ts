@@ -51,6 +51,9 @@ export function handleUniversalResponse<T>(
       (error as any).requestId = errorResponse.meta.requestId;
       throw error;
     }
+    
+    // When throwOnError is false, return the data (which is null for error responses)
+    return errorResponse.data;
   }
 
   // This shouldn't happen with proper typing, but handle it just in case

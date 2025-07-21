@@ -54,10 +54,21 @@ export function PreviewPanelG({
   
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
+  const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
+  
   useEffect(() => {
     if (dbScenes && dbScenes.length > 0 && currentProps) {
+      // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
+      const currentSceneIds = dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',');
+      
+      if (currentSceneIds === lastSyncedSceneIds) {
+        console.log('[PreviewPanelG] Database scenes unchanged, skipping sync');
+        return;
+      }
+      
       console.log('[PreviewPanelG] Database scenes updated, syncing to VideoState:', dbScenes.length);
       console.log('[PreviewPanelG] First scene from DB:', dbScenes[0]);
+      setLastSyncedSceneIds(currentSceneIds);
       
       // Convert database scenes to InputProps format
       let currentStart = 0;
@@ -1231,12 +1242,31 @@ export default function FallbackComposition() {
     }
   }, [scenes]);
 
-  // Single effect: Compile when scenes change
+  // 🚨 FIX: Debounced compilation to prevent multiple rapid recompiles
+  const [compilationDebounceTimer, setCompilationDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
     if (scenes.length > 0) {
-      console.log('[PreviewPanelG] Scenes changed, recompiling...');
-      compileMultiSceneComposition();
+      // Clear existing timer
+      if (compilationDebounceTimer) {
+        clearTimeout(compilationDebounceTimer);
+      }
+      
+      // Set new debounced timer
+      const timer = setTimeout(() => {
+        console.log('[PreviewPanelG] Scenes changed (debounced), recompiling...');
+        compileMultiSceneComposition();
+      }, 100); // 100ms debounce
+      
+      setCompilationDebounceTimer(timer);
     }
+    
+    // Cleanup on unmount
+    return () => {
+      if (compilationDebounceTimer) {
+        clearTimeout(compilationDebounceTimer);
+      }
+    };
   }, [scenes, compileMultiSceneComposition]);
 
 

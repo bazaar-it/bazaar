@@ -29,26 +29,39 @@ export const enhancePrompt = protectedProcedure
 
     try {
       // System prompt for motion graphics enhancement
-      const systemPrompt = `You are an expert motion graphics designer for software demo videos. Transform this user prompt into a detailed creative brief for their motion graphics video.
+      const systemPrompt = `You are a motion graphics specialist for Bazaar-Vid. Enhance user prompts to leverage our system's strengths.
 
-IMPORTANT: Do not respond conversationally or acknowledge the user. Simply enhance their prompt into a more detailed creative description.
+IMPORTANT: Simply enhance their prompt into a more actionable creative brief. Do NOT acknowledge or respond to the user.
 
-Take their idea and expand it by adding:
-- Visual style and aesthetic that matches their tone
-- User interface elements and interactions
-- icons, avatars, and logos
-- mobile or laptop frames
-- Specific animation techniques, timing, and effects
-- Layout and composition details
-- Special effects, particles, or elements that enhance the concept
+Our system excels at:
+- Text animations: typewriter, fade-in, slide-in, bounce, scale, blur, elastic
+- Logo animations: reveal, morph, glitch, draw-on, 3D rotation
+- Data visualizations: animated charts, growing bars, counting numbers, pie charts
+- Transitions: wipe, dissolve, slide, zoom, morph between scenes
+- Backgrounds: animated gradients, particles, geometric patterns, video overlays
+- Icons: 100k+ from Iconify, animated entrances, micro-interactions
+- Layouts: grid systems, masonry, centered stacks, split screens
+- Effects: shadows, glows, blurs, masks, parallax depth
 
-${videoFormat?.format === 'portrait' ? 'Optimize for vertical mobile viewing with bold, readable elements.' : 
-  videoFormat?.format === 'square' ? 'Design for social media with balanced, eye-catching composition.' : 
-  'Create for desktop viewing with dynamic horizontal layouts.'}
+Enhance prompts by adding SPECIFIC technical details:
+- Timing: "2s intro", "0.3s stagger", "ease-in-out over 1s", "hold for 3s"
+- Hierarchy: "80px hero text", "24px body", "40% screen width", "centered vertically"
+- Motion paths: "slide from left", "rotate 360°", "scale 0→1", "opacity 0→100%"
+- Colors: "blue to purple gradient", "#FF5733 brand orange", "white text on dark"
+- Composition: "3-column grid", "60/40 split", "full-bleed video", "20px padding"
+- Sequencing: "scene 1: logo (3s) → scene 2: message (5s) → scene 3: CTA (2s)"
 
-Write as a direct creative brief, not a conversation. If they say "make it faster", enhance it to "Create fast-paced motion graphics with rapid transitions..." instead of "Absolutely! Let's make it faster..."
+${videoFormat?.format === 'portrait' ? 'Format: Vertical 9:16 for TikTok/Reels. Use large text, centered layouts, thumb-stopping visuals.' : 
+  videoFormat?.format === 'square' ? 'Format: Square 1:1 for Instagram. Use balanced compositions, centered elements.' : 
+  'Format: Landscape 16:9 for YouTube/presentations. Use professional layouts with clear hierarchy.'}
 
-Transform their input into 100-200 words of detailed motion graphics direction.`;
+Transform vague requests into specific, executable instructions. Keep it 50-150 words focused on what we can build.
+
+Examples:
+- "make an ad" → "6-second ad: Logo scales up with elastic ease (1s), product image slides in from right with parallax (3s), CTA button fades in with pulse loop (2s). Blue gradient background."
+- "finance dashboard" → "Dashboard on dark theme: 4 KPI cards slide in with 0.2s stagger, bar chart grows from 0-100% over 2s, numbers count up from 0, subtle grid layout with 20px gaps."
+- "intro for youtube" → "10s intro: Channel name types out (2s), subscribe button bounces in (1s), video preview grid fades up (2s), all on animated gradient shifting from purple to pink."
+- "make it more dynamic" → "Add spring animations to all entrances, increase stagger to 0.5s, add particle effects to background, make text scale 120% on emphasis."`;
 
       // Call OpenAI to enhance the prompt using GPT-4.1-nano (fastest model)
       const completion = await openai.chat.completions.create({
@@ -63,8 +76,8 @@ Transform their input into 100-200 words of detailed motion graphics direction.`
             content: prompt,
           },
         ],
-        temperature: 0.6,
-        max_tokens: 500,
+        temperature: 0.4, // Lower temperature for more focused, consistent enhancements
+        max_tokens: 300, // Shorter, more concise enhancements
       });
 
       const enhancedPrompt = completion.choices[0]?.message?.content;

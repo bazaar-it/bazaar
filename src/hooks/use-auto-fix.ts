@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
@@ -10,7 +10,7 @@ interface Scene {
   [key: string]: any;
 }
 
-const DEBUG_AUTOFIX = true; // Temporarily enable for debugging
+const DEBUG_AUTOFIX = false; // Disable debug logging to reduce console spam
 
 // Cost control constants - CRITICAL FOR API BUDGET
 const MAX_FIXES_PER_SESSION = 10; // Maximum total fixes in a session
@@ -19,8 +19,11 @@ const COOLDOWN_PERIOD_MS = 60000; // 1 minute cooldown after hitting limits
 const FIX_HISTORY_WINDOW_MS = 300000; // 5 minute sliding window for rate limiting
 
 export function useAutoFix(projectId: string, scenes: Scene[]) {
-  console.log('[SILENT FIX] Hook initialized with projectId:', projectId, 'scenes:', scenes.length);
-  console.log('[SILENT FIX] Hook mounted at:', new Date().toISOString());
+  // 🚨 FIX: Use useMemo to stabilize scenes array reference to prevent infinite re-renders
+  const sceneIds = scenes.map(s => s.id).join(',');
+  const stableScenes = useMemo(() => scenes, [sceneIds]);
+  
+  // Removed debug log to prevent re-render spam
   const [autoFixQueue] = useState<Map<string, AutoFixQueueItem>>(new Map());
   const generateSceneMutation = api.generation.generateScene.useMutation();
   const utils = api.useUtils();
@@ -174,14 +177,18 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     
     // Check if we've hit the rate limit
     if (recentHistory.length >= MAX_FIXES_PER_SESSION) {
-      console.error('[SILENT FIX] 🛑 RATE LIMIT: Reached maximum fixes per session!');
-      console.error(`[SILENT FIX] ${recentHistory.length} fixes in the last ${FIX_HISTORY_WINDOW_MS / 60000} minutes`);
+      if (DEBUG_AUTOFIX) {
+        console.error('[SILENT FIX] 🛑 RATE LIMIT: Reached maximum fixes per session!');
+        console.error(`[SILENT FIX] ${recentHistory.length} fixes in the last ${FIX_HISTORY_WINDOW_MS / 60000} minutes`);
+      }
       
       // Enter cooldown
       setIsInCooldown(true);
       setTimeout(() => {
         setIsInCooldown(false);
-        console.log('[SILENT FIX] Cooldown period ended');
+        if (DEBUG_AUTOFIX) {
+          console.log('[SILENT FIX] Cooldown period ended');
+        }
       }, COOLDOWN_PERIOD_MS);
       
       // Clear all queued fixes to prevent further attempts
@@ -236,7 +243,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       
       // Success - already cleaned up in executeAutoFix
       if (DEBUG_AUTOFIX) {
-        console.log(`[SILENT FIX] Successfully fixed ${queueItem.errorDetails.sceneName} on attempt ${queueItem.attempts}`);
+        if (DEBUG_AUTOFIX) {
+          console.log(`[SILENT FIX] Successfully fixed ${queueItem.errorDetails.sceneName} on attempt ${queueItem.attempts}`);
+        }
       }
       
     } catch (error) {
@@ -256,14 +265,18 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
 
   // Listen for preview panel errors
   useEffect(() => {
-    console.log('[SILENT FIX] Setting up event listeners in useEffect at:', new Date().toISOString());
-    console.log('[SILENT FIX] Current autoFixQueue size:', autoFixQueue.size);
-    console.log('[SILENT FIX] Current fixingScenes:', Array.from(fixingScenes));
+    if (DEBUG_AUTOFIX) {
+      console.log('[SILENT FIX] Setting up event listeners in useEffect at:', new Date().toISOString());
+      console.log('[SILENT FIX] Current autoFixQueue size:', autoFixQueue.size);
+      console.log('[SILENT FIX] Current fixingScenes:', Array.from(fixingScenes));
+    }
     
     const handlePreviewError = (event: CustomEvent) => {
-      console.log('[SILENT FIX] ======== PREVIEW ERROR EVENT RECEIVED ========');
-      console.log('[SILENT FIX] Event timestamp:', new Date().toISOString());
-      console.log('[SILENT FIX] Event detail:', JSON.stringify(event.detail, null, 2));
+      if (DEBUG_AUTOFIX) {
+        console.log('[SILENT FIX] ======== PREVIEW ERROR EVENT RECEIVED ========');
+        console.log('[SILENT FIX] Event timestamp:', new Date().toISOString());
+        console.log('[SILENT FIX] Event detail:', JSON.stringify(event.detail, null, 2));
+      }
       const { sceneId, sceneName, error } = event.detail;
       
       if (DEBUG_AUTOFIX) {
@@ -280,7 +293,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       
       // Check if we're in cooldown - still add to queue but warn
       if (isInCooldown) {
-        console.warn('[SILENT FIX] ⚠️ ERROR DETECTED BUT IN COOLDOWN - Auto-fix disabled temporarily');
+        if (DEBUG_AUTOFIX) {
+          console.warn('[SILENT FIX] ⚠️ ERROR DETECTED BUT IN COOLDOWN - Auto-fix disabled temporarily');
+        }
         return;
       }
       
@@ -365,18 +380,22 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       });
     };
 
-    console.log('[SILENT FIX] 🎯 Adding event listeners NOW');
-    
-    // Test that events work
-    const testListener = () => {
-      console.log('[SILENT FIX] Test event received - event system is working!');
-    };
-    window.addEventListener('test-event', testListener);
-    window.dispatchEvent(new CustomEvent('test-event'));
-    window.removeEventListener('test-event', testListener);
+    if (DEBUG_AUTOFIX) {
+      console.log('[SILENT FIX] 🎯 Adding event listeners NOW');
+      
+      // Test that events work
+      const testListener = () => {
+        console.log('[SILENT FIX] Test event received - event system is working!');
+      };
+      window.addEventListener('test-event', testListener);
+      window.dispatchEvent(new CustomEvent('test-event'));
+      window.removeEventListener('test-event', testListener);
+    }
     
     window.addEventListener('preview-scene-error', handlePreviewError as EventListener);
-    console.log('[SILENT FIX] ✅ Event listener for preview-scene-error added');
+    if (DEBUG_AUTOFIX) {
+      console.log('[SILENT FIX] ✅ Event listener for preview-scene-error added');
+    }
     window.addEventListener('scene-deleted', handleSceneDeleted as EventListener);
     window.addEventListener('scene-fixed', handleSceneFixed as EventListener);
     
@@ -395,7 +414,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         }
       });
     };
-  }, [processAutoFixQueue, fixingScenes]); // Removed autoFixQueue from deps - it's a stable Map ref
+  }, [projectId]); // 🚨 FIX: Only depend on projectId to prevent infinite re-renders from scenes changes
 
   // Return empty object - no UI interaction needed
   return {};

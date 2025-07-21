@@ -76,11 +76,8 @@ export default function ChatPanelG({
   const messages = getProjectChatHistory(projectId);
   
   // Debug: Log messages to check for duplicates
-  console.log('[ChatPanelG] Messages from VideoState:', messages.length, messages.map(m => ({
-    id: m.id,
-    content: m.message.substring(0, 50) + '...',
-    isUser: m.isUser
-  })));
+  // Commented out to prevent re-render spam
+  // console.log('[ChatPanelG] Messages from VideoState:', messages.length);
   
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
@@ -89,11 +86,7 @@ export default function ChatPanelG({
       array.findIndex(m => m.id === msg.id) === index
     );
     
-    console.log('[ChatPanelG] Deduplicated messages:', {
-      original: messages.length,
-      unique: uniqueMessages.length,
-      removed: messages.length - uniqueMessages.length
-    });
+    // Removed console.log to prevent re-render spam
     
     return uniqueMessages.map(msg => ({
       id: msg.id,
@@ -170,22 +163,34 @@ export default function ChatPanelG({
     };
   }, [currentProps]);
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    if (!generationComplete) {
-      scrollToBottom();
-    }
-  }, [componentMessages, scrollToBottom, generationComplete]);
-
-  // Force scroll to bottom whenever messages change
-  useEffect(() => {
-    // Use requestAnimationFrame to ensure DOM has updated
-    requestAnimationFrame(() => {
-      if (chatContainerRef.current) {
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+  // 🚨 FIX: Smart auto-scroll that respects user scroll position
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  
+  // Detect when user manually scrolls
+  const handleScroll = useCallback(() => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10; // 10px threshold
+      
+      if (!isAtBottom && !userHasScrolled) {
+        setUserHasScrolled(true);
+        setShouldAutoScroll(false);
+      } else if (isAtBottom && userHasScrolled) {
+        setUserHasScrolled(false);
+        setShouldAutoScroll(true);
       }
-    });
-  }, [componentMessages]); // Trigger on any message change
+    }
+  }, [userHasScrolled]);
+  
+  // Auto-scroll only when appropriate
+  useEffect(() => {
+    if (shouldAutoScroll && !userHasScrolled) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [componentMessages, shouldAutoScroll, userHasScrolled, scrollToBottom]);
 
   
   // 🚀 [TICKET-006] Retry logic with exponential backoff
@@ -269,9 +274,8 @@ export default function ChatPanelG({
 
   // Handle message input change
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
-  }, [isGenerating]);
+  }, []);
 
   // ✅ NEW: Handle edit scene plan - copy prompt to input
   const handleEditScenePlan = useCallback((prompt: string) => {
@@ -540,8 +544,14 @@ export default function ChatPanelG({
     setIsEnhancing(true);
     
     try {
+      const currentProps = getCurrentProps();
       await enhancePromptMutation.mutateAsync({
-        prompt: message.trim()
+        prompt: message.trim(),
+        videoFormat: {
+          format: currentProps?.meta?.format || 'landscape',
+          width: currentProps?.meta?.width || 1920,
+          height: currentProps?.meta?.height || 1080
+        }
       });
       
       toast.success('Prompt enhanced!', {
@@ -823,7 +833,7 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
         <div className="space-y-4">
           {componentMessages.map((msg, index) => {
           // Find all scene plan messages

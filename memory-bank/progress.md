@@ -2,12 +2,44 @@
 
 ## �� **Current Status: Production Ready with Export Feature**
 
-**Last Updated**: January 7, 2025  
-**Current Sprint**: Sprint 75 - Credit-Based Payment System
+**Last Updated**: January 18, 2025  
+**Current Sprint**: Sprint 76 - Critical Bug Fixes
 **Previous Sprint**: Sprint 66 - Chat Export Dashboard Fixes
 **Next Focus**: Monetization & Usage Limits
 
-## 🚀 Sprint 75: Credit-Based Payment System (Current - January 7, 2025)
+## 🚀 Sprint 76: Critical Bug Fixes (Current - January 18, 2025)
+
+### Critical System Stability Fixes
+- **Status**: Completed
+- **Goal**: Fix infinite loops and UI issues in scene planning system
+- **Priority**: Critical - System was unusable
+
+### Completed Fixes:
+- ✅ **Fixed Infinite Loop in useAutoFix Hook**: Stabilized scene array reference with useMemo, changed useEffect dependencies
+- ✅ **Fixed Chat Panel Auto-scroll Issue**: Removed duplicate scroll effects, added smart scroll detection
+- ✅ **Improved Performance**: Eliminated infinite re-render loops causing system instability
+- ✅ **Enhanced UX**: Users can now read chat history without constant auto-scroll interruption
+- ✅ **Disabled ScenePlanner**: Commented out all scenePlanner functionality to reduce complexity and improve stability
+
+### Technical Details:
+- Modified `/src/hooks/use-auto-fix.ts` to prevent infinite re-renders
+- Updated `/src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx` with smart scroll behavior
+- Scene plan message styling already correctly implemented
+- VideoState updates working properly from previous fixes
+- **ScenePlanner Disabled**: Commented out in brain orchestrator, type definitions, execution logic, and scene operations
+- Fixed unrelated admin.ts import issue (missing `lt` from Drizzle ORM)
+
+### Impact:
+- System now stable and usable
+- Silent fix system no longer causes infinite loops
+- Chat panel respects user scroll behavior
+- Performance significantly improved
+- **Simplified Architecture**: ScenePlanner complexity removed, users create scenes one at a time
+- Brain now defaults to addScene for all scene creation requests
+
+---
+
+## 🚀 Sprint 75: Credit-Based Payment System (January 7, 2025)
 
 ### Credit System Implementation
 - **Status**: Planning Phase

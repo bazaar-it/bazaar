@@ -16,9 +16,9 @@ export const CODE_GENERATOR = {
 
 VIDEO FORMAT AWARENESS:
 You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video. Adapt your layouts accordingly:
-- PORTRAIT (9:16): Stack elements vertically, use larger text for mobile readability. ALWAYS center content using position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)". Content should occupy middle 80% of width.
-- SQUARE (1:1): Use centered, balanced compositions that work in all orientations. Use absolute positioning with transform: "translate(-50%, -50%)" for centering.
-- LANDSCAPE (16:9): Use horizontal layouts, side-by-side elements, standard text sizes
+- PORTRAIT (9:16): Stack elements vertically, use smaller base text sizes. ALWAYS center content using position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)". Content should occupy middle 90% of width for better mobile viewing.
+- SQUARE (1:1): Use centered, balanced compositions that work in all orientations. Use absolute positioning with transform: "translate(-50%, -50%)" for centering. Content should occupy middle 85% of width.
+- LANDSCAPE (16:9): Use horizontal layouts, side-by-side elements, standard text sizes. Content should occupy middle 80% of width.
 
 MOTION GRAPHICS PHILOSOPHY
 Motion graphics are time-based storytelling. Each scene is a moment. Every frame should have a clear purpose.
@@ -75,7 +75,11 @@ Keep the content concise and to the point. If text is the focal point, use one s
 
 TYPOGRAPHY - 
 
-Size - Use 20rem or 150px for primary text size and decrease in proportion to have many words you need to fit in the frame, ensuring the text never gets cut off by going outside the frame.
+Size - Base text size should be format-aware:
+- LANDSCAPE: Use 8% of width (approximately 150px for 1920px width) for primary text
+- PORTRAIT: Use 5% of width (approximately 50px for 1080px width) for primary text  
+- SQUARE: Use 6% of width (approximately 65px for 1080px width) for primary text
+Decrease proportionally for longer text to ensure it never gets cut off by going outside the frame.
 
 You have access to Google fonts via window.RemotionGoogleFonts.loadFont,
 If the user specified or provided an image, find the closest font match. 
@@ -105,7 +109,7 @@ ICONS AND AVATARS
   • Avatar names: 'asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman'
   • Usage: <img src={window.BazaarAvatars['asian-woman']} style={{width: "100px", height: "100px"}} />
   • Example: Use iconify icon names like "fontisto:apple-pay" for brands
-Match the icon size with the next closest element to it, if none then default to 20rem or 150px. 
+Match the icon size with the next closest element to it, if none then default to the format-aware primary text size. 
 
 ⸻
 
@@ -126,7 +130,7 @@ VIDEO HANDLING
   • Use the Video component from window.Remotion
   • For background video, set width and height to 100% with object-fit cover
   • Always mute background video
-  • Maintain full HD screen size: 1920x1080
+  • Maintain the specified format dimensions: {{WIDTH}}x{{HEIGHT}}
 
 ⸻
 

@@ -139,8 +139,14 @@ export class UnifiedCodeProcessor {
     
     try {
       // Prepare the messages with optional previous scene context
+      // Replace placeholders in TYPOGRAPHY_AGENT content
+      const typographyPrompt = TYPOGRAPHY_AGENT.content
+        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
+        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
+        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system' as const, content: TYPOGRAPHY_AGENT.content }
+        { role: 'system' as const, content: typographyPrompt }
       ];
 
       // Add previous scene context if available
@@ -216,10 +222,16 @@ export class UnifiedCodeProcessor {
         });
       }
       
+      // Replace placeholders in IMAGE_RECREATOR content
+      const imageRecreatorPrompt = IMAGE_RECREATOR.content
+        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
+        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
+        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      
       const response = await AIClientService.generateResponse(
         getModel('codeGenerator'),
         [{ role: 'user', content: messageContent }],
-        { role: 'system', content: IMAGE_RECREATOR.content }
+        { role: 'system', content: imageRecreatorPrompt }
       );
       
       const rawOutput = response?.content;

@@ -2,7 +2,7 @@
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports } from "~/server/db/schema";
-import { sql, and, gte, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
+import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 

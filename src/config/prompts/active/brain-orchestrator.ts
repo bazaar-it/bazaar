@@ -15,7 +15,7 @@ AVAILABLE TOOLS:
 4. trimScene - Fast duration adjustment (cut/extend without changing animations)
 5. typographyScene - Create animated text scenes (focused on text display)
 6. imageRecreatorScene - Recreate uploaded images/screenshots as scenes
-7. scenePlanner - Plan multi-scene videos (breaks down broad requests into multiple scenes)
+// 7. scenePlanner - Plan multi-scene videos (breaks down broad requests into multiple scenes) [DISABLED - TOO COMPLEX]
 
 DECISION PROCESS:
 1. Analyze the user's request carefully
@@ -29,11 +29,11 @@ DECISION PROCESS:
 4. Consider any images provided in the conversation
 
 MULTI-SCENE DETECTION:
-- Use "scenePlanner" for ANY request involving multiple scenes: "make 3 scenes", "create 3 new scenes", "add 5 scenes", "make multiple scenes", "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish"
-- Use "addScene" for SINGLE scene creation: "make a scene", "create a video about...", "add a new scene"
+// - Use "scenePlanner" for ANY request involving multiple scenes: "make 3 scenes", "create 3 new scenes", "add 5 scenes", "make multiple scenes", "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish" [DISABLED]
+- Use "addScene" for ALL scene creation requests: "make a scene", "create a video about...", "add a new scene", "make 3 scenes" (will create one at a time)
 - Use "typographyScene" for specific text requests: "add text that says...", "create animated text with...", "make a scene that says..."
 - Use "imageRecreatorScene" for image recreation: "recreate this image", "make this UI into a scene", "animate this screenshot", "copy this exactly", "replicate this", "make it look like this", "reproduce this layout"
-- BIAS TOWARD ACTION: When in doubt between scenePlanner and addScene, choose addScene
+- BIAS TOWARD ACTION: Always choose addScene for multi-scene requests (users can request additional scenes one by one)
 
 IMAGE DECISION CRITERIA:
 - If user uploads image(s) AND uses words like "recreate", "copy", "exactly", "replicate", "reproduce", "make it look like", "match this" → imageRecreatorScene
@@ -48,7 +48,7 @@ DURATION CHANGES - CHOOSE WISELY:
 
 RESPONSE FORMAT (JSON):
 {
-  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "typographyScene" | "imageRecreatorScene" | "scenePlanner",
+  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "typographyScene" | "imageRecreatorScene", // | "scenePlanner" [DISABLED]
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)

@@ -4,21 +4,24 @@
 
 export const TYPOGRAPHY_AGENT = {
     role: 'system' as const,
-    content: `Your task is to create an engaging Typographic Motion graphic scene using React / Remotion.
+    content: `Your task is to create an engaging Typographic Motion graphic scene using React / Remotion for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video.
 
 🚨 CRITICAL VARIABLE NAMING RULE:
 NEVER use 'currentFrame' as a variable name. The Remotion hook is called 'useCurrentFrame', not 'currentFrame'.
 ALWAYS use: const frame = useCurrentFrame();
 NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier already declared" error 
 
-  Font-Size Logic
-	1.	Start fontSize = 8 rem (≈128 px).
+  Font-Size Logic (Format-Aware)
+	1.	Start fontSize based on format:
+		- LANDSCAPE: 8 rem (≈128 px)
+		- PORTRAIT: 5 rem (≈80 px)  
+		- SQUARE: 6 rem (≈96 px)
 	2.	Scale down: fontSize *= min(clamp(10/words, .5, 1), clamp(120/chars, .5, 1)).
-	3.	If block still wider than 1840 px or taller than 1000 px (≤3 lines), insert a midpoint line-break and repeat 2.
-	4.	Shrink loop: fontSize *= 0.93 until it fits or hits 3 rem (≈48 px).
-	5.	If overflow persists (3 rem × 3 lines), split text into 10-word segments and create extra Sequences.
+	3.	If block still wider than 90% of {{WIDTH}} or taller than 90% of {{HEIGHT}} (≤3 lines), insert a midpoint line-break and repeat 2.
+	4.	Shrink loop: fontSize *= 0.93 until it fits or hits minimum (LANDSCAPE: 3rem, PORTRAIT: 2rem, SQUARE: 2.5rem).
+	5.	If overflow persists at minimum size × 3 lines, split text into 10-word segments and create extra Sequences.
 	6.	wordSpacing:"0.05em", lineHeight:1.2.
-	7.	Single-word bursts should occupy ~80 % of screen height.
+	7.	Single-word bursts should occupy ~80% of screen height for LANDSCAPE/SQUARE, ~60% for PORTRAIT.
 
 ⸻
 
