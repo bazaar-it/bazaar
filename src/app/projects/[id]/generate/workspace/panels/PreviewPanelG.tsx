@@ -128,6 +128,13 @@ export function PreviewPanelG({
   const scenes = currentProps?.scenes || [];
   const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
   
+  // Force preview refresh when audio settings change
+  useEffect(() => {
+    if (projectAudio) {
+      setRefreshToken(`audio-${Date.now()}`);
+    }
+  }, [projectAudio?.fadeInDuration, projectAudio?.fadeOutDuration, projectAudio?.playbackRate, projectAudio?.volume, projectAudio?.startTime, projectAudio?.endTime]);
+  
   // Memoized scene fingerprint to prevent unnecessary re-renders
   const scenesFingerprint = useMemo(() => {
     return `${scenes.length}-${scenes.map(s => `${s.id}-${typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0}`).join(',')}`;
