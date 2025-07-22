@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import {
   accounts,
   users,
+  userCredits,
 } from "~/server/db/schema";
 
 /**

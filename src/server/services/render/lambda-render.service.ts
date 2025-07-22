@@ -72,6 +72,11 @@ export async function renderVideoOnLambda({
     console.log(`[LambdaRender] Scenes: ${scenes.length}`);
     console.log(`[LambdaRender] Resolution: ${width}x${height} (provided: ${renderWidth}x${renderHeight}, settings: ${settings.resolution.width}x${settings.resolution.height})`);
     console.log(`[LambdaRender] Audio: ${audio ? `${audio.name} (${Math.round(audio.duration)}s)` : 'No audio'}`);
+    if (audio) {
+      console.log(`[LambdaRender] Audio URL: ${audio.url}`);
+      console.log(`[LambdaRender] Audio volume: ${audio.volume}`);
+      console.log(`[LambdaRender] Audio trim: ${audio.startTime}s - ${audio.endTime}s`);
+    }
     
     // Log scene details to debug truncation issue
     console.log(`[LambdaRender] Scene data being passed to Lambda:`);
@@ -111,6 +116,9 @@ export async function renderVideoOnLambda({
       imageFormat: format === 'gif' ? 'png' : 'jpeg',
       jpegQuality: settings.jpegQuality,
       crf: format === 'gif' ? undefined : settings.crf,
+      // Explicitly set audio codec for non-GIF formats
+      audioCodec: format === 'gif' ? undefined : 'aac',
+      audioBitrate: format === 'gif' ? undefined : '128k',
       privacy: "public",
       downloadBehavior: {
         type: "download",

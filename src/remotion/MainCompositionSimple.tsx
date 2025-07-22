@@ -1,7 +1,7 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile } from "remotion";
+import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -265,6 +265,16 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
+  // Debug audio prop
+  console.log('[VideoComposition] Audio prop received:', audio ? {
+    url: audio.url,
+    name: audio.name,
+    duration: audio.duration,
+    startTime: audio.startTime,
+    endTime: audio.endTime,
+    volume: audio.volume,
+    playbackRate: audio.playbackRate
+  } : 'No audio');
   if (!scenes || scenes.length === 0) {
     return (
       <AbsoluteFill
@@ -291,15 +301,27 @@ export const VideoComposition: React.FC<{
     <AbsoluteFill>
       {/* Background audio track */}
       {audio && (
-        <Audio
-          src={audio.url}
-          volume={audio.volume}
-          startFrom={Math.round(audio.startTime * 30)} // Convert seconds to frames
-          endAt={Math.round(audio.endTime * 30)} // Convert seconds to frames
-          loop={audio.endTime - audio.startTime < totalVideoDuration / 30} // Loop if audio is shorter than video
-          playbackRate={audio.playbackRate || 1}
-          // Note: Fade effects would need custom implementation with interpolate()
-        />
+        <>
+          {console.log('[VideoComposition] Rendering Audio component with:', {
+            src: audio.url,
+            volume: audio.volume,
+            startFrom: Math.round(audio.startTime * 30),
+            endAt: Math.round(audio.endTime * 30),
+            loop: audio.endTime - audio.startTime < totalVideoDuration / 30,
+            playbackRate: audio.playbackRate || 1,
+            totalVideoDuration,
+            audioDuration: audio.endTime - audio.startTime,
+            videoDurationSeconds: totalVideoDuration / 30
+          })}
+          <Audio
+            src={audio.url}
+            volume={audio.volume}
+            startFrom={Math.round(audio.startTime * 30)} // Convert seconds to frames
+            endAt={Math.round(audio.endTime * 30)} // Convert seconds to frames
+            loop={audio.endTime - audio.startTime < totalVideoDuration / 30} // Loop if audio is shorter than video
+            playbackRate={audio.playbackRate || 1}
+          />
+        </>
       )}
       
       {/* Video scenes */}
@@ -336,7 +358,7 @@ export const MainComposition: React.FC = () => {
           projectId: '',
           audio: undefined,
         }}
-        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number } }) => {
+        calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number; audio?: any } }) => {
           // Calculate total duration by extracting from each scene's code
           const totalDuration = (props.scenes || []).reduce((sum: number, scene: any) => {
             const sceneDuration = extractSceneDuration(scene);
