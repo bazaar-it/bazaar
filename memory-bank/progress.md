@@ -2,12 +2,83 @@
 
 ## �� **Current Status: Production Ready with Export Feature**
 
-**Last Updated**: January 3, 2025  
-**Current Sprint**: Sprint 66 - Chat Export Dashboard Fixes
-**Previous Sprint**: Sprint 65 - Render Improvements
-**Next Focus**: Production Testing & Deployment
+**Last Updated**: January 21, 2025  
+**Current Sprint**: Sprint 76 - Critical Bug Fixes
+**Previous Sprint**: Sprint 66 - Chat Export Dashboard Fixes
+**Next Focus**: Monetization & Usage Limits
 
-## 🚀 Sprint 66: Chat Export Dashboard Fixes (Current - January 3, 2025)
+## 🚀 Sprint 76: Critical Bug Fixes (Current - January 21, 2025)
+
+### Critical System Stability Fixes
+- **Status**: Completed
+- **Goal**: Fix infinite loops and UI issues in scene planning system
+- **Priority**: Critical - System was unusable
+
+### Completed Fixes:
+- ✅ **Fixed Infinite Loop in useAutoFix Hook**: Stabilized scene array reference with useMemo, changed useEffect dependencies
+- ✅ **Fixed Chat Panel Auto-scroll Issue**: Removed duplicate scroll effects, added smart scroll detection
+- ✅ **Improved Performance**: Eliminated infinite re-render loops causing system instability
+- ✅ **Enhanced UX**: Users can now read chat history without constant auto-scroll interruption
+- ✅ **Disabled ScenePlanner**: Commented out all scenePlanner functionality to reduce complexity and improve stability
+- ✅ **Fixed Timeline Utils Broken Imports**: Resolved missing `useTimelineValidation` hook import issue
+- ✅ **Fixed Lambda Export Scene Detection**: Corrected false positives for "script-only" scenes
+
+### Technical Details:
+- Modified `/src/hooks/use-auto-fix.ts` to prevent infinite re-renders
+- Updated `/src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx` with smart scroll behavior
+- Scene plan message styling already correctly implemented
+- VideoState updates working properly from previous fixes
+- **ScenePlanner Disabled**: Commented out in brain orchestrator, type definitions, execution logic, and scene operations
+- Fixed unrelated admin.ts import issue (missing `lt` from Drizzle ORM)
+- **Timeline Fix**: Implemented validation functions directly in `/src/components/client/Timeline/TimelineContext.tsx` after `useTimelineValidation` hook was deleted in Sprint 42/43
+- **Lambda Export Fix**: Updated `/src/server/services/render/render.service.ts` to correctly detect scenes with both script arrays AND components
+  - Previous logic incorrectly flagged scenes as incomplete if they had a script array
+  - Now only flags scenes that have ONLY a script array with no component function
+  - Added more comprehensive component detection patterns
+
+### Impact:
+- System now stable and usable
+- Silent fix system no longer causes infinite loops
+- Chat panel respects user scroll behavior
+- Performance significantly improved
+- **Simplified Architecture**: ScenePlanner complexity removed, users create scenes one at a time
+- Brain now defaults to addScene for all scene creation requests
+- Timeline component no longer has broken imports and validation works correctly
+- Lambda export no longer rejects valid scenes with script arrays
+
+---
+
+## 🚀 Sprint 75: Credit-Based Payment System (January 7, 2025)
+
+### Credit System Implementation
+- **Status**: Planning Phase
+- **Goal**: Implement pay-as-you-go credit system with Stripe
+- **Branch**: TBD
+
+### Planned Features:
+- 💰 Credit packages ($15 minimum purchase)
+- 💳 One-time payments via Stripe
+- 📊 Usage-based credit deduction
+- 🎁 Free credits for new users
+- 📈 Real-time balance tracking
+- 🔢 Bulk purchase discounts
+
+### Progress:
+- ✅ Pivoted from subscription to credit model
+- ✅ Designed credit packages with ~66% margin
+- ✅ Created usage rate structure (20 credits per 10s @ 1080p)
+- ✅ Simplified Stripe integration plan
+- ✅ Documented credit system architecture
+- 🔄 Ready to implement CreditService
+
+### Documentation:
+- `/memory-bank/sprints/sprint75/credit-based-pricing-strategy.md`
+- `/memory-bank/sprints/sprint75/stripe-dos-and-donts.md`
+- `/memory-bank/sprints/sprint75/TODO.md`
+
+---
+
+## ✅ Sprint 66: Chat Export Dashboard Fixes (Completed - January 3, 2025)
 
 ### Chat Analytics & Export Enhancements
 - **Status**: Complete

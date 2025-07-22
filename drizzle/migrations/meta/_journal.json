@@ -15,6 +15,34 @@
       "when": 1751314925822,
       "tag": "0001_fair_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1751919655393,
+      "tag": "0002_clear_sebastian_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751919745174,
+      "tag": "0003_fat_lizard",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752496965716,
+      "tag": "0004_empty_hercules",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1752537539199,
+      "tag": "0005_rapid_random",
+      "breakpoints": true
     }
   ]
 }

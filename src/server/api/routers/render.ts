@@ -89,6 +89,18 @@ export const renderRouter = createTRPCRouter({
 
       const renderId = crypto.randomUUID();
 
+      // Log the scenes we're sending to prepareRenderConfig
+      console.log(`[Render] Preparing render config with ${project.scenes.length} scenes`);
+      project.scenes.forEach((scene, idx) => {
+        console.log(`[Render] Scene ${idx}:`, {
+          id: scene.id,
+          name: scene.name,
+          hasTsxCode: !!scene.tsxCode,
+          tsxCodeLength: scene.tsxCode?.length || 0,
+          tsxCodePreview: scene.tsxCode ? scene.tsxCode.substring(0, 100) + '...' : 'none'
+        });
+      });
+
       // Prepare render configuration
       const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
@@ -96,6 +108,18 @@ export const renderRouter = createTRPCRouter({
         format: input.format,
         quality: input.quality,
         projectProps: project.props,
+      });
+      
+      // Log what prepareRenderConfig returned
+      console.log(`[Render] prepareRenderConfig returned:`);
+      renderConfig.scenes.forEach((scene, idx) => {
+        console.log(`[Render] Processed scene ${idx}:`, {
+          id: scene.id,
+          name: scene.name,
+          hasJsCode: !!scene.jsCode,
+          jsCodeLength: scene.jsCode?.length || 0,
+          jsCodePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'none'
+        });
       });
 
       if (isLambda) {
@@ -185,11 +209,37 @@ export const renderRouter = createTRPCRouter({
     .input(z.object({ renderId: z.string() }))
     .query(async ({ ctx, input }) => {
       console.log(`[getRenderStatus] Checking status for render ID: ${input.renderId}`);
-      const job = renderState.get(input.renderId);
+      let job = renderState.get(input.renderId);
+      
+      // If not in memory, check database (handles server restarts in development)
+      if (!job) {
+        console.log(`[Render] Job ${input.renderId} not found in memory, checking database...`);
+        const dbExport = await ExportTrackingService.getExportByRenderId(input.renderId);
+        
+        if (dbExport && dbExport.userId === ctx.session.user.id) {
+          // Reconstruct job from database
+          job = {
+            id: dbExport.renderId,
+            status: dbExport.status as 'pending' | 'rendering' | 'completed' | 'failed',
+            progress: dbExport.progress || 0,
+            outputUrl: dbExport.outputUrl || undefined,
+            error: dbExport.error || undefined,
+            userId: dbExport.userId,
+            projectId: dbExport.projectId,
+            format: dbExport.format as 'mp4' | 'webm' | 'gif',
+            quality: dbExport.quality as 'low' | 'medium' | 'high',
+            createdAt: dbExport.createdAt.getTime(),
+            bucketName: 'remotionlambda-useast1-yb1vzou9i7', // Default bucket
+          };
+          
+          // Re-add to memory state for faster subsequent lookups
+          renderState.set(input.renderId, job);
+          console.log(`[Render] Restored job ${input.renderId} from database`);
+        }
+      }
       
       if (!job) {
-        console.log(`[Render] Job ${input.renderId} not found in render state`);
-        console.log(`[Render] Active render IDs:`, Array.from(renderState.getAllIds()));
+        console.log(`[Render] Job ${input.renderId} not found in memory or database`);
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: "Render job not found",

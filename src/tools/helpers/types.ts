@@ -12,6 +12,12 @@ export interface BaseToolInput {
   userPrompt: string;
   projectId: string;  // For context only, not DB access
   userId?: string;    // For context only, not DB access
+  requestedDurationFrames?: number;  // Explicit duration from user prompt (e.g. "5 seconds" = 150)
+  formatContext?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**
@@ -113,6 +119,7 @@ export interface EditToolInput extends BaseToolInput {
     };
     analyzedAt: string;
   };
+  modelOverride?: string; // Optional model ID for overriding default model
 }
 
 export interface EditToolOutput extends BaseToolOutput {
@@ -154,6 +161,76 @@ export interface TrimToolOutput extends BaseToolOutput {
 }
 
 // ============================================================================
+// NEW SPECIALIZED TOOL TYPES
+// ============================================================================
+
+export interface TypographyToolInput extends BaseToolInput {
+  textStyle?: 'fast' | 'typewriter' | 'cascade';
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
+  previousSceneContext?: {
+    tsxCode: string;
+    style?: string;
+  };
+}
+
+export interface TypographyToolOutput extends BaseToolOutput {
+  tsxCode: string;
+  name: string;
+  duration: number;
+}
+
+export interface ImageRecreatorToolInput extends BaseToolInput {
+  imageUrls: string[];
+  recreationType?: 'full' | 'segment';
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
+}
+
+export interface ImageRecreatorToolOutput extends BaseToolOutput {
+  tsxCode: string;
+  name: string;
+  duration: number;
+}
+
+export interface ScenePlannerToolInput extends BaseToolInput {
+  storyboardSoFar?: Array<{
+    id: string;
+    name: string;
+    duration: number;
+    order: number;
+    tsxCode: string;
+  }>;
+  chatHistory?: Array<{role: string; content: string}>;
+  imageUrls?: string[];
+}
+
+export interface ScenePlan {
+  toolType: 'typography' | 'recreate' | 'code-generator';
+  prompt: string;
+  order: number;
+  context: Record<string, any>;
+  fallbackUsed?: boolean;
+}
+
+export interface ScenePlannerToolOutput extends BaseToolOutput {
+  scenePlans: ScenePlan[];
+  firstScene?: {
+    tsxCode: string;
+    name: string;
+    duration: number;
+  };
+  shouldAutoGenerateFirstScene?: boolean;
+  firstScenePlan?: ScenePlan;
+}
+
+// ============================================================================
 // SERVICE HELPER TYPES
 // ============================================================================
 
@@ -184,6 +261,11 @@ export interface CodeGenerationInput {
   layoutJson: any;
   functionName: string;
   projectId: string;
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**
@@ -204,6 +286,11 @@ export interface ImageToCodeInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
+  projectFormat?: {
+    format: 'landscape' | 'portrait' | 'square';
+    width: number;
+    height: number;
+  };
 }
 
 /**
@@ -308,6 +395,7 @@ export const editToolInputSchema = baseToolInputSchema.extend({
     }),
     analyzedAt: z.string(),
   }).optional().describe("Web analysis context with screenshots for brand matching"),
+  modelOverride: z.string().optional().describe("Optional model ID for overriding default model"),
 });
 
 export const deleteToolInputSchema = baseToolInputSchema.extend({
@@ -321,6 +409,44 @@ export const trimToolInputSchema = baseToolInputSchema.extend({
   newDuration: z.number().optional().describe("Target duration in frames"),
   trimFrames: z.number().optional().describe("Frames to add (positive) or remove (negative)"),
   trimType: z.enum(['start', 'end']).optional().default('end').describe("Where to trim from"),
+});
+
+// ============================================================================
+// SCHEMAS FOR NEW SPECIALIZED TOOLS
+// ============================================================================
+
+export const typographyToolInputSchema = baseToolInputSchema.extend({
+  textStyle: z.enum(['fast', 'typewriter', 'cascade']).optional(),
+  projectFormat: z.object({
+    format: z.enum(['landscape', 'portrait', 'square']),
+    width: z.number(),
+    height: z.number(),
+  }).optional(),
+});
+
+export const imageRecreatorToolInputSchema = baseToolInputSchema.extend({
+  imageUrls: z.array(z.string()).min(1, "At least one image URL is required"),
+  recreationType: z.enum(['full', 'segment']).optional(),
+  projectFormat: z.object({
+    format: z.enum(['landscape', 'portrait', 'square']),
+    width: z.number(),
+    height: z.number(),
+  }).optional(),
+});
+
+export const scenePlannerToolInputSchema = baseToolInputSchema.extend({
+  storyboardSoFar: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    duration: z.number(),
+    order: z.number(),
+    tsxCode: z.string(),
+  })).optional(),
+  chatHistory: z.array(z.object({
+    role: z.string(),
+    content: z.string(),
+  })).optional(),
+  imageUrls: z.array(z.string()).optional(),
 });
 
 // ============================================================================

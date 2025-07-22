@@ -31,7 +31,7 @@ export default function SharePageContent({
   const [isLooping, setIsLooping] = useState(true); // Default to looping
 
   return (
-    <div className="w-full max-w-4xl rounded-xl bg-white dark:bg-black/80 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
+    <div className={`w-full ${inputProps.meta?.format === 'portrait' ? 'max-w-2xl' : inputProps.meta?.format === 'square' ? 'max-w-3xl' : 'max-w-4xl'} rounded-xl bg-white dark:bg-black/80 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800`}>
       <div className="p-6 md:p-8">
         <ShareVideoPlayerClient 
           inputProps={inputProps} 

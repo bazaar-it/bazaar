@@ -16,7 +16,7 @@ export interface ChatMessage {
   timestamp: number;
   sequence?: number; // Message sequence number for proper ordering
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
-  kind?: "text" | "error" | "status" | "tool_result";
+  kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   jobId?: string | null;
   toolName?: string;
   toolStartTime?: number;
@@ -47,16 +47,35 @@ export type DbMessage = {
   // Added for streaming support
   updatedAt?: Date;
   status?: 'pending' | 'success' | 'error' | 'building';
-  kind?: 'text' | 'tool_result' | 'error' | 'status';
+  kind?: 'text' | 'tool_result' | 'error' | 'status' | 'scene_plan';
 }
 
 // Define ProjectState interface
+interface AudioTrack {
+  id: string;
+  url: string;
+  name: string;
+  duration: number;
+  startTime: number;
+  endTime: number;
+  volume: number;
+  // Phase 1 enhancements
+  fadeInDuration?: number;  // Fade in duration in seconds
+  fadeOutDuration?: number; // Fade out duration in seconds
+  playbackRate?: number;    // Speed control (0.5 = half speed, 2 = double speed)
+  // Future enhancements
+  pitchShift?: number;      // Pitch adjustment in semitones
+  muted?: boolean;          // Mute toggle
+  loop?: boolean;           // Loop the audio
+}
+
 interface ProjectState {
   props: InputProps;
   chatHistory: ChatMessage[];
   dbMessagesLoaded: boolean;
   activeStreamingMessageId?: string | null;
   refreshToken?: string;
+  audio?: AudioTrack | null;
 }
 
 interface VideoState {
@@ -72,6 +91,9 @@ interface VideoState {
   // 🚨 NEW: Hybrid persistence state
   lastSyncTime: number;
   pendingDbSync: Record<string, boolean>; // Track which projects need DB sync
+  
+  // Track which scene plan messages are currently generating
+  generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
@@ -108,6 +130,7 @@ interface VideoState {
   addScene: (projectId: string, scene: any) => void;
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
+  updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
   
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) => void;
@@ -117,6 +140,11 @@ interface VideoState {
   
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
+  
+  // Scene generation tracking
+  setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
+  isSceneGenerating: (projectId: string, messageId: string) => boolean;
+  clearAllGeneratingScenes: (projectId: string) => void;
 }
 
 export const useVideoState = create<VideoState>((set, get) => ({
@@ -127,6 +155,7 @@ export const useVideoState = create<VideoState>((set, get) => ({
   selectedScenes: {},
   lastSyncTime: 0,
   pendingDbSync: {},
+  generatingScenes: {},
   
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
@@ -547,6 +576,48 @@ export const useVideoState = create<VideoState>((set, get) => ({
       const project = state.projects[projectId];
       if (!project) return state;
       
+      // Check if this is a welcome project (only has one scene with "Welcome" in the name)
+      const isWelcomeProject = project.props.scenes.length === 1 && 
+        project.props.scenes[0]?.data?.name && 
+        typeof project.props.scenes[0].data.name === 'string' &&
+        project.props.scenes[0].data.name.includes('Welcome');
+      
+      // If this is the first real scene being added to a welcome project, replace the welcome scene
+      if (isWelcomeProject) {
+        console.log('[VideoState.addScene] Replacing welcome scene with first real scene');
+        const newScene = {
+          id: scene.id,
+          type: 'custom' as const,
+          start: 0,
+          duration: scene.duration || 150,
+          data: {
+            code: scene.tsxCode,
+            name: scene.name || 'Generated Scene',
+            componentId: scene.id,
+            props: scene.props || {}
+          }
+        };
+        
+        return {
+          ...state,
+          projects: {
+            ...state.projects,
+            [projectId]: {
+              ...project,
+              props: {
+                ...project.props,
+                meta: {
+                  ...project.props.meta,
+                  duration: newScene.duration
+                },
+                scenes: [newScene] // Replace welcome scene
+              }
+            }
+          }
+        };
+      }
+      
+      // Normal flow: add scene to existing scenes
       // Calculate the correct start position based on existing scenes' actual durations
       const currentTotalDuration = project.props.scenes.reduce((sum, s) => sum + (s.duration || 150), 0);
       
@@ -746,6 +817,32 @@ export const useVideoState = create<VideoState>((set, get) => ({
             },
             refreshToken: newRefreshToken,
             lastUpdated: Date.now(), // Track when updated
+          }
+        }
+      };
+    }),
+
+  updateProjectAudio: (projectId: string, audio: AudioTrack | null) =>
+    set((state) => {
+      console.log('[VideoState.updateProjectAudio] ⚡ Updating audio:', audio);
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.updateProjectAudio] ❌ Project not found:', projectId);
+        return state;
+      }
+      
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            audio,
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now(),
           }
         }
       };
@@ -996,4 +1093,40 @@ export const useVideoState = create<VideoState>((set, get) => ({
         }
       };
     }),
+    
+  // Scene generation tracking methods
+  setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) =>
+    set((state) => {
+      const currentSet = state.generatingScenes[projectId] || new Set<string>();
+      const newSet = new Set(currentSet);
+      
+      if (isGenerating) {
+        newSet.add(messageId);
+      } else {
+        newSet.delete(messageId);
+      }
+      
+      return {
+        ...state,
+        generatingScenes: {
+          ...state.generatingScenes,
+          [projectId]: newSet
+        }
+      };
+    }),
+    
+  isSceneGenerating: (projectId: string, messageId: string) => {
+    const state = get();
+    const projectSet = state.generatingScenes[projectId];
+    return projectSet ? projectSet.has(messageId) : false;
+  },
+  
+  clearAllGeneratingScenes: (projectId: string) =>
+    set((state) => ({
+      ...state,
+      generatingScenes: {
+        ...state.generatingScenes,
+        [projectId]: new Set<string>()
+      }
+    })),
 }));

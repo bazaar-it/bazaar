@@ -126,10 +126,38 @@ export function ShareDialog({ projectId, projectTitle, open, onOpenChange }: Sha
 
   const handleCopyLink = async (shareUrl: string) => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied to clipboard!");
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied to clipboard!");
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          document.execCommand('copy');
+          toast.success("Link copied to clipboard!");
+        } catch (error) {
+          toast.error("Failed to copy link. Please copy manually.");
+          console.error("Copy failed:", error);
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      }
     } catch (error) {
-      toast.error("Failed to copy link");
+      console.error("Clipboard error:", error);
+      // Show the URL in a toast so user can copy manually
+      toast.error("Cannot access clipboard. Copy this link manually:", {
+        description: shareUrl,
+        duration: 10000,
+      });
     }
   };
 
@@ -272,8 +300,14 @@ export function ShareDialog({ projectId, projectTitle, open, onOpenChange }: Sha
                             </div>
                           </div>
 
-                          <div className="mt-3 p-2 bg-gray-50 rounded border text-sm font-mono truncate">
-                            {shareUrl}
+                          <div className="mt-3 p-2 bg-gray-50 rounded border text-sm font-mono">
+                            <input
+                              type="text"
+                              value={shareUrl}
+                              readOnly
+                              className="w-full bg-transparent border-none outline-none select-all"
+                              onClick={(e) => e.currentTarget.select()}
+                            />
                           </div>
                         </div>
 

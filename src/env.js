@@ -32,6 +32,10 @@ export const env = createEnv({
     R2_PUBLIC_URL: z.string().url(),
     // Cron Job Configuration
     CRON_SECRET: z.string().min(1),
+    
+    // Stripe Configuration
+    STRIPE_SECRET_KEY: z.string().min(1),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
     // Worker Configuration (Server-side)
     WORKER_POLLING_INTERVAL: z.preprocess(
@@ -70,6 +74,7 @@ export const env = createEnv({
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
     NEXT_PUBLIC_LOG_AGENT_URL: z.string().url().optional().default('http://localhost:3002'),
     NEXT_PUBLIC_LOG_RUN_ID: z.string().optional(),
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),
   },
 
   /**
@@ -95,6 +100,9 @@ export const env = createEnv({
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     // Cron Job Environment Variables
     CRON_SECRET: process.env.CRON_SECRET,
+    // Stripe Environment Variables
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     // Worker Configuration Runtime Environment Variables
     WORKER_POLLING_INTERVAL: process.env.WORKER_POLLING_INTERVAL,
     TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
@@ -104,6 +112,7 @@ export const env = createEnv({
     MODEL_PACK: process.env.MODEL_PACK,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

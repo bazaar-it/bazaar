@@ -68,7 +68,7 @@ describe('JSON Patch Validation', () => {
       [{ op: 'invalid', path: '/scenes/0', value: 'test' }], // Invalid op
       [{ op: 'add', path: 'scenes/0', value: 'test' }],      // Missing leading slash
       [{ op: 'remove' }],                                    // Missing path
-      [{ op: 'replace', path: '/invalid path with spaces' }], // Invalid path format
+      [{ op: 'replace', path: 'invalid/path' }], // Path doesn't start with /
       [{ completely: 'invalid', structure: true }],          // Completely wrong structure
       "not an array"                                         // Not even an array
     ];
@@ -149,11 +149,10 @@ describe('JSON Patch Validation', () => {
       fastJsonPatch.applyPatch(initialState, invalidPatch as fastJsonPatch.Operation[], true, true);
     }).toThrow();
     
-    // When not validating operations, it should still fail but not throw
-    const result = fastJsonPatch.applyPatch(initialState, invalidPatch as fastJsonPatch.Operation[], false, false);
-    expect(result.newDocument).toEqual(initialState); // Document should remain unchanged
-    
-    // Check that the operation has an error flag
-    expect(result.error).toBeDefined();
+    // When not validating operations, it may still fail for deeply nested non-existent paths
+    // This is expected behavior - fast-json-patch cannot create deeply nested paths
+    expect(() => {
+      fastJsonPatch.applyPatch(initialState, invalidPatch as fastJsonPatch.Operation[], false, false);
+    }).toThrow();
   });
 });

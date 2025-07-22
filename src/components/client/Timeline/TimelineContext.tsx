@@ -16,12 +16,34 @@ import {
   type TimelineActions
 } from '~/lib/types/video/timeline';
 import { useVideoState } from '~/stores/videoState';
-import {
-  validateDuration,
-  validateStart,
-  validateRow,
-  validateOverlap
-} from '~/hooks/useTimelineValidation';
+
+// Validation functions (previously from useTimelineValidation hook)
+const validateDuration = (duration: number, timelineDuration: number): boolean => {
+  return duration > 0 && duration <= timelineDuration;
+};
+
+const validateStart = (start: number, duration: number, timelineDuration: number): boolean => {
+  return start >= 0 && (start + duration) <= timelineDuration;
+};
+
+const validateRow = (row: number, maxRows: number): boolean => {
+  return row >= 0 && row < maxRows;
+};
+
+const validateOverlap = (items: TimelineItemUnion[], newItem: TimelineItemUnion): boolean => {
+  return !items.some(item => {
+    if (item.id === newItem.id) return false; // Skip self
+    if (item.row !== newItem.row) return false; // Different rows don't overlap
+    
+    const itemStart = item.from;
+    const itemEnd = item.from + item.durationInFrames;
+    const newStart = newItem.from;
+    const newEnd = newItem.from + newItem.durationInFrames;
+    
+    // Check for overlap
+    return (newStart < itemEnd && newEnd > itemStart);
+  });
+};
 
 /**
  * Combined interface for the timeline context

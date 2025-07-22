@@ -38,23 +38,8 @@ describe('Core Service Utilities', () => {
       expect(isValidToolName('')).toBe(false);
     });
 
-    it('should validate EditComplexity values', () => {
-      const { isValidEditComplexity } = require('~/lib/types/ai/brain.types');
-      
-      expect(isValidEditComplexity('surgical')).toBe(true);
-      expect(isValidEditComplexity('creative')).toBe(true);
-      expect(isValidEditComplexity('structural')).toBe(true);
-      expect(isValidEditComplexity('invalid')).toBe(false);
-    });
-
-    it('should validate OperationType values', () => {
-      const { isValidOperationType } = require('~/lib/types/ai/brain.types');
-      
-      expect(isValidOperationType('create')).toBe(true);
-      expect(isValidOperationType('edit')).toBe(true);
-      expect(isValidOperationType('delete')).toBe(true);
-      expect(isValidOperationType('invalid')).toBe(false);
-    });
+    // EditComplexity and OperationType validation tests removed
+    // These type guards don't exist in the codebase
   });
 
   describe('Duration Analysis', () => {

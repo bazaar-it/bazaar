@@ -12,8 +12,22 @@ const SearchBar = ({ opacity }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   
-  const line1 = "Start creating by adding a detailed prompt";
-  const line2 = "and uploading an image.";
+  // Detect format based on aspect ratio
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.1;
+  const isLandscape = aspectRatio > 1.5;
+  
+  // Adaptive sizing based on format
+  const boxWidth = isPortrait ? width * 0.85 : isSquare ? width * 0.8 : width * 0.83;
+  const fontSize = isPortrait ? width * 0.045 : isSquare ? width * 0.05 : width * 0.034;
+  const iconSize = isPortrait ? width * 0.06 : isSquare ? width * 0.065 : width * 0.037;
+  const padding = isPortrait ? width * 0.04 : width * 0.025;
+  const borderRadius = width * 0.026;
+  
+  // Adaptive text based on format
+  const line1 = isPortrait ? "Start creating by adding" : "Start creating by adding a detailed prompt";
+  const line2 = isPortrait ? "a prompt and image." : "and uploading an image.";
   
   const line1CharCount = Math.floor(
     interpolate(
@@ -37,17 +51,19 @@ const SearchBar = ({ opacity }) => {
   const showLine2 = frame >= 90;
   const showCursorOnLine2 = frame >= 90 && frame <= 150;
   const iconProgress = 1;
-  const boxHeight = showLine2 ? "400px" : "320px";
+  const boxHeight = isPortrait 
+    ? (showLine2 ? height * 0.3 : height * 0.25)
+    : (showLine2 ? height * 0.37 : height * 0.3);
 
   return (
     <>
       <div
         style={{
-          width: "1600px",
+          width: boxWidth,
           height: boxHeight,
           background: "#F5F5F5",
-          borderRadius: "50px",
-          padding: "48px",
+          borderRadius: borderRadius,
+          padding: padding,
           opacity,
           boxShadow: "0 8px 64px rgba(0, 0, 0, 0.1)",
           position: "relative",
@@ -56,14 +72,14 @@ const SearchBar = ({ opacity }) => {
       >
         <div
           style={{
-            fontSize: "65px",
+            fontSize: fontSize,
             fontFamily: "Inter, sans-serif",
             color: "#000000",
             opacity: 0.8,
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
-            marginBottom: "40px",
+            gap: fontSize * 0.12,
+            marginBottom: padding * 0.83,
             zIndex: 1,
             position: "relative",
           }}
@@ -73,11 +89,11 @@ const SearchBar = ({ opacity }) => {
             {cursorVisible && frame <= 90 && (
               <span
                 style={{
-                  width: "6px",
-                  height: "48px",
+                  width: fontSize * 0.1,
+                  height: fontSize * 0.74,
                   background: "#000000",
                   display: "inline-block",
-                  marginLeft: "4px",
+                  marginLeft: fontSize * 0.06,
                 }}
               />
             )}
@@ -88,11 +104,11 @@ const SearchBar = ({ opacity }) => {
               {cursorVisible && showCursorOnLine2 && (
                 <span
                   style={{
-                    width: "6px",
-                    height: "48px",
+                    width: fontSize * 0.1,
+                    height: fontSize * 0.74,
                     background: "#000000",
                     display: "inline-block",
-                    marginLeft: "4px",
+                    marginLeft: fontSize * 0.06,
                   }}
                 />
               )}
@@ -103,10 +119,10 @@ const SearchBar = ({ opacity }) => {
         <div
           style={{
             position: "absolute",
-            bottom: "40px",
-            left: "48px",
+            bottom: padding * 0.83,
+            left: padding,
             display: "flex",
-            gap: "32px",
+            gap: iconSize * 0.44,
             alignItems: "center",
             opacity: iconProgress,
             zIndex: 2,
@@ -114,44 +130,42 @@ const SearchBar = ({ opacity }) => {
         >
           <div
             style={{
-              fontSize: "72px",
+              fontSize: iconSize,
               color: "#666666",
               cursor: "pointer",
-              width: "72px",
-              height: "72px",
+              width: iconSize,
+              height: iconSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
-              borderRadius: "12px",
+              borderRadius: iconSize * 0.17,
             }}
           >
             <window.IconifyIcon
               icon="akar-icons:image"
               style={{
-                fontSize: "72px",
+                fontSize: iconSize,
                 color: "#666666",
               }}
             />
           </div>
           <div
             style={{
-              fontSize: "72px",
+              fontSize: iconSize,
               color: "#666666",
               cursor: "pointer",
-              width: "72px",
-              height: "72px",
+              width: iconSize,
+              height: iconSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
-              borderRadius: "12px",
+              borderRadius: iconSize * 0.17,
             }}
           >
             <window.IconifyIcon
               icon="material-symbols:mic-outline"
               style={{
-                fontSize: "72px",
+                fontSize: iconSize,
                 color: "#666666",
               }}
             />
@@ -161,15 +175,15 @@ const SearchBar = ({ opacity }) => {
         <div
           style={{
             position: "absolute",
-            bottom: "40px",
-            right: "48px",
+            bottom: padding * 0.83,
+            right: padding,
             opacity: iconProgress,
           }}
         >
           <div
             style={{
-              width: "120px",
-              height: "120px",
+              width: iconSize * 1.67,
+              height: iconSize * 1.67,
               borderRadius: "50%",
               background: "#333333",
               display: "flex",
@@ -181,7 +195,7 @@ const SearchBar = ({ opacity }) => {
             <window.IconifyIcon
               icon="quill:send"
               style={{
-                fontSize: "60px",
+                fontSize: iconSize * 0.83,
                 color: "#FFFFFF",
               }}
             />
@@ -224,8 +238,22 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   
-  const line1 = "Start creating by adding a detailed prompt";
-  const line2 = "and uploading an image.";
+  // Detect format based on aspect ratio
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.1;
+  const isLandscape = aspectRatio > 1.5;
+  
+  // Adaptive sizing based on format
+  const boxWidth = isPortrait ? width * 0.85 : isSquare ? width * 0.8 : width * 0.83;
+  const fontSize = isPortrait ? width * 0.045 : isSquare ? width * 0.05 : width * 0.034;
+  const iconSize = isPortrait ? width * 0.06 : isSquare ? width * 0.065 : width * 0.037;
+  const padding = isPortrait ? width * 0.04 : width * 0.025;
+  const borderRadius = width * 0.026;
+  
+  // Adaptive text based on format
+  const line1 = isPortrait ? "Start creating by adding" : "Start creating by adding a detailed prompt";
+  const line2 = isPortrait ? "a prompt and image." : "and uploading an image.";
   
   const line1CharCount = Math.floor(
     interpolate(
@@ -249,17 +277,19 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
   const showLine2 = frame >= 90;
   const showCursorOnLine2 = frame >= 90 && frame <= 150;
   const iconProgress = 1;
-  const boxHeight = showLine2 ? "400px" : "320px";
+  const boxHeight = isPortrait 
+    ? (showLine2 ? height * 0.3 : height * 0.25)
+    : (showLine2 ? height * 0.37 : height * 0.3);
 
   return (
     <>
       <div
         style={{
-          width: "1600px",
+          width: boxWidth,
           height: boxHeight,
           background: "#F5F5F5",
-          borderRadius: "50px",
-          padding: "48px",
+          borderRadius: borderRadius,
+          padding: padding,
           opacity,
           boxShadow: "0 8px 64px rgba(0, 0, 0, 0.1)",
           position: "relative",
@@ -268,14 +298,14 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
       >
         <div
           style={{
-            fontSize: "65px",
+            fontSize: fontSize,
             fontFamily: "Inter, sans-serif",
             color: "#000000",
             opacity: 0.8,
             display: "flex",
             flexDirection: "column",
-            gap: "8px",
-            marginBottom: "40px",
+            gap: fontSize * 0.12,
+            marginBottom: padding * 0.83,
             zIndex: 1,
             position: "relative",
           }}
@@ -285,11 +315,11 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
             {cursorVisible && frame <= 90 && (
               <span
                 style={{
-                  width: "6px",
-                  height: "48px",
+                  width: fontSize * 0.1,
+                  height: fontSize * 0.74,
                   background: "#000000",
                   display: "inline-block",
-                  marginLeft: "4px",
+                  marginLeft: fontSize * 0.06,
                 }}
               />
             )}
@@ -300,11 +330,11 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
               {cursorVisible && showCursorOnLine2 && (
                 <span
                   style={{
-                    width: "6px",
-                    height: "48px",
+                    width: fontSize * 0.1,
+                    height: fontSize * 0.74,
                     background: "#000000",
                     display: "inline-block",
-                    marginLeft: "4px",
+                    marginLeft: fontSize * 0.06,
                   }}
                 />
               )}
@@ -315,10 +345,10 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
         <div
           style={{
             position: "absolute",
-            bottom: "40px",
-            left: "48px",
+            bottom: padding * 0.83,
+            left: padding,
             display: "flex",
-            gap: "32px",
+            gap: iconSize * 0.44,
             alignItems: "center",
             opacity: iconProgress,
             zIndex: 2,
@@ -326,44 +356,42 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
         >
           <div
             style={{
-              fontSize: "72px",
+              fontSize: iconSize,
               color: "#666666",
               cursor: "pointer",
-              width: "72px",
-              height: "72px",
+              width: iconSize,
+              height: iconSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
-              borderRadius: "12px",
+              borderRadius: iconSize * 0.17,
             }}
           >
             <window.IconifyIcon
               icon="akar-icons:image"
               style={{
-                fontSize: "72px",
+                fontSize: iconSize,
                 color: "#666666",
               }}
             />
           </div>
           <div
             style={{
-              fontSize: "72px",
+              fontSize: iconSize,
               color: "#666666",
               cursor: "pointer",
-              width: "72px",
-              height: "72px",
+              width: iconSize,
+              height: iconSize,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "3px solid #666666",
-              borderRadius: "12px",
+              borderRadius: iconSize * 0.17,
             }}
           >
             <window.IconifyIcon
               icon="material-symbols:mic-outline"
               style={{
-                fontSize: "72px",
+                fontSize: iconSize,
                 color: "#666666",
               }}
             />
@@ -373,15 +401,15 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
         <div
           style={{
             position: "absolute",
-            bottom: "40px",
-            right: "48px",
+            bottom: padding * 0.83,
+            right: padding,
             opacity: iconProgress,
           }}
         >
           <div
             style={{
-              width: "120px",
-              height: "120px",
+              width: iconSize * 1.67,
+              height: iconSize * 1.67,
               borderRadius: "50%",
               background: "#333333",
               display: "flex",
@@ -393,7 +421,7 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
             <window.IconifyIcon
               icon="quill:send"
               style={{
-                fontSize: "60px",
+                fontSize: iconSize * 0.83,
                 color: "#FFFFFF",
               }}
             />
@@ -429,4 +457,4 @@ export default function PromptUI() {
       <SearchBar opacity={mainProgress} />
     </AbsoluteFill>
   );
-} 
+}

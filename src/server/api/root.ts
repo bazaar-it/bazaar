@@ -9,6 +9,9 @@ import { emailSubscriberRouter } from "~/server/api/routers/emailSubscriber";
 import { scenesRouter } from "~/server/api/routers/scenes";
 import { shareRouter } from "~/server/api/routers/share";
 import { adminRouter } from "~/server/api/routers/admin";
+import { createSceneFromPlanRouter } from "~/server/api/routers/generation/create-scene-from-plan";
+import { usageRouter } from "~/server/api/routers/usage";
+import { paymentRouter } from "~/server/api/routers/payment";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -29,6 +32,9 @@ export const appRouter = createTRPCRouter({
   scenes: scenesRouter,
   share: shareRouter,
   admin: adminRouter,
+  createSceneFromPlan: createSceneFromPlanRouter,
+  usage: usageRouter,
+  payment: paymentRouter,
 });
 
 // export type definition of API

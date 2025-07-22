@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderState } from "~/server/services/render/render-state";
+import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
 import crypto from "crypto";
 
 // Verify webhook signature from Remotion
@@ -59,22 +60,50 @@ export async function POST(req: NextRequest) {
     switch (body.type) {
       case "success":
         console.log("[Webhook] Render completed successfully");
+        const outputUrl = body.outputUrl || body.outputFile;
         renderState.set(body.renderId, {
           ...job,
           status: "completed",
           progress: 100,
-          outputUrl: body.outputUrl || body.outputFile,
+          outputUrl,
           error: undefined,
         });
+        
+        // Update database tracking
+        try {
+          await ExportTrackingService.updateExportStatus({
+            renderId: body.renderId,
+            status: 'completed',
+            progress: 100,
+            outputUrl,
+            fileSize: body.size, // If available from webhook
+          });
+        } catch (dbError) {
+          console.error("[Webhook] Failed to update database:", dbError);
+          // Don't fail the webhook - we still want to update in-memory state
+        }
         break;
         
       case "error":
         console.error("[Webhook] Render failed:", body.errors);
+        const errorMessage = body.errors?.[0]?.message || "Render failed";
         renderState.set(body.renderId, {
           ...job,
           status: "failed",
-          error: body.errors?.[0]?.message || "Render failed",
+          error: errorMessage,
         });
+        
+        // Update database tracking
+        try {
+          await ExportTrackingService.updateExportStatus({
+            renderId: body.renderId,
+            status: 'failed',
+            error: errorMessage,
+          });
+        } catch (dbError) {
+          console.error("[Webhook] Failed to update database:", dbError);
+          // Don't fail the webhook - we still want to update in-memory state
+        }
         break;
         
       case "progress":
@@ -86,15 +115,42 @@ export async function POST(req: NextRequest) {
           // Check if we're in FFmpeg finalization phase
           isFinalizingFFmpeg: body.renderedFrames === body.encodedFrames && progress < 100,
         });
+        
+        // Update database tracking periodically (every 10% progress)
+        if (progress % 10 === 0 && progress !== job.progress) {
+          try {
+            await ExportTrackingService.updateExportStatus({
+              renderId: body.renderId,
+              status: 'rendering',
+              progress,
+            });
+          } catch (dbError) {
+            console.error("[Webhook] Failed to update database:", dbError);
+            // Don't fail the webhook - we still want to update in-memory state
+          }
+        }
         break;
         
       case "timeout":
         console.error("[Webhook] Render timed out");
+        const timeoutError = "Render timed out. Video may be too long or complex.";
         renderState.set(body.renderId, {
           ...job,
           status: "failed",
-          error: "Render timed out. Video may be too long or complex.",
+          error: timeoutError,
         });
+        
+        // Update database tracking
+        try {
+          await ExportTrackingService.updateExportStatus({
+            renderId: body.renderId,
+            status: 'failed',
+            error: timeoutError,
+          });
+        } catch (dbError) {
+          console.error("[Webhook] Failed to update database:", dbError);
+          // Don't fail the webhook - we still want to update in-memory state
+        }
         break;
         
       default:

@@ -12,12 +12,27 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     hasTsxCode: !!scene.tsxCode,
     name: scene.name,
     id: scene.id,
-    codePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'No jsCode'
+    duration: scene.duration,
+    codePreview: scene.jsCode ? scene.jsCode.substring(0, 100) + '...' : 'No jsCode',
+    tsxCodePreview: scene.tsxCode ? scene.tsxCode.substring(0, 100) + '...' : 'No tsxCode'
   });
+  
+  // CRITICAL DEBUG: Log the full jsCode to see what we're actually getting
+  if (scene.jsCode) {
+    console.log(`[DynamicScene] FULL jsCode for scene ${index}:`);
+    console.log(scene.jsCode);
+    console.log(`[DynamicScene] END jsCode for scene ${index}`);
+  }
+  
+  // Use the duration that was already extracted and passed down
+  const sceneDuration = scene.duration || 150;
   
   // If we have jsCode (pre-compiled JavaScript), try to render it
   if (scene.jsCode) {
     try {
+      console.log(`[DynamicScene] Attempting to create component from jsCode`);
+      console.log(`[DynamicScene] First 300 chars of jsCode:`, scene.jsCode.substring(0, 300));
+      
       // Create a component factory function
       const createComponent = new Function(
         'React',
@@ -62,16 +77,40 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           
           ${scene.jsCode}
           
+          // Log what we're trying to execute
+          console.log('[ComponentFactory] Executing scene code...');
+          
           // Try to return the component (it should be assigned to Component variable)
           if (typeof Component !== 'undefined') {
+            console.log('[ComponentFactory] Found Component variable');
             return Component;
           }
           
           // Fallback attempts
-          if (typeof Scene !== 'undefined') return Scene;
-          if (typeof MyScene !== 'undefined') return MyScene;
+          if (typeof Scene !== 'undefined') {
+            console.log('[ComponentFactory] Found Scene variable');
+            return Scene;
+          }
+          if (typeof MyScene !== 'undefined') {
+            console.log('[ComponentFactory] Found MyScene variable');
+            return MyScene;
+          }
           
-          console.error('No component found in scene code');
+          // Check if we have any function that looks like a component
+          const localVars = Object.getOwnPropertyNames(this || {});
+          console.log('[ComponentFactory] Available local variables:', localVars);
+          
+          // Try to find a component-like function
+          for (const varName of localVars) {
+            if ((varName.includes('Scene') || varName.includes('Component')) && typeof this[varName] === 'function') {
+              console.log('[ComponentFactory] Found component via variable scan:', varName);
+              return this[varName];
+            }
+          }
+          
+          console.error('[ComponentFactory] No component found in scene code');
+          console.error('[ComponentFactory] typeof Component:', typeof Component);
+          console.error('[ComponentFactory] typeof Scene:', typeof Scene);
           return null;
         } catch (e) {
           console.error('Scene component factory error:', e);
@@ -101,15 +140,26 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       );
       
       if (ComponentFactory) {
+        console.log(`[DynamicScene] Successfully created component factory for scene ${index}`);
         // Render the component
         return <ComponentFactory />;
+      } else {
+        console.error(`[DynamicScene] Component factory returned null/undefined for scene ${index}`);
       }
     } catch (error) {
-      console.error(`Failed to render scene ${index}:`, error);
+      console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
+      console.error(`[DynamicScene] Error details:`, {
+        message: error.message,
+        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+      });
     }
   }
   
-  // Fallback: Show scene metadata
+  // Fallback: Show scene metadata with diagnostic info
+  const errorReason = !scene.jsCode ? 
+    'No compiled JavaScript code' : 
+    'Failed to render component (check logs for details)';
+  
   return (
     <AbsoluteFill
       style={{
@@ -133,7 +183,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           {scene.name || `Scene ${index + 1}`}
         </h1>
         <p style={{ fontSize: '1.5rem', opacity: 0.8, marginBottom: '2rem' }}>
-          Duration: {Math.round((scene.duration || 150) / 30)}s
+          Duration: {Math.round(sceneDuration / 30)}s ({sceneDuration} frames)
         </p>
         <div style={{
           padding: '20px',
@@ -142,13 +192,55 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           maxWidth: '600px',
           margin: '0 auto',
         }}>
-          <p style={{ fontSize: '1rem', opacity: 0.7 }}>
+          <p style={{ fontSize: '1rem', opacity: 0.7, marginBottom: '1rem' }}>
             {scene.id}
+          </p>
+          <p style={{ fontSize: '0.875rem', opacity: 0.5, color: '#ef4444' }}>
+            {errorReason}
           </p>
         </div>
       </div>
     </AbsoluteFill>
   );
+};
+
+// Helper function to extract duration from scene code
+const extractSceneDuration = (scene: any): number => {
+  if (!scene.jsCode) return scene.duration || 150;
+  
+  try {
+    // Transform the code to handle ES6 exports
+    let codeWithExports = scene.jsCode;
+    
+    // Transform "export const durationInFrames = X;" to "exports.durationInFrames = X;"
+    codeWithExports = codeWithExports.replace(
+      /export\s+const\s+durationInFrames\s*=\s*([^;]+);?/g,
+      'const durationInFrames = $1; exports.durationInFrames = durationInFrames;'
+    );
+    
+    const durationExtractor = new Function(`
+      try {
+        let exports = {};
+        ${codeWithExports}
+        // Try to get duration from exports or local scope
+        return exports.durationInFrames || (typeof durationInFrames !== 'undefined' ? durationInFrames : null);
+      } catch (e) {
+        console.warn('Duration extraction error:', e);
+        return null;
+      }
+    `);
+    
+    const extractedDuration = durationExtractor();
+    if (extractedDuration && extractedDuration > 0) {
+      console.log(`[DurationExtractor] Successfully extracted duration: ${extractedDuration} frames`);
+      return extractedDuration;
+    }
+    console.warn(`[DurationExtractor] Failed to extract valid duration, using fallback: ${scene.duration || 150} frames`);
+    return scene.duration || 150;
+  } catch (error) {
+    console.warn('[DurationExtractor] Failed to extract scene duration:', error);
+    return scene.duration || 150;
+  }
 };
 
 // Video composition component
@@ -178,11 +270,14 @@ export const VideoComposition: React.FC<{
   return (
     <Series>
       {scenes.map((scene, index) => {
-        const duration = scene.duration || 150;
+        // Extract the real duration from the scene code
+        const realDuration = extractSceneDuration(scene);
+        
+        console.log(`[VideoComposition] Scene ${index} duration: ${realDuration} frames (${Math.round(realDuration / 30)}s)`);
         
         return (
-          <Series.Sequence key={scene.id || index} durationInFrames={duration}>
-            <DynamicScene scene={scene} index={index} width={width} height={height} />
+          <Series.Sequence key={scene.id || index} durationInFrames={realDuration}>
+            <DynamicScene scene={{...scene, duration: realDuration}} index={index} width={width} height={height} />
           </Series.Sequence>
         );
       })}
@@ -205,10 +300,13 @@ export const MainComposition: React.FC = () => {
           projectId: '',
         }}
         calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number } }) => {
-          const totalDuration = (props.scenes || []).reduce(
-            (sum: number, scene: any) => sum + (scene.duration || 150),
-            0
-          );
+          // Calculate total duration by extracting from each scene's code
+          const totalDuration = (props.scenes || []).reduce((sum: number, scene: any) => {
+            const sceneDuration = extractSceneDuration(scene);
+            return sum + sceneDuration;
+          }, 0);
+          
+          console.log(`[MainComposition] Total calculated duration: ${totalDuration} frames (${Math.round(totalDuration / 30)}s)`);
           
           return {
             durationInFrames: totalDuration || 300,

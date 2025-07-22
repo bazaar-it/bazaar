@@ -12,6 +12,23 @@ function formatSSE(data: any): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
+// Retry helper with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries === 0) throw error;
+    
+    console.log(`[SSE] Retrying in ${delay}ms... (${retries} attempts left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return retryWithBackoff(fn, retries - 1, delay * 2);
+  }
+}
+
 export async function GET(request: NextRequest) {
   // Auth check
   const session = await auth();
@@ -26,6 +43,7 @@ export async function GET(request: NextRequest) {
   const userMessage = searchParams.get('message');
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
+  const modelOverride = searchParams.get('modelOverride');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -46,12 +64,15 @@ export async function GET(request: NextRequest) {
       // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
       const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
       
-      const userMsg = await messageService.createMessage({
-        projectId,
-        content: userMessage,
-        role: "user",
-        imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
-      });
+      // ✅ NEW: Add retry logic for database operations
+      const userMsg = await retryWithBackoff(async () => {
+        return await messageService.createMessage({
+          projectId,
+          content: userMessage,
+          role: "user",
+          imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
+        });
+      }, 3, 1000);
 
       if (!userMsg) {
         throw new Error('Failed to create user message');
@@ -59,11 +80,13 @@ export async function GET(request: NextRequest) {
 
       // 2. Check if this is the first user message and generate title if needed
       try {
-        const existingMessages = await db.query.messages.findMany({
-          where: eq(messages.projectId, projectId),
-          orderBy: [desc(messages.sequence)],
-          limit: 5, // Check a few messages to be sure
-        });
+        const existingMessages = await retryWithBackoff(async () => {
+          return await db.query.messages.findMany({
+            where: eq(messages.projectId, projectId),
+            orderBy: [desc(messages.sequence)],
+            limit: 5, // Check a few messages to be sure
+          });
+        }, 2, 500);
 
         // Check if this is the first user message (only this message exists, or only welcome/assistant messages before)
         const userMessages = existingMessages.filter(msg => msg.role === 'user');
@@ -83,10 +106,12 @@ export async function GET(request: NextRequest) {
           // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
           if (finalTitle === "Untitled Video") {
             // Get all user's projects with "Untitled Video" pattern to find next number
-            const userProjects = await db.query.projects.findMany({
-              columns: { title: true },
-              where: eq(projects.userId, userId), // Use the authenticated userId
-            });
+            const userProjects = await retryWithBackoff(async () => {
+              return await db.query.projects.findMany({
+                columns: { title: true },
+                where: eq(projects.userId, userId), // Use the authenticated userId
+              });
+            }, 2, 500);
             
             // Find the highest number used in "Untitled Video X" titles
             let highestNumber = 0;
@@ -107,12 +132,14 @@ export async function GET(request: NextRequest) {
           }
 
           // Update the project title
-          await db.update(projects)
-            .set({ 
-              title: finalTitle,
-              updatedAt: new Date(),
-            })
-            .where(eq(projects.id, projectId));
+          await retryWithBackoff(async () => {
+            return await db.update(projects)
+              .set({ 
+                title: finalTitle,
+                updatedAt: new Date(),
+              })
+              .where(eq(projects.id, projectId));
+          }, 2, 500);
 
           console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
           
@@ -134,17 +161,32 @@ export async function GET(request: NextRequest) {
         userMessageId: userMsg.id,
         userMessage: userMessage,
         imageUrls: parsedImageUrls,
-        videoUrls: parsedVideoUrls
+        videoUrls: parsedVideoUrls,
+        modelOverride: modelOverride
       })));
 
     } catch (error) {
       console.error('[SSE] Error:', error);
       
       try {
+        // ✅ NEW: More specific error messages
+        let errorMessage = 'Failed to process request';
+        
+        if (error instanceof Error) {
+          if (error.message.includes('ECONNRESET') || error.message.includes('fetch failed')) {
+            errorMessage = 'Database connection issue. Please try again in a moment.';
+          } else if (error.message.includes('timeout')) {
+            errorMessage = 'Request timed out. Please try again.';
+          } else if (error.message.includes('auth')) {
+            errorMessage = 'Authentication issue. Please refresh the page.';
+          }
+        }
+        
         // Send error to client
         await writer.write(encoder.encode(formatSSE({
           type: 'error',
-          error: 'Failed to process request'
+          error: errorMessage,
+          canRetry: true // ✅ NEW: Hint to client that retry is possible
         })));
       } catch (writeError) {
         console.error('[SSE] Failed to write error:', writeError);

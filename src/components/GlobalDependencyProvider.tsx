@@ -54,7 +54,17 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       // NEW: Add Google Fonts loader
       (window as any).RemotionGoogleFonts = {
-        loadFont: (fontName: string) => {
+        loadFont: (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
+          // Handle case where AI passes options as first parameter
+          let fontName: string;
+          if (typeof fontNameOrOptions === 'object' && fontNameOrOptions !== null) {
+            // If first param is object, try to extract font name
+            fontName = fontNameOrOptions.family || fontNameOrOptions.fontFamily || 'Inter';
+            options = fontNameOrOptions;
+          } else {
+            fontName = String(fontNameOrOptions || 'Inter');
+          }
+          
           // Map common font names to their loaders
           const fontMap: { [key: string]: () => any } = {
             'Inter': loadInter,
@@ -66,10 +76,18 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
           
           const loader = fontMap[fontName];
           if (loader) {
+            // Note: The actual @remotion/google-fonts loaders don't accept options
+            // in the way the generated code expects. They need to be loaded with
+            // specific weights at import time. For now, we'll just call the loader
+            // and ignore the options to prevent errors.
             return loader();
           }
           
-          // Default to Inter if font not found
+          // Default to Inter if font not found - only warn once per font
+          if (!((window as any)._fontWarnings || ((window as any)._fontWarnings = new Set())).has(fontName)) {
+            console.warn(`Font "${fontName}" not found, defaulting to Inter`);
+            (window as any)._fontWarnings.add(fontName);
+          }
           return loadInter();
         },
         Inter: () => loadInter(),

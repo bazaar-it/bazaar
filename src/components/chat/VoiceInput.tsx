@@ -12,6 +12,7 @@ interface VoiceInputProps {
 
 export function VoiceInput({ onTranscription, disabled = false }: VoiceInputProps) {
   const [showError, setShowError] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const lastTranscriptionRef = useRef<string | null>(null);
   
   const {
@@ -22,6 +23,11 @@ export function VoiceInput({ onTranscription, disabled = false }: VoiceInputProp
     error: voiceError,
     isSupported: isVoiceSupported,
   } = useVoiceToText();
+  
+  // Avoid hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Auto-fill transcribed text - only when we get a new transcription
   useEffect(() => {
@@ -39,7 +45,8 @@ export function VoiceInput({ onTranscription, disabled = false }: VoiceInputProp
     }
   }, [voiceError]);
 
-  if (!isVoiceSupported) return null;
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted || !isVoiceSupported) return null;
 
   return (
     <>
@@ -95,6 +102,7 @@ export function VoiceInputWithError({
   className
 }: VoiceInputProps & { className?: string }) {
   const [showError, setShowError] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const lastTranscriptionRef = useRef<string | null>(null);
   
   const {
@@ -105,6 +113,11 @@ export function VoiceInputWithError({
     error: voiceError,
     isSupported: isVoiceSupported,
   } = useVoiceToText();
+  
+  // Avoid hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Auto-fill transcribed text - only when we get a new transcription
   useEffect(() => {
@@ -122,7 +135,8 @@ export function VoiceInputWithError({
     }
   }, [voiceError]);
 
-  if (!isVoiceSupported) return null;
+  // Don't render until mounted to avoid hydration mismatch
+  if (!mounted || !isVoiceSupported) return null;
 
   return (
     <div className={className}>

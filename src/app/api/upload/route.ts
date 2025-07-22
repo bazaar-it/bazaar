@@ -27,20 +27,21 @@ export async function POST(request: NextRequest) {
     // Validate file type
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
+    const isAudio = file.type.startsWith('audio/') || file.name.endsWith('.mp3');
     
-    if (!isImage && !isVideo) {
-      return NextResponse.json({ error: 'Only image and video files are allowed' }, { status: 400 });
+    if (!isImage && !isVideo && !isAudio) {
+      return NextResponse.json({ error: 'Only image, video, and audio files are allowed' }, { status: 400 });
     }
 
-    // Validate file size (10MB for images, 100MB for videos)
-    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+    // Validate file size (10MB for images, 100MB for videos, 50MB for audio)
+    const maxSize = isVideo ? 100 * 1024 * 1024 : isAudio ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
     if (file.size > maxSize) {
       return NextResponse.json({ 
-        error: `File too large (max ${isVideo ? '100MB' : '10MB'})` 
+        error: `File too large (max ${isVideo ? '100MB' : isAudio ? '50MB' : '10MB'})` 
       }, { status: 400 });
     }
 
-    console.log(`[Upload] Processing ${isVideo ? 'video' : 'image'} upload:`, {
+    console.log(`[Upload] Processing ${isVideo ? 'video' : isAudio ? 'audio' : 'image'} upload:`, {
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Generate unique key with project scoping
     const fileExtension = file.name.split('.').pop() || 'jpg';
-    const mediaType = isVideo ? 'videos' : 'images';
+    const mediaType = isVideo ? 'videos' : isAudio ? 'audio' : 'images';
     const uniqueKey = `projects/${projectId}/${mediaType}/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
 
     // Convert file to ArrayBuffer for upload
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Construct public URL
     const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${uniqueKey}`;
 
-    console.log(`[Upload] ✅ ${isVideo ? 'Video' : 'Image'} uploaded successfully:`, {
+    console.log(`[Upload] ✅ ${isVideo ? 'Video' : isAudio ? 'Audio' : 'Image'} uploaded successfully:`, {
       originalName: file.name,
       uniqueKey,
       publicUrl: publicUrl.substring(0, 100) + '...',

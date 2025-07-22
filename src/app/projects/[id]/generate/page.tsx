@@ -16,7 +16,7 @@ export const revalidate = 0;
 export default async function GeneratePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { id: projectId } = params;
-  console.log('GeneratePage accessed with rojectId:', projectId);
+  // console.log('GeneratePage accessed with rojectId:', projectId);
   const session = await auth();
 
   if (!session?.user) {
@@ -28,17 +28,17 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
   }
 
   try {
-    console.log('Fetching project and user projects...');
+    // console.log('Fetching project and user projects...');
     const [projectResult, userProjects] = await Promise.all([
       db.query.projects.findFirst({ where: eq(projects.id, projectId) }),
       getUserProjects(session.user.id),
     ]); 
 
-    console.log('Project result:', projectResult ? 'found' : 'null');
-    console.log('User projects count:', userProjects?.length || 0);
+    // console.log('Project result:', projectResult ? 'found' : 'null');
+    // console.log('User projects count:', userProjects?.length || 0);
 
     if (!projectResult) {
-      console.log('Project not found, calling notFound()');
+      // console.log('Project not found, calling notFound()');
       notFound();
     }
 
@@ -54,12 +54,11 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     }
 
     // 🚨 CRITICAL FIX: Check for existing scenes FIRST to avoid welcome video override
-    console.log('[GeneratePage] Checking for existing scenes in database...');
+    // Note: This check happens on initial page load - scenes created after will show on refresh
     const existingScenes = await db.query.scenes.findMany({
       where: eq(scenes.projectId, projectId),
       orderBy: [scenes.order],
     });
-    console.log('[GeneratePage] Found scenes:', existingScenes.length, existingScenes.map(s => ({ id: s.id, name: s.name })));
     
     let actualInitialProps: InputProps;
     
@@ -111,6 +110,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     return (
       <GenerateWorkspaceRoot
         projectId={projectId}
+        userId={session.user.id}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={actualInitialProps}
       />

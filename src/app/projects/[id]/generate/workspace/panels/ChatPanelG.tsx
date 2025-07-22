@@ -1,21 +1,23 @@
 // src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from "~/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
-import { AutoFixErrorBanner } from "~/components/chat/AutoFixErrorBanner";
-import { ImageUpload, type UploadedImage, createImageUploadHandlers } from "~/components/chat/ImageUpload";
+import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
+import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
+import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 
 
 // Component message representation for UI display
@@ -25,7 +27,7 @@ interface ComponentMessage {
   isUser: boolean;
   timestamp: Date;
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
-  kind?: "text" | "error" | "status" | "tool_result";
+  kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
 }
 
@@ -33,24 +35,30 @@ interface ChatPanelGProps {
   projectId: string;
   selectedSceneId: string | null;
   onSceneGenerated?: (sceneId: string) => void;
+  userId?: string;
 }
 
 export default function ChatPanelG({
   projectId,
   selectedSceneId,
   onSceneGenerated,
+  userId,
 }: ChatPanelGProps) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
   const [generationComplete, setGenerationComplete] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
   
-  // 🚨 NEW: State for image uploads
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  // 🚨 NEW: State for media uploads
+  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -58,7 +66,7 @@ export default function ChatPanelG({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -69,22 +77,28 @@ export default function ChatPanelG({
   const messages = getProjectChatHistory(projectId);
   
   // Debug: Log messages to check for duplicates
-  console.log('[ChatPanelG] Messages from VideoState:', messages.length, messages.map(m => ({
-    id: m.id,
-    content: m.message.substring(0, 50) + '...',
-    isUser: m.isUser
-  })));
+  // Commented out to prevent re-render spam
+  // console.log('[ChatPanelG] Messages from VideoState:', messages.length);
   
   // Convert VideoState messages to component format for rendering
-  const componentMessages: ComponentMessage[] = messages.map(msg => ({
-    id: msg.id,
-    content: msg.message,
-    isUser: msg.isUser,
-    timestamp: new Date(msg.timestamp),
-    status: msg.status,
-    kind: msg.kind,
-    imageUrls: msg.imageUrls,
-  }));
+  const componentMessages: ComponentMessage[] = useMemo(() => {
+    // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
+    const uniqueMessages = messages.filter((msg, index, array) => 
+      array.findIndex(m => m.id === msg.id) === index
+    );
+    
+    // Removed console.log to prevent re-render spam
+    
+    return uniqueMessages.map(msg => ({
+      id: msg.id,
+      content: msg.message,
+      isUser: msg.isUser,
+      timestamp: new Date(msg.timestamp),
+      status: msg.status,
+      kind: msg.kind,
+      imageUrls: msg.imageUrls,
+    }));
+  }, [messages]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
@@ -114,6 +128,10 @@ export default function ChatPanelG({
   
   // 🚨 NEW: Get tRPC utils for cache invalidation
   const utils = api.useUtils();
+  
+  // Use auto-fix hook early to ensure consistent hook order
+  // IMPORTANT: This must be called before any conditional logic
+  useAutoFix(projectId, scenes);
   
   // Helper function to convert database scenes to InputProps format (same as page.tsx)
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -146,22 +164,34 @@ export default function ChatPanelG({
     };
   }, [currentProps]);
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    if (!generationComplete) {
-      scrollToBottom();
-    }
-  }, [componentMessages, scrollToBottom, generationComplete]);
-
-  // Force scroll to bottom whenever messages change
-  useEffect(() => {
-    // Use requestAnimationFrame to ensure DOM has updated
-    requestAnimationFrame(() => {
-      if (chatContainerRef.current) {
-        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+  // 🚨 FIX: Smart auto-scroll that respects user scroll position
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  
+  // Detect when user manually scrolls
+  const handleScroll = useCallback(() => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10; // 10px threshold
+      
+      if (!isAtBottom && !userHasScrolled) {
+        setUserHasScrolled(true);
+        setShouldAutoScroll(false);
+      } else if (isAtBottom && userHasScrolled) {
+        setUserHasScrolled(false);
+        setShouldAutoScroll(true);
       }
-    });
-  }, [componentMessages]); // Trigger on any message change
+    }
+  }, [userHasScrolled]);
+  
+  // Auto-scroll only when appropriate
+  useEffect(() => {
+    if (shouldAutoScroll && !userHasScrolled) {
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [componentMessages, shouldAutoScroll, userHasScrolled, scrollToBottom]);
 
   
   // 🚀 [TICKET-006] Retry logic with exponential backoff
@@ -217,6 +247,7 @@ export default function ChatPanelG({
     setMessage("");
     setUploadedImages([]);
     setIsGenerating(true);
+    setGenerationPhase('thinking'); // Start in thinking phase
     
     // Immediately scroll to bottom after adding messages
     setTimeout(() => {
@@ -224,7 +255,7 @@ export default function ChatPanelG({
     }, 50);
     
     // Let SSE handle DB sync in background
-    generateSSE(trimmedMessage, imageUrls, videoUrls);
+    generateSSE(trimmedMessage, imageUrls, videoUrls, selectedModel);
   };
 
   // Handle keyboard events for textarea
@@ -244,9 +275,22 @@ export default function ChatPanelG({
 
   // Handle message input change
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    console.log('[ChatPanelG] Input change:', e.target.value, 'isGenerating:', isGenerating);
     setMessage(e.target.value);
-  }, [isGenerating]);
+  }, []);
+
+  // ✅ NEW: Handle edit scene plan - copy prompt to input
+  const handleEditScenePlan = useCallback((prompt: string) => {
+    setMessage(prompt);
+    // Focus the textarea after setting the message
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        // Move cursor to end
+        const length = textareaRef.current.value.length;
+        textareaRef.current.setSelectionRange(length, length);
+      }
+    }, 50);
+  }, []);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -269,8 +313,8 @@ export default function ChatPanelG({
   }, [message, adjustTextareaHeight]);
 
 
-  // Create image upload handlers
-  const imageHandlers = createImageUploadHandlers(
+  // Create media upload handlers
+  const imageHandlers = createMediaUploadHandlers(
     uploadedImages,
     setUploadedImages,
     projectId
@@ -292,23 +336,123 @@ export default function ChatPanelG({
     setIsDragOver(false);
   }, [imageHandlers]);
 
+  // Handle audio extraction from video
+  const handleAudioExtract = useCallback(async (videoMedia: UploadedMedia) => {
+    if (!videoMedia.url) {
+      toast.error('Video not ready for audio extraction');
+      return;
+    }
+    
+    console.log('[ChatPanelG] Extracting audio from video:', videoMedia.file.name);
+    
+    // Create an audio track using the video URL (Remotion can extract audio from video)
+    const audioTrack = {
+      id: nanoid(),
+      url: videoMedia.url, // Same URL - Remotion will handle audio extraction
+      name: videoMedia.file.name.replace(/\.(mp4|mov|webm|avi|mkv)$/i, '') + ' (Audio)',
+      duration: 30, // Default duration - will be updated when loaded
+      startTime: 0,
+      endTime: 30,
+      volume: 0.7, // Default volume
+      fadeInDuration: 0.5, // Nice default fade
+      fadeOutDuration: 0.5,
+      playbackRate: 1
+    };
+    
+    // Update project audio state
+    updateProjectAudio(projectId, audioTrack);
+    
+    toast.success(`Audio extracted from ${videoMedia.file.name}`);
+  }, [updateProjectAudio, projectId]);
+
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
     setMessage("");
     setIsGenerating(false);
+    setGenerationPhase('thinking');
     setGenerationComplete(false);
     setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
 
+  // Auto-mark first scene plan as generating and poll for completion
+  useEffect(() => {
+    const scenePlanMessages = componentMessages.filter(msg => 
+      msg.kind === 'scene_plan' && !msg.isUser
+    );
+    
+    if (scenePlanMessages.length > 0) {
+      const firstScenePlan = scenePlanMessages[0];
+      
+      // Auto-generate Scene 1 with a small delay
+      const timeoutId = setTimeout(() => {
+        if (firstScenePlan?.id && projectId) {
+          console.log('[ChatPanelG] Auto-marking first scene as generating:', firstScenePlan.id);
+          setSceneGenerating(projectId, firstScenePlan.id, true);
+          
+          // Poll for completion by checking message updates
+          let pollCount = 0;
+          const maxPolls = 30; // 30 seconds max
+          
+          const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            try {
+              // Refetch messages to check if scene was created
+              await utils.chat.getMessages.invalidate({ projectId });
+              
+              // Check if the message has been updated to show completion
+              const currentMessages = await utils.chat.getMessages.fetch({ projectId });
+              const updatedMessage = currentMessages.find(msg => msg.id === firstScenePlan.id);
+              
+              if (updatedMessage && (
+                updatedMessage.content.includes('created successfully') ||
+                updatedMessage.kind === 'status'
+              )) {
+                // Scene created successfully
+                console.log('[ChatPanelG] Scene creation completed for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              } else if (updatedMessage && (
+                updatedMessage.content.includes('Failed')
+              )) {
+                // Scene creation failed
+                console.log('[ChatPanelG] Scene creation failed for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              } else if (pollCount >= maxPolls) {
+                // Timeout - stop polling
+                console.log('[ChatPanelG] Scene creation timeout for:', firstScenePlan.id);
+                setSceneGenerating(projectId, firstScenePlan.id, false);
+                clearInterval(pollInterval);
+              }
+            } catch (error) {
+              console.error('[ChatPanelG] Error polling for scene creation:', error);
+              setSceneGenerating(projectId, firstScenePlan.id, false);
+              clearInterval(pollInterval);
+            }
+          }, 1000); // Poll every second
+          
+          // Store interval ID for cleanup
+          return () => {
+            clearInterval(pollInterval);
+          };
+        }
+      }, 500);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [componentMessages, projectId, setSceneGenerating, utils]);
+
 
 
   // Check if content has multiple lines
   const hasMultipleLines = message.split('\n').length > 1 || message.includes('\n');
 
-  // Use auto-fix hook
-  const { sceneErrors, handleAutoFix } = useAutoFix(projectId, scenes);
+  // NOTE: useAutoFix moved to top of component to ensure consistent hook order
 
   // No need for pendingMessageRef - data will come from SSE
   
@@ -402,6 +546,53 @@ export default function ChatPanelG({
     }
   }, [projectId, revertMutation, utils, getCurrentProps, replace, updateScene, updateAndRefresh]);
 
+  // Enhance prompt mutation
+  const enhancePromptMutation = api.generation.enhancePrompt.useMutation({
+    onSuccess: (result) => {
+      setMessage(result.enhancedPrompt);
+      // Auto-resize the textarea after setting enhanced prompt
+      setTimeout(() => {
+        adjustTextareaHeight();
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          // Move cursor to end
+          const length = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(length, length);
+        }
+      }, 50);
+    },
+    onError: (error) => {
+      console.error('Failed to enhance prompt:', error);
+      toast.error('Failed to enhance prompt');
+    }
+  });
+
+  // Handle enhance prompt
+  const handleEnhancePrompt = useCallback(async () => {
+    if (!message.trim() || isEnhancing || isGenerating) return;
+    
+    setIsEnhancing(true);
+    
+    try {
+      const currentProps = getCurrentProps();
+      await enhancePromptMutation.mutateAsync({
+        prompt: message.trim(),
+        videoFormat: {
+          format: currentProps?.meta?.format || 'landscape',
+          width: currentProps?.meta?.width || 1920,
+          height: currentProps?.meta?.height || 1080
+        }
+      });
+      
+      toast.success('Prompt enhanced!', {
+        description: 'Your prompt has been expanded with more detail',
+        duration: 2000
+      });
+    } finally {
+      setIsEnhancing(false);
+    }
+  }, [message, isEnhancing, isGenerating, enhancePromptMutation]);
+
   // Use SSE generation hook
   const { generate: generateSSE, cleanup: cancelSSE } = useSSEGeneration({
     projectId,
@@ -411,7 +602,10 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [], videoUrls = [] } = data;
+        const { userMessage, imageUrls = [], videoUrls = [], modelOverride } = data;
+        
+        // Switch to generating phase when SSE is ready and we start the mutation
+        setGenerationPhase('generating');
         
         try {
           const result = await generateSceneMutation.mutateAsync({
@@ -420,6 +614,7 @@ export default function ChatPanelG({
             userContext: {
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+              modelOverride: modelOverride,
             },
             // Don't pass assistantMessageId - let mutation create it
           });
@@ -429,8 +624,32 @@ export default function ChatPanelG({
           // The result contains the actual response
           const responseData = result as any;
           
+          // Check if the response indicates an error (success: false)
+          if (responseData?.meta?.success === false || responseData?.error) {
+            const errorMessage = responseData?.error?.message || '';
+            console.log('[ChatPanelG] Generation failed with error:', errorMessage);
+            
+            // Check if this is a rate limit error
+            if (errorMessage.includes('Daily limit reached') || 
+                errorMessage.includes('Buy more prompts') ||
+                errorMessage.includes('prompt limit') ||
+                responseData?.error?.code === 'RATE_LIMITED') {
+              console.log('[ChatPanelG] Rate limit reached, showing purchase modal');
+              setIsPurchaseModalOpen(true);
+              toast.error('You\'ve reached your daily prompt limit. Please purchase more prompts to continue.');
+              return;
+            } else {
+              // Show other error messages
+              toast.error(errorMessage || 'Failed to generate scene');
+              return;
+            }
+          }
+          
           // Get the assistant message ID from the response
           const assistantMessageId = responseData.assistantMessageId;
+          
+          // ✅ NEW: Get additional message IDs from scene planner
+          const additionalMessageIds = responseData.additionalMessageIds || [];
           
           if (assistantMessageId) {
             // First, add the assistant message to VideoState since it doesn't exist yet
@@ -449,6 +668,20 @@ export default function ChatPanelG({
             
             // Hide the pulsating message immediately when we have the real message
             setIsGenerating(false);
+            setGenerationPhase('thinking'); // Reset phase
+          }
+          
+          // ✅ NEW: Add scene plan messages to VideoState immediately
+          if (additionalMessageIds.length > 0) {
+            console.log(`[ChatPanelG] ✅ SCENE PLANNER: Adding ${additionalMessageIds.length} scene plan messages to VideoState:`, additionalMessageIds);
+            
+            // Force a re-fetch of messages to get the scene plan content from database
+            await utils.chat.getMessages.invalidate({ projectId });
+            
+            // Note: We don't manually add these messages to VideoState because:
+            // 1. They already exist in the database with proper content
+            // 2. The invalidation above will trigger a refresh that includes them
+            // 3. The syncDbMessages effect will automatically sync them to VideoState
           }
           
           // Check if this is a clarification response
@@ -556,12 +789,44 @@ export default function ChatPanelG({
               }
             }
           
-        } catch (error) {
+        } catch (error: any) {
           console.error('[ChatPanelG] Generation failed:', error);
+          console.log('[ChatPanelG] Error structure:', {
+            message: error?.message,
+            code: error?.code,
+            cause: error?.data?.cause,
+            data: error?.data,
+            shape: error?.shape,
+            fullError: JSON.stringify(error, null, 2)
+          });
+          
+          // Check if this is a rate limit error from the mutation
+          // In the catch block, we only have the error object
+          const errorMessage = error?.message || '';
+          
+          const isRateLimitError = 
+            errorMessage.includes('Daily limit reached') ||
+            errorMessage.includes('Buy more prompts') ||
+            errorMessage.includes('prompt limit') ||
+            error?.data?.cause?.code === 'RATE_LIMITED';
+            
+          console.log('[ChatPanelG] Error message:', errorMessage);
+          console.log('[ChatPanelG] Is rate limit error?', isRateLimitError);
+          
+          if (isRateLimitError) {
+            console.log('[ChatPanelG] Rate limit error caught, showing purchase modal');
+            setIsPurchaseModalOpen(true);
+            // Also show a toast to confirm
+            toast.error('You\'ve reached your daily prompt limit. Please purchase more prompts to continue.');
+          } else {
+            // Show generic error message
+            toast.error(errorMessage || 'Failed to generate scene');
+          }
           
           // No optimistic messages to clean up
         } finally {
           setIsGenerating(false);
+          setGenerationPhase('thinking'); // Reset to thinking phase
           setGenerationComplete(true);
           
           // Always invalidate scenes to ensure UI is in sync with database
@@ -574,8 +839,17 @@ export default function ChatPanelG({
     },
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
-      toast.error(error);
+      
+      // Check if this is a rate limit error
+      if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
+        console.log('[ChatPanelG] Rate limit error from SSE, showing purchase modal');
+        setIsPurchaseModalOpen(true);
+      } else {
+        toast.error(error);
+      }
+      
       setIsGenerating(false);
+      setGenerationPhase('thinking'); // Reset to thinking phase
     }
   });
 
@@ -589,58 +863,64 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {componentMessages.map((msg) => (
-          <ChatMessage
-            key={msg.id}
-            message={{
-              id: msg.id,
-              message: msg.content,
-              isUser: msg.isUser,
-              timestamp: msg.timestamp.getTime(),
-              status: msg.status,
-              kind: msg.kind,
-              imageUrls: msg.imageUrls,
-            }}
-            onImageClick={(imageUrl) => {
-              // TODO: Implement image click handler
-              console.log('Image clicked:', imageUrl);
-            }}
-            projectId={projectId}
-            onRevert={isReverting ? undefined : handleRevert}
-            hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-          />
-        ))}
-        
-        {/* Show pulsating message UI when generating */}
-        {isGenerating && (
-          <div className="flex justify-start mb-4">
-            <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
-              <GeneratingMessage />
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
+        <div className="space-y-4">
+          {componentMessages.map((msg, index) => {
+          // Find all scene plan messages
+          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
+          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+          const totalScenePlans = scenePlanMessages.length;
+          
+          return (
+            <ChatMessage
+              key={msg.id}
+              message={{
+                id: msg.id,
+                message: msg.content,
+                isUser: msg.isUser,
+                timestamp: msg.timestamp.getTime(),
+                status: msg.status,
+                kind: msg.kind,
+                imageUrls: msg.imageUrls,
+              }}
+              onImageClick={(imageUrl) => {
+                // TODO: Implement image click handler
+                console.log('Image clicked:', imageUrl);
+              }}
+              projectId={projectId}
+              userId={userId}
+              onRevert={isReverting ? undefined : handleRevert}
+              onEditScenePlan={handleEditScenePlan}
+              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+              isFirstScenePlan={isFirstScenePlan}
+              totalScenePlans={totalScenePlans}
+            />
+          );
+          })}
+          
+          {/* Show pulsating message UI when generating */}
+          {isGenerating && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+                <GeneratingMessage phase={generationPhase} />
+              </div>
             </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input area */}
       <div className="p-4">
 
-        {/* Auto-fix error banner */}
-        <AutoFixErrorBanner
-          scenes={scenes}
-          sceneErrors={sceneErrors}
-          onAutoFix={handleAutoFix}
-          isGenerating={isGenerating}
-        />
 
-        {/* Image upload preview area */}
-        <ImageUpload
-          uploadedImages={uploadedImages}
-          onImagesChange={setUploadedImages}
+        {/* Media upload preview area */}
+        <MediaUpload
+          uploadedMedia={uploadedImages}
+          onMediaChange={setUploadedImages}
           projectId={projectId}
-          disabled={isGenerating}
+          onAudioExtract={handleAudioExtract}
         />
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
@@ -666,12 +946,10 @@ export default function ChatPanelG({
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   placeholder={!message ? "Describe what you want to create" : ""}
-                  disabled={isGenerating}
                   className={cn(
                     "w-full resize-none bg-transparent border-none",
                     "px-3 py-1 text-sm leading-6",
                     "focus:outline-none focus:ring-0",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
                     "rounded-t-2xl"
                   )}
                   style={{
@@ -688,8 +966,7 @@ export default function ChatPanelG({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                    disabled={isGenerating}
+                    className="p-1 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                     aria-label="Upload images"
                   >
                     <ImageIcon className="h-4 w-4" />
@@ -704,17 +981,50 @@ export default function ChatPanelG({
                       return newMessage;
                     });
                   }}
-                  disabled={isGenerating}
-                />
+                  />
                 </div>
 
-                <Button
-                  type="submit"
-                  disabled={!message.trim() || isGenerating}
-                  className="w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0"
-                >
-                  {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                </Button>
+                <div className="flex gap-2 items-center">
+                  {/* Enhance Prompt Button */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleEnhancePrompt}
+                          disabled={!message.trim() || isEnhancing || isGenerating}
+                          className={cn(
+                            "p-1 rounded-full transition-all duration-200",
+                            message.trim() && !isEnhancing && !isGenerating
+                              ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                              : "text-gray-400 cursor-not-allowed"
+                          )}
+                          aria-label="Enhance prompt"
+                        >
+                          {isEnhancing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enhance Prompt</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <Button
+                    type="submit"
+                    disabled={!message.trim() || isGenerating}
+                    className={cn(
+                      "w-8 h-8 rounded-full bg-black hover:bg-gray-800 p-0",
+                      isGenerating && "opacity-60"
+                    )}
+                  >
+                    {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -729,6 +1039,12 @@ export default function ChatPanelG({
           />
         </form>
       </div>
+      
+      {/* Purchase Modal */}
+      <PurchaseModal 
+        isOpen={isPurchaseModalOpen} 
+        onClose={() => setIsPurchaseModalOpen(false)} 
+      />
     </div>
   );
 }

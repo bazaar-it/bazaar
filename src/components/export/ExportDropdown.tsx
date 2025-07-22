@@ -90,45 +90,49 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
   };
 
   // Handle completion - auto-download
-  if (status?.status === 'completed' && renderId && status.outputUrl && !hasDownloaded) {
-    setHasDownloaded(true);
-    toast.success('Render complete! Starting download...');
-    
-    // Auto-download after a short delay
-    setTimeout(async () => {
-      try {
-        const response = await fetch(status.outputUrl!);
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = generateCleanFilename(projectTitle, quality, format);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-        
-        // Reset state after successful download
-        setTimeout(() => {
-          setRenderId(null);
-          setHasDownloaded(false);
-          setIsOpen(false);
-        }, 1500);
-      } catch (error) {
-        console.error('Auto-download failed:', error);
-        toast.error('Auto-download failed. Please click the download button.');
-      }
-    }, 500);
-  }
+  React.useEffect(() => {
+    if (status?.status === 'completed' && renderId && status.outputUrl && !hasDownloaded) {
+      setHasDownloaded(true);
+      toast.success('Render complete! Starting download...');
+      
+      // Auto-download after a short delay
+      setTimeout(async () => {
+        try {
+          const response = await fetch(status.outputUrl!);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = generateCleanFilename(projectTitle, quality, format);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          
+          // Reset state after successful download
+          setTimeout(() => {
+            setRenderId(null);
+            setHasDownloaded(false);
+            setIsOpen(false);
+          }, 1500);
+        } catch (error) {
+          console.error('Auto-download failed:', error);
+          toast.error('Auto-download failed. Please click the download button.');
+        }
+      }, 500);
+    }
+  }, [status?.status, renderId, status?.outputUrl, hasDownloaded, projectTitle, quality, format]);
 
   // Handle failure
-  if (status?.status === 'failed') {
-    toast.error(`Render failed: ${status.error || 'Unknown error'}`);
-    setRenderId(null);
-    setIsOpen(false);
-  }
+  React.useEffect(() => {
+    if (status?.status === 'failed') {
+      toast.error(`Render failed: ${status.error || 'Unknown error'}`);
+      setRenderId(null);
+      setIsOpen(false);
+    }
+  }, [status?.status, status?.error]);
 
   // Rendering states
   const isRendering = !!renderId && status?.status === 'rendering';
@@ -163,7 +167,7 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
           ) : (
             <>
               <Download className="h-4 w-4" />
-              Render
+              Download
               <ChevronDown className="h-3 w-3 opacity-50" />
             </>
           )}
@@ -255,12 +259,12 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
             {isRendering ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Rendering... {progress}%
+                Rendering {progress}%
               </>
             ) : (
               <>
                 <FileVideo className="h-3 w-3" />
-                Render as {format.toUpperCase()}
+                Download as {format.toUpperCase()}
               </>
             )}
           </DropdownMenuItem>

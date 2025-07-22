@@ -4,7 +4,7 @@ import { api } from '~/trpc/react';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[] }) => void;
+  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; modelOverride?: string }) => void;
   onComplete?: () => void;
   onError?: (error: string) => void;
 }
@@ -19,7 +19,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
   const generate = useCallback(async (
     userMessage: string,
     imageUrls?: string[],
-    videoUrls?: string[]
+    videoUrls?: string[],
+    modelOverride?: string
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -39,12 +40,17 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     if (videoUrls?.length) {
       params.append('videoUrls', JSON.stringify(videoUrls));
     }
+    
+    if (modelOverride) {
+      params.append('modelOverride', modelOverride);
+    }
 
     // Create new EventSource
     const eventSource = new EventSource(`/api/generate-stream?${params.toString()}`);
     eventSourceRef.current = eventSource;
 
     let currentMessageId: string | null = null;
+    let hasReceivedMessage = false;
 
     eventSource.onmessage = (event) => {
       try {
@@ -52,12 +58,14 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
         
         switch (data.type) {
           case 'ready':
+            hasReceivedMessage = true;
             // SSE is ready, trigger the generation
             // Don't pass empty string - let the mutation create the assistant message
             onMessageCreated?.(undefined, {
               userMessage: data.userMessage,
               imageUrls: data.imageUrls,
-              videoUrls: data.videoUrls
+              videoUrls: data.videoUrls,
+              modelOverride: data.modelOverride
             });
             eventSource.close();
             break;
@@ -71,26 +79,44 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             break;
             
           case 'error':
-            onError?.(data.error);
+            hasReceivedMessage = true;
+            // ✅ NEW: Enhanced error handling with retry info
+            let errorMessage = data.error || 'Unknown error occurred';
+            
+            // Add helpful context for common errors
+            if (data.canRetry) {
+              errorMessage = `${errorMessage} (Retryable error)`;
+            }
+            
+            onError?.(errorMessage);
             eventSource.close();
             break;
         }
       } catch (error) {
         console.error('[SSE] Failed to parse message:', error);
+        onError?.('Failed to parse server response');
       }
     };
 
     eventSource.onerror = (error) => {
-      // Check if we've already received a message - if so, this is likely just the connection closing normally
-      if (currentMessageId || eventSource.readyState === EventSource.CLOSED) {
+      console.error('[SSE] EventSource error:', error);
+      
+      // ✅ NEW: More intelligent error handling
+      if (hasReceivedMessage) {
         // This is expected - the server closed the connection after creating the message
-        console.log('[SSE] Connection closed normally');
+        console.log('[SSE] Connection closed normally after receiving message');
         return;
       }
       
-      // Only log and show error if we haven't received any messages yet
-      console.error('[SSE] Connection error:', error);
-      onError?.('Connection lost. Please try again.');
+      // Check connection state to provide better error messages
+      if (eventSource.readyState === EventSource.CONNECTING) {
+        onError?.('Connection failed. Please check your network and try again.');
+      } else if (eventSource.readyState === EventSource.CLOSED) {
+        onError?.('Connection lost. Please try again.');
+      } else {
+        onError?.('Connection error. Please try again.');
+      }
+      
       eventSource.close();
     };
 

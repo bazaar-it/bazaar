@@ -2,15 +2,16 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Slider } from "~/components/ui/slider";
 import { Button } from "~/components/ui/button";
-import { PlayIcon, RotateCcwIcon } from "lucide-react";
+import { ChevronsUp } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
 interface PlaybackSpeedSliderProps {
   currentSpeed: number;
@@ -26,43 +27,115 @@ const SPEED_MARKS = [
   { value: 4, label: '4x' }
 ];
 
+// Map speed value to slider position (0-100)
+const speedToSliderValue = (speed: number): number => {
+  // Handle exact matches first
+  for (let i = 0; i < SPEED_MARKS.length; i++) {
+    if (Math.abs(speed - SPEED_MARKS[i]!.value) < 0.01) {
+      return (i / (SPEED_MARKS.length - 1)) * 100;
+    }
+  }
+  
+  // Find the closest marks for interpolation
+  for (let i = 0; i < SPEED_MARKS.length - 1; i++) {
+    const current = SPEED_MARKS[i]!;
+    const next = SPEED_MARKS[i + 1]!;
+    
+    if (speed >= current.value && speed <= next.value) {
+      // Linear interpolation between marks
+      const ratio = (speed - current.value) / (next.value - current.value);
+      const sliderStart = (i / (SPEED_MARKS.length - 1)) * 100;
+      const sliderEnd = ((i + 1) / (SPEED_MARKS.length - 1)) * 100;
+      return sliderStart + ratio * (sliderEnd - sliderStart);
+    }
+  }
+  
+  // Handle edge cases
+  if (speed <= SPEED_MARKS[0]!.value) return 0;
+  if (speed >= SPEED_MARKS[SPEED_MARKS.length - 1]!.value) return 100;
+  
+  return 50; // Default to middle
+};
+
+// Map slider position (0-100) to speed value
+const sliderValueToSpeed = (sliderValue: number): number => {
+  // Clamp to valid range
+  const clampedValue = Math.max(0, Math.min(100, sliderValue));
+  
+  // Check if we're close to any exact mark positions
+  const segmentSize = 100 / (SPEED_MARKS.length - 1);
+  for (let i = 0; i < SPEED_MARKS.length; i++) {
+    const markPosition = i * segmentSize;
+    if (Math.abs(clampedValue - markPosition) < 2) { // Within 2% of exact position
+      return SPEED_MARKS[i]!.value;
+    }
+  }
+  
+  // Find which segment we're in
+  const segmentIndex = Math.floor(clampedValue / segmentSize);
+  const segmentRatio = (clampedValue % segmentSize) / segmentSize;
+  
+  // Handle edge case for last segment
+  if (segmentIndex >= SPEED_MARKS.length - 1) {
+    return SPEED_MARKS[SPEED_MARKS.length - 1]!.value;
+  }
+  
+  // Interpolate between the two marks
+  const current = SPEED_MARKS[segmentIndex]!;
+  const next = SPEED_MARKS[segmentIndex + 1]!;
+  
+  return current.value + segmentRatio * (next.value - current.value);
+};
+
 export function PlaybackSpeedSlider({ 
   currentSpeed, 
   onSpeedChange, 
   className = "" 
 }: PlaybackSpeedSliderProps) {
-  const [sliderValue, setSliderValue] = useState([currentSpeed]);
+  const [sliderValue, setSliderValue] = useState([speedToSliderValue(currentSpeed)]);
   const [isOpen, setIsOpen] = useState(false);
   
   // Update slider when currentSpeed changes from outside
   useEffect(() => {
-    setSliderValue([currentSpeed]);
+    setSliderValue([speedToSliderValue(currentSpeed)]);
   }, [currentSpeed]);
   
   const handleSliderChange = (value: number[]) => {
-    const newSpeed = value[0];
-    setSliderValue([newSpeed]);
+    const sliderPos = value[0] ?? 50;
+    const newSpeed = sliderValueToSpeed(sliderPos);
+    setSliderValue([sliderPos]);
     onSpeedChange(newSpeed);
   };
   
-  const handleReset = () => {
-    setSliderValue([1]);
-    onSpeedChange(1);
+  const handleMarkClick = (speed: number) => {
+    const sliderPos = speedToSliderValue(speed);
+    setSliderValue([sliderPos]);
+    onSpeedChange(speed);
   };
   
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className={`h-8 px-2 text-xs font-mono ${className}`}
-          title="Playback Speed"
-        >
-          <PlayIcon className="h-3 w-3 mr-1" />
-          {currentSpeed}x
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={`h-8 px-2 text-xs font-mono ${className}`}
+              >
+                <ChevronsUp className="h-3 w-3 mr-1 rotate-90" />
+                <span className="inline-block w-[2.5rem] text-left">
+                  {currentSpeed.toFixed(1)}x
+                </span>
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Playback Speed</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent 
         align="end" 
         className="w-48 p-3"
@@ -78,9 +151,9 @@ export function PlaybackSpeedSlider({
           <Slider
             value={sliderValue}
             onValueChange={handleSliderChange}
-            min={0.25}
-            max={4}
-            step={0.05}
+            min={0}
+            max={100}
+            step={1}
             className="w-full"
           />
           
@@ -89,9 +162,9 @@ export function PlaybackSpeedSlider({
               <button
                 key={mark.value}
                 className={`cursor-pointer hover:text-foreground transition-colors ${
-                  Math.abs(sliderValue[0] - mark.value) < 0.05 ? 'text-foreground font-medium' : ''
+                  Math.abs(currentSpeed - mark.value) < 0.05 ? 'text-foreground font-medium' : ''
                 }`}
-                onClick={() => handleSliderChange([mark.value])}
+                onClick={() => handleMarkClick(mark.value)}
               >
                 {mark.label}
               </button>

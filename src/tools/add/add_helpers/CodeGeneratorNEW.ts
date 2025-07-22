@@ -3,14 +3,268 @@ import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
+import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
+import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 
 /**
- * Code Generator Service - converts JSON specifications to React/Remotion code
- * Second step of the two-step pipeline: JSON Spec → React Code
+ * Unified Code Processing Service - handles all code generation tools
+ * Provides consistent response processing for: Code Generator, Typography, Image Recreator
+ * Uses simple, proven approach from original CodeGeneratorService
  */
-export class CodeGeneratorService {
+export class UnifiedCodeProcessor {
   private readonly DEBUG = process.env.NODE_ENV === 'development';
+
+  /**
+   * UNIFIED: Process AI response with consistent logic for all tools
+   * Uses the proven simple approach from CodeGeneratorService
+   */
+  private processAIResponse(rawOutput: string, toolName: string, userPrompt: string, functionName: string): {
+    code: string;
+    name: string;
+    duration: number;
+    reasoning: string;
+  } {
+    // 🚨 DEBUG: Check for mysterious "x" prefix
+    if (rawOutput.trim().startsWith('x')) {
+      console.error('🚨 [UNIFIED PROCESSOR] FOUND "x" PREFIX!', {
+        toolName,
+        userPrompt: userPrompt.substring(0, 100),
+        rawOutputFirst50: rawOutput.substring(0, 50),
+        functionName,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Clean and process code (same logic as original CodeGeneratorService)
+    let cleanCode = rawOutput.trim();
+    
+    // 🚨 FIX: Remove mysterious "x" prefix if present
+    if (cleanCode.startsWith('x\n') || cleanCode.startsWith('x ')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Removing "x" prefix from generated code');
+      cleanCode = cleanCode.substring(1).trim();
+    }
+    cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+    
+    // 🚨 FIX: Replace incorrect currentFrame variable naming
+    if (cleanCode.includes('const currentFrame = useCurrentFrame()')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Fixing currentFrame naming issue');
+      cleanCode = cleanCode.replace(/const currentFrame = useCurrentFrame\(\)/g, 'const frame = useCurrentFrame()');
+      // Also replace any usage of currentFrame variable (but not in destructuring)
+      cleanCode = cleanCode.replace(/(?<!\{[^}]*)(\bcurrentFrame\b)(?![^{]*\}\s*=\s*window\.Remotion)/g, 'frame');
+    }
+    
+    // 🚨 FIX: If there's both frame and currentFrame declared, remove currentFrame
+    if (cleanCode.includes('const frame = useCurrentFrame()') && cleanCode.includes('const currentFrame')) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Removing duplicate currentFrame declaration');
+      // Remove any line that declares currentFrame
+      cleanCode = cleanCode.replace(/^\s*const currentFrame\s*=.*$/gm, '');
+    }
+    
+    // 🚨 FIX: If AI destructured currentFrame instead of useCurrentFrame
+    if (cleanCode.match(/const\s*{[^}]*\bcurrentFrame\b[^}]*}\s*=\s*window\.Remotion/)) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Fixing incorrect destructuring of currentFrame');
+      cleanCode = cleanCode.replace(/(const\s*{[^}]*)(\bcurrentFrame\b)([^}]*}\s*=\s*window\.Remotion)/g, '$1useCurrentFrame$3');
+    }
+    
+    // Ensure single export default only (original CodeGeneratorService logic)
+    if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
+      const sceneMatch = cleanCode.match(/const \{[^}]+\} = window\.Remotion;[\s\S]*?export default function \w+\(\)[^{]*\{[\s\S]*?\n\}/);
+      if (sceneMatch) {
+        cleanCode = sceneMatch[0];
+      }
+    }
+    
+    // Extract duration
+    const durationAnalysis = analyzeDuration(cleanCode);
+    
+    // Generate name based on tool type
+    const name = this.generateSceneName(toolName, userPrompt, cleanCode);
+    
+    return {
+      code: cleanCode,
+      name,
+      duration: durationAnalysis.frames,
+      reasoning: `Generated ${toolName.toLowerCase()} scene: "${name}" (${durationAnalysis.frames} frames)`,
+    };
+  }
+
+  /**
+   * UNIFIED: Generate scene name based on tool type
+   */
+  private generateSceneName(toolName: string, userPrompt: string, code: string): string {
+    switch (toolName.toLowerCase()) {
+      case 'typography':
+        // Look for text-specific patterns
+        const textMatch = userPrompt.match(/(?:says?|text|showing|displaying)\s+(.+?)(?:\s+with|\s+in|\s+on|\s+at|\s+for|$)/i);
+        if (textMatch?.[1]) return `Text: ${textMatch[1].substring(0, 30)}`;
+        
+        const quotedMatch = userPrompt.match(/["'](.*?)["']/) || code.match(/["'](.*?)["']/);
+        if (quotedMatch?.[1] && quotedMatch[1].length > 2) return `Text: ${quotedMatch[1].substring(0, 30)}`;
+        
+        return 'Animated Text';
+        
+      case 'image_recreator':
+        // Look for recreation-specific patterns
+        const recreateMatch = userPrompt.match(/recreate\s+(.+?)(?:\s+with|\s+as|\s+in|\s+for|$)/i);
+        if (recreateMatch?.[1]) return `Recreated ${recreateMatch[1].substring(0, 30)}`;
+        
+        const imageMatch = userPrompt.match(/image\s+of\s+(.+?)(?:\s+with|\s+as|\s+in|\s+for|$)/i);
+        if (imageMatch?.[1]) return `Image: ${imageMatch[1].substring(0, 30)}`;
+        
+        return 'Recreated Scene';
+        
+      default:
+        return 'Scene'; // Simple display name for code generator
+    }
+  }
+
+  /**
+   * TYPOGRAPHY: Generate animated text scenes
+   */
+  async generateTypographyScene(input: {
+    userPrompt: string;
+    functionName: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
+    previousSceneContext?: {
+      tsxCode: string;
+      style?: string;
+    };
+  }): Promise<CodeGenerationOutput> {
+    console.log('🎨 [UNIFIED PROCESSOR] TYPOGRAPHY: Generating text scene');
+    
+    try {
+      // Prepare the messages with optional previous scene context
+      // Replace placeholders in TYPOGRAPHY_AGENT content
+      const typographyPrompt = TYPOGRAPHY_AGENT.content
+        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
+        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
+        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system' as const, content: typographyPrompt }
+      ];
+
+      // Add previous scene context if available
+      if (input.previousSceneContext?.tsxCode) {
+        messages.push({
+          role: 'user' as const,
+          content: `Previous scene code for visual harmony reference:\n\`\`\`tsx\n${input.previousSceneContext.tsxCode}\n\`\`\`\n\nMaintain visual harmony with the established theme. Use similar colors, gradients, and fonts for consistency, but create unique text animations appropriate for the content.`
+        });
+        messages.push({
+          role: 'assistant' as const,
+          content: 'I understand. I will maintain visual harmony with the previous scene while creating unique text animations.'
+        });
+      }
+
+      // Add the main user prompt
+      messages.push({
+        role: 'user' as const,
+        content: input.userPrompt
+      });
+
+      const response = await AIClientService.generateResponse(
+        getModel('codeGenerator'),
+        messages
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from Typography LLM");
+      }
+      
+      const result = this.processAIResponse(rawOutput, 'TYPOGRAPHY', input.userPrompt, input.functionName);
+      
+      return {
+        ...result,
+        debug: {
+          method: 'typography',
+          promptLength: input.userPrompt.length,
+          responseLength: rawOutput.length,
+        }
+      };
+      
+    } catch (error) {
+      console.error('[UNIFIED PROCESSOR] Typography generation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * IMAGE RECREATOR: Generate scenes from images
+   */
+  async generateImageRecreationScene(input: {
+    userPrompt: string;
+    functionName: string;
+    imageUrls: string[];
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
+  }): Promise<CodeGenerationOutput> {
+    console.log('🖼️ [UNIFIED PROCESSOR] IMAGE RECREATOR: Generating recreation scene');
+    
+    try {
+      // Build message content with text and images - include URLs in prompt text too!
+      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      const enhancedPrompt = `${input.userPrompt}
+
+UPLOADED IMAGES TO USE:
+${imageUrlsList}
+
+CRITICAL: You MUST use these exact image URLs above in your generated code with the Remotion <Img> component.`;
+
+      const messageContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
+        { type: 'text', text: enhancedPrompt }
+      ];
+      
+      for (const url of input.imageUrls) {
+        console.log('🖼️ [IMAGE RECREATOR] Adding image URL to message:', url);
+        messageContent.push({ 
+          type: 'image_url', 
+          image_url: { url } 
+        });
+      }
+      
+      // Replace placeholders in IMAGE_RECREATOR content
+      const imageRecreatorPrompt = IMAGE_RECREATOR.content
+        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
+        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
+        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      
+      const response = await AIClientService.generateResponse(
+        getModel('codeGenerator'),
+        [{ role: 'user', content: messageContent }],
+        { role: 'system', content: imageRecreatorPrompt }
+      );
+      
+      const rawOutput = response?.content;
+      if (!rawOutput) {
+        throw new Error("No response from Image Recreator LLM");
+      }
+      
+      const result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      
+      return {
+        ...result,
+        debug: {
+          method: 'imageRecreation',
+          imageCount: input.imageUrls.length,
+          promptLength: input.userPrompt.length,
+          responseLength: rawOutput.length,
+        }
+      };
+      
+    } catch (error) {
+      console.error('[UNIFIED PROCESSOR] Image recreation failed:', error);
+      throw error;
+    }
+  }
 
   /**
    * Generate code directly from prompt (FASTEST PATH - no layout)
@@ -19,6 +273,7 @@ export class CodeGeneratorService {
     userPrompt: string;
     functionName: string;
     projectId: string;
+    requestedDurationFrames?: number;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -31,14 +286,22 @@ export class CodeGeneratorService {
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
-      const formatContext = input.projectFormat ? `
-VIDEO FORMAT: ${input.projectFormat.format} (${input.projectFormat.width}x${input.projectFormat.height})` : '';
       
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"${formatContext}
+      let userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+
+      // Add duration constraint if specified
+      if (input.requestedDurationFrames) {
+        userPrompt += `\n\nDURATION REQUIREMENT: The scene MUST be exactly ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).`;
+        userPrompt += `\nEnsure all animations complete before frame ${input.requestedDurationFrames - 10}.`;
+        userPrompt += `\nExport the duration: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};`;
+      }
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -88,6 +351,12 @@ FUNCTION NAME: ${input.functionName}`;
     functionName: string;
     projectId: string;
     previousSceneCode: string;
+    requestedDurationFrames?: number;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -95,24 +364,51 @@ FUNCTION NAME: ${input.functionName}`;
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       const transitionContext = getSmartTransitionContext(input.previousSceneCode);
-      const userPrompt = `USER REQUEST: "${input.userPrompt}"
+      // Extract key style elements from previous scene
+      const bgColorMatch = input.previousSceneCode.match(/backgroundColor:\s*["']([^"']+)["']/);
+      const bgGradientMatch = input.previousSceneCode.match(/background:\s*["'](linear-gradient[^"']+)["']/);
+      const primaryColorMatch = input.previousSceneCode.match(/color:\s*["']#([0-9a-fA-F]{6})["']/);
+      const fontFamilyMatch = input.previousSceneCode.match(/fontFamily:\s*["']([^"']+)["']/);
+      
+      const styleContext = `
+EXTRACTED STYLE FROM PREVIOUS SCENE:
+- Background: ${bgColorMatch ? bgColorMatch[1] : (bgGradientMatch ? bgGradientMatch[1] : 'Not found')}
+- Primary Text Color: ${primaryColorMatch ? '#' + primaryColorMatch[1] : 'Not found'}
+- Font Family: ${fontFamilyMatch ? fontFamilyMatch[1] : 'Inter'}`;
+
+      let userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 PREVIOUS SCENE REFERENCE:
 \`\`\`tsx
 ${transitionContext}
 \`\`\`
 
-IMPORTANT INSTRUCTIONS:
-1. Study the previous scene's visual style, colors, animation timing, and patterns
-2. Create a NEW scene that maintains visual consistency
-3. If previous elements exit in a direction, consider entering from the opposite
-4. Match the pacing and energy of the previous scene
-5. Use similar animation timing (if previous uses 8-12 frames, you should too)
+${styleContext}
+
+CRITICAL STYLE CONSISTENCY REQUIREMENTS:
+1. You MUST use the EXACT SAME background color/gradient as the previous scene
+2. You MUST use the SAME font family and similar text colors
+3. Study the previous scene's visual style, colors, animation timing, and patterns
+4. Create a NEW scene that maintains PERFECT visual consistency
+5. If the previous scene has a dark theme, your scene MUST also have a dark theme
+6. If the previous scene has specific brand colors (like #007AFF), use them consistently
+7. Match the pacing and energy of the previous scene
+8. Use similar animation timing (if previous uses 8-12 frames, you should too)
 
 FUNCTION NAME: ${input.functionName}`;
+
+      // Add duration constraint if specified
+      if (input.requestedDurationFrames) {
+        userPrompt += `\n\nDURATION REQUIREMENT: The scene MUST be exactly ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).`;
+        userPrompt += `\nAdjust all animations to fit within this duration.`;
+        userPrompt += `\nExport: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};`;
+      }
 
       const messages = [
         { role: 'user' as const, content: userPrompt }
@@ -251,11 +547,22 @@ export default function ${input.functionName}() {
       
       // Get the IMAGE_CODE_GENERATOR prompt specifically for image-based generation
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
-      // Build user message for vision API - include the actual user prompt!
+      // Build user message for vision API - include the actual user prompt AND image URLs!
+      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
+
+UPLOADED IMAGES TO USE IN YOUR CODE:
+${imageUrlsList}
+
+CRITICAL: You MUST use these exact image URLs in your generated code with the Remotion <Img> component.
+DO NOT generate placeholder URLs or use stock photos - use the URLs provided above.
 
 IMPORTANT: Study the image to understand the visual style, colors, typography, and design elements. Then create MOTION GRAPHICS that showcase these elements one at a time in sequence.
 
@@ -351,6 +658,9 @@ export default function ${input.functionName}() {
     const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
       FUNCTION_NAME: functionName,
       USER_PROMPT: userPrompt,
+      WIDTH: input.projectFormat?.width.toString() || '1920',
+      HEIGHT: input.projectFormat?.height.toString() || '1080',
+      FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
     });
     
     const user = JSON.stringify(layoutJson, null, 2);
@@ -365,6 +675,11 @@ export default function ${input.functionName}() {
     videoUrls: string[];
     userPrompt: string;
     functionName: string;
+    projectFormat?: {
+      format: 'landscape' | 'portrait' | 'square';
+      width: number;
+      height: number;
+    };
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -375,7 +690,10 @@ export default function ${input.functionName}() {
     
     try {
       const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName
+        FUNCTION_NAME: input.functionName,
+        WIDTH: input.projectFormat?.width.toString() || '1920',
+        HEIGHT: input.projectFormat?.height.toString() || '1080',
+        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
       });
       
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
@@ -439,4 +757,4 @@ Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytell
 }
 
 // Export singleton instance
-export const codeGenerator = new CodeGeneratorService();
+export const codeGenerator = new UnifiedCodeProcessor();

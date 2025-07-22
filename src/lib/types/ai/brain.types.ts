@@ -7,10 +7,10 @@
  */
 
 // ============================================================================
-// TOOL NAMES - Only the 4 actual tools we have
+// TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene';
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'typographyScene' | 'imageRecreatorScene'; // | 'scenePlanner'; [DISABLED]
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -20,7 +20,10 @@ export const TOOL_OPERATION_MAP = {
   addScene: 'scene.create',
   editScene: 'scene.update',
   trimScene: 'scene.update',
-  deleteScene: 'scene.delete'
+  deleteScene: 'scene.delete',
+  typographyScene: 'scene.create',
+  imageRecreatorScene: 'scene.create',
+  // scenePlanner: 'multi-scene.create' [DISABLED]
 } as const;
 
 export type ToolOperationType = typeof TOOL_OPERATION_MAP[ToolName];
@@ -40,10 +43,12 @@ export interface BrainDecision {
     userPrompt: string;
     targetSceneId?: string;
     targetDuration?: number; // For trim operations
+    requestedDurationFrames?: number; // Explicit duration from user prompt (e.g. "5 seconds" = 150)
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     videoUrls?: string[];
     errorDetails?: string;
+    modelOverride?: string; // Optional model ID for overriding default model
     webContext?: {
       originalUrl: string;
       screenshotUrls: {
@@ -82,7 +87,9 @@ export interface OrchestrationInput {
   prompt: string;
   projectId: string;
   userId: string;
-  userContext?: Record<string, unknown>;
+  userContext?: Record<string, unknown> & {
+    modelOverride?: string; // Optional model override for this request
+  };
   storyboardSoFar?: Array<{
     id: string;
     name: string;
@@ -191,5 +198,5 @@ export interface ToolSelectionResult {
 // ============================================================================
 
 export function isValidToolName(value: string): value is ToolName {
-  return ['addScene', 'editScene', 'deleteScene', 'trimScene'].includes(value);
+  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'typographyScene', 'imageRecreatorScene'].includes(value); // , 'scenePlanner' [DISABLED]
 }

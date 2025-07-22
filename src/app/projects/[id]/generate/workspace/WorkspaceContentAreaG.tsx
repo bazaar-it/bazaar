@@ -17,6 +17,7 @@ import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
+import { AudioPanel } from './panels/AudioPanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -31,6 +32,7 @@ const PANEL_COMPONENTS_G = {
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
   myprojects: MyProjectsPanelG,
+  audio: AudioPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -40,6 +42,7 @@ const PANEL_LABELS_G = {
   storyboard: 'Storyboard',
   templates: 'Templates',
   myprojects: 'My Projects',
+  audio: 'Audio',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -51,6 +54,7 @@ interface OpenPanelG {
 
 interface WorkspaceContentAreaGProps {
   projectId: string;
+  userId?: string;
   initialProps: InputProps;
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
@@ -303,7 +307,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, initialProps, projects = [], onProjectRename }, ref) => {
+  ({ projectId, userId, initialProps, projects = [], onProjectRename }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -395,7 +399,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         console.log('[WorkspaceContentAreaG] Syncing database messages with VideoState:', dbMessages.length);
         syncDbMessages(projectId, dbMessages as any[]);
       }
-    }, [dbMessages, projectId, syncDbMessages]);
+    }, [dbMessages, projectId]); // Removed syncDbMessages from deps to prevent infinite loop
     
     // Helper function to convert database scenes to InputProps format
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -427,7 +431,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           // Preserve the original project title from initialProps instead of generating new ones
           title: initialProps?.meta?.title || 'New Project',
           duration: currentStart || 150, // Ensure minimum duration even if no scenes
-          backgroundColor: initialProps?.meta?.backgroundColor || '#000000'
+          backgroundColor: initialProps?.meta?.backgroundColor || '#000000',
+          format: initialProps?.meta?.format || 'landscape',
+          width: initialProps?.meta?.width || 1920,
+          height: initialProps?.meta?.height || 1080
         },
         scenes // This will REPLACE all scenes, including any welcome scene
       };
@@ -708,6 +715,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'chat':
           return <ChatPanelG
             projectId={projectId}
+            userId={userId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
           />;
@@ -742,6 +750,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'myprojects':
           return <MyProjectsPanelG 
             currentProjectId={projectId} 
+          />;
+        case 'audio':
+          return <AudioPanel 
+            projectId={projectId} 
           />;
         default:
           return null;
@@ -822,7 +834,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                       </Panel>
                       {/* Add resize handle between panels but not after the last one */}
                       {idx < openPanels.length - 1 && (
-                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-blue-400 transition-colors" data-panel-resize-handle-id={`horizontal-${idx}`} />
+                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
                       )}
                     </React.Fragment>
                   ))}
