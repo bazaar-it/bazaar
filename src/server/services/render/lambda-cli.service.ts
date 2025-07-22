@@ -120,9 +120,10 @@ export async function renderVideoOnLambda({
       console.log('---');
     });
     
-    // Build CLI command
+    // Build CLI command - use node to run the installed remotion CLI
+    const remotionPath = path.join(process.cwd(), 'node_modules', '.bin', 'remotion');
     const cliArgs = [
-      'npx', 'remotion', 'lambda', 'render',
+      remotionPath, 'lambda', 'render',
       DEPLOYED_SITE_URL,
       'MainComposition',
       '--props', propsFile, // Use file path instead of inline JSON
