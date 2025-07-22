@@ -28,12 +28,52 @@ export default function MobileAppHeader({
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
+      // Try to copy to clipboard with fallback for Safari mobile
       try {
-        await navigator.clipboard.writeText(data.shareUrl);
-        toast.success("Share link copied!");
+        // Check if we have share API (mobile Safari supports this)
+        if (navigator.share && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          await navigator.share({
+            title: projectTitle || 'Bazaar Video',
+            url: data.shareUrl
+          });
+          toast.success("Share completed!");
+        } else if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(data.shareUrl);
+          toast.success("Share link copied!");
+        } else {
+          // Fallback for mobile browsers
+          const textArea = document.createElement("textarea");
+          textArea.value = data.shareUrl;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-999999px";
+          textArea.style.top = "-999999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+              toast.success("Share link copied!");
+            } else {
+              // Show URL for manual copy
+              toast.info(
+                <div className="text-xs">
+                  <p className="mb-1">Share link created!</p>
+                  <p className="break-all font-mono text-[10px]">{data.shareUrl}</p>
+                </div>,
+                { duration: 10000 }
+              );
+            }
+          } catch (err) {
+            toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
+          } finally {
+            document.body.removeChild(textArea);
+          }
+        }
       } catch (error) {
-        toast.error("Failed to copy link");
-        console.error("Failed to copy to clipboard:", error);
+        console.error("Failed to share/copy:", error);
+        toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
       }
       setIsSharing(false);
     },

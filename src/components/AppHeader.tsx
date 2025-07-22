@@ -77,13 +77,69 @@ export default function AppHeader({
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
-      // Auto-copy to clipboard
+      // Try to copy to clipboard with fallback for Safari
       try {
-        await navigator.clipboard.writeText(data.shareUrl);
-        toast.success("Share link copied to clipboard!");
+        // Check if we're in a secure context and have clipboard API
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(data.shareUrl);
+          toast.success("Share link copied to clipboard!");
+        } else {
+          // Fallback method using execCommand
+          const textArea = document.createElement("textarea");
+          textArea.value = data.shareUrl;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-999999px";
+          textArea.style.top = "-999999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+              toast.success("Share link copied to clipboard!");
+            } else {
+              // Show the URL in a toast with a copy button for Safari
+              toast.info(
+                <div className="flex flex-col gap-2">
+                  <p>Share link created!</p>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      value={data.shareUrl} 
+                      readOnly 
+                      className="text-xs bg-gray-100 px-2 py-1 rounded flex-1"
+                      onClick={(e) => e.currentTarget.select()}
+                    />
+                    <button 
+                      onClick={() => {
+                        const input = document.querySelector<HTMLInputElement>('.sonner-toast input');
+                        if (input) {
+                          input.select();
+                          document.execCommand('copy');
+                          toast.success("Copied!");
+                        }
+                      }}
+                      className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>,
+                { duration: 10000 }
+              );
+            }
+          } catch (err) {
+            console.error("execCommand copy failed:", err);
+            // Show URL in toast as final fallback
+            toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
+          } finally {
+            document.body.removeChild(textArea);
+          }
+        }
       } catch (error) {
-        toast.error("Failed to copy link, but share was created");
         console.error("Failed to copy to clipboard:", error);
+        // Show URL in toast as fallback
+        toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
       }
       setIsSharing(false);
     },
