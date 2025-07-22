@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/tooltip";
 import { ExportOptionsModal, type ExportFormat, type ExportQuality } from "./ExportOptionsModal";
 import { generateCleanFilename } from "~/lib/utils/filename";
+import { useVideoState } from "~/stores/videoState";
 
 interface ExportButtonProps {
   projectId: string;
@@ -28,6 +29,9 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [currentFormat, setCurrentFormat] = useState<ExportFormat>('mp4');
   const [currentQuality, setCurrentQuality] = useState<ExportQuality>('high');
+  
+  // Get audio from Zustand state
+  const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
@@ -109,6 +113,9 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     setShowExportModal(false);
     setCurrentFormat(format);
     setCurrentQuality(quality);
+    
+    console.log('[ExportButton] Starting render (audio will be fetched from database)');
+    
     startRender.mutate({ 
       projectId,
       format,

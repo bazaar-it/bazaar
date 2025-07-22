@@ -1,0 +1,1 @@
+ALTER TABLE "bazaar-vid_project" ADD COLUMN "audio" jsonb;

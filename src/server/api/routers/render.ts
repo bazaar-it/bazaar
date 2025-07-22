@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { prepareRenderConfig } from "~/server/services/render/render.service";
-import { renderVideoOnLambda } from "~/server/services/render/lambda-cli.service";
+import { renderVideoOnLambda } from "~/server/services/render/lambda-render.service";
 import { renderState } from "~/server/services/render/render-state";
 import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
 import crypto from "crypto";
@@ -101,13 +101,14 @@ export const renderRouter = createTRPCRouter({
         });
       });
 
-      // Prepare render configuration
+      // Prepare render configuration with audio from database
       const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
         scenes: project.scenes,
         format: input.format,
         quality: input.quality,
         projectProps: project.props,
+        audio: project.audio, // Get audio from database
       });
       
       // Log what prepareRenderConfig returned
@@ -128,6 +129,9 @@ export const renderRouter = createTRPCRouter({
           const result = await renderVideoOnLambda({
             ...renderConfig,
             webhookUrl: `${process.env.NEXTAUTH_URL}/api/webhooks/render`,
+            renderWidth: renderConfig.renderWidth,
+            renderHeight: renderConfig.renderHeight,
+            audio: renderConfig.audio,
           });
           
           // Store in state for tracking
@@ -264,7 +268,7 @@ export const renderRouter = createTRPCRouter({
       // If using Lambda and job is still rendering, check real-time progress
       if (isLambda && job.status === 'rendering' && job.bucketName) {
         try {
-          const { getLambdaRenderProgress } = await import("~/server/services/render/lambda-cli.service");
+          const { getLambdaRenderProgress } = await import("~/server/services/render/lambda-render.service");
           const progress = await getLambdaRenderProgress(input.renderId, job.bucketName);
           
           // Update local state with latest progress

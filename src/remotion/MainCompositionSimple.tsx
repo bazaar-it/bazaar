@@ -1,7 +1,7 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence } from "remotion";
+import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile } from "remotion";
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -48,14 +48,14 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         'videoWidth',
         'videoHeight',
         'videoDuration',
+        'Img',
+        'Audio',
+        'Video',
+        'staticFile',
         `
         try {
           // Additional Remotion components that might be used
           const Series = Sequence; // Alias for compatibility
-          const Audio = () => null; // Stub for Lambda
-          const Video = () => null; // Stub for Lambda
-          const Img = () => null; // Stub for Lambda
-          const staticFile = (path) => path; // Stub for Lambda
           
           // Stubs for external dependencies
           const window = {
@@ -136,7 +136,11 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         React.useState,
         width,
         height,
-        scene.duration || 150
+        scene.duration || 150,
+        Img,
+        Audio,
+        Video,
+        staticFile
       );
       
       if (ComponentFactory) {
@@ -249,7 +253,18 @@ export const VideoComposition: React.FC<{
   projectId?: string;
   width?: number;
   height?: number;
-}> = ({ scenes = [], width = 1920, height = 1080 }) => {
+  audio?: {
+    url: string;
+    name: string;
+    duration: number;
+    startTime: number;
+    endTime: number;
+    volume: number;
+    fadeInDuration?: number;
+    fadeOutDuration?: number;
+    playbackRate?: number;
+  };
+}> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
   if (!scenes || scenes.length === 0) {
     return (
       <AbsoluteFill
@@ -267,21 +282,42 @@ export const VideoComposition: React.FC<{
     );
   }
 
+  // Calculate total video duration for audio looping
+  const totalVideoDuration = scenes.reduce((sum, scene) => {
+    return sum + extractSceneDuration(scene);
+  }, 0);
+
   return (
-    <Series>
-      {scenes.map((scene, index) => {
-        // Extract the real duration from the scene code
-        const realDuration = extractSceneDuration(scene);
-        
-        console.log(`[VideoComposition] Scene ${index} duration: ${realDuration} frames (${Math.round(realDuration / 30)}s)`);
-        
-        return (
-          <Series.Sequence key={scene.id || index} durationInFrames={realDuration}>
-            <DynamicScene scene={{...scene, duration: realDuration}} index={index} width={width} height={height} />
-          </Series.Sequence>
-        );
-      })}
-    </Series>
+    <AbsoluteFill>
+      {/* Background audio track */}
+      {audio && (
+        <Audio
+          src={audio.url}
+          volume={audio.volume}
+          startFrom={Math.round(audio.startTime * 30)} // Convert seconds to frames
+          endAt={Math.round(audio.endTime * 30)} // Convert seconds to frames
+          loop={audio.endTime - audio.startTime < totalVideoDuration / 30} // Loop if audio is shorter than video
+          playbackRate={audio.playbackRate || 1}
+          // Note: Fade effects would need custom implementation with interpolate()
+        />
+      )}
+      
+      {/* Video scenes */}
+      <Series>
+        {scenes.map((scene, index) => {
+          // Extract the real duration from the scene code
+          const realDuration = extractSceneDuration(scene);
+          
+          console.log(`[VideoComposition] Scene ${index} duration: ${realDuration} frames (${Math.round(realDuration / 30)}s)`);
+          
+          return (
+            <Series.Sequence key={scene.id || index} durationInFrames={realDuration}>
+              <DynamicScene scene={{...scene, duration: realDuration}} index={index} width={width} height={height} />
+            </Series.Sequence>
+          );
+        })}
+      </Series>
+    </AbsoluteFill>
   );
 };
 
@@ -298,6 +334,7 @@ export const MainComposition: React.FC = () => {
         defaultProps={{
           scenes: [],
           projectId: '',
+          audio: undefined,
         }}
         calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number } }) => {
           // Calculate total duration by extracting from each scene's code
@@ -319,3 +356,6 @@ export const MainComposition: React.FC = () => {
     </>
   );
 };
+
+// Export for Lambda usage
+export const MainCompositionSimple = MainComposition;

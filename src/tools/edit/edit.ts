@@ -165,23 +165,47 @@ Please edit the code according to the user request. Return the complete modified
       }
       
       const systemPrompt = getSystemPrompt('CODE_EDITOR');
+
+      // DEBUG: Log request size
+      const requestContent = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent);
+      const requestSize = requestContent.length + systemPrompt.length;
+      console.log(`📊 [EDIT TOOL DEBUG] Request size: ${requestSize} chars (${(requestSize/1024).toFixed(2)}KB)`);
+      
+      // DEBUG: Time the AI call
+      const startTime = Date.now();
       
       const response = await AIClientService.generateResponse(
         modelConfig,
         [{ role: "user", content: messageContent }],
         { role: 'system', content: systemPrompt },
-        { responseFormat: { type: "json_object" } }
+        { responseFormat: { type: "json_object" }, debug: true }
       );
+
+      const responseTime = Date.now() - startTime;
 
       const content = response?.content;
       if (!content) {
         throw new Error("No response from AI editor");
       }
       
-      // Log response size to debug potential truncation issues
-      console.log(`📏 [EDIT TOOL] Response size: ${content.length} characters`);
-      if (content.length > 10000) {
-        console.warn(`⚠️ [EDIT TOOL] Large response detected (${content.length} chars) - may be truncated`);
+      // ENHANCED DEBUG LOGGING
+      console.log(`📏 [EDIT TOOL DEBUG] Response details:`, {
+        size: content.length,
+        sizeKB: (content.length / 1024).toFixed(2),
+        sizeMB: (content.length / 1024 / 1024).toFixed(3),
+        responseTime: `${responseTime}ms`,
+        model: modelConfig.model,
+        provider: modelConfig.provider,
+        truncated: content.endsWith('...') || content.endsWith('\\') || !this.looksComplete(content),
+        lastChars: content.slice(-100),
+        hasValidJSON: this.isValidJSON(content)
+      });
+      
+      // Check for common truncation patterns
+      if (this.detectTruncation(content)) {
+        console.error(`🚨 [EDIT TOOL DEBUG] TRUNCATION DETECTED!`);
+        console.error(`Last 200 chars: "${content.slice(-200)}"`);
+        console.error(`First 200 chars: "${content.slice(0, 200)}"`);
       }
 
       const parsed = this.extractJsonFromResponse(content);
@@ -301,6 +325,45 @@ Please edit the code according to the user request. Return the complete modified
       
       throw new Error('Could not extract JSON or code from response. Response: ' + content.substring(0, 500));
     }
+  }
+
+  private looksComplete(content: string): boolean {
+    // Check if response appears complete
+    const trimmed = content.trim();
+    return trimmed.endsWith('}') || trimmed.endsWith('"}');
+  }
+
+  private isValidJSON(content: string): boolean {
+    try {
+      JSON.parse(content);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private detectTruncation(content: string): boolean {
+    // Common truncation indicators
+    const truncationPatterns = [
+      /\\\s*$/,           // Ends with backslash
+      /"\s*$/,            // Ends with unclosed quote
+      /,\s*$/,            // Ends with comma
+      /:\s*$/,            // Ends with colon
+      /\[\s*$/,           // Ends with unclosed array
+      /\{\s*$/,           // Ends with unclosed object
+      /\\n\s*$/,          // Ends mid-escape sequence
+      /[^}]\s*$/          // Doesn't end with closing brace
+    ];
+    
+    const trimmed = content.trim();
+    
+    // If it's valid JSON, it's not truncated
+    if (this.isValidJSON(content)) {
+      return false;
+    }
+    
+    // Check truncation patterns
+    return truncationPatterns.some(pattern => pattern.test(trimmed));
   }
 
 }

@@ -6,6 +6,8 @@ import { scenes, messages } from "~/server/db/schema";
 import { eq, desc } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
+import { assetContext } from "~/server/services/context/assetContextService";
+import type { AssetContext } from "~/lib/types/asset-context";
 
 export class ContextBuilder {
 
@@ -36,6 +38,11 @@ export class ContextBuilder {
       // 4. Build web analysis context from URL detection
       const webContext = await this.buildWebContext(input);
       
+      // 5. Get persistent asset context
+      const projectAssets = await assetContext.getProjectAssets(input.projectId);
+      console.log(`📚 [CONTEXT BUILDER] Found ${projectAssets.assets.length} persistent assets`);
+      console.log(`📚 [CONTEXT BUILDER] Logos: ${projectAssets.logos.length}`);
+      
       return {
         // Real scene history with full TSX for cross-scene operations
         sceneHistory: scenesWithCode.map(scene => ({
@@ -60,7 +67,18 @@ export class ContextBuilder {
           id: scene.id,
           name: scene.name || 'Untitled Scene',
           order: scene.order
-        }))
+        })),
+        
+        // Persistent asset context
+        assetContext: projectAssets.assets.length > 0 ? {
+          allAssets: projectAssets.assets.map(a => ({
+            url: a.url,
+            type: a.type,
+            originalName: a.originalName
+          })),
+          logos: projectAssets.logos.map(l => l.url),
+          assetUrls: projectAssets.assets.map(a => a.url)
+        } : undefined
       };
 
     } catch (error) {

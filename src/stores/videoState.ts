@@ -147,7 +147,9 @@ interface VideoState {
   clearAllGeneratingScenes: (projectId: string) => void;
 }
 
-export const useVideoState = create<VideoState>((set, get) => ({
+export const useVideoState = create<VideoState>()(
+  persist(
+    (set, get) => ({
   projects: {},
   currentProjectId: null,
   chatHistory: {},
@@ -1129,4 +1131,28 @@ export const useVideoState = create<VideoState>((set, get) => ({
         [projectId]: new Set<string>()
       }
     })),
-}));
+}),
+    {
+      name: 'bazaar-video-state',
+      storage: createJSONStorage(() => localStorage),
+      // Only persist essential data, exclude real-time state
+      partialize: (state) => ({
+        projects: state.projects,
+        currentProjectId: state.currentProjectId,
+        selectedScenes: state.selectedScenes,
+        // Don't persist chat history (too large), refreshTokens, or generating state
+      }),
+      // Handle Sets in generatingScenes by not persisting them
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Reset non-persistent state
+          state.chatHistory = {};
+          state.refreshTokens = {};
+          state.lastSyncTime = 0;
+          state.pendingDbSync = {};
+          state.generatingScenes = {};
+        }
+      },
+    }
+  )
+);

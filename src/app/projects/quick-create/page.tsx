@@ -73,11 +73,58 @@ export default function QuickCreatePage() {
 
   // Loading state
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-        <h1 className="text-xl font-semibold text-gray-700 mb-2">Creating your project...</h1>
-        <p className="text-gray-500">Using {lastFormat} format</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100">
+      <div className="relative">
+        {/* Subtle background decoration */}
+        <div className="absolute -inset-40 bg-gradient-to-r from-indigo-100/20 via-purple-100/20 to-pink-100/20 blur-3xl opacity-70" />
+        
+        <div className="relative text-center px-8">
+          {/* Modern loader with multiple elements */}
+          <div className="relative w-16 h-16 mx-auto mb-8">
+            {/* Outer ring */}
+            <div className="absolute inset-0 border-2 border-slate-200 rounded-full" />
+            
+            {/* Spinning gradient ring */}
+            <div className="absolute inset-0 border-2 border-transparent border-t-indigo-500 border-r-purple-500 rounded-full animate-spin" />
+            
+            {/* Inner dot with pulse */}
+            <div className="absolute inset-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full animate-pulse" />
+            
+            {/* Center dot */}
+            <div className="absolute inset-6 bg-white rounded-full" />
+          </div>
+          
+          {/* Text content with better typography */}
+          <div className="space-y-3 max-w-sm mx-auto">
+            <h1 className="text-2xl font-light text-slate-800 tracking-tight">
+              Setting up your canvas
+            </h1>
+            
+            {/* Format badge */}
+            <div className="flex items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm">
+                <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                    d={lastFormat === 'portrait' 
+                      ? "M12 18v-5l-4 4m4-4l4 4M8 7h8M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" 
+                      : lastFormat === 'square'
+                      ? "M4 4h16v16H4z"
+                      : "M7 4v16m10-16v16M3 12h18M3 4h18v16H3z"
+                    } 
+                  />
+                </svg>
+                <span className="text-slate-600 font-medium capitalize">{lastFormat}</span>
+              </div>
+            </div>
+            
+            {/* Progress indicator */}
+            <div className="flex items-center justify-center gap-1.5 mt-6">
+              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-pulse [animation-delay:200ms]" />
+              <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-pulse [animation-delay:400ms]" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

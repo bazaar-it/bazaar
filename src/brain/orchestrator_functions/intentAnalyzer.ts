@@ -129,11 +129,29 @@ Analyzed: ${new Date(web.analyzedAt).toLocaleString()}
 
 The AI has access to visual screenshots of this website and can reference them for brand matching, design inspiration, and style consistency.`;
     }
+    
+    // Add project assets context
+    let assetInfo = "";
+    if (contextPacket.assetContext && contextPacket.assetContext.assetUrls.length > 0) {
+      assetInfo = `\n\nPROJECT ASSETS (Previously uploaded):
+${contextPacket.assetContext.assetUrls.length} assets available in this project:`;
+      
+      // Show first few assets as examples
+      contextPacket.assetContext.allAssets.slice(0, 5).forEach((asset, idx) => {
+        assetInfo += `\n${idx + 1}. ${asset.originalName} (${asset.type})`;
+      });
+      
+      if (contextPacket.assetContext.logos.length > 0) {
+        assetInfo += `\n\nLOGOS: ${contextPacket.assetContext.logos.length} logo(s) detected in project`;
+      }
+      
+      assetInfo += `\n\nWhen user references "the logo", "my image", "that file from before", they likely mean one of these project assets.`;
+    }
 
     return `USER: "${prompt}"
 
 STORYBOARD:
-${storyboardInfo}${imageInfo}${chatInfo}${webInfo}
+${storyboardInfo}${imageInfo}${chatInfo}${webInfo}${assetInfo}
 
 Respond with JSON only.`;
   }

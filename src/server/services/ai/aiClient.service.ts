@@ -35,6 +35,7 @@ export interface AIResponse {
 
 export interface AIClientOptions {
   responseFormat?: { type: "json_object" };
+  debug?: boolean;
 }
 
 export class AIClientService {
@@ -95,6 +96,18 @@ export class AIClientService {
     const client = this.getOpenAIClient();
     
     try {
+      // Log request details in debug mode
+      if (options?.debug) {
+        const requestSize = JSON.stringify(messages).length;
+        console.log(`🔍 [AI CLIENT DEBUG] OpenAI Request:`, {
+          model: config.model,
+          messageCount: messages.length,
+          requestSizeKB: (requestSize / 1024).toFixed(2),
+          maxTokens: config.maxTokens,
+          hasResponseFormat: !!options.responseFormat
+        });
+      }
+      
       // Handle O1 models (different API structure)
       const isO1Model = config.model.includes('o1');
       
@@ -108,6 +121,16 @@ export class AIClientService {
           })) as any,
           max_completion_tokens: config.maxTokens,
         });
+
+        if (options?.debug) {
+          const responseContent = response.choices[0]?.message?.content || '';
+          console.log(`🔍 [AI CLIENT DEBUG] OpenAI O1 Response:`, {
+            contentLength: responseContent.length,
+            contentLengthKB: (responseContent.length / 1024).toFixed(2),
+            finishReason: response.choices[0]?.finish_reason,
+            usage: response.usage
+          });
+        }
 
         return {
           content: response.choices[0]?.message?.content || '',
@@ -126,6 +149,23 @@ export class AIClientService {
           max_tokens: config.maxTokens,
           ...(options?.responseFormat && { response_format: options.responseFormat }),
         });
+
+        // Log response details in debug mode
+        if (options?.debug) {
+          const responseContent = response.choices[0]?.message?.content || '';
+          console.log(`🔍 [AI CLIENT DEBUG] OpenAI Response:`, {
+            contentLength: responseContent.length,
+            contentLengthKB: (responseContent.length / 1024).toFixed(2),
+            finishReason: response.choices[0]?.finish_reason,
+            usage: response.usage,
+            truncated: response.choices[0]?.finish_reason === 'length'
+          });
+          
+          // Check if response was cut off due to max_tokens
+          if (response.choices[0]?.finish_reason === 'length') {
+            console.error(`🚨 [AI CLIENT DEBUG] Response hit max_tokens limit (${config.maxTokens})`);
+          }
+        }
 
         return {
           content: response.choices[0]?.message?.content || '',

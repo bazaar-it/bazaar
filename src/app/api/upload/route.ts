@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { auth } from '~/server/auth';
+import { assetContext, AssetContextService } from '~/server/services/context/assetContextService';
+import type { Asset } from '~/lib/types/asset-context';
+import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,6 +95,52 @@ export async function POST(request: NextRequest) {
       publicUrl: publicUrl.substring(0, 100) + '...',
       fileSize: file.size
     });
+
+    // Save asset to project memory for persistent context
+    try {
+      // Calculate file hash for deduplication
+      const hashSum = crypto.createHash('sha256');
+      hashSum.update(buffer);
+      const fileHash = hashSum.digest('hex').substring(0, 16);
+      
+      // Determine asset type
+      let assetType: Asset['type'] = 'image';
+      if (isVideo) assetType = 'video';
+      else if (isAudio) assetType = 'audio';
+      else if (AssetContextService.isLikelyLogo(file.name)) assetType = 'logo';
+      
+      const asset: Asset = {
+        id: crypto.randomUUID(),
+        url: publicUrl,
+        type: assetType,
+        fileSize: file.size,
+        originalName: file.name,
+        hash: fileHash,
+        tags: assetType === 'logo' ? ['logo', 'brand'] : [],
+        uploadedAt: new Date(),
+        usageCount: 0
+      };
+      
+      // Get image dimensions if it's an image
+      if (isImage && !isVideo && !isAudio) {
+        // Note: Dimensions would be calculated client-side or via a separate service
+        // For now, we'll skip dimensions
+      }
+      
+      await assetContext.saveAsset(projectId, asset, {
+        isLogo: assetType === 'logo',
+        uploadedBy: session.user.id
+      });
+      
+      console.log(`[Upload] 💾 Asset saved to context:`, {
+        assetId: asset.id,
+        type: asset.type,
+        projectId
+      });
+    } catch (contextError) {
+      // Don't fail the upload if context save fails
+      console.error('[Upload] Failed to save asset context:', contextError);
+    }
 
     return NextResponse.json({
       success: true,

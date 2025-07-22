@@ -617,6 +617,9 @@ export default function ChatPanelG({
               modelOverride: modelOverride,
             },
             // Don't pass assistantMessageId - let mutation create it
+            metadata: {
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
           });
           
           console.log('[ChatPanelG] ✅ Generation completed:', result);

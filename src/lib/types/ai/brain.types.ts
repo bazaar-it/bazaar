@@ -47,6 +47,7 @@ export interface BrainDecision {
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     videoUrls?: string[];
+    assetUrls?: string[]; // All persistent project assets
     errorDetails?: string;
     modelOverride?: string; // Optional model ID for overriding default model
     webContext?: {
@@ -172,6 +173,17 @@ export interface ContextPacket {
     name: string;
     order: number;
   }>;
+  
+  // Persistent asset context from project memory
+  assetContext?: {
+    allAssets: Array<{
+      url: string;
+      type: string;
+      originalName: string;
+    }>;
+    logos: string[];  // Quick access to logo URLs
+    assetUrls: string[];  // All asset URLs for prompt enforcement
+  };
 }
 
 // ============================================================================

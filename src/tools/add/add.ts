@@ -162,6 +162,7 @@ export const durationInFrames_ERROR = 180;`;
       projectId: input.projectId,
       projectFormat: input.projectFormat,
       requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
+      assetUrls: input.assetUrls, // Pass persistent asset URLs
     });
 
     // Return generated content - NO DATABASE!
@@ -210,6 +211,7 @@ export const durationInFrames_ERROR = 180;`;
       userPrompt: input.userPrompt,
       functionName: functionName,
       projectFormat: input.projectFormat,
+      assetUrls: input.assetUrls, // Pass all project assets
     });
 
     // Return generated content - NO DATABASE!
