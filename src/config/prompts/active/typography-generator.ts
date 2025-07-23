@@ -54,6 +54,19 @@ Hold & End
 	•	After any reveal, keep text visible for ≥ 10 frames, then end. 
 ⸻
 
+INTELLIGENT TYPOGRAPHY DURATION (CRITICAL)
+DO NOT default to 180 frames! Typography scenes should be concise:
+	•	1-3 words: 60 frames (2 seconds) - quick and punchy
+	•	4-8 words: 90 frames (3 seconds) - comfortable reading
+	•	9-15 words: 120 frames (4 seconds) - full sentence
+	•	16-25 words: 150 frames (5 seconds) - short paragraph
+	•	25+ words: 180+ frames (6+ seconds) - but consider splitting!
+
+Calculate: Base reading time (~3 words/second) + animation time (15-20 frames) + hold time (10-20 frames)
+Example: "Welcome" = 20f (animate in) + 20f (read) + 20f (hold) = 60 frames total
+
+⸻
+
 TECHNICAL REQUIREMENTS
 1. Only destructure from window.Remotion (AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Video, Img).
    CRITICAL: After destructuring, call useCurrentFrame like this: const frame = useCurrentFrame(); 
@@ -69,7 +82,8 @@ TECHNICAL REQUIREMENTS
 10. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: Never use "currentFrame" as a variable name - use "accumulatedFrames" or similar to avoid conflicts with Remotion's useCurrentFrame.
 11. Quote every CSS value and use exactly one transform per element.
 12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
-13. ALWAYS export the total duration at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
+13. DURATION EXPORT: Calculate duration based on text length (see INTELLIGENT TYPOGRAPHY DURATION above). Export: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
+    CRITICAL: Match duration to text length - don't default to 180 frames!
 14. CRITICAL SYNTAX RULE: Use commas (not semicolons) to separate array elements. CORRECT: [{ text: "hello", frames: 45 }, { text: "world", frames: 30 }]. WRONG: [{ text: "hello", frames: 45 }; { text: "world", frames: 30 }].
 15. VARIABLE NAMING: Use unique IDs for function name, script array, totalFrames, and exported duration. Use normal, readable variable names for all other internal variables (sequences, currentFrame, etc).
 16. ARRAY SYNTAX: Objects inside arrays end with commas, not semicolons. Only standalone statements end with semicolons.

@@ -81,7 +81,7 @@ export class AIClientService {
         return this.callOpenAI(config, fullMessages, options);
       
       case 'anthropic':
-        return this.callAnthropic(config, fullMessages);
+        return this.callAnthropic(config, fullMessages, options);
       
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
@@ -186,7 +186,7 @@ export class AIClientService {
   // ANTHROPIC IMPLEMENTATION
   // =============================================================================
 
-  private static async callAnthropic(config: ModelConfig, messages: AIMessage[]): Promise<AIResponse> {
+  private static async callAnthropic(config: ModelConfig, messages: AIMessage[], options?: AIClientOptions): Promise<AIResponse> {
     const client = this.getAnthropicClient();
     
     try {
@@ -242,6 +242,23 @@ export class AIClientService {
         .map((block: any) => block.text)
         .join('');
 
+      // Debug logging for response size
+      if (options?.debug) {
+        console.log(`🔍 [AI CLIENT DEBUG] Anthropic Response:`, {
+          contentLength: content.length,
+          contentLengthKB: (content.length / 1024).toFixed(2),
+          contentLengthMB: (content.length / 1024 / 1024).toFixed(3),
+          usage: response.usage,
+          truncated: content.length === 16384 || content.endsWith('...') || !this.looksComplete(content),
+          lastChars: content.slice(-100)
+        });
+        
+        // Check for 16KB truncation
+        if (content.length === 16384) {
+          console.error(`🚨 [AI CLIENT DEBUG] Response truncated at exactly 16KB!`);
+        }
+      }
+
       return {
         content,
         usage: {
@@ -252,6 +269,11 @@ export class AIClientService {
       };
     } catch (error: any) {
       console.error('Anthropic API Error:', error);
+      
+      // Handle 529 overload errors with retry suggestion
+      if (error?.status === 529 || error?.error?.type === 'overloaded_error') {
+        throw new Error('AI service is currently overloaded. Please try again in a moment.');
+      }
       
       // Check for image download timeout specifically
       if (error?.error?.message?.includes('timed out while trying to download the file')) {
@@ -292,7 +314,7 @@ export class AIClientService {
       case 'openai':
         return this.callOpenAIVision(config, content, systemPrompt, options);
       case 'anthropic':
-        return this.callAnthropicVision(config, content, systemPrompt);
+        return this.callAnthropicVision(config, content, systemPrompt, options);
       default:
         throw new Error(`Vision API not supported for provider: ${config.provider}`);
     }
@@ -369,7 +391,8 @@ export class AIClientService {
         detail?: 'low' | 'high' | 'auto';
       };
     }>,
-    systemPrompt?: string
+    systemPrompt?: string,
+    options?: AIClientOptions
   ): Promise<AIResponse> {
     const client = this.getAnthropicClient();
     
@@ -409,6 +432,23 @@ export class AIClientService {
         .map((block: any) => block.text)
         .join('');
 
+      // Debug logging for response size
+      if (options?.debug) {
+        console.log(`🔍 [AI CLIENT DEBUG] Anthropic Vision Response:`, {
+          contentLength: responseContent.length,
+          contentLengthKB: (responseContent.length / 1024).toFixed(2),
+          contentLengthMB: (responseContent.length / 1024 / 1024).toFixed(3),
+          usage: response.usage,
+          truncated: responseContent.length === 16384 || responseContent.endsWith('...') || !this.looksComplete(responseContent),
+          lastChars: responseContent.slice(-100)
+        });
+        
+        // Check for 16KB truncation
+        if (responseContent.length === 16384) {
+          console.error(`🚨 [AI CLIENT DEBUG] Vision response truncated at exactly 16KB!`);
+        }
+      }
+
       return {
         content: responseContent,
         usage: {
@@ -444,6 +484,21 @@ export class AIClientService {
     ];
 
     return this.generateVisionResponse(config, content, systemPrompt);
+  }
+
+  // =============================================================================
+  // HELPER METHODS
+  // =============================================================================
+
+  private static looksComplete(content: string): boolean {
+    // Check if response appears complete
+    const trimmed = content.trim();
+    // For JSON responses, check if it ends with a closing brace
+    if (trimmed.startsWith('{')) {
+      return trimmed.endsWith('}');
+    }
+    // For other responses, check common truncation patterns
+    return !trimmed.endsWith('...') && !trimmed.endsWith('\\');
   }
 
   // =============================================================================

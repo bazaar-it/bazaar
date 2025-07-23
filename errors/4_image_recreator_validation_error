@@ -1,0 +1,117 @@
+2025-07-23T08:10:52.167Z [info] [141C97B75A68] Starting scene generation {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  userMessage: 'add screenshot'
+}
+2025-07-23T08:10:52.239Z [info] [141C97B75A68] Getting decision from brain...
+2025-07-23T08:10:52.239Z [info] [141C97B75A68] User context: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:10:52.239Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T08:10:52.239Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'add screenshot',
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  hasImages: false,
+  hasVideos: false,
+  sceneCount: 1
+}
+2025-07-23T08:10:52.239Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T08:10:52.239Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T08:10:52.239Z [info] 📚 [CONTEXT BUILDER] Project: 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:10:52.239Z [info] 📚 [CONTEXT BUILDER] Has images: false
+2025-07-23T08:10:52.247Z [info] 📚 [CONTEXT BUILDER] No valid URL found in prompt
+2025-07-23T08:10:52.254Z [info] 📚 [CONTEXT BUILDER] Found 0 persistent assets
+2025-07-23T08:10:52.254Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T08:10:52.255Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T08:10:52.256Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T08:10:52.256Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T08:10:52.256Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: add screenshot...
+2025-07-23T08:10:54.432Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T08:10:54.432Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "imageRecreatorScene",
+  "reasoning": "User wants to add a screenshot, which implies recreating the uploaded image as a scene.",
+  "targetSceneId": null,
+  "userFeedback": "Adding a new scene by recreating the screenshot you provided.",
+  "needsClarification": false
+}
+2025-07-23T08:10:54.432Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'imageRecreatorScene',
+  success: true,
+  reasoning: 'User wants to add a screenshot, which implies recr...'
+}
+2025-07-23T08:10:54.432Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'imageRecreatorScene',
+  reasoning: 'User wants to add a screenshot, which implies recreating the uploaded image as a scene....'
+}
+2025-07-23T08:10:54.432Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T08:10:54.433Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:10:54.433Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T08:10:54.450Z [info] [141C97B75A68] ✅ IMMEDIATE: Created new assistant message delivered to chat: 1e21011e-3d1f-44c3-962f-f8268e5ab8b3
+2025-07-23T08:10:54.450Z [info] [141C97B75A68] Executing tool: imageRecreatorScene
+2025-07-23T08:10:54.458Z [info] 🖼️ [HELPERS] Using IMAGE RECREATOR tool
+2025-07-23T08:10:54.459Z [error] 🚨 [HELPERS] Image recreator tool failed validation - returning error to prevent app crash
+2025-07-23T08:10:54.459Z [error] 🚨 [HELPERS] Error details: {
+  code: 'VALIDATION_ERROR',
+  message: '[\n' +
+    '  {\n' +
+    '    "code": "too_small",\n' +
+    '    "minimum": 1,\n' +
+    '    "type": "array",\n' +
+    '    "inclusive": true,\n' +
+    '    "exact": false,\n' +
+    '    "message": "At least one image URL is required",\n' +
+    '    "path": [\n' +
+    '      "imageUrls"\n' +
+    '    ]\n' +
+    '  }\n' +
+    ']',
+  details: { issues: [ [Object] ] }
+}
+2025-07-23T08:10:54.460Z [warning] 🔄 [HELPERS] Image recreator tool had unexpected error, falling back to code-generator: Error: [
+  {
+    "code": "too_small",
+    "minimum": 1,
+    "type": "array",
+    "inclusive": true,
+    "exact": false,
+    "message": "At least one image URL is required",
+    "path": [
+      "imageUrls"
+    ]
+  }
+]
+    at g (.next/server/chunks/9930.js:941:38351)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async (.next/server/chunks/9930.js:568:39474)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async t (.next/server/chunks/802.js:127:31931)
+2025-07-23T08:10:54.461Z [info] 🔨 [ADD TOOL - PURE FUNCTION] === EXECUTING ===
+2025-07-23T08:10:54.461Z [info] 🔨 [ADD TOOL] Input: {
+  prompt: 'add screenshot...',
+  hasImages: false,
+  hasVideos: false,
+  hasWebContext: false,
+  sceneNumber: 2,
+  hasPreviousScene: false
+}
+2025-07-23T08:10:54.461Z [info] 🔨 [ADD TOOL] Video URLs received: undefined
+2025-07-23T08:10:54.461Z [info] 🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!
+2025-07-23T08:10:54.461Z [info] 🔨 [ADD TOOL] Using text-based generation
+2025-07-23T08:10:54.461Z [info] ⚡ [ADD TOOL] Using DIRECT code generation - no layout step!
+2025-07-23T08:10:54.461Z [info] ⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only
+2025-07-23T08:11:03.720Z [info] [DurationExtractor] ⚠️ No valid duration pattern found, using default: 180
+2025-07-23T08:11:03.720Z [info] ✅ [ADD TOOL] Finished direct generation - returning result: {
+  name: 'Scene',
+  duration: 180,
+  codeLength: 1966,
+  firstLine: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;'
+}
+2025-07-23T08:11:03.739Z [info] ✅ [HELPERS] Fallback to addTool successful: Scene
+2025-07-23T08:11:03.739Z [info] [141C97B75A68] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  sceneName: 'Scene',
+  additionalMessageIds: 0
+}

@@ -10,7 +10,7 @@ interface Scene {
   [key: string]: any;
 }
 
-const DEBUG_AUTOFIX = false; // Disable debug logging to reduce console spam
+const DEBUG_AUTOFIX = true; // Enable debug logging to diagnose auto-fix issues
 
 // Cost control constants - CRITICAL FOR API BUDGET
 const MAX_FIXES_PER_SESSION = 10; // Maximum total fixes in a session

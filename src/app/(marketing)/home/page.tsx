@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayerRemotion";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
 import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import TemplateScrollGrid from "~/components/TemplateScrollGrid";
@@ -52,7 +52,7 @@ export default function NewHomePage() {
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
+            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
           </div>
         </div>
         <div className="flex gap-4 items-center">
@@ -76,7 +76,7 @@ export default function NewHomePage() {
         <div className="w-full mb-8 flex justify-center">
           <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
             <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-              V3 is Live!
+              V2 is Live!
             </span>
             <button 
               onClick={() => setShowVideo(true)}
@@ -107,7 +107,7 @@ export default function NewHomePage() {
           <p className="text-lg md:text-xl text-gray-600 px-4">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
-        <div className="w-full text-center mb-8 md:mb-16">
+        <div className="w-full text-center mb-0">
           {status === "authenticated" && session?.user ? (
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
               <NewProjectButton
@@ -141,33 +141,44 @@ export default function NewHomePage() {
               </button>
             </div>
           )}
-          <p className="text-center text-gray-500 text-sm mt-2">
+          <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             No credit card required
           </p>
         </div>
         
-        {/* Example videos section */}
-        <section className="w-full mt-8">
-          {/* Marketing Video Player */}
-          <div className="flex justify-center w-full px-2 sm:px-4">
+        {/* Marketing Video Player - positioned outside container with aggressive negative margin */}
+        <div className="w-full -mt-16 mb-8">
+          <div className="flex justify-center w-full px-0">
             <div className="w-full max-w-7xl">
               <MarketingVideoPlayer />
             </div>
           </div>
-        </section>
+        </div>
 
         {/* Create entire videos section */}
         <section className="mt-0 w-full">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              Create <span className="moving-gradient-text">entire videos</span> from a single prompt
+              Create <span className="moving-gradient-text">Viral Videos</span> for your App
             </h2>
           </div>
           
-          {/* Generating Scene Plan Player */}
+          {/* Airbnb Video Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
             <div className="w-full max-w-5xl">
-              <GeneratingScenePlanPlayer />
+              {/* Container with 30% reduced height while maintaining aspect ratio */}
+              <div style={{
+                width: '100%',
+                maxWidth: '400px',
+                height: '560px', // Reduced from ~800px (30% reduction)
+                margin: '0 auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'transparent'
+              }}>
+                {/* Placeholder for removed AirbnbVideoPlayerWithControls */}
+              </div>
             </div>
           </div>
         </section>
@@ -218,11 +229,11 @@ export default function NewHomePage() {
           </div>
         </section>
 
-        {/* 50 Templates Section */}
+        {/* 25 Templates Section */}
         <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              50+ Templates to Start From
+              25+ Templates to Start From
             </h2>
           </div>
           

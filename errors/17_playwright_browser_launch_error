@@ -1,0 +1,167 @@
+2025-07-23T11:17:24.212Z [info] [7205C985BD63] Starting scene generation {
+  projectId: 'a553b934-fec7-4545-be91-cf3097e3cff3',
+  userMessage: 'Generate a reel video for this website. and below is the script\n' +
+    '\n' +
+    "It's a hassle to find the right tools at the right time for designers and developers, \n" +
+    '\n' +
+    'You may saved lots of them but it’s a possible you’ve forgotten them all\n' +
+    '\n' +
+    "That's why keepslink is here for you…\n" +
+    '\n' +
+    'This collection of website library stores wide variety of tools you can browse and get the job done.\n' +
+    '\n' +
+    'All these tools are arranged in category wise so you can navigate easily, \n' +
+    '\n' +
+    'You can also search what you need directly through the search …\n' +
+    '\n' +
+    'Some of the tools catch your eyes? save them for quick access.\n' +
+    '\n' +
+    'You got something new to add? share them or add in personal space.\n' +
+    '\n' +
+    '[Keepslink.com](http://Keepslink.com) your go to design and develpment tool library.\n' +
+    '\n' +
+    'comment link and I will send this website link to your dm.'
+}
+2025-07-23T11:17:24.246Z [info] [7205C985BD63] First real scene - clearing welcome flag
+2025-07-23T11:17:24.265Z [info] [7205C985BD63] Getting decision from brain...
+2025-07-23T11:17:24.265Z [info] [7205C985BD63] User context: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T11:17:24.265Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T11:17:24.268Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'Generate a reel video for this website. and below is the script\n' +
+    '\n' +
+    "It's a hassle to find the right tools at the right time for designers and developers, \n" +
+    '\n' +
+    'You may saved lots of them but it’s a possible you’ve forgotten them all\n' +
+    '\n' +
+    "That's why keepslink is here for you…\n" +
+    '\n' +
+    'This collection of website library stores wide variety of tools you can browse and get the job done.\n' +
+    '\n' +
+    'All these tools are arranged in category wise so you can navigate easily, \n' +
+    '\n' +
+    'You can also search what you need directly through the search …\n' +
+    '\n' +
+    'Some of the tools catch your eyes? save them for quick access.\n' +
+    '\n' +
+    'You got something new to add? share them or add in personal space.\n' +
+    '\n' +
+    '[Keepslink.com](http://Keepslink.com) your go to design and develpment tool library.\n' +
+    '\n' +
+    'comment link and I will send this website link to your dm.',
+  projectId: 'a553b934-fec7-4545-be91-cf3097e3cff3',
+  hasImages: true,
+  hasVideos: false,
+  sceneCount: 0
+}
+2025-07-23T11:17:24.268Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T11:17:24.268Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T11:17:24.268Z [info] 📚 [CONTEXT BUILDER] Project: a553b934-fec7-4545-be91-cf3097e3cff3
+2025-07-23T11:17:24.268Z [info] 📚 [CONTEXT BUILDER] Has images: true
+2025-07-23T11:17:24.272Z [info] 📚 [CONTEXT BUILDER] Analyzing website: http://Keepslink.com
+2025-07-23T11:17:24.914Z [info] 🌐 Analyzing: http://Keepslink.com
+2025-07-23T11:17:24.920Z [error] ❌ Analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T11:17:24.920Z [info] 📚 [CONTEXT BUILDER] Web analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T11:17:24.928Z [info] 📚 [CONTEXT BUILDER] Found 1 persistent assets
+2025-07-23T11:17:24.928Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T11:17:24.928Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T11:17:24.928Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T11:17:24.928Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T11:17:24.928Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: Generate a reel video for this website. and below ...
+2025-07-23T11:17:27.518Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T11:17:27.518Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "addScene",
+  "reasoning": "User requests a reel video based on a provided script and an uploaded image. Starting with addScene to create the first scene inspired by the website and script. Additional scenes can be added subsequently.",
+  "targetSceneId": null,
+  "targetDuration": null,
+  "referencedSceneIds": [],
+  "userFeedback": "Creating the first scene of your reel video based on the website and script you provided.",
+  "needsClarification": false,
+  "clarificationQuestion": null
+}
+2025-07-23T11:17:27.519Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'addScene',
+  success: true,
+  reasoning: 'User requests a reel video based on a provided scr...'
+}
+2025-07-23T11:17:27.519Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'addScene',
+  reasoning: 'User requests a reel video based on a provided script and an uploaded image. Starting with addScene ...'
+}
+2025-07-23T11:17:27.519Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T11:17:27.519Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T11:17:27.519Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T11:17:27.534Z [info] [7205C985BD63] ✅ IMMEDIATE: Created new assistant message delivered to chat: b2804801-aece-4470-8aba-57a7c416720d
+2025-07-23T11:17:27.534Z [info] [7205C985BD63] Executing tool: addScene
+2025-07-23T11:17:27.541Z [info] 📝 [HELPERS] Building ADD tool input: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T11:17:27.541Z [info] 🔨 [ADD TOOL - PURE FUNCTION] === EXECUTING ===
+2025-07-23T11:17:27.542Z [info] 🔨 [ADD TOOL] Input: {
+  prompt: 'Generate a reel video for this website. and below ...',
+  hasImages: true,
+  hasVideos: false,
+  hasWebContext: false,
+  sceneNumber: 1,
+  hasPreviousScene: false
+}
+2025-07-23T11:17:27.542Z [info] 🔨 [ADD TOOL] Video URLs received: undefined
+2025-07-23T11:17:27.542Z [info] 🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!
+2025-07-23T11:17:27.542Z [info] 🔨 [ADD TOOL] Using image-based generation for 1 images
+2025-07-23T11:17:27.542Z [info] ==================== codeGenerator reached:
+2025-07-23T11:17:27.542Z [info] ==================== generateCodeFromImage reached:
+2025-07-23T11:18:12.611Z [info] [DurationExtractor] ⚠️ No valid duration pattern found, using default: 180
+2025-07-23T11:18:12.611Z [info] ✅ [ADD TOOL] Finished image generation - returning result: { name: 'Scene', duration: 180, codeLength: 12608, imageCount: 1 }
+2025-07-23T11:18:12.612Z [info] 📥 [ROUTER] Received from ADD tool: {
+  success: true,
+  hasData: true,
+  dataKeys: [
+    'success',
+    'tsxCode',
+    'name',
+    'duration',
+    'reasoning',
+    'chatResponse',
+    'scene',
+    'debug'
+  ],
+  name: 'Scene',
+  codeLength: 12608
+}
+2025-07-23T11:18:12.612Z [info] 💾 [ROUTER] Saving to database: {
+  projectId: 'a553b934-fec7-4545-be91-cf3097e3cff3',
+  name: 'Scene',
+  order: 0,
+  duration: 180
+}
+2025-07-23T11:18:12.635Z [info] ✅ [ROUTER] Scene saved to database: {
+  id: 'e902fc9e-75d3-42bc-a65e-f3369b993341',
+  name: 'Scene',
+  duration: 180,
+  order: 0
+}
+2025-07-23T11:18:12.650Z [info] 📊 [ROUTER] Created scene iteration record: {
+  sceneId: 'e902fc9e-75d3-42bc-a65e-f3369b993341',
+  operationType: 'create',
+  generationTimeMs: 45101
+}
+2025-07-23T11:18:12.651Z [info] [7205C985BD63] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: 'e902fc9e-75d3-42bc-a65e-f3369b993341',
+  sceneName: 'Scene',
+  additionalMessageIds: 0
+}

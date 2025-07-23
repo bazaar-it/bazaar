@@ -1,0 +1,136 @@
+2025-07-23T09:16:29.114Z [info] [5510F4A14A57] Starting scene generation {
+  projectId: '9e8163f9-b6bd-40d7-9448-c500084ccb8c',
+  userMessage: 'Fade in logo over 0.6s with a slight zoom from 95% to 100%, then hold still for 1.5s.'
+}
+2025-07-23T09:16:29.169Z [info] [5510F4A14A57] First real scene - clearing welcome flag
+2025-07-23T09:16:29.181Z [info] [5510F4A14A57] Getting decision from brain...
+2025-07-23T09:16:29.181Z [info] [5510F4A14A57] User context: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T09:16:29.181Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T09:16:29.181Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'Fade in logo over 0.6s with a slight zoom from 95% to 100%, then hold still for 1.5s.',
+  projectId: '9e8163f9-b6bd-40d7-9448-c500084ccb8c',
+  hasImages: true,
+  hasVideos: false,
+  sceneCount: 0
+}
+2025-07-23T09:16:29.181Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T09:16:29.181Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T09:16:29.182Z [info] 📚 [CONTEXT BUILDER] Project: 9e8163f9-b6bd-40d7-9448-c500084ccb8c
+2025-07-23T09:16:29.182Z [info] 📚 [CONTEXT BUILDER] Has images: true
+2025-07-23T09:16:29.187Z [info] 📚 [CONTEXT BUILDER] No valid URL found in prompt
+2025-07-23T09:16:29.194Z [info] 📚 [CONTEXT BUILDER] Found 1 persistent assets
+2025-07-23T09:16:29.194Z [info] 📚 [CONTEXT BUILDER] Logos: 1
+2025-07-23T09:16:29.194Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T09:16:29.194Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T09:16:29.194Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T09:16:29.194Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: Fade in logo over 0.6s with a slight zoom from 95%...
+2025-07-23T09:16:31.686Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T09:16:31.686Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "addScene",
+  "reasoning": "User wants to create a new scene with the logo fading in and zooming from 95% to 100%, then holding still. No existing scenes, so addScene is appropriate. The logo asset from the project will be used.",
+  "targetSceneId": null,
+  "userFeedback": "Creating a new scene with your logo fading in and zooming as requested.",
+  "needsClarification": false
+}
+2025-07-23T09:16:31.686Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'addScene',
+  success: true,
+  reasoning: 'User wants to create a new scene with the logo fad...'
+}
+2025-07-23T09:16:31.686Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'addScene',
+  reasoning: 'User wants to create a new scene with the logo fading in and zooming from 95% to 100%, then holding ...'
+}
+2025-07-23T09:16:31.686Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T09:16:31.686Z [info] 🕐 [DurationParser] Parsed "Fade in logo over 0.6s with a slight zoom from 95% to 100%, then hold still for 1.5s." → 0.6s → 18 frames
+2025-07-23T09:16:31.686Z [info] 🧠 [ORCHESTRATOR] Parsed duration from prompt: 18 frames
+2025-07-23T09:16:31.686Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T09:16:31.686Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T09:16:31.704Z [info] [5510F4A14A57] ✅ IMMEDIATE: Created new assistant message delivered to chat: 46ae9f14-b7fa-411c-b775-f5a754bed16b
+2025-07-23T09:16:31.704Z [info] [5510F4A14A57] Executing tool: addScene
+2025-07-23T09:16:31.711Z [info] 📝 [HELPERS] Building ADD tool input: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T09:16:31.711Z [info] 🔨 [ADD TOOL - PURE FUNCTION] === EXECUTING ===
+2025-07-23T09:16:31.711Z [info] 🔨 [ADD TOOL] Input: {
+  prompt: 'Fade in logo over 0.6s with a slight zoom from 95%...',
+  hasImages: true,
+  hasVideos: false,
+  hasWebContext: false,
+  sceneNumber: 1,
+  hasPreviousScene: false
+}
+2025-07-23T09:16:31.711Z [info] 🔨 [ADD TOOL] Video URLs received: undefined
+2025-07-23T09:16:31.711Z [info] 🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!
+2025-07-23T09:16:31.711Z [info] 🔨 [ADD TOOL] Using image-based generation for 1 images
+2025-07-23T09:16:31.711Z [info] ==================== codeGenerator reached:
+2025-07-23T09:16:31.711Z [info] ==================== generateCodeFromImage reached:
+2025-07-23T09:16:32.592Z [error] Anthropic API Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.1.image.source.base64.data: The file format is invalid or unsupported"}}
+    at eo.generate (.next/server/chunks/1080.js:1:2150)
+    at tU.makeStatusError (.next/server/chunks/1080.js:5:4247)
+    at tU.makeRequest (.next/server/chunks/1080.js:5:7452)
+    at async r.callAnthropic (.next/server/chunks/4934.js:1:3782)
+    at async l.generateCodeFromImage (.next/server/chunks/9930.js:908:161)
+    at async a.generateFromImages (.next/server/chunks/9930.js:454:2032)
+    at async a.execute (.next/server/chunks/9930.js:428:10480)
+    at async a.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:30413) {
+  status: 400,
+  headers: Headers {
+    date: 'Wed, 23 Jul 2025 09:16:32 GMT',
+    'content-type': 'application/json',
+    'content-length': '158',
+    connection: 'keep-alive',
+    'x-should-retry': 'false',
+    'request-id': 'req_011CRPhTFpV63AoyKLZi8d7s',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'anthropic-organization-id': '89c0d182-e428-427d-8e54-8c37b11c0f35',
+    via: '1.1 google',
+    'cf-cache-status': 'DYNAMIC',
+    'x-robots-tag': 'none',
+    server: 'cloudflare',
+    'cf-ray': '963a145a4b35e0e6-IAD'
+  },
+  requestID: 'req_011CRPhTFpV63AoyKLZi8d7s',
+  error: [Object]
+}
+2025-07-23T09:16:32.592Z [info] [DurationExtractor] ⚠️ No valid duration pattern found, using default: 180
+2025-07-23T09:16:32.592Z [info] ✅ [ADD TOOL] Finished image generation - returning result: { name: 'Scene', duration: 180, codeLength: 828, imageCount: 1 }
+2025-07-23T09:16:32.593Z [info] 📥 [ROUTER] Received from ADD tool: {
+  success: true,
+  hasData: true,
+  dataKeys: [
+    'success',
+    'tsxCode',
+    'name',
+    'duration',
+    'reasoning',
+    'chatResponse',
+    'scene',
+    'debug'
+  ],
+  name: 'Scene',
+  codeLength: 828
+}
+2025-07-23T09:16:32.593Z [info] 💾 [ROUTER] Saving to database: {
+  projectId: '9e8163f9-b6bd-40d7-9448-c500084ccb8c',
+  name: 'Scene',
+  order: 0,
+  duration: 180
+}
+2025-07-23T09:16:32.603Z [info] ✅ [ROUTER] Scene saved to database: {
+  id: '48bd4a0c-47aa-4394-abdc-11c8b85ce46b',
+  name: 'Scene',
+  duration: 180,
+  order: 0
+}
+2025-07-23T09:16:32.614Z [info] 📊 [ROUTER] Created scene iteration record: {
+  sceneId: '48bd4a0c-47aa-4394-abdc-11c8b85ce46b',
+  operationType: 'create',
+  generationTimeMs: 899
+}
+2025-07-23T09:16:32.614Z [info] [5510F4A14A57] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: '48bd4a0c-47aa-4394-abdc-11c8b85ce46b',
+  sceneName: 'Scene',
+  additionalMessageIds: 0
+}

@@ -1,0 +1,137 @@
+2025-07-23T08:10:20.731Z [info] [Render] Preparing render config with 1 scenes
+2025-07-23T08:10:20.731Z [info] [Render] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 12087,
+  tsxCodePreview: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;\n' +
+    '\n' +
+    'const script_mdfon3w6 ...'
+}
+2025-07-23T08:10:20.732Z [info] [prepareRenderConfig] Processing 1 scenes for Lambda
+2025-07-23T08:10:20.732Z [info] [prepareRenderConfig] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 12087,
+  duration: 180,
+  order: 0,
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused'
+  ]
+}
+2025-07-23T08:10:20.733Z [info] [Preprocess] Checking scene: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  hasData: false,
+  dataKeys: [],
+  codeLength: 12087
+}
+2025-07-23T08:10:20.808Z [info] [Preprocess] Found 0 JSX-style icons to replace
+2025-07-23T08:10:20.808Z [info] [Preprocess] Found 0 React.createElement icons to replace
+2025-07-23T08:10:20.808Z [info] [Preprocess] Scene 9e413640-10ac-4157-9975-49c3554ca1f7 transformed for Lambda
+2025-07-23T08:10:20.808Z [info] [Preprocess] Transformation summary: {
+  sceneId: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  sceneName: 'Scene',
+  originalCodeLength: 12087,
+  transformedCodeLength: 12032,
+  hasExportDefault: true,
+  hasComponent: true,
+  hasReturn: true,
+  remotionComponents: [ 'AbsoluteFill', 'useCurrentFrame', 'interpolate', 'Img' ],
+  reactHooks: 'none',
+  transformedCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', text: 'Bazaar.it', frames: 45 },\n" +
+    "  { type: 'headline', text: 'AI-Powered Motion Graphics', frames: 5..."
+}
+2025-07-23T08:10:20.809Z [info] [prepareRenderConfig] 1 of 1 scenes passed preprocessing
+2025-07-23T08:10:20.809Z [info] [Render] prepareRenderConfig returned:
+2025-07-23T08:10:20.809Z [info] [Render] Processed scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 12032,
+  jsCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', ..."
+}
+2025-07-23T08:10:20.809Z [info] [LambdaRender] Starting Lambda render for project 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:10:20.809Z [info] [LambdaRender] Using serve URL: https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-audio-codec/index.html
+2025-07-23T08:10:20.809Z [info] [LambdaRender] Starting render job...
+2025-07-23T08:10:20.809Z [info] [LambdaRender] Total duration: 180 frames
+2025-07-23T08:10:20.809Z [info] [LambdaRender] Format: mp4, Quality: high
+2025-07-23T08:10:20.810Z [info] [LambdaRender] Scenes: 1
+2025-07-23T08:10:20.810Z [info] [LambdaRender] Resolution: 1920x1080 (provided: 1920x1080, settings: 1920x1080)
+2025-07-23T08:10:20.810Z [info] [LambdaRender] Audio: No audio
+2025-07-23T08:10:20.810Z [info] [LambdaRender] Scene data being passed to Lambda:
+2025-07-23T08:10:20.810Z [info] [LambdaRender] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 12032,
+  jsCodeStart: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', text: 'Bazaar.it', frames: 45 },\n" +
+    "  { type: 'headline', text: 'AI-Powered Motion Graphics', frames: 5...",
+  jsCodeEnd: '...          },}, "Start creating at Bazaar.it"\n' +
+    '\n' +
+    '          )\n' +
+    '        )\n' +
+    '      )\n' +
+    '\n' +
+    '    )\n' +
+    '  );\n' +
+    '}\n' +
+    '\n' +
+    'const totalFrames_mdfon3w6 = script_mdfon3w6.reduce((sum, item) => sum + item.frames, 0);\n' +
+    '\n' +
+    '\n' +
+    'return Component;',
+  hasComponentFunctions: true,
+  containsScriptArray: true,
+  hasExportDefault: false,
+  hasReturnComponent: true
+}
+2025-07-23T08:10:22.163Z [info] [LambdaRender] Render started successfully
+2025-07-23T08:10:22.163Z [info] [LambdaRender] Render ID: a7dajn964l
+2025-07-23T08:10:22.163Z [info] [LambdaRender] Bucket: remotionlambda-useast1-yb1vzou9i7
+2025-07-23T08:10:22.189Z [error] [ExportTracking] Failed to track export start: Error [NeonDbError]: null value in column "id" of relation "bazaar-vid_exports" violates not-null constraint
+    at execute (.next/server/chunks/172.js:12:8169)
+    at async c.trackExportStart (.next/server/chunks/9930.js:428:6077)
+    at async (.next/server/chunks/9930.js:424:10587)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async (.next/server/chunks/9930.js:568:39474) {
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (null, ac0c3c0b-0120-491e-beaf-81e6c0f5f42e, 52f57b05-ac15-413f-bb4f-e06de92cbb19, a7dajn964l, pending, 0, mp4, high, null, null, 180, null, {"startTime": "2025-07-23T08:10:22.160Z"}, 0, null, 2025-07-23 08:10:22.166361, null).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'bazaar-vid_exports',
+  column: 'id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '1982',
+  routine: 'ExecConstraints',
+  sourceError: undefined
+}

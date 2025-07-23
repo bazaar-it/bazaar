@@ -93,7 +93,13 @@ async function preprocessSceneForLambda(scene: any) {
       tsxCodeType: typeof scene.tsxCode,
       keys: Object.keys(scene)
     });
-    return scene;
+    // Mark scene as having an error so it gets filtered out
+    return {
+      ...scene,
+      jsCode: null,
+      compiledCode: null,
+      error: 'Scene has no code to render'
+    };
   }
   
   // Check if this is just a script array without a component
@@ -511,12 +517,26 @@ export async function prepareRenderConfig({
     }))
   );
   
-  // Filter out any scenes that failed preprocessing
+  // Filter out any scenes that failed preprocessing or have no code
   const validScenes = processedScenes.filter(scene => {
-    if (!scene.jsCode && !scene.compiledCode && scene.error) {
-      console.error(`[prepareRenderConfig] Skipping scene ${scene.id} due to preprocessing error:`, scene.error);
+    // Skip scenes that have an error
+    if (scene.error) {
+      console.error(`[prepareRenderConfig] Skipping scene ${scene.id} due to error:`, scene.error);
       return false;
     }
+    
+    // Skip scenes that have no compiled code
+    if (!scene.jsCode && !scene.compiledCode) {
+      console.error(`[prepareRenderConfig] Skipping scene ${scene.id} - no compiled code available`);
+      return false;
+    }
+    
+    // Skip scenes that originally had no tsxCode
+    if (!scene.tsxCode || scene.tsxCode.trim().length === 0) {
+      console.error(`[prepareRenderConfig] Skipping scene ${scene.id} - no source code`);
+      return false;
+    }
+    
     return true;
   });
   

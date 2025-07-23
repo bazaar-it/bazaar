@@ -1,0 +1,183 @@
+2025-07-23T08:09:18.810Z [warning] The `fetchConnectionCache` option is deprecated (now always `true`)
+2025-07-23T08:09:18.814Z [info] [DB] Using HTTP-based connection (pooling not available)
+2025-07-23T08:09:18.818Z [info] [DB] Creating HTTP-based fallback connection
+2025-07-23T08:09:18.864Z [info] [C0164EE49BAD] Starting scene generation {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  userMessage: 'create the most professional and engaging software demo video—using only Bazaar.it?\n' +
+    '\n' +
+    'We’re looking for the sharpest, slickest, and most scroll-stopping software demo video—created entirely with Bazaar.it, our AI tool for creating motion graphics and software product videos.\n' +
+    '\n' +
+    'Your Task:\n' +
+    'Bring a user interface to life using only Bazaar. You can:\n' +
+    '• Use your own website or app UI\n' +
+    '• Or grab something beautiful from Figma Community\n' +
+    '\n' +
+    'Then drop in screenshots, images, or video clips and use detailed prompts to guide each scene of the animation.\n' +
+    '\n' +
+    'Your video should include:\n' +
+    '• UI mockups and animated UI elements\n' +
+    '• Kinetic text or animated captions to tell the story\n' +
+    '• Zooms, highlights, transitions, and motion to hold attention\n' +
+    '• Trending music to boost engagement\n' +
+    '• A real sense of speed, clarity, and polish\n' +
+    '\n' +
+    "Here's some examples of the style we're looking for -\n" +
+    'Bazaar V2 Launch - https://youtu.be/rfrYyb83zys\n' +
+    'Lovable 2.0 - https://www.youtube.com/watch?v=xDwR1_vrIg8\n' +
+    'Google Gemini - https://www.youtube.com/watch?v=_fuimO6ErKI\n' +
+    '\n' +
+    'How to take part?\n' +
+    '1. Create an account on Bazaar.it\n' +
+    '2. Start prompting\n' +
+    '3. Either a)download the video or b)click the share button and paste the link as your entry'
+}
+2025-07-23T08:09:19.037Z [info] [C0164EE49BAD] First real scene - clearing welcome flag
+2025-07-23T08:09:19.057Z [info] [C0164EE49BAD] Getting decision from brain...
+2025-07-23T08:09:19.057Z [info] [C0164EE49BAD] User context: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:09:19.057Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T08:09:19.058Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'create the most professional and engaging software demo video—using only Bazaar.it?\n' +
+    '\n' +
+    'We’re looking for the sharpest, slickest, and most scroll-stopping software demo video—created entirely with Bazaar.it, our AI tool for creating motion graphics and software product videos.\n' +
+    '\n' +
+    'Your Task:\n' +
+    'Bring a user interface to life using only Bazaar. You can:\n' +
+    '• Use your own website or app UI\n' +
+    '• Or grab something beautiful from Figma Community\n' +
+    '\n' +
+    'Then drop in screenshots, images, or video clips and use detailed prompts to guide each scene of the animation.\n' +
+    '\n' +
+    'Your video should include:\n' +
+    '• UI mockups and animated UI elements\n' +
+    '• Kinetic text or animated captions to tell the story\n' +
+    '• Zooms, highlights, transitions, and motion to hold attention\n' +
+    '• Trending music to boost engagement\n' +
+    '• A real sense of speed, clarity, and polish\n' +
+    '\n' +
+    "Here's some examples of the style we're looking for -\n" +
+    'Bazaar V2 Launch - https://youtu.be/rfrYyb83zys\n' +
+    'Lovable 2.0 - https://www.youtube.com/watch?v=xDwR1_vrIg8\n' +
+    'Google Gemini - https://www.youtube.com/watch?v=_fuimO6ErKI\n' +
+    '\n' +
+    'How to take part?\n' +
+    '1. Create an account on Bazaar.it\n' +
+    '2. Start prompting\n' +
+    '3. Either a)download the video or b)click the share button and paste the link as your entry',
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  hasImages: false,
+  hasVideos: false,
+  sceneCount: 0
+}
+2025-07-23T08:09:19.058Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T08:09:19.059Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T08:09:19.059Z [info] 📚 [CONTEXT BUILDER] Project: 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:09:19.059Z [info] 📚 [CONTEXT BUILDER] Has images: false
+2025-07-23T08:09:19.078Z [info] 📚 [CONTEXT BUILDER] Analyzing website: https://youtu.be/rfrYyb83zys
+2025-07-23T08:09:19.774Z [info] 🌐 Analyzing: https://youtu.be/rfrYyb83zys
+2025-07-23T08:09:19.804Z [error] ❌ Analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T08:09:19.804Z [info] 📚 [CONTEXT BUILDER] Web analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T08:09:19.821Z [info] 📚 [CONTEXT BUILDER] Found 0 persistent assets
+2025-07-23T08:09:19.821Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T08:09:19.822Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T08:09:19.822Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T08:09:19.822Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T08:09:19.822Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: create the most professional and engaging software...
+2025-07-23T08:09:22.012Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T08:09:22.012Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "addScene",
+  "reasoning": "The user requests to create a professional and engaging software demo video from scratch using Bazaar.it, which involves creating new scenes with UI mockups, animated UI elements, kinetic text, and motion graphics. This requires starting with new scenes.",
+  "userFeedback": "Starting to create the first scene of your professional software demo video with engaging UI elements and animated text.",
+  "needsClarification": false
+}
+2025-07-23T08:09:22.012Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'addScene',
+  success: true,
+  reasoning: 'The user requests to create a professional and eng...'
+}
+2025-07-23T08:09:22.013Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'addScene',
+  reasoning: 'The user requests to create a professional and engaging software demo video from scratch using Bazaa...'
+}
+2025-07-23T08:09:22.013Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T08:09:22.013Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:09:22.013Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T08:09:22.030Z [info] [C0164EE49BAD] ✅ IMMEDIATE: Created new assistant message delivered to chat: ecd819d3-d157-4e55-990b-a3a685b4fdd9
+2025-07-23T08:09:22.030Z [info] [C0164EE49BAD] Executing tool: addScene
+2025-07-23T08:09:22.037Z [info] 📝 [HELPERS] Building ADD tool input: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:09:22.038Z [info] 🔨 [ADD TOOL - PURE FUNCTION] === EXECUTING ===
+2025-07-23T08:09:22.038Z [info] 🔨 [ADD TOOL] Input: {
+  prompt: 'create the most professional and engaging software...',
+  hasImages: false,
+  hasVideos: false,
+  hasWebContext: false,
+  sceneNumber: 1,
+  hasPreviousScene: false
+}
+2025-07-23T08:09:22.038Z [info] 🔨 [ADD TOOL] Video URLs received: undefined
+2025-07-23T08:09:22.038Z [info] 🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!
+2025-07-23T08:09:22.038Z [info] 🔨 [ADD TOOL] Using text-based generation
+2025-07-23T08:09:22.039Z [info] ⚡ [ADD TOOL] Using DIRECT code generation - no layout step!
+2025-07-23T08:09:22.039Z [info] ⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only
+2025-07-23T08:09:58.113Z [info] [DurationExtractor] ⚠️ No valid duration pattern found, using default: 180
+2025-07-23T08:09:58.113Z [info] ✅ [ADD TOOL] Finished direct generation - returning result: {
+  name: 'Scene',
+  duration: 180,
+  codeLength: 12087,
+  firstLine: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;'
+}
+2025-07-23T08:09:58.114Z [info] 📥 [ROUTER] Received from ADD tool: {
+  success: true,
+  hasData: true,
+  dataKeys: [
+    'success',
+    'tsxCode',
+    'name',
+    'duration',
+    'reasoning',
+    'chatResponse',
+    'scene',
+    'debug'
+  ],
+  name: 'Scene',
+  codeLength: 12087
+}
+2025-07-23T08:09:58.114Z [info] 💾 [ROUTER] Saving to database: {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  name: 'Scene',
+  order: 0,
+  duration: 180
+}
+2025-07-23T08:09:58.161Z [info] ✅ [ROUTER] Scene saved to database: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  duration: 180,
+  order: 0
+}
+2025-07-23T08:09:58.199Z [info] 📊 [ROUTER] Created scene iteration record: {
+  sceneId: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  operationType: 'create',
+  generationTimeMs: 36130
+}
+2025-07-23T08:09:58.199Z [info] [C0164EE49BAD] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  sceneName: 'Scene',
+  additionalMessageIds: 0
+}

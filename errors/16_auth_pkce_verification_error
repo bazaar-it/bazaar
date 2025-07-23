@@ -1,0 +1,12 @@
+
+2025-07-23T10:16:37.340Z [error] [31m[auth][error][0m InvalidCheck: pkceCodeVerifier value could not be parsed. Read more at https://errors.authjs.dev#invalidcheck
+2025-07-23T10:16:37.341Z [error] at aw (/var/task/.next/server/chunks/4400.js:368:30990)
+    at Object.use (/var/task/.next/server/chunks/4400.js:368:31398)
+    at ax (/var/task/.next/server/chunks/4400.js:368:35241)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async aW (/var/task/.next/server/chunks/4400.js:368:42308)
+    at async aV (/var/task/.next/server/chunks/4400.js:368:53892)
+    at async aX (/var/task/.next/server/chunks/4400.js:368:58574)
+    at async tf.do (/var/task/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:18:18835)
+    at async tf.handle (/var/task/node_modules/next/dist/compiled/next-server/app-route.runtime.prod.js:18:23727)
+    at async ev (/var/task/node_modules/next/dist/compiled/next-server/server.runtime.prod.js:31:28557)

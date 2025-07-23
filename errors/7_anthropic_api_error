@@ -1,0 +1,111 @@
+2025-07-23T08:14:18.440Z [info] [0FE8D34E45F1] Starting scene generation {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  userMessage: 'use these screenshot'
+}
+2025-07-23T08:14:18.521Z [info] [0FE8D34E45F1] Getting decision from brain...
+2025-07-23T08:14:18.522Z [info] [0FE8D34E45F1] User context: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:14:18.522Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T08:14:18.522Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'use these screenshot',
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  hasImages: true,
+  hasVideos: false,
+  sceneCount: 3
+}
+2025-07-23T08:14:18.522Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T08:14:18.522Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T08:14:18.522Z [info] 📚 [CONTEXT BUILDER] Project: 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:14:18.522Z [info] 📚 [CONTEXT BUILDER] Has images: true
+2025-07-23T08:14:18.529Z [info] 📚 [CONTEXT BUILDER] No valid URL found in prompt
+2025-07-23T08:14:18.534Z [info] 📚 [CONTEXT BUILDER] Found 3 persistent assets
+2025-07-23T08:14:18.534Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T08:14:18.534Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T08:14:18.535Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T08:14:18.535Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T08:14:18.535Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: use these screenshot...
+2025-07-23T08:14:20.327Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T08:14:20.327Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "imageRecreatorScene",
+  "reasoning": "User uploaded screenshots and explicitly said 'use these screenshot', indicating a desire to recreate these images as scenes.",
+  "targetSceneId": null,
+  "userFeedback": "Recreating the uploaded screenshots as new scenes.",
+  "needsClarification": false
+}
+2025-07-23T08:14:20.328Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'imageRecreatorScene',
+  success: true,
+  reasoning: "User uploaded screenshots and explicitly said 'use..."
+}
+2025-07-23T08:14:20.328Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'imageRecreatorScene',
+  reasoning: "User uploaded screenshots and explicitly said 'use these screenshot', indicating a desire to recreat..."
+}
+2025-07-23T08:14:20.328Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T08:14:20.328Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: true, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:14:20.328Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T08:14:20.391Z [info] [0FE8D34E45F1] ✅ IMMEDIATE: Created new assistant message delivered to chat: 53aa6d69-57ec-4036-ab79-67e6d011b47e
+2025-07-23T08:14:20.391Z [info] [0FE8D34E45F1] Executing tool: imageRecreatorScene
+2025-07-23T08:14:20.405Z [info] 🖼️ [HELPERS] Using IMAGE RECREATOR tool
+2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR - UNIFIED] Recreating image as motion graphics
+2025-07-23T08:14:20.406Z [info] 🖼️ [UNIFIED PROCESSOR] IMAGE RECREATOR: Generating recreation scene
+2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258408412-f4091029-8779-48ff-965a-035b36f0c420.jpg
+2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pu
+b-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258428738-7e8cac7e-cec7-4f56-9bec-7c8633051540.jpg
+2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258446053-a2453c19-ba26-4ec3-9721-fbce864deabe.avif
+2025-07-23T08:14:21.420Z [error] Anthropic API Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.3.image.source.base64.data: The file format is invalid or unsupported"}}
+    at eo.generate (.next/server/chunks/1080.js:1:2150)
+    at tU.makeStatusError (.next/server/chunks/1080.js:5:4247)
+    at tU.makeRequest (.next/server/chunks/1080.js:5:7452)
+    at async r.callAnthropic (.next/server/chunks/4934.js:1:3782)
+    at async l.generateImageRecreationScene (.next/server/chunks/9930.js:830:508)
+    at async a.execute (.next/server/chunks/9930.js:611:9185)
+    at async a.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:38011)
+    at async (.next/server/chunks/9930.js:228:4227) {
+  status: 400,
+  headers: Headers {
+    date: 'Wed, 23 Jul 2025 08:14:21 GMT',
+    'content-type': 'application/json',
+    'content-length': '158',
+    connection: 'keep-alive',
+    'x-should-retry': 'false',
+    'request-id': 'req_011CRPciCvwZTC9ECFHuGqZ7',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'anthropic-organization-id': '89c0d182-e428-427d-8e54-8c37b11c0f35',
+    via: '1.1 google',
+    'cf-cache-status': 'DYNAMIC',
+    'x-robots-tag': 'none',
+    server: 'cloudflare',
+    'cf-ray': '9639b9419bc1916d-IAD'
+  },
+  requestID: 'req_011CRPciCvwZTC9ECFHuGqZ7',
+  error: [Object]
+}
+2025-07-23T08:14:21.421Z [error] [UNIFIED PROCESSOR] Image recreation failed: Error: Anthropic API call failed: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.3.image.source.base64.data: The file format is invalid or unsupported"}}
+    at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+    at async l.generateImageRecreationScene (.next/server/chunks/9930.js:830:508)
+    at async a.execute (.next/server/chunks/9930.js:611:9185)
+    at async a.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:38011)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+2025-07-23T08:14:21.422Z [error] 🚨 [IMAGE RECREATOR] Error: Error: Anthropic API call failed: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.3.image.source.base64.data: The file format is invalid or unsupported"}}
+    at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+    at async l.generateImageRecreationScene (.next/server/chunks/9930.js:830:508)
+    at async a.execute (.next/server/chunks/9930.js:611:9185)
+    at async a.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:38011)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+2025-07-23T08:14:21.431Z [info] ✅ [HELPERS] Image recreation successful: Failed Image Recreation
+2025-07-23T08:14:21.431Z [info] [0FE8D34E45F1] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  sceneName: 'Failed Image Recreation',
+  additionalMessageIds: 0
+}
