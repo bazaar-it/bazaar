@@ -1,0 +1,185 @@
+2025-07-23T08:11:08.028Z [info] [7AB55B104466] Starting scene generation {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  userMessage: 'Scene 1:\n' +
+    'Black background. Big bold text: “Meet TaskPro – Your AI Productivity Partner”\n' +
+    'Zoom-in animation on logo\n' +
+    'Quick beat drop, cut to UI\n' +
+    '\n' +
+    'Scene 2:\n' +
+    'Show full Dashboard UI\n' +
+    'Kinetic text: “Organize Everything in One Place”\n' +
+    'Subtle UI hover animations, fade-in tasks\n' +
+    '\n' +
+    'Scene 3:\n' +
+    'Zoom into AI Assistant sidebar\n' +
+    'Text: “Your AI Assistant Plans the Day For You”\n' +
+    'Highlight smart suggestions appearing\n' +
+    '\n' +
+    'Scene 4:\n' +
+    'Cut to ‘Create Task’ form animation\n' +
+    'Text: “Add Tasks Instantly with Voice or Text”\n' +
+    'Typewriter animation as task is entered\n' +
+    '\n' +
+    'Scene 5:\n' +
+    'Show completed tasks & analytics\n' +
+    'Text: “Track Your Progress, Stay Focused”\n' +
+    'Bar chart animation with motion\n' +
+    '\n' +
+    'Scene 6:\n' +
+    'Dark background\n' +
+    'Bold CTA: “Built using Bazaar.it – Create Yours Today”\n' +
+    'Fade out with upbeat outro music'
+}
+2025-07-23T08:11:08.080Z [info] [7AB55B104466] Getting decision from brain...
+2025-07-23T08:11:08.080Z [info] [7AB55B104466] User context: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:11:08.080Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T08:11:08.080Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'Scene 1:\n' +
+    'Black background. Big bold text: “Meet TaskPro – Your AI Productivity Partner”\n' +
+    'Zoom-in animation on logo\n' +
+    'Quick beat drop, cut to UI\n' +
+    '\n' +
+    'Scene 2:\n' +
+    'Show full Dashboard UI\n' +
+    'Kinetic text: “Organize Everything in One Place”\n' +
+    'Subtle UI hover animations, fade-in tasks\n' +
+    '\n' +
+    'Scene 3:\n' +
+    'Zoom into AI Assistant sidebar\n' +
+    'Text: “Your AI Assistant Plans the Day For You”\n' +
+    'Highlight smart suggestions appearing\n' +
+    '\n' +
+    'Scene 4:\n' +
+    'Cut to ‘Create Task’ form animation\n' +
+    'Text: “Add Tasks Instantly with Voice or Text”\n' +
+    'Typewriter animation as task is entered\n' +
+    '\n' +
+    'Scene 5:\n' +
+    'Show completed tasks & analytics\n' +
+    'Text: “Track Your Progress, Stay Focused”\n' +
+    'Bar chart animation with motion\n' +
+    '\n' +
+    'Scene 6:\n' +
+    'Dark background\n' +
+    'Bold CTA: “Built using Bazaar.it – Create Yours Today”\n' +
+    'Fade out with upbeat outro music',
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  hasImages: false,
+  hasVideos: false,
+  sceneCount: 2
+}
+2025-07-23T08:11:08.080Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T08:11:08.081Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T08:11:08.081Z [info] 📚 [CONTEXT BUILDER] Project: 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:11:08.081Z [info] 📚 [CONTEXT BUILDER] Has images: false
+2025-07-23T08:11:08.090Z [info] 📚 [CONTEXT BUILDER] Found and normalized domain "Bazaar.it" to "https://Bazaar.it"
+2025-07-23T08:11:08.090Z [info] 📚 [CONTEXT BUILDER] Analyzing website: https://Bazaar.it
+2025-07-23T08:11:08.090Z [info] 🌐 Analyzing: https://Bazaar.it
+2025-07-23T08:11:08.092Z [error] ❌ Analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T08:11:08.093Z [info] 📚 [CONTEXT BUILDER] Web analysis failed: browserType.launch: Executable doesn't exist at /tmp/ms-playwright/chromium_headless_shell-1179/chrome-linux/headless_shell
+╔═════════════════════════════════════════════════════════════════════════╗
+║ Looks like Playwright Test or Playwright was just installed or updated. ║
+║ Please run the following command to download new browsers:              ║
+║                                                                         ║
+║     npx playwright install                                              ║
+║                                                                         ║
+║ <3 Playwright Team                                                      ║
+╚═════════════════════════════════════════════════════════════════════════╝
+2025-07-23T08:11:08.099Z [info] 📚 [CONTEXT BUILDER] Found 0 persistent assets
+2025-07-23T08:11:08.099Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T08:11:08.099Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T08:11:08.099Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T08:11:08.099Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T08:11:08.099Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: Scene 1:
+Black background. Big bold text: “Meet Ta...
+2025-07-23T08:11:10.751Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T08:11:10.751Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "addScene",
+  "reasoning": "User provided a detailed multi-scene storyboard for a professional software demo video. Each scene has unique content and animations, so we will add the next scene based on the storyboard starting from Scene 3.",
+  "userFeedback": "Adding Scene 3 with zoom into AI Assistant sidebar and text animations as described.",
+  "needsClarification": false
+}
+2025-07-23T08:11:10.751Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'addScene',
+  success: true,
+  reasoning: 'User provided a detailed multi-scene storyboard fo...'
+}
+2025-07-23T08:11:10.751Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'addScene',
+  reasoning: 'User provided a detailed multi-scene storyboard for a professional software demo video. Each scene h...'
+}
+2025-07-23T08:11:10.751Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T08:11:10.751Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:11:10.751Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T08:11:10.768Z [info] [7AB55B104466] ✅ IMMEDIATE: Created new assistant message delivered to chat: 090bc17a-1837-4ec1-8cd1-499ff8133f6e
+2025-07-23T08:11:10.768Z [info] [7AB55B104466] Executing tool: addScene
+2025-07-23T08:11:10.774Z [info] 📝 [HELPERS] Building ADD tool input: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL - PURE FUNCTION] === EXECUTING ===
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL] Input: {
+  prompt: 'Scene 1:\nBlack background. Big bold text: “Meet Ta...',
+  hasImages: false,
+  hasVideos: false,
+  hasWebContext: false,
+  sceneNumber: 3,
+  hasPreviousScene: true
+}
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL] Video URLs received: undefined
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL] Using text-based generation
+2025-07-23T08:11:10.774Z [info] 🔨 [ADD TOOL] Previous scene detected - using code reference
+2025-07-23T08:11:10.775Z [info] 🚀 [CODE GENERATOR] FAST PATH: Using previous scene as reference
+2025-07-23T08:11:21.778Z [info] [DurationExtractor] ⚠️ No valid duration pattern found, using default: 180
+2025-07-23T08:11:21.778Z [info] ✅ [ADD TOOL] Finished with reference - returning result: {
+  name: 'Scene',
+  duration: 180,
+  codeLength: 3386,
+  firstLine: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;'
+}
+2025-07-23T08:11:21.778Z [info] 📥 [ROUTER] Received from ADD tool: {
+  success: true,
+  hasData: true,
+  dataKeys: [
+    'success',
+    'tsxCode',
+    'name',
+    'duration',
+    'reasoning',
+    'chatResponse',
+    'scene',
+    'debug'
+  ],
+  name: 'Scene',
+  codeLength: 3386
+}
+2025-07-23T08:11:21.778Z [info] 💾 [ROUTER] Saving to database: {
+  projectId: '52f57b05-ac15-413f-bb4f-e06de92cbb19',
+  name: 'Scene',
+  order: 2,
+  duration: 180
+}
+2025-07-23T08:11:21.814Z [info] ✅ [ROUTER] Scene saved to database: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  duration: 180,
+  order: 2
+}
+2025-07-23T08:11:21.836Z [info] 📊 [ROUTER] Created scene iteration record: {
+  sceneId: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  operationType: 'create',
+  generationTimeMs: 11047
+}
+2025-07-23T08:11:21.836Z [info] [7AB55B104466] Tool execution result: {
+  success: true,
+  hasScene: true,
+  sceneId: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  sceneName: 'Scene',
+  additionalMessageIds: 0
+}

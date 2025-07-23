@@ -35,6 +35,7 @@ export class ExportTrackingService {
   static async trackExportStart(params: TrackExportParams) {
     try {
       const result = await db.insert(exports).values({
+        id: crypto.randomUUID(), // Explicitly generate UUID
         userId: params.userId,
         projectId: params.projectId,
         renderId: params.renderId,

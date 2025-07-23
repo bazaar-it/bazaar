@@ -1,0 +1,403 @@
+2025-07-23T08:17:10.186Z [info] [Render] Preparing render config with 4 scenes
+2025-07-23T08:17:10.187Z [info] [Render] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 12087,
+  tsxCodePreview: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;\n' +
+    '\n' +
+    'const script_mdfon3w6 ...'
+}
+2025-07-23T08:17:10.187Z [info] [Render] Scene 1: {
+  id: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 1966,
+  tsxCodePreview: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;\n' +
+    '\n' +
+    'const script_mdfop37g ...'
+}
+2025-07-23T08:17:10.187Z [info] [Render] Scene 2: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 3386,
+  tsxCodePreview: 'const { AbsoluteFill, useCurrentFrame, interpolate, Img } = window.Remotion;\n' +
+    '\n' +
+    'const script_mdfopfsl ...'
+}
+2025-07-23T08:17:10.187Z [info] [Render] Scene 3: {
+  id: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  name: 'Failed Image Recreation',
+  hasTsxCode: false,
+  tsxCodeLength: 0,
+  tsxCodePreview: 'none'
+}
+2025-07-23T08:17:10.187Z [info] [prepareRenderConfig] Processing 4 scenes for Lambda
+2025-07-23T08:17:10.188Z [info] [prepareRenderConfig] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 12087,
+  duration: 180,
+  order: 0,
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused'
+  ]
+}
+2025-07-23T08:17:10.188Z [info] [prepareRenderConfig] Scene 1: {
+  id: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 1966,
+  duration: 180,
+  order: 1,
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused'
+  ]
+}
+2025-07-23T08:17:10.188Z [info] [prepareRenderConfig] Scene 2: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  hasTsxCode: true,
+  tsxCodeLength: 3386,
+  duration: 180,
+  order: 2,
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused'
+  ]
+}
+2025-07-23T08:17:10.189Z [info] [prepareRenderConfig] Scene 3: {
+  id: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  name: 'Failed Image Recreation',
+  hasTsxCode: false,
+  tsxCodeLength: 0,
+  duration: 180,
+  order: 3,
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused'
+  ]
+}
+2025-07-23T08:17:10.189Z [info] [Preprocess] Checking scene: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasTsxCode: true,
+  hasData: false,
+  dataKeys: [],
+  codeLength: 12087
+}
+2025-07-23T08:17:10.215Z [info] [Preprocess] Checking scene: {
+  id: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  name: 'Scene',
+  hasTsxCode: true,
+  hasData: false,
+  dataKeys: [],
+  codeLength: 1966
+}
+2025-07-23T08:17:10.222Z [info] [Preprocess] Checking scene: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  hasTsxCode: true,
+  hasData: false,
+  dataKeys: [],
+  codeLength: 3386
+}
+2025-07-23T08:17:10.230Z [info] [Preprocess] Checking scene: {
+  id: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  name: 'Failed Image Recreation',
+  hasTsxCode: false,
+  hasData: false,
+  dataKeys: [],
+  codeLength: 0
+}
+2025-07-23T08:17:10.230Z [error] [Preprocess] No code found for scene 0682a038-0d0b-4e56-b006-b45937af0aab - scene structure: {
+  hasId: true,
+  hasName: true,
+  hasTsxCode: false,
+  tsxCodeType: 'string',
+  keys: [
+    'id',             'projectId',
+    'order',          'name',
+    'tsxCode',        'props',
+    'duration',       'publishedUrl',
+    'publishedHash',  'publishedAt',
+    'createdAt',      'updatedAt',
+    'layoutJson',     'slug',
+    'dominantColors', 'firstH1Text',
+    'lastFocused',    'width',
+    'height'
+  ]
+}
+2025-07-23T08:17:10.241Z [info] [Preprocess] Found 0 JSX-style icons to replace
+2025-07-23T08:17:10.241Z [info] [Preprocess] Found 0 React.createElement icons to replace
+2025-07-23T08:17:10.241Z [info] [Preprocess] Found 0 JSX-style icons to replace
+2025-07-23T08:17:10.241Z [info] [Preprocess] Found 0 React.createElement icons to replace
+2025-07-23T08:17:10.242Z [info] [Preprocess] Found 0 JSX-style icons to replace
+2025-07-23T08:17:10.242Z [info] [Preprocess] Found 0 React.createElement icons to replace
+2025-07-23T08:17:10.242Z [info] [Preprocess] Scene 9e413640-10ac-4157-9975-49c3554ca1f7 transformed for Lambda
+2025-07-23T08:17:10.242Z [info] [Preprocess] Transformation summary: {
+  sceneId: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  sceneName: 'Scene',
+  originalCodeLength: 12087,
+  transformedCodeLength: 12032,
+  hasExportDefault: true,
+  hasComponent: true,
+  hasReturn: true,
+  remotionComponents: [ 'AbsoluteFill', 'useCurrentFrame', 'interpolate', 'Img' ],
+  reactHooks: 'none',
+  transformedCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', text: 'Bazaar.it', frames: 45 },\n" +
+    "  { type: 'headline', text: 'AI-Powered Motion Graphics', frames: 5..."
+}
+2025-07-23T08:17:10.242Z [info] [Preprocess] Scene 3c91f4af-47a8-4c64-8e74-66caf9dcbea3 transformed for Lambda
+2025-07-23T08:17:10.242Z [info] [Preprocess] Transformation summary: {
+  sceneId: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  sceneName: 'Scene',
+  originalCodeLength: 1966,
+  transformedCodeLength: 1884,
+  hasExportDefault: true,
+  hasComponent: true,
+  hasReturn: true,
+  remotionComponents: [ 'AbsoluteFill', 'useCurrentFrame', 'interpolate', 'Img' ],
+  reactHooks: 'none',
+  transformedCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfop37g = [\n' +
+    "  { type: 'text', content: 'Please upload a screenshot', frames: 90 }\n" +
+    '];\n' +
+    '\n' +
+    'let accumulatedFrames_mdfop37g = 0;\n' +
+    'const se...'
+}
+2025-07-23T08:17:10.243Z [info] [Preprocess] Scene 96ba66e6-1669-421c-ae4b-7369f33df033 transformed for Lambda
+2025-07-23T08:17:10.243Z [info] [Preprocess] Transformation summary: {
+  sceneId: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  sceneName: 'Scene',
+  originalCodeLength: 3386,
+  transformedCodeLength: 3274,
+  hasExportDefault: true,
+  hasComponent: true,
+  hasReturn: true,
+  remotionComponents: [ 'AbsoluteFill', 'useCurrentFrame', 'interpolate', 'Img' ],
+  reactHooks: 'none',
+  transformedCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfopfsl = [\n' +
+    "  { type: 'text', content: 'Meet TaskPro – Your AI Productivity Partner', frames: 90 },\n" +
+    "  { type: 'logo', content: 'Ta..."
+}
+2025-07-23T08:17:10.243Z [info] [prepareRenderConfig] 4 of 4 scenes passed preprocessing
+2025-07-23T08:17:10.243Z [info] [Render] prepareRenderConfig returned:
+2025-07-23T08:17:10.243Z [info] [Render] Processed scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 12032,
+  jsCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', ..."
+}
+2025-07-23T08:17:10.243Z [info] [Render] Processed scene 1: {
+  id: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 1884,
+  jsCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfop37g = [\n' +
+    "  { type: 'text', ..."
+}
+2025-07-23T08:17:10.243Z [info] [Render] Processed scene 2: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 3274,
+  jsCodePreview: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfopfsl = [\n' +
+    "  { type: 'text', ..."
+}
+2025-07-23T08:17:10.243Z [info] [Render] Processed scene 3: {
+  id: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  name: 'Failed Image Recreation',
+  hasJsCode: false,
+  jsCodeLength: 0,
+  jsCodePreview: 'none'
+}
+2025-07-23T08:17:10.243Z [info] [LambdaRender] Starting Lambda render for project 52f57b05-ac15-413f-bb4f-e06de92cbb19
+2025-07-23T08:17:10.243Z [info] [LambdaRender] Using serve URL: https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-audio-codec/index.html
+2025-07-23T08:17:10.243Z [info] [LambdaRender] Starting render job...
+2025-07-23T08:17:10.243Z [info] [LambdaRender] Total duration: 720 frames
+2025-07-23T08:17:10.243Z [info] [LambdaRender] Format: mp4, Quality: high
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scenes: 4
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Resolution: 1920x1080 (provided: 1920x1080, settings: 1920x1080)
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Audio: No audio
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scene data being passed to Lambda:
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scene 0: {
+  id: '9e413640-10ac-4157-9975-49c3554ca1f7',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 12032,
+  jsCodeStart: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfon3w6 = [\n' +
+    "  { type: 'logo', text: 'Bazaar.it', frames: 45 },\n" +
+    "  { type: 'headline', text: 'AI-Powered Motion Graphics', frames: 5...",
+  jsCodeEnd: '...          },}, "Start creating at Bazaar.it"\n' +
+    '\n' +
+    '          )\n' +
+    '        )\n' +
+    '      )\n' +
+    '\n' +
+    '    )\n' +
+    '  );\n' +
+    '}\n' +
+    '\n' +
+    'const totalFrames_mdfon3w6 = script_mdfon3w6.reduce((sum, item) => sum + item.frames, 0);\n' +
+    '\n' +
+    '\n' +
+    'return Component;',
+  hasComponentFunctions: true,
+  containsScriptArray: true,
+  hasExportDefault: false,
+  hasReturnComponent: true
+}
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scene 1: {
+  id: '3c91f4af-47a8-4c64-8e74-66caf9dcbea3',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 1884,
+  jsCodeStart: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfop37g = [\n' +
+    "  { type: 'text', content: 'Please upload a screenshot', frames: 90 }\n" +
+    '];\n' +
+    '\n' +
+    'let accumulatedFrames_mdfop37g = 0;\n' +
+    'const se...',
+  jsCodeEnd: '...Width: "80%"\n' +
+    '          },}\n' +
+    ', "Please upload a screenshot"\n' +
+    '\n' +
+    '        )\n' +
+    '      )\n' +
+    '    )\n' +
+    '  );\n' +
+    '}\n' +
+    '\n' +
+    'const totalFrames_mdfop37g = script_mdfop37g.reduce((sum, item) => sum + item.frames, 0);\n' +
+    '\n' +
+    '\n' +
+    'return Component;',
+  hasComponentFunctions: true,
+  containsScriptArray: true,
+  hasExportDefault: false,
+  hasReturnComponent: true
+}
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scene 2: {
+  id: '96ba66e6-1669-421c-ae4b-7369f33df033',
+  name: 'Scene',
+  hasJsCode: true,
+  jsCodeLength: 3274,
+  jsCodeStart: '// Remotion components will be provided by the runtime\n' +
+    '\n' +
+    'const script_mdfopfsl = [\n' +
+    "  { type: 'text', content: 'Meet TaskPro – Your AI Productivity Partner', frames: 90 },\n" +
+    "  { type: 'logo', content: 'Ta...",
+  jsCodeEnd: '... rgba(0,0,0,0.2)"\n' +
+    '            },}\n' +
+    ', "TaskPro"\n' +
+    '\n' +
+    '          )\n' +
+    '        )\n' +
+    '      )\n' +
+    '    )\n' +
+    '  );\n' +
+    '}\n' +
+    '\n' +
+    'const totalFrames_mdfopfsl = script_mdfopfsl.reduce((sum, item) => sum + item.frames, 0);\n' +
+    '\n' +
+    '\n' +
+    'return Component;',
+  hasComponentFunctions: true,
+  containsScriptArray: true,
+  hasExportDefault: false,
+  hasReturnComponent: true
+}
+2025-07-23T08:17:10.244Z [info] [LambdaRender] Scene 3: {
+  id: '0682a038-0d0b-4e56-b006-b45937af0aab',
+  name: 'Failed Image Recreation',
+  hasJsCode: false,
+  jsCodeLength: 0,
+  jsCodeStart: 'NO JSCODE',
+  jsCodeEnd: 'NO JSCODE',
+  hasComponentFunctions: false,
+  containsScriptArray: false,
+  hasExportDefault: false,
+  hasReturnComponent: false
+}
+2025-07-23T08:17:10.852Z [info] [LambdaRender] Render started successfully
+2025-07-23T08:17:10.852Z [info] [LambdaRender] Render ID: zuw49yl7ej
+2025-07-23T08:17:10.852Z [info] [LambdaRender] Bucket: remotionlambda-useast1-yb1vzou9i7
+2025-07-23T08:17:10.861Z [error] [ExportTracking] Failed to track export start: Error [NeonDbError]: null value in column "id" of relation "bazaar-vid_exports" violates not-null constraint
+    at execute (.next/server/chunks/172.js:12:8169)
+    at async c.trackExportStart (.next/server/chunks/9930.js:428:6077)
+    at async (.next/server/chunks/9930.js:424:10587)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async (.next/server/chunks/9930.js:568:39474) {
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (null, ac0c3c0b-0120-491e-beaf-81e6c0f5f42e, 52f57b05-ac15-413f-bb4f-e06de92cbb19, zuw49yl7ej, pending, 0, mp4, high, null, null, 720, null, {"startTime": "2025-07-23T08:17:10.852Z"}, 0, null, 2025-07-23 08:17:10.856641, null).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'bazaar-vid_exports',
+  column: 'id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '1982',
+  routine: 'ExecConstraints',
+  sourceError: undefined
+}

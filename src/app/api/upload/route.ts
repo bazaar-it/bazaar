@@ -6,6 +6,10 @@ import { assetContext, AssetContextService } from '~/server/services/context/ass
 import type { Asset } from '~/lib/types/asset-context';
 import crypto from 'crypto';
 
+// Configure the route to accept larger uploads (100MB)
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication

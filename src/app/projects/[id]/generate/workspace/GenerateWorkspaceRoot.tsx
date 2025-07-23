@@ -151,7 +151,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   // Use mobile layout for mobile breakpoint
   if (breakpoint === 'mobile') {
     return (
-      <div className="h-screen flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+      <div className="h-[100dvh] flex flex-col overflow-hidden bg-white dark:bg-gray-900">
         {/* Mobile Header - Compact version */}
         <div className="sticky top-0 z-40 w-full">
           <MobileAppHeader
@@ -178,7 +178,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   // Desktop/Tablet layout
   return (
-    <div className="h-screen flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
+    <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 rounded-bl-[15px] rounded-br-[15px]">
         <AppHeader
