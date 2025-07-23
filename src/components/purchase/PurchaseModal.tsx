@@ -17,10 +17,12 @@ interface PurchaseModalProps {
   onClose: () => void;
 }
 
-// Helper function to calculate discount percentage
-function calculateDiscount(pricePerPrompt: number, baseRate: number = 30): number | null {
-  if (pricePerPrompt >= baseRate) return null;
-  return Math.round(((baseRate - pricePerPrompt) / baseRate) * 100);
+// Helper function to get custom discount percentage
+function getDiscountPercentage(price: number): number | null {
+  // Custom discount percentages based on price
+  if (price === 2500) return 33; // €25 option gets 33% off
+  if (price === 10000) return 66; // €100 option gets 66% off
+  return null; // No discount for other options
 }
 
 export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
@@ -78,23 +80,20 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
                       <div className="text-2xl font-bold text-gray-900">
                         €{pkg.price / 100}
                       </div>
-                      {pkg.popular && (
+                      {pkg.popular && pkg.price !== 2500 && (
                         <div className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-1 rounded">
                           POPULAR
                         </div>
                       )}
-                      {calculateDiscount(pkg.pricePerPrompt / 100) && (
+                      {getDiscountPercentage(pkg.price) && (
                         <div className="bg-green-100 text-green-700 text-xs font-medium px-2 py-1 rounded">
-                          {calculateDiscount(pkg.pricePerPrompt / 100)}% off
+                          {getDiscountPercentage(pkg.price)}% off
                         </div>
                       )}
                     </div>
                     <div className="text-base text-gray-800 mb-2">
                       Get <span className="font-bold">{pkg.promptCount}</span> prompts at <span className="font-bold">€{(pkg.pricePerPrompt / 100).toFixed(2)}</span> each
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {pkg.description}
-                    </p>
                   </div>
                 </div>
 

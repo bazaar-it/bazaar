@@ -74,13 +74,25 @@ const TemplateScrollGrid: React.FC = () => {
     }
   ];
 
-  // Generate template images for each column - 9 images per column
+  // Generate template images for each column - 3 unique images per column, repeated 3 times
   const generateTemplateImages = (columnIndex: number) => {
+    // Each column gets 3 specific images
+    const startIndex = columnIndex * 3;
+    const columnImages = templateImages.slice(startIndex, startIndex + 3);
+    
+    // If we don't have enough images for this column, wrap around
+    if (columnImages.length < 3) {
+      const needed = 3 - columnImages.length;
+      const wrappedImages = templateImages.slice(0, needed);
+      columnImages.push(...wrappedImages);
+    }
+    
+    // Repeat these 3 images 3 times to create 9 total images for smooth scrolling
     return Array.from({ length: 9 }, (_, i) => {
-      const templateIndex = (columnIndex * 3 + i) % templateImages.length;
-      const template = templateImages[templateIndex];
+      const imageIndex = i % 3; // Cycle through the 3 images
+      const template = columnImages[imageIndex];
       if (!template) {
-        throw new Error(`Template not found at index ${templateIndex}`);
+        throw new Error(`Template not found at index ${imageIndex} in column ${columnIndex}`);
       }
       return {
         ...template,

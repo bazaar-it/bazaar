@@ -24,13 +24,9 @@ const MarketingVideoPlayer: React.FC = () => {
       if (timestamp - lastTimestamp >= frameInterval) {
         setCurrentFrame(prev => {
           const next = prev + 1;
-          // Add a pause at the end
-          if (next >= 420) {
-            // Hold for 2 seconds (60 frames at 30fps)
-            if (next >= 480) {
-              return 0; // Reset
-            }
-            return next;
+          // Reset after 340 frames total (including 1.5s pause)
+          if (next >= 340) {
+            return 0; // Reset
           }
           return next;
         });
@@ -118,13 +114,13 @@ const MarketingVideoPlayer: React.FC = () => {
       return outputMin + progress * (outputMax - outputMin);
     };
     
-    const text = "Create a demo video of my app";
+    const text = "Create an animation of the AirBnB app using the attached screenshots. Show a user swiping thru 4 images.";
     
     // Perfectly consistent typewriter - map each frame to exact character
-    const startFrame = 40;
-    const endFrame = 160;
-    const totalFrames = endFrame - startFrame; // 120 frames
-    const totalChars = text.length; // 29 characters
+    const startFrame = 5; // Start almost immediately
+    const endFrame = 165; // Adjusted for faster overall timing
+    const totalFrames = endFrame - startFrame; // 160 frames total duration
+    const totalChars = text.length; // Much longer text now
     
     let charCount = 0;
     if (frame >= startFrame && frame < endFrame) {
@@ -136,9 +132,10 @@ const MarketingVideoPlayer: React.FC = () => {
     }
     
     // More realistic cursor blinking - faster blink while typing, slower when done
-    const isTyping = frame >= 40 && frame <= 160;
-    const blinkSpeed = isTyping ? 15 : 25; // Faster blink while typing
-    const cursorVisible = Math.floor(frame / blinkSpeed) % 2 === 0;
+    // REMOVED: Cursor blinking logic for cleaner text animation
+    // const isTyping = frame >= 40 && frame <= 200;
+    // const blinkSpeed = isTyping ? 15 : 25; // Faster blink while typing
+    // const cursorVisible = Math.floor(frame / blinkSpeed) % 2 === 0;
 
     // Icons fade in smoothly at the start
     const iconProgress = interpolate(
@@ -148,9 +145,9 @@ const MarketingVideoPlayer: React.FC = () => {
       { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeOut" }
     );
 
-    // Cursor animation - coordinated with text timing
-    const cursorStartFrame = 170; // Start after text completes
-    const cursorEndFrame = 280; // Smoother timing for drag animation
+    // Cursor animation - start immediately when text completes
+    const cursorStartFrame = 165; // Start exactly when text completes (hardcoded to ensure timing)
+    const cursorEndFrame = 275; // End after 110 frames of dragging
     const cursorProgress = interpolate(
       frame,
       [cursorStartFrame, cursorEndFrame],
@@ -158,23 +155,24 @@ const MarketingVideoPlayer: React.FC = () => {
       { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeInOut" }
     );
 
-    // Natural arc path for cursor - enters from right side and crosses 75% of screen
+    // Natural straight path for cursor - enters from right side of container
     const containerWidth = 700; // Current search bar width
     const containerHeight = 190; // Updated to match new baseHeight
-    const screenWidth = 1200; // Approximate visible screen width
-    const startX = screenWidth; // Start from right edge of screen
-    const endX = screenWidth * 0.25; // End at 25% from left (75% across screen)
-    const startY = containerHeight * 0.2; // Start at 20% down in container
-    const endY = containerHeight * 0.4; // Land at 40% down in container (text area)
-    const arcHeight = -60; // Gentle arc for realistic drag
+    const startX = containerWidth + 100; // Start further outside the right edge
+    const endX = containerWidth * 0.5; // End at center of container (350px)
+    const startY = containerHeight * 0.5; // Start at middle height
+    const endY = containerHeight * 0.5; // End at same height (straight line)
 
     const cursorX = interpolate(cursorProgress, [0, 1], [startX, endX]);
-    const cursorY = interpolate(cursorProgress, [0, 1], [startY, endY]) + 
-      Math.sin(cursorProgress * Math.PI) * arcHeight;
+    const cursorY = startY; // Keep Y constant for straight horizontal movement
 
     // Image drop animation - coordinated with cursor end
-    const dropFrame = 280; // Start image drop when cursor ends
-    const dropCompleteFrame = 300; // Drop animation completes 20 frames after start
+    const dropFrame = 275; // Start image drop when cursor ends (hardcoded)
+    const dropCompleteFrame = 295; // Drop animation completes 20 frames after start (hardcoded)
+    
+    // End pause - 2.5 seconds (75 frames) after drop completes
+    const pauseStartFrame = dropCompleteFrame;
+    const videoEndFrame = pauseStartFrame + 75; // 2.5 seconds at 30fps
     const imageDropped = frame >= dropFrame;
     const dropInProgress = frame >= dropFrame && frame < dropCompleteFrame;
     
@@ -187,19 +185,19 @@ const MarketingVideoPlayer: React.FC = () => {
         { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeOut" }
       ) : 0;
     
-    // Calculate dynamic box height based on content with proper spacing
-    const baseHeight = imageDropped ? 220 : 190; // Increased for better initial visibility
-    const imageAreaHeight = imageDropped ? 120 : 0; // Space for images when dropped
+    // Calculate dynamic box height - keep consistent during dragging
+    const baseHeight = 300; // Optimized height for better proportions
+    const imageAreaHeight = imageDropped ? 100 : 0; // Reduced image area for better balance
     const boxHeight = baseHeight + imageAreaHeight;
     
     // Keep consistent image size throughout
-    const imageHeight = 80;
+    const imageHeight = 80; // Same size for dragging and dropped states
 
-    // Check if image is over the drop zone - updated for new coordinate system
-    const searchBarLeft = 200; // Left edge of search bar in screen coordinates
-    const searchBarTop = 0; // Top of search bar in container coordinates  
-    const searchBarBottom = 190; // Bottom of search bar (matches new height)
-    const searchBarRight = 900; // Right edge of search bar in screen coordinates
+    // Check if image is over the drop zone - corrected coordinates
+    const searchBarLeft = 50; // Left edge of text area in container
+    const searchBarTop = 50; // Top of text area in container  
+    const searchBarBottom = 140; // Bottom of text area in container
+    const searchBarRight = 650; // Right edge of text area in container
     
     const isOverDropZone = frame >= cursorStartFrame && frame < dropFrame &&
       cursorX >= searchBarLeft && cursorX <= searchBarRight &&
@@ -216,17 +214,9 @@ const MarketingVideoPlayer: React.FC = () => {
       "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/listing.png"
     ];
 
-    // Image natural sizes (simulate, or fetch if needed)
-    const imageHeights = [60, 60, 60]; // Use 60px as a base height for all
-    const imageWidths = [90, 90, 90]; // Use 90px as a base width for all
-
     // Dragging state - using container coordinate system
     const imageDraggedX = cursorX; // Use the same coordinates as cursor
     const imageDraggedY = cursorY; // Use the same coordinates as cursor
-
-    // Increase image size
-    const droppedImageHeight = 100;
-    const draggedImageHeight = 80;
 
     return (
       <div style={{ 
@@ -241,12 +231,12 @@ const MarketingVideoPlayer: React.FC = () => {
         <div
           style={{
             width: "700px", // Reduced from 800px to fit better in container with padding
-            height: `${boxHeight * 0.7}px`, // Increased scaling from 0.5 to 0.7 for better visibility
+            height: `${boxHeight * 0.85}px`, // Increased scaling to ensure submit button is fully visible
             background: boxBackground,
             borderRadius: "25px",
-            padding: "24px",
-            paddingBottom: "24px",
-            paddingTop: "24px",
+            padding: "16px",
+            paddingBottom: "16px",
+            paddingTop: "16px",
             opacity,
             boxShadow: "none",
             position: "relative",
@@ -290,13 +280,13 @@ const MarketingVideoPlayer: React.FC = () => {
             </div>
           )}
 
-          {/* Dragging images with cursor - consistent size */}
+          {/* Dragging images with cursor - fixed size */}
           {isDragging && (
             <div
               style={{
                 position: "absolute",
-                left: `${imageDraggedX}px`, // Direct positioning - no scaling needed
-                top: `${imageDraggedY}px`, // Direct positioning - no scaling needed
+                left: `${imageDraggedX}px`,
+                top: `${imageDraggedY}px`,
                 transform: "translate(-50%, -50%)",
                 zIndex: 20,
                 display: "flex",
@@ -310,7 +300,7 @@ const MarketingVideoPlayer: React.FC = () => {
                     src={url}
                     alt={`Dragged ${index + 1}`}
                     style={{
-                      height: `${imageHeight}px`,
+                      height: "80px", // Fixed size to prevent scaling
                       width: "auto",
                       borderRadius: "12px",
                       background: "#fff",
@@ -350,21 +340,24 @@ const MarketingVideoPlayer: React.FC = () => {
           }}>
             <div style={{ 
               flex: 1, 
-              fontSize: "32px", 
+              fontSize: "28px", // Reduced from 32px to match MarketingComponentPlayer
               color: "#333",
               fontFamily: "system-ui, -apple-system, sans-serif",
               fontWeight: "400",
-              lineHeight: "1.3",
-              minHeight: "50px", // Reduced from 80px to 50px to decrease spacing
+              lineHeight: "1.4", // Increased line height for better multi-line readability
+              minHeight: "120px", // Further increased for multi-line text
+              maxHeight: "160px", // Set max height to prevent overflow
               display: "flex",
               alignItems: "flex-start",
               justifyContent: "flex-start",
               paddingTop: imageDropped ? "0px" : "0px", // Start at very top initially
+              paddingBottom: "20px", // Add bottom padding to separate from icons
+              wordWrap: "break-word", // Allow text to wrap
+              whiteSpace: "normal", // Allow normal text wrapping
+              overflow: "hidden", // Hide any text overflow
             }}>
               {text.slice(0, charCount)}
-              {charCount < text.length && cursorVisible && (
-                <span style={{ color: "#333", fontSize: "32px" }}>|</span>
-              )}
+              {/* REMOVED: Blinking cursor for cleaner animation */}
             </div>
           </div>
 
@@ -373,13 +366,14 @@ const MarketingVideoPlayer: React.FC = () => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            paddingTop: "5px", // Keep top padding minimal
-            paddingBottom: "12px", // Add bottom padding for breathing room
+            paddingTop: "15px", // Increased top padding for better separation
+            paddingBottom: "20px", // Increased bottom padding for better visibility
             borderTop: "none",
             background: "transparent",
             borderRadius: "0 0 20px 20px",
             boxShadow: "none",
-            minHeight: "50px",
+            minHeight: "60px", // Increased min height for better icon visibility
+            marginTop: "auto", // Push to bottom of container
           }}>
             <div style={{
               display: "flex",
@@ -396,7 +390,7 @@ const MarketingVideoPlayer: React.FC = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#888",
-                fontSize: "28px",
+                fontSize: "36px", // Increased from 28px to match MarketingComponentPlayer
               }}>
                 <IconifyIcon icon="material-symbols:image-outline" />
               </div>
@@ -409,21 +403,21 @@ const MarketingVideoPlayer: React.FC = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#888",
-                fontSize: "28px",
+                fontSize: "36px", // Increased from 28px to match MarketingComponentPlayer
               }}>
                 <IconifyIcon icon="material-symbols:mic-outline" />
               </div>
             </div>
             <div style={{
-              width: "44px",
-              height: "44px",
+              width: "60px", // Increased from 44px to match MarketingComponentPlayer
+              height: "60px", // Increased from 44px to match MarketingComponentPlayer
               borderRadius: "50%",
               backgroundColor: "#222",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontSize: "28px",
+              fontSize: "29px", // Reduced by 20% from 36px
               opacity: iconProgress,
               boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
             }}>
@@ -440,14 +434,15 @@ const MarketingVideoPlayer: React.FC = () => {
       <div style={{
         position: 'relative',
         width: '100%',
-        height: '600px', // Increased to 600px to ensure full visibility
+        height: '400px', // Reduced height to minimize spacing
         background: 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: '20px',
-        overflow: 'visible', // Changed from hidden to visible to prevent cutoff
-        padding: '10px', // Reduced padding to minimize spacing
+        overflow: 'visible',
+        padding: '0px', // Removed all padding
+        margin: '0px', // Removed all margin
       }}>
         <SearchBar opacity={1} />
       </div>

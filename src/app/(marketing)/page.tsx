@@ -4,9 +4,8 @@ import Image from "next/image";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayerRemotion";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
 import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import TemplateScrollGrid from "~/components/TemplateScrollGrid";
@@ -14,10 +13,11 @@ import BazaarShowcasePlayer from "~/components/BazaarShowcasePlayer";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
+import AirbnbVideoPlayerWithControls from "~/components/AirbnbVideoPlayerWithControls";
+import AirbnbDemoPlayer from "~/components/AirbnbDemoPlayer";
 
 // Lazy load heavy components
 const LoginModal = lazy(() => import("./login/page"));
-const EmailSubscriptionForm = dynamic(() => import("~/components/marketing/EmailSubscriptionForm"), { ssr: false });
 
 export default function HomePage() {
   const { data: session, status } = useSession();
@@ -52,7 +52,7 @@ export default function HomePage() {
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
+            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
           </div>
         </div>
         <div className="flex gap-4 items-center">
@@ -76,7 +76,7 @@ export default function HomePage() {
         <div className="w-full mb-8 flex justify-center">
           <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
             <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-              V3 is Live!
+              V2 is Live!
             </span>
             <button 
               onClick={() => setShowVideo(true)}
@@ -141,33 +141,44 @@ export default function HomePage() {
               </button>
             </div>
           )}
-          <p className="text-center text-gray-500 text-sm mt-2">
+          <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             No credit card required
           </p>
         </div>
         
-        {/* Example videos section */}
-        <section className="w-full mt-8">
-          {/* Marketing Video Player */}
-          <div className="flex justify-center w-full px-2 sm:px-4">
+        {/* Marketing Video Player - positioned outside container with aggressive negative margin */}
+        <div className="w-full -mt-16 mb-8">
+          <div className="flex justify-center w-full px-0">
             <div className="w-full max-w-7xl">
               <MarketingVideoPlayer />
             </div>
           </div>
-        </section>
+        </div>
 
         {/* Create entire videos section */}
         <section className="mt-0 w-full">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              Create <span className="moving-gradient-text">entire videos</span> from a single prompt
+              Create <span className="moving-gradient-text">Viral Videos</span> for your App
             </h2>
           </div>
           
-          {/* Generating Scene Plan Player */}
+          {/* Airbnb Video Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
             <div className="w-full max-w-5xl">
-              <GeneratingScenePlanPlayer />
+              {/* Container with 30% reduced height while maintaining aspect ratio */}
+              <div style={{
+                width: '100%',
+                maxWidth: '400px',
+                height: '560px', // Reduced from ~800px (30% reduction)
+                margin: '0 auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'transparent'
+              }}>
+                <AirbnbDemoPlayer />
+              </div>
             </div>
           </div>
         </section>
@@ -217,11 +228,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 50 Templates Section */}
+        {/* 25 Templates Section */}
         <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              50+ Templates to Start From
+              25+ Templates to Start From
             </h2>
           </div>
           
@@ -257,7 +268,7 @@ export default function HomePage() {
                   {tryForFreeLoading ? (
                     <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 818-8v8z"></path>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
                     </svg>
                   ) : (
                     "Start Creating Now"
@@ -269,11 +280,6 @@ export default function HomePage() {
         </section>
 
       </main>
-
-      {/* Email Sign-Up Section */}
-      <Suspense fallback={<div className="w-full py-16 bg-gray-50" />}>
-        <EmailSubscriptionForm />
-      </Suspense>
 
       {/* Video Modal */}
       {showVideo && (

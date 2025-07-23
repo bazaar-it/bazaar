@@ -86,7 +86,7 @@ export function PromptUsageDisplay() {
                 <div className="flex items-center gap-2 mt-1">
                   <Zap className="h-3.5 w-3.5 text-yellow-500" />
                   <span className="text-muted-foreground">
-                    Purchased: <span className={`font-mono ${usage.purchased === 0 ? 'text-gray-400' : 'text-yellow-600'}`}>
+                    {usage.purchased === 20 ? 'Free:' : 'Purchased:'} <span className={`font-mono ${usage.purchased === 0 ? 'text-gray-400' : 'text-yellow-600'}`}>
                       {usage.purchased}
                     </span>
                     {isUsingPurchased && (
