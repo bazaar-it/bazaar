@@ -158,6 +158,7 @@ export class ExportTrackingService {
   private static async trackEvent(params: TrackExportEventParams) {
     try {
       await db.insert(exportAnalytics).values({
+        id: crypto.randomUUID(), // Explicitly generate UUID to avoid null constraint error
         exportId: params.exportId,
         event: params.event,
         eventData: params.eventData,
