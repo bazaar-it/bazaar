@@ -42,6 +42,13 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     }
   );
 
+  // Save current project ID to localStorage for redirect after purchase
+  useEffect(() => {
+    if (projectId) {
+      localStorage.setItem("lastProjectId", projectId);
+    }
+  }, [projectId]);
+
   // Initialize video state on mount - but only if not already loaded
   useEffect(() => {
     const currentProps = useVideoState.getState().getCurrentProps();

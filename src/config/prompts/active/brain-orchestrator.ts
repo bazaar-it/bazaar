@@ -40,6 +40,13 @@ IMAGE DECISION CRITERIA:
 - If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference" → addScene
 - If user uploads image(s) with no specific instruction → addScene (general scene creation)
 
+PROJECT ASSETS AWARENESS:
+When the context includes previously uploaded assets (logos, images, etc.), consider:
+- If user says "the logo", "my logo", "that image from before" → They likely mean a project asset
+- If user references something they uploaded earlier → Check assetContext for matches
+- Pass relevant asset URLs to tools when the user's intent suggests using existing assets
+- But also allow for new asset creation when that's what the user wants
+
 DURATION CHANGES - CHOOSE WISELY:
 - Use "trimScene" for: "cut last X seconds", "remove X seconds", "make it X seconds long", "make scene X, Y seconds"
   → This simply cuts or extends the scene duration without modifying animations (PREFERRED - faster)

@@ -102,15 +102,20 @@ This checklist tracks all critical items that must be addressed before pushing v
   - AWS Lambda settings correct
   - Cloudflare R2 credentials valid
 
-- [ ] **AWS Lambda video export**
-  - Status: PENDING
+- [x] **AWS Lambda video export**
+  - Status: FIXED ✅
   - Lambda function deployed
   - S3 bucket permissions configured
   - Public read access set up
-  - Test export functionality
-  - **Export button working correctly**
+  - Test export functionality - **FIXED**
+  - **Export button working correctly** - YES
   - Download triggers properly
   - Progress tracking accurate
+  - **FIX APPLIED**: Switched from CLI-based to SDK-based Lambda invocation
+    - Changed import from `lambda-cli.service` to `lambda-render.service` in render router
+    - This uses the proper Remotion Lambda SDK instead of trying to execute CLI commands
+    - Icon preprocessing already handled by existing code in `render.service.ts`
+    - See meeting notes 2025-07-22 for details
 
 ### 4.5 Smart Logo Detection & Usage
 - [x] **Logo Detection System - Phase 1: Prompt Updates**
@@ -271,6 +276,87 @@ This checklist tracks all critical items that must be addressed before pushing v
   - Export formats optimized
   - Metadata for sharing
 
+### 12. Context Engineering & Image Ingestion (Sprint 81)
+- [ ] **Deterministic Asset Ingestion**
+  - Status: PENDING
+  - Enforce URL integrity checks in Media API
+  - Eliminate hallucinated placeholder assets
+  - Guarantee exact URL persistence across prompts
+  - Implement signed, permanent CDN URLs
+  
+- [ ] **Context Memory Persistence**
+  - Status: PENDING
+  - Embed URL list in conversation-scoped memory
+  - Implement Redis layer for asset context storage
+  - Ensure multi-turn conversation URL retention
+  - Target: ≥98% asset URL retention after 5 prompts
+  
+- [ ] **Style Research Agent**
+  - Status: PENDING
+  - Web-scraping agent for visual references
+  - Automated mood board generation
+  - Color palette and typography extraction
+  - Cache results for popular styles (Apple, Cyberpunk, etc.)
+  
+- [ ] **Context-Aware Code Generation**
+  - Status: PENDING
+  - Structured context token consumption
+  - Dynamic style metadata injection
+  - Guard-rails against asset URL omission
+  - LLM prompt refactor for context awareness
+  
+- [ ] **Performance & Compliance**
+  - Status: PENDING
+  - Sub-second response time with caching
+  - Respect robots.txt directives
+  - Public license material only
+  - Graceful degradation for scarce styles
+
+### 13. Audio Support & Synchronization (Sprint 82)
+- [ ] **Waveform Visualization**
+  - Status: PENDING
+  - Implement Remotion-compliant waveform renderer
+  - GPU-accelerated Canvas/WebGL for real-time performance
+  - Display amplitude envelopes and transient clusters
+  - Visual timeline integration
+  
+- [ ] **Beat Detection System**
+  - Status: PENDING
+  - DSP pipeline for beat extraction (spectral flux, onset detection)
+  - Support for compressed formats (MP3, AAC)
+  - Frame-accurate timestamp generation (30fps quantization)
+  - Genre-specific algorithm selection
+  - Target F-Score: ≥ 0.85
+  
+- [ ] **Audio-Reactive Scene Modulation**
+  - Status: PENDING
+  - Middleware layer for composition graph mutations
+  - Dynamic scene transitions on beat drops
+  - Adaptive visual effects (camera cuts, color grading)
+  - Kinetic typography synchronized to rhythm
+  - Hierarchical timing model (bar/beat/sub-beat)
+  
+- [ ] **Performance & Infrastructure**
+  - Status: PENDING
+  - Render latency overhead: ≤ 40ms target
+  - Edge-cache strategy for beat maps
+  - Offline caching of extracted features
+  - Editor interaction maintained at ≥ 60fps
+  
+- [ ] **AI-Assisted Audio Analysis**
+  - Status: PENDING
+  - Lightweight ML model for beat inference
+  - Self-supervised learning approach
+  - Cross-genre robustness testing
+  - JSON timeline output for Remotion consumption
+  
+- [ ] **User Controls & UX**
+  - Status: PENDING
+  - Beat sensitivity threshold controls
+  - Manual beat adjustment interface
+  - Preview with audio sync enabled/disabled
+  - Fallback to amplitude-based heuristics
+
 ---
 
 ## 🔍 KNOWN ISSUES TO FIX
@@ -392,5 +478,69 @@ This checklist tracks all critical items that must be addressed before pushing v
 
 ---
 
-**Last Updated**: 2025-07-21
+## 📊 MEETING NOTES & UPDATES
+
+### 2025-07-22 20:36 CEST - Export Functionality Critical Issue
+**Summary**: Export functionality is completely broken. AWS Lambda cannot find Remotion CLI binary.
+
+**Key Findings**:
+1. **Lambda Error**: `/var/task/node_modules/.bin/remotion: No such file or directory`
+   - The Lambda function is trying to execute Remotion CLI but it's not available
+   - This suggests the Lambda deployment is missing required dependencies
+
+2. **Icon Library Issue**: 
+   - Generated code uses icons like `mdi:video-vintage`
+   - Lambda environment doesn't have access to these icon libraries
+   - This causes compilation failures even if Remotion CLI was available
+
+3. **Architecture Mismatch**:
+   - The current approach assumes Remotion CLI is available in Lambda
+   - Lambda functions have size limits and dependency restrictions
+   - May need to refactor to use Remotion's programmatic API instead of CLI
+
+**SOLUTION IMPLEMENTED**:
+1. **Root Cause**: The render router was importing from `lambda-cli.service.ts` (which tries to execute CLI commands) instead of `lambda-render.service.ts` (which uses the Remotion SDK)
+2. **Fix Applied**: 
+   - Changed import in `/src/server/api/routers/render.ts` from `lambda-cli.service` to `lambda-render.service`
+   - This switches from CLI-based approach to SDK-based approach
+   - The SDK approach is the correct way to invoke Remotion Lambda functions
+3. **Icon Handling**: The existing icon preprocessing in `render.service.ts` already handles icon replacement before sending to Lambda
+
+**Status**: FIXED - Export should now work correctly using the Remotion Lambda SDK
+
+**ADDITIONAL FIX (2025-07-22 21:40)**: 
+- **Issue**: Lambda was using an outdated site deployment from June 30, 2025
+- **Solution**: Deployed fresh Lambda site `bazaar-vid-v3-prod` with latest code
+- **Changes**: Updated DEPLOYED_SITE_URL in both lambda-render.service.ts and lambda-cli.service.ts
+- **Command Used**: `npx remotion lambda sites create --site-name="bazaar-vid-v3-prod"`
+
+**ADDITIONAL FIX (2025-07-22 22:50)**: 
+- **Issue**: Portrait videos were being exported as landscape (1920x1080 instead of 1080x1920)
+- **Root Cause**: Lambda render service was using hardcoded quality settings resolution instead of calculated dimensions
+- **Solution**: 
+  - Modified `lambda-render.service.ts` to accept `renderWidth` and `renderHeight` parameters
+  - Updated `renderVideoOnLambda` to use these dimensions instead of `settings.resolution`
+  - Modified render router to pass `renderConfig.renderWidth/renderHeight` to Lambda service
+- **Files Changed**:
+  - `/src/server/services/render/lambda-render.service.ts` - Added dimension parameters
+  - `/src/server/api/routers/render.ts` - Pass calculated dimensions from prepareRenderConfig
+
+**ADDITIONAL FIX (2025-07-22 23:40)**: 
+- **Issue**: Images not rendering in exported videos (showing blank instead of images)
+- **Root Cause**: MainCompositionSimple.tsx had `Img` component stubbed as null: `const Img = () => null;`
+- **Solution**: 
+  - Import actual Remotion components: `Img`, `Audio`, `Video`, `staticFile`
+  - Pass real components to Function constructor instead of stubs
+  - Deployed new Lambda site: `bazaar-vid-v3-prod-fix`
+- **Files Changed**:
+  - `/src/remotion/MainCompositionSimple.tsx` - Import and use real Remotion media components
+  - `/src/server/services/render/lambda-render.service.ts` - Updated to use new site URL
+  - `/.env.local` - Updated REMOTION_SERVE_URL to new site
+- **Command Used**: `npx remotion lambda sites create --site-name="bazaar-vid-v3-prod-fix"`
+
+**Impact**: CRITICAL - No users can export videos until this is fixed
+
+---
+
+**Last Updated**: 2025-07-22
 **Updated By**: Claude

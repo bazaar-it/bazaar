@@ -94,6 +94,8 @@ export class Orchestrator {
             videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
             modelOverride: input.userContext?.modelOverride, // Pass model override if provided
+            // Include persistent asset URLs for context
+            assetUrls: contextPacket.assetContext?.assetUrls || []
           },
           workflow: toolSelection.workflow,
         }

@@ -1,7 +1,7 @@
 //memory-bank/TODO-critical.md
 # 🚨 MVP Launch Blockers - UPDATED PRIORITIES
 
-**Updated**: January 27, 2025  
+**Updated**: July 22, 2025  
 **Based on**: User feedback on production readiness assessment
 
 ## 🎬 NEW: Export Feature (Sprint 63)

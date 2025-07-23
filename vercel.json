@@ -6,5 +6,15 @@
   },
   "env": {
     "PLAYWRIGHT_BROWSERS_PATH": "/tmp/ms-playwright"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/daily-reset",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/data-lifecycle-cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

@@ -7,10 +7,12 @@ import type { AwsRegion } from "@remotion/lambda";
 // Lambda render configuration
 export interface LambdaRenderConfig extends RenderConfig {
   webhookUrl?: string;
+  renderWidth?: number;
+  renderHeight?: number;
 }
 
 // Use pre-deployed site URL (deployed via CLI: npx remotion lambda sites create)
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-prod-fix/index.html";
 
 // Check if Lambda is properly configured
 function checkLambdaConfig() {
@@ -38,6 +40,9 @@ export async function renderVideoOnLambda({
   format = 'mp4',
   quality = 'high',
   webhookUrl,
+  renderWidth,
+  renderHeight,
+  audio,
 }: LambdaRenderConfig) {
   console.log(`[LambdaRender] Starting Lambda render for project ${projectId}`);
   
@@ -57,14 +62,42 @@ export async function renderVideoOnLambda({
       return sum + (scene.duration || 150); // Default 5 seconds at 30fps
     }, 0);
     
+    // Use provided dimensions or fallback to quality settings
+    const width = renderWidth || settings.resolution.width;
+    const height = renderHeight || settings.resolution.height;
+    
     console.log(`[LambdaRender] Starting render job...`);
     console.log(`[LambdaRender] Total duration: ${totalDuration} frames`);
     console.log(`[LambdaRender] Format: ${format}, Quality: ${quality}`);
     console.log(`[LambdaRender] Scenes: ${scenes.length}`);
-    console.log(`[LambdaRender] Resolution: ${settings.resolution.width}x${settings.resolution.height}`);
+    console.log(`[LambdaRender] Resolution: ${width}x${height} (provided: ${renderWidth}x${renderHeight}, settings: ${settings.resolution.width}x${settings.resolution.height})`);
+    console.log(`[LambdaRender] Audio: ${audio ? `${audio.name} (${Math.round(audio.duration)}s)` : 'No audio'}`);
+    if (audio) {
+      console.log(`[LambdaRender] Audio URL: ${audio.url}`);
+      console.log(`[LambdaRender] Audio volume: ${audio.volume}`);
+      console.log(`[LambdaRender] Audio trim: ${audio.startTime}s - ${audio.endTime}s`);
+    }
+    
+    // Log scene details to debug truncation issue
+    console.log(`[LambdaRender] Scene data being passed to Lambda:`);
+    scenes.forEach((scene, idx) => {
+      console.log(`[LambdaRender] Scene ${idx}:`, {
+        id: scene.id,
+        name: scene.name,
+        hasJsCode: !!scene.jsCode,
+        jsCodeLength: scene.jsCode?.length || 0,
+        jsCodeStart: scene.jsCode ? scene.jsCode.substring(0, 200) + '...' : 'NO JSCODE',
+        jsCodeEnd: scene.jsCode ? '...' + scene.jsCode.substring(scene.jsCode.length - 200) : 'NO JSCODE',
+        // Check if the jsCode contains the actual component functions
+        hasComponentFunctions: scene.jsCode ? scene.jsCode.includes('function') && scene.jsCode.includes('return') : false,
+        containsScriptArray: scene.jsCode ? scene.jsCode.includes('const script_') : false,
+        hasExportDefault: scene.jsCode ? scene.jsCode.includes('export default') : false,
+        hasReturnComponent: scene.jsCode ? scene.jsCode.includes('return Component') : false,
+      });
+    });
     
     // Dynamic import to avoid bundling issues
-    const { renderMediaOnLambda } = await import("@remotion/lambda");
+    const { renderMediaOnLambda } = await import("@remotion/lambda/client");
     
     // Start the render
     const { renderId, bucketName } = await renderMediaOnLambda({
@@ -75,13 +108,17 @@ export async function renderVideoOnLambda({
       inputProps: {
         scenes,
         projectId,
-        width: settings.resolution.width,
-        height: settings.resolution.height,
+        width: width,
+        height: height,
+        audio,
       },
       codec: format === 'gif' ? 'gif' : 'h264',
       imageFormat: format === 'gif' ? 'png' : 'jpeg',
       jpegQuality: settings.jpegQuality,
       crf: format === 'gif' ? undefined : settings.crf,
+      // Explicitly set audio codec for non-GIF formats
+      audioCodec: format === 'gif' ? undefined : 'aac',
+      audioBitrate: format === 'gif' ? undefined : '128k',
       privacy: "public",
       downloadBehavior: {
         type: "download",
@@ -136,7 +173,7 @@ export async function renderVideoOnLambda({
 export async function getLambdaRenderProgress(renderId: string, bucketName: string) {
   try {
     // Dynamic import to avoid bundling issues
-    const { getRenderProgress } = await import("@remotion/lambda");
+    const { getRenderProgress } = await import("@remotion/lambda/client");
     
     const progress = await getRenderProgress({
       renderId,

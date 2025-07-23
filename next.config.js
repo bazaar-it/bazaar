@@ -84,6 +84,15 @@ const config = {
       config.externals.push('esbuild');
     }
 
+    // Suppress warnings from mlly module
+    config.ignoreWarnings = [
+      { module: /mlly/ },
+      // Also ignore the specific critical dependency warning
+      {
+        message: /Critical dependency: the request of a dependency is an expression/,
+      },
+    ];
+
     // Add webpack config to handle Remotion platform-specific binaries
     config.externals = [
       ...(Array.isArray(config.externals) ? config.externals : [config.externals || {}]),

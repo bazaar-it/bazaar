@@ -73,6 +73,7 @@ export async function executeToolFromDecision(
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
+        assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
         // Pass previous scene for style continuity (but not for first scene)
         previousSceneContext: storyboard.length > 0 ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,

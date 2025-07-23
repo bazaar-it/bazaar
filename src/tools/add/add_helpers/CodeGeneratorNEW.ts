@@ -279,6 +279,7 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       width: number;
       height: number;
     };
+    assetUrls?: string[];
   }): Promise<CodeGenerationOutput> {
     const config = getModel('codeGenerator');
     
@@ -295,6 +296,16 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       let userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+
+      // Add persistent asset URLs if available
+      if (input.assetUrls && input.assetUrls.length > 0) {
+        userPrompt += `\n\nPROJECT ASSETS AVAILABLE:`;
+        input.assetUrls.forEach(url => {
+          userPrompt += `\n- ${url}`;
+        });
+        userPrompt += `\n\nThese are previously uploaded assets in this project. Use them when appropriate based on the user's request.`;
+        userPrompt += `\nFor example: If user asks for "the logo" or "that image from before", use one of these assets.`;
+      }
 
       // Add duration constraint if specified
       if (input.requestedDurationFrames) {
@@ -538,7 +549,7 @@ export default function ${input.functionName}() {
   /**
    * Generate code directly from images
    */
-  async generateCodeFromImage(input: ImageToCodeInput): Promise<CodeGenerationOutput> {
+  async generateCodeFromImage(input: ImageToCodeInput & { assetUrls?: string[] }): Promise<CodeGenerationOutput> {
     try {
       const config = getModel('codeGenerator');
       

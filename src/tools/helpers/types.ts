@@ -18,6 +18,7 @@ export interface BaseToolInput {
     width: number;
     height: number;
   };
+  assetUrls?: string[];  // All persistent project assets for context enforcement
 }
 
 /**

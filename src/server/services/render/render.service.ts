@@ -2,12 +2,25 @@
 // This file prepares the render configuration but doesn't execute rendering
 // Actual rendering happens via Lambda
 
+export interface AudioTrack {
+  url: string;
+  name: string;
+  duration: number;
+  startTime: number;
+  endTime: number;
+  volume: number;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
+  playbackRate?: number;
+}
+
 export interface RenderConfig {
   projectId: string;
   scenes: any[];
   format: 'mp4' | 'webm' | 'gif';
   quality: 'low' | 'medium' | 'high';
   projectProps?: any;
+  audio?: AudioTrack;
   onProgress?: (progress: number) => void;
 }
 
@@ -214,9 +227,9 @@ async function preprocessSceneForLambda(scene: any) {
       }
     }
     
-    // Ensure the component is exported and returned at the end
-    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('export default Component;')) {
-      transformedCode = transformedCode + '\n\nexport default Component;\nreturn Component;';
+    // Ensure the component is available at the end (no export needed for Function constructor)
+    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('return Component')) {
+      transformedCode = transformedCode + '\n\nreturn Component;';
     }
     
     // Replace window.React with React
@@ -256,6 +269,13 @@ async function preprocessSceneForLambda(scene: any) {
       /\/avatars\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/g,
       'https://pyyqiqdbiygijqaj.public.blob.vercel-storage.com/$1-avatar.png'
     );
+    
+    // Remove export statements that can't be used inside Function constructor
+    transformedCode = transformedCode
+      .replace(/export\s+default\s+Component;?/g, '')
+      .replace(/export\s+default\s+\w+;?/g, '')
+      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')
+      .replace(/export\s+{\s*[^}]*\s*};?/g, '');
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
     console.log(`[Preprocess] Transformation summary:`, {
@@ -437,6 +457,7 @@ export async function prepareRenderConfig({
   format = 'mp4',
   quality = 'high',
   projectProps,
+  audio,
 }: RenderConfig) {
   const settings = getQualityForFormat(quality, format);
   
@@ -522,12 +543,14 @@ export async function prepareRenderConfig({
     estimatedDurationMinutes,
     renderWidth,
     renderHeight,
+    audio,
     // This will be used by Lambda
     inputProps: {
       scenes: validScenes,
       projectId,
       width: renderWidth,
       height: renderHeight,
+      audio,
     },
   };
 }

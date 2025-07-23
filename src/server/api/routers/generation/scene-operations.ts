@@ -30,6 +30,9 @@ export const generateScene = protectedProcedure
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
+    metadata: z.object({
+      timezone: z.string().optional(),
+    }).optional(),
   }))
   .mutation(async ({ input, ctx }): Promise<SceneCreateResponse> => {
     const response = new ResponseBuilder();
@@ -57,7 +60,9 @@ export const generateScene = protectedProcedure
       }
 
       // 1.5. Check prompt usage limits
-      const usageCheck = await UsageService.checkPromptUsage(userId);
+      // Get user timezone from input or default to UTC
+      const userTimezone = input.metadata?.timezone || 'UTC';
+      const usageCheck = await UsageService.checkPromptUsage(userId, userTimezone);
       if (!usageCheck.allowed) {
         // Throw TRPCError for proper error handling in the client
         throw new TRPCError({
@@ -314,7 +319,7 @@ export const generateScene = protectedProcedure
       }
       
       // Increment usage on successful generation
-      await UsageService.incrementPromptUsage(userId);
+      await UsageService.incrementPromptUsage(userId, userTimezone);
       
       const successResponse = response.success(
         toolResult.scene, 

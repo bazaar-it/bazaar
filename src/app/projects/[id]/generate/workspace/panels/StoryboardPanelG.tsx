@@ -102,6 +102,9 @@ export function StoryboardPanelG({
       await generateSceneWithChatMutation.mutateAsync({
         projectId,
         userMessage: newScenePrompt.trim(),
+        metadata: {
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
       });
     } catch (error) {
       console.error("Failed to add scene:", error);

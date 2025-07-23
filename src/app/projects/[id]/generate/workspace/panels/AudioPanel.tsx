@@ -40,15 +40,47 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   // Get project state from Zustand
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
   
+  // Database sync mutation
+  const updateAudioMutation = api.project.updateAudio.useMutation({
+    onError: (error) => {
+      console.error('[AudioPanel] Failed to sync audio to database:', error);
+      toast.error('Failed to save audio settings');
+    },
+  });
+  
+  // Load project data from database
+  const { data: project } = api.project.getById.useQuery({ id: projectId });
+  
   console.log('[AudioPanel] Rendering with projectId:', projectId);
 
-  // Load audio settings from project state
+  // Helper function to sync audio to both Zustand and database
+  const syncAudioSettings = (audio: AudioTrack | null) => {
+    // Update Zustand state immediately for UI responsiveness
+    updateProjectAudio(projectId, audio);
+    
+    // Sync to database in background
+    updateAudioMutation.mutate({
+      projectId,
+      audio,
+    });
+  };
+
+  // Load audio settings from database (takes priority over Zustand)
   useEffect(() => {
-    const projectState = useVideoState.getState().projects[projectId];
-    if (projectState?.audio) {
-      setAudioTrack(projectState.audio);
+    if (project?.audio) {
+      console.log('[AudioPanel] Loading audio from database:', project.audio);
+      setAudioTrack(project.audio);
+      // Also sync to Zustand for consistency
+      updateProjectAudio(projectId, project.audio);
+    } else {
+      // Fallback to Zustand state if no database audio
+      const projectState = useVideoState.getState().projects[projectId];
+      if (projectState?.audio) {
+        console.log('[AudioPanel] Loading audio from Zustand:', projectState.audio);
+        setAudioTrack(projectState.audio);
+      }
     }
-  }, [projectId]);
+  }, [project?.audio, projectId, updateProjectAudio]);
 
   // Update HTML audio element when audio track changes
   useEffect(() => {
@@ -119,7 +151,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
         };
         
         setAudioTrack(newTrack);
-        updateProjectAudio(projectId, newTrack);
+        syncAudioSettings(newTrack);
         toast.success('Audio uploaded successfully');
       });
     } catch (error) {
@@ -167,7 +199,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     };
     
     setAudioTrack(updatedTrack);
-    updateProjectAudio(projectId, updatedTrack);
+    syncAudioSettings(updatedTrack);
   };
 
   const handleVolumeChange = (value: number[]) => {
@@ -179,7 +211,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     };
     
     setAudioTrack(updatedTrack);
-    updateProjectAudio(projectId, updatedTrack);
+    syncAudioSettings(updatedTrack);
     
     if (audioRef.current) {
       audioRef.current.volume = value[0];
@@ -196,7 +228,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     };
     
     setAudioTrack(updatedTrack);
-    updateProjectAudio(projectId, updatedTrack);
+    syncAudioSettings(updatedTrack);
   };
 
   const handleFadeOutChange = (value: number[]) => {
@@ -208,7 +240,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     };
     
     setAudioTrack(updatedTrack);
-    updateProjectAudio(projectId, updatedTrack);
+    syncAudioSettings(updatedTrack);
   };
 
   const handleSpeedChange = (value: number[]) => {
@@ -220,7 +252,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     };
     
     setAudioTrack(updatedTrack);
-    updateProjectAudio(projectId, updatedTrack);
+    syncAudioSettings(updatedTrack);
     
     // Update HTML audio element playback rate for preview
     if (audioRef.current) {
@@ -230,7 +262,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
 
   const removeAudio = () => {
     setAudioTrack(null);
-    updateProjectAudio(projectId, null);
+    syncAudioSettings(null);
     setIsPlaying(false);
     toast.success('Audio removed');
   };

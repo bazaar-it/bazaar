@@ -13,8 +13,8 @@ export interface LambdaRenderConfig extends RenderConfig {
   renderHeight?: number;
 }
 
-// Use working deployment from Sprint 74
-const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fixed/index.html";
+// Use newly deployed v3 production site
+const DEPLOYED_SITE_URL = "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-prod/index.html";
 
 // Main Lambda rendering function using CLI approach
 export async function renderVideoOnLambda({
@@ -123,7 +123,7 @@ export async function renderVideoOnLambda({
     // Build CLI command - use node to run the installed remotion CLI
     const remotionPath = path.join(process.cwd(), 'node_modules', '.bin', 'remotion');
     const cliArgs = [
-      remotionPath, 'lambda', 'render',
+      'node', remotionPath, 'lambda', 'render',
       DEPLOYED_SITE_URL,
       'MainComposition',
       '--props', propsFile, // Use file path instead of inline JSON
@@ -261,9 +261,11 @@ export async function getLambdaRenderProgress(renderId: string, bucketName: stri
   try {
     console.log(`[LambdaRender] Getting progress for render ${renderId}`);
     
-    // Use CLI to get progress
+    // Use CLI to get progress - use installed remotion CLI directly
+    const path = require('path');
+    const remotionPath = path.join(process.cwd(), 'node_modules', '.bin', 'remotion');
     const command = [
-      'npx', 'remotion', 'lambda', 'progress',
+      'node', remotionPath, 'lambda', 'progress',
       renderId,
       '--bucket-name', bucketName,
       '--function-name', process.env.REMOTION_FUNCTION_NAME!,

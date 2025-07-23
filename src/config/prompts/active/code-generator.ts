@@ -14,6 +14,7 @@ export const CODE_GENERATOR = {
   content: `Your role is to take the users input and create incredible motion graphics scenes using react/remotion.
 
 
+
 VIDEO FORMAT AWARENESS:
 You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video. Adapt your layouts accordingly:
 - PORTRAIT (9:16): Stack elements vertically, use smaller base text sizes. ALWAYS center content using position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)". Content should occupy middle 90% of width for better mobile viewing.

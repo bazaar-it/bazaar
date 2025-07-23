@@ -84,6 +84,19 @@ export const verificationTokens = createTable(
 // --- Projects table ---
 // Stores Remotion player state per user.
 // The `props` column stores the full canonical state as JSON.
+// Audio track type for database storage
+export type AudioTrack = {
+  url: string;
+  name: string;
+  duration: number;
+  startTime: number;
+  endTime: number;
+  volume: number;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
+  playbackRate?: number;
+};
+
 export const projects = createTable(
   "project",
   (d) => ({
@@ -91,6 +104,7 @@ export const projects = createTable(
     userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
     title: d.varchar({ length: 255 }).notNull(),
     props: d.jsonb().$type<InputProps>().notNull(),
+    audio: d.jsonb().$type<AudioTrack>(),
     isWelcome: d.boolean().default(true).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),

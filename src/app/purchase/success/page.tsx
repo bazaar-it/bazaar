@@ -1,15 +1,40 @@
 // src/app/purchase/success/page.tsx
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import Link from "next/link";
 import { CheckCircle, ArrowRight } from "lucide-react";
+import { api } from "~/trpc/react";
+import { toast } from "sonner";
 
 function PurchaseSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
+  const router = useRouter();
+  const utils = api.useUtils();
+  
+  useEffect(() => {
+    // Invalidate usage queries to force refresh
+    utils.usage.getPromptUsage.invalidate();
+    utils.payment.getUserCredits.invalidate();
+    
+    // Show success toast
+    toast.success("Payment successful! Your prompts have been added.");
+    
+    // Get last project from localStorage
+    const lastProjectId = localStorage.getItem("lastProjectId");
+    
+    // Optional: Auto-redirect after 3 seconds
+    if (lastProjectId) {
+      const timer = setTimeout(() => {
+        router.push(`/projects/${lastProjectId}/generate`);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [utils, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">

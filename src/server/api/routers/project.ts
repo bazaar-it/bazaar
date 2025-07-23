@@ -391,4 +391,66 @@ export const projectRouter = createTRPCRouter({
         };
       }
     }),
+
+  updateAudio: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      audio: z.object({
+        url: z.string(),
+        name: z.string(),
+        duration: z.number(),
+        startTime: z.number(),
+        endTime: z.number(),
+        volume: z.number(),
+        fadeInDuration: z.number().optional(),
+        fadeOutDuration: z.number().optional(),
+        playbackRate: z.number().optional(),
+      }).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // First check if the project exists and belongs to the user
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId));
+        
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+        
+        // Ensure the user has access to this project
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+
+        // Update the audio field
+        const [updated] = await ctx.db
+          .update(projects)
+          .set({
+            audio: input.audio,
+            updatedAt: new Date()
+          })
+          .where(eq(projects.id, input.projectId))
+          .returning();
+          
+        console.log(`[Project] Updated audio for project ${input.projectId}:`, input.audio);
+        return { success: true, audio: updated.audio };
+      } catch (error) {
+        console.error("Error updating project audio:", error);
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update project audio",
+        });
+      }
+    }),
 }); 
