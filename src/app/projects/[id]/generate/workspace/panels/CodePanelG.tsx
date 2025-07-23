@@ -330,14 +330,14 @@ export function CodePanelG({
                 </SelectContent>
               </Select>
             )}
-            <Button 
+            {/* <Button 
               onClick={handleAddScene}
               size="sm"
               className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
             >
               <PlusIcon className="h-3 w-3" />
               Add Scene
-            </Button>
+            </Button> */}
           </div>
           <div className="flex items-center gap-1">
             {onClose && (
@@ -384,14 +384,14 @@ export function CodePanelG({
               ))}
             </SelectContent>
           </Select>
-          <Button 
+          {/* <Button 
             onClick={handleAddScene}
             size="sm"
             className="bg-orange-600 hover:bg-orange-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
           >
             <PlusIcon className="h-3 w-3" />
             Add Scene
-          </Button>
+          </Button> */}
         </div>
         <div className="flex items-center gap-1">
           <Button 

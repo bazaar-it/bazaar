@@ -198,8 +198,7 @@ Please edit the code according to the user request. Return the complete modified
           sizeKB: (content.length / 1024).toFixed(2),
           responseTime: `${responseTime}ms`,
           model: modelConfig.model,
-          truncated: isTruncated,
-          isExact16KB: content.length === 16384
+          truncated: isTruncated
         });
         
         if (isTruncated) {
@@ -343,11 +342,6 @@ Please edit the code according to the user request. Return the complete modified
   }
 
   private detectTruncation(content: string): boolean {
-    // Check for exact 16KB truncation (16384 bytes)
-    if (content.length === 16384) {
-      return true;
-    }
-    
     // If the response contains properly formatted JSON in markdown, it's likely complete
     if (content.includes('```json') && content.includes('```')) {
       // Try to extract and validate the JSON

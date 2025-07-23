@@ -14,6 +14,7 @@ import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
+import { useAutoFix } from '~/hooks/use-auto-fix';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -51,6 +52,9 @@ export function PreviewPanelG({
       // This will be invalidated when scenes are created
     }
   );
+
+  // Initialize auto-fixer to listen for compilation errors
+  useAutoFix(projectId, dbScenes || []);
   
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
@@ -620,68 +624,73 @@ class SingleSceneErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      const frame = useCurrentFrame();
-      const { fps } = useVideoConfig();
-      
-      const opacity = interpolate(frame, [0, 20], [0, 1], {
-        extrapolateRight: 'clamp',
-      });
-      
-      const scale = spring({
-        frame,
-        fps,
-        from: 0.95,
-        to: 1,
-        config: {
-          damping: 20,
-          stiffness: 40,
-        },
-      });
-      
-      return (
-        <AbsoluteFill style={{
-          background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity,
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            padding: '32px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-            maxWidth: '450px',
-            textAlign: 'center',
-            transform: \`scale(\${scale})\`,
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+      // Create a function component that can use hooks for the error display
+      const ErrorDisplay = () => {
+        const frame = useCurrentFrame();
+        const { fps } = useVideoConfig();
+        
+        const opacity = interpolate(frame, [0, 20], [0, 1], {
+          extrapolateRight: 'clamp',
+        });
+        
+        const scale = spring({
+          frame,
+          fps,
+          from: 0.95,
+          to: 1,
+          config: {
+            damping: 20,
+            stiffness: 40,
+          },
+        });
+        
+        return (
+          <AbsoluteFill style={{
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity,
           }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚡</div>
-            <h3 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.25rem', fontWeight: '600' }}>
-              Runtime Error
-            </h3>
-            <p style={{ color: '#b45309', marginBottom: '16px', fontSize: '0.875rem' }}>
-              This scene encountered an error during playback
-            </p>
-            <details style={{ 
-              marginTop: '12px',
-              textAlign: 'left',
-              background: '#fef3c7',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontSize: '0.75rem',
-              color: '#92400e'
+            <div style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '32px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+              maxWidth: '450px',
+              textAlign: 'center',
+              transform: \`scale(\${scale})\`,
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
             }}>
-              <summary style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
-                Error Details
-              </summary>
-              <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '0.7rem', opacity: 0.8, wordBreak: 'break-word' }}>
-                {this.state.error?.message || 'Unknown error'}
-              </div>
-            </details>
-          </div>
-        </AbsoluteFill>
-      );
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚡</div>
+              <h3 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.25rem', fontWeight: '600' }}>
+                Runtime Error
+              </h3>
+              <p style={{ color: '#b45309', marginBottom: '16px', fontSize: '0.875rem' }}>
+                This scene encountered an error during playback
+              </p>
+              <details style={{ 
+                marginTop: '12px',
+                textAlign: 'left',
+                background: '#fef3c7',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                color: '#92400e'
+              }}>
+                <summary style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
+                  Error Details
+                </summary>
+                <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '0.7rem', opacity: 0.8, wordBreak: 'break-word' }}>
+                  {this.state.error?.message || 'Unknown error'}
+                </div>
+              </details>
+            </div>
+          </AbsoluteFill>
+        );
+      };
+      
+      return React.createElement(ErrorDisplay);
     }
 
     return React.createElement(${scene.componentName});
@@ -842,10 +851,9 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Create a runtime error fallback that matches the compilation error style
-      const { useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
-      
-      return React.createElement(() => {
+      // Create a function component that can use hooks for the error display
+      const ErrorDisplay = () => {
+        const { useCurrentFrame, useVideoConfig, interpolate, spring } = window.Remotion;
         const frame = useCurrentFrame();
         const { fps } = useVideoConfig();
         
@@ -1011,7 +1019,9 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
             ])
           ])
         );
-      });
+      };
+      
+      return React.createElement(ErrorDisplay);
     }
 
     return React.createElement(${compiled.componentName});

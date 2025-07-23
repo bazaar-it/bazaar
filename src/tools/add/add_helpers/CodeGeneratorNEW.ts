@@ -223,12 +223,33 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         { type: 'text', text: enhancedPrompt }
       ];
       
+      // Filter out AVIF images and create user-friendly error
+      const supportedImages = [];
+      const avifImages = [];
+      
       for (const url of input.imageUrls) {
         console.log('🖼️ [IMAGE RECREATOR] Adding image URL to message:', url);
-        messageContent.push({ 
-          type: 'image_url', 
-          image_url: { url } 
-        });
+        
+        if (url.toLowerCase().includes('.avif')) {
+          avifImages.push(url);
+          console.warn('⚠️ [IMAGE RECREATOR] AVIF format not supported by AI service:', url);
+        } else {
+          supportedImages.push(url);
+          messageContent.push({ 
+            type: 'image_url', 
+            image_url: { url } 
+          });
+        }
+      }
+      
+      // If we have AVIF images, throw a user-friendly error
+      if (avifImages.length > 0 && supportedImages.length === 0) {
+        throw new Error(`AVIF image format is not supported. Please convert your images to JPEG or PNG format. Unsupported images: ${avifImages.length}`);
+      }
+      
+      // If some images are AVIF but we have others, warn but continue
+      if (avifImages.length > 0) {
+        console.warn(`⚠️ [IMAGE RECREATOR] Skipped ${avifImages.length} AVIF images. Using ${supportedImages.length} supported images.`);
       }
       
       // Replace placeholders in IMAGE_RECREATOR content
@@ -309,9 +330,15 @@ FUNCTION NAME: ${input.functionName}`;
 
       // Add duration constraint if specified
       if (input.requestedDurationFrames) {
-        userPrompt += `\n\nDURATION REQUIREMENT: The scene MUST be exactly ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).`;
-        userPrompt += `\nEnsure all animations complete before frame ${input.requestedDurationFrames - 10}.`;
-        userPrompt += `\nExport the duration: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};`;
+        userPrompt += `\n\n🚨 CRITICAL DURATION REQUIREMENT 🚨
+The scene MUST be EXACTLY ${input.requestedDurationFrames} frames (${(input.requestedDurationFrames / 30).toFixed(1)} seconds).
+
+This is NOT optional - the user explicitly requested this duration!
+- Plan your animations to fit within ${input.requestedDurationFrames} frames
+- Ensure all animations complete before frame ${input.requestedDurationFrames - 10}
+- MANDATORY: Export exactly this duration: export const durationInFrames_${input.functionName.split('_').pop()} = ${input.requestedDurationFrames};
+
+DO NOT use any other duration value!`;
       }
 
       const messages = [

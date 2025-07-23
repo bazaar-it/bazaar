@@ -49,7 +49,8 @@
 2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR - UNIFIED] Recreating image as motion graphics
 2025-07-23T08:14:20.406Z [info] 🖼️ [UNIFIED PROCESSOR] IMAGE RECREATOR: Generating recreation scene
 2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258408412-f4091029-8779-48ff-965a-035b36f0c420.jpg
-2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258428738-7e8cac7e-cec7-4f56-9bec-7c8633051540.jpg
+2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pu
+b-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258428738-7e8cac7e-cec7-4f56-9bec-7c8633051540.jpg
 2025-07-23T08:14:20.406Z [info] 🖼️ [IMAGE RECREATOR] Adding image URL to message: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/52f57b05-ac15-413f-bb4f-e06de92cbb19/images/1753258446053-a2453c19-ba26-4ec3-9721-fbce864deabe.avif
 2025-07-23T08:14:21.420Z [error] Anthropic API Error: Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.3.image.source.base64.data: The file format is invalid or unsupported"}}
     at eo.generate (.next/server/chunks/1080.js:1:2150)

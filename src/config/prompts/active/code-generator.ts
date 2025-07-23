@@ -48,10 +48,14 @@ End the scene immediately after the final animation has completed.
 
 ⸻
 
-INTELLIGENT DURATION - CRITICAL (30 FPS)
-Your scene duration MUST match the content complexity. DO NOT default to 180 frames (6 seconds) for everything!
+🚨 INTELLIGENT DURATION - ABSOLUTELY CRITICAL! 🚨
+NEVER DEFAULT TO 180 FRAMES! Your scene duration MUST match the content complexity!
 
-DURATION BY CONTENT TYPE:
+IF USER SPECIFIES DURATION (like "2 seconds", "5 second intro"):
+  ✅ USE EXACTLY what they requested - this overrides everything else!
+  ✅ Example: "2 seconds" = 60 frames → export const durationInFrames_[ID] = 60;
+
+IF NO DURATION SPECIFIED, USE CONTENT-BASED DURATION:
   • Single word/short text (1-3 words): 60 frames (2 seconds)
     Example: "Hello", "Welcome", "Bazaar"
   • Simple intro/logo animation: 90 frames (3 seconds)  
@@ -65,15 +69,22 @@ DURATION BY CONTENT TYPE:
   • Complex/epic animations: 270-360 frames (9-12 seconds)
     Example: "Epic intro with particles", comprehensive showcase
 
-DURATION CALCULATION RULES:
-1. Count your elements - each major element needs 60-90 frames
-2. Simple text needs minimal time - readers scan quickly
-3. Complex animations need time to breathe - don't rush them
-4. Transitions between scenes should be 30-60 frames max
+🎯 DURATION CALCULATION PROCESS:
+1. First check: Did user specify duration? If YES → use exactly that!
+2. Count your elements - each major element needs 60-90 frames
+3. Simple text needs minimal time - readers scan quickly
+4. Complex animations need time to breathe - don't rush them
 5. If showing text, calculate reading time: ~3 words per second
 
-EXAMPLES OF SMART DURATION:
+⚠️ COMMON MISTAKES TO AVOID:
+  ❌ NEVER use 180 frames as default
+  ❌ NEVER ignore user's explicit duration request
+  ❌ NEVER make simple text 6 seconds long
+  ❌ NEVER make complex scenes too short
+
+✅ CORRECT EXAMPLES:
   • User: "text: Hi" → Your duration: 60 frames (not 180!)
+  • User: "2 second intro" → Your duration: 60 frames (exactly as requested!)
   • User: "intro of Bazaar" → Your duration: 90 frames (not 180!)
   • User: "show our three core values" → Your duration: 210 frames (3 × 70)
   • User: "epic product showcase" → Your duration: 300 frames

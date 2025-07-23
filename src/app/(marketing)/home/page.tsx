@@ -14,7 +14,6 @@ import BazaarShowcasePlayer from "~/components/BazaarShowcasePlayer";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-import AirbnbVideoPlayerWithControls from "~/components/AirbnbVideoPlayerWithControls";
 // Lazy load heavy components
 const LoginModal = lazy(() => import("../login/page"));
 
@@ -178,7 +177,7 @@ export default function NewHomePage() {
                 justifyContent: 'center',
                 background: 'transparent'
               }}>
-                <AirbnbVideoPlayerWithControls />
+                {/* Placeholder for removed AirbnbVideoPlayerWithControls */}
               </div>
             </div>
           </div>

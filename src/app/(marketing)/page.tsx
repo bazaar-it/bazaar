@@ -13,7 +13,6 @@ import BazaarShowcasePlayer from "~/components/BazaarShowcasePlayer";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-import AirbnbVideoPlayerWithControls from "~/components/AirbnbVideoPlayerWithControls";
 import AirbnbDemoPlayer from "~/components/AirbnbDemoPlayer";
 
 // Lazy load heavy components

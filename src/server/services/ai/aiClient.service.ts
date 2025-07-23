@@ -81,7 +81,7 @@ export class AIClientService {
         return this.callOpenAI(config, fullMessages, options);
       
       case 'anthropic':
-        return this.callAnthropic(config, fullMessages);
+        return this.callAnthropic(config, fullMessages, options);
       
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
@@ -186,7 +186,7 @@ export class AIClientService {
   // ANTHROPIC IMPLEMENTATION
   // =============================================================================
 
-  private static async callAnthropic(config: ModelConfig, messages: AIMessage[]): Promise<AIResponse> {
+  private static async callAnthropic(config: ModelConfig, messages: AIMessage[], options?: AIClientOptions): Promise<AIResponse> {
     const client = this.getAnthropicClient();
     
     try {
@@ -270,6 +270,11 @@ export class AIClientService {
     } catch (error: any) {
       console.error('Anthropic API Error:', error);
       
+      // Handle 529 overload errors with retry suggestion
+      if (error?.status === 529 || error?.error?.type === 'overloaded_error') {
+        throw new Error('AI service is currently overloaded. Please try again in a moment.');
+      }
+      
       // Check for image download timeout specifically
       if (error?.error?.message?.includes('timed out while trying to download the file')) {
         throw new Error('Image download timeout - The AI couldn\'t fetch the uploaded image. Please try again in a moment.');
@@ -309,7 +314,7 @@ export class AIClientService {
       case 'openai':
         return this.callOpenAIVision(config, content, systemPrompt, options);
       case 'anthropic':
-        return this.callAnthropicVision(config, content, systemPrompt);
+        return this.callAnthropicVision(config, content, systemPrompt, options);
       default:
         throw new Error(`Vision API not supported for provider: ${config.provider}`);
     }
@@ -386,7 +391,8 @@ export class AIClientService {
         detail?: 'low' | 'high' | 'auto';
       };
     }>,
-    systemPrompt?: string
+    systemPrompt?: string,
+    options?: AIClientOptions
   ): Promise<AIResponse> {
     const client = this.getAnthropicClient();
     
@@ -425,6 +431,23 @@ export class AIClientService {
         .filter((block: any) => block.type === 'text')
         .map((block: any) => block.text)
         .join('');
+
+      // Debug logging for response size
+      if (options?.debug) {
+        console.log(`🔍 [AI CLIENT DEBUG] Anthropic Vision Response:`, {
+          contentLength: responseContent.length,
+          contentLengthKB: (responseContent.length / 1024).toFixed(2),
+          contentLengthMB: (responseContent.length / 1024 / 1024).toFixed(3),
+          usage: response.usage,
+          truncated: responseContent.length === 16384 || responseContent.endsWith('...') || !this.looksComplete(responseContent),
+          lastChars: responseContent.slice(-100)
+        });
+        
+        // Check for 16KB truncation
+        if (responseContent.length === 16384) {
+          console.error(`🚨 [AI CLIENT DEBUG] Vision response truncated at exactly 16KB!`);
+        }
+      }
 
       return {
         content: responseContent,

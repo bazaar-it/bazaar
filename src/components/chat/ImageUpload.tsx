@@ -26,10 +26,14 @@ export function ImageUpload({
   projectId,
   disabled = false
 }: ImageUploadProps) {
-  // Image compression utility
+  // Image compression and AVIF conversion utility
   const compressImage = async (file: File): Promise<File> => {
-    // Only compress if larger than 1MB
-    if (file.size < 1024 * 1024) return file;
+    // Always convert AVIF to JPEG (since Anthropic API doesn't support AVIF)
+    const isAVIF = file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif');
+    const needsCompression = file.size >= 1024 * 1024; // 1MB+
+    
+    // Only process if it's AVIF or needs compression
+    if (!isAVIF && !needsCompression) return file;
     
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -55,7 +59,14 @@ export function ImageUpload({
           
           canvas.toBlob(
             (blob) => {
-              resolve(new File([blob!], file.name, { type: 'image/jpeg' }));
+              // Fix filename extension for AVIF conversions
+              const finalFileName = isAVIF 
+                ? file.name.replace(/\.avif$/i, '.jpg')
+                : file.name;
+              
+              console.log(`[ImageUpload] ${isAVIF ? '🔄 AVIF→JPEG conversion: ' : '📦 Compression: '}${file.name} → ${finalFileName}`);
+              
+              resolve(new File([blob!], finalFileName, { type: 'image/jpeg' }));
             },
             'image/jpeg',
             0.85 // 85% quality
@@ -194,10 +205,14 @@ export const createImageUploadHandlers = (
   setUploadedImages: React.Dispatch<React.SetStateAction<UploadedImage[]>>,
   projectId: string
 ) => {
-  // Image compression utility
+  // Image compression utility (DEPRECATED - use main compressImage function above)
   const compressImage = async (file: File): Promise<File> => {
-    // Only compress if larger than 1MB
-    if (file.size < 1024 * 1024) return file;
+    // Always convert AVIF to JPEG (since Anthropic API doesn't support AVIF)
+    const isAVIF = file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif');
+    const needsCompression = file.size >= 1024 * 1024; // 1MB+
+    
+    // Only process if it's AVIF or needs compression
+    if (!isAVIF && !needsCompression) return file;
     
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -223,7 +238,14 @@ export const createImageUploadHandlers = (
           
           canvas.toBlob(
             (blob) => {
-              resolve(new File([blob!], file.name, { type: 'image/jpeg' }));
+              // Fix filename extension for AVIF conversions
+              const finalFileName = isAVIF 
+                ? file.name.replace(/\.avif$/i, '.jpg')
+                : file.name;
+              
+              console.log(`[ImageUpload] ${isAVIF ? '🔄 AVIF→JPEG conversion: ' : '📦 Compression: '}${file.name} → ${finalFileName}`);
+              
+              resolve(new File([blob!], finalFileName, { type: 'image/jpeg' }));
             },
             'image/jpeg',
             0.85 // 85% quality
