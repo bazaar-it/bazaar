@@ -50,7 +50,7 @@ export function PromptUsageDropdown() {
         <div className="flex items-center gap-2 text-sm">
           <span className="w-4" /> {/* Spacer for alignment */}
           <span className="text-blue-600 font-medium">
-            +{purchased} purchased
+            +{purchased} {purchased === 20 ? 'Free' : 'purchased'}
           </span>
         </div>
       )}

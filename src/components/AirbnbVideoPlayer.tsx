@@ -1139,6 +1139,14 @@ const AirbnbVideoPlayer: React.FC = () => {
     
     // Show logo screen for first 90 frames (3 seconds)
     if (frame < 90) {
+      // Logo scale animation: 0% to 100% over first 15 frames (500ms)
+      const logoScale = interpolate(
+        frame,
+        [0, 15],
+        [0, 1],
+        { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeOut" }
+      );
+
       return (
         <div style={{
           width: '375px',
@@ -1162,7 +1170,7 @@ const AirbnbVideoPlayer: React.FC = () => {
           }}>
           </div>
           
-          {/* Airbnb logo */}
+          {/* Airbnb logo with scale animation */}
           <div style={{
             width: '80%',
             maxWidth: '280px',
@@ -1170,13 +1178,17 @@ const AirbnbVideoPlayer: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: '24px'
+            marginBottom: '24px',
+            transform: `scale(${logoScale})`
           }}>
+            {/* Airbnb logo from iconify with white color override */}
             <Icon 
               icon={airbnbIcon} 
               style={{ 
-                fontSize: '120px', 
-                color: 'white'
+                fontSize: '120px',
+                color: 'white',
+                // Override any internal colors to white
+                filter: 'brightness(0) invert(1)'
               }} 
             />
           </div>
@@ -1186,7 +1198,8 @@ const AirbnbVideoPlayer: React.FC = () => {
             color: 'white',
             fontSize: '24px',
             fontWeight: '600',
-            textAlign: 'center'
+            textAlign: 'center',
+            transform: `scale(${logoScale})`
           }}>
             Belong Anywhere
           </div>

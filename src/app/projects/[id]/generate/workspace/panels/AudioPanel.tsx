@@ -275,14 +275,10 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
 
   return (
     <div className="h-full flex flex-col bg-white">
-      {/* Header */}
-      <div className="px-6 py-4 border-b bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Music className="w-5 h-5 text-gray-600" />
-            <h2 className="text-lg font-semibold">Audio</h2>
-          </div>
-          {audioTrack && (
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {audioTrack && (
+          <div className="flex justify-end mb-4">
             <Button
               variant="ghost"
               size="sm"
@@ -292,12 +288,8 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
               <X className="w-4 h-4 mr-1" />
               Remove
             </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+          </div>
+        )}
         {!audioTrack ? (
           // Upload state
           <div className="h-full flex items-center justify-center">
