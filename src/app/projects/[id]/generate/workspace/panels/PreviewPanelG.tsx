@@ -1632,13 +1632,9 @@ export default function FallbackComposition() {
           <div 
             className={cn(
               "relative bg-black shadow-xl flex items-center justify-center",
-              // On mobile, let portrait videos take their natural size
-              playerProps.format === 'portrait' ? "w-auto h-full" : "w-full h-full"
+              // On mobile, optimize for viewport
+              "w-full h-full"
             )}
-            style={{
-              // Use CSS aspect ratio to maintain proper dimensions
-              aspectRatio: playerProps.format === 'portrait' ? '9/16' : playerProps.format === 'square' ? '1/1' : '16/9'
-            }}
           >
             <ErrorBoundary FallbackComponent={ErrorFallback}>
               <RemotionPreview

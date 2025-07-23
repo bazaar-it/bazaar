@@ -32,6 +32,15 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const { data: session } = useSession();
   const { setProject } = useVideoState();
   const breakpoint = useBreakpoint();
+  
+  // Debug breakpoint detection
+  useEffect(() => {
+    console.log('[GenerateWorkspaceRoot] Current breakpoint:', breakpoint);
+    console.log('[GenerateWorkspaceRoot] Window dimensions:', {
+      width: typeof window !== 'undefined' ? window.innerWidth : 'SSR',
+      height: typeof window !== 'undefined' ? window.innerHeight : 'SSR'
+    });
+  }, [breakpoint]);
 
   // ✅ NEW: Fetch current project details to get updated title
   const { data: currentProjectData } = api.project.getById.useQuery(
@@ -157,6 +166,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           <MobileAppHeader
             projectTitle={title}
             projectId={projectId}
+            userId={userId}
             onRename={handleRename}
             isRenaming={renameMutation.isPending}
           />

@@ -1,16 +1,24 @@
 "use client";
 
 import Image from "next/image";
-import { ShareIcon, Copy, CheckIcon, XIcon } from "lucide-react";
+import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { ExportDropdown } from "~/components/export/ExportDropdown";
 
 interface MobileAppHeaderProps {
   projectTitle?: string;
   projectId?: string;
+  userId?: string;
   onRename?: (newName: string) => void;
   isRenaming?: boolean;
 }
@@ -18,6 +26,7 @@ interface MobileAppHeaderProps {
 export default function MobileAppHeader({
   projectTitle,
   projectId,
+  userId,
   onRename,
   isRenaming = false,
 }: MobileAppHeaderProps) {
@@ -177,23 +186,36 @@ export default function MobileAppHeader({
 
       </div>
 
-      {/* Share button - Fixed width */}
+      {/* Actions dropdown - Fixed width */}
       <div className="w-16 flex justify-end">
         {projectId && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-xs p-2"
-            onClick={handleShare}
-            disabled={isSharing}
-          >
-            {isSharing ? (
-              <Copy className="h-4 w-4" />
-            ) : (
-              <ShareIcon className="h-4 w-4" />
-            )}
-            <span className="hidden sm:inline">{isSharing ? "Copied!" : "Share"}</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+              >
+                <ShareIcon className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem
+                onClick={handleShare}
+                disabled={isSharing}
+                className="gap-2"
+              >
+                <ShareIcon className="h-4 w-4" />
+                <span>Share Link</span>
+              </DropdownMenuItem>
+              <ExportDropdown
+                projectId={projectId}
+                userId={userId}
+                variant="dropdown-item"
+                className="w-full"
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </header>

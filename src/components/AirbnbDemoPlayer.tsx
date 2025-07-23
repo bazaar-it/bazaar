@@ -712,12 +712,35 @@ export default function AirbnbDemoPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 250, height: 540 });
   const playerRef = useRef<any>(null);
 
   useEffect(() => {
     // Set loaded to true after a short delay to ensure smooth loading
     const timer = setTimeout(() => setIsLoaded(true), 100);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Calculate responsive dimensions based on viewport
+    const calculateDimensions = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      
+      // For mobile (width < 768px)
+      if (vw < 768) {
+        const width = Math.min(vw * 0.7, 280); // 70% of viewport width, max 280px
+        const height = width * 2.165; // Maintain iPhone aspect ratio (812/375 ≈ 2.165)
+        setDimensions({ width, height });
+      } else {
+        // Desktop default
+        setDimensions({ width: 250, height: 540 });
+      }
+    };
+
+    calculateDimensions();
+    window.addEventListener('resize', calculateDimensions);
+    return () => window.removeEventListener('resize', calculateDimensions);
   }, []);
 
   const handlePlayPause = () => {
@@ -743,7 +766,7 @@ export default function AirbnbDemoPlayer() {
   }
 
   return (
-    <div className="relative bg-transparent" style={{ width: '250px', height: '540px' }}>
+    <div className="relative bg-transparent mx-auto" style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}>
       {/* Video Player */}
       <Player
         ref={playerRef}
@@ -753,8 +776,8 @@ export default function AirbnbDemoPlayer() {
         compositionHeight={812}
         fps={30}
         style={{
-          width: '250px',
-          height: '540px',
+          width: `${dimensions.width}px`,
+          height: `${dimensions.height}px`,
         }}
         controls={false}
         loop={true}
