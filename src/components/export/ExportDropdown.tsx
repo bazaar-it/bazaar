@@ -140,6 +140,24 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
   const progress = status?.progress || 0;
 
 
+  // If variant is dropdown-item, render as a menu item that opens a sub-menu
+  if (variant === "dropdown-item") {
+    return (
+      <DropdownMenuItem
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleExport();
+        }}
+        disabled={isRendering || startRender.isPending}
+        className="gap-2"
+      >
+        <Download className="h-4 w-4" />
+        <span>Download Video</span>
+      </DropdownMenuItem>
+    );
+  }
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -152,23 +170,23 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
           {isCompleted ? (
             <>
               <Check className="h-4 w-4 text-green-500" />
-              Rendered!
+              {!iconOnly && "Rendered!"}
             </>
           ) : isRendering ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              {progress}%
+              {!iconOnly && `${progress}%`}
             </>
           ) : startRender.isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Starting...
+              {!iconOnly && "Starting..."}
             </>
           ) : (
             <>
               <Download className="h-4 w-4" />
-              Download
-              <ChevronDown className="h-3 w-3 opacity-50" />
+              {!iconOnly && "Download"}
+              {!iconOnly && <ChevronDown className="h-3 w-3 opacity-50" />}
             </>
           )}
         </Button>

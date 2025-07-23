@@ -143,10 +143,13 @@ export function MobileWorkspaceLayout({
     <div className="flex flex-col h-full bg-gray-50">
       {/* Preview Panel - Dynamic aspect ratio based on format */}
       <div 
-        className="w-full bg-white flex items-center justify-center transition-all duration-300 relative"
+        className="w-full bg-gray-900 flex items-center justify-center transition-all duration-300 relative overflow-hidden"
         style={previewHeight}
       >
-        <PreviewPanelG projectId={projectId} initial={initialProps} selectedSceneId={selectedSceneId} />
+        <div className="w-full h-full">
+          <PreviewPanelG projectId={projectId} initial={initialProps} selectedSceneId={selectedSceneId} />
+        </div>
+        
       </div>
 
       {/* Active Panel - Remaining space */}

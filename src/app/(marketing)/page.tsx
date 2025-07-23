@@ -165,15 +165,10 @@ export default function HomePage() {
           {/* Airbnb Video Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
             <div className="w-full max-w-5xl">
-              {/* Container with 30% reduced height while maintaining aspect ratio */}
-              <div style={{
+              {/* Responsive container that adapts to mobile */}
+              <div className="flex items-center justify-center" style={{
                 width: '100%',
-                maxWidth: '400px',
-                height: '560px', // Reduced from ~800px (30% reduction)
                 margin: '0 auto',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: 'transparent'
               }}>
                 <AirbnbDemoPlayer />
