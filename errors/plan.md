@@ -182,13 +182,36 @@ hasTsxCode: false
 2. User confusion when export has empty sections
 3. Wasted render time on failed scenes
 
-### Proposed Fix
-1. Filter out scenes without code before rendering
-2. Add proper error handling in scene creation
-3. Provide user feedback about failed scenes
+### Fix Applied ✅
+**Files Modified**:
+1. `/src/server/services/render/render.service.ts`
+2. `/src/server/api/routers/render.ts`
+
+**Changes**:
+1. **Enhanced preprocessing** to mark scenes without code as errors:
+   ```typescript
+   if (!scene.tsxCode) {
+     return { 
+       error: 'Scene has no code to render',
+       sceneId: scene.id,
+       sceneName: scene.name 
+     };
+   }
+   ```
+
+2. **Robust filtering** in `prepareRenderConfig`:
+   - Skip scenes with errors
+   - Skip scenes without compiled code
+   - Skip scenes without source code
+   - Log each filtered scene for debugging
+
+3. **Early filtering** in API router:
+   - Filter scenes before sending to render service
+   - Better error messages when no valid scenes
+   - Update duration calculations
 
 ### Status
-- [ ] Fixed
+- [x] Fixed
 - [ ] Deployed to production
 - [ ] Verified in logs
 
@@ -200,33 +223,52 @@ hasTsxCode: false
 1. ✅ **Export tracking ID** - Already fixed with crypto.randomUUID()
 2. ✅ **Webhook signature** - Already fixed with SHA-512 and length check
 
+### Critical Priority (Blocking core functionality)
+3. **Auth PKCE failure** - Users cannot log in at all
+4. **Response truncation** - Edit operations fail on complex scenes
+5. **API 529 overload** - Service unavailable during peak times
+
 ### High Priority (User-facing issues)
-3. **AVIF image support** - Users can't use modern image formats
-4. **Failed scene rendering** - Broken scenes in exports
-5. **Large audio uploads** - 413 errors for files >4.5MB
+6. **AVIF image support** - Users can't use modern image formats
+7. **Base64 image corruption** - Additional image upload failures
+8. **Failed scene rendering** - Broken scenes in exports
+9. **Large audio uploads** - 413 errors for files >4.5MB
 
 ### Medium Priority (Degraded features)
-6. **Playwright browser** - Web scraping features unavailable
-7. **Image recreator validation** - Confusing error messages
+10. **Duplicate project titles** - Creation fails with poor UX
+11. **Playwright browser** - Web scraping features unavailable
+12. **Image recreator validation** - Confusing error messages
 
 ## Analysis Summary
 
 ### Total Errors Analyzed
-- **10 error log files** analyzed
-- **6 unique error types** identified
+- **19 error log files** analyzed
+- **11 unique error types** identified
 - **2 errors already fixed** (export tracking, webhooks)
-- **4 errors need fixes** (AVIF, failed scenes, audio uploads, Playwright)
+- **9 errors need fixes** (including 3 critical)
 
 ### Error Patterns
-1. **Image Processing**: AVIF format unsupported by Anthropic API (errors 7, 10)
-2. **Infrastructure**: Missing dependencies (Playwright) and platform limits (Vercel 4.5MB)
-3. **Data Flow**: Export tracking and webhook verification issues
-4. **Scene Generation**: Failed scenes included in render pipeline
+1. **Authentication**: PKCE verification failures blocking login
+2. **API Limitations**: Response truncation, 529 overload errors
+3. **Image Processing**: AVIF format + base64 encoding issues
+4. **Infrastructure**: Missing dependencies and platform limits
+5. **Data Constraints**: Duplicate titles, missing IDs
+6. **Scene Generation**: Failed scenes polluting render pipeline
 
 ### User Impact Analysis
-- **High Impact**: AVIF uploads fail (common from modern browsers/devices)
-- **Medium Impact**: Failed scenes appear as blank sections in exports
-- **Low Impact**: Web scraping unavailable, large audio files blocked
+- **CRITICAL**: Auth failures completely block access
+- **CRITICAL**: Edit truncation breaks core editing functionality
+- **HIGH**: Image upload failures (AVIF + base64 corruption)
+- **HIGH**: API overload causes intermittent failures
+- **MEDIUM**: Failed scenes, duplicate titles, large files
+- **LOW**: Web scraping unavailable
+
+### New Critical Findings (Files 12-19)
+1. Authentication is broken due to PKCE verifier issues
+2. Edit operations fail silently when responses exceed ~16KB
+3. Anthropic API overload (529) not properly handled
+4. Two separate image issues: AVIF format AND base64 corruption
+5. Project title generation has insufficient uniqueness
 
 ## Deployment Checklist
 
@@ -284,19 +326,46 @@ InvalidCheck: pkceCodeVerifier value could not be parsed
 ```
 
 ### Root Cause
-NextAuth callback receiving malformed or missing PKCE code verifier during OAuth flow.
+1. NextAuth callback receiving malformed or missing PKCE code verifier during OAuth flow
+2. Cookie issues preventing PKCE verifier storage/retrieval
+3. Browser privacy settings blocking third-party cookies
+4. Session mismatch between auth start and callback
 
 ### Impact
 Users cannot authenticate - completely blocks access to the application.
 
-### Proposed Fix
-1. Check NextAuth configuration for PKCE settings
-2. Ensure proper state persistence between auth requests
-3. Add fallback for missing PKCE verifier
-4. Consider disabling PKCE if not required by provider
+### Fix Applied ✅ (Step 1 - Immediate)
+**File**: `/src/server/auth/config.ts`
+**Change**: Added `checks: ["state"]` to GoogleProvider
+
+```typescript
+GoogleProvider({
+  clientId: process.env.GOOGLE_CLIENT_ID || "",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  allowDangerousEmailAccountLinking: true,
+  checks: ["state"], // Use state instead of PKCE to fix login issues
+})
+```
+
+This disables PKCE checks while maintaining state parameter validation for CSRF protection.
+
+### Step 2 (To Be Implemented)
+Fix cookie configuration to properly support PKCE:
+```typescript
+cookies: {
+  pkceCodeVerifier: {
+    options: {
+      sameSite: "lax",  // Change from strict/none
+      secure: true,
+      httpOnly: true
+    }
+  }
+}
+```
 
 ### Status
-- [ ] Fixed
+- [x] Fixed (Step 1 - Immediate fix)
+- [ ] Step 2 - Cookie configuration
 - [ ] Deployed to production
 - [ ] Verified in logs
 

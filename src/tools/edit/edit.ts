@@ -188,24 +188,24 @@ Please edit the code according to the user request. Return the complete modified
         throw new Error("No response from AI editor");
       }
       
-      // ENHANCED DEBUG LOGGING
-      console.log(`📏 [EDIT TOOL DEBUG] Response details:`, {
-        size: content.length,
-        sizeKB: (content.length / 1024).toFixed(2),
-        sizeMB: (content.length / 1024 / 1024).toFixed(3),
-        responseTime: `${responseTime}ms`,
-        model: modelConfig.model,
-        provider: modelConfig.provider,
-        truncated: content.endsWith('...') || content.endsWith('\\') || !this.looksComplete(content),
-        lastChars: content.slice(-100),
-        hasValidJSON: this.isValidJSON(content)
-      });
+      // Only log detailed debug info if truncation is detected or response is very large
+      const isTruncated = this.detectTruncation(content);
+      const isVeryLarge = content.length > 50000;
       
-      // Check for common truncation patterns
-      if (this.detectTruncation(content)) {
-        console.error(`🚨 [EDIT TOOL DEBUG] TRUNCATION DETECTED!`);
-        console.error(`Last 200 chars: "${content.slice(-200)}"`);
-        console.error(`First 200 chars: "${content.slice(0, 200)}"`);
+      if (isTruncated || isVeryLarge) {
+        console.log(`📏 [EDIT TOOL DEBUG] Response details:`, {
+          size: content.length,
+          sizeKB: (content.length / 1024).toFixed(2),
+          responseTime: `${responseTime}ms`,
+          model: modelConfig.model,
+          truncated: isTruncated,
+          isExact16KB: content.length === 16384
+        });
+        
+        if (isTruncated) {
+          console.error(`🚨 [EDIT TOOL] Response truncated at ${content.length} bytes`);
+          console.error(`Last 200 chars: "${content.slice(-200)}"`);
+        }
       }
 
       const parsed = this.extractJsonFromResponse(content);
@@ -343,27 +343,34 @@ Please edit the code according to the user request. Return the complete modified
   }
 
   private detectTruncation(content: string): boolean {
-    // Common truncation indicators
-    const truncationPatterns = [
-      /\\\s*$/,           // Ends with backslash
-      /"\s*$/,            // Ends with unclosed quote
-      /,\s*$/,            // Ends with comma
-      /:\s*$/,            // Ends with colon
-      /\[\s*$/,           // Ends with unclosed array
-      /\{\s*$/,           // Ends with unclosed object
+    // Check for exact 16KB truncation (16384 bytes)
+    if (content.length === 16384) {
+      return true;
+    }
+    
+    // If the response contains properly formatted JSON in markdown, it's likely complete
+    if (content.includes('```json') && content.includes('```')) {
+      // Try to extract and validate the JSON
+      const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch?.[1]) {
+        try {
+          JSON.parse(jsonMatch[1]);
+          return false; // Valid JSON in markdown = not truncated
+        } catch {
+          // JSON parse failed, continue with other checks
+        }
+      }
+    }
+    
+    // Only check for obvious mid-sentence/mid-token truncation
+    const obviousTruncationPatterns = [
+      /\\\s*$/,           // Ends with backslash (escape sequence)
       /\\n\s*$/,          // Ends mid-escape sequence
-      /[^}]\s*$/          // Doesn't end with closing brace
+      /\.\.\.\s*$/,       // Ends with ellipsis (often indicates more content)
     ];
     
     const trimmed = content.trim();
-    
-    // If it's valid JSON, it's not truncated
-    if (this.isValidJSON(content)) {
-      return false;
-    }
-    
-    // Check truncation patterns
-    return truncationPatterns.some(pattern => pattern.test(trimmed));
+    return obviousTruncationPatterns.some(pattern => pattern.test(trimmed));
   }
 
 }

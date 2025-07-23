@@ -242,6 +242,23 @@ export class AIClientService {
         .map((block: any) => block.text)
         .join('');
 
+      // Debug logging for response size
+      if (options?.debug) {
+        console.log(`🔍 [AI CLIENT DEBUG] Anthropic Response:`, {
+          contentLength: content.length,
+          contentLengthKB: (content.length / 1024).toFixed(2),
+          contentLengthMB: (content.length / 1024 / 1024).toFixed(3),
+          usage: response.usage,
+          truncated: content.length === 16384 || content.endsWith('...') || !this.looksComplete(content),
+          lastChars: content.slice(-100)
+        });
+        
+        // Check for 16KB truncation
+        if (content.length === 16384) {
+          console.error(`🚨 [AI CLIENT DEBUG] Response truncated at exactly 16KB!`);
+        }
+      }
+
       return {
         content,
         usage: {
@@ -444,6 +461,21 @@ export class AIClientService {
     ];
 
     return this.generateVisionResponse(config, content, systemPrompt);
+  }
+
+  // =============================================================================
+  // HELPER METHODS
+  // =============================================================================
+
+  private static looksComplete(content: string): boolean {
+    // Check if response appears complete
+    const trimmed = content.trim();
+    // For JSON responses, check if it ends with a closing brace
+    if (trimmed.startsWith('{')) {
+      return trimmed.endsWith('}');
+    }
+    // For other responses, check common truncation patterns
+    return !trimmed.endsWith('...') && !trimmed.endsWith('\\');
   }
 
   // =============================================================================
