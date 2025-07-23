@@ -82,6 +82,7 @@ TECHNICAL REQUIREMENTS
 10. TIMING CALCULATION RULE - Calculate all sequence timing OUTSIDE the component using forEach loop on the script array, then use the pre-calculated sequences inside the component. Never mutate variables during render inside the component function. CRITICAL: Never use "currentFrame" as a variable name - use "accumulatedFrames" or similar to avoid conflicts with Remotion's useCurrentFrame.
 11. Quote every CSS value and use exactly one transform per element.
 12. All interpolations must use extrapolateLeft and extrapolateRight:"clamp".
+12a. POSITIONING: The text container div inside each Sequence should include position: "absolute", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" to ensure text is centered.
 13. DURATION EXPORT: Calculate duration based on text length (see INTELLIGENT TYPOGRAPHY DURATION above). Export: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
     CRITICAL: Match duration to text length - don't default to 180 frames!
 14. CRITICAL SYNTAX RULE: Use commas (not semicolons) to separate array elements. CORRECT: [{ text: "hello", frames: 45 }, { text: "world", frames: 30 }]. WRONG: [{ text: "hello", frames: 45 }; { text: "world", frames: 30 }].
