@@ -1,0 +1,32 @@
+2025-07-23T12:11:37.217Z [info] [SSE] First user message detected, generating title...
+2025-07-23T12:11:37.808Z [info] 2025-07-23T12:11:37.807Z [[32minfo[39m]: [TITLE:SUCCESS][CTX:c0cd2d84-0356-4c18-b24a-3ab7d3dd7d3c] Title generated in 591ms: "Money Transfer Animation" {
+  "title": "Money Transfer Animation",
+  "duration": 591,
+  "hasReasoning": false,
+  "titleGenerator": true
+}
+2025-07-23T12:11:37.816Z [info] [SSE] Retrying in 500ms... (2 attempts left)
+2025-07-23T12:11:38.326Z [info] [SSE] Retrying in 1000ms... (1 attempts left)
+2025-07-23T12:11:39.348Z [error] [SSE] Title generation failed: Error [NeonDbError]: duplicate key value violates unique constraint "project_unique_name"
+    at execute (.next/server/chunks/172.js:12:8169)
+    at async (.next/server/app/api/generate-stream/route.js:3:1609)
+    at async p (.next/server/app/api/generate-stream/route.js:3:44)
+    at async (.next/server/app/api/generate-stream/route.js:3:1592) {
+  severity: 'ERROR',
+  code: '23505',
+  detail: 'Key ("userId", title)=(124ab924-aeb0-44d8-ad2c-705e6e6c91fc, Money Transfer Animation) already exists.',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'bazaar-vid_project',
+  column: undefined,
+  dataType: undefined,
+  constraint: 'project_unique_name',
+  file: 'nbtinsert.c',
+  line: '666',
+  routine: '_bt_check_unique',
+  sourceError: undefined
+}

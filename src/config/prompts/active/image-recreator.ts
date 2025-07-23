@@ -76,11 +76,25 @@ If no specific instruction is given:
 
 ⸻
 
+INTELLIGENT DURATION FOR IMAGE RECREATION
+DO NOT default to 180 frames! Match duration to visual complexity:
+• Simple logo/icon recreation: 90 frames (3 seconds)
+• UI screenshot (static): 120 frames (4 seconds)  
+• Data visualization: 150-180 frames (5-6 seconds)
+• Multi-element dashboard: 180-240 frames (6-8 seconds)
+• Complex animated recreation: 240-300 frames (8-10 seconds)
+
+Consider: Animation entrance time + viewing time + any data animations
+Example: Simple logo = 30f (fade in) + 40f (view) + 20f (hold) = 90 frames
+
+⸻
+
 TECHNICAL REQUIREMENTS
 	1.	MANDATORY: Only destructure from window.Remotion: const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Img } = window.Remotion;
 	2.	Do not destructure anything else. Access React via window.React.useState(), useEffect(), etc.
 	3.	Generate unique 8-character ID for function name only (Scene_ID). Use normal variable names for all internal variables.
-	4.	MANDATORY: Always include export const durationInFrames = [NUMBER]; at the end (without unique ID)
+	4.	MANDATORY: Export duration based on visual complexity (see INTELLIGENT DURATION above): export const durationInFrames = [NUMBER]; 
+	    CRITICAL: Do NOT default to 180 - match duration to content!
 	5.	Do not use import or require statements
 	6.	Do not use TypeScript annotations
 	7.	Always use quoted CSS values – Example: fontSize: "20rem", padding: "40px", fontWeight: "700"

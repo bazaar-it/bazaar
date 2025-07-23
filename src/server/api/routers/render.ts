@@ -74,9 +74,29 @@ export const renderRouter = createTRPCRouter({
           message: "Project has no scenes to render",
         });
       }
+      
+      // Filter out scenes without code
+      const scenesWithCode = project.scenes.filter(scene => {
+        if (!scene.tsxCode || scene.tsxCode.trim().length === 0) {
+          console.warn(`[Render] Filtering out scene ${scene.id} (${scene.name}) - no code to render`);
+          return false;
+        }
+        return true;
+      });
+      
+      if (scenesWithCode.length === 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: "No scenes with code to render. Please add content to your scenes.",
+        });
+      }
+      
+      if (scenesWithCode.length < project.scenes.length) {
+        console.log(`[Render] Filtered ${project.scenes.length - scenesWithCode.length} scenes without code`);
+      }
 
       // Estimate duration and check limits
-      const estimatedDuration = project.scenes.reduce((sum, scene) => {
+      const estimatedDuration = scenesWithCode.reduce((sum, scene) => {
         return sum + (scene.duration || 150); // Default 5 seconds
       }, 0) / 30 / 60; // Convert frames to minutes (assuming 30fps)
 
@@ -90,8 +110,8 @@ export const renderRouter = createTRPCRouter({
       const renderId = crypto.randomUUID();
 
       // Log the scenes we're sending to prepareRenderConfig
-      console.log(`[Render] Preparing render config with ${project.scenes.length} scenes`);
-      project.scenes.forEach((scene, idx) => {
+      console.log(`[Render] Preparing render config with ${scenesWithCode.length} scenes (filtered from ${project.scenes.length})`);
+      scenesWithCode.forEach((scene, idx) => {
         console.log(`[Render] Scene ${idx}:`, {
           id: scene.id,
           name: scene.name,
@@ -104,7 +124,7 @@ export const renderRouter = createTRPCRouter({
       // Prepare render configuration with audio from database
       const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
-        scenes: project.scenes,
+        scenes: scenesWithCode,
         format: input.format,
         quality: input.quality,
         projectProps: project.props,
@@ -148,7 +168,7 @@ export const renderRouter = createTRPCRouter({
           });
           
           // Track export in database
-          const totalDuration = project.scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+          const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
           await ExportTrackingService.trackExportStart({
             userId: ctx.session.user.id,
             projectId: input.projectId,

@@ -48,6 +48,40 @@ End the scene immediately after the final animation has completed.
 
 ⸻
 
+INTELLIGENT DURATION - CRITICAL (30 FPS)
+Your scene duration MUST match the content complexity. DO NOT default to 180 frames (6 seconds) for everything!
+
+DURATION BY CONTENT TYPE:
+  • Single word/short text (1-3 words): 60 frames (2 seconds)
+    Example: "Hello", "Welcome", "Bazaar"
+  • Simple intro/logo animation: 90 frames (3 seconds)  
+    Example: "intro of Bazaar", "show logo", "company name"
+  • Medium text/single statement: 120 frames (4 seconds)
+    Example: "Your success is our mission", single paragraph
+  • Standard scene with animation: 180 frames (6 seconds)
+    Example: Product feature with icon, animated data point
+  • Multiple elements in sequence: 210-240 frames (7-8 seconds)
+    Example: "Show features: speed, security, and reliability"
+  • Complex/epic animations: 270-360 frames (9-12 seconds)
+    Example: "Epic intro with particles", comprehensive showcase
+
+DURATION CALCULATION RULES:
+1. Count your elements - each major element needs 60-90 frames
+2. Simple text needs minimal time - readers scan quickly
+3. Complex animations need time to breathe - don't rush them
+4. Transitions between scenes should be 30-60 frames max
+5. If showing text, calculate reading time: ~3 words per second
+
+EXAMPLES OF SMART DURATION:
+  • User: "text: Hi" → Your duration: 60 frames (not 180!)
+  • User: "intro of Bazaar" → Your duration: 90 frames (not 180!)
+  • User: "show our three core values" → Your duration: 210 frames (3 × 70)
+  • User: "epic product showcase" → Your duration: 300 frames
+
+Remember: Viewers appreciate concise, well-paced content. Don't make a 2-second idea take 6 seconds!
+
+⸻
+
 Correct structure:
 Logo alone (frames 0 to 40)
 Then headline alone (frames 40 to 80)
@@ -199,7 +233,8 @@ TECHNICAL REQUIREMENTS
     - For centered elements: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
     - If adding additional transforms, compose them: transform: \`translate(-50%, -50%) scale(\${scale}) rotate(\${rotate}deg)\`
     - Always test that elements appear correctly centered, not in top-left corner
-16. ALWAYS export the total duration at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID];
+16. DURATION EXPORT: Calculate total duration based on your content (following INTELLIGENT DURATION guidelines above). Export at the end: const totalFrames_[ID] = script_[ID].reduce((sum, item) => sum + item.frames, 0); export const durationInFrames_[ID] = totalFrames_[ID]; 
+    CRITICAL: Do NOT default to 180 frames! Match duration to content complexity.
 
 ⸻
 

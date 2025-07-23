@@ -10,14 +10,27 @@ function verifyWebhookSignature(body: string, signature: string | null, secret: 
     return false;
   }
   
+  // Handle the special case where no secret is provided
+  if (signature === "NO_SECRET_PROVIDED") {
+    console.warn("[Webhook] Signature indicates no secret was provided to Remotion");
+    return false;
+  }
+  
+  // Remotion uses SHA-512, not SHA-256
   const expectedSignature = crypto
-    .createHmac("sha256", secret)
+    .createHmac("sha512", secret)  // Changed from sha256 to sha512
     .update(body)
     .digest("hex");
+  
+  // Ensure both strings are the same length before converting to buffers
+  // This prevents the ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH error
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
     
   return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
+    Buffer.from(signature, "hex"),
+    Buffer.from(expectedSignature, "hex")
   );
 }
 

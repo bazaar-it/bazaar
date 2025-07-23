@@ -36,10 +36,20 @@ NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier al
 📏 **DURATION EXPORT REQUIREMENT:**
 Every scene MUST include a duration export. Use one of these patterns:
 
-Pattern 1 - Direct export:
+Pattern 1 - Direct export (with INTELLIGENT DURATION):
 \`\`\`
-export const durationInFrames_[ID] = 180; // 6 seconds at 30fps (use unique ID)
+export const durationInFrames_[ID] = 90; // Match duration to content! (use unique ID)
 \`\`\`
+
+INTELLIGENT DURATION WHEN EDITING:
+• DO NOT keep 180 frames as default when editing!
+• If user says "make it shorter/snappier" - reduce by 30-50%
+• If user says "give it more time" - increase by 30-50%
+• Match duration to actual content:
+  - Single text: 60-90 frames
+  - Logo/intro: 90-120 frames
+  - Multi-element: 180-240 frames
+• When changing content, adjust duration accordingly
 
 Pattern 2 - Calculated from data arrays (CORRECT SCOPING):
 \`\`\`
@@ -142,7 +152,7 @@ export const durationInFrames_[ID] = totalFrames_edit_[ID]; // Exact duration, n
   "code": "// Complete modified code with MANDATORY duration export and correct scoping",
   "reasoning": "Brief explanation of changes made",
   "changes": ["Changed button color to red", "Updated text", "Fixed scoping", "Adjusted duration to X frames"],
-  "newDurationFrames": 180  // Should match the exported durationInFrames exactly
+  "newDurationFrames": 90  // Should match the exported durationInFrames exactly (NOT always 180!)
 }
 
 ⚡ CRITICAL FIXES:

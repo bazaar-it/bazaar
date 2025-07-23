@@ -1,0 +1,273 @@
+2025-07-23T13:10:47.713Z [info] [A902E231B8A9] Starting scene generation {
+  projectId: '680bc1d9-ec9c-46d9-aaad-0a0d6f07c658',
+  userMessage: 'reduce the space between tired and of and also reduce the size of "of" to 100 px'
+}
+2025-07-23T13:10:47.783Z [info] [A902E231B8A9] Getting decision from brain...
+2025-07-23T13:10:47.783Z [info] [A902E231B8A9] User context: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T13:10:47.783Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+2025-07-23T13:10:47.783Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+  prompt: 'reduce the space between tired and of and also reduce the size of "of" to 100 px',
+  projectId: '680bc1d9-ec9c-46d9-aaad-0a0d6f07c658',
+  hasImages: false,
+  hasVideos: false,
+  sceneCount: 1
+}
+2025-07-23T13:10:47.783Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+2025-07-23T13:10:47.783Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+2025-07-23T13:10:47.783Z [info] 📚 [CONTEXT BUILDER] Project: 680bc1d9-ec9c-46d9-aaad-0a0d6f07c658
+2025-07-23T13:10:47.783Z [info] 📚 [CONTEXT BUILDER] Has images: false
+2025-07-23T13:10:47.792Z [info] 📚 [CONTEXT BUILDER] No valid URL found in prompt
+2025-07-23T13:10:47.799Z [info] 📚 [CONTEXT BUILDER] Found 0 persistent assets
+2025-07-23T13:10:47.799Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+2025-07-23T13:10:47.799Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+2025-07-23T13:10:47.799Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+2025-07-23T13:10:47.799Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+2025-07-23T13:10:47.799Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: reduce the space between tired and of and also red...
+2025-07-23T13:10:50.421Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+2025-07-23T13:10:50.421Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+  "toolName": "editScene",
+  "reasoning": "User wants to adjust spacing between words and change the font size of 'of' specifically in the newest scene's text, which requires editing the scene content and styling.",
+  "targetSceneId": "9c4c04d4-6b88-4784-bdd6-b548d21f4278",
+  "userFeedback": "Reducing space between 'tired' and 'of' and resizing 'of' to 100px in the text of Scene 1.",
+  "needsClarification": false
+}
+2025-07-23T13:10:50.421Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+  toolName: 'editScene',
+  success: true,
+  reasoning: 'User wants to adjust spacing between words and cha...'
+}
+2025-07-23T13:10:50.422Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+  tool: 'editScene',
+  reasoning: "User wants to adjust spacing between words and change the font size of 'of' specifically in the newe..."
+}
+2025-07-23T13:10:50.422Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+2025-07-23T13:10:50.422Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+2025-07-23T13:10:50.422Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+2025-07-23T13:10:50.446Z [info] [A902E231B8A9] ✅ IMMEDIATE: Created new assistant message delivered to chat: 2efca889-2775-45c4-80cc-93822051487e
+2025-07-23T13:10:50.446Z [info] [A902E231B8A9] Executing tool: editScene
+2025-07-23T13:10:50.472Z [info] ✏️ [EDIT TOOL] Executing edit: {
+  prompt: 'reduce the space between tired and of and also reduce the size of "of" to 100 px',
+  hasErrorDetails: false,
+  codeLength: 3608
+}
+2025-07-23T13:10:50.472Z [info] ✏️ [EDIT TOOL] Processing edit request
+2025-07-23T13:10:50.472Z [info] 🔍 [EDIT TOOL] Making edit with context: {
+  userPrompt: 'reduce the space between tired and of and also reduce the size of "of" to 100 px',
+  hasError: false,
+  hasImages: false,
+  hasVideos: false,
+  hasWebContext: false,
+  totalImages: 0,
+  codeLength: 3608,
+  codePreview: 'const { AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig } = window.Remotion;\n' +
+    '\n' +
+    'const script_A8B9C2D1 = [\n' +
+    '  { text: "TIRED", frames: 30 },\n' +
+    '  { text: "OF", frames: 25 },\n' +
+    '  { ',
+  websiteUrl: undefined
+}
+2025-07-23T13:10:50.472Z [info] 🔄 [EDIT TOOL] Using override model: claude-sonnet-4-20250514
+2025-07-23T13:10:50.472Z [info] 📊 [EDIT TOOL DEBUG] Request size: 9875 chars (9.64KB)
+2025-07-23T13:10:53.709Z [error] Anthropic API Error: Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+    at eo.generate (.next/server/chunks/1080.js:1:2317)
+    at tU.makeStatusError (.next/server/chunks/1080.js:5:4247)
+    at tU.makeRequest (.next/server/chunks/1080.js:5:7452)
+    at async r.callAnthropic (.next/server/chunks/4934.js:1:3782)
+    at async c.performEdit (.next/server/chunks/9930.js:611:870)
+    at async c.execute (.next/server/chunks/9930.js:568:44443)
+    at async c.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:32621)
+    at async (.next/server/chunks/9930.js:228:4227) {
+  status: 529,
+  headers: Headers {
+    date: 'Wed, 23 Jul 2025 13:10:53 GMT',
+    'content-type': 'application/json',
+    'content-length': '75',
+    connection: 'keep-alive',
+    'x-should-retry': 'true',
+    'request-id': 'req_011CRQ1Kn8kc4SbpTexMzitf',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'anthropic-organization-id': '89c0d182-e428-427d-8e54-8c37b11c0f35',
+    via: '1.1 google',
+    'cf-cache-status': 'DYNAMIC',
+    'x-robots-tag': 'none',
+    server: 'cloudflare',
+    'cf-ray': '963b6ba5ac472f19-IAD'
+  },
+  requestID: 'req_011CRQ1Kn8kc4SbpTexMzitf',
+  error: [Object]
+}
+2025-07-23T13:10:53.713Z [error] [EDIT TOOL] Edit failed: Error: Anthropic API call failed: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+    at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+    at async c.performEdit (.next/server/chunks/9930.js:611:870)
+    at async c.execute (.next/server/chunks/9930.js:568:44443)
+    at async c.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:32621)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+2025-07-23T13:10:53.713Z [error] ✏️ [EDIT TOOL] Error: Error: Anthropic API call failed: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+    at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+    at async c.performEdit (.next/server/chunks/9930.js:611:870)
+    at async c.execute (.next/server/chunks/9930.js:568:44443)
+    at async c.run (.next/server/chunks/9930.js:425:1032)
+    at async g (.next/server/chunks/9930.js:941:32621)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+2025-07-23T13:10:53.713Z [info] 📥 [ROUTER] Received from EDIT tool: {
+  success: true,
+  hasData: true,
+  dataKeys: [ 'success', 'reasoning', 'error' ],
+  error: undefined
+}
+2025-07-23T13:10:53.713Z [error] [A902E231B8A9] Scene generation error: Error: Edit operation failed - no code returned
+    at g (.next/server/chunks/9930.js:941:32937)
+    at async (.next/server/chunks/9930.js:228:4227)
+    at async a.middlewares (.next/server/chunks/802.js:127:31699)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async (.next/server/chunks/9930.js:568:39474)
+    at async p (.next/server/chunks/802.js:130:68)
+    at async t (.next/server/chunks/802.js:127:31931)
+    ------------
+    2025-07-23T13:16:28.079Z [info] [785970BB2155] Starting scene generation {
+        projectId: '680bc1d9-ec9c-46d9-aaad-0a0d6f07c658',
+        userMessage: 'reduce the space between tired and of'
+      }
+      2025-07-23T13:16:28.140Z [info] [785970BB2155] Getting decision from brain...
+      2025-07-23T13:16:28.140Z [info] [785970BB2155] User context: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+      2025-07-23T13:16:28.140Z [info] 🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===
+      2025-07-23T13:16:28.140Z [info] 🧠 [NEW ORCHESTRATOR] Input: {
+        prompt: 'reduce the space between tired and of',
+        projectId: '680bc1d9-ec9c-46d9-aaad-0a0d6f07c658',
+        hasImages: false,
+        hasVideos: false,
+        sceneCount: 1
+      }
+      2025-07-23T13:16:28.140Z [info] 🧠 [NEW ORCHESTRATOR] Step 1: Building context...
+      2025-07-23T13:16:28.141Z [info] 📚 [CONTEXT BUILDER] === BUILDING REAL CONTEXT ===
+      2025-07-23T13:16:28.141Z [info] 📚 [CONTEXT BUILDER] Project: 680bc1d9-ec9c-46d9-aaad-0a0d6f07c658
+      2025-07-23T13:16:28.141Z [info] 📚 [CONTEXT BUILDER] Has images: false
+      2025-07-23T13:16:28.148Z [info] 📚 [CONTEXT BUILDER] No valid URL found in prompt
+      2025-07-23T13:16:28.153Z [info] 📚 [CONTEXT BUILDER] Found 0 persistent assets
+      2025-07-23T13:16:28.153Z [info] 📚 [CONTEXT BUILDER] Logos: 0
+      2025-07-23T13:16:28.153Z [info] 🧠 [NEW ORCHESTRATOR] Context built successfully
+      2025-07-23T13:16:28.153Z [info] 🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...
+      2025-07-23T13:16:28.153Z [info] 🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===
+      2025-07-23T13:16:28.153Z [info] 🎯 [NEW INTENT ANALYZER] User prompt: reduce the space between tired and of...
+      2025-07-23T13:16:29.996Z [info] 🎯 [NEW INTENT ANALYZER] Brain responded, parsing decision...
+      2025-07-23T13:16:29.996Z [info] 🎯 [NEW INTENT ANALYZER] Raw parsed JSON: {
+        "toolName": "editScene",
+        "reasoning": "User wants to adjust the spacing between words 'tired' and 'of' in the newest scene, which requires editing the text styling or layout.",
+        "targetSceneId": "9c4c04d4-6b88-4784-bdd6-b548d21f4278",
+        "userFeedback": "Reducing the space between 'tired' and 'of' in the latest scene.",
+        "needsClarification": false
+      }
+      2025-07-23T13:16:29.996Z [info] 🎯 [NEW INTENT ANALYZER] Decision: {
+        toolName: 'editScene',
+        success: true,
+        reasoning: "User wants to adjust the spacing between words 'ti..."
+      }
+      2025-07-23T13:16:29.996Z [info] 🧠 [NEW ORCHESTRATOR] Tool selected: {
+        tool: 'editScene',
+        reasoning: "User wants to adjust the spacing between words 'tired' and 'of' in the newest scene, which requires ..."
+      }
+      2025-07-23T13:16:29.996Z [info] 🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...
+      2025-07-23T13:16:29.996Z [info] 🧠 [NEW ORCHESTRATOR] Tool context being passed: { hasImageUrls: false, hasVideoUrls: false, videoUrls: undefined }
+      2025-07-23T13:16:29.996Z [info] 🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===
+      2025-07-23T13:16:30.014Z [info] [785970BB2155] ✅ IMMEDIATE: Created new assistant message delivered to chat: 366411bb-3bb0-4d22-b21c-07da3a456f92
+      2025-07-23T13:16:30.014Z [info] [785970BB2155] Executing tool: editScene
+      2025-07-23T13:16:30.033Z [info] ✏️ [EDIT TOOL] Executing edit: {
+        prompt: 'reduce the space between tired and of',
+        hasErrorDetails: false,
+        codeLength: 5458
+      }
+      2025-07-23T13:16:30.033Z [info] ✏️ [EDIT TOOL] Processing edit request
+      2025-07-23T13:16:30.034Z [info] 🔍 [EDIT TOOL] Making edit with context: {
+        userPrompt: 'reduce the space between tired and of',
+        hasError: false,
+        hasImages: false,
+        hasVideos: false,
+        hasWebContext: false,
+        totalImages: 0,
+        codeLength: 5458,
+        codePreview: 'const { AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig } = window.Remotion;\n' +
+          '\n' +
+          'const script_A8B9C2D1 = [\n' +
+          '  { text: "TIRED", frames: 30 },\n' +
+          '  { text: "OF", frames: 25 },\n' +
+          '  { ',
+        websiteUrl: undefined
+      }
+      2025-07-23T13:16:30.034Z [info] 🔄 [EDIT TOOL] Using override model: claude-sonnet-4-20250514
+      2025-07-23T13:16:30.034Z [info] 📊 [EDIT TOOL DEBUG] Request size: 11682 chars (11.41KB)
+      2025-07-23T13:16:33.947Z [error] Anthropic API Error: Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+          at eo.generate (.next/server/chunks/1080.js:1:2317)
+          at tU.makeStatusError (.next/server/chunks/1080.js:5:4247)
+          at tU.makeRequest (.next/server/chunks/1080.js:5:7452)
+          at async r.callAnthropic (.next/server/chunks/4934.js:1:3782)
+          at async c.performEdit (.next/server/chunks/9930.js:611:870)
+          at async c.execute (.next/server/chunks/9930.js:568:44443)
+          at async c.run (.next/server/chunks/9930.js:425:1032)
+          at async g (.next/server/chunks/9930.js:941:32621)
+          at async (.next/server/chunks/9930.js:228:4227) {
+        status: 529,
+        headers: Headers {
+          date: 'Wed, 23 Jul 2025 13:16:33 GMT',
+          'content-type': 'application/json',
+          'content-length': '75',
+          connection: 'keep-alive',
+          'x-should-retry': 'true',
+          'request-id': 'req_011CRQ1krtwVKpmkZdbG2rrn',
+          'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+          'anthropic-organization-id': '89c0d182-e428-427d-8e54-8c37b11c0f35',
+          via: '1.1 google',
+          'cf-cache-status': 'DYNAMIC',
+          'x-robots-tag': 'none',
+          server: 'cloudflare',
+          'cf-ray': '963b73f45d1e0674-IAD'
+        },
+        requestID: 'req_011CRQ1krtwVKpmkZdbG2rrn',
+        error: [Object]
+      }
+      2025-07-23T13:16:33.947Z [error] [EDIT TOOL] Edit failed: Error: Anthropic API call failed: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+          at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+          at async c.performEdit (.next/server/chunks/9930.js:611:870)
+          at async c.execute (.next/server/chunks/9930.js:568:44443)
+          at async c.run (.next/server/chunks/9930.js:425:1032)
+          at async g (.next/server/chunks/9930.js:941:32621)
+          at async (.next/server/chunks/9930.js:228:4227)
+          at async a.middlewares (.next/server/chunks/802.js:127:31699)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async p (.next/server/chunks/802.js:130:68)
+      2025-07-23T13:16:33.948Z [error] ✏️ [EDIT TOOL] Error: Error: Anthropic API call failed: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+          at r.callAnthropic (.next/server/chunks/4934.js:1:4565)
+          at async c.performEdit (.next/server/chunks/9930.js:611:870)
+          at async c.execute (.next/server/chunks/9930.js:568:44443)
+          at async c.run (.next/server/chunks/9930.js:425:1032)
+          at async g (.next/server/chunks/9930.js:941:32621)
+          at async (.next/server/chunks/9930.js:228:4227)
+          at async a.middlewares (.next/server/chunks/802.js:127:31699)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async p (.next/server/chunks/802.js:130:68)
+      2025-07-23T13:16:33.948Z [info] 📥 [ROUTER] Received from EDIT tool: {
+        success: true,
+        hasData: true,
+        dataKeys: [ 'success', 'reasoning', 'error' ],
+        error: undefined
+      }
+      2025-07-23T13:16:33.948Z [error] [785970BB2155] Scene generation error: Error: Edit operation failed - no code returned
+          at g (.next/server/chunks/9930.js:941:32937)
+          at async (.next/server/chunks/9930.js:228:4227)
+          at async a.middlewares (.next/server/chunks/802.js:127:31699)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async (.next/server/chunks/9930.js:568:39474)
+          at async p (.next/server/chunks/802.js:130:68)
+          at async t (.next/server/chunks/802.js:127:31931)
