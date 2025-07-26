@@ -1,8 +1,18 @@
-import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import React from 'react';
 
 const HighlightSweep: React.FC = () => {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive font sizing
+  const baseFontSize = Math.min(width, height) * 0.1;
+  const fontSize = isPortrait ? baseFontSize * 0.7 : isSquare ? baseFontSize * 0.8 : baseFontSize;
   
   const text = "Highlight Sweep Effect";
   const sweepProgress = interpolate(
@@ -26,12 +36,15 @@ const HighlightSweep: React.FC = () => {
       <div style={{ position: 'relative' }}>
         <h1
           style={{
-            fontSize: '120px',
+            fontSize: `${fontSize}px`,
             fontFamily: 'system-ui, -apple-system, sans-serif',
             color: '#1a1a1a',
             margin: 0,
             position: 'relative',
             zIndex: 1,
+            whiteSpace: 'nowrap',
+            lineHeight: 1.1,
+            textAlign: 'center'
           }}
         >
           {text}
@@ -59,10 +72,20 @@ export const templateConfig = {
   name: 'Highlight Sweep',
   duration: 180,
   previewFrame: 90,
-  getCode: () => `const { AbsoluteFill, interpolate, useCurrentFrame } = window.Remotion;
+  getCode: () => `const { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } = window.Remotion;
 
 export default function HighlightSweep() {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive font sizing
+  const baseFontSize = Math.min(width, height) * 0.1;
+  const fontSize = isPortrait ? baseFontSize * 0.7 : isSquare ? baseFontSize * 0.8 : baseFontSize;
   
   const text = "Highlight Sweep Effect";
   const sweepProgress = interpolate(
@@ -86,12 +109,15 @@ export default function HighlightSweep() {
       <div style={{ position: 'relative' }}>
         <h1
           style={{
-            fontSize: '120px',
+            fontSize: \`\${fontSize}px\`,
             fontFamily: 'system-ui, -apple-system, sans-serif',
             color: '#1a1a1a',
             margin: 0,
             position: 'relative',
             zIndex: 1,
+            whiteSpace: 'nowrap',
+            lineHeight: 1.1,
+            textAlign: 'center'
           }}
         >
           {text}

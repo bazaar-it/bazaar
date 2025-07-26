@@ -4,10 +4,23 @@ import {
     interpolate,
     useCurrentFrame,
     spring,
+    useVideoConfig,
   } from "remotion";
   
   export default function PromptIntro() {
     const frame = useCurrentFrame();
+    const { width, height } = useVideoConfig();
+    
+    // Format detection for responsive sizing
+    const aspectRatio = width / height;
+    const isPortrait = aspectRatio < 1;
+    const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+    
+    // Responsive font sizing to ensure text fits on one line
+    const baseFontSize = Math.min(width, height) * 0.04;
+    const fontSize = isPortrait ? baseFontSize * 0.6 : isSquare ? baseFontSize * 0.8 : baseFontSize;
+    const cursorHeight = fontSize;
+    
     const text = "Create incredible motion graphics for your app with Bazaar";
     const TYPING_START = 0;
     const TYPING_DURATION = 45;
@@ -107,9 +120,11 @@ import {
           <div
             style={{
               flex: 1,
-              fontSize: "36px",
+              fontSize: `${fontSize}px`,
               fontFamily: "Inter, system-ui, sans-serif",
               color: text ? "#FFFFFF" : "#AAAAAA",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
             }}
           >
             {text.slice(0, charCount) || "Ask Bazaar to create..."}
@@ -118,7 +133,7 @@ import {
                 style={{
                   borderRight: "3px solid #FFFFFF",
                   marginLeft: "3px",
-                  height: "36px",
+                  height: `${cursorHeight}px`,
                   display: "inline-block",
                 }}
               />
@@ -158,10 +173,23 @@ export const templateConfig = {
   interpolate,
   useCurrentFrame,
   spring,
+  useVideoConfig,
 } = window.Remotion;
 
 export default function PromptIntro() {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive font sizing to ensure text fits on one line
+  const baseFontSize = Math.min(width, height) * 0.04;
+  const fontSize = isPortrait ? baseFontSize * 0.6 : isSquare ? baseFontSize * 0.8 : baseFontSize;
+  const cursorHeight = fontSize;
+  
   const text = "Create incredible motion graphics for your app with Bazaar";
   const TYPING_START = 0;
   const TYPING_DURATION = 45;
@@ -259,9 +287,11 @@ export default function PromptIntro() {
         <div
           style={{
             flex: 1,
-            fontSize: "32px",
+            fontSize: \`\${fontSize}px\`,
             fontFamily: "Inter, system-ui, sans-serif",
             color: text ? "#FFFFFF" : "#AAAAAA",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
           }}
         >
           {text.slice(0, charCount) || "Ask Bazaar to create..."}
@@ -270,7 +300,7 @@ export default function PromptIntro() {
               style={{
                 borderRight: "3px solid #FFFFFF",
                 marginLeft: "3px",
-                height: "36px",
+                height: \`\${cursorHeight}px\`,
                 display: "inline-block",
               }}
             />

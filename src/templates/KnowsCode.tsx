@@ -1,8 +1,19 @@
 // src/templates/KnowsCode.tsx
-import { AbsoluteFill, interpolate, useCurrentFrame, spring } from 'remotion';
+import { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } from 'remotion';
 
 export default function KnowsCode() {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive sizing to ensure text fits on one line
+  const baseFontSize = Math.min(width, height) * 0.08;
+  const fontSize = isPortrait ? baseFontSize * 0.5 : isSquare ? baseFontSize * 0.65 : baseFontSize;
+  const braceSize = fontSize * 2;
 
   const BRACE_START = 1;
   const TEXT_START = 5;
@@ -19,8 +30,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '140px',
-          lineHeight: '140px',
+          fontSize: `${braceSize}px`,
+          lineHeight: `${braceSize}px`,
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -45,10 +56,11 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '70px',
-          lineHeight: '70px',
+          fontSize: `${fontSize}px`,
+          lineHeight: `${fontSize}px`,
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
+          whiteSpace: 'nowrap',
         }}
       >
         {text.slice(0, charCount)}
@@ -57,7 +69,7 @@ export default function KnowsCode() {
             opacity: cursorVisible ? 1 : 0,
             borderRight: '4px solid black',
             marginLeft: '4px',
-            height: '70px',
+            height: `${fontSize}px`,
             display: 'inline-block',
           }}
         />
@@ -78,8 +90,8 @@ export default function KnowsCode() {
         style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '8px',
-          width: '80%',
+          gap: `${fontSize * 0.1}px`,
+          width: isPortrait ? '95%' : '80%',
           justifyContent: 'center',
         }}
       >
@@ -98,10 +110,21 @@ export const templateConfig = {
   duration: 60, // 2 seconds - animation completes at frame 35
   previewFrame: 30,
   getCode: () => `// src/templates/KnowsCode.tsx
-const { AbsoluteFill, interpolate, useCurrentFrame, spring } = window.Remotion;
+const { AbsoluteFill, interpolate, useCurrentFrame, spring, useVideoConfig } = window.Remotion;
 
 export default function KnowsCode() {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive sizing to ensure text fits on one line
+  const baseFontSize = Math.min(width, height) * 0.08;
+  const fontSize = isPortrait ? baseFontSize * 0.5 : isSquare ? baseFontSize * 0.65 : baseFontSize;
+  const braceSize = fontSize * 2;
 
   const BRACE_START = 1;
   const TEXT_START = 5;
@@ -118,8 +141,8 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '140px',
-          lineHeight: '140px',
+          fontSize: \`\${braceSize}px\`,
+          lineHeight: \`\${braceSize}px\`,
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           background: 'linear-gradient(180deg, #FF8DC7 0%, #86A8E7 100%)',
           WebkitBackgroundClip: 'text',
@@ -144,10 +167,11 @@ export default function KnowsCode() {
     return (
       <div
         style={{
-          fontSize: '70px',
-          lineHeight: '70px',
+          fontSize: \`\${fontSize}px\`,
+          lineHeight: \`\${fontSize}px\`,
           fontFamily: 'SF Pro Display, system-ui, sans-serif',
           fontWeight: 'bold',
+          whiteSpace: 'nowrap',
         }}
       >
         {text.slice(0, charCount)}
@@ -156,7 +180,7 @@ export default function KnowsCode() {
             opacity: cursorVisible ? 1 : 0,
             borderRight: '4px solid black',
             marginLeft: '4px',
-            height: '70px',
+            height: \`\${fontSize}px\`,
             display: 'inline-block',
           }}
         />
@@ -177,8 +201,8 @@ export default function KnowsCode() {
         style={{ 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '8px',
-          width: '80%',
+          gap: \`\${fontSize * 0.1}px\`,
+          width: isPortrait ? '95%' : '80%',
           justifyContent: 'center',
         }}
       >

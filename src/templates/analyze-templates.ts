@@ -18,13 +18,13 @@ export const templateFormatAnalysis = {
   },
   'blue-gradient-text': {
     name: 'Blue Gradient Text',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Simple text animation, adaptable to any format'
+    supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
+    reason: 'Text animation with responsive layout, optimized for landscape and portrait'
   },
   'gradient-text': {
     name: 'Gradient Text',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Centered gradient text, works everywhere'
+    supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
+    reason: 'Gradient text with responsive layout, optimized for landscape and portrait'
   },
   'generating': {
     name: 'Generating',
@@ -153,6 +153,101 @@ export const templateFormatAnalysis = {
     name: 'Audio Animation',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Audio visualizer, adapts to any format'
+  },
+  'flare-bg': {
+    name: 'Flare BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Background gradient template adapts perfectly to all aspect ratios'
+  },
+  'pink-bg': {
+    name: 'Pink BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Pink gradient background template adapts perfectly to all aspect ratios'
+  },
+  'summer-bg': {
+    name: 'Summer BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Summer yellow-green gradient background template adapts perfectly to all aspect ratios'
+  },
+  'dark-forest-bg': {
+    name: 'Dark Forest BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Dark forest black-to-green gradient background template adapts perfectly to all aspect ratios'
+  },
+  'blue-bg': {
+    name: 'Blue BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Blue gradient background template adapts perfectly to all aspect ratios'
+  },
+  'space-grey-bg': {
+    name: 'Space Grey BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Space grey gradient background template adapts perfectly to all aspect ratios'
+  },
+  'insta-bg': {
+    name: 'Insta BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Instagram-style 3-color gradient background template adapts perfectly to all aspect ratios'
+  },
+  'sunrise-bg': {
+    name: 'Sunrise BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Sunrise blue-to-orange gradient background template adapts perfectly to all aspect ratios'
+  },
+  'fruit-bg': {
+    name: 'Fruit BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Fruit cyan-to-orange gradient background template adapts perfectly to all aspect ratios'
+  },
+  'bahamas-bg': {
+    name: 'Bahamas BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Bahamas cyan-to-blue gradient background template adapts perfectly to all aspect ratios'
+  },
+  'cool-sky-bg': {
+    name: 'Cool Sky BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Cool sky 3-color blue-to-white gradient background template adapts perfectly to all aspect ratios'
+  },
+  'vibey-bg': {
+    name: 'Vibey BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Vibey magenta-to-cyan gradient background template adapts perfectly to all aspect ratios'
+  },
+  'hello-bubbles': {
+    name: 'Hello Bubbles',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Animated gradient circles in a grid with zoom effect adapts perfectly to all aspect ratios'
+  },
+  'vibes-bg-gradient': {
+    name: 'Rainbow BG',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Background gradient template with vibrant color transitions adapts to all formats'
+  },
+  'today-1-percent': {
+    name: 'Today, 1%',
+    supportedFormats: ['landscape'] as VideoFormat[],
+    reason: 'Optimized specifically for landscape format with fixed positioning for text elements'
+  },
+  'keyboard': {
+    name: 'Keyboard',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Keyboard typing animation adapts well to all video formats'
+  },
+  'dark-bg-gradient-text': {
+    name: 'Dark BG Gradient Text',
+    supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
+    reason: 'Text-based template with animated gradient effects, optimized for landscape and portrait'
+  },
+  'fast-text': {
+    name: 'Fast Text',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Advanced typography animation with multiple text effects, dynamic sizing adapts perfectly to all aspect ratios'
+  },
+  'airbnb-app': {
+    name: 'Airbnb App',
+    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
+    reason: 'Complete mobile app simulation with responsive phone frame, adapts to all video formats while maintaining mobile app proportions'
   },
 };
 
