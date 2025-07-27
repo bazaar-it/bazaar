@@ -138,7 +138,8 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
       const result = await response.json();
       
       // Create audio element to get duration
-      const audio = new Audio(result.url);
+      // Use native Audio constructor explicitly to avoid conflicts with Remotion's Audio component
+      const audio = new (window as any).NativeAudio(result.url) || new Audio(result.url);
       audio.addEventListener('loadedmetadata', () => {
         const newTrack: AudioTrack = {
           id: result.key,

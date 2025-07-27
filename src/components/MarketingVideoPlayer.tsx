@@ -95,6 +95,28 @@ const MarketingVideoPlayer: React.FC = () => {
     const width = 1920;
     const height = 1080;
     
+    // Responsive scaling
+    const [scale, setScale] = useState(1);
+    
+    useEffect(() => {
+      const handleResize = () => {
+        const vw = window.innerWidth;
+        if (vw < 480) {
+          setScale(0.4); // 40% for very small mobile
+        } else if (vw < 768) {
+          setScale(0.5); // 50% for mobile
+        } else if (vw < 1024) {
+          setScale(0.7); // 70% for tablet
+        } else {
+          setScale(1); // 100% for desktop
+        }
+      };
+      
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    
     const interpolate = (frame: number, inputRange: [number, number], outputRange: [number, number], options?: { extrapolateLeft?: string; extrapolateRight?: string; easing?: string }) => {
       const [inputMin, inputMax] = inputRange;
       const [outputMin, outputMax] = outputRange;
@@ -156,8 +178,8 @@ const MarketingVideoPlayer: React.FC = () => {
     );
 
     // Natural straight path for cursor - enters from right side of container
-    const containerWidth = 700; // Current search bar width
-    const containerHeight = 190; // Updated to match new baseHeight
+    const containerWidth = 700 * scale; // Scale container width
+    const containerHeight = 190 * scale; // Scale container height
     const startX = containerWidth + 100; // Start further outside the right edge
     const endX = containerWidth * 0.5; // End at center of container (350px)
     const startY = containerHeight * 0.5; // Start at middle height
@@ -191,7 +213,7 @@ const MarketingVideoPlayer: React.FC = () => {
     const boxHeight = baseHeight + imageAreaHeight;
     
     // Keep consistent image size throughout
-    const imageHeight = 80; // Same size for dragging and dropped states
+    const imageHeight = 80 * scale; // Scale image size
 
     // Check if image is over the drop zone - corrected coordinates
     const searchBarLeft = 50; // Left edge of text area in container
@@ -230,13 +252,13 @@ const MarketingVideoPlayer: React.FC = () => {
       }}>
         <div
           style={{
-            width: "700px", // Reduced from 800px to fit better in container with padding
-            height: `${boxHeight * 0.85}px`, // Increased scaling to ensure submit button is fully visible
+            width: `${700 * scale}px`, // Responsive width
+            height: `${boxHeight * 0.85 * scale}px`, // Responsive height
             background: boxBackground,
-            borderRadius: "25px",
-            padding: "16px",
-            paddingBottom: "16px",
-            paddingTop: "16px",
+            borderRadius: `${25 * scale}px`,
+            padding: `${16 * scale}px`,
+            paddingBottom: `${16 * scale}px`,
+            paddingTop: `${16 * scale}px`,
             opacity,
             boxShadow: "none",
             position: "relative",
@@ -251,7 +273,7 @@ const MarketingVideoPlayer: React.FC = () => {
             <div
               style={{
                 display: "flex",
-                gap: "24px",
+                gap: `${24 * scale}px`,
                 marginTop: "0px",
                 marginBottom: "20px",
                 opacity: imageOpacity,
@@ -269,7 +291,7 @@ const MarketingVideoPlayer: React.FC = () => {
                   style={{
                     height: `${imageHeight}px`,
                     width: "auto",
-                    borderRadius: "12px",
+                    borderRadius: `${12 * scale}px`,
                     background: "#fff",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
                     objectFit: "contain",
@@ -290,7 +312,7 @@ const MarketingVideoPlayer: React.FC = () => {
                 transform: "translate(-50%, -50%)",
                 zIndex: 20,
                 display: "flex",
-                gap: "20px",
+                gap: `${20 * scale}px`,
                 pointerEvents: "none",
               }}
             >
@@ -300,11 +322,11 @@ const MarketingVideoPlayer: React.FC = () => {
                     src={url}
                     alt={`Dragged ${index + 1}`}
                     style={{
-                      height: "80px", // Fixed size to prevent scaling
+                      height: `${80 * scale}px`, // Responsive size
                       width: "auto",
-                      borderRadius: "12px",
+                      borderRadius: `${12 * scale}px`,
                       background: "#fff",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                      boxShadow: `0 ${2 * scale}px ${8 * scale}px rgba(0,0,0,0.08)`,
                       objectFit: "contain",
                     }}
                   />
@@ -340,13 +362,13 @@ const MarketingVideoPlayer: React.FC = () => {
           }}>
             <div style={{ 
               flex: 1, 
-              fontSize: "28px", // Reduced from 32px to match MarketingComponentPlayer
+              fontSize: `${28 * scale}px`, // Responsive font size
               color: "#333",
               fontFamily: "system-ui, -apple-system, sans-serif",
               fontWeight: "400",
               lineHeight: "1.4", // Increased line height for better multi-line readability
-              minHeight: "120px", // Further increased for multi-line text
-              maxHeight: "160px", // Set max height to prevent overflow
+              minHeight: `${120 * scale}px`, // Responsive min height
+              maxHeight: `${160 * scale}px`, // Responsive max height
               display: "flex",
               alignItems: "flex-start",
               justifyContent: "flex-start",
@@ -366,60 +388,60 @@ const MarketingVideoPlayer: React.FC = () => {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            paddingTop: "15px", // Increased top padding for better separation
-            paddingBottom: "20px", // Increased bottom padding for better visibility
+            paddingTop: `${15 * scale}px`, // Responsive padding
+            paddingBottom: `${20 * scale}px`, // Responsive padding
             borderTop: "none",
             background: "transparent",
             borderRadius: "0 0 20px 20px",
             boxShadow: "none",
-            minHeight: "60px", // Increased min height for better icon visibility
+            minHeight: `${60 * scale}px`, // Responsive min height
             marginTop: "auto", // Push to bottom of container
           }}>
             <div style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
+              gap: `${8 * scale}px`,
               opacity: iconProgress,
             }}>
               <div style={{
-                width: "44px",
-                height: "44px",
-                borderRadius: "8px",
+                width: `${44 * scale}px`,
+                height: `${44 * scale}px`,
+                borderRadius: `${8 * scale}px`,
                 backgroundColor: "transparent",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#888",
-                fontSize: "36px", // Increased from 28px to match MarketingComponentPlayer
+                fontSize: `${36 * scale}px`, // Responsive icon size
               }}>
                 <IconifyIcon icon="material-symbols:image-outline" />
               </div>
               <div style={{
-                width: "44px",
-                height: "44px",
-                borderRadius: "8px",
+                width: `${44 * scale}px`,
+                height: `${44 * scale}px`,
+                borderRadius: `${8 * scale}px`,
                 backgroundColor: "transparent",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#888",
-                fontSize: "36px", // Increased from 28px to match MarketingComponentPlayer
+                fontSize: `${36 * scale}px`, // Responsive icon size
               }}>
                 <IconifyIcon icon="material-symbols:mic-outline" />
               </div>
             </div>
             <div style={{
-              width: "60px", // Increased from 44px to match MarketingComponentPlayer
-              height: "60px", // Increased from 44px to match MarketingComponentPlayer
+              width: `${60 * scale}px`, // Responsive button size
+              height: `${60 * scale}px`, // Responsive button size
               borderRadius: "50%",
               backgroundColor: "#222",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontSize: "29px", // Reduced by 20% from 36px
+              fontSize: `${29 * scale}px`, // Responsive send icon size
               opacity: iconProgress,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+              boxShadow: `0 ${2 * scale}px ${8 * scale}px rgba(0,0,0,0.10)`,
             }}>
               <IconifyIcon icon="material-symbols:send" />
             </div>
@@ -430,19 +452,38 @@ const MarketingVideoPlayer: React.FC = () => {
   };
 
   const PromptUI: React.FC = () => {
+    const [containerHeight, setContainerHeight] = useState(400);
+    
+    useEffect(() => {
+      const handleResize = () => {
+        const vw = window.innerWidth;
+        if (vw < 480) {
+          setContainerHeight(200); // Smaller height for mobile
+        } else if (vw < 768) {
+          setContainerHeight(250);
+        } else {
+          setContainerHeight(400);
+        }
+      };
+      
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+    
     return (
       <div style={{
         position: 'relative',
         width: '100%',
-        height: '400px', // Reduced height to minimize spacing
+        height: `${containerHeight}px`, // Responsive height
         background: 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: '20px',
         overflow: 'visible',
-        padding: '0px', // Removed all padding
-        margin: '0px', // Removed all margin
+        padding: '0px',
+        margin: '0px',
       }}>
         <SearchBar opacity={1} />
       </div>

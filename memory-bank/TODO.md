@@ -624,5 +624,24 @@ Now that state management is unified, we need to test the complete system:
 - [ ] Duration management best practices
 - [ ] Autofix troubleshooting guide
 
-**Last Updated**: Sprint 38
+## 🚀 **SPRINT 85: CONTEXT ENGINEERING** (New - Analysis Complete)
+
+### **Overview**
+Transform from 7+ specialized agents to unified context-based generation system using modular context files.
+
+### **Key Benefits**
+- **Flexibility**: Combine multiple capabilities (typography + particles + TikTok)
+- **Simplicity**: 2 agents instead of 7+ tools
+- **Maintainability**: Update prompts without code changes
+- **Performance**: 50% code reduction expected
+
+### **Implementation Plan**
+- [ ] **Phase 1**: Build ContextManager and 3 initial contexts
+- [ ] **Phase 2**: Update Brain Orchestrator for context selection
+- [ ] **Phase 3**: Migrate all prompts to context files
+- [ ] **Phase 4**: Deprecate old tool-based system
+
+**Details**: See `/memory-bank/sprints/sprint85_context_engineering/`
+
+**Last Updated**: Sprint 85
 **Next Review**: After duration system fixes completed

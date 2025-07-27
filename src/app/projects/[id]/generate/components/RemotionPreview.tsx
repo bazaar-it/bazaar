@@ -63,31 +63,36 @@ export default function RemotionPreview({
           Loading component...
         </div>
       }>
-        <Player
-          ref={playerRef}
-          lazyComponent={lazyComponent}
-          inputProps={inputProps}
-          durationInFrames={durationInFrames}
-          compositionWidth={width}
-          compositionHeight={height}
-          fps={fps}
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'white',
-          }}
-          controls
-          showVolumeControls
-          doubleClickToFullscreen
-          clickToPlay
-          loop={loop}
-          autoPlay={true}
-          playbackRate={playbackRate}
-          inFrame={inFrame}
-          outFrame={outFrame}
-          key={refreshToken} // Force remount when refreshToken changes
-          acknowledgeRemotionLicense
-        />
+        <div className="w-full h-full flex items-center justify-center">
+          <Player
+            ref={playerRef}
+            lazyComponent={lazyComponent}
+            inputProps={inputProps}
+            durationInFrames={durationInFrames}
+            compositionWidth={width}
+            compositionHeight={height}
+            fps={fps}
+            style={{
+              width: '100%',
+              height: '100%',
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              backgroundColor: 'white',
+            }}
+            controls
+            showVolumeControls
+            doubleClickToFullscreen
+            clickToPlay
+            loop={loop}
+            autoPlay={true}
+            playbackRate={playbackRate}
+            inFrame={inFrame}
+            outFrame={outFrame}
+            key={refreshToken} // Force remount when refreshToken changes
+            acknowledgeRemotionLicense
+          />
+        </div>
       </Suspense>
     </ErrorBoundary>
   );

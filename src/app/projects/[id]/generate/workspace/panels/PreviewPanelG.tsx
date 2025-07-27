@@ -604,6 +604,8 @@ function FallbackScene${sceneIndex}() {
         // Generate simple single scene composition
         const compositeCode = `
 ${singleDestructuring}
+// Preserve native Audio constructor for scenes that might need it
+const NativeAudio = window.NativeAudio || window.Audio;
 
 ${scene.compiledCode}
 
@@ -1165,6 +1167,8 @@ function EmergencyScene${index}() {
         // Generate the composite code with single destructuring at top
         const compositeCode = `
 ${singleDestructuring}
+// Preserve native Audio constructor for scenes that might need it
+const NativeAudio = window.NativeAudio || window.Audio;
 
 ${sceneImports.join('\n\n')}
 
