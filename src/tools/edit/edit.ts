@@ -178,7 +178,12 @@ Please edit the code according to the user request. Return the complete modified
         modelConfig,
         [{ role: "user", content: messageContent }],
         { role: 'system', content: systemPrompt },
-        { responseFormat: { type: "json_object" }, debug: true }
+        { 
+          responseFormat: { type: "json_object" }, 
+          debug: true,
+          fallbackToOpenAI: true, // Enable fallback for edit operations
+          priority: 4 // High priority for edits
+        }
       );
 
       const responseTime = Date.now() - startTime;
