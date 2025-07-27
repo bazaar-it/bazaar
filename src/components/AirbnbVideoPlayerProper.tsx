@@ -59,6 +59,45 @@ const SearchScene: React.FC<{ frame: number; fps: number }> = ({ frame, fps }) =
   
   return (
     <AbsoluteFill className="bg-white">
+      {/* Status Bar */}
+      <div 
+        className="relative h-12 pt-2"
+        style={{ opacity: headerOpacity }}
+      >
+        {/* Time - positioned on left side, accounting for notch */}
+        <div className="absolute top-2 left-8">
+          <div className="text-lg font-semibold text-black">9:41</div>
+        </div>
+        
+        {/* Status Icons - positioned on right side, accounting for notch */}
+        <div className="absolute top-2 right-8 flex items-center gap-1">
+          {/* Modern signal bars */}
+          <div className="flex gap-0.5 items-end h-4">
+            <div className="w-1 h-1 bg-black rounded-full"></div>
+            <div className="w-1 h-2 bg-black rounded-full"></div>
+            <div className="w-1 h-3 bg-black rounded-full"></div>
+            <div className="w-1 h-4 bg-black rounded-full"></div>
+          </div>
+          
+          {/* Modern WiFi icon */}
+          <svg className="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2.5 8.5c3.5-3.5 9.5-3.5 13 0l-1.5 1.5c-2.5-2.5-6.5-2.5-9 0L2.5 8.5z"/>
+            <path d="M5 11c2-2 6-2 8 0l-1.5 1.5c-1-1-3-1-4 0L5 11z"/>
+            <path d="M7.5 13.5c0.5-0.5 1.5-0.5 2 0l-1 1-1-1z"/>
+          </svg>
+          
+          {/* Modern battery icon */}
+          <div className="flex items-center ml-1">
+            <div className="relative">
+              <div className="w-6 h-3 border border-black rounded-sm bg-white">
+                <div className="w-4 h-1.5 bg-black rounded-sm m-0.5"></div>
+              </div>
+              <div className="absolute -right-0.5 top-0.5 w-0.5 h-2 bg-black rounded-r-sm"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       {/* Header */}
       <div 
         className="h-16 px-6 flex items-center justify-between"

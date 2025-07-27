@@ -18,7 +18,7 @@ export default function OurStoryPage() {
         <div className="flex items-end gap-2">
           <a href="/" className="flex items-baseline gap-2 font-inter hover:opacity-80 transition-opacity">
             <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium text-gray-600">V3</span>
+            <span className="text-base font-medium text-gray-600">V2</span>
           </a>
         </div>
         <div className="flex gap-4 items-center">

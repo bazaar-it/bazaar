@@ -29,6 +29,27 @@ import FadeIn, { templateConfig as fadeInConfig } from './FadeIn';
 import TeslaStockGraph, { templateConfig as teslaStockGraphConfig } from './TeslaStockGraph';
 import CursorClickScene, { templateConfig as cursorClickSceneConfig } from './CursorClickScene';
 import MobileApp, { templateConfig as mobileAppConfig } from './MobileApp';
+import AppDownload, { templateConfig as appDownloadConfig } from './AppDownload';
+import AppJiggle, { templateConfig as appJiggleConfig } from './AppJiggle';
+import Keyboard, { templateConfig as keyboardConfig } from './Keyboard';
+import DarkBGGradientText, { templateConfig as darkBGGradientTextConfig } from './DarkBGGradientText';
+import Today1Percent, { templateConfig as today1PercentConfig } from './Today1Percent';
+import FlareBG, { templateConfig as flareBGConfig } from './FlareBG';
+import PinkBG, { templateConfig as pinkBGConfig } from './PinkBG';
+import SummerBG, { templateConfig as summerBGConfig } from './SummerBG';
+import DarkForestBG, { templateConfig as darkForestBGConfig } from './DarkForestBG';
+import BlueBG, { templateConfig as blueBGConfig } from './BlueBG';
+import SpaceGreyBG, { templateConfig as spaceGreyBGConfig } from './SpaceGreyBG';
+import InstaBG, { templateConfig as instaBGConfig } from './InstaBG';
+import SunriseBG, { templateConfig as sunriseBGConfig } from './SunriseBG';
+import FruitBG, { templateConfig as fruitBGConfig } from './FruitBG';
+import BahamasBG, { templateConfig as bahamasBGConfig } from './BahamasBG';
+import CoolSkyBG, { templateConfig as coolSkyBGConfig } from './CoolSkyBG';
+import VibeyBG, { templateConfig as vibeyBGConfig } from './VibeyBG';
+import HelloBubbles, { templateConfig as helloBubblesConfig } from './HelloBubbles';
+import VibesBG, { templateConfig as vibesBGConfig } from './VibesBG';
+import FastText, { templateConfig as fastTextConfig } from './FastText';
+import AirbnbApp, { templateConfig as airbnbAppConfig } from './AirbnbApp';
 
 export interface TemplateDefinition {
   id: string;
@@ -50,26 +71,176 @@ function addFormatSupport(template: Omit<TemplateDefinition, 'supportedFormats'>
 }
 
 export const TEMPLATES: TemplateDefinition[] = [
-  // ✅ NEW FORMAT: Self-contained templates
+  // 🎯 PRIMARY TEMPLATES - User specified order
+  
+  // 1. Fast Text (moved to top)
   addFormatSupport({
-    ...knowsCodeConfig,
-    component: KnowsCode,
+    ...fastTextConfig,
+    component: FastText,
+  }),
+  
+  // 2. Airbnb app
+  addFormatSupport({
+    ...airbnbAppConfig,
+    component: AirbnbApp,
+  }),
+  
+  // 3. Prompt UI (now supports vertical with 99% width)
+  addFormatSupport({
+    ...promptUIConfig,
+    component: PromptUI,
+  }),
+  
+  // 4. Today 1%
+  addFormatSupport({
+    ...today1PercentConfig,
+    component: Today1Percent,
+  }),
+  
+  // 5. Hello Bubbles
+  addFormatSupport({
+    ...helloBubblesConfig,
+    component: HelloBubbles,
+  }),
+  
+  // 6. Generating
+  addFormatSupport({
+    ...generatingConfig,
+    component: Generating,
+  }),
+  
+  // 7. App Download
+  addFormatSupport({
+    ...appDownloadConfig,
+    component: AppDownload,
+  }),
+  
+  // 8. App Jiggle
+  addFormatSupport({
+    ...appJiggleConfig,
+    component: AppJiggle,
+  }),
+  
+  // 9. Audio Animation
+  addFormatSupport({
+    ...audioAnimationConfig,
+    component: AudioAnimation,
+  }),
+  
+  // 10. Gradient Text
+  addFormatSupport({
+    ...gradientTextConfig,
+    component: GradientText,
+  }),
+  
+  // 11. Blue Gradient Text
+  addFormatSupport({
+    ...blueGradientTextConfig,
+    component: BlueGradientText,
+  }),
+  
+  // 12. Dark BG Gradient Text
+  addFormatSupport({
+    ...darkBGGradientTextConfig,
+    component: DarkBGGradientText,
+  }),
+  
+  // 13. Keyboard Animation
+  addFormatSupport({
+    ...keyboardConfig,
+    component: Keyboard,
+  }),
+
+  // 🎨 BACKGROUND GRADIENTS
+  addFormatSupport({
+    ...flareBGConfig,
+    component: FlareBG,
   }),
   addFormatSupport({
-    ...promptIntroConfig,
-    component: PromptIntro,
+    ...pinkBGConfig,
+    component: PinkBG,
+  }),
+  addFormatSupport({
+    ...summerBGConfig,
+    component: SummerBG,
+  }),
+  addFormatSupport({
+    ...darkForestBGConfig,
+    component: DarkForestBG,
+  }),
+  addFormatSupport({
+    ...blueBGConfig,
+    component: BlueBG,
+  }),
+  addFormatSupport({
+    ...spaceGreyBGConfig,
+    component: SpaceGreyBG,
+  }),
+  addFormatSupport({
+    ...instaBGConfig,
+    component: InstaBG,
+  }),
+  addFormatSupport({
+    ...sunriseBGConfig,
+    component: SunriseBG,
+  }),
+  addFormatSupport({
+    ...fruitBGConfig,
+    component: FruitBG,
+  }),
+  addFormatSupport({
+    ...bahamasBGConfig,
+    component: BahamasBG,
+  }),
+  addFormatSupport({
+    ...coolSkyBGConfig,
+    component: CoolSkyBG,
+  }),
+  addFormatSupport({
+    ...vibeyBGConfig,
+    component: VibeyBG,
+  }),
+  addFormatSupport({
+    ...vibesBGConfig,
+    component: VibesBG,
+  }),
+
+  // 📚 EVERYTHING ELSE - Alphabetical order
+  addFormatSupport({
+    ...appleSignInConfig,
+    component: AppleSignIn,
+  }),
+  addFormatSupport({
+    ...carouselTextConfig,
+    component: CarouselText,
+  }),
+  addFormatSupport({
+    ...codingConfig,
+    component: Coding,
+  }),
+  addFormatSupport({
+    ...cursorClickSceneConfig,
+    component: CursorClickScene,
+  }),
+  addFormatSupport({
+    ...dotDotDotConfig,
+    component: DotDotDot,
+  }),
+  addFormatSupport({
+    ...drawOnConfig,
+    component: DrawOn,
+  }),
+  addFormatSupport({
+    ...dualScreenAppConfig,
+    component: DualScreenApp,
+  }),
+  addFormatSupport({
+    ...fadeInConfig,
+    component: FadeIn,
   }),
   addFormatSupport({
     ...fintechConfig,
     component: FintechUI,
-  }),
-  addFormatSupport({
-    ...growthConfig,
-    component: GrowthGraph,
-  }),
-  addFormatSupport({
-    ...appleSignInConfig,
-    component: AppleSignIn,
   }),
   addFormatSupport({
     ...githubSignInConfig,
@@ -80,64 +251,32 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: GoogleSignIn,
   }),
   addFormatSupport({
-    ...codingConfig,
-    component: Coding,
-  }),
-  addFormatSupport({
-    ...blueGradientTextConfig,
-    component: BlueGradientText,
-  }),
-  addFormatSupport({
-    ...gradientTextConfig,
-    component: GradientText,
-  }),
-  addFormatSupport({
-    ...dualScreenAppConfig,
-    component: DualScreenApp,
-  }),
-  addFormatSupport({
-    ...audioAnimationConfig,
-    component: AudioAnimation,
-  }),
-  addFormatSupport({
-    ...promptUIConfig,
-    component: PromptUI,
-  }),
-  addFormatSupport({
-    ...generatingConfig,
-    component: Generating,
-  }),
-  addFormatSupport({
-    ...dotDotDotConfig,
-    component: DotDotDot,
-  }),
-  addFormatSupport({
-    ...placeholdersConfig,
-    component: Placeholders,
-  }),
-  addFormatSupport({
-    ...wordFlipConfig,
-    component: WordFlip,
-  }),
-  addFormatSupport({
-    ...morphingTextConfig,
-    component: MorphingText,
+    ...growthConfig,
+    component: GrowthGraph,
   }),
   addFormatSupport({
     ...highlightSweepConfig,
     component: HighlightSweep,
   }),
   addFormatSupport({
-    ...carouselTextConfig,
-    component: CarouselText,
+    ...knowsCodeConfig,
+    component: KnowsCode,
   }),
   addFormatSupport({
-    ...drawOnConfig,
-    component: DrawOn,
+    ...mobileAppConfig,
+    component: MobileApp,
   }),
   addFormatSupport({
-    ...wipeInConfig,
-    component: WipeIn,
+    ...morphingTextConfig,
+    component: MorphingText,
+  }),
+  addFormatSupport({
+    ...placeholdersConfig,
+    component: Placeholders,
+  }),
+  addFormatSupport({
+    ...promptIntroConfig,
+    component: PromptIntro,
   }),
   addFormatSupport({
     ...scaleInConfig,
@@ -148,19 +287,15 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: SlideIn,
   }),
   addFormatSupport({
-    ...fadeInConfig,
-    component: FadeIn,
-  }),
-  addFormatSupport({
     ...teslaStockGraphConfig,
     component: TeslaStockGraph,
   }),
   addFormatSupport({
-    ...cursorClickSceneConfig,
-    component: CursorClickScene,
+    ...wipeInConfig,
+    component: WipeIn,
   }),
   addFormatSupport({
-    ...mobileAppConfig,
-    component: MobileApp,
+    ...wordFlipConfig,
+    component: WordFlip,
   }),
 ]; 
