@@ -16,13 +16,39 @@ interface TemplatesPanelGProps {
   onSceneGenerated?: (sceneId: string) => Promise<void>;
 }
 
+// Get dimensions based on format
+const getFormatDimensions = (format: string) => {
+  switch (format) {
+    case 'portrait':
+      return { width: 1080, height: 1920 };
+    case 'square':
+      return { width: 1080, height: 1080 };
+    case 'landscape':
+    default:
+      return { width: 1920, height: 1080 };
+  }
+};
+
+// Get aspect ratio class based on format
+const getAspectRatioClass = (format: string) => {
+  switch (format) {
+    case 'portrait':
+      return 'aspect-[9/16]'; // 9:16 for portrait
+    case 'square':
+      return 'aspect-square'; // 1:1 for square
+    case 'landscape':
+    default:
+      return 'aspect-video'; // 16:9 for landscape
+  }
+};
+
 // Template thumbnail showing frame 15 by default
 const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition; format: string }) => {
   const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format);
 
   if (compilationError) {
     return (
-      <div className="w-full h-24 sm:h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-xs sm:text-sm font-medium">Template Error</div>
           <div className="text-gray-500 text-[10px] sm:text-xs mt-1">Failed to compile</div>
@@ -33,7 +59,7 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
 
   if (isCompiling || !component) {
     return (
-      <div className="w-full h-24 sm:h-32 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-gray-400 mx-auto mb-1 sm:mb-2" />
           <div className="text-gray-500 text-xs sm:text-sm">Compiling...</div>
@@ -99,9 +125,12 @@ const TemplatePreview = ({ template, onClick, isLoading, format }: {
     setIsHovered(false);
   }, []);
 
+  // Get the correct aspect ratio class based on format
+  const aspectRatioClass = getAspectRatioClass(format);
+
   return (
     <div 
-      className="relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group"
+      className={`relative w-full ${aspectRatioClass} bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group`}
       onClick={onClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -150,19 +179,6 @@ const TemplatePreview = ({ template, onClick, isLoading, format }: {
       )}
     </div>
   );
-};
-
-// Get dimensions based on format
-const getFormatDimensions = (format: string) => {
-  switch (format) {
-    case 'portrait':
-      return { width: 1080, height: 1920 };
-    case 'square':
-      return { width: 1080, height: 1080 };
-    case 'landscape':
-    default:
-      return { width: 1920, height: 1080 };
-  }
 };
 
 // Real template compilation component  
@@ -286,6 +302,22 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     
     return templates;
   }, [searchQuery, currentFormat]);
+
+  // Get grid columns based on format for better layout
+  const getGridColumns = (format: string) => {
+    switch (format) {
+      case 'portrait':
+        // Portrait videos - make cards 3x larger with fewer columns
+        return 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2';
+      case 'square':
+        // Square videos - make cards larger with fewer columns
+        return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2';
+      case 'landscape':
+      default:
+        // Landscape videos - make cards larger with 2 columns
+        return 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-2';
+    }
+  };
   
   return (
     <div className="flex flex-col h-full bg-white">
@@ -302,7 +334,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         </div>
       </div>
 
-      {/* Templates Grid - Mobile-responsive grid */}
+      {/* Templates Grid - Mobile-responsive grid with format-aware columns */}
       <div className="flex-1 overflow-y-auto p-2">
         {/* Format indicator */}
         <div className="mb-3 px-1">
@@ -315,12 +347,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           </div>
         </div>
         
-        <div 
-          className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
-        >
+        <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
           {filteredTemplates.map((template) => (
             <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
-              {/* Clickable Full-Size Preview with Frame 15 Thumbnail + Hover Video */}
+              {/* Clickable Full-Size Preview with correct aspect ratio */}
               <TemplatePreview 
                 template={template} 
                 onClick={() => handleAddTemplate(template)}

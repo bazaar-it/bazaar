@@ -1,8 +1,19 @@
-import { AbsoluteFill, interpolate, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import React from 'react';
 
 const Typewriter: React.FC = () => {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive font sizing
+  const baseFontSize = Math.min(width, height) * 0.08;
+  const fontSize = isPortrait ? baseFontSize * 0.7 : isSquare ? baseFontSize * 0.8 : baseFontSize;
+  const minWidth = isPortrait ? width * 0.6 : isSquare ? width * 0.4 : 400;
   const staticText = "We were born to";
   const words = ["build", "ship", "create"];
   const currentIndex = Math.floor(frame / 90) % words.length;
@@ -29,18 +40,23 @@ const Typewriter: React.FC = () => {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
-        fontSize: '96px',
+        fontSize: `${fontSize}px`,
         fontFamily: 'Inter, sans-serif',
         fontWeight: 700,
         color: '#1A1A1A',
         display: 'flex',
         alignItems: 'center',
         gap: '16px',
-        whiteSpace: 'nowrap',
+        whiteSpace: isPortrait ? 'normal' : 'nowrap',
+        flexDirection: isPortrait ? 'column' : 'row',
+        textAlign: 'center',
+        lineHeight: 1.1,
+        padding: isPortrait ? '0 20px' : '0',
+        maxWidth: isPortrait ? '90%' : 'none'
       }}
     >
       {staticText}
-      <span style={{ minWidth: '400px', display: 'inline-block' }}>
+      <span style={{ minWidth: `${minWidth}px`, display: 'inline-block' }}>
         {displayText}
         <span style={{ opacity: cursorVisible, color: '#1A1A1A', marginLeft: '2px' }}>|</span>
       </span>

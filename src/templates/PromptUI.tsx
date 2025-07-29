@@ -19,7 +19,7 @@ const SearchBar = ({ opacity }) => {
   const isLandscape = aspectRatio > 1.5;
   
   // Adaptive sizing based on format
-  const boxWidth = isPortrait ? width * 0.85 : isSquare ? width * 0.8 : width * 0.83;
+  const boxWidth = isPortrait ? width * 0.99 : isSquare ? width * 0.8 : width * 0.83;
   const fontSize = isPortrait ? width * 0.045 : isSquare ? width * 0.05 : width * 0.034;
   const iconSize = isPortrait ? width * 0.06 : isSquare ? width * 0.065 : width * 0.037;
   const padding = isPortrait ? width * 0.04 : width * 0.025;
@@ -245,7 +245,7 @@ const SearchBar = ({ opacity }: { opacity: number }) => {
   const isLandscape = aspectRatio > 1.5;
   
   // Adaptive sizing based on format
-  const boxWidth = isPortrait ? width * 0.85 : isSquare ? width * 0.8 : width * 0.83;
+  const boxWidth = isPortrait ? width * 0.99 : isSquare ? width * 0.8 : width * 0.83;
   const fontSize = isPortrait ? width * 0.045 : isSquare ? width * 0.05 : width * 0.034;
   const iconSize = isPortrait ? width * 0.06 : isSquare ? width * 0.065 : width * 0.037;
   const padding = isPortrait ? width * 0.04 : width * 0.025;

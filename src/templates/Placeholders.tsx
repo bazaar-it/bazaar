@@ -1,35 +1,52 @@
-import { AbsoluteFill, useCurrentFrame, spring } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, spring, useVideoConfig } from 'remotion';
 import React from 'react';
 
 const SearchInput: React.FC<{
   placeholders: string[];
   opacity: number;
-}> = ({ placeholders, opacity }) => {
+  width: number;
+  height: number;
+}> = ({ placeholders, opacity, width, height }) => {
   const frame = useCurrentFrame();
+  
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive sizing
+  const searchWidth = Math.min(width * 0.9, isPortrait ? width * 0.95 : 1200);
+  const searchHeight = isPortrait ? Math.min(height * 0.1, 96) : 96;
+  const fontSize = isPortrait ? Math.min(width * 0.05, 27) : 27;
+  const iconSize = isPortrait ? Math.min(width * 0.06, 36) : 36;
   const currentIndex = Math.floor(frame / 60) % placeholders.length;
   const currentText = placeholders[currentIndex];
 
   return (
     <div
       style={{
-        width: '1200px',
-        height: '96px',
+        width: `${searchWidth}px`,
+        height: `${searchHeight}px`,
         background: 'white',
-        borderRadius: '48px',
+        borderRadius: `${searchHeight / 2}px`,
         display: 'flex',
         alignItems: 'center',
-        padding: '0 48px',
+        padding: `0 ${searchHeight * 0.5}px`,
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
         position: 'relative',
         opacity,
       }}
     >
-      <div style={{ fontSize: '36px', marginRight: '24px' }}>🔍</div>
+      <div style={{ fontSize: `${iconSize}px`, marginRight: '24px' }}>🔍</div>
       <div
         style={{
-          fontSize: '27px',
+          fontSize: `${fontSize}px`,
           fontFamily: 'Inter, sans-serif',
           color: '#999999',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flex: 1
         }}
       >
         {currentText}
@@ -40,17 +57,31 @@ const SearchInput: React.FC<{
 
 const Title: React.FC<{
   opacity: number;
-}> = ({ opacity }) => {
+  width: number;
+  height: number;
+}> = ({ opacity, width, height }) => {
+  // Format detection for responsive sizing
+  const aspectRatio = width / height;
+  const isPortrait = aspectRatio < 1;
+  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
+  
+  // Responsive font sizing
+  const baseFontSize = Math.min(width, height) * 0.08;
+  const fontSize = isPortrait ? baseFontSize * 0.8 : isSquare ? baseFontSize * 0.9 : baseFontSize;
+  const marginBottom = isPortrait ? height * 0.05 : 72;
+
   return (
     <div
       style={{
-        fontSize: '72px',
+        fontSize: `${fontSize}px`,
         fontFamily: 'Inter, sans-serif',
         fontWeight: 700,
         color: 'black',
-        marginBottom: '72px',
+        marginBottom: `${marginBottom}px`,
         opacity,
         textAlign: 'center',
+        lineHeight: 1.1,
+        padding: isPortrait ? '0 20px' : '0'
       }}
     >
       Ask Bazaar AI Anything
@@ -60,6 +91,7 @@ const Title: React.FC<{
 
 const Placeholders: React.FC = () => {
   const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
 
   const mainProgress = spring({
     frame,
@@ -88,8 +120,8 @@ const Placeholders: React.FC = () => {
         justifyContent: 'center',
       }}
     >
-      <Title opacity={mainProgress} />
-      <SearchInput placeholders={placeholders} opacity={mainProgress} />
+      <Title opacity={mainProgress} width={width} height={height} />
+      <SearchInput placeholders={placeholders} opacity={mainProgress} width={width} height={height} />
     </AbsoluteFill>
   );
 };

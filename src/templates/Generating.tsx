@@ -18,11 +18,9 @@ const Generating: React.FC = () => {
     fontFamily: 'Helvetica, Arial, sans-serif',
     textAlign: 'center',
     color: 'transparent',
-    background: 'linear-gradient(to right, #888 20%, #fff 50%, #888 80%)',
-    backgroundSize: '200% auto',
+    background: `linear-gradient(to right, #888 20%, #fff 50%, #888 80%) ${shimmerPosition}% 0 / 200% auto`,
     WebkitBackgroundClip: 'text',
     backgroundClip: 'text',
-    backgroundPosition: `${shimmerPosition}% 0`,
   };
 
   return (
@@ -61,11 +59,9 @@ export default function Generating() {
         fontFamily: 'Helvetica, Arial, sans-serif',
         textAlign: 'center',
         color: 'transparent',
-        background: 'linear-gradient(to right, #888 20%, #fff 50%, #888 80%)',
-        backgroundSize: '200% auto',
+        background: \`linear-gradient(to right, #888 20%, #fff 50%, #888 80%) \${shimmerPosition}% 0 / 200% auto\`,
         WebkitBackgroundClip: 'text',
         backgroundClip: 'text',
-        backgroundPosition: \`\${shimmerPosition}% 0\`,
     };
 
     return (

@@ -44,6 +44,8 @@ function compileSceneCode(scene: any): React.ComponentType | null {
       // ✅ Code needs destructuring, add it
       finalCode = `
         const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random, Sequence, Audio, Video, Img, staticFile } = window.Remotion || {};
+        // Preserve native Audio constructor for scenes that might need it
+        const NativeAudio = window.NativeAudio || window.Audio;
         ${compiledCode}
       `;
     }
@@ -55,8 +57,19 @@ function compileSceneCode(scene: any): React.ComponentType | null {
       finalCode
     );
     
+    // Create a window proxy that preserves the native Audio constructor
+    const windowProxy = new Proxy(window, {
+      get(target, prop) {
+        if (prop === 'Audio') {
+          // Return the native Audio constructor
+          return (window as any).NativeAudio || window.Audio;
+        }
+        return target[prop as keyof Window];
+      }
+    });
+    
     // Execute and get the component
-    const Component = componentFunction(React, window);
+    const Component = componentFunction(React, windowProxy);
     return Component;
   } catch (error) {
     console.error('Failed to compile scene:', error);

@@ -25,6 +25,10 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       (window as any).ReactDOM = ReactDOM;
       (window as any).Remotion = Remotion;
       
+      // CRITICAL: Preserve native Audio constructor
+      // Store the native Audio constructor before Remotion might override it
+      (window as any).NativeAudio = window.Audio;
+      
       // NEW: Add Heroicons
       (window as any).HeroiconsSolid = HeroiconsSolid;
       (window as any).HeroiconsOutline = HeroiconsOutline;

@@ -5,6 +5,9 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ModelConfig, ModelProvider } from '~/config/models.config';
 import { SYSTEM_PROMPTS } from '~/config/prompts.config';
+import { apiKeyRotation } from './apiKeyRotation.service';
+import { simpleRateLimiter } from './simpleRateLimiter';
+import { aiMonitoring } from './monitoring.service';
 
 type SystemPromptConfig = typeof SYSTEM_PROMPTS[keyof typeof SYSTEM_PROMPTS];
 
@@ -36,29 +39,38 @@ export interface AIResponse {
 export interface AIClientOptions {
   responseFormat?: { type: "json_object" };
   debug?: boolean;
+  skipRateLimit?: boolean; // Skip rate limiting for critical requests
+  priority?: number; // Request priority in queue (higher = more important)
+  fallbackToOpenAI?: boolean; // Allow fallback to OpenAI if Anthropic fails
 }
 
 export class AIClientService {
   private static openaiClient: OpenAI | null = null;
   private static anthropicClient: Anthropic | null = null;
 
-  // Initialize clients lazily
-  private static getOpenAIClient(): OpenAI {
-    if (!this.openaiClient) {
-      this.openaiClient = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
+  // Initialize clients with rotating API keys
+  private static getOpenAIClient(apiKey?: string): OpenAI {
+    const key = apiKey || apiKeyRotation.getNextKey('openai') || process.env.OPENAI_API_KEY;
+    if (!key) {
+      throw new Error('No OpenAI API key available');
     }
-    return this.openaiClient;
+    
+    // Create new client with rotated key
+    return new OpenAI({
+      apiKey: key,
+    });
   }
 
-  private static getAnthropicClient(): Anthropic {
-    if (!this.anthropicClient) {
-      this.anthropicClient = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
+  private static getAnthropicClient(apiKey?: string): Anthropic {
+    const key = apiKey || apiKeyRotation.getNextKey('anthropic') || process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      throw new Error('No Anthropic API key available');
     }
-    return this.anthropicClient;
+    
+    // Create new client with rotated key
+    return new Anthropic({
+      apiKey: key,
+    });
   }
 
   // =============================================================================
@@ -76,15 +88,70 @@ export class AIClientService {
       ? [systemPrompt, ...messages.filter(m => m.role !== 'system')]
       : messages;
 
-    switch (config.provider) {
-      case 'openai':
-        return this.callOpenAI(config, fullMessages, options);
+    // Wrapper function for the actual API call
+    const makeApiCall = async (overrideConfig?: ModelConfig) => {
+      const finalConfig = overrideConfig || config;
       
-      case 'anthropic':
-        return this.callAnthropic(config, fullMessages, options);
+      switch (finalConfig.provider) {
+        case 'openai':
+          return this.callOpenAI(finalConfig, fullMessages, options);
+        
+        case 'anthropic':
+          return this.callAnthropic(finalConfig, fullMessages, options);
+        
+        default:
+          throw new Error(`Unsupported AI provider: ${finalConfig.provider}`);
+      }
+    };
+
+    try {
+      // Use rate limiter unless explicitly skipped
+      if (options?.skipRateLimit) {
+        return await makeApiCall();
+      }
       
-      default:
-        throw new Error(`Unsupported AI provider: ${config.provider}`);
+      // Queue the request with rate limiting
+      return await simpleRateLimiter.queueRequest(
+        config.provider,
+        () => makeApiCall(),
+        {
+          priority: options?.priority || 0,
+        }
+      );
+    } catch (error: any) {
+      // Handle rate limit or overload errors
+      const isOverloadError = error?.status === 529 || 
+                             error?.status === 429 || 
+                             error?.message?.includes('overloaded') ||
+                             error?.message?.includes('Rate limit');
+      
+      // Try fallback to OpenAI if enabled and we hit an overload
+      if (isOverloadError && options?.fallbackToOpenAI && config.provider === 'anthropic') {
+        console.warn('[AIClient] Anthropic overloaded, falling back to OpenAI');
+        
+        // Use a comparable OpenAI model
+        const fallbackConfig: ModelConfig = {
+          provider: 'openai',
+          model: 'gpt-4-turbo-preview', // or gpt-4.1 depending on requirements
+          temperature: config.temperature,
+          maxTokens: Math.min(config.maxTokens || 4096, 4096), // OpenAI has lower limits
+        };
+        
+        try {
+          return await simpleRateLimiter.queueRequest(
+            'openai',
+            () => makeApiCall(fallbackConfig),
+            {
+              priority: (options?.priority || 0) + 1, // Higher priority for fallback
+            }
+          );
+        } catch (fallbackError) {
+          console.error('[AIClient] Fallback to OpenAI also failed:', fallbackError);
+          // Return original error if fallback fails
+        }
+      }
+      
+      throw error;
     }
   }
 
@@ -93,7 +160,15 @@ export class AIClientService {
   // =============================================================================
 
   private static async callOpenAI(config: ModelConfig, messages: AIMessage[], options?: AIClientOptions): Promise<AIResponse> {
-    const client = this.getOpenAIClient();
+    const apiKey = apiKeyRotation.getNextKey('openai') || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('No OpenAI API key available');
+    }
+    
+    const client = this.getOpenAIClient(apiKey);
+    
+    // Start monitoring
+    const trackCompletion = aiMonitoring.startTracking('openai', config.model);
     
     try {
       // Log request details in debug mode
@@ -167,6 +242,10 @@ export class AIClientService {
           }
         }
 
+        // Record success
+        apiKeyRotation.recordSuccess('openai', apiKey);
+        await trackCompletion(true, undefined, response.usage?.total_tokens);
+        
         return {
           content: response.choices[0]?.message?.content || '',
           usage: {
@@ -178,6 +257,11 @@ export class AIClientService {
       }
     } catch (error) {
       console.error('OpenAI API Error:', error);
+      
+      // Record error for key rotation
+      apiKeyRotation.recordError('openai', apiKey, error);
+      await trackCompletion(false, error instanceof Error ? error : new Error(String(error)));
+      
       throw new Error(`OpenAI API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -187,7 +271,15 @@ export class AIClientService {
   // =============================================================================
 
   private static async callAnthropic(config: ModelConfig, messages: AIMessage[], options?: AIClientOptions): Promise<AIResponse> {
-    const client = this.getAnthropicClient();
+    const apiKey = apiKeyRotation.getNextKey('anthropic') || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error('No Anthropic API key available');
+    }
+    
+    const client = this.getAnthropicClient(apiKey);
+    
+    // Start monitoring
+    const trackCompletion = aiMonitoring.startTracking('anthropic', config.model);
     
     try {
       // Anthropic has different message structure - system message is separate
@@ -259,6 +351,10 @@ export class AIClientService {
         }
       }
 
+      // Record success
+      apiKeyRotation.recordSuccess('anthropic', apiKey);
+      await trackCompletion(true, undefined, response.usage.input_tokens + response.usage.output_tokens);
+      
       return {
         content,
         usage: {
@@ -269,6 +365,10 @@ export class AIClientService {
       };
     } catch (error: any) {
       console.error('Anthropic API Error:', error);
+      
+      // Record error for key rotation
+      apiKeyRotation.recordError('anthropic', apiKey, error);
+      await trackCompletion(false, error instanceof Error ? error : new Error(String(error)));
       
       // Handle 529 overload errors with retry suggestion
       if (error?.status === 529 || error?.error?.type === 'overloaded_error') {

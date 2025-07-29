@@ -977,3 +977,52 @@ export const userUsageRelations = relations(userUsage, ({ one }) => ({
     references: [projects.id],
   }),
 }));
+
+// --- API Usage Metrics table ---
+// Tracks AI API usage for monitoring and alerting
+export const apiUsageMetrics = createTable(
+  "api_usage_metric",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    
+    // API details
+    provider: d.varchar({ length: 50 }).notNull(), // 'anthropic' | 'openai'
+    model: d.varchar({ length: 100 }).notNull(),
+    
+    // Request metadata
+    userId: d.varchar({ length: 255 }).references(() => users.id),
+    projectId: d.uuid().references(() => projects.id),
+    toolName: d.varchar({ length: 100 }),
+    
+    // Metrics
+    success: d.boolean().notNull(),
+    responseTime: d.integer().notNull(), // milliseconds
+    tokenCount: d.integer(),
+    
+    // Error tracking
+    errorType: d.varchar({ length: 100 }),
+    errorMessage: d.text(),
+    
+    // Timestamp
+    timestamp: d.timestamp({ withTimezone: true }).notNull().defaultNow(),
+  }),
+  (t) => [
+    // Indexes for efficient queries
+    index("api_metrics_timestamp_idx").on(t.timestamp),
+    index("api_metrics_provider_idx").on(t.provider),
+    index("api_metrics_user_idx").on(t.userId),
+    index("api_metrics_success_idx").on(t.success),
+    index("api_metrics_composite_idx").on(t.provider, t.timestamp, t.success),
+  ]
+);
+
+export const apiUsageMetricsRelations = relations(apiUsageMetrics, ({ one }) => ({
+  user: one(users, {
+    fields: [apiUsageMetrics.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [apiUsageMetrics.projectId],
+    references: [projects.id],
+  }),
+}));

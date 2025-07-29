@@ -261,7 +261,11 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       const response = await AIClientService.generateResponse(
         getModel('codeGenerator'),
         [{ role: 'user', content: messageContent }],
-        { role: 'system', content: imageRecreatorPrompt }
+        { role: 'system', content: imageRecreatorPrompt },
+        { 
+          fallbackToOpenAI: true, // Enable fallback for image recreation
+          priority: 5 // Higher priority for image tasks
+        }
       );
       
       const rawOutput = response?.content;
@@ -348,7 +352,11 @@ DO NOT use any other duration value!`;
       const response = await AIClientService.generateResponse(
         config,
         messages,
-        { role: 'system', content: systemPrompt.content }
+        { role: 'system', content: systemPrompt.content },
+        { 
+          fallbackToOpenAI: true, // Enable fallback for code generation
+          priority: 5
+        }
       );
       
       const rawOutput = response?.content;
@@ -455,7 +463,11 @@ FUNCTION NAME: ${input.functionName}`;
       const response = await AIClientService.generateResponse(
         config,
         messages,
-        { role: 'system', content: systemPrompt.content }
+        { role: 'system', content: systemPrompt.content },
+        { 
+          fallbackToOpenAI: true, // Enable fallback for code generation
+          priority: 5
+        }
       );
       
       const rawOutput = response?.content;
@@ -757,7 +769,11 @@ Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytell
       const response = await AIClientService.generateResponse(
         config,
         messages,
-        { role: 'system', content: systemPrompt.content }
+        { role: 'system', content: systemPrompt.content },
+        { 
+          fallbackToOpenAI: true, // Enable fallback for code generation
+          priority: 5
+        }
       );
       
       const rawOutput = response?.content;

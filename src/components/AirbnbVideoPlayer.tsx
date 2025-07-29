@@ -182,9 +182,7 @@ const AirbnbVideoPlayer: React.FC = () => {
               width: '80px',
               height: '80px',
               borderRadius: '8px',
-              background: 'url(https://images.unsplash.com/photo-1586105251261-72a756497a11?w=400)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center'
+              background: 'url(https://images.unsplash.com/photo-1586105251261-72a756497a11?w=400) center/cover'
             }}></div>
             <div style={{ flex: 1 }}>
               <h3 style={{
@@ -619,9 +617,7 @@ const AirbnbVideoPlayer: React.FC = () => {
             {/* Main Image */}
             <div style={{
               height: '375px',
-              background: 'url(https://images.unsplash.com/photo-1571055107559-3e67626fa8be?w=800)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
+              background: 'url(https://images.unsplash.com/photo-1571055107559-3e67626fa8be?w=800) center/cover',
               position: 'relative'
             }}>
               {/* Photo counter */}
@@ -719,9 +715,7 @@ const AirbnbVideoPlayer: React.FC = () => {
                   width: '56px',
                   height: '56px',
                   borderRadius: '50%',
-                  background: 'url(https://images.unsplash.com/photo-1494790108755-2616b612b1-1c35-32f1-be1d-b90e88cbaa18d5f?w=200)',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
+                  background: 'url(https://images.unsplash.com/photo-1494790108755-2616b612b1-1c35-32f1-be1d-b90e88cbaa18d5f?w=200) center/cover',
                   marginRight: '16px',
                   position: 'relative'
                 }}>
@@ -1011,9 +1005,7 @@ const AirbnbVideoPlayer: React.FC = () => {
                      width: '48px',
                      height: '48px',
                      borderRadius: '50%',
-                     background: 'url(https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200)',
-                     backgroundSize: 'cover',
-                     backgroundPosition: 'center'
+                     background: 'url(https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200) center/cover'
                    }}></div>
                    <div>
                      <div style={{
@@ -1373,9 +1365,7 @@ const AirbnbVideoPlayer: React.FC = () => {
         }}>
           <div style={{
             height: '320px',
-            background: `url(${image})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            background: `url(${image}) center/cover`,
             position: 'relative',
             borderRadius: '12px'
           }}>
