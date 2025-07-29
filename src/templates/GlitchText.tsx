@@ -48,8 +48,7 @@ export default function GlitchText() {
         style={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(0deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%)`,
-          backgroundSize: "100% 4px",
+          background: `linear-gradient(0deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%) 0 0 / 100% 4px`,
           transform: `translateY(${scanlineY}%)`,
         }}
       />
@@ -190,8 +189,7 @@ return (
       style={{
         position: "absolute",
         inset: 0,
-        background: \`linear-gradient(0deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%)\`,
-        backgroundSize: "100% 4px",
+        background: \`linear-gradient(0deg, transparent 50%, rgba(0, 255, 0, 0.03) 50%) 0 0 / 100% 4px\`,
         transform: \`translateY(\${scanlineY}%)\`,
       }}
     />

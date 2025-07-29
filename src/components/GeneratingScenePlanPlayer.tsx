@@ -52,12 +52,10 @@ const GeneratingScenePlanPlayer: React.FC = () => {
               fontFamily: "Inter, sans-serif",
               fontWeight: "600",
               position: 'relative',
-              background: 'linear-gradient(90deg, #9ca3af 0%, #374151 25%, #1f2937 50%, #374151 75%, #9ca3af 100%)',
+              background: `linear-gradient(90deg, #9ca3af 0%, #374151 25%, #1f2937 50%, #374151 75%, #9ca3af 100%) ${backgroundPosition} / 200% 100%`,
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               color: 'transparent',
-              backgroundSize: '200% 100%',
-              backgroundPosition: backgroundPosition,
               transition: 'background-position 0.1s ease-out'
             }}
           >

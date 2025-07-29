@@ -33,10 +33,9 @@ export function GeneratingMessage({ className = "", phase = 'thinking' }: Genera
   // Use shimmer effect for thinking, pulse for generating
   const getAnimationStyle = () => {
     if (phase === 'thinking') {
-      // Shimmer effect
+      // Shimmer effect - using shorthand to avoid conflicting properties
       return {
-        background: 'linear-gradient(90deg, #64748b 25%, #94a3b8 50%, #64748b 75%)',
-        backgroundSize: '200% 100%',
+        background: 'linear-gradient(90deg, #64748b 25%, #94a3b8 50%, #64748b 75%) 0% 0% / 200% 100%',
         animation: 'shimmer 2s infinite',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
