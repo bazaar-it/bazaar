@@ -112,9 +112,11 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
       return;
     }
 
-    // Validate file size (50MB max)
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('Audio file too large (max 50MB)');
+    // Validate file size (4.5MB max for Vercel)
+    const maxSize = 4.5 * 1024 * 1024; // 4.5MB in bytes
+    if (file.size > maxSize) {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      toast.error(`Audio file too large (${fileSizeMB}MB). Maximum size is 4.5MB`);
       return;
     }
 
@@ -132,6 +134,10 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
       });
 
       if (!response.ok) {
+        // Check for 413 (Payload Too Large) error
+        if (response.status === 413) {
+          throw new Error('File too large. Please upload an audio file smaller than 4.5MB');
+        }
         throw new Error('Upload failed');
       }
 
@@ -157,7 +163,12 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
       });
     } catch (error) {
       console.error('Audio upload failed:', error);
-      toast.error('Failed to upload audio');
+      // Show specific error message if available
+      if (error instanceof Error && error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to upload audio');
+      }
     } finally {
       setIsUploading(false);
       // Reset file input

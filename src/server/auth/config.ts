@@ -110,6 +110,25 @@ export const authConfig = {
       return true; // Allow public routes
     },
   },
+  events: {
+    async createUser({ user }) {
+      // Create initial credits for new user
+      console.log(`[Auth] Creating initial credits for new user: ${user.email}`);
+      try {
+        await db.insert(userCredits).values({
+          userId: user.id,
+          dailyCredits: 5,
+          purchasedCredits: 20, // 20 signup bonus
+          lifetimeCredits: 20,
+          dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        console.log(`[Auth] Successfully created credits for user: ${user.email}`);
+      } catch (error) {
+        console.error(`[Auth] Failed to create credits for user ${user.email}:`, error);
+        // Don't throw - let signup continue even if credits fail
+      }
+    }
+  },
   // secret: env.AUTH_SECRET, // Implicitly uses AUTH_SECRET env var in v5
   pages: { signIn: "/login" }, // Custom login page
 } satisfies NextAuthConfig;
