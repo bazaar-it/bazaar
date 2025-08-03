@@ -50,6 +50,13 @@
       "when": 1753224156482,
       "tag": "0006_brief_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1754077585570,
+      "tag": "0007_illegal_liz_osborn",
+      "breakpoints": true
     }
   ]
 }

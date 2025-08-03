@@ -19,7 +19,9 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/exports' ? 'exports' :
     pathname === '/admin/testing' ? 'testing' :
     pathname === '/admin/email-marketing' ? 'email-marketing' :
-    pathname === '/admin/chat-export' ? 'chat-export' : 'homepage';
+    pathname === '/admin/chat-export' ? 'chat-export' :
+    pathname === '/admin/promo-codes' ? 'promo-codes' :
+    pathname === '/admin/paywall-analytics' ? 'paywall-analytics' : 'homepage';
 
   return (
     <div className="w-64 bg-white shadow-sm border-r border-gray-200 min-h-screen">
@@ -118,6 +120,36 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
               </svg>
               Exports
+            </Link>
+
+            {/* Promo Codes */}
+            <Link 
+              href="/admin/promo-codes"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full text-left transition-colors ${
+                currentSection === 'promo-codes'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+              Promo Codes
+            </Link>
+
+            {/* Paywall Analytics */}
+            <Link 
+              href="/admin/paywall-analytics"
+              className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full text-left transition-colors ${
+                currentSection === 'paywall-analytics'
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="mr-3 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Paywall Analytics
             </Link>
 
             {/* Coming Soon section */}

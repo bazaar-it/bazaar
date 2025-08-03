@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2783,6 +2783,126 @@ export default function GeneratedScene() {
           start: previousStartDate.toISOString(),
           end: previousEndDate.toISOString(),
         },
+      };
+    }),
+
+  // Get all promo codes
+  getPromoCodes: adminOnlyProcedure
+    .query(async () => {
+      const codes = await db.select()
+        .from(promoCodes)
+        .orderBy(desc(promoCodes.createdAt));
+      
+      return codes;
+    }),
+
+  // Create a new promo code
+  createPromoCode: adminOnlyProcedure
+    .input(z.object({
+      code: z.string().min(1).max(50),
+      description: z.string().optional(),
+      discountType: z.enum(["percentage", "fixed_amount", "free_credits"]),
+      discountValue: z.number().positive(),
+      maxUses: z.number().positive().optional(),
+      validUntil: z.date().optional(),
+      minPurchaseAmount: z.number().min(0).optional(),
+      applicablePackages: z.array(z.string().uuid()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // Check if code already exists
+      const existing = await db.select()
+        .from(promoCodes)
+        .where(eq(promoCodes.code, input.code))
+        .limit(1);
+      
+      if (existing.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Promo code already exists",
+        });
+      }
+
+      const [newCode] = await db.insert(promoCodes).values({
+        code: input.code,
+        description: input.description,
+        discountType: input.discountType,
+        discountValue: input.discountValue,
+        maxUses: input.maxUses,
+        validUntil: input.validUntil,
+        minPurchaseAmount: input.minPurchaseAmount,
+        applicablePackages: input.applicablePackages,
+        createdBy: ctx.session.user.id,
+      }).returning();
+
+      return newCode;
+    }),
+
+  // Deactivate a promo code
+  deactivatePromoCode: adminOnlyProcedure
+    .input(z.object({
+      promoId: z.string().uuid(),
+    }))
+    .mutation(async ({ input }) => {
+      await db.update(promoCodes)
+        .set({ validUntil: new Date() })
+        .where(eq(promoCodes.id, input.promoId));
+      
+      return { success: true };
+    }),
+
+  // Get paywall analytics
+  getPaywallAnalytics: adminOnlyProcedure
+    .input(z.object({
+      startDate: z.date().optional(),
+      endDate: z.date().optional(),
+    }))
+    .query(async ({ input }) => {
+      const startDate = input.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default 30 days
+      const endDate = input.endDate || new Date();
+
+      // Get event counts
+      const events = await db.select({
+        eventType: paywallEvents.eventType,
+        count: count(),
+      })
+        .from(paywallEvents)
+        .where(
+          and(
+            gte(paywallEvents.createdAt, startDate),
+            lte(paywallEvents.createdAt, endDate)
+          )
+        )
+        .groupBy(paywallEvents.eventType);
+
+      // Get unique users per event type
+      const uniqueUsers = await db.select({
+        eventType: paywallEvents.eventType,
+        uniqueUsers: countDistinct(paywallEvents.userId),
+      })
+        .from(paywallEvents)
+        .where(
+          and(
+            gte(paywallEvents.createdAt, startDate),
+            lte(paywallEvents.createdAt, endDate)
+          )
+        )
+        .groupBy(paywallEvents.eventType);
+
+      // Get daily analytics
+      const dailyStats = await db.select()
+        .from(paywallAnalytics)
+        .where(
+          and(
+            gte(paywallAnalytics.date, startDate.toISOString().split('T')[0]),
+            lte(paywallAnalytics.date, endDate.toISOString().split('T')[0])
+          )
+        )
+        .orderBy(paywallAnalytics.date);
+
+      return {
+        events: events.reduce((acc, e) => ({ ...acc, [e.eventType]: e.count }), {}),
+        uniqueUsers: uniqueUsers.reduce((acc, e) => ({ ...acc, [e.eventType]: e.uniqueUsers }), {}),
+        dailyStats,
       };
     }),
 });

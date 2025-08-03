@@ -1026,3 +1026,97 @@ export const apiUsageMetricsRelations = relations(apiUsageMetrics, ({ one }) => 
     references: [projects.id],
   }),
 }));
+
+// --- Promo Codes & Analytics Tables ---
+
+// Promo codes table
+export const promoCodes = createTable("promo_codes", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  code: d.varchar("code", { length: 50 }).unique().notNull(),
+  description: d.text("description"),
+  discountType: d.text("discount_type", {
+    enum: ["percentage", "fixed_amount", "free_credits"]
+  }).notNull(),
+  discountValue: d.integer("discount_value").notNull(), // percentage (0-100), cents for fixed, or credit count
+  maxUses: d.integer("max_uses"), // NULL for unlimited
+  usesCount: d.integer("uses_count").default(0).notNull(),
+  validFrom: d.timestamp("valid_from", { withTimezone: true }).defaultNow().notNull(),
+  validUntil: d.timestamp("valid_until", { withTimezone: true }),
+  minPurchaseAmount: d.integer("min_purchase_amount"), // Minimum purchase in cents
+  applicablePackages: d.uuid("applicable_packages").array(), // Array of package IDs, NULL for all
+  createdBy: d.varchar("created_by", { length: 255 }).references(() => users.id),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("promo_codes_code_idx").on(t.code),
+  index("promo_codes_valid_idx").on(t.validFrom, t.validUntil),
+]);
+
+// Track promo code usage
+export const promoCodeUsage = createTable("promo_code_usage", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  promoCodeId: d.uuid("promo_code_id").notNull().references(() => promoCodes.id),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+  orderId: d.varchar("order_id", { length: 255 }), // Stripe payment intent ID
+  discountAppliedCents: d.integer("discount_applied_cents").notNull(),
+  usedAt: d.timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("promo_code_user_unique").on(t.promoCodeId, t.userId), // One use per user
+  index("promo_code_usage_user_idx").on(t.userId),
+  index("promo_code_usage_code_idx").on(t.promoCodeId),
+]);
+
+// Track all paywall interactions
+export const paywallEvents = createTable("paywall_events", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // 'viewed', 'clicked_package', 'initiated_checkout', 'completed_purchase'
+  packageId: d.uuid("package_id"), // References credit_package, but not enforced for flexibility
+  metadata: d.jsonb("metadata"), // Store additional context
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("paywall_events_user_idx").on(t.userId),
+  index("paywall_events_type_idx").on(t.eventType),
+  index("paywall_events_created_idx").on(t.createdAt),
+]);
+
+// Analytics aggregations for performance
+export const paywallAnalytics = createTable("paywall_analytics", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  date: d.date("date").notNull().unique(),
+  uniqueUsersHitPaywall: d.integer("unique_users_hit_paywall").default(0).notNull(),
+  uniqueUsersClickedPackage: d.integer("unique_users_clicked_package").default(0).notNull(),
+  uniqueUsersInitiatedCheckout: d.integer("unique_users_initiated_checkout").default(0).notNull(),
+  uniqueUsersCompletedPurchase: d.integer("unique_users_completed_purchase").default(0).notNull(),
+  totalRevenueCents: d.integer("total_revenue_cents").default(0).notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("paywall_analytics_date_idx").on(t.date),
+]);
+
+// Relations for promo codes
+export const promoCodesRelations = relations(promoCodes, ({ one, many }) => ({
+  createdBy: one(users, {
+    fields: [promoCodes.createdBy],
+    references: [users.id],
+  }),
+  usage: many(promoCodeUsage),
+}));
+
+export const promoCodeUsageRelations = relations(promoCodeUsage, ({ one }) => ({
+  promoCode: one(promoCodes, {
+    fields: [promoCodeUsage.promoCodeId],
+    references: [promoCodes.id],
+  }),
+  user: one(users, {
+    fields: [promoCodeUsage.userId],
+    references: [users.id],
+  }),
+}));
+
+export const paywallEventsRelations = relations(paywallEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [paywallEvents.userId],
+    references: [users.id],
+  }),
+}));
