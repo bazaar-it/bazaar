@@ -283,9 +283,9 @@ export async function getLambdaRenderProgress(renderId: string, bucketName: stri
     
     // Parse the CLI output to extract progress information
     const progressMatch = stdout.match(/Overall progress:\s*([\d.]+)%/);
-    const overallProgress = progressMatch ? parseFloat(progressMatch[1]) / 100 : 0;
+    const overallProgress = progressMatch && progressMatch[1] ? parseFloat(progressMatch[1]) / 100 : 0;
     const doneMatch = stdout.match(/Render\s+status:\s*(DONE|RENDERING|ERROR)/i);
-    const done = doneMatch ? doneMatch[1].toUpperCase() === 'DONE' : false;
+    const done = doneMatch && doneMatch[1] ? doneMatch[1].toUpperCase() === 'DONE' : false;
     const outputMatch = stdout.match(/Output:\s*(https:\/\/[^\s]+)/);
     const outputFile = outputMatch ? outputMatch[1] : null;
     

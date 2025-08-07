@@ -1,11 +1,10 @@
 // src/server/db/index.ts
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
-import { neon, neonConfig } from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless";
 import { env } from "~/env";
 import * as schema from "./schema";
 
-// Recommended by Neon for Drizzle to cache connection details.
-neonConfig.fetchConnectionCache = true;
+// fetchConnectionCache is deprecated and now always true
 
 // Try to use pooling if available, otherwise fall back to HTTP
 let db: ReturnType<typeof drizzleNeon<typeof schema>>;

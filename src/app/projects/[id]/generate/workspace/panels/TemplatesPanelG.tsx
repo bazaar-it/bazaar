@@ -75,11 +75,11 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
   return (
     <div className="w-full h-full">
       <Player
-        component={playerProps.component}
-        durationInFrames={playerProps.durationInFrames || 150}
-        fps={playerProps.fps || 30}
-        compositionWidth={playerProps.compositionWidth || 1920}
-        compositionHeight={playerProps.compositionHeight || 1080}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={false}
@@ -102,11 +102,11 @@ const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinitio
   return (
     <div className="w-full h-full">
       <Player
-        component={playerProps.component}
-        durationInFrames={playerProps.durationInFrames || 150}
-        fps={playerProps.fps || 30}
-        compositionWidth={playerProps.compositionWidth || 1920}
-        compositionHeight={playerProps.compositionHeight || 1080}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={true}

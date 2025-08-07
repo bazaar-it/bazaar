@@ -145,6 +145,11 @@ export class APIKeyRotationService {
       this.currentIndex.set(provider, (currentIdx + 1) % keys.length);
       attempts++;
       
+      // Skip if key is undefined (shouldn't happen but being safe)
+      if (!key) {
+        continue;
+      }
+      
       // Check if key is healthy and not in cooldown
       if (this.isKeyHealthy(key)) {
         key.lastUsed = Date.now();

@@ -255,9 +255,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
         projectId={projectId}
         scenes={currentScenes.map(scene => ({
           id: scene.id,
-          name: scene.data.name,
+          name: String(scene.data.name || 'Untitled'),
           duration: scene.duration,
-          tsxCode: scene.data.code,
+          tsxCode: String(scene.data.code || ''),
           order: 0,
           projectId,
           props: scene.data.props || {},
