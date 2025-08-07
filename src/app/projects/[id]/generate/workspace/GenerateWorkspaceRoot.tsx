@@ -14,6 +14,7 @@ import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContent
 import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
 import { useBreakpoint } from '~/hooks/use-breakpoint';
 import MobileAppHeader from '~/components/MobileAppHeader';
+import { CreateTemplateModal } from '~/components/CreateTemplateModal';
 
 // ✅ NEW: Debug flag for production logging
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -27,10 +28,11 @@ type Props = {
 
 export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
+  const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
   const { data: session } = useSession();
-  const { setProject } = useVideoState();
+  const { setProject, getCurrentProps } = useVideoState();
   const breakpoint = useBreakpoint();
   
   // Debug breakpoint detection
@@ -154,8 +156,15 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     });
   }, [projectId, renderMutation]);
   
-  // Access user info from session
-  const user = session?.user ? { name: session.user.name ?? "User", email: session.user.email ?? undefined } : undefined;
+  // Access user info from session with admin status
+  const user = session?.user ? { 
+    name: session.user.name ?? "User", 
+    email: session.user.email ?? undefined,
+    isAdmin: session.user.isAdmin ?? false
+  } : undefined;
+  
+  // Get current scenes for template creation
+  const currentScenes = getCurrentProps()?.scenes || [];
 
   // Use mobile layout for mobile breakpoint
   if (breakpoint === 'mobile') {
@@ -199,6 +208,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           isRendering={renderMutation.isPending}
           user={user}
           projectId={projectId}
+          onCreateTemplate={() => setIsCreateTemplateModalOpen(true)}
         />
       </div>
       
@@ -237,6 +247,25 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           />
         </div>
       </div>
+      
+      {/* Create Template Modal */}
+      <CreateTemplateModal
+        isOpen={isCreateTemplateModalOpen}
+        onClose={() => setIsCreateTemplateModalOpen(false)}
+        projectId={projectId}
+        scenes={currentScenes.map(scene => ({
+          id: scene.id,
+          name: scene.data.name,
+          duration: scene.duration,
+          tsxCode: scene.data.code,
+          order: 0,
+          projectId,
+          props: scene.data.props || {},
+          layoutJson: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }))}
+      />
     </div>
   );
 } 

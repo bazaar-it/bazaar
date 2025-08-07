@@ -990,18 +990,23 @@ export const apiUsageMetrics = createTable(
     model: d.varchar({ length: 100 }).notNull(),
     
     // Request metadata
-    userId: d.varchar({ length: 255 }).references(() => users.id),
-    projectId: d.uuid().references(() => projects.id),
-    toolName: d.varchar({ length: 100 }),
+    userId: d.varchar("user_id", { length: 255 }).references(() => users.id),
+    projectId: d.uuid("project_id").references(() => projects.id),
+    toolName: d.varchar("tool_name", { length: 100 }),
     
     // Metrics
     success: d.boolean().notNull(),
-    responseTime: d.integer().notNull(), // milliseconds
-    tokenCount: d.integer(),
+    responseTime: d.integer("response_time").notNull(), // milliseconds
+    inputTokens: d.integer("input_tokens"),
+    outputTokens: d.integer("output_tokens"),
+    tokenCount: d.integer("token_count"),
     
     // Error tracking
-    errorType: d.varchar({ length: 100 }),
-    errorMessage: d.text(),
+    errorType: d.varchar("error_type", { length: 100 }),
+    errorMessage: d.text("error_message"),
+    
+    // Additional data
+    metadata: d.jsonb("metadata"),
     
     // Timestamp
     timestamp: d.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -1118,5 +1123,51 @@ export const paywallEventsRelations = relations(paywallEvents, ({ one }) => ({
   user: one(users, {
     fields: [paywallEvents.userId],
     references: [users.id],
+  }),
+}));
+
+// --- Dynamic Templates System ---
+
+// Templates table for storing user-created and official templates
+export const templates = createTable("templates", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  name: d.varchar("name", { length: 255 }).notNull(),
+  description: d.text("description"),
+  tsxCode: d.text("tsx_code").notNull(),
+  duration: d.integer("duration").notNull(),
+  previewFrame: d.integer("preview_frame").default(15),
+  supportedFormats: d.jsonb("supported_formats").$type<('landscape' | 'portrait' | 'square')[]>().default(['landscape', 'portrait', 'square']),
+  thumbnailUrl: d.text("thumbnail_url"),
+  category: d.varchar("category", { length: 100 }),
+  tags: d.jsonb("tags").$type<string[]>().default([]),
+  isActive: d.boolean("is_active").default(true).notNull(),
+  isOfficial: d.boolean("is_official").default(false).notNull(),
+  createdBy: d.varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  sourceProjectId: d.uuid("source_project_id").references(() => projects.id),
+  sourceSceneId: d.uuid("source_scene_id").references(() => scenes.id),
+  usageCount: d.integer("usage_count").default(0).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("templates_active_idx").on(t.isActive),
+  index("templates_official_idx").on(t.isOfficial),
+  index("templates_category_idx").on(t.category),
+  index("templates_created_by_idx").on(t.createdBy),
+  index("templates_created_at_idx").on(t.createdAt),
+]);
+
+// Template relations
+export const templatesRelations = relations(templates, ({ one }) => ({
+  creator: one(users, {
+    fields: [templates.createdBy],
+    references: [users.id],
+  }),
+  sourceProject: one(projects, {
+    fields: [templates.sourceProjectId],
+    references: [projects.id],
+  }),
+  sourceScene: one(scenes, {
+    fields: [templates.sourceSceneId],
+    references: [scenes.id],
   }),
 }));
