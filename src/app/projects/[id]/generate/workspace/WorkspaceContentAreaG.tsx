@@ -702,6 +702,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       setOpenPanels((panels) => panels.filter((p) => p.id !== id));
     }, []);
 
+    // Memoize current scenes to avoid recalculation on every render
+    const currentScenes = useMemo(() => {
+      return getCurrentProps()?.scenes || [];
+    }, [getCurrentProps]);
+
     // Generate panel content - memoized to prevent unnecessary re-renders
     const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
       if (!panel) return null;
@@ -802,36 +807,36 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               {openPanels.length > 0 && (
                 <PanelGroup direction="horizontal" className="h-full">
                   {openPanels.map((panel, idx) => (
-                    <React.Fragment key={panel?.id || `panel-${idx}`}>
-                      <Panel 
-                        minSize={10} 
-                        defaultSize={100 / (openPanels.length || 1)}
-                        className="transition-all duration-300"
-                        style={{
-                          transformOrigin: 'center',
-                          transition: 'all 250ms cubic-bezier(0.25, 1, 0.5, 1)'
-                        }}
-                      >
-                        <SortablePanelG 
-                          id={panel?.id || `panel-${idx}`}
-                          onRemove={() => panel?.id ? removePanel(panel.id) : null}
-                          projectId={projectId}
-                          currentPlaybackSpeed={currentPlaybackSpeed}
-                          setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
-                          currentLoopState={currentLoopState}
-                          setCurrentLoopState={setCurrentLoopState}
-                          selectedSceneId={selectedSceneId}
-                          onSceneSelect={setSelectedSceneId}
-                          scenes={useMemo(() => getCurrentProps()?.scenes || [], [getCurrentProps])}
+                      <React.Fragment key={panel?.id || `panel-${idx}`}>
+                        <Panel 
+                          minSize={10} 
+                          defaultSize={100 / (openPanels.length || 1)}
+                          className="transition-all duration-300"
+                          style={{
+                            transformOrigin: 'center',
+                            transition: 'all 250ms cubic-bezier(0.25, 1, 0.5, 1)'
+                          }}
                         >
-                          {renderPanelContent(panel)}
-                        </SortablePanelG>
-                      </Panel>
-                      {/* Add resize handle between panels but not after the last one */}
-                      {idx < openPanels.length - 1 && (
-                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
-                      )}
-                    </React.Fragment>
+                          <SortablePanelG 
+                            id={panel?.id || `panel-${idx}`}
+                            onRemove={() => panel?.id ? removePanel(panel.id) : null}
+                            projectId={projectId}
+                            currentPlaybackSpeed={currentPlaybackSpeed}
+                            setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
+                            currentLoopState={currentLoopState}
+                            setCurrentLoopState={setCurrentLoopState}
+                            selectedSceneId={selectedSceneId}
+                            onSceneSelect={setSelectedSceneId}
+                            scenes={currentScenes}
+                          >
+                            {renderPanelContent(panel)}
+                          </SortablePanelG>
+                        </Panel>
+                        {/* Add resize handle between panels but not after the last one */}
+                        {idx < openPanels.length - 1 && (
+                          <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
+                        )}
+                      </React.Fragment>
                   ))}
                 </PanelGroup>
               )}
