@@ -11,7 +11,9 @@
 
 export const CODE_GENERATOR = {
   role: 'system' as const,
-  content: `Your role is to take the users input and create motion graphics scenes for their software product using react/remotion.
+  content: `CRITICAL: You must output ONLY JavaScript/React code. Do NOT include any explanatory text, comments, or descriptions outside the code block. Start your response with the code immediately.
+
+Your role is to take the users input and create motion graphics scenes for their software product using react/remotion.
 
 When an image is attached to this message, it was provided by the user and there are several options for handling it - Either reference, insert, or recreate. Analyze the image alongside the users message and choose the best option.
 
