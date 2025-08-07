@@ -56,9 +56,17 @@ export interface TemplateDefinition {
   name: string;
   duration: number; // in frames
   previewFrame: number; // fps for preview
-  component: React.ComponentType; // Real React component for Remotion Player
+  component: React.ComponentType | null; // Real React component for Remotion Player (null for DB templates)
   getCode: () => string; // Code string for database storage
   supportedFormats?: VideoFormat[]; // Formats this template works well with
+  // Additional fields for database templates
+  isFromDatabase?: boolean;
+  isOfficial?: boolean;
+  category?: string | null;
+  creator?: {
+    id: string;
+    name: string | null;
+  };
 }
 
 // Helper function to add format support to templates

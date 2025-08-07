@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2 } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -55,8 +55,9 @@ interface AppHeaderProps {
   isRenaming?: boolean;
   onRender?: () => void;
   isRendering?: boolean;
-  user?: { name: string; email?: string };
+  user?: { name: string; email?: string; isAdmin?: boolean };
   projectId?: string;
+  onCreateTemplate?: () => void;
 }
 
 export default function AppHeader({
@@ -67,6 +68,7 @@ export default function AppHeader({
   isRendering = false,
   user,
   projectId,
+  onCreateTemplate,
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
@@ -320,6 +322,19 @@ export default function AppHeader({
               {isSharing ? <Copy className="h-4 w-4 animate-pulse" /> : <ShareIcon className="h-4 w-4" />}
               {isSharing ? "Copied!" : "Share"}
             </Button>
+            
+            {/* Create Template button - Admin only */}
+            {user?.isAdmin && onCreateTemplate && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 rounded-[15px] shadow-sm border-purple-200 text-purple-600 hover:bg-purple-50"
+                onClick={onCreateTemplate}
+              >
+                <Layers className="h-4 w-4" />
+                Template
+              </Button>
+            )}
             
             {/* Download button - MP4 1080p */}
             <Button

@@ -2,12 +2,10 @@
 import { redirect, notFound } from "next/navigation";
 import { auth } from "~/server/auth";
 import { getUserProjects } from "~/server/queries/getUserProjects";
-import { db } from "~/server/db";
-import { projects, scenes } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
 import GenerateWorkspaceRoot from "./workspace/GenerateWorkspaceRoot";
 import { analytics } from '~/lib/utils/analytics';
 import type { InputProps } from '~/lib/types/video/input-props';
+import { api } from "~/trpc/server";
 
 // Force dynamic rendering to prevent caching issues
 export const dynamic = 'force-dynamic';
@@ -28,44 +26,22 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
   }
 
   try {
-    // console.log('Fetching project and user projects...');
-    const [projectResult, userProjects] = await Promise.all([
-      db.query.projects.findFirst({ where: eq(projects.id, projectId) }),
+    // Use consolidated query to fetch everything in parallel
+    const [fullProjectData, userProjects] = await Promise.all([
+      api.project.getFullProject({ id: projectId }),
       getUserProjects(session.user.id),
-    ]); 
+    ]);
 
-    // console.log('Project result:', projectResult ? 'found' : 'null');
-    // console.log('User projects count:', userProjects?.length || 0);
-
-    if (!projectResult) {
-      // console.log('Project not found, calling notFound()');
+    if (!fullProjectData) {
       notFound();
     }
 
-    if (projectResult.userId !== session.user.id) {
-      return (
-        <div className="flex items-center justify-center h-screen bg-gray-50/30">
-          <div className="text-center p-8 max-w-md bg-white/95 rounded-[15px] shadow-lg border border-gray-100">
-            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
-            <p className="mb-4">You don't have permission to view this project.</p>
-          </div>
-        </div>
-      );
-    }
-
-    // 🚨 CRITICAL FIX: Check for existing scenes FIRST to avoid welcome video override
-    // Note: This check happens on initial page load - scenes created after will show on refresh
-    const existingScenes = await db.query.scenes.findMany({
-      where: eq(scenes.projectId, projectId),
-      orderBy: [scenes.order],
-    });
+    const { project: projectResult, scenes: existingScenes } = fullProjectData;
     
     let actualInitialProps: InputProps;
     
     if (existingScenes.length > 0) {
       // ✅ HAS REAL SCENES: Convert database scenes to props format
-      // console.log('[GeneratePage] Found', existingScenes.length, 'existing scenes, building props from database');
-      
       let currentStart = 0;
       const convertedScenes = existingScenes.map((dbScene) => {
         const sceneDuration = dbScene.duration || 150; // Fallback to 5s
@@ -96,11 +72,8 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         },
         scenes: convertedScenes
       };
-      
-      // console.log('[GeneratePage] ✅ Built initial props from', convertedScenes.length, 'database scenes');
     } else {
       // ✅ NEW PROJECT: Use stored props (welcome video for new projects)
-      // console.log('[GeneratePage] No existing scenes found, using stored project props (welcome video)');
       actualInitialProps = projectResult.props;
     }
 

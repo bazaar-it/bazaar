@@ -118,7 +118,7 @@ function CreateAllScenesButton({ projectId, userId, totalScenePlans, scenePlanMe
   );
 }
 
-export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId, onEditScenePlan, isFirstScenePlan, totalScenePlans }: ChatMessageProps) {
+function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasIterations: hasIterationsProp, userId, onEditScenePlan, isFirstScenePlan, totalScenePlans }: ChatMessageProps) {
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
@@ -524,3 +524,19 @@ export function ChatMessage({ message, onImageClick, projectId, onRevert, hasIte
     </div>
   );
 }
+
+// Memoized export to prevent unnecessary re-renders
+export const ChatMessage = React.memo(ChatMessageComponent, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if these specific props change
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.status === nextProps.message.status &&
+    prevProps.message.kind === nextProps.message.kind &&
+    prevProps.hasIterations === nextProps.hasIterations &&
+    prevProps.isFirstScenePlan === nextProps.isFirstScenePlan &&
+    prevProps.totalScenePlans === nextProps.totalScenePlans
+  );
+});
+
+ChatMessage.displayName = 'ChatMessage';

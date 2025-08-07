@@ -1,0 +1,194 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.bazaar-vid_templates": {
+      "name": "bazaar-vid_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tsx_code": {
+          "name": "tsx_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration": {
+          "name": "duration",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "preview_frame": {
+          "name": "preview_frame",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 15
+        },
+        "supported_formats": {
+          "name": "supported_formats",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[\"landscape\",\"portrait\",\"square\"]'"
+        },
+        "thumbnail_url": {
+          "name": "thumbnail_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "category": {
+          "name": "category",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "is_official": {
+          "name": "is_official",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_project_id": {
+          "name": "source_project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_scene_id": {
+          "name": "source_scene_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usage_count": {
+          "name": "usage_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      },
+      "indexes": {
+        "templates_active_idx": {
+          "name": "templates_active_idx",
+          "columns": ["is_active"],
+          "isUnique": false
+        },
+        "templates_official_idx": {
+          "name": "templates_official_idx",
+          "columns": ["is_official"],
+          "isUnique": false
+        },
+        "templates_category_idx": {
+          "name": "templates_category_idx",
+          "columns": ["category"],
+          "isUnique": false
+        },
+        "templates_created_by_idx": {
+          "name": "templates_created_by_idx",
+          "columns": ["created_by"],
+          "isUnique": false
+        },
+        "templates_created_at_idx": {
+          "name": "templates_created_at_idx",
+          "columns": ["created_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "templates_created_by_fkey": {
+          "name": "templates_created_by_fkey",
+          "tableFrom": "bazaar-vid_templates",
+          "tableTo": "bazaar-vid_user",
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "templates_source_project_id_fkey": {
+          "name": "templates_source_project_id_fkey",
+          "tableFrom": "bazaar-vid_templates",
+          "tableTo": "bazaar-vid_project",
+          "columnsFrom": ["source_project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "templates_source_scene_id_fkey": {
+          "name": "templates_source_scene_id_fkey",
+          "tableFrom": "bazaar-vid_templates",
+          "tableTo": "bazaar-vid_scene",
+          "columnsFrom": ["source_scene_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}

@@ -990,18 +990,23 @@ export const apiUsageMetrics = createTable(
     model: d.varchar({ length: 100 }).notNull(),
     
     // Request metadata
-    userId: d.varchar({ length: 255 }).references(() => users.id),
-    projectId: d.uuid().references(() => projects.id),
-    toolName: d.varchar({ length: 100 }),
+    userId: d.varchar("user_id", { length: 255 }).references(() => users.id),
+    projectId: d.uuid("project_id").references(() => projects.id),
+    toolName: d.varchar("tool_name", { length: 100 }),
     
     // Metrics
     success: d.boolean().notNull(),
-    responseTime: d.integer().notNull(), // milliseconds
-    tokenCount: d.integer(),
+    responseTime: d.integer("response_time").notNull(), // milliseconds
+    inputTokens: d.integer("input_tokens"),
+    outputTokens: d.integer("output_tokens"),
+    tokenCount: d.integer("token_count"),
     
     // Error tracking
-    errorType: d.varchar({ length: 100 }),
-    errorMessage: d.text(),
+    errorType: d.varchar("error_type", { length: 100 }),
+    errorMessage: d.text("error_message"),
+    
+    // Additional data
+    metadata: d.jsonb("metadata"),
     
     // Timestamp
     timestamp: d.timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -1024,5 +1029,145 @@ export const apiUsageMetricsRelations = relations(apiUsageMetrics, ({ one }) => 
   project: one(projects, {
     fields: [apiUsageMetrics.projectId],
     references: [projects.id],
+  }),
+}));
+
+// --- Promo Codes & Analytics Tables ---
+
+// Promo codes table
+export const promoCodes = createTable("promo_codes", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  code: d.varchar("code", { length: 50 }).unique().notNull(),
+  description: d.text("description"),
+  discountType: d.text("discount_type", {
+    enum: ["percentage", "fixed_amount", "free_credits"]
+  }).notNull(),
+  discountValue: d.integer("discount_value").notNull(), // percentage (0-100), cents for fixed, or credit count
+  maxUses: d.integer("max_uses"), // NULL for unlimited
+  usesCount: d.integer("uses_count").default(0).notNull(),
+  validFrom: d.timestamp("valid_from", { withTimezone: true }).defaultNow().notNull(),
+  validUntil: d.timestamp("valid_until", { withTimezone: true }),
+  minPurchaseAmount: d.integer("min_purchase_amount"), // Minimum purchase in cents
+  applicablePackages: d.uuid("applicable_packages").array(), // Array of package IDs, NULL for all
+  createdBy: d.varchar("created_by", { length: 255 }).references(() => users.id),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("promo_codes_code_idx").on(t.code),
+  index("promo_codes_valid_idx").on(t.validFrom, t.validUntil),
+]);
+
+// Track promo code usage
+export const promoCodeUsage = createTable("promo_code_usage", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  promoCodeId: d.uuid("promo_code_id").notNull().references(() => promoCodes.id),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+  orderId: d.varchar("order_id", { length: 255 }), // Stripe payment intent ID
+  discountAppliedCents: d.integer("discount_applied_cents").notNull(),
+  usedAt: d.timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("promo_code_user_unique").on(t.promoCodeId, t.userId), // One use per user
+  index("promo_code_usage_user_idx").on(t.userId),
+  index("promo_code_usage_code_idx").on(t.promoCodeId),
+]);
+
+// Track all paywall interactions
+export const paywallEvents = createTable("paywall_events", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // 'viewed', 'clicked_package', 'initiated_checkout', 'completed_purchase'
+  packageId: d.uuid("package_id"), // References credit_package, but not enforced for flexibility
+  metadata: d.jsonb("metadata"), // Store additional context
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("paywall_events_user_idx").on(t.userId),
+  index("paywall_events_type_idx").on(t.eventType),
+  index("paywall_events_created_idx").on(t.createdAt),
+]);
+
+// Analytics aggregations for performance
+export const paywallAnalytics = createTable("paywall_analytics", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  date: d.date("date").notNull().unique(),
+  uniqueUsersHitPaywall: d.integer("unique_users_hit_paywall").default(0).notNull(),
+  uniqueUsersClickedPackage: d.integer("unique_users_clicked_package").default(0).notNull(),
+  uniqueUsersInitiatedCheckout: d.integer("unique_users_initiated_checkout").default(0).notNull(),
+  uniqueUsersCompletedPurchase: d.integer("unique_users_completed_purchase").default(0).notNull(),
+  totalRevenueCents: d.integer("total_revenue_cents").default(0).notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("paywall_analytics_date_idx").on(t.date),
+]);
+
+// Relations for promo codes
+export const promoCodesRelations = relations(promoCodes, ({ one, many }) => ({
+  createdBy: one(users, {
+    fields: [promoCodes.createdBy],
+    references: [users.id],
+  }),
+  usage: many(promoCodeUsage),
+}));
+
+export const promoCodeUsageRelations = relations(promoCodeUsage, ({ one }) => ({
+  promoCode: one(promoCodes, {
+    fields: [promoCodeUsage.promoCodeId],
+    references: [promoCodes.id],
+  }),
+  user: one(users, {
+    fields: [promoCodeUsage.userId],
+    references: [users.id],
+  }),
+}));
+
+export const paywallEventsRelations = relations(paywallEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [paywallEvents.userId],
+    references: [users.id],
+  }),
+}));
+
+// --- Dynamic Templates System ---
+
+// Templates table for storing user-created and official templates
+export const templates = createTable("templates", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  name: d.varchar("name", { length: 255 }).notNull(),
+  description: d.text("description"),
+  tsxCode: d.text("tsx_code").notNull(),
+  duration: d.integer("duration").notNull(),
+  previewFrame: d.integer("preview_frame").default(15),
+  supportedFormats: d.jsonb("supported_formats").$type<('landscape' | 'portrait' | 'square')[]>().default(['landscape', 'portrait', 'square']),
+  thumbnailUrl: d.text("thumbnail_url"),
+  category: d.varchar("category", { length: 100 }),
+  tags: d.jsonb("tags").$type<string[]>().default([]),
+  isActive: d.boolean("is_active").default(true).notNull(),
+  isOfficial: d.boolean("is_official").default(false).notNull(),
+  createdBy: d.varchar("created_by", { length: 255 }).notNull().references(() => users.id),
+  sourceProjectId: d.uuid("source_project_id").references(() => projects.id),
+  sourceSceneId: d.uuid("source_scene_id").references(() => scenes.id),
+  usageCount: d.integer("usage_count").default(0).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("templates_active_idx").on(t.isActive),
+  index("templates_official_idx").on(t.isOfficial),
+  index("templates_category_idx").on(t.category),
+  index("templates_created_by_idx").on(t.createdBy),
+  index("templates_created_at_idx").on(t.createdAt),
+]);
+
+// Template relations
+export const templatesRelations = relations(templates, ({ one }) => ({
+  creator: one(users, {
+    fields: [templates.createdBy],
+    references: [users.id],
+  }),
+  sourceProject: one(projects, {
+    fields: [templates.sourceProjectId],
+    references: [projects.id],
+  }),
+  sourceScene: one(scenes, {
+    fields: [templates.sourceSceneId],
+    references: [scenes.id],
   }),
 }));

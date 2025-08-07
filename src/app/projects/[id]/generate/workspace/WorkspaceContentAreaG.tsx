@@ -1,7 +1,7 @@
 // src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOverlay, defaultDropAnimationSideEffects } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent, DragOverEvent, DropAnimation } from '@dnd-kit/core';
@@ -323,25 +323,27 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Listen for playback speed loaded from PreviewPanelG
     useEffect(() => {
-      const handleSpeedLoaded = (event: CustomEvent) => {
-        const speed = event.detail?.speed;
+      const handleSpeedLoaded = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const speed = customEvent.detail?.speed;
         if (typeof speed === 'number') {
           setCurrentPlaybackSpeed(speed);
         }
       };
       
-      const handleLoopLoaded = (event: CustomEvent) => {
-        const state = event.detail?.state;
+      const handleLoopLoaded = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        const state = customEvent.detail?.state;
         if (state === 'video' || state === 'off' || state === 'scene') {
           setCurrentLoopState(state);
         }
       };
 
-      window.addEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
-      window.addEventListener('loop-state-loaded', handleLoopLoaded as EventListener);
+      window.addEventListener('playback-speed-loaded', handleSpeedLoaded);
+      window.addEventListener('loop-state-loaded', handleLoopLoaded);
       return () => {
-        window.removeEventListener('playback-speed-loaded', handleSpeedLoaded as EventListener);
-        window.removeEventListener('loop-state-loaded', handleLoopLoaded as EventListener);
+        window.removeEventListener('playback-speed-loaded', handleSpeedLoaded);
+        window.removeEventListener('loop-state-loaded', handleLoopLoaded);
       };
     }, []);
     
@@ -349,21 +351,21 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Scene selection state - shared between Storyboard and Code panels
     const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
     
-    // 🚨 NEW: Restore last selected scene from localStorage on mount
+    // Restore and save selected scene - combined into single effect for efficiency
     useEffect(() => {
       const lastSceneKey = `lastSelectedScene_${projectId}`;
-      const lastSceneId = localStorage.getItem(lastSceneKey);
       
-      if (lastSceneId) {
-        console.log('[WorkspaceContentAreaG] Restoring last selected scene:', lastSceneId);
-        setSelectedSceneId(lastSceneId);
+      // On mount, restore last selected scene
+      if (!selectedSceneId) {
+        const lastSceneId = localStorage.getItem(lastSceneKey);
+        if (lastSceneId) {
+          console.log('[WorkspaceContentAreaG] Restoring last selected scene:', lastSceneId);
+          setSelectedSceneId(lastSceneId);
+        }
       }
-    }, [projectId]);
-    
-    // 🚨 NEW: Save selected scene to localStorage whenever it changes
-    useEffect(() => {
+      
+      // Save whenever it changes
       if (selectedSceneId) {
-        const lastSceneKey = `lastSelectedScene_${projectId}`;
         localStorage.setItem(lastSceneKey, selectedSceneId);
         console.log('[WorkspaceContentAreaG] Saved last selected scene to localStorage:', selectedSceneId);
       }
@@ -372,26 +374,18 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Get video state methods
     const { updateAndRefresh, getCurrentProps, syncDbMessages } = useVideoState();
     
-    // Query for fetching updated project scenes from database
-    const getProjectScenesQuery = api.generation.getProjectScenes.useQuery(
-      { projectId },
+    // Consolidated query for all project data
+    const { data: fullProjectData } = api.project.getFullProject.useQuery(
+      { id: projectId },
       { 
-        enabled: false, // Only fetch manually when needed
         refetchOnWindowFocus: false,
-        refetchOnMount: false
+        staleTime: 5 * 60 * 1000, // 5 minute cache
       }
     );
     
-    // ✅ SINGLE POINT: Database message sync
-    const { data: dbMessages } = api.chat.getMessages.useQuery(
-      { projectId },
-      {
-        refetchOnWindowFocus: false,
-        enabled: !!projectId,
-        retry: 1,
-        staleTime: 0,
-      }
-    );
+    // Extract data from consolidated query
+    const dbMessages = fullProjectData?.messages;
+    const dbScenes = fullProjectData?.scenes;
     
     // ✅ SYNC: When database messages are loaded, sync them with VideoState
     useEffect(() => {
@@ -399,9 +393,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         console.log('[WorkspaceContentAreaG] Syncing database messages with VideoState:', dbMessages.length);
         syncDbMessages(projectId, dbMessages as any[]);
       }
-    }, [dbMessages, projectId]); // Removed syncDbMessages from deps to prevent infinite loop
+    }, [dbMessages, projectId, syncDbMessages]);
     
     // Helper function to convert database scenes to InputProps format
+    // Memoized to prevent recreating on every render
     const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
       // CRITICAL: If we have real scenes from DB, we should NOT include the welcome scene
       // The welcome scene only exists in video state, not in DB
@@ -540,14 +535,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       console.log('[WorkspaceContentAreaG] ⚠️ Scene not found in state, fetching from database...');
       
       try {
-        // ✅ FETCH: Get updated scenes from database  
-        const scenesResult = await getProjectScenesQuery.refetch();
+        // ✅ FETCH: Use scenes from consolidated query or refetch if needed
+        const scenesData = dbScenes || [];
         
-        if (scenesResult.data) {
-          console.log('[WorkspaceContentAreaG] ✅ Fetched', scenesResult.data.length, 'scenes from database');
+        if (scenesData.length > 0) {
+          console.log('[WorkspaceContentAreaG] ✅ Using', scenesData.length, 'scenes from consolidated query');
           
           // ✅ CONVERT: Database scenes to InputProps format
-          const updatedProps = convertDbScenesToInputProps(scenesResult.data);
+          const updatedProps = convertDbScenesToInputProps(scenesData);
           console.log('[WorkspaceContentAreaG] ✅ Converted to InputProps format:', updatedProps.scenes.length, 'scenes');
           
           // 🚨 CRITICAL FIX: Use updateAndRefresh instead of replace for guaranteed UI updates
@@ -559,13 +554,13 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           setSelectedSceneId(sceneId);
           console.log('[WorkspaceContentAreaG] ✅ Selected new scene:', sceneId);
         } else {
-          console.warn('[WorkspaceContentAreaG] ⚠️ No scenes data returned from database query');
+          console.warn('[WorkspaceContentAreaG] ⚠️ No scenes data available');
         }
       } catch (error) {
         console.error('[WorkspaceContentAreaG] ❌ CRITICAL ERROR in scene generation handling:', error);
         toast.error('Critical error handling scene generation - please refresh the page');
       }
-    }, [projectId, getProjectScenesQuery, convertDbScenesToInputProps, updateAndRefresh, getCurrentProps]);
+    }, [projectId, dbScenes, convertDbScenesToInputProps, updateAndRefresh, getCurrentProps]);
 
     // 🚨 REMOVED: Redundant initialization logic
     // GenerateWorkspaceRoot already handles project initialization
@@ -589,7 +584,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // State for detecting drags from the sidebar
     const [isDraggingFromSidebar, setIsDraggingFromSidebar] = useState(false);
     
-    // Drag event handlers
+    // Drag event handlers - memoized to prevent recreation
     const handleDragStart = useCallback((event: DragStartEvent) => {
       const { active } = event;
       
@@ -600,7 +595,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     }, []);
 
     const handleDragOver = useCallback((event: DragOverEvent) => {
-      const { active, over } = event;
+      const { over } = event;
       
       if (over) {
         setOverId(String(over.id));
@@ -707,7 +702,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       setOpenPanels((panels) => panels.filter((p) => p.id !== id));
     }, []);
 
-    // Generate panel content
+    // Memoize current scenes to avoid recalculation on every render
+    const currentScenes = useMemo(() => {
+      return getCurrentProps()?.scenes || [];
+    }, [getCurrentProps]);
+
+    // Generate panel content - memoized to prevent unnecessary re-renders
     const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
       if (!panel) return null;
       
@@ -758,7 +758,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         default:
           return null;
       }
-    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel]);
+    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel, userId]);
 
     // Render empty state if no panels are open
     if (openPanels.length === 0) {
@@ -807,36 +807,36 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               {openPanels.length > 0 && (
                 <PanelGroup direction="horizontal" className="h-full">
                   {openPanels.map((panel, idx) => (
-                    <React.Fragment key={panel?.id || `panel-${idx}`}>
-                      <Panel 
-                        minSize={10} 
-                        defaultSize={100 / (openPanels.length || 1)}
-                        className="transition-all duration-300"
-                        style={{
-                          transformOrigin: 'center',
-                          transition: 'all 250ms cubic-bezier(0.25, 1, 0.5, 1)'
-                        }}
-                      >
-                        <SortablePanelG 
-                          id={panel?.id || `panel-${idx}`}
-                          onRemove={() => panel?.id ? removePanel(panel.id) : null}
-                          projectId={projectId}
-                          currentPlaybackSpeed={currentPlaybackSpeed}
-                          setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
-                          currentLoopState={currentLoopState}
-                          setCurrentLoopState={setCurrentLoopState}
-                          selectedSceneId={selectedSceneId}
-                          onSceneSelect={setSelectedSceneId}
-                          scenes={getCurrentProps()?.scenes || []}
+                      <React.Fragment key={panel?.id || `panel-${idx}`}>
+                        <Panel 
+                          minSize={10} 
+                          defaultSize={100 / (openPanels.length || 1)}
+                          className="transition-all duration-300"
+                          style={{
+                            transformOrigin: 'center',
+                            transition: 'all 250ms cubic-bezier(0.25, 1, 0.5, 1)'
+                          }}
                         >
-                          {renderPanelContent(panel)}
-                        </SortablePanelG>
-                      </Panel>
-                      {/* Add resize handle between panels but not after the last one */}
-                      {idx < openPanels.length - 1 && (
-                        <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
-                      )}
-                    </React.Fragment>
+                          <SortablePanelG 
+                            id={panel?.id || `panel-${idx}`}
+                            onRemove={() => panel?.id ? removePanel(panel.id) : null}
+                            projectId={projectId}
+                            currentPlaybackSpeed={currentPlaybackSpeed}
+                            setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
+                            currentLoopState={currentLoopState}
+                            setCurrentLoopState={setCurrentLoopState}
+                            selectedSceneId={selectedSceneId}
+                            onSceneSelect={setSelectedSceneId}
+                            scenes={currentScenes}
+                          >
+                            {renderPanelContent(panel)}
+                          </SortablePanelG>
+                        </Panel>
+                        {/* Add resize handle between panels but not after the last one */}
+                        {idx < openPanels.length - 1 && (
+                          <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
+                        )}
+                      </React.Fragment>
                   ))}
                 </PanelGroup>
               )}

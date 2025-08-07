@@ -11,6 +11,9 @@ import {
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { useEffect, useCallback } from "react";
 
 interface PurchaseModalProps {
   isOpen: boolean;
@@ -27,9 +30,25 @@ function getDiscountPercentage(price: number): number | null {
 
 export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
   const [processingPackageId, setProcessingPackageId] = useState<string | null>(null);
+  const [hasTrackedView, setHasTrackedView] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
   
   // Fetch packages from database
   const { data: packages, isLoading } = api.payment.getPackages.useQuery();
+  
+  // Track paywall events
+  const trackEvent = api.payment.trackPaywallEvent.useMutation();
+  
+  // Validate promo code
+  const { data: promoValidation, refetch: validatePromo } = api.payment.validatePromoCode.useQuery(
+    { code: promoCode, packageId: selectedPackageId || undefined },
+    { 
+      enabled: false, // Only run when we call refetch
+      retry: false
+    }
+  );
   
   const createCheckout = api.payment.createCheckout.useMutation({
     onSuccess: (data) => {
@@ -43,9 +62,56 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
   });
 
   const handlePurchase = async (packageId: string) => {
+    // Track package click event
+    trackEvent.mutate({ 
+      eventType: 'clicked_package', 
+      packageId,
+      metadata: { source: 'purchase_modal', promo_code: promoCode || null }
+    });
+    
     setProcessingPackageId(packageId);
-    await createCheckout.mutateAsync({ packageId });
+    
+    // Track checkout initiation
+    trackEvent.mutate({ 
+      eventType: 'initiated_checkout', 
+      packageId,
+      metadata: { source: 'purchase_modal', promo_code: promoCode || null }
+    });
+    
+    // Include promo code in checkout if valid
+    await createCheckout.mutateAsync({ 
+      packageId,
+      promoCode: promoValidation?.valid ? promoCode : undefined
+    });
   };
+  
+  const handlePromoCodeChange = async (code: string) => {
+    setPromoCode(code);
+    setPromoError(null);
+    
+    if (code.length > 0 && selectedPackageId) {
+      const result = await validatePromo();
+      if (result.data && !result.data.valid) {
+        setPromoError(result.data.error || "Invalid promo code");
+      }
+    }
+  };
+  
+  // Track modal view when opened
+  useEffect(() => {
+    if (isOpen && !hasTrackedView) {
+      trackEvent.mutate({ 
+        eventType: 'viewed',
+        metadata: { source: 'purchase_modal' }
+      });
+      setHasTrackedView(true);
+    }
+    
+    // Reset tracking when modal closes
+    if (!isOpen) {
+      setHasTrackedView(false);
+    }
+  }, [isOpen, hasTrackedView, trackEvent]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -99,7 +165,11 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
 
                 <div className="ml-4 flex items-end">
                   <Button
-                    onClick={() => handlePurchase(pkg.id)}
+                    onClick={() => {
+                      setSelectedPackageId(pkg.id);
+                      handlePurchase(pkg.id);
+                    }}
+                    onMouseEnter={() => setSelectedPackageId(pkg.id)}
                     disabled={processingPackageId !== null}
                     variant="outline"
                     className="bg-black hover:bg-white hover:text-black text-white border-black"
@@ -118,6 +188,31 @@ export function PurchaseModal({ isOpen, onClose }: PurchaseModalProps) {
             <div className="text-center text-muted-foreground">
               No packages available
             </div>
+          )}
+        </div>
+
+        {/* Promo code section */}
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+          <Label htmlFor="promo-code" className="text-sm font-medium">
+            Have a promo code?
+          </Label>
+          <div className="flex gap-2 mt-2">
+            <Input
+              id="promo-code"
+              type="text"
+              placeholder="Enter code"
+              value={promoCode}
+              onChange={(e) => handlePromoCodeChange(e.target.value.toUpperCase())}
+              className="flex-1"
+            />
+          </div>
+          {promoError && (
+            <p className="text-sm text-red-500 mt-1">{promoError}</p>
+          )}
+          {promoValidation?.valid && (
+            <p className="text-sm text-green-600 mt-1">
+              {promoValidation.discountDisplay} applied!
+            </p>
           )}
         </div>
 

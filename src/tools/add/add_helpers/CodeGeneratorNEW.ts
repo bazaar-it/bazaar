@@ -39,12 +39,21 @@ export class UnifiedCodeProcessor {
     // Clean and process code (same logic as original CodeGeneratorService)
     let cleanCode = rawOutput.trim();
     
+    // 🚨 FIX: Extract code from markdown code blocks if AI included extra text
+    const codeBlockMatch = cleanCode.match(/```(?:javascript|tsx|ts|js)?\n([\s\S]*?)\n```/);
+    if (codeBlockMatch) {
+      console.warn('🚨 [UNIFIED PROCESSOR] Extracting code from markdown block, ignoring surrounding text');
+      cleanCode = codeBlockMatch[1].trim();
+    } else {
+      // Fallback: just remove code fences if they exist
+      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+    }
+    
     // 🚨 FIX: Remove mysterious "x" prefix if present
     if (cleanCode.startsWith('x\n') || cleanCode.startsWith('x ')) {
       console.warn('🚨 [UNIFIED PROCESSOR] Removing "x" prefix from generated code');
       cleanCode = cleanCode.substring(1).trim();
     }
-    cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
     
     // 🚨 FIX: Replace incorrect currentFrame variable naming
     if (cleanCode.includes('const currentFrame = useCurrentFrame()')) {
@@ -364,23 +373,16 @@ DO NOT use any other duration value!`;
         throw new Error("No response from CodeGenerator LLM");
       }
       
-      // Clean and process code
-      let cleanCode = rawOutput.trim();
-      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
-      
-      // Extract duration
-      const durationAnalysis = analyzeDuration(cleanCode);
+      // Use the unified processAIResponse method for consistent code extraction
+      const result = this.processAIResponse(rawOutput, 'CODE_GENERATOR', input.userPrompt, input.functionName);
       
       return {
-        code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
-        duration: durationAnalysis.frames,
-        reasoning: `Generated scene directly from prompt (${durationAnalysis.frames} frames)`,
+        ...result,
         debug: {
           method: 'direct',
           promptLength: userPrompt.length,
           responseLength: rawOutput.length,
-          durationAnalysis
+          durationAnalysis: analyzeDuration(result.code)
         }
       };
     } catch (error) {
@@ -475,23 +477,17 @@ FUNCTION NAME: ${input.functionName}`;
         throw new Error("No response from CodeGenerator LLM");
       }
       
-      // Clean and process code
-      let cleanCode = rawOutput.trim();
-      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
-      
-      // Extract duration
-      const durationAnalysis = analyzeDuration(cleanCode);
+      // Use the unified processAIResponse method for consistent code extraction
+      const result = this.processAIResponse(rawOutput, 'CODE_GENERATOR', input.userPrompt, input.functionName);
       
       return {
-        code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
-        duration: durationAnalysis.frames,
-        reasoning: `Generated new scene using previous scene style (${durationAnalysis.frames} frames)`,
+        ...result,
+        reasoning: `Generated new scene using previous scene style (${result.duration} frames)`,
         debug: {
           method: 'withReference',
           promptLength: userPrompt.length,
           responseLength: rawOutput.length,
-          durationAnalysis
+          durationAnalysis: analyzeDuration(result.code)
         }
       };
     } catch (error) {
@@ -781,24 +777,18 @@ Generate MOTION GRAPHICS that incorporate the video(s) with sequential storytell
         throw new Error("No response from CodeGenerator LLM");
       }
       
-      // Clean and process code
-      let cleanCode = rawOutput.trim();
-      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
-      
-      // Extract duration
-      const durationAnalysis = analyzeDuration(cleanCode);
+      // Use the unified processAIResponse method for consistent code extraction
+      const result = this.processAIResponse(rawOutput, 'CODE_GENERATOR', input.userPrompt, input.functionName);
       
       return {
-        code: cleanCode,
-        name: "Scene", 
-        duration: durationAnalysis.frames,
-        reasoning: `Generated scene with video content (${durationAnalysis.frames} frames)`,
+        ...result,
+        reasoning: `Generated scene with video content (${result.duration} frames)`,
         debug: {
           method: 'withVideos',
           videoCount: input.videoUrls.length,
           promptLength: userPrompt.length,
           responseLength: rawOutput.length,
-          durationAnalysis
+          durationAnalysis: analyzeDuration(result.code)
         }
       };
     } catch (error) {

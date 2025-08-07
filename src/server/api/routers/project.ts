@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches, scenePlans } from "~/server/db/schema";
+import { projects, patches, scenePlans, scenes, messages } from "~/server/db/schema";
 import { eq, desc, like, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
@@ -39,6 +39,64 @@ export const projectRouter = createTRPCRouter({
       }
 
       return project;
+    }),
+    
+  // NEW: Consolidated query for full project data
+  getFullProject: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      include: z.array(z.enum(['scenes', 'messages'])).optional().default(['scenes', 'messages']),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Fetch project with all related data in parallel
+      const [projectData, projectScenes, projectMessages] = await Promise.all([
+        // Get project (includes audio in the props)
+        ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.id))
+          .then(rows => rows[0]),
+        
+        // Get scenes if requested
+        input.include.includes('scenes') 
+          ? ctx.db
+              .select()
+              .from(scenes)
+              .where(eq(scenes.projectId, input.id))
+              .orderBy(scenes.order)
+          : Promise.resolve([]),
+        
+        // Get messages if requested
+        input.include.includes('messages')
+          ? ctx.db
+              .select()
+              .from(messages)
+              .where(eq(messages.projectId, input.id))
+              .orderBy(messages.createdAt)
+          : Promise.resolve([]),
+      ]);
+
+      if (!projectData) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      // Ensure the user has access to this project
+      if (projectData.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have access to this project",
+        });
+      }
+
+      return {
+        project: projectData,
+        scenes: projectScenes,
+        messages: projectMessages,
+        audio: projectData.audio, // Audio is stored in the project itself
+      };
     }),
     
   list: protectedProcedure
