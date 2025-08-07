@@ -12,6 +12,7 @@ import { adminRouter } from "~/server/api/routers/admin";
 import { createSceneFromPlanRouter } from "~/server/api/routers/generation/create-scene-from-plan";
 import { usageRouter } from "~/server/api/routers/usage";
 import { paymentRouter } from "~/server/api/routers/payment";
+import { videoAnalysisRouter } from "~/server/api/routers/video-analysis";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -35,6 +36,7 @@ export const appRouter = createTRPCRouter({
   createSceneFromPlan: createSceneFromPlanRouter,
   usage: usageRouter,
   payment: paymentRouter,
+  videoAnalysis: videoAnalysisRouter,
 });
 
 // export type definition of API

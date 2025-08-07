@@ -63,6 +63,8 @@ export const env = createEnv({
     LOG_AGENT_URL: z.string().url().optional().default("http://localhost:3002"),
     // Model pack selection for AI services
     MODEL_PACK: z.string().optional().default("optimal-pack"),
+    // Google Gemini API
+    GOOGLE_GEMINI_API_KEY: z.string().optional(),
   },
 
   /**
@@ -110,6 +112,7 @@ export const env = createEnv({
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
     LOG_AGENT_URL: process.env.LOG_AGENT_URL,
     MODEL_PACK: process.env.MODEL_PACK,
+    GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,

@@ -14,6 +14,10 @@ help me generate system pormpts for these agents.
 
 another agent also that is reposinble for searching the web and analysing what other new trends that we might use inetad. for exmpale, in the beginning of mcp area, it mighjt check myu proopsoed suggestion on how to implement somehting and it would stop me and sya, hey, thats not a bad idea, but uy might wanna consider doing it this way inetad, because all of new the startsups and forwardlooking companies are building on this mcp framwrosk, so it might not be a bad idea for u to do it this way intead. 
 
+
+
+---
+also, lets make the admin interface a buit better. being able to find projects, just by filtering on project id. that would be beneficial. so being able to search for projectsin the main admin page. also, how difficutk would it be to being able to search for something, and then having a AI, like u now ihave in claude code , who can take that english text, and generete sql quires and runquieries on the databse, and then providing that infromaiton? so a intelligence layer within the admin interface? so for exmaple a user could search for asomehting like  'how many project has been created last week, by users who signed up earlier than a week a go ? --- also we would need some good trkcing for these promo codes. iof generitn promo cidesand provindg free credits, we would need to be able to track the usage of the promo code etc. in a good wat. 
 ================================================================================================================================================
 
 --------
