@@ -251,10 +251,28 @@ async function preprocessSceneForLambda(scene: any) {
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
     transformedCode = await replaceIconifyIcons(transformedCode);
     
-    // Fix avatar URLs - replace local paths with R2 URLs
+    // Fix avatar URLs - replace window.BazaarAvatars with actual URLs
+    // This handles the window.BazaarAvatars['avatar-name'] pattern
+    transformedCode = transformedCode.replace(
+      /window\.BazaarAvatars\[['"]([^'"]+)['"]\]/g,
+      (match, avatarId) => {
+        // Map avatar IDs to their full public R2 URLs
+        const avatarUrls: Record<string, string> = {
+          'asian-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/asian-woman.png',
+          'black-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/black-man.png',
+          'hispanic-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/hispanic-man.png',
+          'middle-eastern-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/middle-eastern-man.png',
+          'white-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/white-woman.png'
+        };
+        console.log(`[Preprocess] Replacing avatar: ${avatarId} with URL: ${avatarUrls[avatarId]}`);
+        return `"${avatarUrls[avatarId] || 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/default.png'}"`;
+      }
+    );
+    
+    // Also fix direct avatar path references (fallback)
     transformedCode = transformedCode.replace(
       /\/avatars\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/g,
-      'https://pyyqiqdbiygijqaj.public.blob.vercel-storage.com/$1-avatar.png'
+      'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/$1.png'
     );
     
     // Remove export statements that can't be used inside Function constructor
@@ -329,20 +347,31 @@ async function replaceIconifyIcons(code: string): Promise<string> {
   
   // Load all icons first
   const iconMap = new Map<string, string>();
+  console.log(`[Preprocess] Loading ${iconNames.size} unique icons...`);
+  
   for (const iconName of iconNames) {
     try {
       const [collection, icon] = iconName.split(':');
       if (collection && icon) {
+        console.log(`[Preprocess] Loading icon: ${iconName}`);
         const svgString = await loadNodeIcon(collection, icon);
         if (svgString) {
           iconMap.set(iconName, svgString);
-          console.log(`[Preprocess] Loaded icon: ${iconName}`);
+          console.log(`[Preprocess] Successfully loaded icon: ${iconName}`);
+        } else {
+          // If loading fails, add a fallback circle
+          console.warn(`[Preprocess] Icon "${iconName}" returned empty, using fallback`);
+          iconMap.set(iconName, '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>');
         }
       }
     } catch (error) {
-      console.warn(`[Preprocess] Failed to load icon "${iconName}":`, error);
+      console.error(`[Preprocess] Failed to load icon "${iconName}":`, error);
+      // Add a fallback circle for failed icons
+      iconMap.set(iconName, '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>');
     }
   }
+  
+  console.log(`[Preprocess] Loaded ${iconMap.size} icons (including fallbacks)`)
   
   // Build the icon map with actual SVG paths
   const iconMapEntries = [];
