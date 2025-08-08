@@ -5,7 +5,7 @@
 
 import type { ChangelogVideoRequest, ChangelogVideoResponse, PRAnalysis } from '~/lib/types/github.types';
 import { db } from '~/server/db';
-import { projects, scenes } from '~/server/db/schema';
+import { projects, scenes, users } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { orchestrator } from '~/brain/orchestratorNEW';
 import { renderVideo } from '~/server/services/render/render.service';
@@ -23,16 +23,41 @@ export async function generateChangelogVideo(
   console.log(`[${requestId}] Generating changelog video for PR #${prAnalysis.prNumber}`);
   
   try {
-    // 1. Create a temporary project for video generation
+    // 1. Ensure system-changelog user exists (create if needed)
+    const systemUserId = 'system-changelog';
+    try {
+      await db.insert(users).values({
+        id: systemUserId,
+        name: 'System Changelog',
+        email: 'changelog@bazaar.it',
+        emailVerified: new Date(),
+        isAdmin: false,
+      }).onConflictDoNothing();
+    } catch (error) {
+      // User might already exist, that's fine
+      console.log(`[${requestId}] System user check:`, error);
+    }
+    
+    // 2. Create a temporary project for video generation
     const projectId = crypto.randomUUID();
     const projectName = `Changelog: ${prAnalysis.repository.name} PR #${prAnalysis.prNumber}`;
+    const projectTitle = `${prAnalysis.title} - Changelog Video`;
+    
+    // Default props for video projects
+    const defaultProps = {
+      format: format || 'landscape',
+      fps: 30,
+      durationInFrames: (duration || 15) * 30, // Convert seconds to frames
+      compositionWidth: format === 'portrait' ? 1080 : 1920,
+      compositionHeight: format === 'portrait' ? 1920 : (format === 'square' ? 1080 : 1080),
+    };
     
     await db.insert(projects).values({
       id: projectId,
       name: projectName,
-      userId: 'system-changelog', // Special system user
-      format: format || 'landscape',
-      fps: 30,
+      title: projectTitle, // Required field
+      props: defaultProps, // Required JSONB field
+      userId: systemUserId, // Special system user
       createdAt: new Date(),
       updatedAt: new Date(),
     });

@@ -369,44 +369,119 @@ async function replaceIconifyIcons(code: string): Promise<string> {
   const iconMap = new Map<string, string>();
   console.log(`[Preprocess] Loading ${iconNames.size} unique icons...`);
   
-  for (const iconName of iconNames) {
+  // Loader with smart fallbacks for common outline names
+  async function loadWithFallback(name: string): Promise<string | null> {
+    const [collection, icon] = name.split(':');
+    if (!collection || !icon) return null;
+    
+    // Try loading the exact icon first
     try {
-      const [collection, icon] = iconName.split(':');
-      if (collection && icon) {
-        console.log(`[Preprocess] Loading icon: ${iconName}`);
-        const svgString = await loadNodeIcon(collection, icon);
-        if (svgString) {
-          iconMap.set(iconName, svgString);
-          console.log(`[Preprocess] Successfully loaded icon: ${iconName}`);
-        } else {
-          // If loading fails, add a fallback circle
-          console.warn(`[Preprocess] Icon "${iconName}" returned empty, using fallback`);
-          iconMap.set(iconName, '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>');
+      const svg = await loadNodeIcon(collection, icon);
+      if (svg) {
+        console.log(`[Preprocess] Loaded exact icon: ${name}`);
+        return svg;
+      }
+    } catch (e) {
+      console.log(`[Preprocess] Could not load exact icon: ${name}`);
+    }
+    
+    // Handle material-symbols outline variants
+    if (collection === 'material-symbols' && icon.endsWith('-outline')) {
+      const base = icon.replace(/-outline$/, '');
+      
+      // Map common outline names to their actual icon names
+      const iconMapping: Record<string, string[]> = {
+        'favorite-outline': ['favorite', 'heart', 'favorite-border'],
+        'home-outline': ['home', 'house', 'home-work'],
+        'chat-outline': ['chat', 'message', 'chat-bubble'],
+        'person-outline': ['person', 'account-circle', 'person-2'],
+        'search-outline': ['search', 'search-rounded']
+      };
+      
+      // Try mapped alternatives
+      const mappedAlternatives = iconMapping[icon] || [base];
+      
+      for (const alt of mappedAlternatives) {
+        const candidates = [
+          `material-symbols:${alt}`,
+          `material-symbols:${alt}-outline`,
+          `material-symbols:${alt}-rounded`,
+          `mdi:${alt}`,
+          `mdi:${alt}-outline`
+        ];
+        
+        for (const cand of candidates) {
+          const [c2, i2] = cand.split(':');
+          try {
+            const svg2 = await loadNodeIcon(c2, i2);
+            if (svg2) {
+              console.log(`[Preprocess] Using fallback: ${name} -> ${cand}`);
+              return svg2;
+            }
+          } catch {}
         }
       }
-    } catch (error) {
-      console.error(`[Preprocess] Failed to load icon "${iconName}":`, error);
-      // Add a fallback circle for failed icons
-      iconMap.set(iconName, '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/></svg>');
+    }
+    
+    // Try removing -outline suffix as last resort
+    if (icon.endsWith('-outline')) {
+      const baseIcon = icon.replace(/-outline$/, '');
+      try {
+        const svg = await loadNodeIcon(collection, baseIcon);
+        if (svg) {
+          console.log(`[Preprocess] Using base icon without outline: ${name} -> ${collection}:${baseIcon}`);
+          return svg;
+        }
+      } catch {}
+    }
+    
+    console.warn(`[Preprocess] No icon found for: ${name}`);
+    return null;
+  }
+
+  for (const iconName of iconNames) {
+    const svgString = await loadWithFallback(iconName);
+    if (svgString) {
+      iconMap.set(iconName, svgString);
+      console.log(`[Preprocess] Loaded icon: ${iconName}`);
+    } else {
+      console.warn(`[Preprocess] Icon "${iconName}" not found, using fallback`);
+      // Use a generic icon shape as fallback that's less obtrusive
+      const fallbackSvg = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+      iconMap.set(iconName, fallbackSvg);
     }
   }
   
-  console.log(`[Preprocess] Loaded ${iconMap.size} icons (including fallbacks)`)
+  console.log(`[Preprocess] Loaded ${iconNames.size} icons from initial scan`);
   
-  // Build the icon map with actual SVG paths
+  // Broaden detection: include any literal that looks like an icon name with allowed prefixes
+  // Do this BEFORE building the icon map entries
+  try {
+    const allowedPrefixes = ['material-symbols', 'simple-icons', 'mdi', 'tabler', 'lucide', 'ph', 'bi', 'fa', 'ri', 'ion', 'iconicons'];
+    const allStringLikeIcons = code.match(/["']([a-z0-9_-]+:[a-z0-9_\-]+)["']/gi) || [];
+    for (const m of allStringLikeIcons) {
+      const val = m.slice(1, -1).toLowerCase(); // Ensure lowercase
+      const prefix = val.split(':')[0];
+      if (allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
+        const svgString = await loadWithFallback(val);
+        if (svgString && !iconMap.has(val)) {
+          iconMap.set(val, svgString);
+          console.log(`[Preprocess] Added additional icon: ${val}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Preprocess] Error loading additional icons:', e);
+  }
+  
+  console.log(`[Preprocess] Total icons loaded: ${iconMap.size}`);
+  
+  // NOW build the icon map entries with ALL collected icons
   const iconMapEntries = [];
   for (const [name, svg] of iconMap.entries()) {
-    // Extract all paths from the SVG (some icons have multiple paths)
+    // Extract viewBox and inner content
     const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
     const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
-    
-    // Extract all path elements
-    const paths = [];
-    const pathRegex = /<path[^>]*d="([^"]+)"[^>]*>/g;
-    let pathMatch;
-    while ((pathMatch = pathRegex.exec(svg)) !== null) {
-      paths.push(pathMatch[1]);
-    }
     
     // Extract inner SVG markup to preserve all shapes (paths, circles, rects, etc.)
     const innerMatch = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
@@ -424,40 +499,20 @@ async function replaceIconifyIcons(code: string): Promise<string> {
       const iconName = _p.icon;
       const rest = (function(p){ var r={}; for (var k in p){ if(k!== 'icon' && Object.prototype.hasOwnProperty.call(p,k)) r[k]=p[k]; } return r; })(_p);
       if (!iconName) {
-        return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, rest && rest.style)});
+        // Return empty span for missing icon prop
+        return React.createElement("span", {style: Object.assign({display:"inline-block",width:"1em",height:"1em"}, rest && rest.style)});
       }
       const IconComponent = __iconMap[iconName];
       if (IconComponent) {
         return IconComponent(rest);
       }
-      return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"red",border:"2px solid white"}, rest && rest.style)});
+      // Fallback: simple square icon shape
+      console.warn('Icon not in map:', iconName);
+      return React.createElement("svg", Object.assign({viewBox:"0 0 24 24",width:"1em",height:"1em",fill:"currentColor"}, rest), 
+        React.createElement("rect", {x:"4",y:"4",width:"16",height:"16",rx:"2",fill:"none",stroke:"currentColor",strokeWidth:"2"})
+      );
     };
   `;
-  
-  // Broaden detection: include any literal that looks like an icon name with allowed prefixes
-  try {
-    const allowedPrefixes = ['material-symbols', 'simple-icons', 'mdi', 'tabler', 'lucide', 'ph', 'bi', 'fa', 'ri', 'ion', 'ionicons'];
-    const allStringLikeIcons = code.match(/["']([a-z0-9_-]+:[a-z0-9_\-]+)["']/gi) || [];
-    for (const m of allStringLikeIcons) {
-      const val = m.slice(1, -1);
-      const prefix = val.split(':')[0];
-      if (allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
-        try {
-          const [collection, icon] = val.split(':');
-          const svgString = await loadNodeIcon(collection, icon);
-          if (svgString) {
-            iconMap.set(val, svgString);
-            // Rebuild entry for this icon
-            const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
-            const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 24 24';
-            const innerMatch2 = svgString.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
-            const inner2 = innerMatch2 ? innerMatch2[1].replace(/`/g, '\\`') : '';
-            iconMapEntries.push(`"${val}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner2}\` }}, props)); }`);
-          }
-        } catch {}
-      }
-    }
-  } catch {}
 
   // Replace window.IconifyIcon with our local IconifyIcon
   // This handles both JSX and React.createElement forms
