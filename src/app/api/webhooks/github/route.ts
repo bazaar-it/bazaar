@@ -97,6 +97,42 @@ export async function POST(request: NextRequest) {
     // 6. Handle different event types
     const eventType = headers['x-github-event'];
     
+    // Handle issue comments for manual trigger
+    if (eventType === 'issue_comment') {
+      const comment = event as any;
+      const commentBody = comment.comment?.body?.toLowerCase() || '';
+      
+      // Check for various trigger phrases (flexible matching)
+      const triggers = [
+        '@bazaar changelog',  // Official app name
+        '@bazaar-changelog',  // With hyphen
+        '@bazaarchangelog',   // No space
+        'bazaar changelog generate',
+        'generate changelog video'
+      ];
+      
+      const isTriggered = triggers.some(trigger => commentBody.includes(trigger.toLowerCase()));
+      
+      if (isTriggered) {
+        console.log(`[${requestId}] Manual trigger via comment on PR #${comment.issue?.number}`);
+        console.log(`[${requestId}] Comment: ${comment.comment?.body}`);
+        
+        // For now, just acknowledge - full implementation coming
+        return NextResponse.json({ 
+          status: 'triggered',
+          message: 'Changelog video generation triggered by comment',
+          prNumber: comment.issue?.number,
+          comment: comment.comment?.body
+        });
+      }
+      
+      // Not a trigger comment, ignore
+      return NextResponse.json({ 
+        status: 'ignored',
+        reason: 'Comment does not contain trigger phrase'
+      });
+    }
+    
     if (eventType !== 'pull_request') {
       console.log(`[${requestId}] Ignoring non-PR event: ${eventType}`);
       return NextResponse.json({ 
