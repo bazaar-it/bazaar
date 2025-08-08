@@ -344,6 +344,26 @@ async function replaceIconifyIcons(code: string): Promise<string> {
       console.log(`[Preprocess] Found direct icon: ${match[1]}`);
     }
   }
+
+  // Capture variable-based icon references like: icon: myIcon
+  const variableIconRefRegex = /\b(icon|iconName|tabIcon)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)/g;
+  const variableNames = new Set<string>();
+  let vmatch;
+  while ((vmatch = variableIconRefRegex.exec(code)) !== null) {
+    if (vmatch[2]) variableNames.add(vmatch[2]);
+  }
+  // Resolve variable assignments: const myIcon = 'prefix:name'
+  for (const varName of variableNames) {
+    const assignRegex = new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*["']([^"']+)["']`,'g');
+    let amatch;
+    while ((amatch = assignRegex.exec(code)) !== null) {
+      const val = amatch[1];
+      if (val && val.includes(':')) {
+        iconNames.add(val);
+        console.log(`[Preprocess] Resolved variable icon ${varName} -> ${val}`);
+      }
+    }
+  }
   
   // Load all icons first
   const iconMap = new Map<string, string>();
@@ -388,46 +408,57 @@ async function replaceIconifyIcons(code: string): Promise<string> {
       paths.push(pathMatch[1]);
     }
     
-    if (paths.length > 0) {
-      // Create a function that renders all paths
-      const pathElements = paths.map(d => `React.createElement("path", {d:"${d ? d.replace(/"/g, '\\"') : ''}"})`).join(', ');
-      iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor"}, props), ${pathElements}); }`);
-    }
+    // Extract inner SVG markup to preserve all shapes (paths, circles, rects, etc.)
+    const innerMatch = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
+    const inner = innerMatch ? innerMatch[1].replace(/`/g, '\\`') : '';
+    iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner}\` }}, props)); }`);
   }
   
-  // Create the icon map code that will be injected
-  // Using regular function syntax to avoid destructuring issues in Lambda
+  // Create the icon map code that will be injected (top-level shim)
   const iconMapCode = `
     const __iconMap = {
       ${iconMapEntries.join(',\n      ')}
     };
     const IconifyIcon = function(props) {
-      const iconName = props && props.icon;
-      
-      // Add Lambda-side logging to debug icon rendering
-      if (typeof console !== 'undefined') {
-        console.log('[Lambda Icon] Requested icon:', iconName);
-        console.log('[Lambda Icon] Available icons count:', Object.keys(__iconMap).length);
-        if (iconName && !__iconMap[iconName]) {
-          console.error('[Lambda Icon] Icon not found:', iconName);
-          console.error('[Lambda Icon] Available:', Object.keys(__iconMap).slice(0, 5).join(', '), '...');
-        }
-      }
-      
+      const _p = props || {};
+      const iconName = _p.icon;
+      const rest = (function(p){ var r={}; for (var k in p){ if(k!== 'icon' && Object.prototype.hasOwnProperty.call(p,k)) r[k]=p[k]; } return r; })(_p);
       if (!iconName) {
-        // No icon name provided - show blue circle
-        return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, (props && props.style) || {})});
+        return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, rest && rest.style)});
       }
       const IconComponent = __iconMap[iconName];
       if (IconComponent) {
-        // Icon found - render it
-        return IconComponent((props && props.style) || {});
+        return IconComponent(rest);
       }
-      // Icon not found - show red circle so we know the function is being called
-      return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"red",border:"2px solid white"}, (props && props.style) || {})});
+      return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"red",border:"2px solid white"}, rest && rest.style)});
     };
   `;
   
+  // Broaden detection: include any literal that looks like an icon name with allowed prefixes
+  try {
+    const allowedPrefixes = ['material-symbols', 'simple-icons', 'mdi', 'tabler', 'lucide', 'ph', 'bi', 'fa', 'ri', 'ion', 'ionicons'];
+    const allStringLikeIcons = code.match(/["']([a-z0-9_-]+:[a-z0-9_\-]+)["']/gi) || [];
+    for (const m of allStringLikeIcons) {
+      const val = m.slice(1, -1);
+      const prefix = val.split(':')[0];
+      if (allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
+        try {
+          const [collection, icon] = val.split(':');
+          const svgString = await loadNodeIcon(collection, icon);
+          if (svgString) {
+            iconMap.set(val, svgString);
+            // Rebuild entry for this icon
+            const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
+            const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 24 24';
+            const innerMatch2 = svgString.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
+            const inner2 = innerMatch2 ? innerMatch2[1].replace(/`/g, '\\`') : '';
+            iconMapEntries.push(`"${val}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner2}\` }}, props)); }`);
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
   // Replace window.IconifyIcon with our local IconifyIcon
   // This handles both JSX and React.createElement forms
   code = code.replace(/window\.IconifyIcon/g, 'IconifyIcon');
@@ -435,35 +466,9 @@ async function replaceIconifyIcons(code: string): Promise<string> {
   // Also handle React.createElement calls that already exist
   code = code.replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(IconifyIcon,');
   
-  // Find where the component function starts and inject the icon map INSIDE it
-  // Look for common patterns: "function Scene", "const Component = function", etc.
-  const componentFunctionPatterns = [
-    /function\s+Scene[^{]*\{/,
-    /const\s+Component\s*=\s*function[^{]*\{/,
-    /function\s+Component[^{]*\{/,
-    /const\s+Scene[^=]*=\s*function[^{]*\{/
-  ];
-  
-  let injected = false;
-  for (const pattern of componentFunctionPatterns) {
-    const match = code.match(pattern);
-    if (match) {
-      const insertPosition = match.index! + match[0].length;
-      // Insert the icon map right after the function opening brace
-      code = code.slice(0, insertPosition) + '\n' + iconMapCode + '\n' + code.slice(insertPosition);
-      console.log(`[Preprocess] Injected icon map inside component function at position ${insertPosition}`);
-      injected = true;
-      break;
-    }
-  }
-  
-  if (!injected) {
-    // Fallback: inject at the beginning if we can't find the component function
-    console.warn('[Preprocess] Could not find component function, injecting icon map at beginning');
-    code = iconMapCode + '\n' + code;
-  }
-  
-  console.log(`[Preprocess] Injected icon map with ${iconMap.size} icons`);
+  // Always inject the shim at the beginning so IconifyIcon exists in any scope
+  code = iconMapCode + '\n' + code;
+  console.log(`[Preprocess] Injected top-level Iconify shim with ${iconMap.size} icons`);
   
   // Log a sample of the transformed code to verify injection
   const codePreview = code.substring(0, 1500);

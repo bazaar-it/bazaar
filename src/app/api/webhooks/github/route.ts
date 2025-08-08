@@ -116,23 +116,87 @@ export async function POST(request: NextRequest) {
       
       const isTriggered = triggers.some(trigger => commentBody.includes(trigger.toLowerCase()));
       
-      if (isTriggered) {
+      if (isTriggered && comment.issue?.pull_request) {
         console.log(`[${requestId}] Manual trigger via comment on PR #${comment.issue?.number}`);
         console.log(`[${requestId}] Comment: ${comment.comment?.body}`);
         
-        // For now, just acknowledge - full implementation coming
-        return NextResponse.json({ 
-          status: 'triggered',
-          message: 'Changelog video generation triggered by comment',
-          prNumber: comment.issue?.number,
-          comment: comment.comment?.body
-        });
+        try {
+          // Extract repository info
+          const [owner, repo] = comment.repository?.full_name?.split('/') || [];
+          if (!owner || !repo) {
+            throw new Error('Could not extract repository information');
+          }
+          
+          // Analyze the PR
+          console.log(`[${requestId}] Analyzing PR #${comment.issue.number}...`);
+          const analysis = await analyzeGitHubPR({
+            owner,
+            repo,
+            prNumber: comment.issue.number,
+          });
+          
+          // Queue video generation
+          console.log(`[${requestId}] Queueing video generation...`);
+          const jobId = await queueChangelogVideo({
+            prAnalysis: analysis,
+            repository: comment.repository.full_name,
+            style: 'automatic',
+            format: 'landscape',
+            branding: 'auto',
+          });
+          
+          // Store in database
+          await db.insert(changelogEntries).values({
+            id: crypto.randomUUID(),
+            prNumber: comment.issue.number,
+            repositoryFullName: comment.repository.full_name,
+            repositoryOwner: owner,
+            repositoryName: repo,
+            title: analysis.title,
+            description: analysis.description || '',
+            type: analysis.type,
+            authorUsername: comment.comment.user.login,
+            authorAvatar: comment.comment.user.avatar_url,
+            authorUrl: comment.comment.user.html_url,
+            mergedAt: new Date(), // Will update when actually merged
+            jobId,
+            status: 'queued',
+            additions: analysis.stats.additions,
+            deletions: analysis.stats.deletions,
+            filesChanged: analysis.stats.filesChanged,
+          });
+          
+          console.log(`[${requestId}] Video generation queued with job ID: ${jobId}`);
+          
+          // TODO: Comment back on PR with status
+          // await commentOnPR(owner, repo, comment.issue.number, 
+          //   `🎬 Generating changelog video... Check back in ~2 minutes!`);
+          
+          return NextResponse.json({ 
+            status: 'success',
+            message: 'Changelog video generation started',
+            prNumber: comment.issue.number,
+            jobId,
+            repository: comment.repository.full_name,
+          });
+          
+        } catch (error) {
+          console.error(`[${requestId}] Error processing comment trigger:`, error);
+          return NextResponse.json(
+            { 
+              status: 'error',
+              message: 'Failed to generate changelog video',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 500 }
+          );
+        }
       }
       
-      // Not a trigger comment, ignore
+      // Not a trigger comment or not on a PR, ignore
       return NextResponse.json({ 
         status: 'ignored',
-        reason: 'Comment does not contain trigger phrase'
+        reason: isTriggered ? 'Not a pull request' : 'Comment does not contain trigger phrase'
       });
     }
     
