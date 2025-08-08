@@ -403,6 +403,17 @@ async function replaceIconifyIcons(code: string): Promise<string> {
     };
     const IconifyIcon = function(props) {
       const iconName = props && props.icon;
+      
+      // Add Lambda-side logging to debug icon rendering
+      if (typeof console !== 'undefined') {
+        console.log('[Lambda Icon] Requested icon:', iconName);
+        console.log('[Lambda Icon] Available icons count:', Object.keys(__iconMap).length);
+        if (iconName && !__iconMap[iconName]) {
+          console.error('[Lambda Icon] Icon not found:', iconName);
+          console.error('[Lambda Icon] Available:', Object.keys(__iconMap).slice(0, 5).join(', '), '...');
+        }
+      }
+      
       if (!iconName) {
         // No icon name provided - show blue circle
         return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, (props && props.style) || {})});

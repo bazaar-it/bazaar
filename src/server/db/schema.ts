@@ -1171,3 +1171,62 @@ export const templatesRelations = relations(templates, ({ one }) => ({
     references: [scenes.id],
   }),
 }));
+
+// Changelog Entries table for GitHub integration
+export const changelogEntries = createTable("changelog_entries", (d) => ({
+  id: d.uuid().defaultRandom().primaryKey(),
+  
+  // GitHub PR information
+  prNumber: d.integer("pr_number").notNull(),
+  repositoryFullName: d.text("repository_full_name").notNull(), // e.g., "owner/repo"
+  repositoryOwner: d.text("repository_owner").notNull(),
+  repositoryName: d.text("repository_name").notNull(),
+  
+  // PR content
+  title: d.text().notNull(),
+  description: d.text().notNull(),
+  type: d.text({ enum: ['feature', 'fix', 'refactor', 'docs', 'style', 'test', 'chore'] }).notNull(),
+  
+  // Author information
+  authorUsername: d.text("author_username").notNull(),
+  authorAvatar: d.text("author_avatar"),
+  authorUrl: d.text("author_url"),
+  
+  // Video information
+  videoUrl: d.text("video_url"),
+  thumbnailUrl: d.text("thumbnail_url"),
+  gifUrl: d.text("gif_url"),
+  videoDuration: d.integer("video_duration"), // in seconds
+  videoFormat: d.text("video_format").default('landscape'),
+  
+  // Processing status
+  status: d.text({ enum: ['queued', 'processing', 'completed', 'failed'] }).default('queued').notNull(),
+  jobId: d.text("job_id"), // Queue job ID
+  errorMessage: d.text("error_message"),
+  
+  // Statistics
+  additions: d.integer().default(0),
+  deletions: d.integer().default(0),
+  filesChanged: d.integer("files_changed").default(0),
+  viewCount: d.integer("view_count").default(0),
+  
+  // Version information
+  version: d.text(), // Optional version tag
+  
+  // Timestamps
+  mergedAt: d.timestamp("merged_at", { withTimezone: true }).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  processedAt: d.timestamp("processed_at", { withTimezone: true }), // When video was generated
+}), (t) => [
+  index("changelog_repository_idx").on(t.repositoryFullName),
+  index("changelog_pr_idx").on(t.repositoryFullName, t.prNumber),
+  index("changelog_status_idx").on(t.status),
+  index("changelog_merged_at_idx").on(t.mergedAt),
+  index("changelog_created_at_idx").on(t.createdAt),
+]);
+
+// Changelog relations
+export const changelogEntriesRelations = relations(changelogEntries, ({ }) => ({
+  // Could add relations to projects if we link changelogs to Bazaar projects
+}))

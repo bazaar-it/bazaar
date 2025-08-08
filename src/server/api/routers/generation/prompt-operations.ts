@@ -1,11 +1,13 @@
+//src/server/api/routers/generation/prompt-operations.ts
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
-import { openai } from "~/server/lib/openai";
+import { AIClientService, type AIMessage } from "~/server/services/ai/aiClient.service";
+import { resolveModel } from "~/config/models.config";
 
 /**
  * ENHANCE PROMPT - Expands user prompts into detailed motion graphics instructions
  * 
- * Uses GPT-4.1-nano (fastest model) to transform simple user prompts into comprehensive
+ * Uses centrally configured GPT‑5 nano (via models.config) to transform simple user prompts into comprehensive
  * motion graphics specifications with animation details, visual styles,
  * timing, and effects.
  */
@@ -29,7 +31,7 @@ export const enhancePrompt = protectedProcedure
 
     try {
       // System prompt for motion graphics enhancement
-      const systemPrompt = `You are a motion graphics specialist for Bazaar-Vid. Enhance user prompts to leverage our system's strengths.
+      const systemPromptText = `You are a motion graphics specialist for Bazaar-Vid. Enhance user prompts to leverage our system's strengths.
 
 IMPORTANT: Simply enhance their prompt into a more actionable creative brief. Do NOT acknowledge or respond to the user.
 
@@ -63,24 +65,17 @@ Examples:
 - "intro for youtube" → "10s intro: Channel name types out (2s), subscribe button bounces in (1s), video preview grid fades up (2s), all on animated gradient shifting from purple to pink."
 - "make it more dynamic" → "Add spring animations to all entrances, increase stagger to 0.5s, add particle effects to background, make text scale 120% on emphasis."`;
 
-      // Call OpenAI to enhance the prompt using GPT-4.1-nano (fastest model)
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4.1-nano-2025-04-14",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.4, // Lower temperature for more focused, consistent enhancements
-        max_tokens: 300, // Shorter, more concise enhancements
-      });
+      // Build messages for centralized AI client
+      const messages: AIMessage[] = [
+        { role: 'system', content: systemPromptText },
+        { role: 'user', content: prompt },
+      ];
 
-      const enhancedPrompt = completion.choices[0]?.message?.content;
+      // Resolve model from central config (promptEnhancer)
+      const modelConfig = resolveModel('promptEnhancer');
+
+      const aiResponse = await AIClientService.generateResponse(modelConfig, messages);
+      const enhancedPrompt = aiResponse.content;
 
       if (!enhancedPrompt) {
         throw new Error("Failed to generate enhanced prompt");
@@ -89,7 +84,7 @@ Examples:
       console.log(`[EnhancePrompt] Successfully enhanced prompt`, {
         originalLength: prompt.length,
         enhancedLength: enhancedPrompt.length,
-        model: "gpt-4.1-nano-2025-04-14",
+        model: `${modelConfig.provider}/${modelConfig.model}`,
       });
 
       return {
@@ -97,7 +92,7 @@ Examples:
         originalPrompt: prompt,
         enhancedPrompt,
         metadata: {
-          model: "gpt-4.1-nano-2025-04-14",
+          model: `${modelConfig.provider}/${modelConfig.model}`,
           videoFormat,
           enhancementRatio: Math.round((enhancedPrompt.length / prompt.length) * 100) / 100,
         },
@@ -113,7 +108,7 @@ Examples:
         enhancedPrompt: prompt, // Return original if enhancement fails
         error: error instanceof Error ? error.message : "Failed to enhance prompt",
         metadata: {
-          model: "gpt-4.1-nano-2025-04-14",
+          model: `${resolveModel('promptEnhancer').provider}/${resolveModel('promptEnhancer').model}`,
           videoFormat,
           enhancementRatio: 1,
         },

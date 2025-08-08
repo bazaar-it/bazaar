@@ -30,6 +30,8 @@ export const ModelPackSchema = z.object({
     
     // Simple utilities
     titleGenerator: ModelConfigSchema,
+    // Prompt enhancer (ChatPanel enhance)
+    promptEnhancer: ModelConfigSchema,
   }),
 });
 
@@ -50,10 +52,11 @@ const optimalPack: ModelPack = {
   name: 'Optimal Pack',
   description: 'Best balance of speed, cost, and quality',
   models: {
-    brain: { provider: 'openai', model: 'gpt-4.1-mini', temperature: 0.4 },
+    brain: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.4 },
     codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
     editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 400 }
+    titleGenerator: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.5, maxTokens: 400 },
+    promptEnhancer: { provider: 'openai', model: 'gpt-5-nano', temperature: 0.4, maxTokens: 300 },
   }
 };
 
@@ -65,19 +68,21 @@ const anthropicPack: ModelPack = {
     brain: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.6 },
     codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
     editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5, maxTokens: 100 }
+    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5, maxTokens: 100 },
+    promptEnhancer: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3, maxTokens: 8000 },
   }
 };
 
 // 🚀 OPENAI PACK: All OpenAI models
 const openaiPack: ModelPack = {
   name: 'OpenAI Pack',
-  description: 'OpenAI models only - GPT-4.1 for intelligence, GPT-4o-mini for speed',
+  description: 'OpenAI models only - GPT-5 for intelligence, GPT-5-mini for speed',
   models: {
-    brain: { provider: 'openai', model: 'gpt-4.1', temperature: 0.6 },
-    codeGenerator: { provider: 'openai', model: 'gpt-4.1', temperature: 0.3, maxTokens: 16000 },
-    editScene: { provider: 'openai', model: 'gpt-4.1', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.5, maxTokens: 100 }
+    brain: { provider: 'openai', model: 'gpt-5', temperature: 0.6 },
+    codeGenerator: { provider: 'openai', model: 'gpt-5', temperature: 0.3, maxTokens: 16000 },
+    editScene: { provider: 'openai', model: 'gpt-5', temperature: 0.3, maxTokens: 16000 },
+    titleGenerator: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.5, maxTokens: 100 },
+    promptEnhancer: { provider: 'openai', model: 'gpt-5-nano', temperature: 0.4, maxTokens: 300 },
   }
 };
 
@@ -92,7 +97,7 @@ export const MODEL_PACKS: Record<string, ModelPack> = {
 // ENVIRONMENT-DRIVEN ACTIVE PACK
 // =============================================================================
 
-export const ACTIVE_MODEL_PACK = process.env.MODEL_PACK ?? 'optimal-pack';
+export const ACTIVE_MODEL_PACK = process.env.MODEL_PACK ?? 'openai-pack';
 
 // Get the currently active model configuration
 export function getActiveModelPack(): ModelPack {
@@ -100,6 +105,13 @@ export function getActiveModelPack(): ModelPack {
   if (!pack) {
     throw new Error(`Model pack "${ACTIVE_MODEL_PACK}" not found. Available packs: ${Object.keys(MODEL_PACKS).join(', ')}`);
   }
+  
+  // Log GPT-5 usage when OpenAI pack is active
+  if (ACTIVE_MODEL_PACK === 'openai-pack') {
+    console.log('\n🚀 GPT-5 ACTIVE - Using the latest OpenAI models!');
+    console.log('🤖 Brain: GPT-5 | Code Generation: GPT-5 | Titles: GPT-5-mini\n');
+  }
+  
   return pack;
 }
 
@@ -150,15 +162,15 @@ export const INDIVIDUAL_MODELS: Record<string, ModelConfig> = {
   },
   
   // OpenAI models
-  'gpt-4o-mini': {
+  'gpt-5-mini': {
     provider: 'openai',
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     temperature: 0.3,
     maxTokens: 4000
   },
-  'gpt-4.1': {
+  'gpt-5': {
     provider: 'openai',
-    model: 'gpt-4.1',
+    model: 'gpt-5',
     temperature: 0.3,
     maxTokens: 16000
   }
@@ -239,12 +251,18 @@ export function getModelManifest() {
 
 // Development helper to log current configuration
 export function logCurrentModelConfiguration() {
-  if (process.env.NODE_ENV === 'development') {
-    const manifest = getModelManifest();
-    console.log('🤖 Model Management System');
-    console.log('📦 Active Pack:', manifest.activePack);
-    console.log('📝 Description:', manifest.packDescription);
-    console.log('🔧 Models:', manifest.models);
-    console.log('🌍 Environment:', manifest.environment);
-  }
+  const manifest = getModelManifest();
+  console.log('\n' + '='.repeat(60));
+  console.log('🚀 GPT-5 Model Management System');
+  console.log('='.repeat(60));
+  console.log('🔥 Active Pack:', manifest.activePack);
+  console.log('📝 Description:', manifest.packDescription);
+  console.log('🤖 Models:');
+  Object.entries(manifest.models).forEach(([key, value]) => {
+    const isGPT5 = value.includes('gpt-5');
+    const emoji = isGPT5 ? '✨' : '📍';
+    console.log(`  ${emoji} ${key}: ${value} ${isGPT5 ? '(GPT-5!)' : ''}`);
+  });
+  console.log('🌍 Environment:', manifest.environment);
+  console.log('='.repeat(60) + '\n');
 }
