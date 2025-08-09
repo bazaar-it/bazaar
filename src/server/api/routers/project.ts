@@ -11,6 +11,8 @@ import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
+import { assetContext } from "~/server/services/context/assetContextService";
+import type { AssetContext as AssetContextType } from "~/lib/types/asset-context";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -511,5 +513,13 @@ export const projectRouter = createTRPCRouter({
           message: "Failed to update project audio",
         });
       }
+    }),
+  
+  // List uploaded assets for a project
+  getUploads: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const ctx: AssetContextType = await assetContext.getProjectAssets(input.projectId);
+      return ctx;
     }),
 }); 

@@ -23,28 +23,24 @@ export default function PublicChangelogPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Changelog</h1>
-            <p className="text-gray-600">Product updates with short video summaries</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              className="border rounded-md px-3 py-2 text-sm"
-              placeholder="Search changelog..."
-              value={query}
-              onChange={(e) => { setPage(1); setQuery(e.target.value); }}
-            />
-            <select
-              className="border rounded-md px-3 py-2 text-sm"
-              value={type}
-              onChange={(e) => { setPage(1); setType(e.target.value as TypeFilter); }}
-            >
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <h1 className="text-4xl font-semibold mb-2">Changelog</h1>
+        <p className="text-gray-400 mb-8">Product updates with short video summaries</p>
+        <div className="flex items-center gap-3 mb-8">
+          <input
+            className="bg-transparent border border-gray-800 rounded-md px-3 py-2 text-sm placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600"
+            placeholder="Search changelog..."
+            value={query}
+            onChange={(e) => { setPage(1); setQuery(e.target.value); }}
+          />
+          <select
+            className="bg-transparent border border-gray-800 rounded-md px-3 py-2 text-sm"
+            value={type}
+            onChange={(e) => { setPage(1); setType(e.target.value as TypeFilter); }}
+          >
+            {TYPES.map(t => <option className="bg-black" key={t} value={t}>{t}</option>)}
+          </select>
         </div>
 
         {isLoading && <div className="text-gray-500">Loading…</div>}
@@ -52,22 +48,22 @@ export default function PublicChangelogPage() {
         {!isLoading && data && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {data.items.map(item => (
-              <Link key={item.id} href={`/changelog/${item.id}`} className="block bg-white rounded-lg shadow-sm border hover:shadow-md transition">
-                <div className="aspect-video w-full bg-gray-100 rounded-t-lg overflow-hidden">
+              <Link key={item.id} href={`/changelog/${item.id}`} className="block rounded-lg border border-gray-800 hover:border-gray-700 hover:bg-gray-950 transition">
+                <div className="aspect-video w-full bg-gray-900 rounded-t-lg overflow-hidden">
                   {item.thumbnailUrl ? (
                     <img src={item.thumbnailUrl} alt="thumbnail" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">No thumbnail</div>
+                    <div className="w-full h-full flex items-center justify-center text-gray-600">No thumbnail</div>
                   )}
                 </div>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 uppercase">{item.type}</span>
+                    <span className="text-[10px] px-2 py-1 rounded border border-gray-800 uppercase text-gray-300">{item.type}</span>
                     <span className="text-xs text-gray-500">{item.version ? `v${item.version}` : formatDate(item.mergedAt as any)}</span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{item.title}</h3>
-                  <p className="text-sm text-gray-600 line-clamp-2 mt-1">{item.description}</p>
-                  <div className="text-xs text-gray-400 mt-3 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white line-clamp-2">{item.title}</h3>
+                  <p className="text-sm text-gray-400 line-clamp-2 mt-1">{item.description}</p>
+                  <div className="text-xs text-gray-500 mt-3 flex items-center justify-between">
                     <span>{item.viewCount || 0} views</span>
                     <span>{formatDate(item.mergedAt as any)}</span>
                   </div>
@@ -78,8 +74,8 @@ export default function PublicChangelogPage() {
         )}
 
         {!isLoading && data && data.total > data.page * data.pageSize && (
-          <div className="mt-6 flex justify-center">
-            <button className="px-4 py-2 border rounded-md" onClick={() => setPage(p => p + 1)}>Load more</button>
+          <div className="mt-8 flex justify-center">
+            <button className="px-4 py-2 border border-gray-800 rounded-md hover:border-gray-700" onClick={() => setPage(p => p + 1)}>Load more</button>
           </div>
         )}
       </div>

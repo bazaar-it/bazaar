@@ -16,6 +16,7 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
+import UploadsPanel from './panels/UploadsPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { AudioPanel } from './panels/AudioPanel';
 import { toast } from 'sonner';
@@ -33,6 +34,7 @@ const PANEL_COMPONENTS_G = {
   templates: TemplatesPanelG,
   myprojects: MyProjectsPanelG,
   audio: AudioPanel,
+  uploads: UploadsPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -43,6 +45,7 @@ const PANEL_LABELS_G = {
   templates: 'Templates',
   myprojects: 'My Projects',
   audio: 'Audio',
+  uploads: 'My uploads',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -718,6 +721,15 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             userId={userId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
+          />;
+        case 'uploads':
+          return <UploadsPanel
+            projectId={projectId}
+            onInsertToChat={(url) => {
+              // Broadcast drag/drop or click-insert to chat textarea via CustomEvent
+              const event = new CustomEvent('chat-insert-media-url', { detail: { url } });
+              window.dispatchEvent(event);
+            }}
           />;
         case 'preview':
           return (
