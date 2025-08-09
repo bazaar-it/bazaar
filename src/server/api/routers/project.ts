@@ -84,7 +84,8 @@ export const projectRouter = createTRPCRouter({
       }
 
       // Ensure the user has access to this project
-      if (projectData.userId !== ctx.session.user.id) {
+      // Exception: system-changelog projects are public (viewable by anyone)
+      if (projectData.userId !== ctx.session.user.id && projectData.userId !== 'system-changelog') {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You don't have access to this project",

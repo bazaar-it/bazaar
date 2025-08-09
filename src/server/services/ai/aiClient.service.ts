@@ -8,6 +8,15 @@ import { SYSTEM_PROMPTS } from '~/config/prompts.config';
 import { apiKeyRotation } from './apiKeyRotation.service';
 import { simpleRateLimiter } from './simpleRateLimiter';
 import { aiMonitoring } from './monitoring.service';
+import { logCurrentModelConfiguration, ACTIVE_MODEL_PACK } from '~/config/models.config';
+
+// Log GPT-5 configuration on startup
+if (ACTIVE_MODEL_PACK === 'openai-pack') {
+  console.log('\n' + '⭐'.repeat(30));
+  console.log('🚀 BAZAAR-VID NOW POWERED BY GPT-5! 🚀');
+  console.log('⭐'.repeat(30) + '\n');
+  logCurrentModelConfiguration();
+}
 
 type SystemPromptConfig = typeof SYSTEM_PROMPTS[keyof typeof SYSTEM_PROMPTS];
 
@@ -215,8 +224,30 @@ export class AIClientService {
             totalTokens: response.usage?.total_tokens,
           }
         };
+      } else if (config.model.startsWith('gpt-5')) {
+        // GPT-5 models have different parameter requirements
+        const response = await client.chat.completions.create({
+          model: config.model,
+          messages: messages as any,
+          // GPT-5 only supports default temperature (1.0)
+          // temperature parameter is not supported
+          max_completion_tokens: config.maxTokens, // GPT-5 uses max_completion_tokens
+          ...(options?.responseFormat && { response_format: options.responseFormat }),
+        });
+        
+        // Log GPT-5 usage
+        console.log(`🚀 [GPT-5] Model: ${config.model} | Tokens: ${config.maxTokens}`);
+        
+        return {
+          content: response.choices[0]?.message?.content || '',
+          usage: {
+            promptTokens: response.usage?.prompt_tokens,
+            completionTokens: response.usage?.completion_tokens,
+            totalTokens: response.usage?.total_tokens,
+          }
+        };
       } else {
-        // Standard GPT models
+        // Standard GPT-4 and other models
         const response = await client.chat.completions.create({
           model: config.model,
           messages: messages as any,
