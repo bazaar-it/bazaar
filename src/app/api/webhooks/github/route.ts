@@ -209,73 +209,30 @@ export async function POST(request: NextRequest) {
     }
     
     // 7. Check if PR was merged (for changelog generation)
+    // DISABLED: Auto-generation on merge - only generate when explicitly requested via comment
+    // Uncomment the block below to enable automatic generation for all merged PRs
+    /*
     if (event.action === 'closed' && event.pull_request.merged) {
-      console.log(`[${requestId}] PR #${event.pull_request.number} was merged, generating changelog video`);
+      console.log(`[${requestId}] PR #${event.pull_request.number} was merged, but auto-generation is disabled`);
+      console.log(`[${requestId}] To generate a video, comment "@bazaar changelog" on the PR`);
       
-      try {
-        // 8. Analyze PR for content
-        const analysis = await analyzeGitHubPR({
-          owner: event.repository.owner.login,
-          repo: event.repository.name,
-          prNumber: event.pull_request.number,
-          prData: event.pull_request,
-        });
-        
-        // 9. Check if changelog generation is enabled for this repo
-        // For MVP, we'll generate for all merged PRs
-        // Later, check for .github/bazaar.json config
-        
-        // 10. Queue video generation job
-        const jobId = await queueChangelogVideo({
-          prAnalysis: analysis,
-          repository: event.repository.full_name,
-          style: 'automatic',
-          format: 'landscape',
-          branding: 'auto',
-        });
-        
-        // 11. Store changelog entry in database
-        await db.insert(changelogEntries).values({
-          id: crypto.randomUUID(),
-          prNumber: event.pull_request.number,
-          repositoryFullName: event.repository.full_name,
-          repositoryOwner: event.repository.owner.login,
-          repositoryName: event.repository.name,
-          title: event.pull_request.title,
-          description: event.pull_request.body || '',
-          type: analysis.type,
-          authorUsername: event.pull_request.user.login,
-          authorAvatar: event.pull_request.user.avatar_url,
-          authorUrl: event.pull_request.user.html_url,
-          mergedAt: new Date(event.pull_request.merged_at!),
-          jobId,
-          status: 'queued',
-          additions: event.pull_request.additions,
-          deletions: event.pull_request.deletions,
-          filesChanged: event.pull_request.changed_files,
-        });
-        
-        console.log(`[${requestId}] Changelog video queued with job ID: ${jobId}`);
-        
-        return NextResponse.json({
-          status: 'success',
-          message: 'Changelog video generation queued',
-          jobId,
-          prNumber: event.pull_request.number,
-          repository: event.repository.full_name,
-        });
-        
-      } catch (error) {
-        console.error(`[${requestId}] Error processing merged PR:`, error);
-        return NextResponse.json(
-          { 
-            status: 'error',
-            message: 'Failed to queue changelog video',
-            error: error instanceof Error ? error.message : 'Unknown error'
-          },
-          { status: 500 }
-        );
-      }
+      return NextResponse.json({
+        status: 'acknowledged',
+        message: 'PR merged - use @bazaar changelog comment to generate video',
+        prNumber: event.pull_request.number,
+        repository: event.repository.full_name,
+      });
+    }
+    */
+    
+    // For now, only generate videos when explicitly requested via comment
+    if (event.action === 'closed' && event.pull_request.merged) {
+      console.log(`[${requestId}] PR #${event.pull_request.number} was merged (auto-generation disabled)`);
+      return NextResponse.json({
+        status: 'acknowledged',
+        message: 'PR merged - video generation available via comment trigger',
+        prNumber: event.pull_request.number,
+      });
     }
     
     // 12. Handle other PR actions (opened, synchronize, etc.)
