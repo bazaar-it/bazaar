@@ -36,6 +36,8 @@ export default function AdminChangelogPage() {
       videoUrl: (fd.get('videoUrl') as string) || undefined,
       thumbnailUrl: (fd.get('thumbnailUrl') as string) || undefined,
       status: (fd.get('status') as any) || 'completed',
+      mergedAt: fd.get('mergedAt') ? new Date(fd.get('mergedAt') as string) : undefined,
+      version: (fd.get('version') as string) || undefined,
     };
 
     if (editing) {
@@ -121,6 +123,22 @@ export default function AdminChangelogPage() {
                   <select name="status" defaultValue={editing?.status || 'completed'} className="border rounded px-3 py-2">
                     {STATUSES.filter(s=>s!=='all').map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="date"
+                    name="mergedAt"
+                    defaultValue={editing?.mergedAt ? new Date(editing.mergedAt as unknown as string).toISOString().slice(0,10) : new Date().toISOString().slice(0,10)}
+                    className="border rounded px-3 py-2"
+                    aria-label="Date"
+                  />
+                  <input
+                    name="version"
+                    placeholder="Version (e.g., 1.4)"
+                    defaultValue={editing?.version || ''}
+                    className="border rounded px-3 py-2"
+                    aria-label="Version"
+                  />
                 </div>
                 <input name="repo" defaultValue={editing?.repositoryFullName || ''} placeholder="owner/repo" className="w-full border rounded px-3 py-2" required />
                 <input name="prNumber" defaultValue={editing?.prNumber || ''} placeholder="PR number (optional)" className="w-full border rounded px-3 py-2" />

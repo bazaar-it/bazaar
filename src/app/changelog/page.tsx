@@ -16,6 +16,12 @@ export default function PublicChangelogPage() {
 
   const { data, isLoading } = api.changelog.list.useQuery({ page, pageSize: 20, type, query: query || undefined });
 
+  const formatDate = (d?: string | Date | null) => {
+    if (!d) return '';
+    const date = typeof d === 'string' ? new Date(d) : d;
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
@@ -57,13 +63,13 @@ export default function PublicChangelogPage() {
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 uppercase">{item.type}</span>
-                    <span className="text-xs text-gray-500">{item.repository}</span>
+                    <span className="text-xs text-gray-500">{item.version ? `v${item.version}` : formatDate(item.mergedAt as any)}</span>
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{item.title}</h3>
                   <p className="text-sm text-gray-600 line-clamp-2 mt-1">{item.description}</p>
                   <div className="text-xs text-gray-400 mt-3 flex items-center justify-between">
                     <span>{item.viewCount || 0} views</span>
-                    <span>{item.mergedAt ? new Date(item.mergedAt as unknown as string).toLocaleDateString() : ''}</span>
+                    <span>{formatDate(item.mergedAt as any)}</span>
                   </div>
                 </div>
               </Link>

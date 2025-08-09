@@ -141,6 +141,7 @@ export const changelogRouter = createTRPCRouter({
       thumbnailUrl: z.string().url().optional(),
       status: z.enum(['queued', 'processing', 'completed', 'failed']).default('completed'),
       mergedAt: z.date().default(new Date()),
+      version: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const id = crypto.randomUUID();
@@ -158,6 +159,7 @@ export const changelogRouter = createTRPCRouter({
         videoUrl: input.videoUrl,
         thumbnailUrl: input.thumbnailUrl,
         status: input.status,
+        version: input.version,
       });
       return { id };
     }),
@@ -171,6 +173,8 @@ export const changelogRouter = createTRPCRouter({
       videoUrl: z.string().url().optional().nullable(),
       thumbnailUrl: z.string().url().optional().nullable(),
       status: z.enum(['queued', 'processing', 'completed', 'failed']).optional(),
+      mergedAt: z.date().optional(),
+      version: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const update: any = {};
@@ -180,6 +184,8 @@ export const changelogRouter = createTRPCRouter({
       if (input.videoUrl !== undefined) update.videoUrl = input.videoUrl;
       if (input.thumbnailUrl !== undefined) update.thumbnailUrl = input.thumbnailUrl;
       if (input.status !== undefined) update.status = input.status;
+      if (input.mergedAt !== undefined) update.mergedAt = input.mergedAt;
+      if (input.version !== undefined) update.version = input.version;
       if (Object.keys(update).length === 0) return { success: true };
       await db.update(changelogEntries).set(update).where(eq(changelogEntries.id, input.id));
       return { success: true };
