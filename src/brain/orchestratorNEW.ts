@@ -3,6 +3,7 @@
 import { ContextBuilder } from "./orchestrator_functions/contextBuilder";
 import { IntentAnalyzer } from "./orchestrator_functions/intentAnalyzer";
 import { parseDurationFromPrompt } from "./utils/durationParser";
+import { extractYouTubeUrl, extractDuration, YouTubeAnalyzerTool } from "./tools/youtube-analyzer";
 import type { 
   OrchestrationInput, 
   OrchestrationOutput 
@@ -23,16 +24,63 @@ export class Orchestrator {
     });
     
     try {
+      // Check for YouTube URL in the prompt
+      const youtubeUrl = extractYouTubeUrl(input.prompt);
+      let enhancedPrompt = input.prompt;
+      
+      if (youtubeUrl) {
+        console.log('🧠 [NEW ORCHESTRATOR] YouTube URL detected:', youtubeUrl);
+        
+        try {
+          // Extract duration from user message
+          const duration = extractDuration(input.prompt);
+          console.log('🧠 [NEW ORCHESTRATOR] Requested duration:', duration, 'seconds');
+          
+          // Analyze the YouTube video
+          input.onProgress?.('🎥 Analyzing YouTube video...', 'building');
+          const youtubeAnalyzer = new YouTubeAnalyzerTool();
+          const { analysis } = await youtubeAnalyzer.execute({
+            youtubeUrl,
+            duration,
+            additionalInstructions: input.prompt // Pass full prompt for context
+          });
+          
+          console.log('🧠 [NEW ORCHESTRATOR] YouTube analysis successful');
+          
+          // Extract user modifications (everything except the URL)
+          const urlPattern = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})(?:[&?][\w=]*)?/g;
+          const modifications = input.prompt.replace(urlPattern, '').trim();
+          
+          // Enhance the prompt with the analysis and modifications
+          enhancedPrompt = `Create a motion graphics video based on this YouTube video analysis:\n\n${analysis}\n\n${modifications ? `User requirements: ${modifications}` : 'Reproduce this video as accurately as possible.'}`;
+          console.log('🧠 [NEW ORCHESTRATOR] Enhanced prompt with YouTube analysis');
+          console.log('🧠 [NEW ORCHESTRATOR] Enhanced prompt length:', enhancedPrompt.length);
+        } catch (youtubeError) {
+          console.error('🧠 [NEW ORCHESTRATOR] YouTube analysis failed:', youtubeError);
+          input.onProgress?.('⚠️ Failed to analyze YouTube video, proceeding without analysis', 'building');
+          
+          // Fall back to original prompt if YouTube analysis fails
+          // This allows the user's request to still be processed
+          console.log('🧠 [NEW ORCHESTRATOR] Falling back to original prompt');
+        }
+      }
+      
+      // Update input with enhanced prompt
+      const enhancedInput = {
+        ...input,
+        prompt: enhancedPrompt
+      };
+      
       // 1. Build context
       console.log('🧠 [NEW ORCHESTRATOR] Step 1: Building context...');
       input.onProgress?.('🧠 Understanding your request...', 'building');
-      const contextPacket = await this.contextBuilder.buildContext(input);
+      const contextPacket = await this.contextBuilder.buildContext(enhancedInput);
       console.log('🧠 [NEW ORCHESTRATOR] Context built successfully');
 
       // 2. Analyze intent and select tool
       console.log('🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...');
       input.onProgress?.('🎯 Choosing the right approach...', 'building');
-      const toolSelection = await this.intentAnalyzer.analyzeIntent(input, contextPacket);
+      const toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
       console.log('🧠 [NEW ORCHESTRATOR] Tool selected:', {
         tool: toolSelection.toolName,
         reasoning: toolSelection.reasoning?.substring(0, 100) + '...'
