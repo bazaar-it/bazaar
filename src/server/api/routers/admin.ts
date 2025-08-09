@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2123,6 +2123,85 @@ export default function GeneratedScene() {
         emailsSentThisMonth: 0, // TODO: Track email sends in database
         openRate: 0, // TODO: Implement email tracking
         clickRate: 0, // TODO: Implement email tracking
+      };
+    }),
+
+  // 🆕 Paying user count and revenue metrics
+  getPayingUsersStats: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['all', '30d', '7d', '24h']).default('30d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const since = input.timeframe === '24h'
+        ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        : input.timeframe === '7d'
+          ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          : input.timeframe === '30d'
+            ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            : null;
+
+      // Paying users: unique users with a 'purchase' credit transaction
+      const whereClause = since ? and(gte(creditTransactions.createdAt, since), eq(creditTransactions.type, 'purchase')) : eq(creditTransactions.type, 'purchase');
+
+      const [payingUsersDistinct, totalRevenueCents, previousPeriod] = await Promise.all([
+        db
+          .select({ userId: creditTransactions.userId })
+          .from(creditTransactions)
+          .where(whereClause)
+          .groupBy(creditTransactions.userId),
+
+        db
+          .select({ sum: sql<number>`COALESCE(SUM((${creditTransactions.metadata} ->> 'amount')::int), 0)` })
+          .from(creditTransactions)
+          .where(whereClause),
+
+        (async () => {
+          if (!since) return null;
+          const prevStart = input.timeframe === '24h'
+            ? new Date(now.getTime() - 48 * 60 * 60 * 1000)
+            : input.timeframe === '7d'
+              ? new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+              : new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+          const prevEnd = since;
+          const prevWhere = and(
+            gte(creditTransactions.createdAt, prevStart),
+            lt(creditTransactions.createdAt, prevEnd),
+            eq(creditTransactions.type, 'purchase')
+          );
+
+          const [prevUsersRows, prevRevenueRow] = await Promise.all([
+            db
+              .select({ userId: creditTransactions.userId })
+              .from(creditTransactions)
+              .where(prevWhere)
+              .groupBy(creditTransactions.userId),
+            db
+              .select({ sum: sql<number>`COALESCE(SUM((${creditTransactions.metadata} ->> 'amount')::int), 0)` })
+              .from(creditTransactions)
+              .where(prevWhere),
+          ]);
+          return {
+            users: prevUsersRows.length,
+            revenueCents: prevRevenueRow[0]?.sum || 0,
+          };
+        })(),
+      ]);
+
+      const payingUsers = payingUsersDistinct.length;
+      const revenueCents = totalRevenueCents[0]?.sum || 0;
+
+      let usersChangePct: number | undefined;
+      let revenueChangePct: number | undefined;
+      if (previousPeriod) {
+        usersChangePct = previousPeriod.users === 0 ? (payingUsers > 0 ? 100 : 0) : Math.round(((payingUsers - previousPeriod.users) / previousPeriod.users) * 100);
+        revenueChangePct = previousPeriod.revenueCents === 0 ? (revenueCents > 0 ? 100 : 0) : Math.round(((revenueCents - previousPeriod.revenueCents) / previousPeriod.revenueCents) * 100);
+      }
+
+      return {
+        timeframe: input.timeframe,
+        payingUsers,
+        revenueCents,
+        usersChangePct,
+        revenueChangePct,
       };
     }),
 
