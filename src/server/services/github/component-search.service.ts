@@ -1,0 +1,349 @@
+/**
+ * GitHub Component Search Service
+ * Searches for React/Vue/Angular components in connected repositories
+ */
+
+import { Octokit } from '@octokit/rest';
+import { db } from '~/server/db';
+import { githubConnections, componentCache } from '~/server/db/schema/github-connections';
+import { eq, and, gt } from 'drizzle-orm';
+import crypto from 'crypto';
+
+export interface ComponentSearchResult {
+  name: string;
+  repository: string;
+  path: string;
+  content: string;
+  language: string;
+  size: number;
+  lastModified: string;
+  score: number;
+}
+
+export interface SearchOptions {
+  repositories?: string[];
+  maxResults?: number;
+  useCache?: boolean;
+}
+
+export class GitHubComponentSearchService {
+  private octokit: Octokit;
+  private userId: string;
+  
+  constructor(accessToken: string, userId: string) {
+    this.octokit = new Octokit({ auth: accessToken });
+    this.userId = userId;
+  }
+  
+  /**
+   * Search for a component by name across repositories
+   */
+  async searchComponent(
+    componentName: string,
+    options: SearchOptions = {}
+  ): Promise<ComponentSearchResult[]> {
+    const { repositories = [], maxResults = 10, useCache = true } = options;
+    
+    // Check cache first
+    if (useCache) {
+      const cached = await this.getCachedComponent(componentName, repositories[0]);
+      if (cached) {
+        return [cached];
+      }
+    }
+    
+    const results: ComponentSearchResult[] = [];
+    
+    // Build search queries
+    const searchQueries = this.buildSearchQueries(componentName, repositories);
+    
+    // Execute searches with rate limit handling
+    for (const query of searchQueries) {
+      try {
+        const response = await this.octokit.search.code({
+          q: query,
+          per_page: Math.min(maxResults, 30),
+          sort: 'indexed',
+        });
+        
+        // Process each result
+        for (const item of response.data.items) {
+          const result = await this.processSearchResult(item, componentName);
+          if (result) {
+            results.push(result);
+          }
+        }
+        
+        // Handle rate limiting
+        if (response.headers['x-ratelimit-remaining'] === '0') {
+          const resetTime = parseInt(response.headers['x-ratelimit-reset'] || '0') * 1000;
+          const waitTime = resetTime - Date.now();
+          if (waitTime > 0) {
+            await this.sleep(waitTime);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`Search query failed: ${query}`, error);
+        // Continue with next query
+      }
+      
+      // Stop if we have enough results
+      if (results.length >= maxResults) {
+        break;
+      }
+    }
+    
+    // Rank results by relevance
+    const rankedResults = this.rankResults(results, componentName);
+    
+    // Cache top result
+    if (rankedResults.length > 0 && useCache) {
+      await this.cacheComponent(rankedResults[0], componentName);
+    }
+    
+    return rankedResults.slice(0, maxResults);
+  }
+  
+  /**
+   * Build search queries for different patterns
+   */
+  private buildSearchQueries(
+    componentName: string,
+    repositories: string[]
+  ): string[] {
+    const queries: string[] = [];
+    const repoFilter = repositories.length > 0
+      ? repositories.map(r => `repo:${r}`).join(' ')
+      : '';
+    
+    // Direct filename matches
+    queries.push(`${repoFilter} filename:${componentName}.tsx`);
+    queries.push(`${repoFilter} filename:${componentName}.jsx`);
+    queries.push(`${repoFilter} filename:${componentName}.vue`);
+    
+    // Component declarations
+    const capitalizedName = componentName.charAt(0).toUpperCase() + componentName.slice(1);
+    queries.push(`${repoFilter} "export function ${capitalizedName}"`);
+    queries.push(`${repoFilter} "export const ${capitalizedName}"`);
+    queries.push(`${repoFilter} "export default function ${capitalizedName}"`);
+    queries.push(`${repoFilter} "class ${capitalizedName} extends"`);
+    
+    // Common paths
+    queries.push(`${repoFilter} path:components/${componentName}`);
+    queries.push(`${repoFilter} path:src/components/${componentName}`);
+    
+    return queries;
+  }
+  
+  /**
+   * Process a search result and fetch full content
+   */
+  private async processSearchResult(
+    item: any,
+    componentName: string
+  ): Promise<ComponentSearchResult | null> {
+    try {
+      // Parse repository info
+      const [owner, repo] = item.repository.full_name.split('/');
+      
+      // Fetch full file content
+      const response = await this.octokit.repos.getContent({
+        owner,
+        repo,
+        path: item.path,
+      });
+      
+      if ('content' in response.data) {
+        const content = Buffer.from(response.data.content, 'base64').toString();
+        
+        return {
+          name: item.name,
+          repository: item.repository.full_name,
+          path: item.path,
+          content,
+          language: this.detectLanguage(item.name),
+          size: response.data.size,
+          lastModified: item.repository.updated_at,
+          score: 0, // Will be calculated in ranking
+        };
+      }
+    } catch (error) {
+      console.error(`Failed to fetch content for ${item.path}:`, error);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Rank results by relevance
+   */
+  private rankResults(
+    results: ComponentSearchResult[],
+    componentName: string
+  ): ComponentSearchResult[] {
+    return results
+      .map(result => ({
+        ...result,
+        score: this.calculateScore(result, componentName),
+      }))
+      .sort((a, b) => b.score - a.score);
+  }
+  
+  /**
+   * Calculate relevance score for a result
+   */
+  private calculateScore(
+    result: ComponentSearchResult,
+    componentName: string
+  ): number {
+    let score = 0;
+    
+    // Exact filename match
+    const filename = result.path.split('/').pop() || '';
+    if (filename === `${componentName}.tsx`) score += 100;
+    if (filename === `${componentName}.jsx`) score += 90;
+    if (filename === `${componentName}.vue`) score += 80;
+    
+    // Path indicates component
+    if (result.path.includes('/components/')) score += 50;
+    if (result.path.includes('/ui/')) score += 40;
+    if (result.path.includes('/lib/components/')) score += 30;
+    
+    // Content analysis
+    if (result.content.includes(`export default function ${componentName}`)) score += 50;
+    if (result.content.includes(`export function ${componentName}`)) score += 40;
+    if (result.content.includes(`export const ${componentName}`)) score += 30;
+    
+    // Language preference (React > Vue > Angular)
+    if (result.language === 'tsx' || result.language === 'jsx') score += 20;
+    if (result.language === 'vue') score += 10;
+    
+    // File size (prefer reasonable sizes)
+    if (result.size > 100 && result.size < 5000) score += 10;
+    
+    return score;
+  }
+  
+  /**
+   * Get cached component if available
+   */
+  private async getCachedComponent(
+    componentName: string,
+    repository?: string
+  ): Promise<ComponentSearchResult | null> {
+    const cacheKey = this.buildCacheKey(componentName, repository);
+    
+    const cached = await db.query.componentCache.findFirst({
+      where: and(
+        eq(componentCache.cacheKey, cacheKey),
+        gt(componentCache.expiresAt, new Date())
+      ),
+    });
+    
+    if (cached) {
+      // Update access count
+      await db
+        .update(componentCache)
+        .set({
+          accessCount: cached.accessCount + 1,
+          lastAccessedAt: new Date(),
+        })
+        .where(eq(componentCache.id, cached.id));
+      
+      return {
+        name: cached.componentName,
+        repository: cached.repository,
+        path: cached.filePath,
+        content: cached.rawContent || '',
+        language: cached.parsedData.framework || 'tsx',
+        size: cached.rawContent?.length || 0,
+        lastModified: cached.createdAt.toISOString(),
+        score: 100, // Cached results get high score
+      };
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Cache a component for future use
+   */
+  private async cacheComponent(
+    result: ComponentSearchResult,
+    componentName: string
+  ): Promise<void> {
+    const cacheKey = this.buildCacheKey(componentName, result.repository);
+    const fileHash = crypto.createHash('sha256').update(result.content).digest('hex');
+    
+    await db
+      .insert(componentCache)
+      .values({
+        cacheKey,
+        userId: this.userId,
+        repository: result.repository,
+        filePath: result.path,
+        componentName: componentName,
+        parsedData: {
+          structure: {},
+          styles: {},
+          content: {},
+          props: {},
+          framework: result.language,
+        },
+        rawContent: result.content,
+        fileHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      })
+      .onConflictDoUpdate({
+        target: componentCache.cacheKey,
+        set: {
+          rawContent: result.content,
+          fileHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+  }
+  
+  private buildCacheKey(componentName: string, repository?: string): string {
+    return `${this.userId}:${repository || 'all'}:${componentName}`;
+  }
+  
+  private detectLanguage(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return ext || 'unknown';
+  }
+  
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  
+  /**
+   * Get user's connected repositories
+   */
+  static async getUserRepositories(userId: string): Promise<string[]> {
+    const connection = await db.query.githubConnections.findFirst({
+      where: and(
+        eq(githubConnections.userId, userId),
+        eq(githubConnections.isActive, true)
+      ),
+    });
+    
+    if (!connection) {
+      throw new Error('No active GitHub connection found');
+    }
+    
+    // If no specific repos selected, fetch user's repos
+    if (!connection.selectedRepos || connection.selectedRepos.length === 0) {
+      const octokit = new Octokit({ auth: connection.accessToken });
+      const { data: repos } = await octokit.repos.listForAuthenticatedUser({
+        per_page: 100,
+        sort: 'updated',
+      });
+      
+      return repos.map(repo => repo.full_name);
+    }
+    
+    return connection.selectedRepos;
+  }
+}
