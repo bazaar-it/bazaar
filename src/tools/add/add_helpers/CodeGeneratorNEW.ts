@@ -41,7 +41,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 FIX: Extract code from markdown code blocks if AI included extra text
     const codeBlockMatch = cleanCode.match(/```(?:javascript|tsx|ts|js)?\n([\s\S]*?)\n```/);
-    if (codeBlockMatch) {
+    if (codeBlockMatch && codeBlockMatch[1]) {
       console.warn('🚨 [UNIFIED PROCESSOR] Extracting code from markdown block, ignoring surrounding text');
       cleanCode = codeBlockMatch[1].trim();
     } else {

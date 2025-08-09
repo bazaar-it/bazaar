@@ -65,6 +65,9 @@ export default function ChatPanelG({
   // 🚨 NEW: Auto-expanding textarea state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
+  // Character limit for URL safety (12KB for Vercel)
+  const SAFE_CHARACTER_LIMIT = 12000;
+  
   // Get video state and current scenes
   const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
   const currentProps = getCurrentProps();
@@ -102,7 +105,7 @@ export default function ChatPanelG({
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
-    .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-'))
+    .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-') && !m.id.startsWith('system-') && !m.id.startsWith('user-'))
     .map(m => m.id);
 
   const { data: messageIterations } = api.generation.getBatchMessageIterations.useQuery(
@@ -124,7 +127,12 @@ export default function ChatPanelG({
   }, []);
   
   // 🚨 CRITICAL FIX: Use getProjectScenes instead of getById to get actual scene data
-  const { data: scenesData, refetch: refetchScenes } = api.generation.getProjectScenes.useQuery({ projectId: projectId });
+  const { data: scenesData, refetch: refetchScenes } = api.generation.getProjectScenes.useQuery(
+    { projectId: projectId },
+    { 
+      staleTime: 30000, // Cache for 30 seconds
+    }
+  );
   
   // 🚨 NEW: Get tRPC utils for cache invalidation
   const utils = api.useUtils();
@@ -931,8 +939,10 @@ export default function ChatPanelG({
         <form onSubmit={handleSubmit} className="flex items-end" autoComplete="off">
           <div 
             className={cn(
-              "flex-1 relative rounded-2xl border border-gray-300 bg-white shadow-sm",
-              "focus-within:border-gray-400 focus-within:shadow-md transition-all",
+              "flex-1 relative rounded-2xl border bg-white shadow-sm transition-all",
+              message.length > SAFE_CHARACTER_LIMIT 
+                ? "border-red-400 border-2" 
+                : "border-gray-300 focus-within:border-gray-400 focus-within:shadow-md",
               isDragOver && "border-blue-500 bg-blue-50"
             )}
             onDragOver={handleDragOver}
@@ -1029,6 +1039,15 @@ export default function ChatPanelG({
                   </Button>
                 </div>
               </div>
+              
+              {/* Character limit warning */}
+              {message.length > SAFE_CHARACTER_LIMIT && (
+                <div className="px-3 pb-2">
+                  <p className="text-xs text-red-500">
+                    {message.length.toLocaleString()} / {SAFE_CHARACTER_LIMIT.toLocaleString()} characters - Message may be too long
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

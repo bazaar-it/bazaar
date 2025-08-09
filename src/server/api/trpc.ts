@@ -142,3 +142,45 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+/**
+ * Admin procedure
+ *
+ * If you want a query or mutation to ONLY be accessible to admin users, use this. It verifies
+ * the session is valid and that the user has the isAdmin flag set to true.
+ */
+export const adminProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(async ({ ctx, next }) => {
+    if (!ctx.session?.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+    
+    // Check if user is admin in database
+    const user = await ctx.db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, ctx.session.user.id),
+      columns: {
+        isAdmin: true,
+      },
+    });
+    
+    if (!user?.isAdmin) {
+      throw new TRPCError({ 
+        code: "FORBIDDEN",
+        message: "Admin access required" 
+      });
+    }
+    
+    return next({
+      ctx: {
+        // infers the `session` as non-nullable and includes isAdmin
+        session: { 
+          ...ctx.session, 
+          user: { 
+            ...ctx.session.user,
+            isAdmin: true 
+          } 
+        },
+      },
+    });
+  });

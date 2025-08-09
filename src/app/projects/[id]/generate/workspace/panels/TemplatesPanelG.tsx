@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
 import { Player } from "@remotion/player";
 import { useVideoState } from "~/stores/videoState";
+import { transform } from 'sucrase';
 
 interface TemplatesPanelGProps {
   projectId: string;
@@ -74,7 +75,11 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
   return (
     <div className="w-full h-full">
       <Player
-        {...playerProps}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={false}
@@ -97,7 +102,11 @@ const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinitio
   return (
     <div className="w-full h-full">
       <Player
-        {...playerProps}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={true}
@@ -155,26 +164,9 @@ const TemplatePreview = ({ template, onClick, isLoading, format }: {
       {/* Template name overlay - only visible on hover when not loading */}
       {isHovered && !isLoading && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
-          <div className="text-white text-xs sm:text-sm font-medium">
+          <div className="text-white text-xs sm:text-sm font-medium truncate">
             {template.name}
           </div>
-          {/* Format compatibility indicators */}
-          {template.supportedFormats && template.supportedFormats.length < 3 && (
-            <div className="flex gap-1 mt-1">
-              {template.supportedFormats.map(fmt => (
-                <span 
-                  key={fmt} 
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    fmt === format 
-                      ? 'bg-green-500/80 text-white' 
-                      : 'bg-white/20 text-white/70'
-                  }`}
-                >
-                  {fmt === 'landscape' ? '16:9' : fmt === 'portrait' ? '9:16' : '1:1'}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -183,23 +175,85 @@ const TemplatePreview = ({ template, onClick, isLoading, format }: {
 
 // Real template compilation component  
 const useCompiledTemplate = (template: TemplateDefinition, format: string = 'landscape') => {
-  // Templates already have working React components - use them directly!
-  const component = template.component;
-  const isCompiling = false; // No compilation needed
-  const compilationError = null; // No compilation errors
   const dimensions = getFormatDimensions(format);
+  
+  // For hardcoded templates, just return the component directly
+  if (!template.isFromDatabase && template.component) {
+    return {
+      component: template.component,
+      isCompiling: false,
+      compilationError: null,
+      playerProps: {
+        component: template.component,
+        durationInFrames: template.duration,
+        fps: 30,
+        compositionWidth: dimensions.width,
+        compositionHeight: dimensions.height,
+      }
+    };
+  }
+  
+  // For database templates, we need to compile them
+  const [component, setComponent] = useState<React.ComponentType | null>(null);
+  const [isCompiling, setIsCompiling] = useState(true);
+  const [compilationError, setCompilationError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    // Only compile database templates
+    if (template.isFromDatabase) {
+      setIsCompiling(true);
+      
+      const compileTemplate = async () => {
+        try {
+          const code = template.getCode();
+          
+          // Transform TypeScript/JSX to JavaScript using sucrase
+          const { code: transformed } = transform(code, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          
+          // Create a blob URL for the module
+          const blob = new Blob([transformed], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // Import the module dynamically
+          const module = await import(/* webpackIgnore: true */ blobUrl);
+          
+          if (module.default && typeof module.default === 'function') {
+            setComponent(() => module.default);
+            setCompilationError(null);
+          } else {
+            throw new Error('No default export found in template code');
+          }
+          
+          // Clean up the blob URL immediately
+          URL.revokeObjectURL(blobUrl);
+          
+        } catch (error) {
+          console.error('Failed to compile database template:', error);
+          setCompilationError(error as Error);
+        } finally {
+          setIsCompiling(false);
+        }
+      };
+      
+      compileTemplate();
+    }
+  }, [template]);
 
   return { 
     component, 
     isCompiling, 
     compilationError,
-    playerProps: {
+    playerProps: component ? {
       component,
       durationInFrames: template.duration,
       fps: 30,
       compositionWidth: dimensions.width,
       compositionHeight: dimensions.height,
-    }
+    } : null
   };
 };
 
@@ -215,6 +269,12 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+  
+  // Fetch database templates
+  const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery({
+    format: currentFormat,
+    limit: 100,
+  });
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
@@ -258,6 +318,9 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     },
   });
 
+  // Track template usage mutation
+  const trackUsageMutation = api.templates.trackUsage.useMutation();
+  
   // Handle template addition
   const handleAddTemplate = useCallback(async (template: TemplateDefinition) => {
     console.log('[TemplatesPanelG] Adding template:', template.name);
@@ -265,6 +328,11 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     console.log('[TemplatesPanelG] Template code preview:', template.getCode().substring(0, 200) + '...');
     
     setLoadingTemplateId(template.id);
+    
+    // Track usage if it's a database template
+    if (template.isFromDatabase) {
+      trackUsageMutation.mutate(template.id);
+    }
     
     const mutationParams = {
       projectId,
@@ -277,11 +345,32 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     console.log('[TemplatesPanelG] Mutation parameters:', mutationParams);
     
     addTemplateMutation.mutate(mutationParams);
-  }, [projectId, addTemplateMutation]);
+  }, [projectId, addTemplateMutation, trackUsageMutation]);
 
+  // Combine hardcoded and database templates
+  const combinedTemplates = useMemo(() => {
+    // Convert database templates to TemplateDefinition format
+    const dbTemplatesFormatted: TemplateDefinition[] = databaseTemplates.map(dbTemplate => ({
+      id: dbTemplate.id,
+      name: dbTemplate.name,
+      duration: dbTemplate.duration,
+      previewFrame: dbTemplate.previewFrame || 15,
+      component: null as any, // Database templates don't have components
+      getCode: () => dbTemplate.tsxCode,
+      supportedFormats: dbTemplate.supportedFormats as ('landscape' | 'portrait' | 'square')[],
+      isFromDatabase: true, // Mark as database template
+      isOfficial: dbTemplate.isOfficial,
+      category: dbTemplate.category,
+      creator: dbTemplate.creator,
+    }));
+    
+    // Combine with hardcoded templates
+    return [...TEMPLATES, ...dbTemplatesFormatted];
+  }, [databaseTemplates]);
+  
   // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
-    let templates = TEMPLATES;
+    let templates = combinedTemplates;
     
     // Filter by format compatibility
     templates = templates.filter(template => {
@@ -301,7 +390,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     }
     
     return templates;
-  }, [searchQuery, currentFormat]);
+  }, [searchQuery, currentFormat, combinedTemplates]);
 
   // Get grid columns based on format for better layout
   const getGridColumns = (format: string) => {

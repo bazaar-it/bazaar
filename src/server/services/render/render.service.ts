@@ -247,27 +247,8 @@ async function preprocessSceneForLambda(scene: any) {
       '// Font loading removed for Lambda'
     );
     
-    // Replace ALL remaining window.IconifyIcon references with simple div placeholders
-    // This handles any complex cases that weren't caught by the SVG replacement
-    transformedCode = transformedCode.replace(
-      /window\.IconifyIcon/g,
-      '"div"'
-    );
-    
-    // Fix React.createElement calls with icon props - remove invalid icon prop
-    // Handle simple icon props
-    transformedCode = transformedCode.replace(
-      /React\.createElement\(\s*"div"\s*,\s*\{\s*icon:\s*"[^"]*"\s*,\s*([^}]+)\s*\}/g,
-      'React.createElement("div", { $1 }'
-    );
-    
-    // Handle complex multi-line icon props (like conditional expressions)
-    transformedCode = transformedCode.replace(
-      /React\.createElement\(\s*"div"\s*,\s*\{\s*icon:\s*[^,}]+\s*,\s*([^}]+)\s*\}/gs,
-      'React.createElement("div", { $1 }'
-    );
-    
     // Replace window.IconifyIcon with actual SVG icons
+    // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
     transformedCode = await replaceIconifyIcons(transformedCode);
     
     // Fix avatar URLs - replace local paths with R2 URLs
@@ -324,134 +305,142 @@ async function preprocessSceneForLambda(scene: any) {
 async function replaceIconifyIcons(code: string): Promise<string> {
   const { loadNodeIcon } = await import('@iconify/utils/lib/loader/node-loader');
   
-  // Find all IconifyIcon references - both JSX and React.createElement styles
-  const jsxIconRegex = /<window\.IconifyIcon\s+icon="([^"]+)"([^>]*?)\/>/g;
-  const createElementRegex = /React\.createElement\(window\.IconifyIcon,\s*\{[^}]*icon:\s*"([^"]+)"[^}]*\}[^)]*\)/g;
+  // First, extract all icon names from data structures
+  const iconNames = new Set<string>();
   
-  // First handle JSX-style icons
-  const jsxMatches = [...code.matchAll(jsxIconRegex)];
-  console.log(`[Preprocess] Found ${jsxMatches.length} JSX-style icons to replace`);
-  
-  // Process JSX-style icons
-  for (const match of jsxMatches) {
-    const [fullMatch, iconName, attrs = ''] = match;
-    
-    if (!iconName) {
-      console.warn(`[Preprocess] Empty icon name found, using placeholder`);
-      code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
-      continue;
-    }
-    
-    try {
-      // Split icon name into collection and icon (e.g., "material-symbols:play-arrow" -> ["material-symbols", "play-arrow"])
-      const [collection, icon] = iconName.split(':');
-      
-      if (!collection || !icon) {
-        console.warn(`[Preprocess] Invalid icon name format "${iconName}", using placeholder`);
-        code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
-        continue;
-      }
-      
-      // Load the icon data - loadNodeIcon returns SVG string directly
-      const svgString = await loadNodeIcon(collection, icon);
-      
-      if (!svgString) {
-        console.warn(`[Preprocess] Icon "${iconName}" not found, using placeholder`);
-        code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
-        continue;
-      }
-      
-      // Extract style and className from original attributes
-      const styleMatch = attrs?.match(/style=\{([^}]+)\}/);
-      const classMatch = attrs?.match(/className="([^"]+)"/);
-      
-      // Build React-compatible SVG from the string
-      let reactSvg = svgString
-        .replace(/class=/g, 'className=')
-        .replace(/(\w+)-(\w+)=/g, (_match, p1, p2) => `${p1}${p2.charAt(0).toUpperCase() + p2.slice(1)}=`);
-      
-      // Apply style if present
-      if (styleMatch) {
-        reactSvg = reactSvg.replace('<svg', `<svg style={${styleMatch[1]}}`);
-      }
-      
-      // Apply className if present
-      if (classMatch) {
-        reactSvg = reactSvg.replace('<svg', `<svg className="${classMatch[1]}"`);
-      }
-      
-      // Ensure proper sizing
-      if (!reactSvg.includes('width=') && !reactSvg.includes('height=')) {
-        reactSvg = reactSvg.replace('<svg', '<svg width="1em" height="1em"');
-      }
-      
-      console.log(`[Preprocess] Replaced icon "${iconName}" with SVG`);
-      code = code.replace(fullMatch, reactSvg);
-      
-    } catch (error) {
-      console.error(`[Preprocess] Failed to load icon "${iconName}":`, error);
-      // Fallback to placeholder
-      code = code.replace(fullMatch, '<span style={{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}} />');
+  // Find icon data arrays like: { icon: "mdi:home", ... }
+  const iconDataRegex = /\{\s*icon:\s*["']([^"']+)["']/g;
+  let match;
+  while ((match = iconDataRegex.exec(code)) !== null) {
+    if (match[1]) {
+      iconNames.add(match[1]);
+      console.log(`[Preprocess] Found icon in data: ${match[1]}`);
     }
   }
   
-  // Now handle React.createElement style icons
-  const createElementMatches = [...code.matchAll(createElementRegex)];
-  console.log(`[Preprocess] Found ${createElementMatches.length} React.createElement icons to replace`);
-  
-  for (const match of createElementMatches) {
-    const [fullMatch, iconName] = match;
-    
-    if (!iconName) {
-      console.warn(`[Preprocess] Empty icon name found in createElement, using placeholder`);
-      code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
-      continue;
-    }
-    
-    try {
-      // Split icon name into collection and icon
-      const [collection, icon] = iconName.split(':');
-      
-      if (!collection || !icon) {
-        console.warn(`[Preprocess] Invalid icon name format "${iconName}" in createElement, using placeholder`);
-        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
-        continue;
-      }
-      
-      // Load the icon data
-      const svgString = await loadNodeIcon(collection, icon);
-      
-      if (!svgString) {
-        console.warn(`[Preprocess] Icon "${iconName}" not found, using placeholder`);
-        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
-        continue;
-      }
-      
-      // Convert SVG string to React.createElement format
-      // Extract viewBox and path data from SVG
-      const viewBoxMatch = svgString.match(/viewBox="([^"]+)"/);
-      const pathMatch = svgString.match(/<path[^>]*d="([^"]+)"/);
-      
-      if (pathMatch && pathMatch[1]) {
-        const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
-        const pathData = pathMatch[1];
-        
-        // Create React.createElement for SVG
-        const svgElement = `React.createElement("svg", {viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor"}, React.createElement("path", {d:"${pathData}"}))`;
-        
-        console.log(`[Preprocess] Replaced createElement icon "${iconName}" with SVG`);
-        code = code.replace(fullMatch, svgElement);
-      } else {
-        console.warn(`[Preprocess] Could not extract path from icon "${iconName}", using placeholder`);
-        code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
-      }
-      
-    } catch (error) {
-      console.error(`[Preprocess] Failed to load icon "${iconName}":`, error);
-      // Fallback to placeholder
-      code = code.replace(fullMatch, 'React.createElement("span", {style:{display:"inline-block",width:"1em",height:"1em",background:"currentColor",borderRadius:"50%"}})');
+  // Also find direct icon usage with literal strings
+  const directIconRegex = /<window\.IconifyIcon\s+icon=["']([^"']+)["']/g;
+  while ((match = directIconRegex.exec(code)) !== null) {
+    if (match[1]) {
+      iconNames.add(match[1]);
+      console.log(`[Preprocess] Found direct icon: ${match[1]}`);
     }
   }
+  
+  // Load all icons first
+  const iconMap = new Map<string, string>();
+  for (const iconName of iconNames) {
+    try {
+      const [collection, icon] = iconName.split(':');
+      if (collection && icon) {
+        const svgString = await loadNodeIcon(collection, icon);
+        if (svgString) {
+          iconMap.set(iconName, svgString);
+          console.log(`[Preprocess] Loaded icon: ${iconName}`);
+        }
+      }
+    } catch (error) {
+      console.warn(`[Preprocess] Failed to load icon "${iconName}":`, error);
+    }
+  }
+  
+  // Build the icon map with actual SVG paths
+  const iconMapEntries = [];
+  for (const [name, svg] of iconMap.entries()) {
+    // Extract all paths from the SVG (some icons have multiple paths)
+    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
+    const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
+    
+    // Extract all path elements
+    const paths = [];
+    const pathRegex = /<path[^>]*d="([^"]+)"[^>]*>/g;
+    let pathMatch;
+    while ((pathMatch = pathRegex.exec(svg)) !== null) {
+      paths.push(pathMatch[1]);
+    }
+    
+    if (paths.length > 0) {
+      // Create a function that renders all paths
+      const pathElements = paths.map(d => `React.createElement("path", {d:"${d ? d.replace(/"/g, '\\"') : ''}"})`).join(', ');
+      iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor"}, props), ${pathElements}); }`);
+    }
+  }
+  
+  // Create the icon map code that will be injected
+  // Using regular function syntax to avoid destructuring issues in Lambda
+  const iconMapCode = `
+    const __iconMap = {
+      ${iconMapEntries.join(',\n      ')}
+    };
+    const IconifyIcon = function(props) {
+      const iconName = props && props.icon;
+      if (!iconName) {
+        // No icon name provided - show blue circle
+        return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, (props && props.style) || {})});
+      }
+      const IconComponent = __iconMap[iconName];
+      if (IconComponent) {
+        // Icon found - render it
+        return IconComponent((props && props.style) || {});
+      }
+      // Icon not found - show red circle so we know the function is being called
+      return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"red",border:"2px solid white"}, (props && props.style) || {})});
+    };
+  `;
+  
+  // Replace window.IconifyIcon with our local IconifyIcon
+  // This handles both JSX and React.createElement forms
+  code = code.replace(/window\.IconifyIcon/g, 'IconifyIcon');
+  
+  // Also handle React.createElement calls that already exist
+  code = code.replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(IconifyIcon,');
+  
+  // Find where the component function starts and inject the icon map INSIDE it
+  // Look for common patterns: "function Scene", "const Component = function", etc.
+  const componentFunctionPatterns = [
+    /function\s+Scene[^{]*\{/,
+    /const\s+Component\s*=\s*function[^{]*\{/,
+    /function\s+Component[^{]*\{/,
+    /const\s+Scene[^=]*=\s*function[^{]*\{/
+  ];
+  
+  let injected = false;
+  for (const pattern of componentFunctionPatterns) {
+    const match = code.match(pattern);
+    if (match) {
+      const insertPosition = match.index! + match[0].length;
+      // Insert the icon map right after the function opening brace
+      code = code.slice(0, insertPosition) + '\n' + iconMapCode + '\n' + code.slice(insertPosition);
+      console.log(`[Preprocess] Injected icon map inside component function at position ${insertPosition}`);
+      injected = true;
+      break;
+    }
+  }
+  
+  if (!injected) {
+    // Fallback: inject at the beginning if we can't find the component function
+    console.warn('[Preprocess] Could not find component function, injecting icon map at beginning');
+    code = iconMapCode + '\n' + code;
+  }
+  
+  console.log(`[Preprocess] Injected icon map with ${iconMap.size} icons`);
+  
+  // Log a sample of the transformed code to verify injection
+  const codePreview = code.substring(0, 1500);
+  console.log('[Preprocess] Code after icon injection (first 1500 chars):');
+  console.log(codePreview);
+  
+  // Check if IconifyIcon is actually being used in the code
+  const iconifyUsageCount = (code.match(/IconifyIcon/g) || []).length;
+  console.log(`[Preprocess] IconifyIcon is referenced ${iconifyUsageCount} times in the transformed code`);
+  
+  // Check for the actual compiled form
+  const createElementIconCount = (code.match(/React\.createElement\(\s*IconifyIcon/g) || []).length;
+  console.log(`[Preprocess] React.createElement(IconifyIcon) found ${createElementIconCount} times`);
+  
+  // Look for any icon references
+  const iconReferences = code.match(/icon(?:Item)?\.icon/g) || [];
+  console.log(`[Preprocess] Found ${iconReferences.length} icon property references`);
   
   return code;
 }

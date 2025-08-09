@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { format, subDays } from "date-fns";
-import { ArrowUpIcon, ArrowDownIcon, UsersIcon, CreditCardIcon, MousePointerClickIcon, EyeIcon } from "@heroicons/react/24/outline";
+import { ArrowUpIcon, ArrowDownIcon, UsersIcon, CreditCardIcon, CursorArrowRaysIcon, EyeIcon } from "@heroicons/react/24/outline";
 
 export default function PaywallAnalyticsPage() {
   const [dateRange, setDateRange] = useState(30); // Default to last 30 days
@@ -99,7 +99,7 @@ export default function PaywallAnalyticsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Package Clicks</CardTitle>
-                <MousePointerClickIcon className="h-4 w-4 text-muted-foreground" />
+                <CursorArrowRaysIcon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{analytics?.uniqueUsers?.clicked_package || 0}</div>
