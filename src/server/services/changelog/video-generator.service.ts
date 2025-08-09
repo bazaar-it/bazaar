@@ -1,21 +1,23 @@
+// src/server/services/changelog/video-generator.service.ts
 /**
  * Changelog Video Generator Service
  * Generates motion graphic videos from PR analysis
  */
 
 import type { ChangelogVideoRequest, ChangelogVideoResponse, PRAnalysis } from '~/lib/types/github.types';
+import type { InputProps } from '~/lib/types/video/input-props';
 import { db } from '~/server/db';
 import { projects, scenes, users } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { orchestrator } from '~/brain/orchestratorNEW';
-import { renderVideo } from '~/server/services/render/render.service';
-import { uploadToR2 } from '~/server/services/upload/r2.service';
+import { prepareRenderConfig } from '~/server/services/render/render.service';
+import { renderVideoOnLambda, getLambdaRenderProgress } from '~/server/services/render/lambda-render.service';
 
 /**
  * Generate a changelog video from PR analysis
  */
 export async function generateChangelogVideo(
-  request: ChangelogVideoRequest
+  request: ChangelogVideoRequest,
+  userId?: string // Optional user ID to use instead of system user
 ): Promise<ChangelogVideoResponse> {
   const requestId = crypto.randomUUID();
   const { prAnalysis, style, format, duration, branding } = request;
@@ -23,57 +25,72 @@ export async function generateChangelogVideo(
   console.log(`[${requestId}] Generating changelog video for PR #${prAnalysis.prNumber}`);
   
   try {
-    // 1. Ensure system-changelog user exists (create if needed)
-    const systemUserId = 'system-changelog';
-    try {
-      await db.insert(users).values({
-        id: systemUserId,
-        name: 'System Changelog',
-        email: 'changelog@bazaar.it',
-        emailVerified: new Date(),
-        isAdmin: false,
-      }).onConflictDoNothing();
-    } catch (error) {
-      // User might already exist, that's fine
-      console.log(`[${requestId}] System user check:`, error);
+    // 1. Use provided userId or system-changelog user
+    const projectUserId = userId || 'system-changelog';
+    
+    // Ensure system user exists if we're using it
+    if (!userId) {
+      try {
+        await db.insert(users).values({
+          id: projectUserId,
+          name: 'System Changelog',
+          email: 'changelog@bazaar.it',
+          emailVerified: new Date(),
+          isAdmin: false,
+        }).onConflictDoNothing();
+      } catch (error) {
+        // User might already exist, that's fine
+        console.log(`[${requestId}] System user check:`, error);
+      }
     }
     
     // 2. Create a temporary project for video generation
     const projectId = crypto.randomUUID();
-    const projectName = `Changelog: ${prAnalysis.repository.name} PR #${prAnalysis.prNumber}`;
-    const projectTitle = `${prAnalysis.title} - Changelog Video`;
+    const timestamp = new Date().toISOString().substring(11, 19).replace(/:/g, '-');
+    const projectName = `Changelog: ${prAnalysis.repository.name} PR #${prAnalysis.prNumber} - ${timestamp}`;
+    const projectTitle = `${prAnalysis.title} - Changelog Video ${timestamp}`;
     
-    // Default props for video projects
-    const defaultProps = {
-      format: format || 'landscape',
-      fps: 30,
-      durationInFrames: (duration || 15) * 30, // Convert seconds to frames
-      compositionWidth: format === 'portrait' ? 1080 : 1920,
-      compositionHeight: format === 'portrait' ? 1920 : (format === 'square' ? 1080 : 1080),
+    // Determine dimensions based on requested format
+    const videoFormat = format || 'landscape';
+    const fps = 30;
+    const durationInFrames = (duration || 15) * fps;
+    const width = videoFormat === 'portrait' ? 1080 : 1920;
+    const height = videoFormat === 'portrait' ? 1920 : (videoFormat === 'square' ? 1080 : 1080);
+
+    // Default props for video projects (must match InputProps schema)
+    const defaultProps: InputProps = {
+      meta: {
+        duration: durationInFrames,
+        title: projectTitle,
+        backgroundColor: '#000000',
+        format: videoFormat as InputProps['meta']['format'],
+        width,
+        height,
+      },
+      scenes: [],
     };
     
     await db.insert(projects).values({
       id: projectId,
-      name: projectName,
       title: projectTitle, // Required field
       props: defaultProps, // Required JSONB field
-      userId: systemUserId, // Special system user
+      userId: projectUserId, // User who owns the project
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     
-    // 2. Generate content based on PR type
+    // 3. Generate content based on PR type
     const videoContent = await generateVideoContent(prAnalysis, style || 'automatic');
     
-    // 3. Create scene with generated content
+    // 4. Create scene with generated content
     const sceneId = crypto.randomUUID();
-    const sceneDuration = (duration || 15) * 30; // Convert seconds to frames at 30fps
+    const sceneDuration = durationInFrames; // Single-scene video
     
-    // 4. Generate the Remotion component code
+    // 5. Generate the Remotion component code
     const componentCode = await generateChangelogComponent(
       videoContent,
       prAnalysis,
-      format || 'landscape',
+      videoFormat,
       branding || 'auto'
     );
     
@@ -83,39 +100,78 @@ export async function generateChangelogVideo(
       name: videoContent.title,
       order: 0,
       duration: sceneDuration,
-      startFrame: 0,
       tsxCode: componentCode,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     
-    // 5. Render the video
-    const renderResult = await renderVideo({
+    // 6. Prepare Lambda render configuration (output format is file type, not orientation)
+    const renderConfig = await prepareRenderConfig({
       projectId,
-      format: format || 'landscape',
+      scenes: [
+        {
+          id: sceneId,
+          projectId,
+          name: videoContent.title,
+          order: 0,
+          duration: sceneDuration,
+          tsxCode: componentCode,
+          startFrame: 0,
+        },
+      ],
+      format: 'mp4',
       quality: 'high',
-      fps: 30,
+      projectProps: defaultProps,
+      // No audio for now
     });
-    
-    // 6. Generate thumbnail
-    const thumbnailUrl = await generateThumbnail(renderResult.videoUrl);
-    
-    // 7. Optionally generate GIF
-    const gifUrl = format === 'square' ? await generateGif(renderResult.videoUrl) : undefined;
-    
-    // 8. Return the result
+
+    // 7. Trigger Lambda render
+    const { renderId, bucketName } = await renderVideoOnLambda({
+      ...renderConfig,
+      webhookUrl: `${process.env.NEXTAUTH_URL}/api/webhooks/render`,
+      renderWidth: renderConfig.renderWidth,
+      renderHeight: renderConfig.renderHeight,
+    });
+
+    console.log(`[${requestId}] Lambda render started. renderId=${renderId} bucket=${bucketName}`);
+
+    // 8. Poll for completion (MVP) to return a URL synchronously
+    const startedAt = Date.now();
+    const maxWaitMs = 8 * 60 * 1000; // 8 minutes
+    let videoUrl: string | undefined;
+    while (Date.now() - startedAt < maxWaitMs) {
+      const progress = await getLambdaRenderProgress(renderId, bucketName);
+      if (progress.done) {
+        videoUrl = progress.outputFile || undefined;
+        break;
+      }
+      // Backoff: 2s up to 10s
+      const elapsed = Date.now() - startedAt;
+      const delay = Math.min(10000, 2000 + Math.floor(elapsed / 30000) * 2000);
+      await sleep(delay);
+    }
+
+    if (!videoUrl) {
+      throw new Error('Render timed out before completion. The webhook may still complete later.');
+    }
+
+    // 9. Generate thumbnail/GIF placeholders
+    const thumbnailUrl = await generateThumbnail(videoUrl);
+    const gifUrl = videoFormat === 'square' ? await generateGif(videoUrl) : undefined;
+
+    // 10. Return the result
     const response: ChangelogVideoResponse = {
       id: sceneId,
-      videoUrl: renderResult.videoUrl,
+      videoUrl,
       thumbnailUrl,
       gifUrl,
       duration: duration || 15,
-      format: format || 'landscape',
+      format: videoFormat,
       createdAt: new Date().toISOString(),
       prNumber: prAnalysis.prNumber,
       repository: prAnalysis.repository.fullName,
     };
-    
+
     console.log(`[${requestId}] Changelog video generated successfully`);
     return response;
     
@@ -123,6 +179,10 @@ export async function generateChangelogVideo(
     console.error(`[${requestId}] Error generating changelog video:`, error);
     throw error;
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

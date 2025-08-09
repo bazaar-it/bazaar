@@ -255,7 +255,7 @@ async function preprocessSceneForLambda(scene: any) {
     // This handles the window.BazaarAvatars['avatar-name'] pattern
     transformedCode = transformedCode.replace(
       /window\.BazaarAvatars\[['"]([^'"]+)['"]\]/g,
-      (match, avatarId) => {
+      (match: string, avatarId: string) => {
         // Map avatar IDs to their full public R2 URLs
         const avatarUrls: Record<string, string> = {
           'asian-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/asian-woman.png',
@@ -413,7 +413,7 @@ async function replaceIconifyIcons(code: string): Promise<string> {
         for (const cand of candidates) {
           const [c2, i2] = cand.split(':');
           try {
-            const svg2 = await loadNodeIcon(c2, i2);
+            const svg2 = await loadNodeIcon(c2, i2 || '');
             if (svg2) {
               console.log(`[Preprocess] Using fallback: ${name} -> ${cand}`);
               return svg2;
@@ -463,7 +463,7 @@ async function replaceIconifyIcons(code: string): Promise<string> {
       const val = m.slice(1, -1).toLowerCase(); // Ensure lowercase
       const prefix = val.split(':')[0];
       if (allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
-        const svgString = await loadWithFallback(val);
+        const svgString = await loadWithFallback(val || '');
         if (svgString && !iconMap.has(val)) {
           iconMap.set(val, svgString);
           console.log(`[Preprocess] Added additional icon: ${val}`);
@@ -485,7 +485,7 @@ async function replaceIconifyIcons(code: string): Promise<string> {
     
     // Extract inner SVG markup to preserve all shapes (paths, circles, rects, etc.)
     const innerMatch = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
-    const inner = innerMatch ? innerMatch[1].replace(/`/g, '\\`') : '';
+    const inner = innerMatch?.[1]?.replace(/`/g, '\\`') || '';
     iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner}\` }}, props)); }`);
   }
   
