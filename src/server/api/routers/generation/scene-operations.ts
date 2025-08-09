@@ -139,12 +139,38 @@ export const generateScene = protectedProcedure
       // 4. User message is already created in SSE route, skip creating it here
       // This prevents duplicate messages and ensures correct sequence order
 
+      // 4.5 Check for GitHub connection
+      let githubAccessToken: string | undefined;
+      let githubConnected = false;
+      
+      try {
+        const { githubConnections } = await import("~/server/db/schema/github-connections");
+        const { eq, and } = await import("drizzle-orm");
+        
+        const connections = await ctx.db
+          .select()
+          .from(githubConnections)
+          .where(and(
+            eq(githubConnections.userId, userId),
+            eq(githubConnections.isActive, true)
+          ));
+        
+        if (connections[0]) {
+          githubConnected = true;
+          githubAccessToken = connections[0].accessToken;
+          console.log(`[${response.getRequestId()}] User has GitHub connection`);
+        }
+      } catch (error) {
+        console.error('Failed to check GitHub connection:', error);
+      }
+
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
       console.log(`[${response.getRequestId()}] User context:`, {
         hasImageUrls: !!userContext?.imageUrls?.length,
         hasVideoUrls: !!userContext?.videoUrls?.length,
         videoUrls: userContext?.videoUrls,
+        githubConnected,
       });
       const orchestratorResponse = await orchestrator.processUserInput({
         prompt: userMessage,
@@ -156,19 +182,13 @@ export const generateScene = protectedProcedure
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
           modelOverride: userContext?.modelOverride,
+          githubConnected,
+          githubAccessToken,
+          userId,
         },
       });
 
-      if (!orchestratorResponse.success || !orchestratorResponse.result) {
-        return response.error(
-          ErrorCode.AI_ERROR,
-          orchestratorResponse.error || "Failed to get decision from brain",
-          'scene.create',
-          'scene'
-        ) as any as SceneCreateResponse;
-      }
-
-      // Handle clarification responses
+      // Handle clarification responses FIRST (before checking for result)
       if (orchestratorResponse.needsClarification) {
         console.log(`[${response.getRequestId()}] Brain needs clarification:`, orchestratorResponse.chatResponse);
         
@@ -206,6 +226,16 @@ export const generateScene = protectedProcedure
           },
           assistantMessageId,
         } as any;
+      }
+
+      // Now check for errors (after clarification check)
+      if (!orchestratorResponse.success || !orchestratorResponse.result) {
+        return response.error(
+          ErrorCode.AI_ERROR,
+          orchestratorResponse.error || "Failed to get decision from brain",
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
       }
 
       const decision: BrainDecision = {

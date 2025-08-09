@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_OAUTH_CLIENT_ID!,
-        client_secret: process.env.GITHUB_OAUTH_CLIENT_SECRET!,
+        client_id: process.env.GITHUB_REPO_CLIENT_ID || process.env.AUTH_GITHUB_ID!,
+        client_secret: process.env.GITHUB_REPO_CLIENT_SECRET || process.env.AUTH_GITHUB_SECRET!,
         code: code,
         redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/github/callback`,
       }),
@@ -77,9 +77,12 @@ export async function GET(request: NextRequest) {
     const { data: githubUser } = await octokit.users.getAuthenticated();
     
     // Check if connection already exists
-    const existingConnection = await db.query.githubConnections.findFirst({
-      where: eq(githubConnections.userId, session.user.id),
-    });
+    const existingConnections = await db
+      .select()
+      .from(githubConnections)
+      .where(eq(githubConnections.userId, session.user.id));
+    
+    const existingConnection = existingConnections[0];
     
     if (existingConnection) {
       // Update existing connection

@@ -27,15 +27,35 @@ export default function AdminChangelogPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
+    // Build description from structured sections if provided
+    const improvements = (fd.get('improvements') as string) || '';
+    const fixes = (fd.get('fixes') as string) || '';
+    const howTo = (fd.get('howto') as string) || '';
+    const media = ((fd.get('media') as string) || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+
+    let structuredDescription = (fd.get('description') as string) || '';
+    if (improvements || fixes || howTo || media.length > 0) {
+      const sections: string[] = [];
+      if (improvements) sections.push(`## Improvements\n\n${improvements.trim()}\n`);
+      if (fixes) sections.push(`## Fixes\n\n${fixes.trim()}\n`);
+      if (howTo) sections.push(`## How to use\n\n${howTo.trim()}\n`);
+      if (media.length > 0) {
+        sections.push(`## Media\n\n${media.map((url) => url).join('\n')}`);
+      }
+      structuredDescription = sections.join('\n');
+    }
+
+    const isPublished = fd.get('published') === 'on';
+
     const payload = {
       title: (fd.get('title') as string) || '',
-      description: (fd.get('description') as string) || '',
+      description: structuredDescription,
       type: (fd.get('type') as any),
       repositoryFullName: (fd.get('repo') as string) || '',
       prNumber: Number(fd.get('prNumber') || 0) || undefined,
       videoUrl: (fd.get('videoUrl') as string) || undefined,
       thumbnailUrl: (fd.get('thumbnailUrl') as string) || undefined,
-      status: (fd.get('status') as any) || 'completed',
+      status: isPublished ? 'completed' : ((fd.get('status') as any) || 'queued'),
       mergedAt: fd.get('mergedAt') ? new Date(fd.get('mergedAt') as string) : undefined,
       version: (fd.get('version') as string) || undefined,
     };
@@ -92,11 +112,25 @@ export default function AdminChangelogPage() {
                 <tr key={item.id} className="border-t">
                   <td className="px-3 py-2 text-gray-900">{item.title}</td>
                   <td className="px-3 py-2 text-center uppercase text-xs">{item.type}</td>
-                  <td className="px-3 py-2 text-center text-xs">{item.status}</td>
+                  <td className="px-3 py-2 text-center text-xs">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border ${item.status === 'completed' ? 'border-green-300 text-green-700 bg-green-50' : 'border-gray-300 text-gray-700 bg-gray-50'}`}>
+                      {item.status === 'completed' ? 'Published' : item.status}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-center text-blue-600">{item.videoUrl ? 'Yes' : 'No'}</td>
                   <td className="px-3 py-2 text-center">{item.viewCount || 0}</td>
                   <td className="px-3 py-2 text-center">{item.mergedAt ? new Date(item.mergedAt as unknown as string).toLocaleDateString() : ''}</td>
                   <td className="px-3 py-2 text-right">
+                    <button 
+                      className={`px-2 py-1 ${item.status === 'completed' ? 'text-amber-600' : 'text-green-600'}`}
+                      onClick={async () => {
+                        const next = item.status === 'completed' ? 'queued' : 'completed';
+                        await updateMut.mutateAsync({ id: item.id, status: next });
+                        list.refetch();
+                      }}
+                    >
+                      {item.status === 'completed' ? 'Unpublish' : 'Publish'}
+                    </button>
                     <button className="px-2 py-1 text-indigo-600" onClick={() => { setEditing(item); setFormOpen(true); }}>Edit</button>
                     <button className="px-2 py-1 text-red-600" onClick={async () => { await deleteMut.mutateAsync({ id: item.id }); list.refetch(); }}>Delete</button>
                   </td>
@@ -139,11 +173,23 @@ export default function AdminChangelogPage() {
                     className="border rounded px-3 py-2"
                     aria-label="Version"
                   />
+                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" name="published" defaultChecked={editing?.status === 'completed'} />
+                    Published
+                  </label>
                 </div>
                 <input name="repo" defaultValue={editing?.repositoryFullName || ''} placeholder="owner/repo" className="w-full border rounded px-3 py-2" required />
                 <input name="prNumber" defaultValue={editing?.prNumber || ''} placeholder="PR number (optional)" className="w-full border rounded px-3 py-2" />
                 <input name="videoUrl" defaultValue={editing?.videoUrl || ''} placeholder="Video URL (optional)" className="w-full border rounded px-3 py-2" />
                 <input name="thumbnailUrl" defaultValue={editing?.thumbnailUrl || ''} placeholder="Thumbnail URL (optional)" className="w-full border rounded px-3 py-2" />
+
+                {/* Structured sections matching Cursor-style blocks */}
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <textarea name="improvements" placeholder="Improvements (markdown, bullets or text)" className="w-full border rounded px-3 py-2" rows={4} />
+                  <textarea name="fixes" placeholder="Fixes (markdown)" className="w-full border rounded px-3 py-2" rows={4} />
+                  <textarea name="howto" placeholder="How to use (steps, shortcuts, UI path)" className="w-full border rounded px-3 py-2 md:col-span-2" rows={4} />
+                  <textarea name="media" placeholder="Media URLs (one per line)" className="w-full border rounded px-3 py-2 md:col-span-2" rows={3} />
+                </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <button type="button" className="px-3 py-2" onClick={() => setFormOpen(false)}>Cancel</button>
                   <button type="submit" className="px-3 py-2 bg-indigo-600 text-white rounded">Save</button>

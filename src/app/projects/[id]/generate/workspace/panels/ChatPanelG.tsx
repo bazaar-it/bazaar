@@ -359,7 +359,8 @@ export default function ChatPanelG({
       const { url } = (e as CustomEvent).detail || {};
       if (typeof url === 'string' && url.length > 0) {
         // Add as a new uploadedMedia entry (already uploaded)
-        const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+        const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
+        const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
@@ -385,9 +386,24 @@ export default function ChatPanelG({
   }, [imageHandlers]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    // First handle file drops (existing behavior)
     imageHandlers.handleDrop(e);
+    // Also handle URL/text drops (from Uploads panel drag)
+    try {
+      const url = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+      if (url && typeof url === 'string' && /^(https?:)?\/\//i.test(url)) {
+        const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+        const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
+        const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
+        const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+        const id = nanoid();
+        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
+        setMessage((prev) => prev ? `${prev}\n${url}` : url);
+      }
+    } catch {}
     setIsDragOver(false);
-  }, [imageHandlers]);
+  }, [imageHandlers, setUploadedImages]);
 
   // Handle audio extraction from video
   const handleAudioExtract = useCallback(async (videoMedia: UploadedMedia) => {
@@ -1107,7 +1123,7 @@ export default function ChatPanelG({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/mp4,video/quicktime,video/webm"
+            accept="image/*,video/mp4,video/webm,audio/*"
             multiple
             onChange={imageHandlers.handleFileSelect}
             className="hidden"

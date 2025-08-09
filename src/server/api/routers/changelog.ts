@@ -42,7 +42,9 @@ export const changelogRouter = createTRPCRouter({
         ));
       }
 
-      const whereExpr = whereClauses.length > 0 ? and(...whereClauses) : undefined;
+      // Only show published (completed) in public list
+      whereClauses.push(eq(changelogEntries.status, 'completed'));
+      const whereExpr = and(...whereClauses);
 
       const [rows, totalRow] = await Promise.all([
         db.select({
@@ -75,6 +77,18 @@ export const changelogRouter = createTRPCRouter({
         pageSize,
         total: totalRow[0]?.count || 0,
       };
+    }),
+
+  // Public: fetch by version permalink
+  getByVersion: publicProcedure
+    .input(z.object({ version: z.string() }))
+    .query(async ({ input }) => {
+      const [row] = await db
+        .select()
+        .from(changelogEntries)
+        .where(and(eq(changelogEntries.version, input.version), eq(changelogEntries.status, 'completed')))
+        .limit(1);
+      return row || null;
     }),
 
   // Public detail + increment viewCount

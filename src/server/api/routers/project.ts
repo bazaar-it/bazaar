@@ -522,4 +522,11 @@ export const projectRouter = createTRPCRouter({
       const ctx: AssetContextType = await assetContext.getProjectAssets(input.projectId);
       return ctx;
     }),
+
+  // List uploaded assets for the current user across all projects
+  getUserUploads: protectedProcedure
+    .query(async ({ ctx }) => {
+      const res = await assetContext.getUserAssets(ctx.session.user.id);
+      return res;
+    }),
 }); 

@@ -74,6 +74,7 @@ export async function executeToolFromDecision(
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
+        isYouTubeAnalysis: decision.toolContext.isYouTubeAnalysis, // Pass YouTube analysis flag
         // Pass previous scene for style continuity (but not for first scene)
         previousSceneContext: storyboard.length > 0 ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,

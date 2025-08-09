@@ -163,6 +163,7 @@ export const durationInFrames_ERROR = 180;`;
       projectFormat: input.projectFormat,
       requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
       assetUrls: input.assetUrls, // Pass persistent asset URLs
+      isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
     });
 
     // Return generated content - NO DATABASE!

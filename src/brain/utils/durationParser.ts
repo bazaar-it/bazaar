@@ -10,12 +10,16 @@
  */
 
 export function parseDurationFromPrompt(prompt: string): number | undefined {
+  // IMPORTANT: Exclude YouTube URL parameters like t=51s
+  // Remove YouTube URLs before parsing to avoid confusion
+  const cleanedPrompt = prompt.replace(/[?&]t=\d+s?/g, '');
+  
   // Match various duration patterns
   // Patterns for seconds: "5 seconds", "5 second", "5s", "5 sec", "5.5 seconds"
-  const secondsMatch = prompt.match(/(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i);
+  const secondsMatch = cleanedPrompt.match(/(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i);
   
   // Patterns for frames: "90 frames", "90 frame", "90f"
-  const framesMatch = prompt.match(/(\d+)\s*(?:frames?|f)\b/i);
+  const framesMatch = cleanedPrompt.match(/(\d+)\s*(?:frames?|f)\b/i);
   
   // Convert seconds to frames (30fps standard)
   if (secondsMatch && secondsMatch[1]) {

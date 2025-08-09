@@ -161,29 +161,19 @@ export class ContextBuilder {
 
   private async buildWebContext(input: OrchestrationInput) {
     try {
-      // First try to extract a URL with protocol
+      // ONLY analyze websites if explicitly provided with http/https
       let targetUrl = extractFirstValidUrl(input.prompt);
       
-      // If no URL found, look for domain patterns within the text
-      if (!targetUrl) {
-        // Look for domains with common patterns like www.example.com or example.com
-        // Updated regex to be more flexible and catch domains in various contexts
-        const domainPattern = /(?:^|[\s,.:;!?'"(]|is\s+)((?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,})(?:[\s,.:;!?'")]|$)/i;
-        const match = input.prompt.match(domainPattern);
-        
-        if (match && match[1]) {
-          const domain = match[1];
-          // Normalize the URL by adding https://
-          const normalizedUrl = normalizeUrl(domain);
-          if (isValidWebUrl(normalizedUrl)) {
-            targetUrl = normalizedUrl;
-            console.log(`📚 [CONTEXT BUILDER] Found and normalized domain "${domain}" to "${targetUrl}"`);
-          }
-        }
+      // Skip YouTube URLs - they're handled separately
+      if (targetUrl && (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be'))) {
+        console.log('📚 [CONTEXT BUILDER] Skipping YouTube URL - handled by YouTube analyzer');
+        return undefined;
       }
       
+      // DO NOT extract random domains from text! Only explicit URLs
+      // This prevents crawling random websites mentioned in videos or text
       if (!targetUrl) {
-        console.log('📚 [CONTEXT BUILDER] No valid URL found in prompt');
+        console.log('📚 [CONTEXT BUILDER] No explicit website URL provided');
         return undefined;
       }
       

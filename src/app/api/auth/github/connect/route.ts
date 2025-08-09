@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(
     `${GITHUB_OAUTH_URL}?` +
     new URLSearchParams({
-      client_id: process.env.GITHUB_OAUTH_CLIENT_ID!,
+      client_id: process.env.GITHUB_REPO_CLIENT_ID || process.env.AUTH_GITHUB_ID!,
       redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/github/callback`,
       scope: 'repo user:email read:org',
       state: state,

@@ -1,7 +1,7 @@
 // GitHub connection schema for component animation system
 import { createTable, users } from "../schema";
 import { varchar, text, timestamp, boolean, jsonb, index, uuid, integer } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 
 /**
  * Stores GitHub OAuth connections for users
@@ -94,3 +94,18 @@ export const componentCache = createTable(
     expiresAtIdx: index("component_cache_expires_at_idx").on(table.expiresAt),
   })
 );
+
+// Relations
+export const githubConnectionsRelations = relations(githubConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [githubConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const componentCacheRelations = relations(componentCache, ({ one }) => ({
+  user: one(users, {
+    fields: [componentCache.userId],
+    references: [users.id],
+  }),
+}));

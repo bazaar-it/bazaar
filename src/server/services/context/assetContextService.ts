@@ -7,7 +7,7 @@
  */
 
 import { db } from "~/server/db";
-import { projectMemory } from "~/server/db/schema";
+import { projectMemory, projects } from "~/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import type { Asset, AssetContext, AssetMemoryValue } from "~/lib/types/asset-context";
 
@@ -77,6 +77,43 @@ export class AssetContextService {
       logos,
       recent
     };
+  }
+
+  /**
+   * Get all assets for a user across all of their projects
+   */
+  async getUserAssets(userId: string): Promise<Omit<AssetContext, 'projectId'>> {
+    const rows = await db
+      .select({
+        memoryValue: projectMemory.memoryValue,
+        createdAt: projectMemory.createdAt,
+      })
+      .from(projectMemory)
+      .innerJoin(projects, eq(projects.id, projectMemory.projectId))
+      .where(
+        and(
+          eq(projectMemory.memoryType, AssetContextService.MEMORY_TYPE),
+          eq(projects.userId, userId)
+        )
+      )
+      .orderBy(desc(projectMemory.createdAt));
+
+    const assets: Asset[] = rows
+      .map((r) => {
+        try {
+          const value = JSON.parse(r.memoryValue as unknown as string) as AssetMemoryValue;
+          return value.asset;
+        } catch (e) {
+          console.error('[AssetContext] Failed to parse user asset memory:', e);
+          return null;
+        }
+      })
+      .filter((a): a is Asset => a !== null);
+
+    const logos = assets.filter(a => a.type === 'logo' || a.tags?.includes('logo'));
+    const recent = assets.slice(0, 5);
+
+    return { assets, logos, recent };
   }
   
   /**

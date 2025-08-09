@@ -35,23 +35,18 @@ export class YouTubeAnalyzerTool {
     console.log('🎥 [YouTube Analyzer] Additional instructions:', input.additionalInstructions);
 
     try {
-      // Build custom prompt based on duration
-      const customPrompt = `Analyze the first ${input.duration} seconds (${input.duration * 30} frames at 30fps) of this video for EXACT recreation in code.
-
-${input.additionalInstructions ? `Additional context: ${input.additionalInstructions}` : ''}
-
-CRITICAL: Provide a COMPLETE analysis of ALL ${input.duration * 30} frames (${input.duration} seconds).
-
-For EACH distinct visual moment, provide:
-- Exact text content and animations
-- Precise colors (hex codes)
-- Animation timing (frame numbers)
-- Text positions and sizes
-- Background colors/gradients
-- UI elements with full details
-- Transition effects
-
-Your analysis will be used to recreate this video EXACTLY in code.`;
+      // Use the comprehensive MOTION_GRAPHICS_ANALYSIS_PROMPT but adapt it for the specified duration
+      const { MOTION_GRAPHICS_ANALYSIS_PROMPT } = await import('~/server/services/ai/google-video-analyzer');
+      
+      // Adapt the prompt for the specified duration (replace 10 seconds with actual duration)
+      const frameCount = input.duration * 30;
+      const customPrompt = MOTION_GRAPHICS_ANALYSIS_PROMPT
+        .replace(/10 seconds = 300 frames/g, `${input.duration} seconds = ${frameCount} frames`)
+        .replace(/300 frames/g, `${frameCount} frames`)
+        .replace(/EXACTLY 300/g, `EXACTLY ${frameCount}`)
+        .replace(/10 seconds at 30fps/g, `${input.duration} seconds at 30fps`)
+        .replace(/The video is 10 seconds/g, `The video is ${input.duration} seconds`)
+        + (input.additionalInstructions ? `\n\nAdditional context: ${input.additionalInstructions}` : '');
 
       console.log('🎥 [YouTube Analyzer] Calling GoogleVideoAnalyzer...');
       const analysis = await this.analyzer.analyzeYouTubeVideo(
@@ -60,7 +55,15 @@ Your analysis will be used to recreate this video EXACTLY in code.`;
       );
 
       console.log('🎥 [YouTube Analyzer] Analysis received, length:', analysis.length);
-      console.log('🎥 [YouTube Analyzer] First 200 chars:', analysis.substring(0, 200));
+      
+      // Log full analysis in development for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎥 [YouTube Analyzer] === FULL GEMINI ANALYSIS START ===');
+        console.log(analysis);
+        console.log('🎥 [YouTube Analyzer] === FULL GEMINI ANALYSIS END ===');
+      } else {
+        console.log('🎥 [YouTube Analyzer] First 500 chars:', analysis.substring(0, 500));
+      }
 
       return {
         analysis,

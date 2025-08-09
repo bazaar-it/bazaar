@@ -36,13 +36,21 @@ export class GitHubComponentSearchService {
   }
   
   /**
-   * Search for a component by name across repositories
+   * Search for a component by name across selected repositories
    */
   async searchComponent(
     componentName: string,
     options: SearchOptions = {}
   ): Promise<ComponentSearchResult[]> {
     const { repositories = [], maxResults = 10, useCache = true } = options;
+    
+    // If no repositories provided, user hasn't selected any
+    if (repositories.length === 0) {
+      console.log(`[GitHub] Cannot search for "${componentName}" - no repositories selected`);
+      return [];
+    }
+    
+    console.log(`[GitHub] Searching for "${componentName}" in ${repositories.length} repositories`);
     
     // Check cache first
     if (useCache) {
@@ -234,12 +242,15 @@ export class GitHubComponentSearchService {
   ): Promise<ComponentSearchResult | null> {
     const cacheKey = this.buildCacheKey(componentName, repository);
     
-    const cached = await db.query.componentCache.findFirst({
-      where: and(
+    const cachedResults = await db
+      .select()
+      .from(componentCache)
+      .where(and(
         eq(componentCache.cacheKey, cacheKey),
         gt(componentCache.expiresAt, new Date())
-      ),
-    });
+      ));
+    
+    const cached = cachedResults[0];
     
     if (cached) {
       // Update access count
@@ -319,31 +330,32 @@ export class GitHubComponentSearchService {
   }
   
   /**
-   * Get user's connected repositories
+   * Get user's selected repositories for searching
+   * Returns only explicitly selected repos, not all accessible repos
    */
   static async getUserRepositories(userId: string): Promise<string[]> {
-    const connection = await db.query.githubConnections.findFirst({
-      where: and(
+    const connections = await db
+      .select()
+      .from(githubConnections)
+      .where(and(
         eq(githubConnections.userId, userId),
         eq(githubConnections.isActive, true)
-      ),
-    });
+      ));
+    
+    const connection = connections[0];
     
     if (!connection) {
       throw new Error('No active GitHub connection found');
     }
     
-    // If no specific repos selected, fetch user's repos
+    // Only return explicitly selected repos
+    // If none selected, return empty array (user must select repos first)
     if (!connection.selectedRepos || connection.selectedRepos.length === 0) {
-      const octokit = new Octokit({ auth: connection.accessToken });
-      const { data: repos } = await octokit.repos.listForAuthenticatedUser({
-        per_page: 100,
-        sort: 'updated',
-      });
-      
-      return repos.map(repo => repo.full_name);
+      console.log('[GitHub] No repositories selected for search');
+      return [];
     }
     
+    console.log(`[GitHub] Using ${connection.selectedRepos.length} selected repositories for search`);
     return connection.selectedRepos;
   }
 }

@@ -50,6 +50,7 @@ export interface BrainDecision {
     assetUrls?: string[]; // All persistent project assets
     errorDetails?: string;
     modelOverride?: string; // Optional model ID for overriding default model
+    isYouTubeAnalysis?: boolean; // Flag indicating this is YouTube analysis that should be followed closely
     webContext?: {
       originalUrl: string;
       screenshotUrls: {

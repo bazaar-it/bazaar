@@ -61,6 +61,7 @@ export interface AddToolInput extends BaseToolInput {
   }>;
   imageUrls?: string[];
   videoUrls?: string[];
+  isYouTubeAnalysis?: boolean; // Flag indicating this is YouTube analysis that should be followed closely
   webContext?: {
     originalUrl: string;
     screenshotUrls: {

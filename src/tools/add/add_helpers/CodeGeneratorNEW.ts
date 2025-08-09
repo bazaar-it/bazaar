@@ -314,22 +314,59 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       height: number;
     };
     assetUrls?: string[];
+    isYouTubeAnalysis?: boolean;
   }): Promise<CodeGenerationOutput> {
-    const config = getModel('codeGenerator');
+    // Use Sonnet 4 with temperature 0 for YouTube reproduction
+    const config = input.isYouTubeAnalysis 
+      ? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514', temperature: 0, maxTokens: 16000 }
+      : getModel('codeGenerator');
     
     console.log('⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only');
+    if (input.isYouTubeAnalysis) {
+      console.log('🎥 [CODE GENERATOR] YouTube Reproduction Mode: Using Sonnet 4 with temperature 0');
+    }
     
     try {
-      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName,
-        WIDTH: input.projectFormat?.width.toString() || '1920',
-        HEIGHT: input.projectFormat?.height.toString() || '1080',
-        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
-      });
-      
-      let userPrompt = `USER REQUEST: "${input.userPrompt}"
+      let systemPrompt: { role: 'system'; content: string };
+      let userPrompt: string;
+
+      // YouTube reproduction uses completely different prompt
+      if (input.isYouTubeAnalysis) {
+        // Import the reproduction prompt
+        const { YOUTUBE_REPRODUCTION } = await import('~/config/prompts/active/youtube-reproduction');
+        
+        // Use the forensic analysis as system instructions
+        systemPrompt = {
+          role: 'system' as const,
+          content: YOUTUBE_REPRODUCTION.content + `
+
+FRAME-BY-FRAME ANALYSIS TO REPRODUCE:
+
+${input.userPrompt}
+
+FUNCTION NAME: ${input.functionName}
+CANVAS: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080}
+TOTAL DURATION: ${input.requestedDurationFrames || 180} frames
+
+Remember: This analysis is your EXACT blueprint. No creativity allowed.`
+        };
+        
+        // Simple user prompt - just trigger the reproduction
+        userPrompt = `Generate the Remotion code to exactly reproduce the analyzed video. Output only code, no explanations.`;
+        
+      } else {
+        // Regular creative generation
+        systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+          FUNCTION_NAME: input.functionName,
+          WIDTH: input.projectFormat?.width.toString() || '1920',
+          HEIGHT: input.projectFormat?.height.toString() || '1080',
+          FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
+        });
+        
+        userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+      }
 
       // Add persistent asset URLs if available
       if (input.assetUrls && input.assetUrls.length > 0) {
