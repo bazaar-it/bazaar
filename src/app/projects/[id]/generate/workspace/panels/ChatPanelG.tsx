@@ -8,7 +8,7 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
@@ -62,6 +62,9 @@ export default function ChatPanelG({
   const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // GitHub mode state
+  const [isGitHubMode, setIsGitHubMode] = useState(false);
   
   // 🚨 NEW: Auto-expanding textarea state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -288,7 +291,7 @@ export default function ChatPanelG({
     }
     
     // Let SSE handle DB sync in background
-    generateSSE(finalMessage, imageUrls, videoUrls, selectedModel);
+    generateSSE(finalMessage, imageUrls, videoUrls, selectedModel, isGitHubMode);
   };
 
   // Handle keyboard events for textarea
@@ -387,6 +390,44 @@ export default function ChatPanelG({
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    
+    // Check for GitHub component drop first
+    try {
+      const jsonData = e.dataTransfer.getData('application/json');
+      if (jsonData) {
+        const data = JSON.parse(jsonData);
+        if (data.type === 'github-component') {
+          // Handle GitHub component(s) drop
+          let componentsToAdd: any[] = [];
+          
+          // Check for multiple components (new format)
+          if (data.components && Array.isArray(data.components)) {
+            componentsToAdd = data.components;
+          } else if (data.component) {
+            // Single component (backward compatibility)
+            componentsToAdd = [data.component];
+          }
+          
+          if (componentsToAdd.length > 0) {
+            // Create message for all components
+            const componentMessages = componentsToAdd.map(component => 
+              `Animate my ${component.name} component from ${component.path}`
+            );
+            
+            // Join with newlines if multiple, or just the single message
+            const fullMessage = componentMessages.join('\n');
+            
+            // Add to existing message or set as new message
+            setMessage((prev) => prev ? `${prev}\n${fullMessage}` : fullMessage);
+            setIsDragOver(false);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // Not JSON data, continue with other handlers
+    }
+    
     // First handle file drops (existing behavior)
     imageHandlers.handleDrop(e);
     // Also handle URL/text drops (from Uploads panel drag)
@@ -671,7 +712,7 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [], videoUrls = [], modelOverride } = data;
+        const { userMessage, imageUrls = [], videoUrls = [], modelOverride, useGitHub } = data;
         
         // Switch to generating phase when SSE is ready and we start the mutation
         setGenerationPhase('generating');
@@ -684,6 +725,7 @@ export default function ChatPanelG({
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
               modelOverride: modelOverride,
+              useGitHub: useGitHub,
             },
             // Don't pass assistantMessageId - let mutation create it
             metadata: {
@@ -1067,6 +1109,30 @@ export default function ChatPanelG({
                 </div>
 
                 <div className="flex gap-2 items-center">
+                  {/* GitHub Component Mode Toggle */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setIsGitHubMode(!isGitHubMode)}
+                          className={cn(
+                            "p-1 rounded-full transition-all duration-200",
+                            isGitHubMode
+                              ? "text-white bg-gray-900 hover:bg-gray-800"
+                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                          )}
+                          aria-label="Toggle GitHub component search"
+                        >
+                          <Github className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{isGitHubMode ? 'GitHub mode ON - will search your repos' : 'Click to search GitHub components'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
                   {/* Enhance Prompt Button */}
                   <TooltipProvider>
                     <Tooltip>

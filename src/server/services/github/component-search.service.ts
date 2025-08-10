@@ -199,6 +199,50 @@ export class GitHubComponentSearchService {
   }
   
   /**
+   * Fetch a file directly from GitHub using the exact path
+   */
+  async fetchFileDirectly(
+    repository: string,
+    filePath: string
+  ): Promise<ComponentSearchResult> {
+    console.log(`[GitHub] Fetching file directly: ${filePath} from ${repository}`);
+    
+    try {
+      const [owner, repo] = repository.split('/');
+      
+      // Get file content using GitHub API
+      const { data } = await this.octokit.repos.getContent({
+        owner,
+        repo,
+        path: filePath,
+      });
+      
+      // Check if it's a file (not a directory)
+      if ('content' in data && data.type === 'file') {
+        const content = Buffer.from(data.content, 'base64').toString('utf-8');
+        
+        return {
+          name: filePath.split('/').pop()?.replace(/\.(tsx?|jsx?)$/, '') || '',
+          path: filePath,
+          repository,
+          content,
+          language: filePath.endsWith('.tsx') ? 'tsx' : 
+                   filePath.endsWith('.jsx') ? 'jsx' : 
+                   filePath.endsWith('.ts') ? 'ts' : 'js',
+          size: data.size,
+          url: data.html_url,
+          sha: data.sha,
+        };
+      }
+      
+      throw new Error('Path is not a file');
+    } catch (error) {
+      console.error(`[GitHub] Error fetching file directly:`, error);
+      throw error;
+    }
+  }
+  
+  /**
    * Calculate relevance score for a result
    */
   private calculateScore(

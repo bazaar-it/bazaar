@@ -24,13 +24,18 @@ export class GitHubComponentAnalyzerTool {
   
   /**
    * Extract component reference from user prompt
+   * Returns an object with both component name and optional file path
    */
-  extractComponentReference(prompt: string): string | null {
-    // First, check for explicit file paths - extract the component name
-    const filePathMatch = prompt.match(/(?:src\/.*?\/)?(\w+(?:[-_]?\w+)*)\.tsx/i);
-    if (filePathMatch && filePathMatch[1]) {
-      console.log(`Extracted component from file path: ${filePathMatch[1]}`);
-      return filePathMatch[1].toLowerCase();
+  extractComponentReference(prompt: string): { name: string; path?: string } | null {
+    // First, check for explicit file paths - extract both name and full path
+    const filePathMatch = prompt.match(/((?:src\/.*?\/)?(\w+(?:[-_]?\w+)*))\.tsx/i);
+    if (filePathMatch && filePathMatch[2]) {
+      const fullPath = filePathMatch[1] + '.tsx';
+      console.log(`Extracted component from file path: name=${filePathMatch[2]}, path=${fullPath}`);
+      return { 
+        name: filePathMatch[2].toLowerCase(),
+        path: fullPath
+      };
     }
     
     // Look for patterns like "my sidebar", "the navbar", "our header", etc.
@@ -48,7 +53,7 @@ export class GitHubComponentAnalyzerTool {
         const component = match[1].toLowerCase();
         if (!skipWords.includes(component)) {
           console.log(`Extracted component from pattern: ${component}`);
-          return component;
+          return { name: component };
         }
       }
     }
@@ -62,7 +67,7 @@ export class GitHubComponentAnalyzerTool {
    */
   async analyze(
     userId: string,
-    componentName: string,
+    componentRef: { name: string; path?: string },
     accessToken: string
   ): Promise<GitHubComponentContext | null> {
     try {
@@ -76,18 +81,34 @@ export class GitHubComponentAnalyzerTool {
       
       // Search for the component in selected repos only
       const searchService = new GitHubComponentSearchService(accessToken, userId);
-      const results = await searchService.searchComponent(componentName, {
-        repositories, // Pass selected repos here
-        maxResults: 1,
-        useCache: true,
-      });
       
-      if (results.length === 0) {
-        console.log(`[GitHub] No component '${componentName}' found in ${repositories.length} selected repositories`);
-        return null;
+      let component;
+      
+      // If we have an exact file path, try to fetch it directly
+      if (componentRef.path && repositories.length > 0) {
+        console.log(`[GitHub] Trying to fetch exact file: ${componentRef.path} from ${repositories[0]}`);
+        try {
+          component = await searchService.fetchFileDirectly(repositories[0], componentRef.path);
+        } catch (error) {
+          console.log(`[GitHub] Could not fetch file directly, falling back to search`);
+        }
       }
       
-      const component = results[0];
+      // If direct fetch failed or no path provided, search by name
+      if (!component) {
+        const results = await searchService.searchComponent(componentRef.name, {
+          repositories, // Pass selected repos here
+          maxResults: 1,
+          useCache: true,
+        });
+        
+        if (results.length === 0) {
+          console.log(`[GitHub] No component '${componentRef.name}' found in ${repositories.length} selected repositories`);
+          return null;
+        }
+        
+        component = results[0];
+      }
       
       // Parse the component
       const parser = new ComponentParser(component.content);

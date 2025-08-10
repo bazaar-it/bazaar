@@ -28,6 +28,7 @@ export const generateScene = protectedProcedure
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
+      useGitHub: z.boolean().optional(), // Explicit GitHub component search mode
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
     metadata: z.object({
@@ -182,6 +183,7 @@ export const generateScene = protectedProcedure
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
           modelOverride: userContext?.modelOverride,
+          useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
           githubConnected,
           githubAccessToken,
           userId,
