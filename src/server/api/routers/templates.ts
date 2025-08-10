@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure, adminProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { templates, scenes, projects } from "~/server/db/schema";
+import { templates, scenes, projects, templateUsages } from "~/server/db/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -261,7 +261,11 @@ export const templatesRouter = createTRPCRouter({
           usageCount: sql`${templates.usageCount} + 1`,
         })
         .where(eq(templates.id, input));
-      
+      // Also persist usage event for timeframe analytics
+      await db.insert(templateUsages).values({
+        templateId: input,
+        userId: (await import("next-auth")).getServerSession ? undefined : undefined,
+      });
       return { success: true };
     }),
 
