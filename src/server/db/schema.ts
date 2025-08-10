@@ -1172,6 +1172,19 @@ export const templatesRelations = relations(templates, ({ one }) => ({
   }),
 }));
 
+// Track per-usage events for templates to enable timeframe analytics
+export const templateUsages = createTable("template_usage", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d.uuid("template_id").notNull().references(() => templates.id, { onDelete: "cascade" }),
+  userId: d.varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  projectId: d.uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+  sceneId: d.uuid("scene_id").references(() => scenes.id, { onDelete: "set null" }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("template_usage_template_idx").on(t.templateId),
+  index("template_usage_created_idx").on(t.createdAt),
+]);
+
 // Changelog Entries table for GitHub integration
 export const changelogEntries = createTable("changelog_entries", (d) => ({
   id: d.uuid().defaultRandom().primaryKey(),

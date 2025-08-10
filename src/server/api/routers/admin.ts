@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2130,8 +2130,7 @@ export default function GeneratedScene() {
   getTopTemplates: adminOnlyProcedure
     .input(z.object({ timeframe: z.enum(['all','24h','7d','30d']).default('all'), limit: z.number().min(1).max(50).default(10) }))
     .query(async ({ input }) => {
-      // v1.1: Make timeframe-aware by filtering recent activity using templates.updatedAt as a proxy.
-      // Note: True usage over time requires scene->template linkage; this is a lightweight approximation.
+      // v2: Use templateUsages to compute timeframe usage counts, join to template metadata.
       const now = new Date();
       const since = input.timeframe === '24h'
         ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
@@ -2141,16 +2140,41 @@ export default function GeneratedScene() {
             ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
             : null;
 
-      const baseSelect = db
-        .select({ id: templates.id, name: templates.name, usageCount: templates.usageCount, thumbnailUrl: templates.thumbnailUrl, updatedAt: templates.updatedAt })
-        .from(templates);
+      if (!since) {
+        // All-time fallback: usageCount ranking
+        const rows = await db
+          .select({ id: templates.id, name: templates.name, usageCount: templates.usageCount, thumbnailUrl: templates.thumbnailUrl })
+          .from(templates)
+          .orderBy(desc(templates.usageCount))
+          .limit(input.limit);
+        return rows;
+      }
 
-      const rows = await (since
-        ? baseSelect.where(gte(templates.updatedAt, since))
-        : baseSelect)
-        .orderBy(desc(templates.usageCount))
+      // Aggregate usage by templateId within timeframe
+      const usageRows = await db
+        .select({ templateId: templateUsages.templateId, c: count() })
+        .from(templateUsages)
+        .where(and(gte(templateUsages.createdAt, since), lte(templateUsages.createdAt, now)))
+        .groupBy(templateUsages.templateId)
+        .orderBy(desc(count()))
         .limit(input.limit);
-      return rows;
+
+      if (usageRows.length === 0) return [] as { id: string; name: string; usageCount: number; thumbnailUrl: string | null }[];
+
+      const ids = usageRows.map(r => r.templateId);
+      const metas = await db
+        .select({ id: templates.id, name: templates.name, thumbnailUrl: templates.thumbnailUrl })
+        .from(templates)
+        .where(inArray(templates.id, ids));
+
+      const idToMeta = new Map(metas.map(m => [m.id, m] as const));
+      const result = usageRows
+        .map(r => ({ id: r.templateId, name: idToMeta.get(r.templateId)?.name || 'Unknown', usageCount: r.c as number, thumbnailUrl: idToMeta.get(r.templateId)?.thumbnailUrl || null }))
+        // Ensure order by usage desc
+        .sort((a, b) => b.usageCount - a.usageCount)
+        .slice(0, input.limit);
+
+      return result;
     }),
 
   // --- Analytics: Trends for exports, prompts, conversions ---
