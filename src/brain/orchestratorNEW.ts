@@ -30,27 +30,26 @@ export class Orchestrator {
       // Check if this is a YouTube URL with time specification
       // Only do YouTube analysis if we have both URL and time
       
-      // Check for GitHub component reference (e.g., "animate my sidebar")
-      const hasComponentReference = /(?:my|the|our)\s+\w+/i.test(input.prompt) || 
-                                    /animate\s+(?:my|the|our)?\s*\w+/i.test(input.prompt);
+      // Check for GitHub component reference - only if explicitly enabled via toggle
+      const shouldUseGitHub = input.userContext?.useGitHub === true;
       
-      if (hasComponentReference && input.userContext?.githubConnected) {
+      if (shouldUseGitHub && input.userContext?.githubConnected) {
         console.log('🧠 [NEW ORCHESTRATOR] GitHub component reference detected');
         
         try {
           const { GitHubComponentAnalyzerTool } = await import("./tools/github-component-analyzer");
           const analyzer = new GitHubComponentAnalyzerTool();
           
-          // Extract component name from prompt
-          const componentName = analyzer.extractComponentReference(input.prompt);
+          // Extract component reference from prompt
+          const componentRef = analyzer.extractComponentReference(input.prompt);
           
-          if (componentName) {
-            console.log(`🧠 [NEW ORCHESTRATOR] Looking for component: ${componentName}`);
+          if (componentRef) {
+            console.log(`🧠 [NEW ORCHESTRATOR] Looking for component:`, componentRef);
             
             // Get GitHub context
             const context = await analyzer.analyze(
               input.userId,
-              componentName,
+              componentRef, // Pass the full reference object
               input.userContext.githubAccessToken as string
             );
             
@@ -132,9 +131,8 @@ export class Orchestrator {
               additionalInstructions: `Analyze seconds ${startSec} to ${startSec + duration}`
             });
             
-            // Enhance prompt with analysis - REMOVE the YouTube URL to avoid confusion
-            // The analysis already contains all the details needed
-            enhancedPrompt = `RECREATE this video exactly as described in the following frame-by-frame analysis:\n\n${analysis}\n\nIMPORTANT: Generate Remotion code that recreates the described animations, colors, text, and timing. Do NOT embed the YouTube video.`;
+            // Pass the description directly - no JSON, just natural language
+            enhancedPrompt = `Recreate this video based on the following description:\n\n${analysis}\n\nThis is a description of what appears in the video. Create Remotion code that brings this description to life.`;
             console.log('🧠 [NEW ORCHESTRATOR] Enhanced prompt with YouTube analysis');
           } catch (error) {
             console.error('🧠 [NEW ORCHESTRATOR] YouTube analysis failed:', error);

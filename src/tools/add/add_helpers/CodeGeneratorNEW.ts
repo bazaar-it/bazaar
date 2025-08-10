@@ -330,29 +330,30 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       let systemPrompt: { role: 'system'; content: string };
       let userPrompt: string;
 
-      // YouTube reproduction uses completely different prompt
+      // YouTube reproduction uses description-based approach
       if (input.isYouTubeAnalysis) {
-        // Import the reproduction prompt
-        const { YOUTUBE_REPRODUCTION } = await import('~/config/prompts/active/youtube-reproduction');
+        // Import the description-to-code prompt
+        const { DESCRIPTION_TO_CODE } = await import('~/config/prompts/active/description-to-code');
         
-        // Use the forensic analysis as system instructions
+        // Use the description-to-code system prompt
         systemPrompt = {
           role: 'system' as const,
-          content: YOUTUBE_REPRODUCTION.content + `
-
-FRAME-BY-FRAME ANALYSIS TO REPRODUCE:
+          content: DESCRIPTION_TO_CODE.content
+        };
+        
+        // Pass the description as the user prompt
+        userPrompt = `Create Remotion code for this video description:
 
 ${input.userPrompt}
 
-FUNCTION NAME: ${input.functionName}
-CANVAS: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080}
-TOTAL DURATION: ${input.requestedDurationFrames || 180} frames
+SPECIFICATIONS:
+- Total duration: ${input.requestedDurationFrames || 180} frames (${(input.requestedDurationFrames || 180) / 30} seconds)
+- Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080}
+- Function name: ${input.functionName}
 
-Remember: This analysis is your EXACT blueprint. No creativity allowed.`
-        };
-        
-        // Simple user prompt - just trigger the reproduction
-        userPrompt = `Generate the Remotion code to exactly reproduce the analyzed video. Output only code, no explanations.`;
+CRITICAL: Create all visuals with CSS and React components. NO stock photos or external URLs.
+
+Output only code.`;
         
       } else {
         // Regular creative generation

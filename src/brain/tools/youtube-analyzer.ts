@@ -35,18 +35,14 @@ export class YouTubeAnalyzerTool {
     console.log('🎥 [YouTube Analyzer] Additional instructions:', input.additionalInstructions);
 
     try {
-      // Use the comprehensive MOTION_GRAPHICS_ANALYSIS_PROMPT but adapt it for the specified duration
-      const { MOTION_GRAPHICS_ANALYSIS_PROMPT } = await import('~/server/services/ai/google-video-analyzer');
+      // Use the simple description prompt - just describe what you see
+      const { YOUTUBE_DESCRIPTION_PROMPT } = await import('~/config/prompts/active/youtube-description');
       
-      // Adapt the prompt for the specified duration (replace 10 seconds with actual duration)
-      const frameCount = input.duration * 30;
-      const customPrompt = MOTION_GRAPHICS_ANALYSIS_PROMPT
-        .replace(/10 seconds = 300 frames/g, `${input.duration} seconds = ${frameCount} frames`)
-        .replace(/300 frames/g, `${frameCount} frames`)
-        .replace(/EXACTLY 300/g, `EXACTLY ${frameCount}`)
-        .replace(/10 seconds at 30fps/g, `${input.duration} seconds at 30fps`)
-        .replace(/The video is 10 seconds/g, `The video is ${input.duration} seconds`)
-        + (input.additionalInstructions ? `\n\nAdditional context: ${input.additionalInstructions}` : '');
+      // Add the specific duration request to the prompt
+      const customPrompt = YOUTUBE_DESCRIPTION_PROMPT
+        + `\n\nDESCRIBE THE FIRST ${input.duration} SECONDS OF THIS VIDEO.`
+        + `\nFocus only on what happens in the first ${input.duration} seconds.`
+        + (input.additionalInstructions ? `\n\n${input.additionalInstructions}` : '');
 
       console.log('🎥 [YouTube Analyzer] Calling GoogleVideoAnalyzer...');
       const analysis = await this.analyzer.analyzeYouTubeVideo(
