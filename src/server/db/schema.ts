@@ -1243,3 +1243,99 @@ export const changelogEntries = createTable("changelog_entries", (d) => ({
 export const changelogEntriesRelations = relations(changelogEntries, ({ }) => ({
   // Could add relations to projects if we link changelogs to Bazaar projects
 }))
+
+// --- Figma Integration Tables ---
+
+// Figma connections table - stores OAuth tokens
+export const figmaConnections = createTable("figma_connections", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  figmaUserId: d.varchar("figma_user_id", { length: 255 }).notNull(),
+  figmaUserEmail: d.varchar("figma_user_email", { length: 255 }),
+  figmaUserHandle: d.varchar("figma_user_handle", { length: 255 }),
+  accessToken: d.text("access_token").notNull(), // Encrypted
+  refreshToken: d.text("refresh_token"), // Encrypted
+  expiresAt: d.timestamp("expires_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_connections_user_idx").on(t.userId),
+  uniqueIndex("figma_connections_user_unique").on(t.userId), // One connection per user
+]);
+
+// Figma file cache - stores indexed component catalogs
+export const figmaFileCache = createTable("figma_file_cache", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  fileKey: d.varchar("file_key", { length: 255 }).notNull().unique(),
+  fileName: d.varchar("file_name", { length: 255 }),
+  teamId: d.varchar("team_id", { length: 255 }),
+  teamName: d.varchar("team_name", { length: 255 }),
+  projectId: d.varchar("project_id", { length: 255 }),
+  projectName: d.varchar("project_name", { length: 255 }),
+  lastModified: d.timestamp("last_modified", { withTimezone: true }),
+  indexedAt: d.timestamp("indexed_at", { withTimezone: true }),
+  componentCatalog: d.jsonb("component_catalog"), // Categorized components
+  thumbnailCache: d.jsonb("thumbnail_cache"), // Map of nodeId to CDN URLs
+  fileStructure: d.jsonb("file_structure"), // Cached file structure for quick access
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_file_cache_file_key_idx").on(t.fileKey),
+  index("figma_file_cache_indexed_at_idx").on(t.indexedAt),
+]);
+
+// Figma imports - tracks designs imported into projects
+export const figmaImports = createTable("figma_imports", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  sceneId: d.uuid("scene_id").references(() => scenes.id, { onDelete: "set null" }),
+  fileKey: d.varchar("file_key", { length: 255 }).notNull(),
+  fileName: d.varchar("file_name", { length: 255 }),
+  nodeId: d.varchar("node_id", { length: 255 }).notNull(),
+  nodeName: d.varchar("node_name", { length: 255 }),
+  nodeType: d.varchar("node_type", { length: 50 }), // FRAME, COMPONENT, INSTANCE, etc.
+  exportFormat: d.varchar("export_format", { length: 10 }), // png, svg
+  remotionCode: d.text("remotion_code"), // Generated Remotion code
+  assets: d.jsonb("assets"), // URLs to exported images/SVGs stored in R2
+  designTokens: d.jsonb("design_tokens"), // Extracted colors, fonts, etc.
+  motionHints: d.jsonb("motion_hints"), // Animation preferences
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_imports_project_idx").on(t.projectId),
+  index("figma_imports_scene_idx").on(t.sceneId),
+  index("figma_imports_file_key_idx").on(t.fileKey),
+]);
+
+// Figma webhook subscriptions
+export const figmaWebhooks = createTable("figma_webhooks", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  webhookId: d.varchar("webhook_id", { length: 255 }).notNull().unique(),
+  teamId: d.varchar("team_id", { length: 255 }).notNull(),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // FILE_UPDATE, LIBRARY_PUBLISH
+  endpoint: d.text("endpoint").notNull(),
+  passcode: d.varchar("passcode", { length: 255 }).notNull(),
+  active: d.boolean("active").default(true).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_webhooks_team_idx").on(t.teamId),
+  index("figma_webhooks_active_idx").on(t.active),
+]);
+
+// Relations for Figma tables
+export const figmaConnectionsRelations = relations(figmaConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [figmaConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const figmaImportsRelations = relations(figmaImports, ({ one }) => ({
+  project: one(projects, {
+    fields: [figmaImports.projectId],
+    references: [projects.id],
+  }),
+  scene: one(scenes, {
+    fields: [figmaImports.sceneId],
+    references: [scenes.id],
+  }),
+}))

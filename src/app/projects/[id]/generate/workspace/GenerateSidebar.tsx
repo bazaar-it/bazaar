@@ -17,6 +17,8 @@ import {
   LayoutTemplateIcon,
   Music,
   Settings,
+  Github,
+  Palette,
 } from "lucide-react";
 import { Images } from "lucide-react";
 
@@ -43,7 +45,7 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Video, Audio, Code, Templates
+// Workspace panels in vertical order: Projects, Chat, Video, Audio, Code, Templates, GitHub, Figma
 const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
@@ -52,6 +54,8 @@ const navItems: WorkspacePanelG[] = [
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
   { type: 'uploads', id: 'uploads', name: "Uploads", icon: Images, href: "#uploads", tooltip: "My uploads" },
+  { type: 'components' as any, id: 'components', name: "GitHub", icon: Github, href: "#components", tooltip: "GitHub Components" },
+  { type: 'figma' as any, id: 'figma', name: "Figma", icon: Palette, href: "#figma", tooltip: "Figma Designs" },
 ];
 
 

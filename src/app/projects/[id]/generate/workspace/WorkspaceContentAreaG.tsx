@@ -1,6 +1,7 @@
 // src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 "use client";
 
+// src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOverlay, defaultDropAnimationSideEffects } from '@dnd-kit/core';
@@ -19,6 +20,8 @@ import TemplatesPanelG from './panels/TemplatesPanelG';
 import UploadsPanel from './panels/UploadsPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import { AudioPanel } from './panels/AudioPanel';
+import { ComponentDiscoveryPanel } from './panels/ComponentDiscoveryPanel';
+import FigmaDiscoveryPanel from './panels/FigmaDiscoveryPanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -35,6 +38,8 @@ const PANEL_COMPONENTS_G = {
   myprojects: MyProjectsPanelG,
   audio: AudioPanel,
   uploads: UploadsPanel,
+  components: ComponentDiscoveryPanel,
+  figma: FigmaDiscoveryPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -46,6 +51,8 @@ const PANEL_LABELS_G = {
   myprojects: 'My Projects',
   audio: 'Audio',
   uploads: 'My uploads',
+  components: 'GitHub Components',
+  figma: 'Figma Designs',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -104,6 +111,22 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   const isPreviewPanel = id === 'preview';
   const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
+
+  // Inline mini frame counter component listening to preview-frame-update events
+  function FrameCounterMini() {
+    const [frame, setFrame] = React.useState<number>(0);
+    React.useEffect(() => {
+      const handler = (e: Event) => {
+        const ce = e as CustomEvent;
+        if (typeof ce.detail?.frame === 'number') {
+          setFrame(ce.detail.frame as number);
+        }
+      };
+      window.addEventListener('preview-frame-update', handler as EventListener);
+      return () => window.removeEventListener('preview-frame-update', handler as EventListener);
+    }, []);
+    return <span className="tabular-nums">Frame: {frame}</span>;
+  }
   
   return (
     <div
@@ -139,6 +162,10 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                   }}
                   scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
                 />
+                {/* Live frame counter (30fps = 30 frames/sec) */}
+                <div id="frame-counter-mini" className="h-8 px-2 text-xs text-gray-600 flex items-center rounded bg-white border border-gray-200">
+                  <FrameCounterMini />
+                </div>
                 <PlaybackSpeedSlider
                   currentSpeed={currentPlaybackSpeed || 1}
                   onSpeedChange={(speed) => {
@@ -707,8 +734,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
 
     // Memoize current scenes to avoid recalculation on every render
     const currentScenes = useMemo(() => {
-      return getCurrentProps()?.scenes || [];
-    }, [getCurrentProps]);
+      const props = getCurrentProps();
+      return props?.scenes || [];
+    }, [getCurrentProps, projectId]);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
     const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
@@ -766,6 +794,24 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'audio':
           return <AudioPanel 
             projectId={projectId} 
+          />;
+        case 'components':
+          return <ComponentDiscoveryPanel 
+            projectId={projectId}
+            onComponentSelect={(component) => {
+              // Insert component reference into chat
+              const event = new CustomEvent('chat-insert-component', { 
+                detail: { 
+                  text: `Animate my ${component.name} component from ${component.path}`,
+                  component 
+                } 
+              });
+              window.dispatchEvent(event);
+            }}
+          />;
+        case 'figma':
+          return <FigmaDiscoveryPanel 
+            projectId={projectId}
           />;
         default:
           return null;
