@@ -56,6 +56,23 @@ export default function RemotionPreview({
     console.log('RemotionPreview props:', { durationInFrames, fps, width, height, playbackRate });
   }, [durationInFrames, fps, width, height, refreshToken, playbackRate]);
   
+  // Emit current frame updates for external UI (e.g., frame counter)
+  useEffect(() => {
+    if (!playerRef?.current) return;
+    const ref = playerRef.current;
+    const onFrame = () => {
+      try {
+        const frame = (ref as any)?.getCurrentFrame?.() ?? undefined;
+        if (typeof frame === 'number') {
+          const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
+          window.dispatchEvent(ev);
+        }
+      } catch {}
+    };
+    const interval = window.setInterval(onFrame, Math.max(1000 / fps, 16));
+    return () => window.clearInterval(interval);
+  }, [playerRef, fps]);
+  
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       <Suspense fallback={

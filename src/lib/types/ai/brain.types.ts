@@ -91,6 +91,7 @@ export interface OrchestrationInput {
   userId: string;
   userContext?: Record<string, unknown> & {
     modelOverride?: string; // Optional model override for this request
+    useGitHub?: boolean; // Explicit GitHub component search mode
   };
   storyboardSoFar?: Array<{
     id: string;

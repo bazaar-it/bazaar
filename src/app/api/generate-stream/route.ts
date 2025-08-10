@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
   const modelOverride = searchParams.get('modelOverride');
+  const useGitHub = searchParams.get('useGitHub') === 'true';
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -162,7 +163,8 @@ export async function GET(request: NextRequest) {
         userMessage: userMessage,
         imageUrls: parsedImageUrls,
         videoUrls: parsedVideoUrls,
-        modelOverride: modelOverride
+        modelOverride: modelOverride,
+        useGitHub: useGitHub
       })));
 
     } catch (error) {

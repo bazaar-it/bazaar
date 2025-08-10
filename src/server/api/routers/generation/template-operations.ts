@@ -1,3 +1,4 @@
+//src/server/api/routers/generation/template-operations.ts
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";

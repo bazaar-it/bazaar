@@ -30,6 +30,19 @@ export function LoopToggle({
 }: LoopToggleProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
+  function FrameChip() {
+    const [frame, setFrame] = React.useState<number>(0);
+    React.useEffect(() => {
+      const handler = (e: Event) => {
+        const ce = e as CustomEvent;
+        if (typeof ce.detail?.frame === 'number') setFrame(ce.detail.frame as number);
+      };
+      window.addEventListener('preview-frame-update', handler as EventListener);
+      return () => window.removeEventListener('preview-frame-update', handler as EventListener);
+    }, []);
+    return <>{`Frame: ${frame}`}</>;
+  }
+  
   // Handle clicking the loop toggle button
   const handleToggleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,31 +98,37 @@ export function LoopToggle({
       
       {/* Show scene selector only when in scene loop mode */}
       {loopState === 'scene' && scenes.length > 0 && (
-        <Select
-          value={selectedSceneId || ''}
-          onValueChange={(value) => {
-            console.log('[LoopToggle] Scene selected:', value);
-            onSceneSelect?.(value);
-          }}
-          open={isDropdownOpen}
-          onOpenChange={setIsDropdownOpen}
-        >
-          <SelectTrigger 
-            className="h-8 px-2 text-xs border-0 bg-transparent hover:bg-gray-100 w-auto min-w-[100px]"
-            onClick={(e) => e.stopPropagation()}
+        <div className="flex items-center gap-2">
+          <Select
+            value={selectedSceneId || ''}
+            onValueChange={(value) => {
+              console.log('[LoopToggle] Scene selected:', value);
+              onSceneSelect?.(value);
+            }}
+            open={isDropdownOpen}
+            onOpenChange={setIsDropdownOpen}
           >
-            <SelectValue placeholder="Select Scene">
-              {selectedSceneName}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {scenes.map((scene, index) => (
-              <SelectItem key={scene.id} value={scene.id}>
-                {getSceneName(scene, index)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger 
+              className="h-8 px-3 text-xs border border-gray-200 rounded-md bg-white hover:bg-gray-50 w-auto min-w-[110px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SelectValue placeholder="Select Scene">
+                {selectedSceneName}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {scenes.map((scene, index) => (
+                <SelectItem key={scene.id} value={scene.id}>
+                  {getSceneName(scene, index)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Frame chip (listens globally) */}
+          <span className="h-8 px-3 inline-flex items-center text-xs font-mono rounded-md border border-gray-200 bg-white text-gray-700 select-none">
+            <FrameChip />
+          </span>
+        </div>
       )}
     </div>
   );

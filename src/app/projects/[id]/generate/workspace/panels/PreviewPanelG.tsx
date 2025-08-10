@@ -138,6 +138,23 @@ export function PreviewPanelG({
       setRefreshToken(`audio-${Date.now()}`);
     }
   }, [projectAudio?.fadeInDuration, projectAudio?.fadeOutDuration, projectAudio?.playbackRate, projectAudio?.volume, projectAudio?.startTime, projectAudio?.endTime]);
+
+  // Broadcast current frame to header for external counter
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      try {
+        const frame = (playerRef.current as any)?.getCurrentFrame?.();
+        if (typeof frame === 'number') {
+          const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
+          window.dispatchEvent(ev);
+          setCurrentFrame(frame);
+        }
+      } catch {}
+    }, Math.max(1000 / 30, 16));
+    return () => window.clearInterval(interval);
+  }, []);
+
+  // (moved below selectedSceneRange definition to avoid TDZ)
   
   // Memoized scene fingerprint to prevent unnecessary re-renders
   const scenesFingerprint = useMemo(() => {
@@ -170,6 +187,15 @@ export function PreviewPanelG({
     if (!selectedSceneId) return null;
     return sceneRanges.find(range => range.id === selectedSceneId);
   }, [selectedSceneId, sceneRanges]);
+
+  // Ensure when entering scene-loop or changing selected scene, playback seeks to the start
+  useEffect(() => {
+    if (loopState === 'scene' && selectedSceneRange && playerRef.current) {
+      try {
+        playerRef.current.seekTo(selectedSceneRange.start);
+      } catch {}
+    }
+  }, [loopState, selectedSceneRange?.start]);
 
   // 🚨 SIMPLIFIED: Direct scene compilation
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
