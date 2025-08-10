@@ -61,13 +61,20 @@ export default function AnalyticsPage() {
   // Check admin access
   const { data: adminCheck, isLoading: adminCheckLoading } = api.admin.checkAdminAccess.useQuery();
 
-  // Fetch analytics data
-  const { data: analyticsData, isLoading: analyticsLoading } = api.admin.getAnalyticsData.useQuery(
-    { timeframe: selectedTimeframe, metric: selectedMetric },
+  // New endpoints
+  const { data: trends, isLoading: trendsLoading } = api.admin.getTrends.useQuery(
+    { timeframe: selectedTimeframe },
     { enabled: adminCheck?.isAdmin === true }
   );
-
-  const { data: overviewData, isLoading: overviewLoading } = api.admin.getAnalyticsOverview.useQuery(
+  const { data: wow, isLoading: wowLoading } = api.admin.getWoW.useQuery(
+    { weeks: 1 },
+    { enabled: adminCheck?.isAdmin === true }
+  );
+  const { data: topTemplates } = api.admin.getTopTemplates.useQuery(
+    { timeframe: selectedTimeframe as any, limit: 10 },
+    { enabled: adminCheck?.isAdmin === true }
+  );
+  const { data: monetization } = api.admin.getMonetizationFunnel.useQuery(
     { timeframe: selectedTimeframe },
     { enabled: adminCheck?.isAdmin === true }
   );
@@ -258,7 +265,7 @@ export default function AnalyticsPage() {
     );
   };
 
-  const isLoading = analyticsLoading || overviewLoading || (comparisonMode && comparisonLoading);
+  const isLoading = trendsLoading || wowLoading || (comparisonMode && comparisonLoading);
 
   return (
     <div className="p-8">
@@ -322,77 +329,134 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <>
-          {/* Metrics Overview */}
+          {/* WoW Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <MetricOverviewCard
-              metric="users"
-              value={comparisonMode ? (comparisonData?.current.users || 0) : (overviewData?.metrics.users || 0)}
-              previousValue={comparisonMode ? comparisonData?.previous.users : undefined}
-              showComparison={comparisonMode}
-              label="New Users"
-              color={metricColors.users}
-            />
-            <MetricOverviewCard
-              metric="projects"
-              value={comparisonMode ? (comparisonData?.current.projects || 0) : (overviewData?.metrics.projects || 0)}
-              previousValue={comparisonMode ? comparisonData?.previous.projects : undefined}
-              showComparison={comparisonMode}
-              label="Projects Created"
-              color={metricColors.projects}
-            />
-            <MetricOverviewCard
-              metric="scenes"
-              value={comparisonMode ? (comparisonData?.current.scenes || 0) : (overviewData?.metrics.scenes || 0)}
-              previousValue={comparisonMode ? comparisonData?.previous.scenes : undefined}
-              showComparison={comparisonMode}
-              label="Scenes Created"
-              color={metricColors.scenes}
-            />
-            <MetricOverviewCard
-              metric="prompts"
-              value={comparisonMode ? (comparisonData?.current.prompts || 0) : (overviewData?.metrics.prompts || 0)}
-              previousValue={comparisonMode ? comparisonData?.previous.prompts : undefined}
-              showComparison={comparisonMode}
-              label="Prompts Submitted"
-              color={metricColors.prompts}
-            />
+            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+              <div className="text-sm text-gray-500 mb-2">Export Success Rate</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{((wow?.exportSuccess.current || 0) * 100).toFixed(0)}%</div>
+              <div className="text-xs text-gray-500">vs {(wow ? (wow.exportSuccess.previous*100).toFixed(0) : '0')}% last {wow?.windowDays || 7} days</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+              <div className="text-sm text-gray-500 mb-2">Paying Users</div>
+              <div className="text-2xl font-bold text-gray-900 mb-1">{wow?.payingUsers.current || 0}</div>
+              <div className="text-xs text-gray-500">vs {wow?.payingUsers.previous || 0} last {wow?.windowDays || 7} days</div>
+            </div>
           </div>
 
           {/* Main Chart */}
           <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {metricLabels[selectedMetric]} - {comparisonMode ? 'Period Comparison' : timeframeLabels[selectedTimeframe]}
-              </h3>
+          <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Trends - {timeframeLabels[selectedTimeframe]}</h3>
               <div className="text-sm text-gray-500">
-                {comparisonMode ? (
-                  <span>
-                    Current: {comparisonData?.currentData?.totalCount || 0} | 
-                    Previous: {comparisonData?.previousData?.totalCount || 0}
-                  </span>
-                ) : (
-                  <span>Total: {analyticsData?.totalCount || 0}</span>
-                )}
+                {(() => {
+                  const totals = {
+                    exports: (trends?.exports ?? []).reduce((s: number, d: any) => s + (d?.count ?? 0), 0),
+                    prompts: (trends?.prompts ?? []).reduce((s: number, d: any) => s + (d?.count ?? 0), 0),
+                    conversions: (trends?.conversions ?? []).reduce((s: number, d: any) => s + (d?.count ?? 0), 0),
+                  };
+                  return (
+                    <span>Totals — E: {totals.exports} | P: {totals.prompts} | C: {totals.conversions}</span>
+                  );
+                })()}
               </div>
             </div>
 
             <div className="h-64">
-              {comparisonMode ? (
-                <ComparisonChart 
-                  currentData={comparisonData?.currentData?.data || []} 
-                  previousData={comparisonData?.previousData?.data || []}
-                />
-              ) : (
-                <SimpleChart data={analyticsData?.data || []} />
-              )}
+              {/* 3 mini charts stacked: Exports / Prompts / Conversions */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div>
+                  <div className="text-sm text-gray-600 mb-2">Exports</div>
+                  <SimpleChart data={trends?.exports || []} />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 mb-2">Prompts</div>
+                  <SimpleChart data={trends?.prompts || []} />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 mb-2">Conversions</div>
+                  <SimpleChart data={trends?.conversions || []} />
+                </div>
+              </div>
             </div>
 
             <div className="mt-4 text-xs text-gray-500 text-center">
-              {comparisonMode 
-                ? 'Showing current week vs previous week comparison'
-                : 'Click on metric cards above to change the chart data'
-              }
+              {'Exports / Prompts / Conversions over time'}
             </div>
+          </div>
+
+          {/* Top Templates */}
+          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Top Templates</h3>
+              <div className="text-sm text-gray-500">Last: {timeframeLabels[selectedTimeframe]}</div>
+            </div>
+            {topTemplates && topTemplates.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {topTemplates.map((t) => (
+                  <div key={t.id} className="border rounded-lg p-3 flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                      {t.thumbnailUrl ? (<img src={t.thumbnailUrl} alt="thumb" className="w-full h-full object-cover" />) : (<span className="text-xs text-gray-400">No thumb</span>)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 truncate">{t.name}</div>
+                      <div className="text-xs text-gray-500">Usage: {t.usageCount}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-gray-500">No template usage yet</div>
+            )}
+          </div>
+
+          {/* Monetization Funnel */}
+          <div className="bg-white rounded-lg shadow p-6 border border-gray-200 mt-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Monetization Funnel</h3>
+              <div className="text-sm text-gray-500">{timeframeLabels[selectedTimeframe]}</div>
+            </div>
+            {monetization ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 border rounded">
+                    <div className="text-xs text-gray-500">Viewed</div>
+                    <div className="text-xl font-semibold">{monetization.counts.viewed}</div>
+                  </div>
+                  <div className="p-3 border rounded">
+                    <div className="text-xs text-gray-500">Clicked</div>
+                    <div className="text-xl font-semibold">{monetization.counts.clicked}</div>
+                  </div>
+                  <div className="p-3 border rounded">
+                    <div className="text-xs text-gray-500">Initiated</div>
+                    <div className="text-xl font-semibold">{monetization.counts.initiated}</div>
+                  </div>
+                  <div className="p-3 border rounded">
+                    <div className="text-xs text-gray-500">Completed</div>
+                    <div className="text-xl font-semibold">{monetization.counts.completed}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Viewed → Clicked</span>
+                    <span className="font-medium">{Math.round((monetization.conversion.viewed_to_clicked || 0) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Clicked → Initiated</span>
+                    <span className="font-medium">{Math.round((monetization.conversion.clicked_to_initiated || 0) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Initiated → Completed</span>
+                    <span className="font-medium">{Math.round((monetization.conversion.initiated_to_completed || 0) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Overall</span>
+                    <span className="font-medium">{Math.round((monetization.conversion.overall || 0) * 100)}%</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-gray-500">No monetization data</div>
+            )}
           </div>
         </>
       )}

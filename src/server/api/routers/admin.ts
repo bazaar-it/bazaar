@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2123,6 +2123,151 @@ export default function GeneratedScene() {
         emailsSentThisMonth: 0, // TODO: Track email sends in database
         openRate: 0, // TODO: Implement email tracking
         clickRate: 0, // TODO: Implement email tracking
+      };
+    }),
+
+  // --- Analytics: Top Templates ---
+  getTopTemplates: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['all','24h','7d','30d']).default('all'), limit: z.number().min(1).max(50).default(10) }))
+    .query(async ({ input }) => {
+      // v1.1: Make timeframe-aware by filtering recent activity using templates.updatedAt as a proxy.
+      // Note: True usage over time requires scene->template linkage; this is a lightweight approximation.
+      const now = new Date();
+      const since = input.timeframe === '24h'
+        ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        : input.timeframe === '7d'
+          ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          : input.timeframe === '30d'
+            ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            : null;
+
+      const baseSelect = db
+        .select({ id: templates.id, name: templates.name, usageCount: templates.usageCount, thumbnailUrl: templates.thumbnailUrl, updatedAt: templates.updatedAt })
+        .from(templates);
+
+      const rows = await (since
+        ? baseSelect.where(gte(templates.updatedAt, since))
+        : baseSelect)
+        .orderBy(desc(templates.usageCount))
+        .limit(input.limit);
+      return rows;
+    }),
+
+  // --- Analytics: Trends for exports, prompts, conversions ---
+  getTrends: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['24h','7d','30d']).default('7d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      let slots: { start: Date; end: Date; label: string }[] = [];
+      if (input.timeframe === '24h') {
+        const start = new Date(now.getTime() - 24*60*60*1000);
+        for (let i=0;i<24;i++) {
+          const s = new Date(start.getTime() + i*60*60*1000);
+          const e = new Date(s.getTime() + 60*60*1000);
+          slots.push({ start: s, end: e, label: s.toLocaleTimeString([], {hour: '2-digit'}) });
+        }
+      } else {
+        const days = input.timeframe === '7d' ? 7 : 30;
+        const start = new Date(now.getTime() - days*24*60*60*1000);
+        for (let i=0;i<days;i++) {
+          const s = new Date(start.getTime() + i*24*60*60*1000);
+          const e = new Date(s.getTime() + 24*60*60*1000);
+          slots.push({ start: s, end: e, label: s.toLocaleDateString([], { month: 'short', day: 'numeric' }) });
+        }
+      }
+
+      // Helper count function
+      const countBetween = async (table: any, dateCol: any, whereExtra?: any) => {
+        return await Promise.all(slots.map(async (slot) => {
+          const whereParts = [gte(dateCol, slot.start), lt(dateCol, slot.end)];
+          if (whereExtra) whereParts.push(whereExtra);
+          const r = await db.select({ c: count() }).from(table).where(and(...whereParts));
+          return { label: slot.label, count: r[0]?.c || 0 };
+        }));
+      };
+
+      const exportsSeries = await countBetween(exports, exports.createdAt);
+      const promptsSeries = await countBetween(messages, messages.createdAt, eq(messages.role, 'user'));
+      const conversionsSeries = await countBetween(paywallEvents, paywallEvents.createdAt, eq(paywallEvents.eventType, 'completed_purchase'));
+
+      return {
+        timeframe: input.timeframe,
+        exports: exportsSeries,
+        prompts: promptsSeries,
+        conversions: conversionsSeries,
+      };
+    }),
+
+  // --- Analytics: Week-over-Week Comparisons ---
+  getWoW: adminOnlyProcedure
+    .input(z.object({ weeks: z.number().min(1).max(4).default(1) }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const days = input.weeks * 7;
+      const currentStart = new Date(now.getTime() - days*24*60*60*1000);
+      const prevEnd = currentStart;
+      const previousStart = new Date(prevEnd.getTime() - days*24*60*60*1000);
+
+      // Export success rate WoW
+      const [curTotal, curCompleted, prevTotal, prevCompleted] = await Promise.all([
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, currentStart), lte(exports.createdAt, now))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, currentStart), lte(exports.createdAt, now), eq(exports.status, 'completed'))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, previousStart), lte(exports.createdAt, prevEnd))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, previousStart), lte(exports.createdAt, prevEnd), eq(exports.status, 'completed'))),
+      ]);
+
+      const curSuccess = (curCompleted[0]?.c || 0) / Math.max(1, (curTotal[0]?.c || 0));
+      const prevSuccess = (prevCompleted[0]?.c || 0) / Math.max(1, (prevTotal[0]?.c || 0));
+
+      // Paying users WoW
+      const [curPaying, prevPaying] = await Promise.all([
+        db.select({ c: countDistinct(creditTransactions.userId) }).from(creditTransactions).where(and(gte(creditTransactions.createdAt, currentStart), lte(creditTransactions.createdAt, now), eq(creditTransactions.type, 'purchase'))),
+        db.select({ c: countDistinct(creditTransactions.userId) }).from(creditTransactions).where(and(gte(creditTransactions.createdAt, previousStart), lte(creditTransactions.createdAt, prevEnd), eq(creditTransactions.type, 'purchase'))),
+      ]);
+
+      return {
+        exportSuccess: { current: curSuccess, previous: prevSuccess },
+        payingUsers: { current: curPaying[0]?.c || 0, previous: prevPaying[0]?.c || 0 },
+        windowDays: days,
+      };
+    }),
+
+  // --- Analytics: Monetization Funnel ---
+  getMonetizationFunnel: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['24h','7d','30d']).default('7d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const hours = input.timeframe === '24h' ? 24 : input.timeframe === '7d' ? 7*24 : 30*24;
+      const start = new Date(now.getTime() - hours*60*60*1000);
+
+      async function countEvent(eventType: string) {
+        const r = await db.select({ c: count() }).from(paywallEvents)
+          .where(and(eq(paywallEvents.eventType, eventType), gte(paywallEvents.createdAt, start), lte(paywallEvents.createdAt, now)));
+        return r[0]?.c || 0;
+      }
+
+      const [viewed, clicked, initiated, completed] = await Promise.all([
+        countEvent('viewed'),
+        countEvent('clicked_package'),
+        countEvent('initiated_checkout'),
+        countEvent('completed_purchase'),
+      ]);
+
+      const safe = (a: number, b: number) => (b > 0 ? (a / b) : 0);
+      const step1 = safe(clicked, viewed);
+      const step2 = safe(initiated, clicked);
+      const step3 = safe(completed, initiated);
+      const overall = safe(completed, viewed);
+
+      return {
+        timeframe: input.timeframe,
+        counts: { viewed, clicked, initiated, completed },
+        conversion: {
+          viewed_to_clicked: step1,
+          clicked_to_initiated: step2,
+          initiated_to_completed: step3,
+          overall,
+        }
       };
     }),
 
