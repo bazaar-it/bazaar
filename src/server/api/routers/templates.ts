@@ -255,7 +255,7 @@ export const templatesRouter = createTRPCRouter({
   // Track template usage (Protected - when a user adds a template)
   trackUsage: protectedProcedure
     .input(z.string().uuid())
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await db.update(templates)
         .set({
           usageCount: sql`${templates.usageCount} + 1`,
@@ -264,7 +264,7 @@ export const templatesRouter = createTRPCRouter({
       // Also persist usage event for timeframe analytics
       await db.insert(templateUsages).values({
         templateId: input,
-        userId: (await import("next-auth")).getServerSession ? undefined : undefined,
+        userId: ctx.session.user.id,
       });
       return { success: true };
     }),
