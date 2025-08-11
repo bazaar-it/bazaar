@@ -385,11 +385,26 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                                     onClick={(e) => e.stopPropagation()}
                                     className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                   />
-                                  <h4 className={`text-sm font-medium ${
-                                    isSelected ? 'text-blue-700' : 'text-gray-900 group-hover:text-blue-600'
-                                  }`}>
-                                    {component.name}
-                                  </h4>
+                                  <div className="flex flex-col">
+                                    <h4 className={`text-sm font-medium ${
+                                      isSelected ? 'text-blue-700' : 'text-gray-900 group-hover:text-blue-600'
+                                    }`}>
+                                      {component.name}
+                                    </h4>
+                                    {component.framework && component.framework !== 'react' && (
+                                      <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+                                        component.framework === 'vue' 
+                                          ? 'bg-green-100 text-green-700'
+                                          : component.framework === 'svelte'
+                                          ? 'bg-orange-100 text-orange-700'
+                                          : component.framework === 'solid'
+                                          ? 'bg-blue-100 text-blue-700'
+                                          : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {component.framework.toUpperCase()}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <span className="text-xs text-gray-400">{component.score}</span>
                               </div>

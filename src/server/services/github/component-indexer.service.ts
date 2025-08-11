@@ -104,11 +104,11 @@ export class ComponentIndexerService {
         recursive: '1', // Get all files recursively
       });
       
-      // Filter to React/TypeScript files
+      // Filter to component files from various frameworks
       const componentFiles = tree.tree.filter(item => 
         item.type === 'blob' && 
         item.path && 
-        /\.(tsx|jsx|ts|js)$/.test(item.path)
+        /\.(tsx|jsx|ts|js|vue|svelte)$/.test(item.path)
       );
       
       console.log(`[ComponentIndexer] Found ${componentFiles.length} potential component files`);
