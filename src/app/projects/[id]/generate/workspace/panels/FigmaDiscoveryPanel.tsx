@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '~/trpc/react';
-import { Loader2, Search, Palette, Layers, FileText, Square } from 'lucide-react';
+import { Loader2, Search, Palette, Layers, FileText, Square, RefreshCw, Clock, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FigmaDiscoveryPanelProps {
@@ -17,17 +17,51 @@ interface FigmaComponent {
   description?: string;
 }
 
+interface RecentFile {
+  key: string;
+  name: string;
+  accessedAt: string;
+}
+
 export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelProps) {
   const [fileKey, setFileKey] = useState('');
   const [components, setComponents] = useState<FigmaComponent[]>([]);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [showRecent, setShowRecent] = useState(false);
 
   // Test Figma connection with PAT
   const testConnection = api.figma.checkConnection.useQuery(undefined, {
     retry: false,
     enabled: false // Don't auto-run
   });
+
+  // Load recent files from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('figma-recent-files');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setRecentFiles(parsed.slice(0, 5)); // Keep only 5 most recent
+      } catch (e) {
+        console.error('Failed to parse recent files:', e);
+      }
+    }
+  }, []);
+
+  // Save recent file
+  const saveRecentFile = (key: string, name: string) => {
+    const newRecent: RecentFile = {
+      key,
+      name: name || key,
+      accessedAt: new Date().toISOString()
+    };
+    
+    const updated = [newRecent, ...recentFiles.filter(f => f.key !== key)].slice(0, 5);
+    setRecentFiles(updated);
+    localStorage.setItem('figma-recent-files', JSON.stringify(updated));
+  };
 
   // Index file mutation
   const indexFile = api.figma.indexFile.useMutation({
@@ -36,6 +70,9 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
       if (data.components && data.components.length > 0) {
         setComponents(data.components);
         toast.success(`Found ${data.components.length} components!`);
+        // Save to recent files
+        const cleanKey = fileKey.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/)?.[1] || fileKey;
+        saveRecentFile(cleanKey, `File with ${data.components.length} components`);
       } else {
         toast.warning('No components found in this file');
         setComponents([]);
@@ -49,7 +86,7 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
     }
   });
 
-  const handleSearch = async () => {
+  const handleSearch = async (forceRefresh = false) => {
     if (!fileKey.trim()) {
       toast.error('Please enter a Figma file key');
       return;
@@ -86,8 +123,18 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
     }
 
     // Now index the file
-    console.log('Indexing Figma file:', cleanKey);
-    indexFile.mutate({ fileKey: cleanKey });
+    console.log('Indexing Figma file:', cleanKey, 'Force refresh:', forceRefresh);
+    indexFile.mutate({ 
+      fileKey: cleanKey,
+      forceRefresh: forceRefresh 
+    });
+  };
+  
+  const handleRefresh = () => {
+    if (fileKey && components.length > 0) {
+      toast.info('Refreshing components...');
+      handleSearch(true);
+    }
   };
 
   const handleDragStart = (component: FigmaComponent) => {
@@ -147,17 +194,56 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
       {/* Search Bar */}
       <div className="p-4 border-b bg-gray-50">
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={fileKey}
-            onChange={(e) => setFileKey(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !loading && handleSearch()}
-            placeholder="Enter Figma file key or URL"
-            className="flex-1 px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            disabled={loading}
-          />
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={fileKey}
+              onChange={(e) => setFileKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !loading && handleSearch()}
+              placeholder="Enter Figma file key or URL"
+              className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              disabled={loading}
+            />
+            {recentFiles.length > 0 && (
+              <button
+                onClick={() => setShowRecent(!showRecent)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
+                title="Recent files"
+              >
+                <Clock className="w-4 h-4 text-gray-400" />
+              </button>
+            )}
+            
+            {/* Recent files dropdown */}
+            {showRecent && recentFiles.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg z-10">
+                <div className="p-2 border-b">
+                  <p className="text-xs font-medium text-gray-600">Recent Files</p>
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {recentFiles.map((file) => (
+                    <button
+                      key={file.key}
+                      onClick={() => {
+                        setFileKey(file.key);
+                        setShowRecent(false);
+                        handleSearch();
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors border-b last:border-0"
+                    >
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {file.key.substring(0, 12)}... • {new Date(file.accessedAt).toLocaleDateString()}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={loading || !fileKey.trim()}
             className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
@@ -223,9 +309,14 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
               <p className="text-sm text-gray-600">
                 Found {components.length} components
               </p>
-              <p className="text-xs text-gray-400">
-                Drag to chat to animate
-              </p>
+              <button
+                onClick={handleRefresh}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                title="Refresh components"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Refresh
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {components.map((component) => (
@@ -256,16 +347,26 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
                     </div>
                   </div>
                   
-                  {/* Thumbnail placeholder */}
+                  {/* Thumbnail with loading state */}
                   {component.thumbnailUrl ? (
-                    <img 
-                      src={component.thumbnailUrl} 
-                      alt={component.name}
-                      className="w-full h-24 object-cover rounded mt-2 bg-gray-100"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
+                    <div className="relative w-full h-24 mt-2">
+                      <img 
+                        src={component.thumbnailUrl} 
+                        alt={component.name}
+                        className="w-full h-full object-contain rounded bg-gray-50 border border-gray-100"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          // Show fallback
+                          const fallback = target.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                      <div className="hidden w-full h-full bg-gradient-to-br from-purple-50 to-purple-100 rounded items-center justify-center">
+                        <Palette className="w-8 h-8 text-purple-300" />
+                      </div>
+                    </div>
                   ) : (
                     <div className="w-full h-24 bg-gradient-to-br from-purple-50 to-purple-100 rounded mt-2 flex items-center justify-center">
                       <Palette className="w-8 h-8 text-purple-300" />
