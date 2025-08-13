@@ -98,6 +98,19 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     }
   }, [currentProjectData?.title, title]);
 
+  // ✅ NEW: Auto-open media panel with audio tab when flag is set
+  const shouldOpenAudioPanel = useVideoState(state => state.projects[projectId]?.shouldOpenAudioPanel);
+  useEffect(() => {
+    if (shouldOpenAudioPanel) {
+      console.log('[GenerateWorkspaceRoot] Auto-opening media panel with audio tab');
+      // Open media panel instead of audio panel
+      handleAddPanel('media');
+      // TODO: Need to signal that audio tab should be active
+      // Clear the flag after opening
+      useVideoState.getState().setShouldOpenAudioPanel(projectId, false);
+    }
+  }, [shouldOpenAudioPanel, projectId, handleAddPanel]);
+
   // Sidebar is now fixed width, no expansion state needed
 
   const handleProjectRenamed = useCallback((newTitle: string) => {

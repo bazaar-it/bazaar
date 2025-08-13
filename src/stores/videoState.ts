@@ -76,6 +76,7 @@ interface ProjectState {
   activeStreamingMessageId?: string | null;
   refreshToken?: string;
   audio?: AudioTrack | null;
+  shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
 }
 
 interface VideoState {
@@ -131,6 +132,9 @@ interface VideoState {
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
   updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
+  
+  // Audio panel auto-opening
+  setShouldOpenAudioPanel: (projectId: string, shouldOpen: boolean) => void;
   
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) => void;
@@ -845,6 +849,24 @@ export const useVideoState = create<VideoState>()(
             audio,
             refreshToken: newRefreshToken,
             lastUpdated: Date.now(),
+          }
+        }
+      };
+    }),
+    
+  // Audio panel auto-opening
+  setShouldOpenAudioPanel: (projectId: string, shouldOpen: boolean) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            shouldOpenAudioPanel: shouldOpen,
           }
         }
       };
