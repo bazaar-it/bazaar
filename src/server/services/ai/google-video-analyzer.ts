@@ -1,22 +1,32 @@
+// src/server/services/ai/google-video-analyzer.ts
 // Google Gemini Video Analysis Service
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export class GoogleVideoAnalyzer {
-  private genAI: GoogleGenerativeAI;
+  private genAI: any;
   private model: any;
 
-  constructor(apiKey: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
-    // Use Gemini 1.5 Pro for high-quality video analysis
-    this.model = this.genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
-      generationConfig: {
-        temperature: 0.0, // Zero temperature for maximum precision
-        topK: 1,
-        topP: 1.0,
-        maxOutputTokens: 8192,
-      }
-    });
+  constructor(private apiKey: string) {}
+
+  private async ensureClient() {
+    if (this.model) return;
+    try {
+      // Dynamic import to avoid hard dependency at build time
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      this.genAI = new GoogleGenerativeAI(this.apiKey);
+      // Use Gemini 2.5 Flash for video analysis
+      this.model = this.genAI.getGenerativeModel({ 
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.0,
+          topK: 1,
+          topP: 1.0,
+          maxOutputTokens: 8192,
+        }
+      });
+    } catch (err) {
+      // Provide actionable error if package is missing
+      throw new Error("Missing '@google/generative-ai'. Run: npm install @google/generative-ai");
+    }
   }
 
   async analyzeYouTubeVideo(youtubeUrl: string, systemPrompt: string): Promise<string> {
@@ -24,17 +34,22 @@ export class GoogleVideoAnalyzer {
     console.log('🔍 [GoogleVideoAnalyzer] URL:', youtubeUrl);
     console.log('🔍 [GoogleVideoAnalyzer] Prompt length:', systemPrompt.length);
     
+    // CRITICAL: Log exact URL being sent
+    console.log('🔍 [GoogleVideoAnalyzer] EXACT URL BEING ANALYZED:', youtubeUrl);
+    console.log('🔍 [GoogleVideoAnalyzer] First 200 chars of prompt:', systemPrompt.substring(0, 200));
+    
     try {
-      // Gemini expects YouTube URLs as file_data parts
-      console.log('🔍 [GoogleVideoAnalyzer] Calling Gemini API...');
+      await this.ensureClient();
+      console.log('🔍 [GoogleVideoAnalyzer] Calling Gemini API with YouTube URL as fileUri (official format)...');
+      
+      // OFFICIAL FORMAT from Google docs - YouTube URLs as fileUri
       const result = await this.model.generateContent([
+        systemPrompt,  // Prompt first
         {
           fileData: {
-            mimeType: 'video/mp4',
-            fileUri: youtubeUrl
+            fileUri: youtubeUrl  // YouTube URL goes in fileUri, no mimeType needed
           }
-        },
-        { text: systemPrompt }
+        }
       ]);
       
       console.log('🔍 [GoogleVideoAnalyzer] Got response from Gemini');
@@ -69,6 +84,7 @@ export class GoogleVideoAnalyzer {
 
   async analyzeUploadedVideo(videoPath: string, systemPrompt: string): Promise<string> {
     try {
+      await this.ensureClient();
       // For now, we'll need to convert the video to base64 for inline upload
       // Note: This is limited to videos under 20MB
       const fs = await import('fs/promises');
@@ -96,13 +112,17 @@ export class GoogleVideoAnalyzer {
 }
 
 // Universal Motion Graphics Analysis Prompt for EXACT Reproduction
-export const MOTION_GRAPHICS_ANALYSIS_PROMPT = `You are analyzing a video to enable PIXEL-PERFECT code reproduction. Your analysis will be used to recreate this EXACT video in code.
+export const MOTION_GRAPHICS_ANALYSIS_PROMPT = `You are a FORENSIC VIDEO ANALYZER creating a blueprint for EXACT code reproduction.
+Your analysis will be converted directly into code - be EXTREMELY PRECISE with all measurements.
 
 CRITICAL REQUIREMENTS:
 1. You MUST analyze EXACTLY 10 seconds = 300 frames at 30fps
 2. Your total frame count MUST add up to 300 frames
-3. DO NOT compress timing - if something happens at frame 150, say frame 150, not frame 15
-4. This is for EXACT reproduction - every detail matters
+3. Use ABSOLUTE frame numbers - if something happens at frame 150, write "frame 150"
+4. This is for PIXEL-PERFECT reproduction - every measurement matters
+5. IGNORE ALL AUDIO - Do NOT mention lyrics, speech, music, or sound effects
+6. FOCUS ONLY ON VISUAL ELEMENTS - text, colors, animations, transitions
+7. Provide EXACT hex colors, pixel sizes, and coordinates
 
 ## YOUR ANALYSIS MUST INCLUDE:
 
@@ -113,7 +133,7 @@ Break the video into scenes based on major visual changes. For each scene:
 - What defines this as a distinct scene
 
 ### FOR EVERY TEXT ELEMENT:
-- **Content**: The EXACT text (every word, letter, punctuation)
+- **Content**: The EXACT text visible on screen (NOT audio/lyrics - only displayed text)
 - **Typography**: 
   - Font family (or closest match: Inter, Arial, Helvetica, etc.)
   - Font weight (100-900)
@@ -223,4 +243,6 @@ FINAL VERIFICATION:
 REMEMBER: 
 - Your analysis is the blueprint for EXACT reproduction
 - Describe ACTUAL UI elements (buttons, inputs, cards) not generic "UI form"
-- Include ALL visual details for pixel-perfect recreation`;
+- Include ALL visual details for pixel-perfect recreation
+- NEVER include audio, lyrics, or sound - ONLY visual elements
+- If text appears synced with audio, describe ONLY the visual text animation, not the audio`;

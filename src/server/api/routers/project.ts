@@ -11,6 +11,8 @@ import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
+import { assetContext } from "~/server/services/context/assetContextService";
+import type { AssetContext as AssetContextType } from "~/lib/types/asset-context";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -102,12 +104,16 @@ export const projectRouter = createTRPCRouter({
     
   list: protectedProcedure
     .query(async ({ ctx }) => {
-      // Fetch all projects for the current user, sorted by most recently updated
+      // Fetch all projects for the current user
+      // First sort by favorite status (favorites first), then by most recently updated
       const userProjects = await ctx.db
         .select()
         .from(projects)
         .where(eq(projects.userId, ctx.session.user.id))
-        .orderBy(desc(projects.updatedAt));
+        .orderBy(
+          desc(projects.isFavorite), // Favorites first (true = 1, false = 0)
+          desc(projects.updatedAt)   // Then by most recent
+        );
         
       return userProjects;
     }),
@@ -511,5 +517,71 @@ export const projectRouter = createTRPCRouter({
           message: "Failed to update project audio",
         });
       }
+    }),
+  
+  // Toggle favorite status for a project
+  toggleFavorite: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Check if project exists and user has access
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId));
+
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+
+        // Toggle the favorite status
+        const [updated] = await ctx.db
+          .update(projects)
+          .set({
+            isFavorite: !project.isFavorite,
+            updatedAt: new Date()
+          })
+          .where(eq(projects.id, input.projectId))
+          .returning();
+
+        console.log(`[Project] Toggled favorite for project ${input.projectId}: ${updated.isFavorite}`);
+        return { success: true, isFavorite: updated.isFavorite };
+      } catch (error) {
+        console.error("Error toggling favorite:", error);
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to toggle favorite status",
+        });
+      }
+    }),
+  
+  // List uploaded assets for a project
+  getUploads: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const ctx: AssetContextType = await assetContext.getProjectAssets(input.projectId);
+      return ctx;
+    }),
+
+  // List uploaded assets for the current user across all projects
+  getUserUploads: protectedProcedure
+    .query(async ({ ctx }) => {
+      const res = await assetContext.getUserAssets(ctx.session.user.id);
+      return res;
     }),
 }); 

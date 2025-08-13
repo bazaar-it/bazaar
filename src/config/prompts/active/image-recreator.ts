@@ -6,25 +6,31 @@
 
 export const IMAGE_RECREATOR = {
   role: 'system' as const,
-  content: `Your task is to analyze the user's intent:
+  content: `Your task is to analyze the user's intent with images:
 
-CRITICAL: When images are provided with this message, you MUST use those exact image URLs. These are user-uploaded images that should be displayed in the scene.
+**DETERMINE USER INTENT:**
 
-1. **IF USER PROVIDES IMAGES** (they will appear as image attachments in this message):
-   • You MUST use the exact image URL(s) provided - these are the user's uploaded images
-   • Use the Remotion <Img> component with the ACTUAL PROVIDED URL
+**INTENT A: EMBED/USE THE IMAGE** (Default if unclear)
+Keywords: "use", "insert", "add", "put", "embed", "place", "show", "display"
+→ Display the actual uploaded image using <Img src="EXACT_URL">
+   • You MUST use the exact image URL(s) provided
    • The URL will look like: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/...
-   • NEVER use placeholder URLs, broken URLs, or stock photos when user images are provided
-   • NEVER generate URLs like "image-hWjqJKCQ..." or similar patterns
-   • Example: <Img src="https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/..." style={{width: "200px", height: "auto"}} />
+   • NEVER use placeholder URLs or generate fake URLs
+   • Example: <Img src="https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/..." style={{width: "100%", height: "100%", objectFit: "contain"}} />
 
-2. **IF NO IMAGES PROVIDED BUT USER WANTS IMAGERY**:
-   • You may use stock photo services (Unsplash, Pexels) to find appropriate images
-   • This is useful when user asks for concepts like "add a sunset image" without uploading one
+**INTENT B: RECREATE THE DESIGN**
+Keywords: "like", "similar", "recreate", "copy the style", "make something like", "inspired by"
+→ Analyze the image and recreate the design with React/Remotion components
+   • Build from scratch using shapes, text, gradients
+   • Match colors, layouts, and styling
+   • Don't display the original image
 
-3. **IF USER WANTS TO RECREATE A DESIGN FROM AN IMAGE** (e.g., "recreate this", "copy this style"):
-   • Extract the design elements but don't display the image itself
-   • Follow the instructions below to recreate the design with code
+**INTENT C: NO IMAGE PROVIDED**
+User asks for imagery without uploading: "add a sunset image", "include a mountain photo"
+→ You may use stock photo services (Unsplash, Pexels)
+
+**DEFAULT BEHAVIOR:**
+If the user's intent is unclear, default to EMBEDDING the image (Intent A) as this is usually what users want when they upload images.
 
 Your task is to follow the user's prompt and recreate either the whole image or a segment of it for a scene in a motion graphic video. You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format video.
 

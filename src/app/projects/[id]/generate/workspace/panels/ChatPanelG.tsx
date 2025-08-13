@@ -8,16 +8,25 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
+import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
+import { 
+  parseAssetMentions, 
+  resolveAssetMentions, 
+  getAssetSuggestions, 
+  getMentionContext,
+  type AssetMention 
+} from "~/lib/utils/asset-mentions";
 import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
 import { PurchaseModal } from "~/components/purchase/PurchaseModal";
+import { extractYouTubeUrl } from "~/brain/tools/youtube-analyzer";
 
 
 // Component message representation for UI display
@@ -51,6 +60,11 @@ export default function ChatPanelG({
   const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  
+  // Asset mention state
+  const [mentionSuggestions, setMentionSuggestions] = useState<AssetMention[]>([]);
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const [showMentionAutocomplete, setShowMentionAutocomplete] = useState(false);
   const activeAssistantMessageIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -62,11 +76,17 @@ export default function ChatPanelG({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // GitHub mode state
+  const [isGitHubMode, setIsGitHubMode] = useState(false);
+  
   // 🚨 NEW: Auto-expanding textarea state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Character limit for URL safety (12KB for Vercel)
   const SAFE_CHARACTER_LIMIT = 12000;
+  
+  // Fetch user assets for @mentions
+  const { data: userAssets } = api.project.getUserUploads.useQuery();
   
   // Get video state and current scenes
   const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
@@ -229,16 +249,61 @@ export default function ChatPanelG({
     e.preventDefault();
     if (!message.trim() || isGenerating) return;
 
-    const trimmedMessage = message.trim();
+    let trimmedMessage = message.trim();
+    const originalMessage = trimmedMessage; // Keep original for display
     
-    // 🚨 NEW: Get image and video URLs from uploaded media
-    const imageUrls = uploadedImages
-      .filter(img => img.status === 'uploaded' && img.url && img.type !== 'video')
+    // 🚨 NEW: Get image, video, and audio URLs from uploaded media
+    let imageUrls = uploadedImages
+      .filter(img => img.status === 'uploaded' && img.url && img.type === 'image')
       .map(img => img.url!);
     
-    const videoUrls = uploadedImages
+    let videoUrls = uploadedImages
       .filter(img => img.status === 'uploaded' && img.url && img.type === 'video')
       .map(img => img.url!);
+    
+    let audioUrls = uploadedImages
+      .filter(img => img.status === 'uploaded' && img.url && img.type === 'audio')
+      .map(img => img.url!);
+    
+    // Resolve @mentions and categorize URLs by type
+    if (userAssets?.assets) {
+      console.log('[ChatPanelG] User assets available:', userAssets.assets.length);
+      console.log('[ChatPanelG] Message to resolve:', trimmedMessage);
+      
+      const { 
+        resolvedMessage, 
+        imageUrls: mentionedImages, 
+        audioUrls: mentionedAudio, 
+        videoUrls: mentionedVideos 
+      } = resolveAssetMentions(
+        trimmedMessage,
+        userAssets.assets
+      );
+      
+      console.log('[ChatPanelG] Resolved message:', resolvedMessage);
+      console.log('[ChatPanelG] Mentioned images:', mentionedImages);
+      console.log('[ChatPanelG] Mentioned audio:', mentionedAudio);
+      console.log('[ChatPanelG] Mentioned videos:', mentionedVideos);
+      
+      // Update message to show resolved references
+      trimmedMessage = resolvedMessage;
+      
+      // Add mentioned assets to appropriate categories
+      if (mentionedImages.length > 0) {
+        console.log('[ChatPanelG] 🖼️ Adding mentioned images:', mentionedImages);
+        imageUrls = [...imageUrls, ...mentionedImages];
+      }
+      if (mentionedAudio.length > 0) {
+        console.log('[ChatPanelG] 🎵 Adding mentioned audio:', mentionedAudio);
+        audioUrls = [...audioUrls, ...mentionedAudio];
+      }
+      if (mentionedVideos.length > 0) {
+        console.log('[ChatPanelG] 🎥 Adding mentioned videos:', mentionedVideos);
+        videoUrls = [...videoUrls, ...mentionedVideos];
+      }
+    } else {
+      console.log('[ChatPanelG] No user assets available for @mention resolution');
+    }
     
     if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
@@ -248,8 +313,12 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] 🎥 Including videos in chat submission:', videoUrls);
     }
     
-    // Show user message immediately
-    addUserMessage(projectId, trimmedMessage, imageUrls.length > 0 ? imageUrls : undefined);
+    if (audioUrls.length > 0) {
+      console.log('[ChatPanelG] 🎵 Including audio in chat submission:', audioUrls);
+    }
+    
+    // Show user message immediately (with original text including @mentions for display)
+    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -262,12 +331,99 @@ export default function ChatPanelG({
       scrollToBottom();
     }, 50);
     
+    // Check for pending YouTube URL from previous clarification
+    const pendingYouTubeUrl = localStorage.getItem('pendingYouTubeUrl');
+    let finalMessage = trimmedMessage;
+    
+    if (pendingYouTubeUrl) {
+      console.log('[ChatPanelG] Found pending YouTube URL:', pendingYouTubeUrl);
+      
+      // Check if user is providing a time specification or starting a new request
+      const isLikelyTimeResponse = /^\d+[-–]\d+|^first\s+\d+|^\d+:\d+|^seconds?\s+\d+/i.test(trimmedMessage);
+      const hasNewYouTubeUrl = extractYouTubeUrl(trimmedMessage) !== null;
+      
+      if (isLikelyTimeResponse && !hasNewYouTubeUrl) {
+        // This is likely a follow-up response to "Which seconds?"
+        // Combine the URL with the time specification
+        finalMessage = `${pendingYouTubeUrl} ${trimmedMessage}`;
+        console.log('[ChatPanelG] Enhanced message for follow-up:', finalMessage);
+      } else {
+        // User is starting a new request, clear the pending URL
+        console.log('[ChatPanelG] User started new request, clearing pending URL');
+      }
+      
+      localStorage.removeItem('pendingYouTubeUrl'); // Clear after use
+    }
+    
     // Let SSE handle DB sync in background
-    generateSSE(trimmedMessage, imageUrls, videoUrls, selectedModel);
+    // Use finalMessage if it's a YouTube follow-up, otherwise use original message with @mentions
+    const displayMessage = finalMessage !== trimmedMessage ? finalMessage : originalMessage;
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode);
   };
+
+  // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
+  const handleSelectMention = useCallback((asset: AssetMention) => {
+    if (textareaRef.current) {
+      const cursorPosition = textareaRef.current.selectionStart;
+      const mentionContext = getMentionContext(message, cursorPosition);
+      
+      if (mentionContext) {
+        // Replace the @query with @assetName
+        const before = message.substring(0, mentionContext.startIndex);
+        const after = message.substring(cursorPosition);
+        const newMessage = `${before}@${asset.name} ${after}`;
+        
+        setMessage(newMessage);
+        setShowMentionAutocomplete(false);
+        
+        // Move cursor after the mention
+        setTimeout(() => {
+          if (textareaRef.current) {
+            const newPosition = mentionContext.startIndex + asset.name.length + 2;
+            textareaRef.current.setSelectionRange(newPosition, newPosition);
+            textareaRef.current.focus();
+          }
+        }, 0);
+      }
+    }
+  }, [message]);
 
   // Handle keyboard events for textarea
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle mention autocomplete navigation
+    if (showMentionAutocomplete) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionSelectedIndex(prev => 
+          prev < mentionSuggestions.length - 1 ? prev + 1 : 0
+        );
+        return;
+      }
+      
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionSelectedIndex(prev => 
+          prev > 0 ? prev - 1 : mentionSuggestions.length - 1
+        );
+        return;
+      }
+      
+      if (e.key === 'Tab' || (e.key === 'Enter' && mentionSuggestions.length > 0)) {
+        e.preventDefault();
+        if (mentionSuggestions[mentionSelectedIndex]) {
+          handleSelectMention(mentionSuggestions[mentionSelectedIndex]);
+        }
+        return;
+      }
+      
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionAutocomplete(false);
+        return;
+      }
+    }
+    
+    // Normal Enter key handling
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!message.trim() || isGenerating) return;
@@ -279,12 +435,33 @@ export default function ChatPanelG({
         form.dispatchEvent(submitEvent);
       }
     }
-  }, [message, isGenerating]);
+  }, [message, isGenerating, showMentionAutocomplete, mentionSuggestions, mentionSelectedIndex, handleSelectMention]);
 
-  // Handle message input change
+  // Handle message input change with @mention detection
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
-  }, []);
+    const newValue = e.target.value;
+    setMessage(newValue);
+    
+    // Check for @mention context
+    if (textareaRef.current && userAssets?.assets) {
+      const cursorPosition = textareaRef.current.selectionStart;
+      const mentionContext = getMentionContext(newValue, cursorPosition);
+      
+      if (mentionContext) {
+        // Get suggestions based on query
+        const suggestions = getAssetSuggestions(
+          mentionContext.query,
+          userAssets.assets
+        );
+        
+        setMentionSuggestions(suggestions);
+        setMentionSelectedIndex(0);
+        setShowMentionAutocomplete(suggestions.length > 0);
+      } else {
+        setShowMentionAutocomplete(false);
+      }
+    }
+  }, [userAssets]);
 
   // ✅ NEW: Handle edit scene plan - copy prompt to input
   const handleEditScenePlan = useCallback((prompt: string) => {
@@ -328,6 +505,28 @@ export default function ChatPanelG({
     projectId
   );
 
+  // Listen for insert events from Uploads panel
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { url, name } = (e as CustomEvent).detail || {};
+      if (typeof url === 'string' && url.length > 0) {
+        // Add as a new uploadedMedia entry (already uploaded)
+        const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
+        const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
+        const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
+        const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
+        const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+        const id = nanoid();
+        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
+        // Append either the custom name reference or URL to the message
+        const reference = name ? `use the ${name}` : url;
+        setMessage((prev) => prev ? `${prev}\n${reference}` : reference);
+      }
+    };
+    window.addEventListener('chat-insert-media-url', handler as EventListener);
+    return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
+  }, []);
+
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
     imageHandlers.handleDragOver(e);
@@ -340,9 +539,80 @@ export default function ChatPanelG({
   }, [imageHandlers]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    
+    // Check for Figma component drop
+    if ((window as any).figmaDragData) {
+      const figmaData = (window as any).figmaDragData;
+      if (figmaData.type === 'figma-component' && figmaData.component) {
+        const component = figmaData.component;
+        // Create a message with full Figma reference (fileKey:nodeId format)
+        const figmaMessage = `Create an animated version of my Figma design "${component.name}" (ID: ${component.fullId || component.id})`;
+        
+        // Add to existing message or set as new message
+        setMessage((prev) => prev ? `${prev}\n${figmaMessage}` : figmaMessage);
+        setIsDragOver(false);
+        
+        // Clean up the drag data
+        delete (window as any).figmaDragData;
+        return;
+      }
+    }
+    
+    // Check for GitHub component drop
+    try {
+      const jsonData = e.dataTransfer.getData('application/json');
+      if (jsonData) {
+        const data = JSON.parse(jsonData);
+        if (data.type === 'github-component') {
+          // Handle GitHub component(s) drop
+          let componentsToAdd: any[] = [];
+          
+          // Check for multiple components (new format)
+          if (data.components && Array.isArray(data.components)) {
+            componentsToAdd = data.components;
+          } else if (data.component) {
+            // Single component (backward compatibility)
+            componentsToAdd = [data.component];
+          }
+          
+          if (componentsToAdd.length > 0) {
+            // Create message for all components
+            const componentMessages = componentsToAdd.map(component => 
+              `Animate my ${component.name} component from ${component.path}`
+            );
+            
+            // Join with newlines if multiple, or just the single message
+            const fullMessage = componentMessages.join('\n');
+            
+            // Add to existing message or set as new message
+            setMessage((prev) => prev ? `${prev}\n${fullMessage}` : fullMessage);
+            setIsDragOver(false);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      // Not JSON data, continue with other handlers
+    }
+    
+    // First handle file drops (existing behavior)
     imageHandlers.handleDrop(e);
+    // Also handle URL/text drops (from Uploads panel drag)
+    try {
+      const url = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+      if (url && typeof url === 'string' && /^(https?:)?\/\//i.test(url)) {
+        const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+        const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
+        const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
+        const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+        const id = nanoid();
+        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
+        setMessage((prev) => prev ? `${prev}\n${url}` : url);
+      }
+    } catch {}
     setIsDragOver(false);
-  }, [imageHandlers]);
+  }, [imageHandlers, setUploadedImages]);
 
   // Handle audio extraction from video
   const handleAudioExtract = useCallback(async (videoMedia: UploadedMedia) => {
@@ -610,7 +880,7 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [], videoUrls = [], modelOverride } = data;
+        const { userMessage, imageUrls = [], videoUrls = [], audioUrls = [], modelOverride, useGitHub } = data;
         
         // Switch to generating phase when SSE is ready and we start the mutation
         setGenerationPhase('generating');
@@ -622,7 +892,9 @@ export default function ChatPanelG({
             userContext: {
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+              audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
               modelOverride: modelOverride,
+              useGitHub: useGitHub,
             },
             // Don't pass assistantMessageId - let mutation create it
             metadata: {
@@ -698,6 +970,14 @@ export default function ChatPanelG({
           // Check if this is a clarification response
           if (responseData.context?.needsClarification) {
             console.log('[ChatPanelG] ✅ Received clarification request:', responseData.context.chatResponse);
+            
+            // Save YouTube URL if this is a YouTube clarification
+            const youtubeUrl = extractYouTubeUrl(userMessage);
+            if (youtubeUrl) {
+              console.log('[ChatPanelG] Saving YouTube URL for follow-up:', youtubeUrl);
+              localStorage.setItem('pendingYouTubeUrl', youtubeUrl);
+            }
+            
             // No scene to process, clarification message already added above
             // Early return to skip scene processing
             return;
@@ -971,6 +1251,14 @@ export default function ChatPanelG({
                     overflowY: "auto"
                   }}
                 />
+                {/* Asset mention autocomplete */}
+                {showMentionAutocomplete && (
+                  <AssetMentionAutocomplete
+                    suggestions={mentionSuggestions}
+                    selectedIndex={mentionSelectedIndex}
+                    onSelect={handleSelectMention}
+                  />
+                )}
               </div>
 
               {/* Icon row at bottom - completely separate from text area */}
@@ -998,6 +1286,30 @@ export default function ChatPanelG({
                 </div>
 
                 <div className="flex gap-2 items-center">
+                  {/* GitHub Component Mode Toggle */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setIsGitHubMode(!isGitHubMode)}
+                          className={cn(
+                            "p-1 rounded-full transition-all duration-200",
+                            isGitHubMode
+                              ? "text-white bg-gray-900 hover:bg-gray-800"
+                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                          )}
+                          aria-label="Toggle GitHub component search"
+                        >
+                          <Github className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{isGitHubMode ? 'GitHub mode ON - will search your repos' : 'Click to search GitHub components'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
                   {/* Enhance Prompt Button */}
                   <TooltipProvider>
                     <Tooltip>
@@ -1054,7 +1366,7 @@ export default function ChatPanelG({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/mp4,video/quicktime,video/webm"
+            accept="image/*,video/mp4,video/webm,audio/*"
             multiple
             onChange={imageHandlers.handleFileSelect}
             className="hidden"

@@ -27,7 +27,9 @@ export const generateScene = protectedProcedure
     userContext: z.object({
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
+      audioUrls: z.array(z.string()).optional(),
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
+      useGitHub: z.boolean().optional(), // Explicit GitHub component search mode
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
     metadata: z.object({
@@ -139,15 +141,100 @@ export const generateScene = protectedProcedure
       // 4. User message is already created in SSE route, skip creating it here
       // This prevents duplicate messages and ensures correct sequence order
 
+      // 4.5 Check for GitHub connection
+      let githubAccessToken: string | undefined;
+      let githubConnected = false;
+      
+      try {
+        const { githubConnections } = await import("~/server/db/schema/github-connections");
+        const { eq, and } = await import("drizzle-orm");
+        
+        const connections = await ctx.db
+          .select()
+          .from(githubConnections)
+          .where(and(
+            eq(githubConnections.userId, userId),
+            eq(githubConnections.isActive, true)
+          ));
+        
+        if (connections[0]) {
+          githubConnected = true;
+          githubAccessToken = connections[0].accessToken;
+          console.log(`[${response.getRequestId()}] User has GitHub connection`);
+        }
+      } catch (error) {
+        console.error('Failed to check GitHub connection:', error);
+      }
+      
+      // 4.6 Check for Figma component request and fetch data
+      let figmaComponentData: any = null;
+      const figmaMatch = userMessage.match(/Figma design "([^"]+)" \(ID: ([^)]+)\)/i);
+      
+      if (figmaMatch) {
+        const [, componentName, fullId] = figmaMatch;
+        console.log(`🎨 [${response.getRequestId()}] Detected Figma component request:`, { componentName, fullId });
+        
+        // Parse the fullId (format: fileKey:nodeId where nodeId can have colons)
+        // Split only on the first colon to separate fileKey from nodeId
+        if (fullId) {
+          const colonIndex = fullId.indexOf(':');
+          const fileKey = colonIndex > -1 ? fullId.substring(0, colonIndex) : null;
+          const nodeId = colonIndex > -1 ? fullId.substring(colonIndex + 1) : fullId;
+        
+        if (fileKey && nodeId) {
+          try {
+            // Import Figma import router
+            const { figmaImportRouter } = await import('~/server/api/routers/figma-import.router');
+            
+            // Create a caller for the router
+            const caller = figmaImportRouter.createCaller({
+              session: ctx.session,
+              db: ctx.db,
+              headers: ctx.headers,
+            });
+            
+            // Fetch the component data
+            const componentResult = await caller.fetchComponentData({
+              fileKey,
+              nodeId,
+              componentName,
+            });
+            
+            if (componentResult.success && componentResult.designData) {
+              figmaComponentData = componentResult.designData;
+              console.log(`🎨 [${response.getRequestId()}] Fetched Figma component data:`, {
+                type: figmaComponentData.type,
+                hasChildren: figmaComponentData.children?.length > 0,
+                colors: figmaComponentData.colors?.length || 0,
+                texts: figmaComponentData.texts?.length || 0,
+              });
+              
+              // Create enhanced prompt with Figma data context
+              const enhancedMessage = `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements`;
+            }
+            } catch (error) {
+              console.error(`🎨 [${response.getRequestId()}] Failed to fetch Figma component:`, error);
+              // Continue without Figma data - will use generic generation
+            }
+          }
+        }
+      }
+
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
       console.log(`[${response.getRequestId()}] User context:`, {
         hasImageUrls: !!userContext?.imageUrls?.length,
         hasVideoUrls: !!userContext?.videoUrls?.length,
         videoUrls: userContext?.videoUrls,
+        githubConnected,
       });
+      // Use enhanced message if we have Figma data, otherwise original message
+      const finalPrompt = figmaComponentData ? 
+        `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements` : 
+        userMessage;
+        
       const orchestratorResponse = await orchestrator.processUserInput({
-        prompt: userMessage,
+        prompt: finalPrompt,
         projectId,
         userId,
         storyboardSoFar: storyboardForBrain,
@@ -155,20 +242,17 @@ export const generateScene = protectedProcedure
         userContext: {
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
+          audioUrls: userContext?.audioUrls,
           modelOverride: userContext?.modelOverride,
+          useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
+          githubConnected,
+          githubAccessToken,
+          userId,
+          figmaComponentData, // Pass the Figma component data
         },
       });
 
-      if (!orchestratorResponse.success || !orchestratorResponse.result) {
-        return response.error(
-          ErrorCode.AI_ERROR,
-          orchestratorResponse.error || "Failed to get decision from brain",
-          'scene.create',
-          'scene'
-        ) as any as SceneCreateResponse;
-      }
-
-      // Handle clarification responses
+      // Handle clarification responses FIRST (before checking for result)
       if (orchestratorResponse.needsClarification) {
         console.log(`[${response.getRequestId()}] Brain needs clarification:`, orchestratorResponse.chatResponse);
         
@@ -206,6 +290,16 @@ export const generateScene = protectedProcedure
           },
           assistantMessageId,
         } as any;
+      }
+
+      // Now check for errors (after clarification check)
+      if (!orchestratorResponse.success || !orchestratorResponse.result) {
+        return response.error(
+          ErrorCode.AI_ERROR,
+          orchestratorResponse.error || "Failed to get decision from brain",
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
       }
 
       const decision: BrainDecision = {

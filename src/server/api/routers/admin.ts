@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -2123,6 +2123,254 @@ export default function GeneratedScene() {
         emailsSentThisMonth: 0, // TODO: Track email sends in database
         openRate: 0, // TODO: Implement email tracking
         clickRate: 0, // TODO: Implement email tracking
+      };
+    }),
+
+  // --- Analytics: Top Templates ---
+  getTopTemplates: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['all','24h','7d','30d']).default('all'), limit: z.number().min(1).max(50).default(10) }))
+    .query(async ({ input }) => {
+      // v2: Use templateUsages to compute timeframe usage counts, join to template metadata.
+      const now = new Date();
+      const since = input.timeframe === '24h'
+        ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        : input.timeframe === '7d'
+          ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          : input.timeframe === '30d'
+            ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            : null;
+
+      if (!since) {
+        // All-time fallback: usageCount ranking
+        const rows = await db
+          .select({ id: templates.id, name: templates.name, usageCount: templates.usageCount, thumbnailUrl: templates.thumbnailUrl })
+          .from(templates)
+          .orderBy(desc(templates.usageCount))
+          .limit(input.limit);
+        return rows;
+      }
+
+      // Aggregate usage by templateId within timeframe
+      const usageRows = await db
+        .select({ templateId: templateUsages.templateId, c: count() })
+        .from(templateUsages)
+        .where(and(gte(templateUsages.createdAt, since), lte(templateUsages.createdAt, now)))
+        .groupBy(templateUsages.templateId)
+        .orderBy(desc(count()))
+        .limit(input.limit);
+
+      if (usageRows.length === 0) return [] as { id: string; name: string; usageCount: number; thumbnailUrl: string | null }[];
+
+      const ids = usageRows.map(r => r.templateId);
+      const metas = await db
+        .select({ id: templates.id, name: templates.name, thumbnailUrl: templates.thumbnailUrl })
+        .from(templates)
+        .where(inArray(templates.id, ids));
+
+      const idToMeta = new Map(metas.map(m => [m.id, m] as const));
+      const result = usageRows
+        .map(r => ({ id: r.templateId, name: idToMeta.get(r.templateId)?.name || 'Unknown', usageCount: r.c as number, thumbnailUrl: idToMeta.get(r.templateId)?.thumbnailUrl || null }))
+        // Ensure order by usage desc
+        .sort((a, b) => b.usageCount - a.usageCount)
+        .slice(0, input.limit);
+
+      return result;
+    }),
+
+  // --- Analytics: Trends for exports, prompts, conversions ---
+  getTrends: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['24h','7d','30d']).default('7d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      let slots: { start: Date; end: Date; label: string }[] = [];
+      if (input.timeframe === '24h') {
+        const start = new Date(now.getTime() - 24*60*60*1000);
+        for (let i=0;i<24;i++) {
+          const s = new Date(start.getTime() + i*60*60*1000);
+          const e = new Date(s.getTime() + 60*60*1000);
+          slots.push({ start: s, end: e, label: s.toLocaleTimeString([], {hour: '2-digit'}) });
+        }
+      } else {
+        const days = input.timeframe === '7d' ? 7 : 30;
+        const start = new Date(now.getTime() - days*24*60*60*1000);
+        for (let i=0;i<days;i++) {
+          const s = new Date(start.getTime() + i*24*60*60*1000);
+          const e = new Date(s.getTime() + 24*60*60*1000);
+          slots.push({ start: s, end: e, label: s.toLocaleDateString([], { month: 'short', day: 'numeric' }) });
+        }
+      }
+
+      // Helper count function
+      const countBetween = async (table: any, dateCol: any, whereExtra?: any) => {
+        return await Promise.all(slots.map(async (slot) => {
+          const whereParts = [gte(dateCol, slot.start), lt(dateCol, slot.end)];
+          if (whereExtra) whereParts.push(whereExtra);
+          const r = await db.select({ c: count() }).from(table).where(and(...whereParts));
+          return { label: slot.label, count: r[0]?.c || 0 };
+        }));
+      };
+
+      const exportsSeries = await countBetween(exports, exports.createdAt);
+      const promptsSeries = await countBetween(messages, messages.createdAt, eq(messages.role, 'user'));
+      const conversionsSeries = await countBetween(paywallEvents, paywallEvents.createdAt, eq(paywallEvents.eventType, 'completed_purchase'));
+
+      return {
+        timeframe: input.timeframe,
+        exports: exportsSeries,
+        prompts: promptsSeries,
+        conversions: conversionsSeries,
+      };
+    }),
+
+  // --- Analytics: Week-over-Week Comparisons ---
+  getWoW: adminOnlyProcedure
+    .input(z.object({ weeks: z.number().min(1).max(4).default(1) }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const days = input.weeks * 7;
+      const currentStart = new Date(now.getTime() - days*24*60*60*1000);
+      const prevEnd = currentStart;
+      const previousStart = new Date(prevEnd.getTime() - days*24*60*60*1000);
+
+      // Export success rate WoW
+      const [curTotal, curCompleted, prevTotal, prevCompleted] = await Promise.all([
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, currentStart), lte(exports.createdAt, now))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, currentStart), lte(exports.createdAt, now), eq(exports.status, 'completed'))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, previousStart), lte(exports.createdAt, prevEnd))),
+        db.select({ c: count() }).from(exports).where(and(gte(exports.createdAt, previousStart), lte(exports.createdAt, prevEnd), eq(exports.status, 'completed'))),
+      ]);
+
+      const curSuccess = (curCompleted[0]?.c || 0) / Math.max(1, (curTotal[0]?.c || 0));
+      const prevSuccess = (prevCompleted[0]?.c || 0) / Math.max(1, (prevTotal[0]?.c || 0));
+
+      // Paying users WoW
+      const [curPaying, prevPaying] = await Promise.all([
+        db.select({ c: countDistinct(creditTransactions.userId) }).from(creditTransactions).where(and(gte(creditTransactions.createdAt, currentStart), lte(creditTransactions.createdAt, now), eq(creditTransactions.type, 'purchase'))),
+        db.select({ c: countDistinct(creditTransactions.userId) }).from(creditTransactions).where(and(gte(creditTransactions.createdAt, previousStart), lte(creditTransactions.createdAt, prevEnd), eq(creditTransactions.type, 'purchase'))),
+      ]);
+
+      return {
+        exportSuccess: { current: curSuccess, previous: prevSuccess },
+        payingUsers: { current: curPaying[0]?.c || 0, previous: prevPaying[0]?.c || 0 },
+        windowDays: days,
+      };
+    }),
+
+  // --- Analytics: Monetization Funnel ---
+  getMonetizationFunnel: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['24h','7d','30d']).default('7d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const hours = input.timeframe === '24h' ? 24 : input.timeframe === '7d' ? 7*24 : 30*24;
+      const start = new Date(now.getTime() - hours*60*60*1000);
+
+      async function countEvent(eventType: string) {
+        const r = await db.select({ c: count() }).from(paywallEvents)
+          .where(and(eq(paywallEvents.eventType, eventType), gte(paywallEvents.createdAt, start), lte(paywallEvents.createdAt, now)));
+        return r[0]?.c || 0;
+      }
+
+      const [viewed, clicked, initiated, completed] = await Promise.all([
+        countEvent('viewed'),
+        countEvent('clicked_package'),
+        countEvent('initiated_checkout'),
+        countEvent('completed_purchase'),
+      ]);
+
+      const safe = (a: number, b: number) => (b > 0 ? (a / b) : 0);
+      const step1 = safe(clicked, viewed);
+      const step2 = safe(initiated, clicked);
+      const step3 = safe(completed, initiated);
+      const overall = safe(completed, viewed);
+
+      return {
+        timeframe: input.timeframe,
+        counts: { viewed, clicked, initiated, completed },
+        conversion: {
+          viewed_to_clicked: step1,
+          clicked_to_initiated: step2,
+          initiated_to_completed: step3,
+          overall,
+        }
+      };
+    }),
+
+  // 🆕 Paying user count and revenue metrics
+  getPayingUsersStats: adminOnlyProcedure
+    .input(z.object({ timeframe: z.enum(['all', '30d', '7d', '24h']).default('30d') }))
+    .query(async ({ input }) => {
+      const now = new Date();
+      const since = input.timeframe === '24h'
+        ? new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        : input.timeframe === '7d'
+          ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          : input.timeframe === '30d'
+            ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+            : null;
+
+      // Paying users: unique users with a 'purchase' credit transaction
+      const whereClause = since ? and(gte(creditTransactions.createdAt, since), eq(creditTransactions.type, 'purchase')) : eq(creditTransactions.type, 'purchase');
+
+      const [payingUsersDistinct, totalRevenueCents, previousPeriod] = await Promise.all([
+        db
+          .select({ userId: creditTransactions.userId })
+          .from(creditTransactions)
+          .where(whereClause)
+          .groupBy(creditTransactions.userId),
+
+        db
+          .select({ sum: sql<number>`COALESCE(SUM((${creditTransactions.metadata} ->> 'amount')::int), 0)` })
+          .from(creditTransactions)
+          .where(whereClause),
+
+        (async () => {
+          if (!since) return null;
+          const prevStart = input.timeframe === '24h'
+            ? new Date(now.getTime() - 48 * 60 * 60 * 1000)
+            : input.timeframe === '7d'
+              ? new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+              : new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+          const prevEnd = since;
+          const prevWhere = and(
+            gte(creditTransactions.createdAt, prevStart),
+            lt(creditTransactions.createdAt, prevEnd),
+            eq(creditTransactions.type, 'purchase')
+          );
+
+          const [prevUsersRows, prevRevenueRow] = await Promise.all([
+            db
+              .select({ userId: creditTransactions.userId })
+              .from(creditTransactions)
+              .where(prevWhere)
+              .groupBy(creditTransactions.userId),
+            db
+              .select({ sum: sql<number>`COALESCE(SUM((${creditTransactions.metadata} ->> 'amount')::int), 0)` })
+              .from(creditTransactions)
+              .where(prevWhere),
+          ]);
+          return {
+            users: prevUsersRows.length,
+            revenueCents: prevRevenueRow[0]?.sum || 0,
+          };
+        })(),
+      ]);
+
+      const payingUsers = payingUsersDistinct.length;
+      const revenueCents = totalRevenueCents[0]?.sum || 0;
+
+      let usersChangePct: number | undefined;
+      let revenueChangePct: number | undefined;
+      if (previousPeriod) {
+        usersChangePct = previousPeriod.users === 0 ? (payingUsers > 0 ? 100 : 0) : Math.round(((payingUsers - previousPeriod.users) / previousPeriod.users) * 100);
+        revenueChangePct = previousPeriod.revenueCents === 0 ? (revenueCents > 0 ? 100 : 0) : Math.round(((revenueCents - previousPeriod.revenueCents) / previousPeriod.revenueCents) * 100);
+      }
+
+      return {
+        timeframe: input.timeframe,
+        payingUsers,
+        revenueCents,
+        usersChangePct,
+        revenueChangePct,
       };
     }),
 

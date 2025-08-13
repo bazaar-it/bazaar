@@ -14,6 +14,13 @@ import { usageRouter } from "~/server/api/routers/usage";
 import { paymentRouter } from "~/server/api/routers/payment";
 import { videoAnalysisRouter } from "~/server/api/routers/video-analysis";
 import { templatesRouter } from "~/server/api/routers/templates";
+import { changelogRouter } from "~/server/api/routers/changelog";
+import { githubRouter } from "~/server/api/routers/github.router";
+import { githubDiscoveryRouter } from "~/server/api/routers/github-discovery.router";
+import { figmaRouter } from "~/server/api/routers/figma.router";
+import { figmaImportRouter } from "~/server/api/routers/figma-import.router";
+import { evalsRouter } from "~/server/api/routers/evals";
+import { mediaRouter } from "~/server/api/routers/media";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -39,6 +46,13 @@ export const appRouter = createTRPCRouter({
   payment: paymentRouter,
   videoAnalysis: videoAnalysisRouter,
   templates: templatesRouter,
+  changelog: changelogRouter,
+  github: githubRouter,
+  githubDiscovery: githubDiscoveryRouter,
+  figma: figmaRouter,
+  figmaImport: figmaImportRouter,
+  evals: evalsRouter,
+  media: mediaRouter,
 });
 
 // export type definition of API

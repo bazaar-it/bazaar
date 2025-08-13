@@ -106,6 +106,7 @@ export const projects = createTable(
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
     isWelcome: d.boolean().default(true).notNull(),
+    isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
   }),
@@ -529,6 +530,81 @@ export const emailSubscribers = createTable(
 
 export const emailSubscribersRelations = relations(emailSubscribers, ({ one }) => ({
   user: one(users, { fields: [emailSubscribers.userId], references: [users.id] }),
+}));
+
+// --- Assets table ---
+// User-centric media asset storage with cross-project sharing
+export const assets = createTable(
+  "asset",
+  (d) => ({
+    id: d.text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    url: d.text("url").notNull(),
+    userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    
+    // Names
+    originalName: d.text("original_name").notNull(),
+    customName: d.text("custom_name"), // User-defined name for easy reference
+    
+    // Asset info
+    type: d.text("type").notNull(), // 'image', 'video', 'audio', 'logo'
+    mimeType: d.text("mime_type"),
+    fileSize: d.integer("file_size"), // in bytes
+    
+    // Metadata
+    width: d.integer("width"),
+    height: d.integer("height"),
+    duration: d.integer("duration"), // for video/audio in seconds
+    thumbnailUrl: d.text("thumbnail_url"),
+    
+    // Usage tracking
+    usageCount: d.integer("usage_count").default(0).notNull(),
+    lastUsedAt: d.timestamp("last_used_at", { withTimezone: true }),
+    
+    // Organization
+    tags: d.text("tags").array(), // Array of tags for categorization
+    
+    // Soft delete
+    deletedAt: d.timestamp("deleted_at", { withTimezone: true }),
+    
+    // Timestamps
+    createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: d.timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("asset_user_id_idx").on(t.userId),
+    index("asset_type_idx").on(t.type),
+    index("asset_custom_name_idx").on(t.customName),
+    index("asset_url_idx").on(t.url),
+    index("asset_deleted_at_idx").on(t.deletedAt),
+    uniqueIndex("asset_url_user_idx").on(t.url, t.userId), // One asset per URL per user
+  ]
+);
+
+// Junction table for project-asset relationships
+export const projectAssets = createTable(
+  "project_asset",
+  (d) => ({
+    id: d.text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    projectId: d.text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    assetId: d.text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+    addedAt: d.timestamp("added_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    addedVia: d.text("added_via"), // 'upload', 'reference', 'import'
+  }),
+  (t) => [
+    index("project_asset_project_id_idx").on(t.projectId),
+    index("project_asset_asset_id_idx").on(t.assetId),
+    uniqueIndex("project_asset_unique_idx").on(t.projectId, t.assetId),
+  ]
+);
+
+export const assetsRelations = relations(assets, ({ one, many }) => ({
+  user: one(users, { fields: [assets.userId], references: [users.id] }),
+  projects: many(projectAssets),
+}));
+
+export const projectAssetsRelations = relations(projectAssets, ({ one }) => ({
+  project: one(projects, { fields: [projectAssets.projectId], references: [projects.id] }),
+  asset: one(assets, { fields: [projectAssets.assetId], references: [assets.id] }),
 }));
 
 // --- Agent Messages table ---
@@ -1172,6 +1248,19 @@ export const templatesRelations = relations(templates, ({ one }) => ({
   }),
 }));
 
+// Track per-usage events for templates to enable timeframe analytics
+export const templateUsages = createTable("template_usage", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d.uuid("template_id").notNull().references(() => templates.id, { onDelete: "cascade" }),
+  userId: d.varchar("user_id", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+  projectId: d.uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+  sceneId: d.uuid("scene_id").references(() => scenes.id, { onDelete: "set null" }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("template_usage_template_idx").on(t.templateId),
+  index("template_usage_created_idx").on(t.createdAt),
+]);
+
 // Changelog Entries table for GitHub integration
 export const changelogEntries = createTable("changelog_entries", (d) => ({
   id: d.uuid().defaultRandom().primaryKey(),
@@ -1230,3 +1319,120 @@ export const changelogEntries = createTable("changelog_entries", (d) => ({
 export const changelogEntriesRelations = relations(changelogEntries, ({ }) => ({
   // Could add relations to projects if we link changelogs to Bazaar projects
 }))
+
+// --- Figma Integration Tables ---
+
+// Figma connections table - stores OAuth tokens
+export const figmaConnections = createTable("figma_connections", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  figmaUserId: d.varchar("figma_user_id", { length: 255 }).notNull(),
+  figmaUserEmail: d.varchar("figma_user_email", { length: 255 }),
+  figmaUserHandle: d.varchar("figma_user_handle", { length: 255 }),
+  accessToken: d.text("access_token").notNull(), // Encrypted
+  refreshToken: d.text("refresh_token"), // Encrypted
+  expiresAt: d.timestamp("expires_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_connections_user_idx").on(t.userId),
+  uniqueIndex("figma_connections_user_unique").on(t.userId), // One connection per user
+]);
+
+// Figma file cache - stores indexed component catalogs
+export const figmaFileCache = createTable("figma_file_cache", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  fileKey: d.varchar("file_key", { length: 255 }).notNull().unique(),
+  fileName: d.varchar("file_name", { length: 255 }),
+  teamId: d.varchar("team_id", { length: 255 }),
+  teamName: d.varchar("team_name", { length: 255 }),
+  projectId: d.varchar("project_id", { length: 255 }),
+  projectName: d.varchar("project_name", { length: 255 }),
+  lastModified: d.timestamp("last_modified", { withTimezone: true }),
+  indexedAt: d.timestamp("indexed_at", { withTimezone: true }),
+  componentCatalog: d.jsonb("component_catalog"), // Categorized components
+  thumbnailCache: d.jsonb("thumbnail_cache"), // Map of nodeId to CDN URLs
+  fileStructure: d.jsonb("file_structure"), // Cached file structure for quick access
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_file_cache_file_key_idx").on(t.fileKey),
+  index("figma_file_cache_indexed_at_idx").on(t.indexedAt),
+]);
+
+// Figma imports - tracks designs imported into projects
+export const figmaImports = createTable("figma_imports", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  sceneId: d.uuid("scene_id").references(() => scenes.id, { onDelete: "set null" }),
+  fileKey: d.varchar("file_key", { length: 255 }).notNull(),
+  fileName: d.varchar("file_name", { length: 255 }),
+  nodeId: d.varchar("node_id", { length: 255 }).notNull(),
+  nodeName: d.varchar("node_name", { length: 255 }),
+  nodeType: d.varchar("node_type", { length: 50 }), // FRAME, COMPONENT, INSTANCE, etc.
+  exportFormat: d.varchar("export_format", { length: 10 }), // png, svg
+  remotionCode: d.text("remotion_code"), // Generated Remotion code
+  assets: d.jsonb("assets"), // URLs to exported images/SVGs stored in R2
+  designTokens: d.jsonb("design_tokens"), // Extracted colors, fonts, etc.
+  motionHints: d.jsonb("motion_hints"), // Animation preferences
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_imports_project_idx").on(t.projectId),
+  index("figma_imports_scene_idx").on(t.sceneId),
+  index("figma_imports_file_key_idx").on(t.fileKey),
+]);
+
+// Figma webhook subscriptions
+export const figmaWebhooks = createTable("figma_webhooks", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  webhookId: d.varchar("webhook_id", { length: 255 }).notNull().unique(),
+  teamId: d.varchar("team_id", { length: 255 }).notNull(),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // FILE_UPDATE, LIBRARY_PUBLISH
+  endpoint: d.text("endpoint").notNull(),
+  passcode: d.varchar("passcode", { length: 255 }).notNull(),
+  active: d.boolean("active").default(true).notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("figma_webhooks_team_idx").on(t.teamId),
+  index("figma_webhooks_active_idx").on(t.active),
+]);
+
+// Relations for Figma tables
+export const figmaConnectionsRelations = relations(figmaConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [figmaConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const figmaImportsRelations = relations(figmaImports, ({ one }) => ({
+  project: one(projects, {
+    fields: [figmaImports.projectId],
+    references: [projects.id],
+  }),
+  scene: one(scenes, {
+    fields: [figmaImports.sceneId],
+    references: [scenes.id],
+  }),
+}))
+
+// Evaluation table for YouTube to code testing
+export const evalsTable = createTable("evals", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
+  youtubeUrl: d.text().notNull(),
+  model: d.varchar({ length: 100 }).notNull(),
+  strategy: d.varchar({ length: 50 }).notNull(),
+  prompt: d.text(),
+  generatedCode: d.text().notNull(),
+  timeMs: d.integer().notNull(),
+  tokensUsed: d.integer(),
+  cost: d.real(),
+  error: d.text(),
+  metadata: d.jsonb().$type<Record<string, any>>(),
+  createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}), (t) => [
+  index("evals_user_idx").on(t.userId),
+  index("evals_created_idx").on(t.createdAt),
+  index("evals_model_idx").on(t.model),
+])

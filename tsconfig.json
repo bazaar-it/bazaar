@@ -57,6 +57,7 @@
     "src/scripts",
     "memory-bank/**/*",
     "drizzle/**/*",
-    "src/tools/edit/deprecated/**/*"
+    "src/tools/edit/deprecated/**/*",
+    "coverage/**/*"
   ]
 }

@@ -30,6 +30,8 @@ export function LoopToggle({
 }: LoopToggleProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
+  // Removed extra frame chip to avoid duplicate frame counters in UI.
+  
   // Handle clicking the loop toggle button
   const handleToggleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,31 +87,33 @@ export function LoopToggle({
       
       {/* Show scene selector only when in scene loop mode */}
       {loopState === 'scene' && scenes.length > 0 && (
-        <Select
-          value={selectedSceneId || ''}
-          onValueChange={(value) => {
-            console.log('[LoopToggle] Scene selected:', value);
-            onSceneSelect?.(value);
-          }}
-          open={isDropdownOpen}
-          onOpenChange={setIsDropdownOpen}
-        >
-          <SelectTrigger 
-            className="h-8 px-2 text-xs border-0 bg-transparent hover:bg-gray-100 w-auto min-w-[100px]"
-            onClick={(e) => e.stopPropagation()}
+        <div className="flex items-center gap-2">
+          <Select
+            value={selectedSceneId || ''}
+            onValueChange={(value) => {
+              console.log('[LoopToggle] Scene selected:', value);
+              onSceneSelect?.(value);
+            }}
+            open={isDropdownOpen}
+            onOpenChange={setIsDropdownOpen}
           >
-            <SelectValue placeholder="Select Scene">
-              {selectedSceneName}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {scenes.map((scene, index) => (
-              <SelectItem key={scene.id} value={scene.id}>
-                {getSceneName(scene, index)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger 
+              className="h-8 px-3 text-xs border border-gray-200 rounded-md bg-white hover:bg-gray-50 w-auto min-w-[110px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SelectValue placeholder="Select Scene">
+                {selectedSceneName}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {scenes.map((scene, index) => (
+                <SelectItem key={scene.id} value={scene.id}>
+                  {getSceneName(scene, index)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
     </div>
   );

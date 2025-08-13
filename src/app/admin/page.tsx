@@ -23,6 +23,7 @@ export default function AdminDashboard() {
   // Check admin access
   const { data: adminCheck, isLoading: adminCheckLoading } = api.admin.checkAdminAccess.useQuery();
   const { data: dashboardData, isLoading } = api.admin.getDashboardMetrics.useQuery();
+  const { data: payingStats } = api.admin.getPayingUsersStats.useQuery({ timeframe: selectedTimeframe === 'all' ? '30d' : selectedTimeframe });
 
   // Handle authentication and admin access
   if (status === "loading" || adminCheckLoading) {
@@ -190,6 +191,12 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const formatPayingUsersDescription = () => {
+    const periodLabel = selectedTimeframe === 'all' ? timeframeLabels['30d'] : timeframeLabels[selectedTimeframe];
+    const euros = ((payingStats?.revenueCents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${periodLabel} revenue • €${euros}`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -202,7 +209,7 @@ export default function AdminDashboard() {
         <TimeframeToggle />
 
         {/* Enhanced Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <MetricCard
             title="Total Users"
             value={
@@ -237,6 +244,16 @@ export default function AdminDashboard() {
             description="AI-generated scenes"
             change={getScenesChange()}
             color="purple"
+          />
+
+          {/* Paying users card */}
+          <MetricCard
+            title="Paying Users"
+            value={payingStats?.payingUsers || 0}
+            description={formatPayingUsersDescription()}
+            change={payingStats?.usersChangePct}
+            color="orange"
+            href="/admin/paywall-analytics"
           />
         </div>
 

@@ -8,6 +8,15 @@ import { Badge } from "~/components/ui/badge";
 import { format, subDays } from "date-fns";
 import { ArrowUpIcon, ArrowDownIcon, UsersIcon, CreditCardIcon, CursorArrowRaysIcon, EyeIcon } from "@heroicons/react/24/outline";
 
+// Define the expected event types
+type PaywallEventType = 'viewed' | 'clicked_package' | 'initiated_checkout' | 'completed_purchase';
+
+type PaywallAnalytics = {
+  events: Record<string, number>;
+  uniqueUsers: Record<string, number>;
+  dailyStats: any[];
+};
+
 export default function PaywallAnalyticsPage() {
   const [dateRange, setDateRange] = useState(30); // Default to last 30 days
   
@@ -17,21 +26,27 @@ export default function PaywallAnalyticsPage() {
     endDate: new Date(),
   });
 
+  // Safely access the dynamic properties with proper typing
+  const viewed = (analytics?.uniqueUsers as Record<PaywallEventType, number>)?.viewed || 0;
+  const clickedPackage = (analytics?.uniqueUsers as Record<PaywallEventType, number>)?.clicked_package || 0;
+  const initiatedCheckout = (analytics?.uniqueUsers as Record<PaywallEventType, number>)?.initiated_checkout || 0;
+  const completedPurchase = (analytics?.uniqueUsers as Record<PaywallEventType, number>)?.completed_purchase || 0;
+
   // Calculate conversion rates
-  const conversionRate = analytics?.uniqueUsers?.viewed && analytics?.uniqueUsers?.completed_purchase
-    ? ((analytics.uniqueUsers.completed_purchase / analytics.uniqueUsers.viewed) * 100).toFixed(1)
+  const conversionRate = viewed && completedPurchase
+    ? ((completedPurchase / viewed) * 100).toFixed(1)
     : "0";
 
-  const clickThroughRate = analytics?.uniqueUsers?.viewed && analytics?.uniqueUsers?.clicked_package
-    ? ((analytics.uniqueUsers.clicked_package / analytics.uniqueUsers.viewed) * 100).toFixed(1)
+  const clickThroughRate = viewed && clickedPackage
+    ? ((clickedPackage / viewed) * 100).toFixed(1)
     : "0";
 
-  const checkoutRate = analytics?.uniqueUsers?.clicked_package && analytics?.uniqueUsers?.initiated_checkout
-    ? ((analytics.uniqueUsers.initiated_checkout / analytics.uniqueUsers.clicked_package) * 100).toFixed(1)
+  const checkoutRate = clickedPackage && initiatedCheckout
+    ? ((initiatedCheckout / clickedPackage) * 100).toFixed(1)
     : "0";
 
-  const completionRate = analytics?.uniqueUsers?.initiated_checkout && analytics?.uniqueUsers?.completed_purchase
-    ? ((analytics.uniqueUsers.completed_purchase / analytics.uniqueUsers.initiated_checkout) * 100).toFixed(1)
+  const completionRate = initiatedCheckout && completedPurchase
+    ? ((completedPurchase / initiatedCheckout) * 100).toFixed(1)
     : "0";
 
   return (
@@ -89,7 +104,7 @@ export default function PaywallAnalyticsPage() {
                 <EyeIcon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{analytics?.uniqueUsers?.viewed || 0}</div>
+                <div className="text-2xl font-bold">{viewed}</div>
                 <p className="text-xs text-muted-foreground">
                   Unique users who saw the paywall
                 </p>
@@ -102,7 +117,7 @@ export default function PaywallAnalyticsPage() {
                 <CursorArrowRaysIcon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{analytics?.uniqueUsers?.clicked_package || 0}</div>
+                <div className="text-2xl font-bold">{clickedPackage}</div>
                 <p className="text-xs text-muted-foreground">
                   {clickThroughRate}% click-through rate
                 </p>
@@ -115,7 +130,7 @@ export default function PaywallAnalyticsPage() {
                 <CreditCardIcon className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{analytics?.uniqueUsers?.initiated_checkout || 0}</div>
+                <div className="text-2xl font-bold">{initiatedCheckout}</div>
                 <p className="text-xs text-muted-foreground">
                   {checkoutRate}% of clicks proceed
                 </p>
@@ -130,7 +145,7 @@ export default function PaywallAnalyticsPage() {
                 </Badge>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{analytics?.uniqueUsers?.completed_purchase || 0}</div>
+                <div className="text-2xl font-bold">{completedPurchase}</div>
                 <p className="text-xs text-muted-foreground">
                   {completionRate}% checkout completion
                 </p>
@@ -149,7 +164,7 @@ export default function PaywallAnalyticsPage() {
                 <div className="relative">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Viewed Paywall</span>
-                    <span className="text-sm text-muted-foreground">{analytics?.uniqueUsers?.viewed || 0} users (100%)</span>
+                    <span className="text-sm text-muted-foreground">{viewed} users (100%)</span>
                   </div>
                   <div className="mt-2 h-4 bg-gray-200 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500" style={{ width: '100%' }}></div>
@@ -159,7 +174,7 @@ export default function PaywallAnalyticsPage() {
                 <div className="relative">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Clicked Package</span>
-                    <span className="text-sm text-muted-foreground">{analytics?.uniqueUsers?.clicked_package || 0} users ({clickThroughRate}%)</span>
+                    <span className="text-sm text-muted-foreground">{clickedPackage} users ({clickThroughRate}%)</span>
                   </div>
                   <div className="mt-2 h-4 bg-gray-200 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500" style={{ width: `${clickThroughRate}%` }}></div>
@@ -169,17 +184,17 @@ export default function PaywallAnalyticsPage() {
                 <div className="relative">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Started Checkout</span>
-                    <span className="text-sm text-muted-foreground">{analytics?.uniqueUsers?.initiated_checkout || 0} users ({(analytics?.uniqueUsers?.viewed && analytics?.uniqueUsers?.initiated_checkout ? (analytics.uniqueUsers.initiated_checkout / analytics.uniqueUsers.viewed * 100).toFixed(1) : 0)}%)</span>
+                    <span className="text-sm text-muted-foreground">{initiatedCheckout} users ({(viewed && initiatedCheckout ? (initiatedCheckout / viewed * 100).toFixed(1) : 0)}%)</span>
                   </div>
                   <div className="mt-2 h-4 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${analytics?.uniqueUsers?.viewed && analytics?.uniqueUsers?.initiated_checkout ? (analytics.uniqueUsers.initiated_checkout / analytics.uniqueUsers.viewed * 100) : 0}%` }}></div>
+                    <div className="h-full bg-blue-500" style={{ width: `${viewed && initiatedCheckout ? (initiatedCheckout / viewed * 100) : 0}%` }}></div>
                   </div>
                 </div>
 
                 <div className="relative">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Completed Purchase</span>
-                    <span className="text-sm text-muted-foreground">{analytics?.uniqueUsers?.completed_purchase || 0} users ({conversionRate}%)</span>
+                    <span className="text-sm text-muted-foreground">{completedPurchase} users ({conversionRate}%)</span>
                   </div>
                   <div className="mt-2 h-4 bg-gray-200 rounded-full overflow-hidden">
                     <div className="h-full bg-green-500" style={{ width: `${conversionRate}%` }}></div>

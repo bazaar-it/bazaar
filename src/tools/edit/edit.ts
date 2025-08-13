@@ -75,6 +75,16 @@ BRAND MATCHING INSTRUCTIONS:
         context += `\nVIDEO URLS: ${input.videoUrls.map((url, i) => `\nVideo ${i + 1}: ${url}`).join('')}`;
       }
       
+      // Handle audio separately - don't send as images!
+      if (input.audioUrls?.length) {
+        context += `\n\nAUDIO CONTEXT: User provided ${input.audioUrls.length} audio file(s):`;
+        input.audioUrls.forEach((url, i) => {
+          const filename = url.split('/').pop() || 'audio';
+          context += `\n- Audio ${i + 1}: ${filename}`;
+        });
+        context += `\n\nNote: Add audio playback functionality if the user requests it.`;
+      }
+      
       
       // Add reference scenes for style/color matching
       if (input.referenceScenes?.length) {
@@ -144,6 +154,7 @@ Please edit the code according to the user request. Return the complete modified
         hasError: !!input.errorDetails,
         hasImages: !!input.imageUrls?.length,
         hasVideos: !!input.videoUrls?.length,
+        hasAudio: !!input.audioUrls?.length,
         hasWebContext: !!input.webContext,
         totalImages: allImageUrls.length,
         codeLength: input.tsxCode.length,

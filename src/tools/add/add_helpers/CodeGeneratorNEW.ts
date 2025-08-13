@@ -6,6 +6,7 @@ import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
 import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
 import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
+import { MediaValidation } from "./mediaValidation";
 
 /**
  * Unified Code Processing Service - handles all code generation tools
@@ -210,6 +211,7 @@ export class UnifiedCodeProcessor {
     userPrompt: string;
     functionName: string;
     imageUrls: string[];
+    projectId?: string;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -282,7 +284,21 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         throw new Error("No response from Image Recreator LLM");
       }
       
-      const result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      let result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          result.code,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE RECREATOR] Fixed hallucinated URLs:', validation.fixes);
+          result.code = validation.code;
+        }
+      }
       
       return {
         ...result,
@@ -314,22 +330,60 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       height: number;
     };
     assetUrls?: string[];
+    isYouTubeAnalysis?: boolean;
   }): Promise<CodeGenerationOutput> {
-    const config = getModel('codeGenerator');
+    // Use Sonnet 4 with temperature 0 for YouTube reproduction
+    const config = input.isYouTubeAnalysis 
+      ? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514', temperature: 0, maxTokens: 16000 }
+      : getModel('codeGenerator');
     
     console.log('⚡ [CODE GENERATOR] DIRECT PATH: Generating code from prompt only');
+    if (input.isYouTubeAnalysis) {
+      console.log('🎥 [CODE GENERATOR] YouTube Reproduction Mode: Using Sonnet 4 with temperature 0');
+    }
     
     try {
-      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName,
-        WIDTH: input.projectFormat?.width.toString() || '1920',
-        HEIGHT: input.projectFormat?.height.toString() || '1080',
-        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
-      });
-      
-      let userPrompt = `USER REQUEST: "${input.userPrompt}"
+      let systemPrompt: { role: 'system'; content: string };
+      let userPrompt: string;
+
+      // YouTube reproduction uses description-based approach
+      if (input.isYouTubeAnalysis) {
+        // Import the description-to-code prompt
+        const { DESCRIPTION_TO_CODE } = await import('~/config/prompts/active/description-to-code');
+        
+        // Use the description-to-code system prompt
+        systemPrompt = {
+          role: 'system' as const,
+          content: DESCRIPTION_TO_CODE.content
+        };
+        
+        // Pass the description as the user prompt
+        userPrompt = `Create Remotion code for this video description:
+
+${input.userPrompt}
+
+SPECIFICATIONS:
+- Total duration: ${input.requestedDurationFrames || 180} frames (${(input.requestedDurationFrames || 180) / 30} seconds)
+- Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080}
+- Function name: ${input.functionName}
+
+CRITICAL: Create all visuals with CSS and React components. NO stock photos or external URLs.
+
+Output only code.`;
+        
+      } else {
+        // Regular creative generation
+        systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
+          FUNCTION_NAME: input.functionName,
+          WIDTH: input.projectFormat?.width.toString() || '1920',
+          HEIGHT: input.projectFormat?.height.toString() || '1080',
+          FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
+        });
+        
+        userPrompt = `USER REQUEST: "${input.userPrompt}"
 
 FUNCTION NAME: ${input.functionName}`;
+      }
 
       // Add persistent asset URLs if available
       if (input.assetUrls && input.assetUrls.length > 0) {
@@ -649,6 +703,20 @@ Transform the static design into sequential storytelling.`;
       // Clean up code
       let cleanCode = response?.content?.trim() || '';
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          cleanCode,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);
+          cleanCode = validation.code;
+        }
+      }
       
       // Extract duration from image-generated code
       const durationAnalysis = analyzeDuration(cleanCode);

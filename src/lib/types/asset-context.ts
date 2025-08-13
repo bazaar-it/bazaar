@@ -13,6 +13,8 @@ export interface Asset {
   dimensions?: { width: number; height: number };
   fileSize: number;
   originalName: string;
+  customName?: string;  // User-defined name for easier reference
+  referenceNames?: string[];  // Alternative names for matching
   hash?: string;
   tags?: string[];
   uploadedAt: Date;

@@ -5,7 +5,7 @@ import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "~/components/ui/dialog";
-import { SearchIcon, FolderIcon, Loader2, X } from "lucide-react";
+import { SearchIcon, FolderIcon, Loader2, X, Heart } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import { Player } from "@remotion/player";
@@ -23,6 +23,7 @@ type Project = {
   updatedAt: Date | null;
   userId: string;
   isWelcome: boolean;
+  isFavorite: boolean;
   props: any;
 };
 
@@ -159,7 +160,8 @@ const ProjectPreview = ({
   project, 
   onClick, 
   isCurrentProject, 
-  onDelete, 
+  onDelete,
+  onToggleFavorite,
   onStartEdit,
   editingProject,
   editingValue,
@@ -171,6 +173,7 @@ const ProjectPreview = ({
   onClick: () => void;
   isCurrentProject: boolean;
   onDelete: (project: Project) => void;
+  onToggleFavorite: (project: Project, e: React.MouseEvent) => void;
   onStartEdit: (project: Project, e: React.MouseEvent) => void;
   editingProject: string | null;
   editingValue: string;
@@ -208,9 +211,10 @@ const ProjectPreview = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Delete button - only visible on hover */}
+        {/* Top action buttons - visible on hover */}
         {isHovered && (
-          <div className="absolute top-2 left-2 z-20">
+          <div className="absolute top-2 left-2 right-2 z-20 flex justify-between">
+            {/* Delete button */}
             <Button
               variant="ghost"
               size="sm"
@@ -218,6 +222,22 @@ const ProjectPreview = ({
               onClick={handleDeleteClick}
             >
               <X className="h-3 w-3" />
+            </Button>
+            
+            {/* Favorite button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-7 w-7 p-0 rounded-full transition-all duration-200 ${
+                project.isFavorite 
+                  ? 'bg-pink-500/90 hover:bg-pink-600 text-white' 
+                  : 'bg-black/50 hover:bg-black/70 text-white'
+              }`}
+              onClick={(e) => onToggleFavorite(project, e)}
+            >
+              <Heart 
+                className={`h-3.5 w-3.5 ${project.isFavorite ? 'fill-current' : ''}`} 
+              />
             </Button>
           </div>
         )}
@@ -445,6 +465,18 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
     },
   });
   
+  // Toggle favorite mutation
+  const toggleFavoriteMutation = api.project.toggleFavorite.useMutation({
+    onSuccess: async () => {
+      // Invalidate projects list to trigger refetch with new sort order
+      await utils.project.list.invalidate();
+    },
+    onError: (error) => {
+      console.error('Toggle favorite failed:', error);
+      toast.error(`Failed to update favorite: ${error.message}`);
+    },
+  });
+  
   // Delete project mutation
   const deleteProjectMutation = api.project.delete.useMutation({
     onSuccess: async (result) => {
@@ -489,11 +521,15 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
       );
     }
     
-    // Sort: current project first, then by updated date
+    // Sort: favorites first (except current), current project, then by updated date
     return filtered.sort((a, b) => {
       // Current project always first
       if (a.id === currentProjectId) return -1;
       if (b.id === currentProjectId) return 1;
+      
+      // Then favorites
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
       
       // Then by updated date (newest first)
       return new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime();
@@ -538,6 +574,12 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
     setEditingProject(null);
     setEditingValue("");
   }, []);
+  
+  // Handle toggling favorite
+  const handleToggleFavorite = useCallback((project: Project, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigation
+    toggleFavoriteMutation.mutate({ projectId: project.id });
+  }, [toggleFavoriteMutation]);
   
   // Handle save edit
   const handleSaveEdit = useCallback(() => {
@@ -621,6 +663,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
                   onClick={() => handleProjectClick(project.id)}
                   isCurrentProject={project.id === currentProjectId}
                   onDelete={handleDeleteProject}
+                  onToggleFavorite={handleToggleFavorite}
                   onStartEdit={handleStartEdit}
                   editingProject={editingProject}
                   editingValue={editingValue}

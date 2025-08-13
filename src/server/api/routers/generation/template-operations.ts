@@ -1,7 +1,8 @@
+//src/server/api/routers/generation/template-operations.ts
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { scenes, projects } from "~/server/db/schema";
+import { scenes, projects, templateUsages } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder } from "~/lib/api/response-helpers";
@@ -202,7 +203,15 @@ export const addTemplate = protectedProcedure
           .where(eq(projects.id, projectId));
       }
 
-      // 7. Add chat message for context
+      // 7. Track template usage for analytics
+      await db.insert(templateUsages).values({
+        templateId,
+        userId,
+        projectId,
+        sceneId: newScene.id,
+      });
+
+      // 8. Add chat message for context
       await messageService.createMessage({
         projectId,
         content: `Added ${templateName} template to scene ${sceneOrder + 1}`,

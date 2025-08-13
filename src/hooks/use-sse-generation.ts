@@ -4,7 +4,7 @@ import { api } from '~/trpc/react';
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; modelOverride?: string }) => void;
+  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
   onComplete?: () => void;
   onError?: (error: string) => void;
 }
@@ -20,7 +20,9 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     userMessage: string,
     imageUrls?: string[],
     videoUrls?: string[],
-    modelOverride?: string
+    audioUrls?: string[],
+    modelOverride?: string,
+    useGitHub?: boolean
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -41,8 +43,16 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
       params.append('videoUrls', JSON.stringify(videoUrls));
     }
     
+    if (audioUrls?.length) {
+      params.append('audioUrls', JSON.stringify(audioUrls));
+    }
+    
     if (modelOverride) {
       params.append('modelOverride', modelOverride);
+    }
+    
+    if (useGitHub) {
+      params.append('useGitHub', 'true');
     }
 
     // Create new EventSource
@@ -65,7 +75,9 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
               userMessage: data.userMessage,
               imageUrls: data.imageUrls,
               videoUrls: data.videoUrls,
-              modelOverride: data.modelOverride
+              audioUrls: data.audioUrls,
+              modelOverride: data.modelOverride,
+              useGitHub: data.useGitHub
             });
             eventSource.close();
             break;
