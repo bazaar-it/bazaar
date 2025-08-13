@@ -6,6 +6,7 @@ import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
 import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
 import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
+import { MediaValidation } from "./mediaValidation";
 
 /**
  * Unified Code Processing Service - handles all code generation tools
@@ -210,6 +211,7 @@ export class UnifiedCodeProcessor {
     userPrompt: string;
     functionName: string;
     imageUrls: string[];
+    projectId?: string;
     projectFormat?: {
       format: 'landscape' | 'portrait' | 'square';
       width: number;
@@ -282,7 +284,21 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         throw new Error("No response from Image Recreator LLM");
       }
       
-      const result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      let result = this.processAIResponse(rawOutput, 'IMAGE_RECREATOR', input.userPrompt, input.functionName);
+      
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          result.code,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE RECREATOR] Fixed hallucinated URLs:', validation.fixes);
+          result.code = validation.code;
+        }
+      }
       
       return {
         ...result,
@@ -687,6 +703,20 @@ Transform the static design into sequential storytelling.`;
       // Clean up code
       let cleanCode = response?.content?.trim() || '';
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
+      
+      // Validate and fix any hallucinated URLs
+      if (input.projectId) {
+        const validation = await MediaValidation.validateAndFixCode(
+          cleanCode,
+          input.projectId,
+          input.imageUrls
+        );
+        
+        if (validation.wasFixed) {
+          console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);
+          cleanCode = validation.code;
+        }
+      }
       
       // Extract duration from image-generated code
       const durationAnalysis = analyzeDuration(cleanCode);

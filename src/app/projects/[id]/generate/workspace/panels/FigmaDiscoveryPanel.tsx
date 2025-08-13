@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '~/trpc/react';
-import { Loader2, Search, Palette, Layers, FileText, Square, RefreshCw, Clock, ChevronDown } from 'lucide-react';
+import { Loader2, Search, Palette, Layers, FileText, Square, RefreshCw, Clock, ChevronDown, Link2, LogOut, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '~/components/ui/button';
 
 interface FigmaDiscoveryPanelProps {
   projectId: string;
@@ -30,13 +31,57 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
   const [dragging, setDragging] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [showRecent, setShowRecent] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  // Test Figma connection with PAT
-  const testConnection = api.figma.checkConnection.useQuery(undefined, {
-    retry: false,
-    enabled: false // Don't auto-run
+  // Check Figma connection status
+  const { data: connectionStatus, refetch: refetchConnection } = api.figma.checkConnection.useQuery();
+  
+  // Get OAuth URL
+  const { data: oauthData } = api.figma.getOAuthUrl.useQuery(
+    undefined,
+    { enabled: !connectionStatus?.connected }
+  );
+  
+  // Disconnect mutation
+  const disconnectMutation = api.figma.disconnect.useMutation({
+    onSuccess: () => {
+      refetchConnection();
+      toast.success('Disconnected from Figma');
+      setComponents([]);
+    },
   });
 
+  // Handle OAuth connection
+  const handleConnect = useCallback(() => {
+    if (oauthData?.url) {
+      setIsConnecting(true);
+      window.open(oauthData.url, '_blank', 'width=600,height=800');
+      
+      // Poll for connection status
+      const pollInterval = setInterval(async () => {
+        const result = await refetchConnection();
+        if (result.data?.connected) {
+          clearInterval(pollInterval);
+          setIsConnecting(false);
+          toast.success('Successfully connected to Figma!');
+        }
+      }, 2000);
+      
+      // Stop polling after 2 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setIsConnecting(false);
+      }, 120000);
+    }
+  }, [oauthData, refetchConnection]);
+  
+  // Handle disconnect
+  const handleDisconnect = useCallback(async () => {
+    if (confirm('Are you sure you want to disconnect your Figma account?')) {
+      await disconnectMutation.mutateAsync();
+    }
+  }, [disconnectMutation]);
+  
   // Load recent files from localStorage
   useEffect(() => {
     const stored = localStorage.getItem('figma-recent-files');
@@ -98,26 +143,15 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
     // Extract key from Figma URL if needed
     const urlMatch = cleanKey.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
     if (urlMatch) {
-      cleanKey = urlMatch[1];
+      cleanKey = urlMatch[1] || '';
     }
 
     setLoading(true);
     setComponents([]);
     
-    // First test connection
-    console.log('Testing Figma connection...');
-    try {
-      const connectionResult = await testConnection.refetch();
-      console.log('Connection test result:', connectionResult.data);
-      
-      if (!connectionResult.data?.connected) {
-        toast.error('Figma connection failed. Check your PAT in .env.local');
-        setLoading(false);
-        return;
-      }
-    } catch (error) {
-      console.error('Connection test error:', error);
-      toast.error('Failed to connect to Figma');
+    // Check if connected first
+    if (!connectionStatus?.connected) {
+      toast.error('Please connect your Figma account first');
       setLoading(false);
       return;
     }
@@ -140,13 +174,22 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
   const handleDragStart = (component: FigmaComponent) => {
     setDragging(component.id);
     
-    // Create drag data for ChatPanelG
+    // Extract the actual file key if it's a URL
+    let actualFileKey = fileKey;
+    const urlMatch = fileKey.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+    if (urlMatch) {
+      actualFileKey = urlMatch[1] || '';
+    }
+    
+    // Create drag data for ChatPanelG with file key for fetching
     const dragData = {
       type: 'figma-component',
       component: {
         id: component.id,
         name: component.name,
-        fileKey: fileKey,
+        fileKey: actualFileKey,
+        nodeId: component.id, // This is the node ID
+        fullId: `${actualFileKey}:${component.id}`, // Combined for easy parsing
         prompt: `Create an animated version of the Figma component "${component.name}"`
       }
     };
@@ -179,16 +222,63 @@ export default function FigmaDiscoveryPanel({ projectId }: FigmaDiscoveryPanelPr
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-2">
-          <Palette className="w-5 h-5 text-purple-600" />
-          <h2 className="font-semibold text-lg">Figma Designs</h2>
+      <div className="p-4 border-b">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Palette className="w-5 h-5 text-purple-600" />
+            <h2 className="font-semibold text-lg">Figma Designs</h2>
+          </div>
+          
+          {/* Connection status */}
+          {connectionStatus?.connected ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-green-600 flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-600 rounded-full" />
+                Connected
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleDisconnect}
+                className="h-6 px-2"
+              >
+                <LogOut className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleConnect}
+              disabled={isConnecting}
+              className="h-7"
+            >
+              {isConnecting ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-3 h-3 mr-1" />
+                  Connect Figma
+                </>
+              )}
+            </Button>
+          )}
         </div>
-        {testConnection.data?.connected && (
-          <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-            PAT Connected
-          </span>
-        )}
+        
+        {/* Connection info */}
+        {connectionStatus && !connectionStatus.connected ? (
+          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Click "Connect Figma" above to link your account
+          </div>
+        ) : connectionStatus?.user?.email ? (
+          <div className="text-xs text-gray-500">
+            {connectionStatus.user.email}
+          </div>
+        ) : null}
       </div>
 
       {/* Search Bar */}

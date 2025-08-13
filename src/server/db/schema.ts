@@ -106,6 +106,7 @@ export const projects = createTable(
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
     isWelcome: d.boolean().default(true).notNull(),
+    isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).$onUpdate(() => new Date()),
   }),
@@ -529,6 +530,81 @@ export const emailSubscribers = createTable(
 
 export const emailSubscribersRelations = relations(emailSubscribers, ({ one }) => ({
   user: one(users, { fields: [emailSubscribers.userId], references: [users.id] }),
+}));
+
+// --- Assets table ---
+// User-centric media asset storage with cross-project sharing
+export const assets = createTable(
+  "asset",
+  (d) => ({
+    id: d.text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    url: d.text("url").notNull(),
+    userId: d.varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+    
+    // Names
+    originalName: d.text("original_name").notNull(),
+    customName: d.text("custom_name"), // User-defined name for easy reference
+    
+    // Asset info
+    type: d.text("type").notNull(), // 'image', 'video', 'audio', 'logo'
+    mimeType: d.text("mime_type"),
+    fileSize: d.integer("file_size"), // in bytes
+    
+    // Metadata
+    width: d.integer("width"),
+    height: d.integer("height"),
+    duration: d.integer("duration"), // for video/audio in seconds
+    thumbnailUrl: d.text("thumbnail_url"),
+    
+    // Usage tracking
+    usageCount: d.integer("usage_count").default(0).notNull(),
+    lastUsedAt: d.timestamp("last_used_at", { withTimezone: true }),
+    
+    // Organization
+    tags: d.text("tags").array(), // Array of tags for categorization
+    
+    // Soft delete
+    deletedAt: d.timestamp("deleted_at", { withTimezone: true }),
+    
+    // Timestamps
+    createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: d.timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("asset_user_id_idx").on(t.userId),
+    index("asset_type_idx").on(t.type),
+    index("asset_custom_name_idx").on(t.customName),
+    index("asset_url_idx").on(t.url),
+    index("asset_deleted_at_idx").on(t.deletedAt),
+    uniqueIndex("asset_url_user_idx").on(t.url, t.userId), // One asset per URL per user
+  ]
+);
+
+// Junction table for project-asset relationships
+export const projectAssets = createTable(
+  "project_asset",
+  (d) => ({
+    id: d.text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    projectId: d.text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    assetId: d.text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+    addedAt: d.timestamp("added_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    addedVia: d.text("added_via"), // 'upload', 'reference', 'import'
+  }),
+  (t) => [
+    index("project_asset_project_id_idx").on(t.projectId),
+    index("project_asset_asset_id_idx").on(t.assetId),
+    uniqueIndex("project_asset_unique_idx").on(t.projectId, t.assetId),
+  ]
+);
+
+export const assetsRelations = relations(assets, ({ one, many }) => ({
+  user: one(users, { fields: [assets.userId], references: [users.id] }),
+  projects: many(projectAssets),
+}));
+
+export const projectAssetsRelations = relations(projectAssets, ({ one }) => ({
+  project: one(projects, { fields: [projectAssets.projectId], references: [projects.id] }),
+  asset: one(assets, { fields: [projectAssets.assetId], references: [assets.id] }),
 }));
 
 // --- Agent Messages table ---
@@ -1339,3 +1415,24 @@ export const figmaImportsRelations = relations(figmaImports, ({ one }) => ({
     references: [scenes.id],
   }),
 }))
+
+// Evaluation table for YouTube to code testing
+export const evalsTable = createTable("evals", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  userId: d.varchar({ length: 255 }).notNull().references(() => users.id),
+  youtubeUrl: d.text().notNull(),
+  model: d.varchar({ length: 100 }).notNull(),
+  strategy: d.varchar({ length: 50 }).notNull(),
+  prompt: d.text(),
+  generatedCode: d.text().notNull(),
+  timeMs: d.integer().notNull(),
+  tokensUsed: d.integer(),
+  cost: d.real(),
+  error: d.text(),
+  metadata: d.jsonb().$type<Record<string, any>>(),
+  createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}), (t) => [
+  index("evals_user_idx").on(t.userId),
+  index("evals_created_idx").on(t.createdAt),
+  index("evals_model_idx").on(t.model),
+])

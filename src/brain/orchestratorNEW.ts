@@ -20,6 +20,7 @@ export class Orchestrator {
       projectId: input.projectId,
       hasImages: !!(input.userContext?.imageUrls as string[])?.length,
       hasVideos: !!(input.userContext?.videoUrls as string[])?.length,
+      hasAudio: !!(input.userContext?.audioUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
     
@@ -215,6 +216,7 @@ export class Orchestrator {
             referencedSceneIds: toolSelection.referencedSceneIds,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
             videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
+            audioUrls: (input.userContext?.audioUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
             modelOverride: input.userContext?.modelOverride, // Pass model override if provided
             // Include persistent asset URLs for context

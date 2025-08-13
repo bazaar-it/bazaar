@@ -1,0 +1,1164 @@
+From 000c49824597e0f9ebb7424a13dd7806a0f9bebd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Markus=20H=C3=B8gne?= <markushogne@gmail.com>
+Date: Wed, 13 Aug 2025 09:21:50 +0200
+Subject: [PATCH] feat: Add professional timeline panel with drag-and-drop
+ functionality
+
+- Implement horizontal timeline at bottom of workspace
+- Add playhead dragging for video scrubbing
+- Enable scene trimming with resize handles
+- Add play/pause sync between timeline and preview
+- Implement scene deletion (context menu + keyboard)
+- Add modern, minimalistic UI design
+- Include zoom controls and time display
+- Support show/hide timeline from sidebar
+- Add persistence for duration changes to database
+---
+ .../generate/components/RemotionPreview.tsx   |  51 +-
+ .../generate/workspace/GenerateSidebar.tsx    |  14 +-
+ .../workspace/GenerateWorkspaceRoot.tsx       |  70 +-
+ .../workspace/panels/PreviewPanelG.tsx        |  80 ++
+ .../workspace/panels/TimelinePanel.tsx        | 700 ++++++++++++++++++
+ src/generated/entities.ts                     |   2 +-
+ src/server/api/routers/scenes.ts              |  46 ++
+ 7 files changed, 943 insertions(+), 20 deletions(-)
+ create mode 100644 src/app/projects/[id]/generate/workspace/panels/TimelinePanel.tsx
+
+diff --git a/src/app/projects/[id]/generate/components/RemotionPreview.tsx b/src/app/projects/[id]/generate/components/RemotionPreview.tsx
+index 05b8a1c9..b436d16f 100644
+--- a/src/app/projects/[id]/generate/components/RemotionPreview.tsx
++++ b/src/app/projects/[id]/generate/components/RemotionPreview.tsx
+@@ -33,6 +33,8 @@ export interface RemotionPreviewProps {
+   loop?: boolean;
+   inFrame?: number;
+   outFrame?: number;
++  onPlay?: () => void;
++  onPause?: () => void;
+ }
+ 
+ // The main preview component that wraps Remotion Player
+@@ -48,7 +50,9 @@ export default function RemotionPreview({
+   playbackRate = 1,
+   loop = true,
+   inFrame,
+-  outFrame
++  outFrame,
++  onPlay,
++  onPause
+ }: RemotionPreviewProps) {
+   // Log rendering for debugging
+   useEffect(() => {
+@@ -56,19 +60,58 @@ export default function RemotionPreview({
+     console.log('RemotionPreview props:', { durationInFrames, fps, width, height, playbackRate });
+   }, [durationInFrames, fps, width, height, refreshToken, playbackRate]);
+   
+-  // Emit current frame updates for external UI (e.g., frame counter)
++  // Emit current frame updates and detect play/pause state from frame changes
+   useEffect(() => {
+     if (!playerRef?.current) return;
+     const ref = playerRef.current;
++    
++    let lastFrame = -1;
++    let frameUnchangedCount = 0;
++    let lastReportedPlayState: boolean | null = null;
++    
+     const onFrame = () => {
+       try {
+-        const frame = (ref as any)?.getCurrentFrame?.() ?? undefined;
+-        if (typeof frame === 'number') {
++        const rawFrame = (ref as any)?.getCurrentFrame?.() ?? undefined;
++        if (typeof rawFrame === 'number') {
++          // Round frame to integer to avoid decimals
++          const frame = Math.round(rawFrame);
++          // Always emit frame update
+           const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
+           window.dispatchEvent(ev);
++          
++          // Detect play/pause state from frame changes
++          if (frame === lastFrame) {
++            // Frame hasn't changed
++            frameUnchangedCount++;
++            
++            // If frame hasn't changed for 3 consecutive checks (about 48ms at 60fps)
++            // and we haven't already reported paused state, report it
++            if (frameUnchangedCount >= 3 && lastReportedPlayState !== false) {
++              lastReportedPlayState = false;
++              const pauseEv = new CustomEvent('preview-play-state-change', { 
++                detail: { playing: false }
++              });
++              window.dispatchEvent(pauseEv);
++            }
++          } else {
++            // Frame changed - video is playing
++            frameUnchangedCount = 0;
++            
++            // Only report playing if we haven't already
++            if (lastReportedPlayState !== true) {
++              lastReportedPlayState = true;
++              const playEv = new CustomEvent('preview-play-state-change', { 
++                detail: { playing: true }
++              });
++              window.dispatchEvent(playEv);
++            }
++          }
++          
++          lastFrame = frame;
+         }
+       } catch {}
+     };
++    
+     const interval = window.setInterval(onFrame, Math.max(1000 / fps, 16));
+     return () => window.clearInterval(interval);
+   }, [playerRef, fps]);
+diff --git a/src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx b/src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx
+index 7dd32da4..df0340d8 100644
+--- a/src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx
++++ b/src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx
+@@ -19,16 +19,17 @@ import {
+   Settings,
+   Github,
+   Palette,
++  Film,
+ } from "lucide-react";
+ import { Images } from "lucide-react";
+ 
+ 
+ interface GenerateSidebarProps {
+-  onAddPanel?: (panelType: PanelTypeG) => void;
++  onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
+ }
+ 
+ interface WorkspacePanelG {
+-  type: PanelTypeG;
++  type: PanelTypeG | 'timeline';
+   id: string;
+   name: string;
+   icon: any;
+@@ -37,7 +38,7 @@ interface WorkspacePanelG {
+ }
+ 
+ interface PanelOption {
+-  type: PanelTypeG;
++  type: PanelTypeG | 'timeline';
+   label: string;
+   description: string;
+   icon: React.ReactNode;
+@@ -45,11 +46,12 @@ interface PanelOption {
+   color: string;
+ }
+ 
+-// Workspace panels in vertical order: Projects, Chat, Video, Audio, Code, Templates, GitHub, Figma
++// Workspace panels in vertical order: Projects, Chat, Video, Timeline, Audio, Code, Templates, GitHub, Figma
+ const navItems: WorkspacePanelG[] = [
+   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
+   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
+   { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
++  { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
+   { type: 'audio', id: 'audio', name: "Audio", icon: Music, href: "#audio", tooltip: "Audio Panel" },
+   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
+   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
+@@ -66,7 +68,7 @@ export function GenerateSidebar({
+   const [isDragging, setIsDragging] = useState(false);
+   
+   // Handle dragging panel icons from sidebar
+-  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG) => {
++  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG | 'timeline') => {
+     e.dataTransfer.setData("text/plain", panelType);
+     e.dataTransfer.effectAllowed = "copy";
+     setIsDragging(true);
+@@ -97,7 +99,7 @@ export function GenerateSidebar({
+   };
+   
+   // Handle clicking on panel icons in sidebar
+-  const handlePanelClick = (panelType: PanelTypeG) => {
++  const handlePanelClick = (panelType: PanelTypeG | 'timeline') => {
+     if (onAddPanel) {
+       onAddPanel(panelType);
+     }
+diff --git a/src/app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx b/src/app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx
+index 5d5d420d..f574faa7 100644
+--- a/src/app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx
++++ b/src/app/projects/[id]/generate/workspace/GenerateWorkspaceRoot.tsx
+@@ -15,6 +15,8 @@ import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
+ import { useBreakpoint } from '~/hooks/use-breakpoint';
+ import MobileAppHeader from '~/components/MobileAppHeader';
+ import { CreateTemplateModal } from '~/components/CreateTemplateModal';
++import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
++import TimelinePanel from './panels/TimelinePanel';
+ 
+ // ✅ NEW: Debug flag for production logging
+ const DEBUG = process.env.NODE_ENV === 'development';
+@@ -29,6 +31,7 @@ type Props = {
+ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
+   const [userProjects, setUserProjects] = useState(initialProjects);
+   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
++  const [isTimelineVisible, setIsTimelineVisible] = useState(false);
+   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
+   
+   const { data: session } = useSession();
+@@ -106,7 +109,13 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
+   }, [projectId]);
+   
+   // Handle panel add when clicked or dragged from sidebar
+-  const handleAddPanel = useCallback((panelType: PanelTypeG) => {
++  const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {
++    // Special handling for timeline
++    if (panelType === 'timeline') {
++      setIsTimelineVisible(true);
++      return;
++    }
++    
+     workspaceContentAreaRef.current?.addPanel(panelType);
+   }, []);
+   
+@@ -228,14 +237,57 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
+           }}
+         >
+           <div className="h-full flex flex-col overflow-hidden relative">
+-            <WorkspaceContentAreaG
+-              ref={workspaceContentAreaRef}
+-              projectId={projectId}
+-              userId={userId}
+-              initialProps={initialProps}
+-              projects={userProjects}
+-              onProjectRename={handleProjectRenamed}
+-            />
++            {/* Conditional vertical layout based on timeline visibility */}
++            {isTimelineVisible ? (
++              <PanelGroup direction="vertical" className="h-full">
++                {/* Main workspace panels */}
++                <Panel defaultSize={75} minSize={30}>
++                  <WorkspaceContentAreaG
++                    ref={workspaceContentAreaRef}
++                    projectId={projectId}
++                    userId={userId}
++                    initialProps={initialProps}
++                    projects={userProjects}
++                    onProjectRename={handleProjectRenamed}
++                  />
++                </Panel>
++                
++                {/* Resize handle between main area and timeline */}
++                <PanelResizeHandle className="h-[8px] bg-gray-100 hover:bg-gray-200 transition-colors border-t border-b border-gray-200" />
++                
++                {/* Timeline panel at bottom */}
++                <Panel defaultSize={25} minSize={15} maxSize={50}>
++                  <div className="h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200 relative">
++                    {/* Close button for timeline */}
++                    <button
++                      onClick={() => setIsTimelineVisible(false)}
++                      className="absolute top-2 right-2 z-50 p-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
++                      title="Close Timeline"
++                    >
++                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
++                        <line x1="18" y1="6" x2="6" y2="18"></line>
++                        <line x1="6" y1="6" x2="18" y2="18"></line>
++                      </svg>
++                    </button>
++                    <TimelinePanel
++                      key={`timeline-${projectId}`}
++                      projectId={projectId}
++                      userId={userId}
++                    />
++                  </div>
++                </Panel>
++              </PanelGroup>
++            ) : (
++              /* No timeline - just the main workspace */
++              <WorkspaceContentAreaG
++                ref={workspaceContentAreaRef}
++                projectId={projectId}
++                userId={userId}
++                initialProps={initialProps}
++                projects={userProjects}
++                onProjectRename={handleProjectRenamed}
++              />
++            )}
+           </div>
+         </div>
+         
+diff --git a/src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx b/src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
+index b0586079..44c66473 100644
+--- a/src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
++++ b/src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx
+@@ -124,6 +124,7 @@ export function PreviewPanelG({
+   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+   const playerRef = useRef<PlayerRef>(null);
+   const [currentFrame, setCurrentFrame] = useState(0);
++  const [isPlaying, setIsPlaying] = useState(false);
+   
+   // Loop state - using the three-state system
+   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
+@@ -153,6 +154,71 @@ export function PreviewPanelG({
+     }, Math.max(1000 / 30, 16));
+     return () => window.clearInterval(interval);
+   }, []);
++  
++  // Listen for Timeline events
++  useEffect(() => {
++    const handleTimelineSeek = (event: CustomEvent) => {
++      if (event.detail && typeof event.detail.frame === 'number' && playerRef.current) {
++        try {
++          const frame = Math.round(event.detail.frame); // Ensure integer frame
++          console.log('[PreviewPanelG] Timeline seek to frame:', frame);
++          
++          // Remotion Player's seekTo expects frame number directly
++          playerRef.current.seekTo(frame);
++          setCurrentFrame(frame); // Update local state
++          
++          console.log('[PreviewPanelG] Seek completed, updating timeline');
++          
++          // Force a frame update event after seek completes
++          // This ensures the timeline updates to the new position
++          setTimeout(() => {
++            const updateEvent = new CustomEvent('preview-frame-update', { 
++              detail: { frame: frame }
++            });
++            window.dispatchEvent(updateEvent);
++          }, 50); // Reduced timeout for faster response
++        } catch (error) {
++          console.error('[PreviewPanelG] Failed to seek:', error);
++        }
++      }
++    };
++    
++    const handleTimelinePlayPause = () => {
++      console.log('[PreviewPanelG] Received timeline play/pause event, current isPlaying:', isPlaying);
++      if (playerRef.current) {
++        try {
++          // Use our state variable instead of trying to get player state
++          if (isPlaying) {
++            playerRef.current.pause();
++            setIsPlaying(false);
++            // Dispatch play state change event
++            const event = new CustomEvent('preview-play-state-change', { 
++              detail: { playing: false }
++            });
++            window.dispatchEvent(event);
++          } else {
++            playerRef.current.play();
++            setIsPlaying(true);
++            // Dispatch play state change event
++            const event = new CustomEvent('preview-play-state-change', { 
++              detail: { playing: true }
++            });
++            window.dispatchEvent(event);
++          }
++        } catch (error) {
++          console.warn('Failed to play/pause from timeline:', error);
++        }
++      }
++    };
++    
++    window.addEventListener('timeline-seek' as any, handleTimelineSeek);
++    window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
++    
++    return () => {
++      window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
++      window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
++    };
++  }, [isPlaying, setCurrentFrame]);
+ 
+   // (moved below selectedSceneRange definition to avoid TDZ)
+   
+@@ -1680,6 +1746,20 @@ export default function FallbackComposition() {
+                 loop={loopState !== 'off'}
+                 inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
+                 outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
++                onPlay={() => {
++                  setIsPlaying(true);
++                  const event = new CustomEvent('preview-play-state-change', { 
++                    detail: { playing: true }
++                  });
++                  window.dispatchEvent(event);
++                }}
++                onPause={() => {
++                  setIsPlaying(false);
++                  const event = new CustomEvent('preview-play-state-change', { 
++                    detail: { playing: false }
++                  });
++                  window.dispatchEvent(event);
++                }}
+               />
+             </ErrorBoundary>
+           </div>
+diff --git a/src/app/projects/[id]/generate/workspace/panels/TimelinePanel.tsx b/src/app/projects/[id]/generate/workspace/panels/TimelinePanel.tsx
+new file mode 100644
+index 00000000..4b6076f9
+--- /dev/null
++++ b/src/app/projects/[id]/generate/workspace/panels/TimelinePanel.tsx
+@@ -0,0 +1,700 @@
++"use client";
++
++import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
++import { useVideoState } from '~/stores/videoState';
++import { 
++  Play, 
++  Pause, 
++  SkipBack, 
++  SkipForward, 
++  ZoomIn, 
++  ZoomOut,
++  Trash2,
++  Copy,
++  GripVertical
++} from 'lucide-react';
++import { cn } from '~/lib/cn';
++import { toast } from 'sonner';
++import { api } from '~/trpc/react';
++
++// Constants from React Video Editor Pro
++const ROW_HEIGHT = 60;
++const TIMELINE_ITEM_HEIGHT = 40;
++const FPS = 30;
++
++// Define Scene type based on Bazaar-Vid structure
++interface Scene {
++  id: string;
++  name?: string;
++  duration: number;  // duration in frames
++  start: number;     // start position in frames
++  type?: string;
++  data?: any;
++}
++
++interface TimelinePanelProps {
++  projectId: string;
++  userId?: string;
++}
++
++interface DragInfo {
++  action: 'move' | 'resize-start' | 'resize-end' | 'playhead';
++  sceneId?: string;
++  startX: number;
++  startPosition: number;  // In frames
++  startDuration: number;  // In frames
++  sceneIndex?: number;
++}
++
++export default function TimelinePanel({ projectId, userId }: TimelinePanelProps) {
++  const timelineRef = useRef<HTMLDivElement>(null);
++  const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
++  
++  // Debug: Log when timeline mounts/unmounts
++  useEffect(() => {
++    console.log('[TimelinePanel] Mounted for project:', projectId, 'ID:', timelineId.current);
++    return () => {
++      console.log('[TimelinePanel] Unmounted for project:', projectId, 'ID:', timelineId.current);
++    };
++  }, [projectId]);
++  const [zoomScale, setZoomScale] = useState(1);
++  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
++  const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
++  const [isDragging, setIsDragging] = useState(false);
++  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
++  
++  // Get video state from Zustand store
++  const project = useVideoState(state => state.projects[projectId]);
++  const scenes = project?.props?.scenes || [];
++  const updateScene = useVideoState(state => state.updateScene);
++  const deleteScene = useVideoState(state => state.deleteScene);
++  
++  // API mutation for persisting duration changes
++  const updateSceneDurationMutation = api.scenes.updateSceneDuration.useMutation({
++    onSuccess: () => {
++      console.log('[Timeline] Scene duration persisted to database');
++    },
++    onError: (error) => {
++      console.error('[Timeline] Failed to persist scene duration:', error);
++      toast.error('Failed to save duration changes');
++    }
++  });
++  
++  // API mutation for deleting scenes
++  const removeSceneMutation = api.generation.removeScene.useMutation({
++    onSuccess: () => {
++      console.log('[Timeline] Scene deleted from database');
++      toast.success('Scene deleted');
++    },
++    onError: (error) => {
++      console.error('[Timeline] Failed to delete scene:', error);
++      toast.error('Failed to delete scene');
++    }
++  });
++  
++  // Get current frame from PreviewPanelG via event system
++  const [currentFrame, setCurrentFrame] = useState(0);
++  const [isPlaying, setIsPlaying] = useState(false);
++  
++  // Listen for frame updates and play state changes from PreviewPanelG
++  useEffect(() => {
++    const handleFrameUpdate = (event: CustomEvent) => {
++      // Don't update frame while dragging the playhead
++      if (isDragging && dragInfo?.action === 'playhead') {
++        return;
++      }
++      
++      if (event.detail && typeof event.detail.frame === 'number') {
++        setCurrentFrame(event.detail.frame);
++      }
++    };
++    
++    const handlePlaybackSpeed = (event: CustomEvent) => {
++      if (event.detail && typeof event.detail.speed === 'number') {
++        // Update playback speed if needed
++      }
++    };
++    
++    const handlePlayStateChange = (event: CustomEvent) => {
++      if (event.detail && typeof event.detail.playing === 'boolean') {
++        setIsPlaying(event.detail.playing);
++      }
++    };
++    
++    window.addEventListener('preview-frame-update' as any, handleFrameUpdate);
++    window.addEventListener('playback-speed-change' as any, handlePlaybackSpeed);
++    window.addEventListener('preview-play-state-change' as any, handlePlayStateChange);
++    
++    return () => {
++      window.removeEventListener('preview-frame-update' as any, handleFrameUpdate);
++      window.removeEventListener('playback-speed-change' as any, handlePlaybackSpeed);
++      window.removeEventListener('preview-play-state-change' as any, handlePlayStateChange);
++    };
++  }, [isDragging, dragInfo]);
++  
++  // Calculate total duration - memoized to prevent infinite re-renders
++  const totalDuration = useMemo(() => {
++    console.log('[Timeline] Calculating totalDuration for scenes:', scenes.length);
++    return Math.max(150, scenes.reduce((acc: number, scene: Scene) => {
++      return acc + (scene.duration || 150);
++    }, 0));
++  }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
++  
++  // Format time display
++  const formatTime = useCallback((frames: number): string => {
++    // Ensure frames is an integer
++    frames = Math.round(frames);
++    const totalSeconds = Math.floor(frames / FPS);
++    const minutes = Math.floor(totalSeconds / 60);
++    const seconds = totalSeconds % 60;
++    const frameRemainder = frames % FPS;
++    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${frameRemainder.toString().padStart(2, '0')}`;
++  }, []);
++  
++  // Handle timeline click for scrubbing
++  const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
++    if (isDragging || !timelineRef.current) return;
++    
++    const rect = timelineRef.current.getBoundingClientRect();
++    const clickX = e.clientX - rect.left;
++    
++    // Clamp to timeline bounds
++    const clampedX = Math.max(0, Math.min(rect.width, clickX));
++    
++    // Calculate percentage (0 to 1)
++    const percentage = clampedX / rect.width;
++    
++    // Convert to frame
++    const newFrame = Math.round(percentage * totalDuration);
++    const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
++    
++    console.log('[Timeline Click] Seek to frame:', clampedFrame);
++    
++    // Update state and dispatch event
++    setCurrentFrame(clampedFrame);
++    const event = new CustomEvent('timeline-seek', { 
++      detail: { frame: clampedFrame }
++    });
++    window.dispatchEvent(event);
++  }, [isDragging, totalDuration]);
++  
++  // Handle play/pause
++  const togglePlayPause = useCallback(() => {
++    console.log('[Timeline] Dispatching play/pause event, current isPlaying:', isPlaying);
++    const event = new CustomEvent('timeline-play-pause');
++    window.dispatchEvent(event);
++    // Don't update isPlaying here - let PreviewPanelG tell us the state
++  }, [isPlaying]);
++  
++  // Handle zoom with mouse wheel (React Video Editor Pro pattern)
++  const handleWheelZoom = useCallback((e: React.WheelEvent) => {
++    if (!e.ctrlKey && !e.metaKey) return;
++    
++    e.preventDefault();
++    const delta = e.deltaY > 0 ? -0.1 : 0.1;
++    setZoomScale(prev => Math.max(0.25, Math.min(4, prev + delta)));
++  }, []);
++  
++  // Handle drag start
++  const handleDragStart = useCallback((
++    e: React.MouseEvent,
++    sceneId: string,
++    action: DragInfo['action']
++  ) => {
++    e.preventDefault();
++    e.stopPropagation();
++    
++    const sceneIndex = scenes.findIndex((s: Scene) => s.id === sceneId);
++    const scene = scenes[sceneIndex];
++    if (!scene) return;
++    
++    // Calculate scene start position based on previous scenes (sequential)
++    const sceneStart = scenes.slice(0, sceneIndex).reduce((acc, s) => acc + (s.duration || 150), 0);
++    
++    setDragInfo({
++      action,
++      sceneId,
++      startX: e.clientX,
++      startPosition: sceneStart,
++      startDuration: scene.duration,
++      sceneIndex
++    });
++    setIsDragging(true);
++    setSelectedSceneId(sceneId);
++  }, [scenes]);
++  
++  // Handle drag move
++  const handleDragMove = useCallback((e: MouseEvent) => {
++    if (!dragInfo || !timelineRef.current) return;
++    
++    const rect = timelineRef.current.getBoundingClientRect();
++    
++    if (dragInfo.action === 'playhead') {
++      // Get mouse position relative to timeline container
++      const mouseX = e.clientX - rect.left;
++      
++      // Clamp to timeline bounds
++      const clampedX = Math.max(0, Math.min(rect.width, mouseX));
++      
++      // Calculate percentage (0 to 1)
++      const percentage = clampedX / rect.width;
++      
++      // Convert percentage to frame number
++      const newFrame = Math.round(percentage * totalDuration);
++      const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
++      
++      console.log('[Playhead Drag] Position:', {
++        mouseX: mouseX.toFixed(1),
++        containerWidth: rect.width.toFixed(1),
++        percentage: (percentage * 100).toFixed(1) + '%',
++        frame: clampedFrame,
++        totalDuration
++      });
++      
++      // Update local state immediately for visual feedback
++      setCurrentFrame(clampedFrame);
++      
++      // Dispatch seek event to preview
++      const event = new CustomEvent('timeline-seek', { 
++        detail: { frame: clampedFrame }
++      });
++      window.dispatchEvent(event);
++      
++      return;
++    }
++    
++    const deltaX = e.clientX - dragInfo.startX;
++    const pixelsPerFrame = rect.width / totalDuration;
++    const deltaFrames = Math.round(deltaX / pixelsPerFrame);
++    
++    // Get current scenes from store to avoid dependency issues
++    const currentProject = useVideoState.getState().projects[projectId];
++    const currentScenes = currentProject?.props?.scenes || [];
++    const scene = currentScenes.find((s: Scene) => s.id === dragInfo.sceneId);
++    if (!scene) return;
++    
++    if (dragInfo.action === 'resize-start') {
++      // Trim from start - dragging right decreases duration, dragging left increases it
++      const newDuration = Math.max(30, dragInfo.startDuration - deltaFrames);
++      
++      if (newDuration !== scene.duration) {
++        updateScene(projectId, dragInfo.sceneId || '', {
++          ...scene,
++          duration: newDuration
++        });
++      }
++      
++    } else if (dragInfo.action === 'resize-end') {
++      // Trim from end - dragging right increases duration, dragging left decreases it
++      const newDuration = Math.max(30, dragInfo.startDuration + deltaFrames);
++      
++      if (newDuration !== scene.duration) {
++        updateScene(projectId, dragInfo.sceneId || '', {
++          ...scene,
++          duration: newDuration
++        });
++      }
++    }
++  }, [dragInfo, totalDuration, zoomScale, updateScene, projectId]);
++  
++  // Handle drag end
++  const handleDragEnd = useCallback(() => {
++    // If we were doing a resize operation, persist the duration change
++    if (dragInfo && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
++      // Get current scenes from store to avoid dependency issues
++      const currentProject = useVideoState.getState().projects[projectId];
++      const currentScenes = currentProject?.props?.scenes || [];
++      const scene = currentScenes.find((s: Scene) => s.id === dragInfo.sceneId);
++      
++      if (scene && scene.duration !== dragInfo.startDuration && dragInfo.sceneId) {
++        // Duration has changed, persist to database
++        updateSceneDurationMutation.mutate({
++          projectId,
++          sceneId: dragInfo.sceneId,
++          duration: scene.duration
++        });
++      }
++    }
++    
++    setDragInfo(null);
++    setIsDragging(false);
++  }, [dragInfo, updateSceneDurationMutation, projectId]);
++  
++  // Set up drag event listeners
++  useEffect(() => {
++    if (isDragging) {
++      document.addEventListener('mousemove', handleDragMove);
++      document.addEventListener('mouseup', handleDragEnd);
++      
++      return () => {
++        document.removeEventListener('mousemove', handleDragMove);
++        document.removeEventListener('mouseup', handleDragEnd);
++      };
++    }
++  }, [isDragging, handleDragMove, handleDragEnd]);
++  
++  // Handle context menu
++  const handleContextMenu = useCallback((e: React.MouseEvent, sceneId: string) => {
++    e.preventDefault();
++    setContextMenu({ x: e.clientX, y: e.clientY, sceneId });
++  }, []);
++  
++  // Close context menu on click outside
++  useEffect(() => {
++    const handleClick = () => setContextMenu(null);
++    if (contextMenu) {
++      document.addEventListener('click', handleClick);
++      return () => document.removeEventListener('click', handleClick);
++    }
++  }, [contextMenu]);
++  
++  // Handle scene operations
++  const handleDeleteScene = useCallback((sceneId: string) => {
++    // Update local state immediately for responsive UI
++    deleteScene(projectId, sceneId);
++    
++    // Persist to database
++    removeSceneMutation.mutate({
++      projectId,
++      sceneId
++    });
++    
++    setContextMenu(null);
++  }, [deleteScene, projectId, removeSceneMutation]);
++  
++  // Handle keyboard events for delete
++  useEffect(() => {
++    const handleKeyDown = (e: KeyboardEvent) => {
++      if (e.key === 'Backspace' || e.key === 'Delete') {
++        if (selectedSceneId) {
++          e.preventDefault();
++          handleDeleteScene(selectedSceneId);
++        }
++      }
++    };
++    
++    document.addEventListener('keydown', handleKeyDown);
++    return () => document.removeEventListener('keydown', handleKeyDown);
++  }, [selectedSceneId, handleDeleteScene]);
++  
++  const handleDuplicateScene = useCallback((sceneId: string) => {
++    const scene = scenes.find((s: Scene) => s.id === sceneId);
++    if (!scene) return;
++    
++    // Create duplicate with new ID
++    const duplicateScene = {
++      ...scene,
++      id: `${scene.id}-copy-${Date.now()}`,
++      data: {
++        ...scene.data,
++        name: `${scene.data?.name || 'Scene'} Copy`
++      }
++    };
++    
++    // Add to scenes array
++    const newScenes = [...scenes, duplicateScene];
++    const replace = useVideoState.getState().replace;
++    const currentProps = project?.props;
++    
++    if (currentProps) {
++      replace(projectId, {
++        ...currentProps,
++        scenes: newScenes
++      });
++    }
++    
++    toast.success('Scene duplicated');
++    setContextMenu(null);
++  }, [scenes, project, projectId]);
++  
++  
++  // Get scene color based on type (Modern professional colors)
++  const getSceneColor = useCallback((scene: Scene): string => {
++    const isSelected = selectedSceneId === scene.id;
++    
++    // Color by type with modern palette
++    const type = scene.type || scene.data?.type || 'default';
++    
++    switch(type) {
++      case 'text':
++      case 'text-animation':
++        return isSelected 
++          ? "bg-indigo-500 text-white border-indigo-400 shadow-indigo-200" 
++          : "bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200"; // Indigo for text
++      case 'video':
++      case 'custom':
++        return isSelected
++          ? "bg-blue-500 text-white border-blue-400 shadow-blue-200"
++          : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"; // Blue for video  
++      case 'image':
++        return isSelected
++          ? "bg-emerald-500 text-white border-emerald-400 shadow-emerald-200"
++          : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"; // Emerald for image
++      case 'sound':
++      case 'audio':
++        return isSelected
++          ? "bg-orange-500 text-white border-orange-400 shadow-orange-200"
++          : "bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"; // Orange for audio
++      default:
++        return isSelected
++          ? "bg-gray-500 text-white border-gray-400 shadow-gray-200"
++          : "bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200"; // Gray default
++    }
++  }, [selectedSceneId]);
++  
++  return (
++    <div className="flex flex-col h-full bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
++      {/* Timeline Controls - Modern design */}
++      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
++        <div className="flex items-center gap-2">
++          {/* Playback Controls */}
++          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
++            <button
++              onClick={() => {
++                const newFrame = Math.max(0, currentFrame - 30);
++                const event = new CustomEvent('timeline-seek', { 
++                  detail: { frame: newFrame }
++                });
++                window.dispatchEvent(event);
++                setCurrentFrame(newFrame);
++              }}
++              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
++              title="Previous second"
++            >
++              <SkipBack className="w-3.5 h-3.5" />
++            </button>
++            
++            <button
++              onClick={togglePlayPause}
++              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 transition-colors"
++              title={isPlaying ? "Pause" : "Play"}
++            >
++              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
++            </button>
++            
++            <button
++              onClick={() => {
++                const newFrame = Math.min(totalDuration - 1, currentFrame + 30);
++                const event = new CustomEvent('timeline-seek', { 
++                  detail: { frame: newFrame }
++                });
++                window.dispatchEvent(event);
++                setCurrentFrame(newFrame);
++              }}
++              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
++              title="Next second"
++            >
++              <SkipForward className="w-3.5 h-3.5" />
++            </button>
++          </div>
++          
++          {/* Time Display */}
++          <div className="px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
++            <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
++              {formatTime(currentFrame)} / {formatTime(totalDuration)}
++            </span>
++          </div>
++        </div>
++        
++        {/* Zoom Controls */}
++        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
++          <button
++            onClick={() => setZoomScale(Math.max(0.25, zoomScale - 0.25))}
++            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
++            title="Zoom out"
++          >
++            <ZoomOut className="w-3.5 h-3.5" />
++          </button>
++          
++          <span className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium">
++            {Math.round(zoomScale * 100)}%
++          </span>
++          
++          <button
++            onClick={() => setZoomScale(Math.min(4, zoomScale + 0.25))}
++            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
++            title="Zoom in"
++          >
++            <ZoomIn className="w-3.5 h-3.5" />
++          </button>
++        </div>
++      </div>
++      
++      {/* Timeline Container */}
++      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-950">
++        {/* Time Ruler */}
++        <div 
++          className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden"
++          style={{ width: `${zoomScale * 100}%` }}
++        >
++          {/* Time markers every second */}
++          {Array.from({ length: Math.ceil(totalDuration / 30) + 1 }).map((_, i) => {
++            const frame = i * 30;
++            const position = (frame / totalDuration) * 100;
++            
++            return (
++              <div
++                key={i}
++                className="absolute top-0 h-full"
++                style={{ left: `${position}%` }}
++              >
++                <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
++                <span className="absolute top-3 left-0 text-[10px] text-gray-500 dark:text-gray-400 transform -translate-x-1/2 font-mono">
++                  {formatTime(frame)}
++                </span>
++              </div>
++            );
++          })}
++        </div>
++        
++        {/* Timeline Track */}
++        <div 
++          ref={timelineRef}
++          className="flex-1 relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
++          onClick={handleTimelineClick}
++          onWheel={handleWheelZoom}
++          style={{ cursor: isDragging ? 'grabbing' : 'pointer' }}
++        >
++          <div
++            className="relative h-full"
++            style={{ 
++              width: `${zoomScale * 100}%`,
++              minWidth: '100%'
++            }}
++          >
++            {/* Grid lines */}
++            <div className="absolute inset-0 pointer-events-none">
++              {Array.from({ length: Math.ceil(totalDuration / 30) + 1 }).map((_, i) => {
++                const frame = i * 30;
++                const position = (frame / totalDuration) * 100;
++                
++                return (
++                  <div
++                    key={i}
++                    className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 opacity-50"
++                    style={{ left: `${position}%` }}
++                  />
++                );
++              })}
++            </div>
++            
++            {/* Scene Items */}
++            <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
++              {scenes.map((scene: Scene, index: number) => {
++                // Calculate scene start position based on previous scenes (sequential)
++                const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
++                const left = (sceneStart / totalDuration) * 100;
++                const width = (scene.duration / totalDuration) * 100;
++                const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id;
++                
++                return (
++                  <div
++                    key={scene.id}
++                    className={cn(
++                      "absolute flex items-center rounded-lg text-sm font-medium transition-all shadow-sm border",
++                      getSceneColor(scene),
++                      isBeingDragged ? "opacity-75 z-20 scale-105" : "z-10",
++                      selectedSceneId === scene.id ? "ring-2 ring-blue-500 ring-opacity-50" : ""
++                    )}
++                    style={{ 
++                      left: `${left}%`,
++                      width: `${width}%`,
++                      height: TIMELINE_ITEM_HEIGHT,
++                      top: '50%',
++                      transform: 'translateY(-50%)',
++                      minWidth: '40px'
++                    }}
++                    onClick={(e) => {
++                      e.stopPropagation();
++                      setSelectedSceneId(scene.id);
++                    }}
++                    onContextMenu={(e) => handleContextMenu(e, scene.id)}
++                  >
++                    {/* Resize Handle Start */}
++                    <div
++                      className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-black/10 hover:bg-black/20 rounded-l-lg transition-colors"
++                      onMouseDown={(e) => handleDragStart(e, scene.id, 'resize-start')}
++                    />
++                    
++                    {/* Drag Handle */}
++                    <div
++                      className="absolute left-2 top-0 bottom-0 w-5 cursor-move flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity"
++                      onMouseDown={(e) => handleDragStart(e, scene.id, 'move')}
++                    >
++                      <GripVertical className="w-3 h-3" />
++                    </div>
++                    
++                    {/* Scene Label */}
++                    <span className="flex-1 text-center px-8 truncate select-none">
++                      {scene.name || scene.data?.name || `Scene ${index + 1}`}
++                    </span>
++                    
++                    {/* Resize Handle End */}
++                    <div
++                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-black/10 hover:bg-black/20 rounded-r-lg transition-colors"
++                      onMouseDown={(e) => handleDragStart(e, scene.id, 'resize-end')}
++                    />
++                  </div>
++                );
++              })}
++            </div>
++            
++            {/* Playhead */}
++            <div
++              className="absolute top-0 bottom-0 w-0.5 bg-blue-500 cursor-ew-resize z-30 shadow-lg"
++              style={{ left: `${(currentFrame / totalDuration) * 100}%` }}
++              title={`Frame: ${currentFrame} / ${totalDuration} (${((currentFrame / totalDuration) * 100).toFixed(1)}%)`}
++              onMouseDown={(e) => {
++                e.preventDefault();
++                e.stopPropagation();
++                setDragInfo({
++                  action: 'playhead',
++                  startX: e.clientX,
++                  startPosition: currentFrame,
++                  startDuration: 0
++                });
++                setIsDragging(true);
++              }}
++            >
++              {/* Modern playhead indicator */}
++              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-md" />
++              <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 
++                              w-0 h-0 
++                              border-l-[4px] border-l-transparent
++                              border-r-[4px] border-r-transparent
++                              border-t-[5px] border-t-blue-500 pointer-events-none" />
++            </div>
++          </div>
++        </div>
++      </div>
++      
++      {/* Context Menu */}
++      {contextMenu && (
++        <div
++          className="absolute bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-[160px] text-sm backdrop-blur-sm"
++          style={{ 
++            left: Math.min(contextMenu.x, window.innerWidth - 170),
++            top: Math.min(contextMenu.y, window.innerHeight - 120)
++          }}
++          onClick={(e) => e.stopPropagation()}
++        >
++          <button
++            onClick={() => handleDuplicateScene(contextMenu.sceneId)}
++            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"
++          >
++            <Copy className="w-4 h-4" />
++            Duplicate Scene
++          </button>
++          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
++          <button
++            onClick={() => handleDeleteScene(contextMenu.sceneId)}
++            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left text-red-600 dark:text-red-400 transition-colors"
++          >
++            <Trash2 className="w-4 h-4" />
++            Delete Scene
++          </button>
++        </div>
++      )}
++    </div>
++  );
++}
+\ No newline at end of file
+diff --git a/src/generated/entities.ts b/src/generated/entities.ts
+index 0a73a2ba..6e2eadf2 100644
+--- a/src/generated/entities.ts
++++ b/src/generated/entities.ts
+@@ -2,7 +2,7 @@
+  * THIS FILE IS AUTO-GENERATED FROM DATABASE SCHEMA
+  * DO NOT EDIT MANUALLY - RUN: npm run generate:types
+  * 
+- * Generated at: 2025-08-10T11:05:10.259Z
++ * Generated at: 2025-08-12T18:16:04.912Z
+  */
+ 
+ /**
+diff --git a/src/server/api/routers/scenes.ts b/src/server/api/routers/scenes.ts
+index 5e82e066..e9b5e27f 100644
+--- a/src/server/api/routers/scenes.ts
++++ b/src/server/api/routers/scenes.ts
+@@ -50,6 +50,52 @@ export const scenesRouter = createTRPCRouter({
+ 
+       console.log(`[scenes.updateSceneCode] ✅ Scene code updated successfully`);
+       
++      return {
++        success: true,
++        scene: updatedScenes[0]
++      };
++    }),
++
++  updateSceneDuration: protectedProcedure
++    .input(z.object({
++      projectId: z.string(),
++      sceneId: z.string(),
++      duration: z.number().min(30), // Minimum 1 second (30 frames at 30fps)
++    }))
++    .mutation(async ({ ctx, input }) => {
++      console.log(`[scenes.updateSceneDuration] Updating scene ${input.sceneId} duration to ${input.duration} frames`);
++      
++      // Verify project ownership
++      const existingScene = await ctx.db.query.scenes.findFirst({
++        where: and(
++          eq(scenes.id, input.sceneId),
++          eq(scenes.projectId, input.projectId)
++        ),
++        with: {
++          project: true
++        }
++      });
++
++      if (!existingScene) {
++        throw new Error("Scene not found");
++      }
++
++      if (existingScene.project.userId !== ctx.session.user.id) {
++        throw new Error("Unauthorized: You don't own this project");
++      }
++
++      // Update scene duration
++      const updatedScenes = await ctx.db
++        .update(scenes)
++        .set({
++          duration: input.duration,
++          updatedAt: new Date(),
++        })
++        .where(eq(scenes.id, input.sceneId))
++        .returning();
++
++      console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated successfully`);
++      
+       return {
+         success: true,
+         scene: updatedScenes[0]
+-- 
+2.37.2
+

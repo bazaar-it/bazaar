@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
@@ -10,7 +10,7 @@ interface Scene {
   [key: string]: any;
 }
 
-const DEBUG_AUTOFIX = true; // Enable debug logging to diagnose auto-fix issues
+const DEBUG_AUTOFIX = false; // Enable debug logging to diagnose auto-fix issues
 
 // Cost control constants - CRITICAL FOR API BUDGET
 const MAX_FIXES_PER_SESSION = 10; // Maximum total fixes in a session
@@ -40,6 +40,34 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
   // Cost control state
   const [fixHistory, setFixHistory] = useState<number[]>([]); // Timestamps of recent fixes
   const [isInCooldown, setIsInCooldown] = useState(false);
+  
+  // 🚨 CRITICAL FIX: Use refs to avoid stale closures in event handlers
+  const scenesRef = useRef(scenes);
+  const autoFixQueueRef = useRef(autoFixQueue);
+  const fixingScenesRef = useRef(fixingScenes);
+  const isInCooldownRef = useRef(isInCooldown);
+  const fixHistoryRef = useRef(fixHistory);
+  
+  // Update refs when values change
+  useEffect(() => {
+    scenesRef.current = scenes;
+  }, [scenes]);
+  
+  useEffect(() => {
+    autoFixQueueRef.current = autoFixQueue;
+  }, [autoFixQueue]);
+  
+  useEffect(() => {
+    fixingScenesRef.current = fixingScenes;
+  }, [fixingScenes]);
+  
+  useEffect(() => {
+    isInCooldownRef.current = isInCooldown;
+  }, [isInCooldown]);
+  
+  useEffect(() => {
+    fixHistoryRef.current = fixHistory;
+  }, [fixHistory]);
 
   // Helper function to convert database scenes to InputProps format
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
@@ -87,13 +115,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     
     if (attemptNumber === 1) {
       // Attempt 1: Quick targeted fix
-      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". Use the fixBrokenScene tool to fix ONLY this specific error. Make minimal changes.`;
+      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". Fix ONLY this specific error. Make minimal changes to resolve the compilation issue.`;
     } else if (attemptNumber === 2) {
       // Attempt 2: Comprehensive fix
-      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". Use fixBrokenScene tool to fix ALL compilation errors, check imports, undefined variables, and syntax issues. Be more thorough this time.`;
+      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". Fix ALL compilation errors, check imports, undefined variables, and syntax issues. Be more thorough this time.`;
     } else {
       // Attempt 3: Nuclear option - rewrite
-      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}". Use fixBrokenScene tool to REWRITE this component using simpler, more reliable code that will definitely compile. Keep the same visual output but prioritize making it work.`;
+      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}". REWRITE this component using simpler, more reliable code that will definitely compile. Keep the same visual output but prioritize making it work.`;
     }
     
     try {
@@ -131,7 +159,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         }
         
         // Success - remove from queue
-        autoFixQueue.delete(sceneId);
+        autoFixQueueRef.current.delete(sceneId);
         
         // Dispatch success event for PreviewPanel
         const successEvent = new CustomEvent('scene-fixed', {
@@ -154,23 +182,23 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         });
       }, 2000);
     }
-  }, [projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh, autoFixQueue]);
+  }, [projectId, generateSceneMutation, utils, refetchScenes, convertDbScenesToInputProps, updateAndRefresh]);
 
   // Process queued fixes with progressive strategy
   const processAutoFixQueue = useCallback(async (sceneId: string) => {
-    const queueItem = autoFixQueue.get(sceneId);
+    const queueItem = autoFixQueueRef.current.get(sceneId);
     if (!queueItem) return;
     
     // Check if we're in cooldown
-    if (isInCooldown) {
+    if (isInCooldownRef.current) {
       console.warn('[SILENT FIX] ⚠️ In cooldown period, skipping auto-fix');
-      autoFixQueue.delete(sceneId);
+      autoFixQueueRef.current.delete(sceneId);
       return;
     }
     
     // Clean up old fix history entries (older than window)
     const now = Date.now();
-    const recentHistory = fixHistory.filter(timestamp => 
+    const recentHistory = fixHistoryRef.current.filter(timestamp => 
       now - timestamp < FIX_HISTORY_WINDOW_MS
     );
     setFixHistory(recentHistory);
@@ -192,21 +220,21 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }, COOLDOWN_PERIOD_MS);
       
       // Clear all queued fixes to prevent further attempts
-      autoFixQueue.clear();
+      autoFixQueueRef.current.clear();
       return;
     }
     
     // Check if scene still exists
-    const sceneStillExists = scenes.some(s => s.id === sceneId);
+    const sceneStillExists = scenesRef.current.some(s => s.id === sceneId);
     if (!sceneStillExists) {
-      autoFixQueue.delete(sceneId);
+      autoFixQueueRef.current.delete(sceneId);
       return;
     }
     
     // Check retry limits
     if (queueItem.attempts >= 3) {
       // Max retries reached, give up silently
-      autoFixQueue.delete(sceneId);
+      autoFixQueueRef.current.delete(sceneId);
       
       if (DEBUG_AUTOFIX) {
         console.error(`[SILENT FIX] Giving up on ${queueItem.errorDetails.sceneName} after 3 attempts`);
@@ -261,14 +289,14 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         processAutoFixQueue(sceneId);
       }, retryDelay);
     }
-  }, [scenes, executeAutoFix, autoFixQueue, isInCooldown, fixHistory]);
+  }, [executeAutoFix]);
 
   // Listen for preview panel errors
   useEffect(() => {
     if (DEBUG_AUTOFIX) {
       console.log('[SILENT FIX] Setting up event listeners in useEffect at:', new Date().toISOString());
-      console.log('[SILENT FIX] Current autoFixQueue size:', autoFixQueue.size);
-      console.log('[SILENT FIX] Current fixingScenes:', Array.from(fixingScenes));
+      console.log('[SILENT FIX] Current autoFixQueue size:', autoFixQueueRef.current.size);
+      console.log('[SILENT FIX] Current fixingScenes:', Array.from(fixingScenesRef.current));
     }
     
     const handlePreviewError = (event: CustomEvent) => {
@@ -284,7 +312,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }
       
       // Don't track errors for scenes that are currently being fixed
-      if (fixingScenes.has(sceneId)) {
+      if (fixingScenesRef.current.has(sceneId)) {
         if (DEBUG_AUTOFIX) {
           console.log('[SILENT FIX] Ignoring error for scene being fixed:', sceneId);
         }
@@ -292,7 +320,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }
       
       // Check if we're in cooldown - still add to queue but warn
-      if (isInCooldown) {
+      if (isInCooldownRef.current) {
         if (DEBUG_AUTOFIX) {
           console.warn('[SILENT FIX] ⚠️ ERROR DETECTED BUT IN COOLDOWN - Auto-fix disabled temporarily');
         }
@@ -300,7 +328,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }
       
       // Check if already in queue
-      const existingItem = autoFixQueue.get(sceneId);
+      const existingItem = autoFixQueueRef.current.get(sceneId);
       
       // Clear existing debounce timer
       if (existingItem?.debounceTimer) {
@@ -327,7 +355,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }, 2000);
       
       // Add to queue
-      autoFixQueue.set(sceneId, queueItem);
+      autoFixQueueRef.current.set(sceneId, queueItem);
       
       if (DEBUG_AUTOFIX) {
         console.log('[SILENT FIX] Queued for auto-fix after debounce:', sceneId);
@@ -343,11 +371,11 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }
       
       // Clear from queue
-      const queueItem = autoFixQueue.get(sceneId);
+      const queueItem = autoFixQueueRef.current.get(sceneId);
       if (queueItem?.debounceTimer) {
         clearTimeout(queueItem.debounceTimer);
       }
-      autoFixQueue.delete(sceneId);
+      autoFixQueueRef.current.delete(sceneId);
       
       // Remove from fixing set
       setFixingScenes(prev => {
@@ -366,11 +394,11 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       }
       
       // Clean up queue
-      const queueItem = autoFixQueue.get(sceneId);
+      const queueItem = autoFixQueueRef.current.get(sceneId);
       if (queueItem?.debounceTimer) {
         clearTimeout(queueItem.debounceTimer);
       }
-      autoFixQueue.delete(sceneId);
+      autoFixQueueRef.current.delete(sceneId);
       
       // Remove from fixing set
       setFixingScenes(prev => {
@@ -408,13 +436,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       window.removeEventListener('scene-fixed', handleSceneFixed as EventListener);
       
       // Clear all timers on unmount
-      autoFixQueue.forEach(item => {
+      autoFixQueueRef.current.forEach(item => {
         if (item.debounceTimer) {
           clearTimeout(item.debounceTimer);
         }
       });
     };
-  }, [projectId]); // 🚨 FIX: Only depend on projectId to prevent infinite re-renders from scenes changes
+  }, [projectId, processAutoFixQueue]); // Add processAutoFixQueue to dependencies since it's used in handlers
 
   // Return empty object - no UI interaction needed
   return {};

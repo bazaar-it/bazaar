@@ -30,18 +30,7 @@ export function LoopToggle({
 }: LoopToggleProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
-  function FrameChip() {
-    const [frame, setFrame] = React.useState<number>(0);
-    React.useEffect(() => {
-      const handler = (e: Event) => {
-        const ce = e as CustomEvent;
-        if (typeof ce.detail?.frame === 'number') setFrame(ce.detail.frame as number);
-      };
-      window.addEventListener('preview-frame-update', handler as EventListener);
-      return () => window.removeEventListener('preview-frame-update', handler as EventListener);
-    }, []);
-    return <>{`Frame: ${frame}`}</>;
-  }
+  // Removed extra frame chip to avoid duplicate frame counters in UI.
   
   // Handle clicking the loop toggle button
   const handleToggleClick = (e: React.MouseEvent) => {
@@ -124,10 +113,6 @@ export function LoopToggle({
               ))}
             </SelectContent>
           </Select>
-          {/* Frame chip (listens globally) */}
-          <span className="h-8 px-3 inline-flex items-center text-xs font-mono rounded-md border border-gray-200 bg-white text-gray-700 select-none">
-            <FrameChip />
-          </span>
         </div>
       )}
     </div>

@@ -17,7 +17,7 @@ import type {
 } from '~/lib/types/figma.types';
 
 // Component detection patterns (reuse from GitHub)
-const COMPONENT_PATTERNS = {
+const COMPONENT_PATTERNS: Record<UICategoryKey, RegExp[]> = {
   auth: [
     /login|sign[-_ ]?in/i,
     /sign[-_ ]?up|register/i,
@@ -48,6 +48,10 @@ const COMPONENT_PATTERNS = {
     /modal|dialog|popup|overlay/i,
     /dropdown|select|menu/i,
     /carousel|slider|gallery/i,
+  ],
+  custom: [
+    // Custom components don't have specific patterns
+    // They will be categorized based on other heuristics
   ],
 };
 
@@ -265,6 +269,20 @@ export class FigmaDiscoveryService {
   }
 
   /**
+   * Get a single node by ID (public method for external use)
+   */
+  async getNode(fileKey: string, nodeId: string): Promise<FigmaNode | null> {
+    try {
+      const response = await this.getNodeDetails(fileKey, [nodeId]);
+      const node = response.nodes?.[nodeId];
+      return node?.document || null;
+    } catch (error) {
+      console.error('Failed to get node:', error);
+      return null;
+    }
+  }
+  
+  /**
    * Get specific node details
    */
   private async getNodeDetails(fileKey: string, nodeIds: string[]): Promise<FigmaNodesResponse> {
@@ -385,7 +403,7 @@ export class FigmaDiscoveryService {
     // Name matching
     if (/login|signup|header|footer|checkout|hero/i.test(node.name)) {
       score += 40;
-    } else if (COMPONENT_PATTERNS[category]?.some(p => p.test(node.name))) {
+    } else if (COMPONENT_PATTERNS[category]?.some((p: RegExp) => p.test(node.name))) {
       score += 30;
     }
 

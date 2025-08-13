@@ -31,10 +31,10 @@ export default function UploadsPanel({ projectId, onInsertToChat }: UploadsPanel
   const assets = useMemo(() => {
     const list = data?.assets || [];
     if (filter === 'all') return list;
-    if (filter === 'images') return list.filter(a => a.type === 'image' || a.type === 'logo');
-    if (filter === 'videos') return list.filter(a => a.type === 'video');
-    if (filter === 'audio') return list.filter(a => a.type === 'audio');
-    if (filter === 'logos') return list.filter(a => a.type === 'logo');
+    if (filter === 'images') return list.filter((a: any) => a.type === 'image' || a.type === 'logo');
+    if (filter === 'videos') return list.filter((a: any) => a.type === 'video');
+    if (filter === 'audio') return list.filter((a: any) => a.type === 'audio');
+    if (filter === 'logos') return list.filter((a: any) => a.type === 'logo');
     return list;
   }, [data, filter]);
 
@@ -144,7 +144,7 @@ export default function UploadsPanel({ projectId, onInsertToChat }: UploadsPanel
         <div className="p-4 text-gray-500">Loading…</div>
       ) : (
         <div className="p-3 grid grid-cols-2 gap-3 overflow-auto">
-          {assets.map((a) => (
+          {assets.map((a: any) => (
             <div
               key={a.id}
               className="group border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"

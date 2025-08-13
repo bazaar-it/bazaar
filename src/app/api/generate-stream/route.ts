@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
   const userMessage = searchParams.get('message');
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
+  const audioUrls = searchParams.get('audioUrls');
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
 
@@ -61,8 +62,10 @@ export async function GET(request: NextRequest) {
       // 1. Create the user message FIRST to ensure correct sequence order
       const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
       const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
+      const parsedAudioUrls = audioUrls ? JSON.parse(audioUrls) : undefined;
       
       // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
+      // But don't include audio URLs as they're not images!
       const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
       
       // ✅ NEW: Add retry logic for database operations
@@ -163,6 +166,7 @@ export async function GET(request: NextRequest) {
         userMessage: userMessage,
         imageUrls: parsedImageUrls,
         videoUrls: parsedVideoUrls,
+        audioUrls: parsedAudioUrls,
         modelOverride: modelOverride,
         useGitHub: useGitHub
       })));

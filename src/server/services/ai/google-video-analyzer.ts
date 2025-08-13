@@ -13,9 +13,9 @@ export class GoogleVideoAnalyzer {
       // Dynamic import to avoid hard dependency at build time
       const { GoogleGenerativeAI } = await import('@google/generative-ai');
       this.genAI = new GoogleGenerativeAI(this.apiKey);
-      // Use Gemini 1.5 Pro for high-quality video analysis
+      // Use Gemini 2.5 Flash for video analysis
       this.model = this.genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-pro',
+        model: 'gemini-2.5-flash',
         generationConfig: {
           temperature: 0.0,
           topK: 1,
@@ -34,18 +34,22 @@ export class GoogleVideoAnalyzer {
     console.log('🔍 [GoogleVideoAnalyzer] URL:', youtubeUrl);
     console.log('🔍 [GoogleVideoAnalyzer] Prompt length:', systemPrompt.length);
     
+    // CRITICAL: Log exact URL being sent
+    console.log('🔍 [GoogleVideoAnalyzer] EXACT URL BEING ANALYZED:', youtubeUrl);
+    console.log('🔍 [GoogleVideoAnalyzer] First 200 chars of prompt:', systemPrompt.substring(0, 200));
+    
     try {
       await this.ensureClient();
-      // Gemini expects YouTube URLs as file_data parts
-      console.log('🔍 [GoogleVideoAnalyzer] Calling Gemini API...');
+      console.log('🔍 [GoogleVideoAnalyzer] Calling Gemini API with YouTube URL as fileUri (official format)...');
+      
+      // OFFICIAL FORMAT from Google docs - YouTube URLs as fileUri
       const result = await this.model.generateContent([
+        systemPrompt,  // Prompt first
         {
           fileData: {
-            mimeType: 'video/mp4',
-            fileUri: youtubeUrl
+            fileUri: youtubeUrl  // YouTube URL goes in fileUri, no mimeType needed
           }
-        },
-        { text: systemPrompt }
+        }
       ]);
       
       console.log('🔍 [GoogleVideoAnalyzer] Got response from Gemini');

@@ -61,6 +61,7 @@ export interface AddToolInput extends BaseToolInput {
   }>;
   imageUrls?: string[];
   videoUrls?: string[];
+  audioUrls?: string[];
   isYouTubeAnalysis?: boolean; // Flag indicating this is YouTube analysis that should be followed closely
   webContext?: {
     originalUrl: string;
@@ -81,6 +82,7 @@ export interface AddToolInput extends BaseToolInput {
     width: number;
     height: number;
   };
+  figmaComponentData?: any; // Figma component data for recreation
 }
 
 export interface AddToolOutput extends BaseToolOutput {
@@ -101,6 +103,7 @@ export interface EditToolInput extends BaseToolInput {
   currentDuration?: number;
   imageUrls?: string[];
   videoUrls?: string[];
+  audioUrls?: string[];
   errorDetails?: string;
   referenceScenes?: Array<{  // For cross-scene style/color matching
     id: string;
@@ -288,6 +291,7 @@ export interface ImageToCodeInput {
   imageUrls: string[];
   userPrompt: string;
   functionName: string;
+  projectId?: string;
   projectFormat?: {
     format: 'landscape' | 'portrait' | 'square';
     width: number;
@@ -355,6 +359,7 @@ export const addToolInputSchema = baseToolInputSchema.extend({
   })).optional().describe("Reference scenes for cross-scene style/color matching"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
+  audioUrls: z.array(z.string()).optional().describe("Audio URLs for background music"),
   webContext: z.object({
     originalUrl: z.string(),
     screenshotUrls: z.object({
@@ -377,6 +382,7 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   currentDuration: z.number().optional().describe("Current duration in frames"),
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
+  audioUrls: z.array(z.string()).optional().describe("Audio URLs for background music"),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
   referenceScenes: z.array(z.object({
     id: z.string(),

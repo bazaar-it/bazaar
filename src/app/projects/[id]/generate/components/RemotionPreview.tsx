@@ -2,9 +2,10 @@
 
 "use client";
 
-import React, { useEffect, useMemo, Suspense } from 'react';
+import React, { useEffect, useMemo, Suspense, useState, useRef } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
+import { createPortal } from 'react-dom';
 
 // Error fallback component to display when component loading fails
 function ErrorFallback({ error }: { error: Error }) {
@@ -72,6 +73,54 @@ export default function RemotionPreview({
     const interval = window.setInterval(onFrame, Math.max(1000 / fps, 16));
     return () => window.clearInterval(interval);
   }, [playerRef, fps]);
+
+  // Simple state for current frame display
+  const [currentFrame, setCurrentFrame] = useState<number>(0);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
+  const hasAudio = !!(inputProps?.audio?.url);
+  
+  // Update frame from player
+  useEffect(() => {
+    if (!playerRef?.current) return;
+    const updateFrame = () => {
+      try {
+        const frame = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
+        if (typeof frame === 'number') {
+          setCurrentFrame(frame);
+        }
+      } catch {}
+    };
+    const interval = setInterval(updateFrame, 100);
+    return () => clearInterval(interval);
+  }, [playerRef]);
+
+  // Find the player element for portal injection
+  useEffect(() => {
+    if (!playerContainerRef.current) return;
+    
+    const findPlayer = () => {
+      const player = playerContainerRef.current?.querySelector('.remotion-player') as HTMLElement | null;
+      if (player) {
+        setPlayerElement(player);
+        // Ensure player has position relative for absolute children
+        if (getComputedStyle(player).position === 'static') {
+          player.style.position = 'relative';
+        }
+      }
+    };
+    
+    // Try multiple times to catch dynamically rendered player
+    findPlayer();
+    const t1 = setTimeout(findPlayer, 100);
+    const t2 = setTimeout(findPlayer, 500);
+    
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [refreshToken]);
+
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -80,7 +129,7 @@ export default function RemotionPreview({
           Loading component...
         </div>
       }>
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center relative" ref={playerContainerRef}>
           <Player
             ref={playerRef}
             lazyComponent={lazyComponent}
@@ -102,13 +151,44 @@ export default function RemotionPreview({
             doubleClickToFullscreen
             clickToPlay
             loop={loop}
-            autoPlay={true}
+            autoPlay={false}
             playbackRate={playbackRate}
+            initiallyMuted={false}
             inFrame={inFrame}
             outFrame={outFrame}
             key={refreshToken} // Force remount when refreshToken changes
             acknowledgeRemotionLicense
+            className="remotion-player"
           />
+          {playerElement && createPortal(
+            <>
+              {/* Frame counter */}
+              <div
+                className="pointer-events-none select-none"
+                style={{
+                  position: 'absolute',
+                  right: 48,
+                  bottom: 34,
+                  zIndex: 2147483647, // Maximum z-index for fullscreen
+                  color: 'rgba(255,255,255,0.95)',
+                  background: 'rgba(17,17,17,0.45)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  lineHeight: 1,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontWeight: 600,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}
+              >
+                {currentFrame}
+              </div>
+              
+            </>,
+            playerElement
+          )}
         </div>
       </Suspense>
     </ErrorBoundary>

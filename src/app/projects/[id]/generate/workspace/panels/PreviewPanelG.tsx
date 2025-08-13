@@ -41,6 +41,9 @@ export function PreviewPanelG({
     return project?.props || initial;
   });
   
+  // Get audio data from project state
+  const projectAudio = useVideoState((state) => state.projects[projectId]?.audio);
+  
   // 🚨 CLEANED UP: Only use project-specific refresh token
   const projectRefreshToken = useVideoState((state) => state.projects[projectId]?.refreshToken);
   
@@ -128,9 +131,8 @@ export function PreviewPanelG({
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
   
-  // Get scenes and audio from reactive state
+  // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
-  const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -1243,9 +1245,19 @@ const EnhancedAudio = ({ audioData }) => {
   });
 };
 
-export default function MultiSceneComposition() {
-  // Get audio from props
-  const projectAudio = window.projectAudio;
+export default function MultiSceneComposition(props) {
+  // Get audio from props passed by Remotion Player
+  const projectAudio = props?.audio || window.projectAudio;
+  
+  // Debug audio
+  React.useEffect(() => {
+    console.log('[MultiSceneComposition] Audio data:', projectAudio);
+    if (projectAudio) {
+      console.log('[MultiSceneComposition] Audio URL:', projectAudio.url);
+      console.log('[MultiSceneComposition] Audio volume:', projectAudio.volume);
+      console.log('[MultiSceneComposition] Audio duration:', projectAudio.duration);
+    }
+  }, [projectAudio]);
   
   return (
     <AbsoluteFill>
@@ -1633,9 +1645,11 @@ export default function FallbackComposition() {
       height,
       format,
       durationInFrames: totalDuration, // Use total duration, not just last scene
-      inputProps: {}
+      inputProps: {
+        audio: projectAudio || null
+      }
     };
-  }, [scenes, currentProps?.meta]);
+  }, [scenes, currentProps?.meta, projectAudio]);
   
   // Get format icon
   const formatIcon = useMemo(() => {
@@ -1682,6 +1696,7 @@ export default function FallbackComposition() {
                 outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
               />
             </ErrorBoundary>
+            {/* Frame counter is now rendered inside the Remotion Player via portal for correct fullscreen behavior. */}
           </div>
         ) : componentError ? (
           <div className="flex items-center justify-center h-full p-4">

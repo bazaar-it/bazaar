@@ -21,7 +21,7 @@ export interface UIComponentItem {
 export type UICatalog = Record<UICategoryKey, UIComponentItem[]>;
 
 // Component detection patterns
-const COMPONENT_PATTERNS = {
+const COMPONENT_PATTERNS: Record<UICategoryKey, RegExp[]> = {
   auth: [
     /login|sign[-_ ]?in/i,
     /sign[-_ ]?up|register/i,
@@ -52,6 +52,10 @@ const COMPONENT_PATTERNS = {
     /modal|dialog|popup|overlay/i,
     /dropdown|select|menu/i,
     /carousel|slider|gallery/i,
+  ],
+  custom: [
+    // Custom components don't have specific patterns
+    // They will be categorized based on other heuristics
   ],
 };
 
@@ -265,7 +269,7 @@ export class ComponentIndexerService {
     // Name-based scoring
     if (/^(Login|SignUp|Header|Footer|Nav|Sidebar|Hero|Checkout|Cart)$/i.test(name)) {
       score += 50; // Exact common component names
-    } else if (COMPONENT_PATTERNS[category] && COMPONENT_PATTERNS[category].some(p => p.test(name))) {
+    } else if (COMPONENT_PATTERNS[category] && COMPONENT_PATTERNS[category].some((p: RegExp) => p.test(name))) {
       score += 30; // Matches category pattern
     }
     

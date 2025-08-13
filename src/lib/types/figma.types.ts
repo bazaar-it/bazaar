@@ -78,10 +78,16 @@ export interface FigmaNode {
   absoluteBoundingBox?: Rectangle;
   relativeTransform?: Transform;
   size?: Vector;
+  constraints?: {
+    vertical: 'TOP' | 'BOTTOM' | 'CENTER' | 'TOP_BOTTOM' | 'SCALE';
+    horizontal: 'LEFT' | 'RIGHT' | 'CENTER' | 'LEFT_RIGHT' | 'SCALE';
+  };
   
   // Styling
   fills?: Paint[];
   strokes?: Paint[];
+  strokeWeight?: number;
+  strokeAlign?: 'INSIDE' | 'OUTSIDE' | 'CENTER';
   effects?: Effect[];
   opacity?: number;
   blendMode?: BlendMode;

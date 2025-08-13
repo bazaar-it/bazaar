@@ -8,6 +8,7 @@ import { db } from '~/server/db';
 import { githubConnections, componentCache } from '~/server/db/schema/github-connections';
 import { eq, and, gt } from 'drizzle-orm';
 import crypto from 'crypto';
+import { GitHubError, GitHubErrorCode, ErrorRecovery } from '~/lib/types/github-errors';
 
 export interface ComponentSearchResult {
   name: string;
@@ -199,47 +200,119 @@ export class GitHubComponentSearchService {
   }
   
   /**
-   * Fetch a file directly from GitHub using the exact path
+   * Fetch a file directly from GitHub using the exact path with fallback strategies
    */
   async fetchFileDirectly(
     repository: string,
-    filePath: string
+    filePath: string,
+    retries = 3
   ): Promise<ComponentSearchResult> {
     console.log(`[GitHub] Fetching file directly: ${filePath} from ${repository}`);
     
-    try {
-      const [owner, repo] = repository.split('/');
-      
-      // Get file content using GitHub API
-      const { data } = await this.octokit.repos.getContent({
-        owner,
-        repo,
-        path: filePath,
-      });
-      
-      // Check if it's a file (not a directory)
-      if ('content' in data && data.type === 'file') {
-        const content = Buffer.from(data.content, 'base64').toString('utf-8');
-        
-        return {
-          name: filePath.split('/').pop()?.replace(/\.(tsx?|jsx?)$/, '') || '',
-          path: filePath,
-          repository,
-          content,
-          language: filePath.endsWith('.tsx') ? 'tsx' : 
-                   filePath.endsWith('.jsx') ? 'jsx' : 
-                   filePath.endsWith('.ts') ? 'ts' : 'js',
-          size: data.size,
-          url: data.html_url,
-          sha: data.sha,
-        };
+    // Normalize the file path (remove leading slash if present)
+    const normalizedPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+    
+    // Try different path variations if the exact path fails
+    const pathVariations = [
+      normalizedPath,
+      normalizedPath.replace(/\.tsx?$/, '.tsx'), // Try .tsx if no extension
+      normalizedPath.replace(/\.tsx?$/, '.ts'),  // Try .ts
+      normalizedPath.replace(/\.jsx?$/, '.jsx'), // Try .jsx
+      normalizedPath.replace(/\.jsx?$/, '.js'),  // Try .js
+    ];
+    
+    let lastError: any = null;
+    
+    for (const pathToTry of pathVariations) {
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          const [owner, repo] = repository.split('/');
+          
+          console.log(`[GitHub] Attempt ${attempt + 1}/${retries} for path: ${pathToTry}`);
+          
+          // Add delay between retries (exponential backoff)
+          if (attempt > 0) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            console.log(`[GitHub] Waiting ${delay}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          // Get file content using GitHub API
+          const { data } = await this.octokit.repos.getContent({
+            owner,
+            repo,
+            path: pathToTry,
+          });
+          
+          // Check if it's a file (not a directory)
+          if ('content' in data && data.type === 'file') {
+            const content = Buffer.from(data.content, 'base64').toString('utf-8');
+            
+            console.log(`[GitHub] ✅ Successfully fetched ${pathToTry} (${data.size} bytes)`);
+            
+            return {
+              name: pathToTry.split('/').pop()?.replace(/\.(tsx?|jsx?)$/, '') || '',
+              path: pathToTry,
+              repository,
+              content,
+              language: pathToTry.endsWith('.tsx') ? 'tsx' : 
+                       pathToTry.endsWith('.jsx') ? 'jsx' : 
+                       pathToTry.endsWith('.ts') ? 'ts' : 'js',
+              size: data.size,
+              url: data.html_url,
+              sha: data.sha,
+            };
+          }
+          
+          throw new Error(`Path ${pathToTry} is not a file`);
+        } catch (error: any) {
+          // Convert to GitHubError for better handling
+          const githubError = GitHubError.fromApiError(error);
+          lastError = githubError;
+          
+          // Log with appropriate level
+          if (githubError.code === GitHubErrorCode.FILE_NOT_FOUND) {
+            console.log(`[GitHub] File not found: ${pathToTry}`);
+            break; // Don't retry 404s, try next variation
+          } else if (githubError.code === GitHubErrorCode.RATE_LIMITED) {
+            console.error(`[GitHub] ⚠️ Rate limited - ${githubError.getUserMessage()}`);
+            if (ErrorRecovery.shouldRetry(githubError, attempt)) {
+              const delay = ErrorRecovery.getRetryDelay(githubError, attempt);
+              console.log(`[GitHub] Waiting ${delay}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+              break;
+            }
+          } else if (githubError.code === GitHubErrorCode.AUTH_FAILED) {
+            console.error(`[GitHub] ❌ ${githubError.getUserMessage()}`);
+            throw githubError; // Don't continue, auth is broken
+          } else {
+            console.error(`[GitHub] Error on attempt ${attempt + 1}:`, githubError.message);
+            if (!ErrorRecovery.shouldRetry(githubError, attempt)) {
+              break;
+            }
+          }
+        }
       }
-      
-      throw new Error('Path is not a file');
-    } catch (error) {
-      console.error(`[GitHub] Error fetching file directly:`, error);
-      throw error;
     }
+    
+    // If we get here, all attempts failed
+    if (lastError instanceof GitHubError) {
+      console.error(`[GitHub] ❌ All fetch attempts failed for ${filePath}`);
+      console.error(`[GitHub] Error: ${lastError.getUserMessage()}`);
+      console.error(`[GitHub] Suggestion: ${lastError.getSuggestedAction()}`);
+      throw lastError;
+    }
+    
+    // Fallback error if somehow we don't have a GitHubError
+    const fallbackError = new GitHubError(
+      GitHubErrorCode.UNKNOWN,
+      `Failed to fetch component file: ${filePath}`,
+      { originalPath: filePath, repository, attempts: retries }
+    );
+    
+    console.error(`[GitHub] ❌ ${fallbackError.getUserMessage()}`);
+    throw fallbackError;
   }
   
   /**

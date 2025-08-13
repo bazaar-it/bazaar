@@ -413,7 +413,7 @@ async function replaceIconifyIcons(code: string): Promise<string> {
         for (const cand of candidates) {
           const [c2, i2] = cand.split(':');
           try {
-            const svg2 = await loadNodeIcon(c2, i2 || '');
+            const svg2 = await loadNodeIcon(c2 || '', i2 || '');
             if (svg2) {
               console.log(`[Preprocess] Using fallback: ${name} -> ${cand}`);
               return svg2;
@@ -462,8 +462,8 @@ async function replaceIconifyIcons(code: string): Promise<string> {
     for (const m of allStringLikeIcons) {
       const val = m.slice(1, -1).toLowerCase(); // Ensure lowercase
       const prefix = val.split(':')[0];
-      if (allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
-        const svgString = await loadWithFallback(val || '');
+      if (prefix && allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
+        const svgString = await loadWithFallback(val);
         if (svgString && !iconMap.has(val)) {
           iconMap.set(val, svgString);
           console.log(`[Preprocess] Added additional icon: ${val}`);

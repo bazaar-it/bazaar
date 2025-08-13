@@ -1,84 +1,248 @@
 /**
  * Figma to Remotion Converter Service
- * Converts Figma designs to Remotion code
+ * Uses LLM to intelligently convert Figma designs to animated Remotion components
  */
 
-import type { FigmaNode, DesignTokens, ConversionOptions } from '~/lib/types/figma.types';
+import type { FigmaNode, ConversionOptions } from '~/lib/types/figma.types';
+import { FIGMA_TO_REMOTION_PROMPT } from '~/config/prompts/active/figma-to-remotion';
+import { AIClientService } from '~/server/services/ai/aiClient.service';
+import type { ModelConfig } from '~/config/models.config';
 
 export class FigmaConverterService {
   /**
-   * Convert Figma node to Remotion component code
+   * Convert Figma node to Remotion component code using LLM
    */
-  convertToRemotionCode(
+  async convertToRemotionCode(
     node: FigmaNode,
     options: ConversionOptions = {}
-  ): string {
+  ): Promise<string> {
     const { format = 'landscape' } = options;
     
-    // Extract design tokens
-    const tokens = this.extractDesignTokens(node);
+    // Prepare the Figma data for LLM
+    const figmaData = this.prepareFigmaData(node);
     
-    // Generate component structure
-    const componentCode = this.generateComponent(node, tokens, format);
+    // Create context about the component
+    const context = this.analyzeComponentType(node);
     
-    return componentCode;
+    // Build the complete prompt
+    const prompt = `${FIGMA_TO_REMOTION_PROMPT}
+
+Component Context:
+- Name: ${node.name}
+- Type: ${context.componentType}
+- Suggested Animation: ${context.animationSuggestion}
+- Video Format: ${format} (${this.getFormatDimensions(format).width}x${this.getFormatDimensions(format).height})
+
+Figma Component Data:
+\`\`\`json
+${JSON.stringify(figmaData, null, 2)}
+\`\`\`
+
+Create a Remotion component named "${this.sanitizeComponentName(node.name)}" that beautifully recreates and animates this design.`;
+
+    try {
+      // Use GPT-5-mini (gpt-4o-mini) for fast, high-quality conversion
+      const modelConfig: ModelConfig = {
+        provider: 'openai',
+        model: 'gpt-5-mini', // This maps to gpt-4o-mini in the actual API
+        temperature: 0.7,
+        maxTokens: 4000
+      };
+      
+      // Call LLM to generate the code
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [
+          {
+            role: 'system',
+            content: 'You are an expert at creating beautiful, animated Remotion components from Figma designs. Return only the component code, no explanations.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      );
+
+      // Extract code from response
+      const code = this.extractCodeFromResponse(response.content);
+      
+      // Validate and clean the code
+      return this.validateAndCleanCode(code, node.name);
+      
+    } catch (error) {
+      console.error('Failed to convert Figma to Remotion:', error);
+      // Fallback to basic conversion
+      return this.generateFallbackComponent(node, format);
+    }
   }
 
   /**
-   * Extract design tokens from node
+   * Prepare Figma data for LLM (clean unnecessary fields)
    */
-  private extractDesignTokens(node: FigmaNode): DesignTokens {
-    const tokens: DesignTokens = {
-      colors: {},
-      typography: {},
-      spacing: {},
-      shadows: {},
+  private prepareFigmaData(node: FigmaNode): any {
+    // Remove internal Figma fields that aren't useful for conversion
+    const cleaned = {
+      name: node.name,
+      type: node.type,
+      visible: node.visible,
+      opacity: node.opacity,
+      // Layout
+      absoluteBoundingBox: node.absoluteBoundingBox,
+      constraints: node.constraints,
+      // Styling
+      fills: node.fills,
+      strokes: node.strokes,
+      strokeWeight: node.strokeWeight,
+      strokeAlign: node.strokeAlign,
+      // Effects
+      effects: node.effects,
+      // Corner radius
+      cornerRadius: (node as any).cornerRadius,
+      rectangleCornerRadii: (node as any).rectangleCornerRadii,
+      // Text properties
+      ...(node.type === 'TEXT' ? {
+        characters: (node as any).characters,
+        style: (node as any).style,
+        characterStyleOverrides: (node as any).characterStyleOverrides,
+        styleOverrideTable: (node as any).styleOverrideTable,
+      } : {}),
+      // Children (recursive, but limited depth)
+      children: node.children?.slice(0, 10).map(child => this.prepareFigmaData(child)),
     };
 
-    // Extract colors from fills
-    if (node.fills) {
-      node.fills.forEach((fill, index) => {
-        if (fill.type === 'SOLID' && fill.color) {
-          const { r, g, b, a } = fill.color;
-          const hex = this.rgbToHex(r, g, b);
-          tokens.colors[`fill-${index}`] = hex;
-        }
-      });
-    }
-
-    // Extract typography (for text nodes)
-    if (node.type === 'TEXT' && 'style' in node) {
-      const textNode = node as any;
-      if (textNode.style) {
-        tokens.typography.default = {
-          fontFamily: textNode.style.fontFamily || 'Inter',
-          fontSize: textNode.style.fontSize || 16,
-          fontWeight: textNode.style.fontWeight || 400,
-          lineHeightPx: textNode.style.lineHeightPx,
-        };
-      }
-    }
-
-    return tokens;
+    // Remove undefined values
+    return JSON.parse(JSON.stringify(cleaned));
   }
 
   /**
-   * Generate Remotion component code
+   * Analyze component type for better animation suggestions
    */
-  private generateComponent(
-    node: FigmaNode,
-    tokens: DesignTokens,
-    format: string
-  ): string {
+  private analyzeComponentType(node: FigmaNode): { 
+    componentType: string; 
+    animationSuggestion: string;
+  } {
+    const name = node.name.toLowerCase();
+    const hasText = this.hasTextChildren(node);
+    const hasRoundedCorners = (node as any).cornerRadius > 0;
+    const childCount = node.children?.length || 0;
+
+    // Button detection
+    if ((name.includes('button') || name.includes('btn') || name.includes('cta')) ||
+        (hasRoundedCorners && hasText && childCount <= 3)) {
+      return {
+        componentType: 'button',
+        animationSuggestion: 'scale on hover, bounce entrance, optional pulse'
+      };
+    }
+
+    // Card detection
+    if (name.includes('card') || (childCount > 3 && hasText)) {
+      return {
+        componentType: 'card',
+        animationSuggestion: 'slide up with fade, or 3D flip on hover'
+      };
+    }
+
+    // Header/Title detection
+    if (name.includes('header') || name.includes('title') || name.includes('heading')) {
+      return {
+        componentType: 'header',
+        animationSuggestion: 'slide in from top, or letter-by-letter reveal'
+      };
+    }
+
+    // List detection
+    if (name.includes('list') || name.includes('menu')) {
+      return {
+        componentType: 'list',
+        animationSuggestion: 'stagger children animations with fade'
+      };
+    }
+
+    // Image detection
+    if (node.type === 'RECTANGLE' && node.fills?.some(f => f.type === 'IMAGE')) {
+      return {
+        componentType: 'image',
+        animationSuggestion: 'ken burns effect or parallax'
+      };
+    }
+
+    // Default
+    return {
+      componentType: 'container',
+      animationSuggestion: 'fade in with subtle scale'
+    };
+  }
+
+  /**
+   * Check if node has text children
+   */
+  private hasTextChildren(node: FigmaNode): boolean {
+    if (node.type === 'TEXT') return true;
+    return node.children?.some(child => this.hasTextChildren(child)) || false;
+  }
+
+  /**
+   * Extract code from LLM response
+   */
+  private extractCodeFromResponse(response: string): string {
+    // Try to extract code between ```tsx or ```jsx or ``` markers
+    const codeMatch = response.match(/```(?:tsx?|jsx?)?\n?([\s\S]*?)```/);
+    if (codeMatch && codeMatch[1]) {
+      return codeMatch[1].trim();
+    }
+    
+    // If no code blocks, assume entire response is code
+    return response.trim();
+  }
+
+  /**
+   * Validate and clean the generated code
+   */
+  private validateAndCleanCode(code: string, componentName: string): string {
+    // Ensure it has required imports
+    if (!code.includes('from \'remotion\'')) {
+      code = `import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from 'remotion';\n\n${code}`;
+    }
+
+    // Ensure it exports a component
+    if (!code.includes('export')) {
+      const safeName = this.sanitizeComponentName(componentName);
+      code = code.replace(
+        /const\s+(\w+)\s*=\s*\(/,
+        `export const ${safeName} = (`
+      );
+    }
+
+    return code;
+  }
+
+  /**
+   * Sanitize component name for valid JS
+   */
+  private sanitizeComponentName(name: string): string {
+    // Remove special characters and spaces, convert to PascalCase
+    return name
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('') || 'FigmaComponent';
+  }
+
+  /**
+   * Generate fallback component if LLM fails
+   */
+  private generateFallbackComponent(node: FigmaNode, format: string): string {
     const dimensions = this.getFormatDimensions(format);
+    const name = this.sanitizeComponentName(node.name);
     
     return `import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 
-export const FigmaComponent = () => {
+export const ${name} = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  // Animation values
   const opacity = spring({
     frame,
     fps,
@@ -90,7 +254,7 @@ export const FigmaComponent = () => {
   const scale = spring({
     frame,
     fps,
-    from: 0.8,
+    from: 0.9,
     to: 1,
     durationInFrames: 30,
   });
@@ -98,7 +262,7 @@ export const FigmaComponent = () => {
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: '${tokens.colors['fill-0'] || '#ffffff'}',
+        backgroundColor: '#ffffff',
         justifyContent: 'center',
         alignItems: 'center',
       }}
@@ -107,162 +271,20 @@ export const FigmaComponent = () => {
         style={{
           opacity,
           transform: \`scale(\${scale})\`,
+          padding: 40,
+          backgroundColor: '#f0f0f0',
+          borderRadius: 8,
         }}
       >
-        ${this.generateNodeElements(node, tokens)}
+        <h2 style={{ fontSize: 24, marginBottom: 16 }}>${node.name}</h2>
+        <p style={{ color: '#666' }}>Figma component imported successfully</p>
+        <p style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
+          Type: ${node.type}
+        </p>
       </div>
     </AbsoluteFill>
   );
 };`;
-  }
-
-  /**
-   * Generate JSX for node elements
-   */
-  private generateNodeElements(node: FigmaNode, tokens: DesignTokens): string {
-    // Simplified conversion for MVP
-    switch (node.type) {
-      case 'FRAME':
-      case 'GROUP':
-        return this.generateContainer(node, tokens);
-      
-      case 'RECTANGLE':
-        return this.generateRectangle(node, tokens);
-      
-      case 'TEXT':
-        return this.generateText(node, tokens);
-      
-      case 'VECTOR':
-      case 'ELLIPSE':
-      case 'BOOLEAN_OPERATION':
-        // For complex shapes, we'd export as image
-        return this.generateImage(node);
-      
-      default:
-        return `<div>/* ${node.type} - ${node.name} */</div>`;
-    }
-  }
-
-  /**
-   * Generate container element
-   */
-  private generateContainer(node: FigmaNode, tokens: DesignTokens): string {
-    const style = this.nodeToStyle(node);
-    const children = node.children
-      ? node.children.map(child => this.generateNodeElements(child, tokens)).join('\n        ')
-      : '';
-
-    return `<div
-          style={{
-            ${style}
-          }}
-        >
-          ${children}
-        </div>`;
-  }
-
-  /**
-   * Generate rectangle element
-   */
-  private generateRectangle(node: FigmaNode, tokens: DesignTokens): string {
-    const style = this.nodeToStyle(node);
-    
-    return `<div
-          style={{
-            ${style}
-          }}
-        />`;
-  }
-
-  /**
-   * Generate text element
-   */
-  private generateText(node: FigmaNode, tokens: DesignTokens): string {
-    const textNode = node as any;
-    const text = textNode.characters || node.name;
-    const typography = tokens.typography.default || {};
-    
-    return `<p
-          style={{
-            fontFamily: '${typography.fontFamily || 'Inter'}',
-            fontSize: ${typography.fontSize || 16},
-            fontWeight: ${typography.fontWeight || 400},
-            ${this.nodeToStyle(node)}
-          }}
-        >
-          ${text}
-        </p>`;
-  }
-
-  /**
-   * Generate image placeholder
-   */
-  private generateImage(node: FigmaNode): string {
-    return `<div
-          style={{
-            width: ${node.absoluteBoundingBox?.width || 100},
-            height: ${node.absoluteBoundingBox?.height || 100},
-            backgroundColor: '#e5e5e5',
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <span style={{ color: '#999', fontSize: 12 }}>
-            ${node.name}
-          </span>
-        </div>`;
-  }
-
-  /**
-   * Convert node properties to CSS style
-   */
-  private nodeToStyle(node: FigmaNode): string {
-    const styles: string[] = [];
-    
-    // Position (if absolute)
-    if (node.absoluteBoundingBox) {
-      const { x, y, width, height } = node.absoluteBoundingBox;
-      styles.push(`position: 'absolute'`);
-      styles.push(`left: ${x}`);
-      styles.push(`top: ${y}`);
-      styles.push(`width: ${width}`);
-      styles.push(`height: ${height}`);
-    }
-    
-    // Background color
-    if (node.fills && node.fills[0]?.type === 'SOLID') {
-      const color = node.fills[0].color;
-      if (color) {
-        const hex = this.rgbToHex(color.r, color.g, color.b);
-        styles.push(`backgroundColor: '${hex}'`);
-      }
-    }
-    
-    // Opacity
-    if (node.opacity !== undefined && node.opacity < 1) {
-      styles.push(`opacity: ${node.opacity}`);
-    }
-    
-    // Border radius (simplified)
-    if ('cornerRadius' in node) {
-      styles.push(`borderRadius: ${(node as any).cornerRadius}`);
-    }
-    
-    return styles.join(',\n            ');
-  }
-
-  /**
-   * Convert RGB to hex color
-   */
-  private rgbToHex(r: number, g: number, b: number): string {
-    const toHex = (n: number) => {
-      const hex = Math.round(n * 255).toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    };
-    
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
   /**

@@ -64,6 +64,13 @@
       "when": 1754594825000,
       "tag": "0008_add_templates_table",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1755016080201,
+      "tag": "0009_mute_overlord",
+      "breakpoints": true
     }
   ]
 }
