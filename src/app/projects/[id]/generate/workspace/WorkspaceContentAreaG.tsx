@@ -17,11 +17,9 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
-import UploadsPanel from './panels/UploadsPanel';
+import MediaPanel from './panels/MediaPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
-import { AudioPanel } from './panels/AudioPanel';
-import { ComponentDiscoveryPanel } from './panels/ComponentDiscoveryPanel';
-import FigmaDiscoveryPanel from './panels/FigmaDiscoveryPanel';
+import IntegrationsPanel from './panels/IntegrationsPanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -36,10 +34,8 @@ const PANEL_COMPONENTS_G = {
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
   myprojects: MyProjectsPanelG,
-  audio: AudioPanel,
-  uploads: UploadsPanel,
-  components: ComponentDiscoveryPanel,
-  figma: FigmaDiscoveryPanel,
+  media: MediaPanel,
+  integrations: IntegrationsPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -49,10 +45,8 @@ const PANEL_LABELS_G = {
   storyboard: 'Storyboard',
   templates: 'Templates',
   myprojects: 'My Projects',
-  audio: 'Audio',
-  uploads: 'My uploads',
-  components: 'GitHub Components',
-  figma: 'Figma Designs',
+  media: 'Media',
+  integrations: 'Integrations',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -112,21 +106,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
 
-  // Inline mini frame counter component listening to preview-frame-update events
-  function FrameCounterMini() {
-    const [frame, setFrame] = React.useState<number>(0);
-    React.useEffect(() => {
-      const handler = (e: Event) => {
-        const ce = e as CustomEvent;
-        if (typeof ce.detail?.frame === 'number') {
-          setFrame(ce.detail.frame as number);
-        }
-      };
-      window.addEventListener('preview-frame-update', handler as EventListener);
-      return () => window.removeEventListener('preview-frame-update', handler as EventListener);
-    }, []);
-    return <span className="tabular-nums">Frame: {frame}</span>;
-  }
+  // Removed header frame counter to avoid duplication and visual clutter.
   
   return (
     <div
@@ -162,10 +142,6 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                   }}
                   scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
                 />
-                {/* Live frame counter (30fps = 30 frames/sec) */}
-                <div id="frame-counter-mini" className="h-8 px-2 text-xs text-gray-600 flex items-center rounded bg-white border border-gray-200">
-                  <FrameCounterMini />
-                </div>
                 <PlaybackSpeedSlider
                   currentSpeed={currentPlaybackSpeed || 1}
                   onSpeedChange={(speed) => {
@@ -177,13 +153,16 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                 />
               </>
             )}
-            <button 
-              onClick={onRemove} 
-              className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
-              aria-label={`Close ${panelTitle} panel`}
-            >
-              <XIcon className="h-4 w-4" />
-            </button>
+            {/* Hide close button for Preview panel; users should always have video available */}
+            {!isPreviewPanel && (
+              <button 
+                onClick={onRemove} 
+                className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+                aria-label={`Close ${panelTitle} panel`}
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -223,15 +202,6 @@ function DropZoneG({
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-      )
-    },
-    { 
-      type: 'preview', 
-      label: 'Video Player', 
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
       )
     },
@@ -403,6 +373,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Get video state methods
     const { updateAndRefresh, getCurrentProps, syncDbMessages } = useVideoState();
+    
+    // Get shouldOpenAudioPanel flag for MediaPanel
+    const shouldOpenAudioPanel = useVideoState(state => state.projects[projectId]?.shouldOpenAudioPanel);
     
     // Consolidated query for all project data
     const { data: fullProjectData } = api.project.getFullProject.useQuery(
@@ -750,14 +723,17 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
           />;
-        case 'uploads':
-          return <UploadsPanel
+        case 'media':
+          return <MediaPanel
             projectId={projectId}
             onInsertToChat={(url) => {
               // Broadcast drag/drop or click-insert to chat textarea via CustomEvent
-              const event = new CustomEvent('chat-insert-media-url', { detail: { url } });
+              const event = new CustomEvent('chat-insert-media-url', { 
+                detail: { url, name: url.split('/').pop() } 
+              });
               window.dispatchEvent(event);
             }}
+            defaultTab={shouldOpenAudioPanel ? 'audio' : 'uploads'}
           />;
         case 'preview':
           return (
@@ -791,26 +767,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return <MyProjectsPanelG 
             currentProjectId={projectId} 
           />;
-        case 'audio':
-          return <AudioPanel 
-            projectId={projectId} 
-          />;
-        case 'components':
-          return <ComponentDiscoveryPanel 
-            projectId={projectId}
-            onComponentSelect={(component) => {
-              // Insert component reference into chat
-              const event = new CustomEvent('chat-insert-component', { 
-                detail: { 
-                  text: `Animate my ${component.name} component from ${component.path}`,
-                  component 
-                } 
-              });
-              window.dispatchEvent(event);
-            }}
-          />;
-        case 'figma':
-          return <FigmaDiscoveryPanel 
+        // Old panels removed - now handled by IntegrationsPanel
+        case 'integrations':
+          return <IntegrationsPanel 
             projectId={projectId}
           />;
         default:
