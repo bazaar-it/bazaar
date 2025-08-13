@@ -103,7 +103,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   // Handle panel add when clicked or dragged from sidebar
   const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {
-    // Special handling for timeline
+    // Special handling for timeline panels
     if (panelType === 'timeline') {
       setIsTimelineVisible(true);
       return;

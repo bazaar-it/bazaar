@@ -166,7 +166,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
           </div>
         </div>
       )}
-      <div className={`flex-1 min-h-0 ${isCodePanel ? "h-full" : ""}`}>
+      <div className={`${isCodePanel ? "h-full" : "h-[calc(100%-41px)]"} overflow-hidden`}>
         {children}
       </div>
     </div>

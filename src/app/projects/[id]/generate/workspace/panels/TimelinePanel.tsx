@@ -11,11 +11,15 @@ import {
   ZoomOut,
   Trash2,
   Copy,
-  GripVertical
+  GripVertical,
+  Music,
+  Volume2,
+  Upload
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { toast } from 'sonner';
 import { api } from '~/trpc/react';
+import { extractSceneColors } from '~/lib/utils/extract-scene-colors';
 
 // Constants from React Video Editor Pro
 const ROW_HEIGHT = 60;
@@ -30,6 +34,20 @@ interface Scene {
   start: number;     // start position in frames
   type?: string;
   data?: any;
+}
+
+// Audio track interface
+interface AudioTrack {
+  id: string;
+  url: string;
+  name: string;
+  duration: number;  // in frames
+  startTime: number; // in frames
+  endTime: number;   // in frames
+  volume: number;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
+  playbackRate?: number;
 }
 
 interface TimelinePanelProps {
@@ -48,6 +66,8 @@ interface DragInfo {
 
 export default function TimelinePanel({ projectId, userId }: TimelinePanelProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const audioCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
   
   // Debug: Log when timeline mounts/unmounts
@@ -66,8 +86,14 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   // Get video state from Zustand store
   const project = useVideoState(state => state.projects[projectId]);
   const scenes = project?.props?.scenes || [];
+  
+  // Audio state - get from project
+  const audioTrack = project?.audio || null;
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [audioWaveform, setAudioWaveform] = useState<number[]>([]);
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
+  const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
   
   // API mutation for persisting duration changes
   const updateSceneDurationMutation = api.scenes.updateSceneDuration.useMutation({
@@ -95,6 +121,104 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   // Get current frame from PreviewPanelG via event system
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  
+  // Generate waveform when audio loads or canvas becomes available
+  useEffect(() => {
+    console.log('[Timeline] Audio track:', audioTrack);
+    if (audioTrack?.url) {
+      console.log('[Timeline] Generating waveform for:', audioTrack.url);
+      // Small delay to ensure canvas is mounted
+      setTimeout(() => {
+        if (audioCanvasRef.current) {
+          generateWaveform(audioTrack.url);
+        }
+      }, 100);
+    }
+  }, [audioTrack?.url]);
+
+  // Generate waveform visualization
+  const generateWaveform = async (audioUrl: string) => {
+    try {
+      console.log('[Timeline] Starting waveform generation...');
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const response = await fetch(audioUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      
+      console.log('[Timeline] Audio decoded, duration:', audioBuffer.duration, 'seconds');
+      
+      // Generate waveform data with more samples for finer detail
+      const channelData = audioBuffer.getChannelData(0);
+      const samples = 200; // More samples for finer waveform
+      const blockSize = Math.floor(channelData.length / samples);
+      const waveform: number[] = [];
+      
+      for (let i = 0; i < samples; i++) {
+        let sum = 0;
+        for (let j = 0; j < blockSize; j++) {
+          const dataIndex = i * blockSize + j;
+          if (dataIndex < channelData.length) {
+            sum += Math.abs(channelData[dataIndex] || 0);
+          }
+        }
+        waveform.push(sum / blockSize);
+      }
+      
+      console.log('[Timeline] Waveform data generated, samples:', waveform.length);
+      setAudioWaveform(waveform);
+      
+      if (audioCanvasRef.current) {
+        console.log('[Timeline] Drawing waveform on canvas...');
+        drawWaveform(waveform);
+      } else {
+        console.log('[Timeline] Canvas not ready yet');
+      }
+    } catch (error) {
+      console.error('[Timeline] Failed to generate waveform:', error);
+    }
+  };
+  
+  // Draw waveform on canvas - professional horizontal waveform like in DAWs
+  const drawWaveform = (waveform: number[]) => {
+    if (!audioCanvasRef.current) return;
+    
+    const canvas = audioCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Set style for filled gray waveform
+    ctx.fillStyle = 'rgba(156, 163, 175, 0.8)'; // gray-400
+    ctx.strokeStyle = 'rgba(156, 163, 175, 0.8)';
+    ctx.lineWidth = 0.5;
+    
+    const samples = waveform.length;
+    const sampleWidth = canvas.width / samples;
+    const centerY = canvas.height / 2;
+    
+    // Draw filled waveform path
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    
+    // Draw upper half of waveform with higher amplitude
+    for (let i = 0; i < samples; i++) {
+      const x = i * sampleWidth;
+      const amplitude = (waveform[i] || 0) * (canvas.height * 0.9); // Use 90% of height for bigger waveform
+      ctx.lineTo(x, centerY - amplitude);
+    }
+    
+    // Draw lower half of waveform (mirror)
+    for (let i = samples - 1; i >= 0; i--) {
+      const x = i * sampleWidth;
+      const amplitude = (waveform[i] || 0) * (canvas.height * 0.9); // Match upper amplitude
+      ctx.lineTo(x, centerY + amplitude);
+    }
+    
+    ctx.closePath();
+    ctx.fill();
+  };
   
   // Listen for frame updates and play state changes from PreviewPanelG
   useEffect(() => {
@@ -191,8 +315,15 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     if (!e.ctrlKey && !e.metaKey) return;
     
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoomScale(prev => Math.max(0.25, Math.min(4, prev + delta)));
+    // Use smaller increments for smoother zooming
+    const zoomSpeed = 0.05;
+    const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+    
+    setZoomScale(prev => {
+      const newScale = prev + delta;
+      // Clamp between 0.25 and 4, and round to avoid floating point issues
+      return Math.round(Math.max(0.25, Math.min(4, newScale)) * 100) / 100;
+    });
   }, []);
   
   // Handle drag start
@@ -223,6 +354,13 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     setSelectedSceneId(sceneId);
   }, [scenes]);
   
+  // Snapping helper function
+  const snapToGrid = useCallback((frame: number, snapInterval: number = 30): number => {
+    // Snap to nearest interval (default 1 second = 30 frames)
+    const snapped = Math.round(frame / snapInterval) * snapInterval;
+    return Math.max(0, Math.min(totalDuration, snapped));
+  }, [totalDuration]);
+
   // Handle drag move
   const handleDragMove = useCallback((e: MouseEvent) => {
     if (!dragInfo || !timelineRef.current) return;
@@ -240,7 +378,20 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
       const percentage = clampedX / rect.width;
       
       // Convert percentage to frame number
-      const newFrame = Math.round(percentage * totalDuration);
+      let newFrame = Math.round(percentage * totalDuration);
+      
+      // Apply snapping if Shift is NOT held (Shift disables snapping for fine control)
+      if (!e.shiftKey) {
+        // Determine snap interval based on zoom level
+        let snapInterval = 30; // 1 second by default
+        if (zoomScale < 0.5) {
+          snapInterval = 60; // 2 seconds when zoomed out
+        } else if (zoomScale > 2) {
+          snapInterval = 15; // 0.5 seconds when zoomed in
+        }
+        newFrame = snapToGrid(newFrame, snapInterval);
+      }
+      
       const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
       
       console.log('[Playhead Drag] Position:', {
@@ -248,6 +399,7 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
         containerWidth: rect.width.toFixed(1),
         percentage: (percentage * 100).toFixed(1) + '%',
         frame: clampedFrame,
+        snapped: !e.shiftKey,
         totalDuration
       });
       
@@ -265,7 +417,23 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     
     const deltaX = e.clientX - dragInfo.startX;
     const pixelsPerFrame = rect.width / totalDuration;
-    const deltaFrames = Math.round(deltaX / pixelsPerFrame);
+    let deltaFrames = Math.round(deltaX / pixelsPerFrame);
+    
+    // Apply snapping for resize operations
+    if (!e.shiftKey && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
+      // Snap to nearest second (30 frames) for duration changes
+      const snapInterval = 30;
+      
+      if (dragInfo.action === 'resize-start') {
+        const newDuration = dragInfo.startDuration - deltaFrames;
+        const snappedDuration = Math.round(newDuration / snapInterval) * snapInterval;
+        deltaFrames = dragInfo.startDuration - snappedDuration;
+      } else if (dragInfo.action === 'resize-end') {
+        const newDuration = dragInfo.startDuration + deltaFrames;
+        const snappedDuration = Math.round(newDuration / snapInterval) * snapInterval;
+        deltaFrames = snappedDuration - dragInfo.startDuration;
+      }
+    }
     
     // Get current scenes from store to avoid dependency issues
     const currentProject = useVideoState.getState().projects[projectId];
@@ -295,7 +463,7 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
         });
       }
     }
-  }, [dragInfo, totalDuration, zoomScale, updateScene, projectId]);
+  }, [dragInfo, totalDuration, zoomScale, updateScene, projectId, snapToGrid]);
   
   // Handle drag end
   const handleDragEnd = useCallback(() => {
@@ -362,10 +530,17 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     setContextMenu(null);
   }, [deleteScene, projectId, removeSceneMutation]);
   
-  // Handle keyboard events for delete
+  // Handle keyboard events for delete and play/pause
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Backspace' || e.key === 'Delete') {
+      // Space bar for play/pause
+      if (e.key === ' ' || e.code === 'Space') {
+        // Prevent default scrolling behavior
+        e.preventDefault();
+        togglePlayPause();
+      }
+      // Delete/Backspace for deleting selected scene
+      else if (e.key === 'Backspace' || e.key === 'Delete') {
         if (selectedSceneId) {
           e.preventDefault();
           handleDeleteScene(selectedSceneId);
@@ -375,7 +550,7 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedSceneId, handleDeleteScene]);
+  }, [selectedSceneId, handleDeleteScene, togglePlayPause]);
   
   const handleDuplicateScene = useCallback((sceneId: string) => {
     const scene = scenes.find((s: Scene) => s.id === sceneId);
@@ -408,39 +583,54 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   }, [scenes, project, projectId]);
   
   
-  // Get scene color based on type (Modern professional colors)
-  const getSceneColor = useCallback((scene: Scene): string => {
+  // Extract and cache scene colors
+  const sceneColors = useMemo(() => {
+    const colors: Record<string, { primary: string; secondary?: string; gradient?: string }> = {};
+    scenes.forEach((scene: Scene) => {
+      // Get the actual code for the scene - check multiple possible locations
+      const sceneCode = (scene as any).tsxCode || scene.data?.code || scene.data?.tsxCode || '';
+      if (sceneCode) {
+        colors[scene.id] = extractSceneColors(sceneCode);
+      } else {
+        // Fallback colors based on type
+        const type = scene.type || scene.data?.type || 'default';
+        switch(type) {
+          case 'text':
+          case 'text-animation':
+            colors[scene.id] = { primary: '#6366f1', gradient: 'linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%)' };
+            break;
+          case 'video':
+          case 'custom':
+            colors[scene.id] = { primary: '#3b82f6', gradient: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)' };
+            break;
+          case 'image':
+            colors[scene.id] = { primary: '#10b981', gradient: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' };
+            break;
+          case 'sound':
+          case 'audio':
+            colors[scene.id] = { primary: '#f97316', gradient: 'linear-gradient(90deg, #f97316 0%, #ea580c 100%)' };
+            break;
+          default:
+            colors[scene.id] = { primary: '#6b7280', gradient: 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)' };
+        }
+      }
+    });
+    return colors;
+  }, [scenes]);
+  
+  // Get scene color based on extracted colors
+  const getSceneStyles = useCallback((scene: Scene): React.CSSProperties => {
     const isSelected = selectedSceneId === scene.id;
+    const colors = sceneColors[scene.id] || { primary: '#6b7280', gradient: 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)' };
     
-    // Color by type with modern palette
-    const type = scene.type || scene.data?.type || 'default';
-    
-    switch(type) {
-      case 'text':
-      case 'text-animation':
-        return isSelected 
-          ? "bg-indigo-500 text-white border-indigo-400 shadow-indigo-200" 
-          : "bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200"; // Indigo for text
-      case 'video':
-      case 'custom':
-        return isSelected
-          ? "bg-blue-500 text-white border-blue-400 shadow-blue-200"
-          : "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100"; // Blue for video  
-      case 'image':
-        return isSelected
-          ? "bg-emerald-500 text-white border-emerald-400 shadow-emerald-200"
-          : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"; // Emerald for image
-      case 'sound':
-      case 'audio':
-        return isSelected
-          ? "bg-orange-500 text-white border-orange-400 shadow-orange-200"
-          : "bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100"; // Orange for audio
-      default:
-        return isSelected
-          ? "bg-gray-500 text-white border-gray-400 shadow-gray-200"
-          : "bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200"; // Gray default
-    }
-  }, [selectedSceneId]);
+    return {
+      background: colors.gradient || colors.primary,
+      border: isSelected ? '2px solid rgba(59, 130, 246, 0.8)' : '1px solid rgba(0, 0, 0, 0.1)',
+      boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+      color: '#ffffff',
+      textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)'
+    };
+  }, [selectedSceneId, sceneColors]);
   
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
@@ -499,19 +689,23 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
         {/* Zoom Controls */}
         <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => setZoomScale(Math.max(0.25, zoomScale - 0.25))}
+            onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
             title="Zoom out"
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
           
-          <span className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium">
+          <button
+            onClick={() => setZoomScale(1)}
+            className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            title="Reset zoom to 100%"
+          >
             {Math.round(zoomScale * 100)}%
-          </span>
+          </button>
           
           <button
-            onClick={() => setZoomScale(Math.min(4, zoomScale + 0.25))}
+            onClick={() => setZoomScale(prev => Math.min(4, Math.round((prev + 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
             title="Zoom in"
           >
@@ -527,24 +721,41 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
           className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden"
           style={{ width: `${zoomScale * 100}%` }}
         >
-          {/* Time markers every second */}
-          {Array.from({ length: Math.ceil(totalDuration / 30) + 1 }).map((_, i) => {
-            const frame = i * 30;
-            const position = (frame / totalDuration) * 100;
+          {/* Dynamic time markers that adapt to zoom */}
+          {(() => {
+            // Calculate pixel width of the timeline
+            const timelinePixelWidth = window.innerWidth * zoomScale;
+            const minPixelsBetweenMarkers = 60; // Minimum pixels between time markers to avoid overlap
             
-            return (
-              <div
-                key={i}
-                className="absolute top-0 h-full"
-                style={{ left: `${position}%` }}
-              >
-                <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
-                <span className="absolute top-3 left-0 text-[10px] text-gray-500 dark:text-gray-400 transform -translate-x-1/2 font-mono">
-                  {formatTime(frame)}
-                </span>
-              </div>
-            );
-          })}
+            // Calculate how many seconds should be between markers based on available space
+            const pixelsPerSecond = timelinePixelWidth / (totalDuration / 30);
+            let secondsBetweenMarkers = Math.ceil(minPixelsBetweenMarkers / pixelsPerSecond);
+            
+            // Round to nice intervals (1, 2, 5, 10, 15, 30, 60 seconds)
+            const niceIntervals = [1, 2, 5, 10, 15, 30, 60];
+            const interval = niceIntervals.find(i => i >= secondsBetweenMarkers) || 60;
+            const frameInterval = interval * 30; // Convert to frames
+            
+            const markers = [];
+            for (let frame = 0; frame <= totalDuration; frame += frameInterval) {
+              const position = (frame / totalDuration) * 100;
+              
+              markers.push(
+                <div
+                  key={`time-${frame}`}
+                  className="absolute top-0 h-full"
+                  style={{ left: `${position}%` }}
+                >
+                  <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
+                  <span className="absolute top-3 left-0 text-[10px] text-gray-500 dark:text-gray-400 transform -translate-x-1/2 font-mono whitespace-nowrap">
+                    {formatTime(frame)}
+                  </span>
+                </div>
+              );
+            }
+            
+            return markers;
+          })()}
         </div>
         
         {/* Timeline Track */}
@@ -562,24 +773,57 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
               minWidth: '100%'
             }}
           >
-            {/* Grid lines */}
+            {/* Dynamic grid lines matching time markers */}
             <div className="absolute inset-0 pointer-events-none">
-              {Array.from({ length: Math.ceil(totalDuration / 30) + 1 }).map((_, i) => {
-                const frame = i * 30;
-                const position = (frame / totalDuration) * 100;
+              {(() => {
+                // Use same calculation as time markers for consistency
+                const timelinePixelWidth = window.innerWidth * zoomScale;
+                const minPixelsBetweenMarkers = 60;
+                const pixelsPerSecond = timelinePixelWidth / (totalDuration / 30);
+                let secondsBetweenMarkers = Math.ceil(minPixelsBetweenMarkers / pixelsPerSecond);
                 
-                return (
-                  <div
-                    key={i}
-                    className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 opacity-50"
-                    style={{ left: `${position}%` }}
-                  />
-                );
-              })}
+                const niceIntervals = [1, 2, 5, 10, 15, 30, 60];
+                const interval = niceIntervals.find(i => i >= secondsBetweenMarkers) || 60;
+                const frameInterval = interval * 30;
+                
+                const gridLines = [];
+                for (let frame = 0; frame <= totalDuration; frame += frameInterval) {
+                  const position = (frame / totalDuration) * 100;
+                  
+                  gridLines.push(
+                    <div
+                      key={`grid-${frame}`}
+                      className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 opacity-50"
+                      style={{ left: `${position}%` }}
+                    />
+                  );
+                  
+                  // Add finer grid lines between major ones when zoomed in
+                  if (zoomScale > 1.5 && interval <= 5) {
+                    const subInterval = frameInterval / 2;
+                    const subFrame = frame + subInterval;
+                    if (subFrame <= totalDuration) {
+                      const subPosition = (subFrame / totalDuration) * 100;
+                      gridLines.push(
+                        <div
+                          key={`subgrid-${subFrame}`}
+                          className="absolute top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-800 opacity-25"
+                          style={{ left: `${subPosition}%` }}
+                        />
+                      );
+                    }
+                  }
+                }
+                
+                return gridLines;
+              })()}
             </div>
             
             {/* Scene Items */}
             <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                Scenes
+              </div>
               {scenes.map((scene: Scene, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
@@ -591,10 +835,8 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
                   <div
                     key={scene.id}
                     className={cn(
-                      "absolute flex items-center rounded-lg text-sm font-medium transition-all shadow-sm border",
-                      getSceneColor(scene),
-                      isBeingDragged ? "opacity-75 z-20 scale-105" : "z-10",
-                      selectedSceneId === scene.id ? "ring-2 ring-blue-500 ring-opacity-50" : ""
+                      "absolute flex items-center rounded-lg text-sm font-medium transition-all",
+                      isBeingDragged ? "opacity-75 z-20 scale-105" : "z-10 hover:scale-102 hover:z-15"
                     )}
                     style={{ 
                       left: `${left}%`,
@@ -602,7 +844,9 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
                       height: TIMELINE_ITEM_HEIGHT,
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      minWidth: '40px'
+                      minWidth: '40px',
+                      ...getSceneStyles(scene),
+                      transition: 'all 0.2s ease'
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -612,32 +856,56 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
                   >
                     {/* Resize Handle Start */}
                     <div
-                      className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-black/10 hover:bg-black/20 rounded-l-lg transition-colors"
+                      className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-l-lg transition-colors backdrop-blur-sm"
                       onMouseDown={(e) => handleDragStart(e, scene.id, 'resize-start')}
                     />
                     
                     {/* Drag Handle */}
                     <div
-                      className="absolute left-2 top-0 bottom-0 w-5 cursor-move flex items-center justify-center opacity-30 hover:opacity-70 transition-opacity"
+                      className="absolute left-2 top-0 bottom-0 w-5 cursor-move flex items-center justify-center opacity-40 hover:opacity-80 transition-opacity"
                       onMouseDown={(e) => handleDragStart(e, scene.id, 'move')}
                     >
-                      <GripVertical className="w-3 h-3" />
+                      <GripVertical className="w-3 h-3 text-white drop-shadow" />
                     </div>
                     
                     {/* Scene Label */}
-                    <span className="flex-1 text-center px-8 truncate select-none">
+                    <span className="flex-1 text-center px-8 truncate select-none font-semibold drop-shadow-sm">
                       {scene.name || scene.data?.name || `Scene ${index + 1}`}
                     </span>
                     
                     {/* Resize Handle End */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-black/10 hover:bg-black/20 rounded-r-lg transition-colors"
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-r-lg transition-colors backdrop-blur-sm"
                       onMouseDown={(e) => handleDragStart(e, scene.id, 'resize-end')}
                     />
                   </div>
                 );
               })}
             </div>
+            
+            {/* Audio Track - only show when audio exists */}
+            {audioTrack && (
+              <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
+                <div
+                  className="absolute"
+                  style={{
+                    left: `${((audioTrack.startTime || 0) * FPS / totalDuration) * 100}%`,
+                    width: `${(((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100}%`,
+                    height: TIMELINE_ITEM_HEIGHT,
+                    top: '50%',
+                    transform: 'translateY(-50%)'
+                  }}
+                >
+                  {/* Audio waveform canvas - no background, just the waveform */}
+                  <canvas
+                    ref={audioCanvasRef}
+                    className="absolute inset-0 w-full h-full"
+                    width={1200}
+                    height={TIMELINE_ITEM_HEIGHT * 2}
+                  />
+                </div>
+              </div>
+            )}
             
             {/* Playhead */}
             <div
