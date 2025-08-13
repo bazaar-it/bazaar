@@ -33,6 +33,8 @@ export interface RemotionPreviewProps {
   loop?: boolean;
   inFrame?: number;
   outFrame?: number;
+  onPlay?: () => void;
+  onPause?: () => void;
 }
 
 // The main preview component that wraps Remotion Player
@@ -48,7 +50,9 @@ export default function RemotionPreview({
   playbackRate = 1,
   loop = true,
   inFrame,
-  outFrame
+  outFrame,
+  onPlay,
+  onPause
 }: RemotionPreviewProps) {
   // Log rendering for debugging
   useEffect(() => {
@@ -56,19 +60,58 @@ export default function RemotionPreview({
     console.log('RemotionPreview props:', { durationInFrames, fps, width, height, playbackRate });
   }, [durationInFrames, fps, width, height, refreshToken, playbackRate]);
   
-  // Emit current frame updates for external UI (e.g., frame counter)
+  // Emit current frame updates and detect play/pause state from frame changes
   useEffect(() => {
     if (!playerRef?.current) return;
     const ref = playerRef.current;
+    
+    let lastFrame = -1;
+    let frameUnchangedCount = 0;
+    let lastReportedPlayState: boolean | null = null;
+    
     const onFrame = () => {
       try {
-        const frame = (ref as any)?.getCurrentFrame?.() ?? undefined;
-        if (typeof frame === 'number') {
+        const rawFrame = (ref as any)?.getCurrentFrame?.() ?? undefined;
+        if (typeof rawFrame === 'number') {
+          // Round frame to integer to avoid decimals
+          const frame = Math.round(rawFrame);
+          // Always emit frame update
           const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
           window.dispatchEvent(ev);
+          
+          // Detect play/pause state from frame changes
+          if (frame === lastFrame) {
+            // Frame hasn't changed
+            frameUnchangedCount++;
+            
+            // If frame hasn't changed for 3 consecutive checks (about 48ms at 60fps)
+            // and we haven't already reported paused state, report it
+            if (frameUnchangedCount >= 3 && lastReportedPlayState !== false) {
+              lastReportedPlayState = false;
+              const pauseEv = new CustomEvent('preview-play-state-change', { 
+                detail: { playing: false }
+              });
+              window.dispatchEvent(pauseEv);
+            }
+          } else {
+            // Frame changed - video is playing
+            frameUnchangedCount = 0;
+            
+            // Only report playing if we haven't already
+            if (lastReportedPlayState !== true) {
+              lastReportedPlayState = true;
+              const playEv = new CustomEvent('preview-play-state-change', { 
+                detail: { playing: true }
+              });
+              window.dispatchEvent(playEv);
+            }
+          }
+          
+          lastFrame = frame;
         }
       } catch {}
     };
+    
     const interval = window.setInterval(onFrame, Math.max(1000 / fps, 16));
     return () => window.clearInterval(interval);
   }, [playerRef, fps]);

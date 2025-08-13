@@ -15,6 +15,8 @@ import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
 import { useBreakpoint } from '~/hooks/use-breakpoint';
 import MobileAppHeader from '~/components/MobileAppHeader';
 import { CreateTemplateModal } from '~/components/CreateTemplateModal';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import TimelinePanel from './panels/TimelinePanel';
 
 // ✅ NEW: Debug flag for production logging
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -29,6 +31,7 @@ type Props = {
 export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [isTimelineVisible, setIsTimelineVisible] = useState(false);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
   const { data: session } = useSession();
@@ -106,7 +109,13 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   }, [projectId]);
   
   // Handle panel add when clicked or dragged from sidebar
-  const handleAddPanel = useCallback((panelType: PanelTypeG) => {
+  const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {
+    // Special handling for timeline
+    if (panelType === 'timeline') {
+      setIsTimelineVisible(true);
+      return;
+    }
+    
     workspaceContentAreaRef.current?.addPanel(panelType);
   }, []);
   
@@ -228,14 +237,57 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           }}
         >
           <div className="h-full flex flex-col overflow-hidden relative">
-            <WorkspaceContentAreaG
-              ref={workspaceContentAreaRef}
-              projectId={projectId}
-              userId={userId}
-              initialProps={initialProps}
-              projects={userProjects}
-              onProjectRename={handleProjectRenamed}
-            />
+            {/* Conditional vertical layout based on timeline visibility */}
+            {isTimelineVisible ? (
+              <PanelGroup direction="vertical" className="h-full">
+                {/* Main workspace panels */}
+                <Panel defaultSize={75} minSize={30}>
+                  <WorkspaceContentAreaG
+                    ref={workspaceContentAreaRef}
+                    projectId={projectId}
+                    userId={userId}
+                    initialProps={initialProps}
+                    projects={userProjects}
+                    onProjectRename={handleProjectRenamed}
+                  />
+                </Panel>
+                
+                {/* Resize handle between main area and timeline */}
+                <PanelResizeHandle className="h-[8px] bg-gray-100 hover:bg-gray-200 transition-colors border-t border-b border-gray-200" />
+                
+                {/* Timeline panel at bottom */}
+                <Panel defaultSize={25} minSize={15} maxSize={50}>
+                  <div className="h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200 relative">
+                    {/* Close button for timeline */}
+                    <button
+                      onClick={() => setIsTimelineVisible(false)}
+                      className="absolute top-2 right-2 z-50 p-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
+                      title="Close Timeline"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                    <TimelinePanel
+                      key={`timeline-${projectId}`}
+                      projectId={projectId}
+                      userId={userId}
+                    />
+                  </div>
+                </Panel>
+              </PanelGroup>
+            ) : (
+              /* No timeline - just the main workspace */
+              <WorkspaceContentAreaG
+                ref={workspaceContentAreaRef}
+                projectId={projectId}
+                userId={userId}
+                initialProps={initialProps}
+                projects={userProjects}
+                onProjectRename={handleProjectRenamed}
+              />
+            )}
           </div>
         </div>
         
