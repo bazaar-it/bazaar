@@ -127,6 +127,7 @@ export function PreviewPanelG({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const playerRef = useRef<PlayerRef>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
@@ -155,6 +156,71 @@ export function PreviewPanelG({
     }, Math.max(1000 / 30, 16));
     return () => window.clearInterval(interval);
   }, []);
+  
+  // Listen for Timeline events
+  useEffect(() => {
+    const handleTimelineSeek = (event: CustomEvent) => {
+      if (event.detail && typeof event.detail.frame === 'number' && playerRef.current) {
+        try {
+          const frame = Math.round(event.detail.frame); // Ensure integer frame
+          console.log('[PreviewPanelG] Timeline seek to frame:', frame);
+          
+          // Remotion Player's seekTo expects frame number directly
+          playerRef.current.seekTo(frame);
+          setCurrentFrame(frame); // Update local state
+          
+          console.log('[PreviewPanelG] Seek completed, updating timeline');
+          
+          // Force a frame update event after seek completes
+          // This ensures the timeline updates to the new position
+          setTimeout(() => {
+            const updateEvent = new CustomEvent('preview-frame-update', { 
+              detail: { frame: frame }
+            });
+            window.dispatchEvent(updateEvent);
+          }, 50); // Reduced timeout for faster response
+        } catch (error) {
+          console.error('[PreviewPanelG] Failed to seek:', error);
+        }
+      }
+    };
+    
+    const handleTimelinePlayPause = () => {
+      console.log('[PreviewPanelG] Received timeline play/pause event, current isPlaying:', isPlaying);
+      if (playerRef.current) {
+        try {
+          // Use our state variable instead of trying to get player state
+          if (isPlaying) {
+            playerRef.current.pause();
+            setIsPlaying(false);
+            // Dispatch play state change event
+            const event = new CustomEvent('preview-play-state-change', { 
+              detail: { playing: false }
+            });
+            window.dispatchEvent(event);
+          } else {
+            playerRef.current.play();
+            setIsPlaying(true);
+            // Dispatch play state change event
+            const event = new CustomEvent('preview-play-state-change', { 
+              detail: { playing: true }
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (error) {
+          console.warn('Failed to play/pause from timeline:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('timeline-seek' as any, handleTimelineSeek);
+    window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    
+    return () => {
+      window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
+      window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    };
+  }, [isPlaying, setCurrentFrame]);
 
   // (moved below selectedSceneRange definition to avoid TDZ)
   
@@ -1694,6 +1760,20 @@ export default function FallbackComposition() {
                 loop={loopState !== 'off'}
                 inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
                 outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
+                onPlay={() => {
+                  setIsPlaying(true);
+                  const event = new CustomEvent('preview-play-state-change', { 
+                    detail: { playing: true }
+                  });
+                  window.dispatchEvent(event);
+                }}
+                onPause={() => {
+                  setIsPlaying(false);
+                  const event = new CustomEvent('preview-play-state-change', { 
+                    detail: { playing: false }
+                  });
+                  window.dispatchEvent(event);
+                }}
               />
             </ErrorBoundary>
             {/* Frame counter is now rendered inside the Remotion Player via portal for correct fullscreen behavior. */}

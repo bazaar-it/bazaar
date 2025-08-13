@@ -19,16 +19,17 @@ import {
   Music,
   Settings,
   Zap,
+  Film,
 } from "lucide-react";
 import { Images } from "lucide-react";
 
 
 interface GenerateSidebarProps {
-  onAddPanel?: (panelType: PanelTypeG) => void;
+  onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
 }
 
 interface WorkspacePanelG {
-  type: PanelTypeG;
+  type: PanelTypeG | 'timeline';
   id: string;
   name: string;
   icon: any;
@@ -37,7 +38,7 @@ interface WorkspacePanelG {
 }
 
 interface PanelOption {
-  type: PanelTypeG;
+  type: PanelTypeG | 'timeline';
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -45,10 +46,12 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Media, Code, Templates, Integrations
+// Workspace panels in vertical order: Projects, Chat, Video, Timeline, Media, Code, Templates, Integrations
 const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
+  { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
+  { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
   { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Media & Audio" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
@@ -63,7 +66,7 @@ export function GenerateSidebar({
   const [isDragging, setIsDragging] = useState(false);
   
   // Handle dragging panel icons from sidebar
-  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG) => {
+  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG | 'timeline') => {
     e.dataTransfer.setData("text/plain", panelType);
     e.dataTransfer.effectAllowed = "copy";
     setIsDragging(true);
@@ -94,7 +97,7 @@ export function GenerateSidebar({
   };
   
   // Handle clicking on panel icons in sidebar
-  const handlePanelClick = (panelType: PanelTypeG) => {
+  const handlePanelClick = (panelType: PanelTypeG | 'timeline') => {
     if (onAddPanel) {
       onAddPanel(panelType);
     }
