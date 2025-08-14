@@ -54,7 +54,7 @@ const navItems: WorkspacePanelG[] = [
   { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Media & Audio" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
-  { type: 'integrations' as any, id: 'integrations', name: "Connect", icon: Zap, href: "#integrations", tooltip: "Connect GitHub & Figma" },
+  { type: 'integrations' as any, id: 'integrations', name: "Integrations", icon: Zap, href: "#integrations", tooltip: "GitHub & Figma Integrations" },
 ];
 
 
