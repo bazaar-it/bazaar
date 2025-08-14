@@ -50,17 +50,17 @@ export default function HomePage() {
       <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
         <div className="flex items-end gap-2">
           <div className="flex items-baseline gap-2 font-inter">
-            <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
+            <span className="text-2xl md:text-3xl font-semibold text-black">Bazaar</span>
+            <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
           </div>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-2 md:gap-4 items-center">
           {status === "authenticated" ? (
-            <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
+            <span className="text-xs md:text-base truncate max-w-[150px] md:max-w-none">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
           ) : (
             <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
+              <button className="text-sm md:text-base px-2 md:px-4 py-1 md:py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
+              <button className="text-sm md:text-base px-3 md:px-4 py-1 md:py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
             </>
           )}
         </div>
@@ -145,9 +145,9 @@ export default function HomePage() {
           </p>
         </div>
         
-        {/* Marketing Video Player - positioned outside container with aggressive negative margin */}
-        <div className="w-full -mt-16 mb-8">
-          <div className="flex justify-center w-full px-0">
+        {/* Marketing Video Player - responsive positioning */}
+        <div className="w-full -mt-8 md:-mt-16 mb-8">
+          <div className="flex justify-center w-full px-2 sm:px-4 md:px-0">
             <div className="w-full max-w-7xl">
               <MarketingVideoPlayer />
             </div>
@@ -164,15 +164,8 @@ export default function HomePage() {
           
           {/* Airbnb Video Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
-            <div className="w-full max-w-5xl">
-              {/* Responsive container that adapts to mobile */}
-              <div className="flex items-center justify-center" style={{
-                width: '100%',
-                margin: '0 auto',
-                background: 'transparent'
-              }}>
-                <AirbnbDemoPlayer />
-              </div>
+            <div className="w-full max-w-5xl flex justify-center">
+              <AirbnbDemoPlayer />
             </div>
           </div>
         </section>

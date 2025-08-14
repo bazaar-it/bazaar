@@ -16,9 +16,11 @@ const MarketingVideoPlayer: React.FC = () => {
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
-    let lastTimestamp = 0;
-    const targetFPS = 30; // Reduced from 60 to 30 for smoother performance
+    // Check if we're on mobile
+    const isMobile = window.innerWidth < 768;
+    const targetFPS = isMobile ? 20 : 30; // Lower FPS on mobile for better performance
     const frameInterval = 1000 / targetFPS;
+    let lastTimestamp = 0;
     
     const animate = (timestamp: number) => {
       if (timestamp - lastTimestamp >= frameInterval) {
@@ -35,7 +37,14 @@ const MarketingVideoPlayer: React.FC = () => {
       animationRef.current = requestAnimationFrame(animate);
     };
     
-    animationRef.current = requestAnimationFrame(animate);
+    // Add a small delay before starting animation on mobile
+    if (isMobile) {
+      setTimeout(() => {
+        animationRef.current = requestAnimationFrame(animate);
+      }, 100);
+    } else {
+      animationRef.current = requestAnimationFrame(animate);
+    }
     
     return () => {
       if (animationRef.current) {
@@ -95,6 +104,9 @@ const MarketingVideoPlayer: React.FC = () => {
     const width = 1920;
     const height = 1080;
     
+    // Detect if device can handle animations
+    const [canAnimate, setCanAnimate] = useState(true);
+    
     // Responsive scaling
     const [scale, setScale] = useState(1);
 
@@ -111,6 +123,10 @@ const MarketingVideoPlayer: React.FC = () => {
          } else {
            setScale(1); // 100% for desktop
          }
+         
+         // Check device performance
+         const isLowEnd = vw < 480 || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
+         setCanAnimate(!isLowEnd);
        };
        
        handleResize();
@@ -267,7 +283,8 @@ const MarketingVideoPlayer: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        padding: '10px'
+        padding: '10px',
+        willChange: 'transform'
       }}>
         <div
           style={{
@@ -285,6 +302,8 @@ const MarketingVideoPlayer: React.FC = () => {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
+            transform: 'translateZ(0)', // Enable GPU acceleration
+            backfaceVisibility: 'hidden', // Prevent flickering
           }}
         >
           {/* Image previews when dropped - consistent size */}
@@ -492,4 +511,4 @@ const MarketingVideoPlayer: React.FC = () => {
   return <PromptUI />;
 };
 
-export default MarketingVideoPlayer; 
+export default React.memo(MarketingVideoPlayer); 
