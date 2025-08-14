@@ -25,6 +25,7 @@ import { Images } from "lucide-react";
 
 interface GenerateSidebarProps {
   onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
+  isAdmin?: boolean;
 }
 
 interface WorkspacePanelG {
@@ -59,10 +60,20 @@ const navItems: WorkspacePanelG[] = [
 
 
 export function GenerateSidebar({ 
-  onAddPanel
+  onAddPanel,
+  isAdmin = false
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Filter nav items based on admin status
+  const visibleNavItems = navItems.filter(item => {
+    // Hide integrations panel for non-admin users
+    if (item.type === 'integrations' && !isAdmin) {
+      return false;
+    }
+    return true;
+  });
   
   // Handle dragging panel icons from sidebar
   const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG | 'timeline') => {
@@ -161,7 +172,7 @@ export function GenerateSidebar({
             document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
           }}
         >
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
                 <div className="flex flex-col items-center group cursor-pointer gap-1">
