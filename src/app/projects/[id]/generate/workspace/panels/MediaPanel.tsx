@@ -110,9 +110,9 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   };
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-2">
+    <div className="h-full flex flex-col bg-white overflow-hidden">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
+        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
           <TabsTrigger value="uploads" className="flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Uploads
@@ -123,8 +123,8 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
           </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="uploads" className="flex-1 flex flex-col overflow-hidden mt-0">
-          <div className="h-full flex flex-col overflow-hidden">
+        <TabsContent value="uploads" className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
               <div className="font-medium">My uploads</div>
               <select
@@ -200,7 +200,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
           </div>
         </TabsContent>
         
-        <TabsContent value="audio" className="flex-1 overflow-hidden mt-0">
+        <TabsContent value="audio" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
           <AudioPanel projectId={projectId} />
         </TabsContent>
       </Tabs>

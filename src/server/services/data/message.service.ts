@@ -2,6 +2,8 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { db } from "~/server/db";
 import { messages } from "~/server/db/schema";
+import { YouTubeExtractorService } from "~/server/services/media/youtube-extractor.service";
+import { youTubeContextStore } from "~/server/services/media/youtube-context.store";
 
 export class MessageService {
   /**
@@ -47,7 +49,51 @@ export class MessageService {
 
     const [newMessage] = await db.insert(messages).values(messageData).returning();
     
+    // Async YouTube URL detection - runs in parallel, doesn't block
+    if (data.role === 'user' && newMessage) {
+      this.detectAndProcessYouTubeUrls(newMessage.content, newMessage.projectId, newMessage.id)
+        .catch(error => {
+          console.error('[MessageService] YouTube detection failed:', error);
+          // Silent failure - doesn't affect the main flow
+        });
+    }
+    
     return newMessage;
+  }
+
+  /**
+   * Asynchronously detect and process YouTube URLs
+   * This runs in the background without blocking the message creation
+   */
+  private async detectAndProcessYouTubeUrls(
+    content: string,
+    projectId: string,
+    messageId: string
+  ): Promise<void> {
+    try {
+      const result = await YouTubeExtractorService.processMessageForYouTube(
+        content,
+        projectId,
+        messageId
+      );
+      
+      if (result && result.urls.length > 0) {
+        console.log(`[MessageService] Detected ${result.urls.length} YouTube URLs in message ${messageId}`);
+        
+        // Store in context store for AI to use
+        youTubeContextStore.addContext(projectId, {
+          urls: result.urls,
+          videoIds: result.videoIds,
+          messageId
+        });
+        
+        console.log('[MessageService] YouTube URLs stored in context:', result.urls);
+        console.log('[MessageService] Video IDs:', result.videoIds);
+      }
+    } catch (error) {
+      // Silent failure - this is a background operation
+      console.error('[MessageService] YouTube processing error:', error);
+    }
   }
 }
 

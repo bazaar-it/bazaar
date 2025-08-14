@@ -112,7 +112,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden flex flex-col h-full ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
       {!isCodePanel && (
         <div 
@@ -166,7 +166,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
           </div>
         </div>
       )}
-      <div className={`${isCodePanel ? "h-full" : "h-[calc(100%-41px)]"} overflow-hidden`}>
+      <div className="flex-1 overflow-hidden">
         {children}
       </div>
     </div>

@@ -3,6 +3,7 @@
 import { ContextBuilder } from "./orchestrator_functions/contextBuilder";
 import { IntentAnalyzer } from "./orchestrator_functions/intentAnalyzer";
 import { parseDurationFromPrompt } from "./utils/durationParser";
+import { youTubeContextStore } from "~/server/services/media/youtube-context.store";
 // YouTube imports removed - analysis will be handled by tools when brain decides
 import type { 
   OrchestrationInput, 
@@ -146,6 +147,14 @@ export class Orchestrator {
         ...input,
         prompt: enhancedPrompt
       };
+      
+      // 0.5. Add YouTube context if available
+      const youtubeContext = youTubeContextStore.getFormattedContext(input.projectId);
+      if (youtubeContext) {
+        console.log('🧠 [NEW ORCHESTRATOR] Found YouTube reference context:', youtubeContext);
+        // Append YouTube context to the enhanced prompt
+        enhancedInput.prompt = enhancedInput.prompt + youtubeContext;
+      }
       
       // 1. Build context
       console.log('🧠 [NEW ORCHESTRATOR] Step 1: Building context...');
