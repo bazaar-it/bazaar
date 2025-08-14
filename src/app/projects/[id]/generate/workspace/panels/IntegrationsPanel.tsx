@@ -27,9 +27,10 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
   
   // Update selected repos mutation
   const updateReposMutation = api.github.updateSelectedRepos.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Repository selection saved');
-      refetchGitHub();
+      // Wait for refetch to complete before UI updates
+      await refetchGitHub();
     },
     onError: (error) => {
       toast.error('Failed to save repository selection');
@@ -37,8 +38,22 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
     }
   });
 
+  // Reset repository selection mutation
+  const resetReposMutation = api.github.resetRepositorySelection.useMutation({
+    onSuccess: () => {
+      toast.success('Repository selection reset');
+      // Don't refetch immediately - let the user select new repos first
+      setSelectedRepos([]);
+    },
+    onError: (error) => {
+      toast.error('Failed to reset repository selection');
+      console.error('Failed to reset repos:', error);
+    }
+  });
+
   // Initialize selected repos when data loads
   React.useEffect(() => {
+    console.log('[IntegrationsPanel] GitHub connection data:', githubConnection?.selectedRepos);
     if (githubConnection?.selectedRepos) {
       setSelectedRepos(githubConnection.selectedRepos);
     }
@@ -74,19 +89,28 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
   };
 
   const handleRepoToggle = (repo: string) => {
+    console.log('[IntegrationsPanel] Toggling repo:', repo);
     setSelectedRepos(prev => {
-      if (prev.includes(repo)) {
-        return prev.filter(r => r !== repo);
-      } else {
-        return [...prev, repo];
-      }
+      const newSelection = prev.includes(repo) 
+        ? prev.filter(r => r !== repo)
+        : [...prev, repo];
+      console.log('[IntegrationsPanel] New selection:', newSelection);
+      return newSelection;
     });
   };
 
   const handleSaveRepoSelection = async () => {
+    console.log('[IntegrationsPanel] Saving repos:', selectedRepos);
+    if (selectedRepos.length === 0) {
+      toast.error('Please select at least one repository');
+      return;
+    }
     setIsSavingRepos(true);
     try {
       await updateReposMutation.mutateAsync({ repositories: selectedRepos });
+      console.log('[IntegrationsPanel] Save successful, repos should be updated');
+    } catch (error) {
+      console.error('[IntegrationsPanel] Save failed:', error);
     } finally {
       setIsSavingRepos(false);
     }
@@ -209,7 +233,7 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
             ) : (
               // GitHub Connected - Repository Selection
               <div className="h-full flex flex-col overflow-hidden">
-                {selectedRepos.length === 0 ? (
+                {(!githubConnection?.selectedRepos?.length || githubConnection.selectedRepos.length === 0) ? (
                   // Repository selection UI
                   <div className="flex-1 flex flex-col overflow-hidden">
                     <div className="p-4 bg-green-50 border-b border-green-200 flex-shrink-0">
@@ -323,11 +347,21 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                         Searching in {selectedRepos.length} {selectedRepos.length === 1 ? 'repository' : 'repositories'}
                       </p>
                       <Button
-                        onClick={() => setSelectedRepos([])}
+                        onClick={async () => {
+                          await resetReposMutation.mutateAsync();
+                        }}
                         variant="ghost"
                         size="sm"
+                        disabled={resetReposMutation.isPending}
                       >
-                        Change Repos
+                        {resetReposMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Resetting...
+                          </>
+                        ) : (
+                          'Change Repos'
+                        )}
                       </Button>
                     </div>
                     <ComponentDiscoveryPanel projectId={projectId} />
