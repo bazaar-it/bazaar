@@ -24,8 +24,8 @@ const MarketingVideoPlayer: React.FC = () => {
       if (timestamp - lastTimestamp >= frameInterval) {
         setCurrentFrame(prev => {
           const next = prev + 1;
-          // Reset after 340 frames total (including 1.5s pause)
-          if (next >= 340) {
+          // Reset after video ends (text + 30 frame pause)
+          if (next >= 135) { // endFrame (105) + 30 frames
             return 0; // Reset
           }
           return next;
@@ -97,26 +97,28 @@ const MarketingVideoPlayer: React.FC = () => {
     
     // Responsive scaling
     const [scale, setScale] = useState(1);
+
     
-    useEffect(() => {
-      const handleResize = () => {
-        const vw = window.innerWidth;
-        if (vw < 480) {
-          setScale(0.4); // 40% for very small mobile
-        } else if (vw < 768) {
-          setScale(0.5); // 50% for mobile
-        } else if (vw < 1024) {
-          setScale(0.7); // 70% for tablet
-        } else {
-          setScale(1); // 100% for desktop
-        }
-      };
-      
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }, []);
-    
+         useEffect(() => {
+       const handleResize = () => {
+         const vw = window.innerWidth;
+         if (vw < 480) {
+           setScale(0.4); // 40% for very small mobile
+         } else if (vw < 768) {
+           setScale(0.5); // 50% for mobile
+         } else if (vw < 1024) {
+           setScale(0.7); // 70% for tablet
+         } else {
+           setScale(1); // 100% for desktop
+         }
+       };
+       
+       handleResize();
+       window.addEventListener('resize', handleResize);
+       return () => window.removeEventListener('resize', handleResize);
+     }, []);
+
+        
     const interpolate = (frame: number, inputRange: [number, number], outputRange: [number, number], options?: { extrapolateLeft?: string; extrapolateRight?: string; easing?: string }) => {
       const [inputMin, inputMax] = inputRange;
       const [outputMin, outputMax] = outputRange;
@@ -136,13 +138,13 @@ const MarketingVideoPlayer: React.FC = () => {
       return outputMin + progress * (outputMax - outputMin);
     };
     
-    const text = "Create an animation of the AirBnB app using the attached screenshots. Show a user swiping thru 4 images.";
+    const text = "Create a demo video of the AirBnB app using these screenshots.";
     
     // Perfectly consistent typewriter - map each frame to exact character
     const startFrame = 5; // Start almost immediately
-    const endFrame = 165; // Adjusted for faster overall timing
-    const totalFrames = endFrame - startFrame; // 160 frames total duration
-    const totalChars = text.length; // Much longer text now
+    const endFrame = 105; // Reduced for shorter text
+    const totalFrames = endFrame - startFrame; // 100 frames total duration
+    const totalChars = text.length; // Shorter text now
     
     let charCount = 0;
     if (frame >= startFrame && frame < endFrame) {
@@ -152,7 +154,21 @@ const MarketingVideoPlayer: React.FC = () => {
     } else if (frame >= endFrame) {
       charCount = totalChars;
     }
+
+    // Calculate dynamic text height based on content length
+    const currentText = text.slice(0, charCount);
+    const textContainerWidth = 650 * scale; // Available text width
+    const fontSize = 28 * scale;
+    const avgCharWidth = fontSize * 0.6; // Approximate character width
+    const charsPerLine = Math.floor(textContainerWidth / avgCharWidth);
+    const estimatedLines = Math.max(1, Math.ceil(currentText.length / charsPerLine));
     
+    // Dynamic height calculation
+    const lineHeight = fontSize * 1.4;
+    const baseTextHeight = 40 * scale; // Minimum height for one line
+    const dynamicTextHeight = Math.max(baseTextHeight, estimatedLines * lineHeight + (10 * scale)); // Add padding
+
+        
     // More realistic cursor blinking - faster blink while typing, slower when done
     // REMOVED: Cursor blinking logic for cleaner text animation
     // const isTyping = frame >= 40 && frame <= 200;
@@ -167,15 +183,19 @@ const MarketingVideoPlayer: React.FC = () => {
       { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeOut" }
     );
 
-    // Cursor animation - start immediately when text completes
-    const cursorStartFrame = 165; // Start exactly when text completes (hardcoded to ensure timing)
-    const cursorEndFrame = 275; // End after 110 frames of dragging
-    const cursorProgress = interpolate(
-      frame,
-      [cursorStartFrame, cursorEndFrame],
-      [0, 1],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeInOut" }
-    );
+    // Cursor animation - start when the word 'animation' finishes typing
+    const animationWord = "animation";
+    const animationIndex = text.toLowerCase().indexOf(animationWord);
+    const animationEndIndex = animationIndex === -1 ? Math.floor(totalChars * 0.2) : animationIndex + animationWord.length;
+    const frameAtAnimation = startFrame + Math.floor((animationEndIndex / totalChars) * totalFrames);
+         const cursorStartFrame = frameAtAnimation; // earlier start aligned with 'animation'
+     const cursorEndFrame = cursorStartFrame + 45; // faster, more human-like drag (1.5 seconds at 30fps)
+          const cursorProgress = interpolate(
+        frame,
+        [cursorStartFrame, cursorEndFrame],
+        [0, 1],
+        { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: "easeOut" }
+      );
 
     // Natural straight path for cursor - enters from right side of container
     const containerWidth = 700 * scale; // Scale container width
@@ -189,12 +209,11 @@ const MarketingVideoPlayer: React.FC = () => {
     const cursorY = startY; // Keep Y constant for straight horizontal movement
 
     // Image drop animation - coordinated with cursor end
-    const dropFrame = 275; // Start image drop when cursor ends (hardcoded)
-    const dropCompleteFrame = 295; // Drop animation completes 20 frames after start (hardcoded)
+    const dropFrame = cursorEndFrame; // Start image drop when cursor ends (dynamic)
+    const dropCompleteFrame = dropFrame + 20; // Drop animation completes 20 frames after start
     
-    // End pause - 2.5 seconds (75 frames) after drop completes
-    const pauseStartFrame = dropCompleteFrame;
-    const videoEndFrame = pauseStartFrame + 75; // 2.5 seconds at 30fps
+    // End pause - 30 frames after text completes
+    const videoEndFrame = endFrame + 30; // 30 frames after text finishes (1 second at 30fps)
     const imageDropped = frame >= dropFrame;
     const dropInProgress = frame >= dropFrame && frame < dropCompleteFrame;
     
@@ -208,7 +227,7 @@ const MarketingVideoPlayer: React.FC = () => {
       ) : 0;
     
     // Calculate dynamic box height - keep consistent during dragging
-    const baseHeight = 300; // Optimized height for better proportions
+    const baseHeight = 200; // Reduced base height to match smaller text input
     const imageAreaHeight = imageDropped ? 100 : 0; // Reduced image area for better balance
     const boxHeight = baseHeight + imageAreaHeight;
     
@@ -357,7 +376,7 @@ const MarketingVideoPlayer: React.FC = () => {
             display: "flex", 
             alignItems: "flex-start",
             marginTop: imageDropped ? "0px" : "0px", // Remove top margin to align text to top
-            marginBottom: "10px", // Reduce bottom margin to bring icons closer
+            marginBottom: `${12 * scale}px`, // Add more space between text and icons
             justifyContent: "flex-start",
           }}>
             <div style={{ 
@@ -367,13 +386,13 @@ const MarketingVideoPlayer: React.FC = () => {
               fontFamily: "system-ui, -apple-system, sans-serif",
               fontWeight: "400",
               lineHeight: "1.4", // Increased line height for better multi-line readability
-              minHeight: `${120 * scale}px`, // Responsive min height
-              maxHeight: `${160 * scale}px`, // Responsive max height
+              minHeight: `${dynamicTextHeight}px`,
+              maxHeight: `${dynamicTextHeight}px`,
               display: "flex",
               alignItems: "flex-start",
               justifyContent: "flex-start",
               paddingTop: imageDropped ? "0px" : "0px", // Start at very top initially
-              paddingBottom: "20px", // Add bottom padding to separate from icons
+              paddingBottom: `${2 * scale}px`, // Minimal padding above icons
               wordWrap: "break-word", // Allow text to wrap
               whiteSpace: "normal", // Allow normal text wrapping
               overflow: "hidden", // Hide any text overflow
@@ -383,63 +402,43 @@ const MarketingVideoPlayer: React.FC = () => {
             </div>
           </div>
 
-          {/* Bottom action bar - no white background on icons */}
+          {/* Bottom action bar - positioned like 'Prompt it to Perfection' */}
           <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingTop: `${15 * scale}px`, // Responsive padding
-            paddingBottom: `${20 * scale}px`, // Responsive padding
-            borderTop: "none",
-            background: "transparent",
-            borderRadius: "0 0 20px 20px",
-            boxShadow: "none",
-            minHeight: `${60 * scale}px`, // Responsive min height
-            marginTop: "auto", // Push to bottom of container
+            position: "relative",
+            height: `${44 * scale}px`,
+            marginTop: "auto",
           }}>
+            {/* Left icons */}
             <div style={{
+              position: "absolute",
+              left: `${24 * scale}px`,
+              bottom: `${-8 * scale}px`,
               display: "flex",
+              gap: `${16 * scale}px`,
               alignItems: "center",
-              gap: `${8 * scale}px`,
               opacity: iconProgress,
             }}>
-              <div style={{
-                width: `${44 * scale}px`,
-                height: `${44 * scale}px`,
-                borderRadius: `${8 * scale}px`,
-                backgroundColor: "transparent",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#888",
-                fontSize: `${36 * scale}px`, // Responsive icon size
-              }}>
+              <div style={{ color: "#666", fontSize: `${36 * scale}px` }}>
                 <IconifyIcon icon="material-symbols:image-outline" />
               </div>
-              <div style={{
-                width: `${44 * scale}px`,
-                height: `${44 * scale}px`,
-                borderRadius: `${8 * scale}px`,
-                backgroundColor: "transparent",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#888",
-                fontSize: `${36 * scale}px`, // Responsive icon size
-              }}>
+              <div style={{ color: "#666", fontSize: `${36 * scale}px` }}>
                 <IconifyIcon icon="material-symbols:mic-outline" />
               </div>
             </div>
+            {/* Right send button */}
             <div style={{
-              width: `${60 * scale}px`, // Responsive button size
-              height: `${60 * scale}px`, // Responsive button size
+              position: "absolute",
+              right: `${24 * scale}px`,
+              bottom: `${-12 * scale}px`,
+              width: `${50 * scale}px`,
+              height: `${50 * scale}px`,
               borderRadius: "50%",
               backgroundColor: "#222",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontSize: `${29 * scale}px`, // Responsive send icon size
+              fontSize: `${29 * scale}px`,
               opacity: iconProgress,
               boxShadow: `0 ${2 * scale}px ${8 * scale}px rgba(0,0,0,0.10)`,
             }}>
