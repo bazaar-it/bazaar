@@ -103,7 +103,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   // Handle panel add when clicked or dragged from sidebar
   const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {
-    // Special handling for timeline
+    // Special handling for timeline panels
     if (panelType === 'timeline') {
       setIsTimelineVisible(true);
       return;
@@ -262,6 +262,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
                     initialProps={initialProps}
                     projects={userProjects}
                     onProjectRename={handleProjectRenamed}
+                    isAdmin={user?.isAdmin}
                   />
                 </Panel>
                 
@@ -299,6 +300,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
                 initialProps={initialProps}
                 projects={userProjects}
                 onProjectRename={handleProjectRenamed}
+                isAdmin={user?.isAdmin}
               />
             )}
           </div>
@@ -309,6 +311,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
             onAddPanel={handleAddPanel}
+            isAdmin={user?.isAdmin}
           />
         </div>
       </div>

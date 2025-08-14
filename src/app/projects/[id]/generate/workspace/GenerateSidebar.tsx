@@ -17,7 +17,6 @@ import {
   FolderIcon,
   LayoutTemplateIcon,
   Music,
-  Settings,
   Zap,
   Film,
 } from "lucide-react";
@@ -26,6 +25,7 @@ import { Images } from "lucide-react";
 
 interface GenerateSidebarProps {
   onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
+  isAdmin?: boolean;
 }
 
 interface WorkspacePanelG {
@@ -60,10 +60,20 @@ const navItems: WorkspacePanelG[] = [
 
 
 export function GenerateSidebar({ 
-  onAddPanel
+  onAddPanel,
+  isAdmin = false
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Filter nav items based on admin status
+  const visibleNavItems = navItems.filter(item => {
+    // Hide integrations panel for non-admin users
+    if (item.type === 'integrations' && !isAdmin) {
+      return false;
+    }
+    return true;
+  });
   
   // Handle dragging panel icons from sidebar
   const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG | 'timeline') => {
@@ -162,7 +172,7 @@ export function GenerateSidebar({
             document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
           }}
         >
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
                 <div className="flex flex-col items-center group cursor-pointer gap-1">
@@ -197,27 +207,6 @@ export function GenerateSidebar({
           }}
         ></div>
 
-        {/* Settings Button */}
-        <div className="w-full flex justify-center mb-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex flex-col items-center group cursor-pointer gap-1">
-                <div 
-                  className="h-10 w-10 rounded-lg flex items-center justify-center transition-all duration-200 
-                    bg-transparent group-hover:bg-gray-100 dark:group-hover:bg-gray-800 
-                    text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 cursor-pointer"
-                  onClick={() => router.push('/settings')}
-                >
-                  <Settings className="h-5 w-5 text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors stroke-[1.5]" />
-                </div>
-                <span className="text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 font-light leading-tight transition-colors">Settings</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              Settings & GitHub Integration
-            </TooltipContent>
-          </Tooltip>
-        </div>
 
         {/* Feedback Button - aligned to bottom */}
         <div 

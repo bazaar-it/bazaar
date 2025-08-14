@@ -63,6 +63,7 @@ interface WorkspaceContentAreaGProps {
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
   onProjectRename?: (newTitle: string) => void;
+  isAdmin?: boolean;
 }
 
 export interface WorkspaceContentAreaGHandle {
@@ -112,7 +113,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden flex flex-col h-full ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
       {!isCodePanel && (
         <div 
@@ -166,7 +167,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
           </div>
         </div>
       )}
-      <div className={`flex-1 min-h-0 ${isCodePanel ? "h-full" : ""}`}>
+      <div className="flex-1 overflow-hidden">
         {children}
       </div>
     </div>
@@ -307,7 +308,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, userId, initialProps, projects = [], onProjectRename }, ref) => {
+  ({ projectId, userId, initialProps, projects = [], onProjectRename, isAdmin = false }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -669,6 +670,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
 
     // Add panel method
     const addPanel = useCallback((type: PanelTypeG) => {
+      // Prevent non-admins from adding integrations panel
+      if (type === 'integrations' && !isAdmin) {
+        toast.error('Integrations panel is currently available for administrators only');
+        return;
+      }
+      
       const panelExists = openPanels.some((p) => p.type === type);
       
       if (!panelExists) {
@@ -687,7 +694,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       } else {
         console.log(`Panel ${type} already exists`);
       }
-    }, [openPanels, setIsDraggingFromSidebar]);
+    }, [openPanels, setIsDraggingFromSidebar, isAdmin]);
     
     // Expose methods to parent
     useImperativeHandle(ref, () => ({

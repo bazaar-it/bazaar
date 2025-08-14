@@ -110,9 +110,9 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   };
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
-        <TabsList className="grid w-full grid-cols-2">
+    <div className="h-full flex flex-col bg-white overflow-hidden">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
+        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
           <TabsTrigger value="uploads" className="flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Uploads
@@ -123,9 +123,9 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
           </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="uploads" className="flex-1 overflow-hidden mt-0">
-          <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between p-3 border-b">
+        <TabsContent value="uploads" className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
               <div className="font-medium">My uploads</div>
               <select
                 value={filter}
@@ -139,7 +139,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                 <option value="logos">Logos</option>
               </select>
             </div>
-            <div className="px-3 pt-2">
+            <div className="px-3 pt-2 flex-shrink-0">
               <div className="inline-flex items-center gap-2 text-xs text-gray-600">
                 <label className="inline-flex items-center gap-1">
                   <input type="radio" name="scope" value="project" checked={scope==='project'} onChange={() => setScope('project')} /> Project
@@ -152,7 +152,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
 
             {/* Upload controls */}
             <div
-              className={`m-3 rounded-lg border ${isDragging ? 'border-blue-400 bg-blue-50/40' : 'border-dashed border-gray-300'} p-4 text-sm text-gray-600 flex items-center justify-between`}
+              className={`mx-3 mt-3 mb-2 rounded-lg border ${isDragging ? 'border-blue-400 bg-blue-50/40' : 'border-dashed border-gray-300'} p-4 text-sm text-gray-600 flex items-center justify-between flex-shrink-0`}
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={onDrop}
@@ -166,11 +166,13 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
               </div>
             </div>
 
+            {/* Scrollable content area */}
             {isLoading ? (
               <div className="p-4 text-gray-500">Loading…</div>
             ) : (
-              <div className="p-3 grid grid-cols-2 gap-3 overflow-auto">
-                {assets.map((a: any) => (
+              <div className="flex-1 overflow-y-auto p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {assets.map((a: any) => (
                   <div
                     key={a.id}
                     className="group border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
@@ -192,12 +194,13 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
             )}
           </div>
         </TabsContent>
         
-        <TabsContent value="audio" className="flex-1 overflow-hidden mt-0">
+        <TabsContent value="audio" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
           <AudioPanel projectId={projectId} />
         </TabsContent>
       </Tabs>

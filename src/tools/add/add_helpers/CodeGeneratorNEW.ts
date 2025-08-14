@@ -100,7 +100,7 @@ export class UnifiedCodeProcessor {
   }
 
   /**
-   * UNIFIED: Generate scene name based on tool type
+   * UNIFIED: Generate scene name based on tool type and content
    */
   private generateSceneName(toolName: string, userPrompt: string, code: string): string {
     switch (toolName.toLowerCase()) {
@@ -125,8 +125,79 @@ export class UnifiedCodeProcessor {
         return 'Recreated Scene';
         
       default:
-        return 'Scene'; // Simple display name for code generator
+        // For code generator, try to extract a meaningful name from the prompt
+        
+        // Common patterns for scene descriptions
+        const patterns = [
+          /(?:create|make|generate|show|display|animate)\s+(?:a\s+)?(.+?)(?:\s+with|\s+that|\s+which|\.$)/i,
+          /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|graphic)/i,
+          /^(.+?)(?:\s+scene|\s+animation)?$/i
+        ];
+        
+        for (const pattern of patterns) {
+          const match = userPrompt.match(pattern);
+          if (match?.[1]) {
+            // Clean up and capitalize the extracted name
+            const cleanName = match[1]
+              .replace(/[.,!?;:]$/, '') // Remove trailing punctuation
+              .trim()
+              .split(' ')
+              .slice(0, 4) // Limit to 4 words
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+              .join(' ');
+            
+            if (cleanName && cleanName.length > 2) {
+              return cleanName.substring(0, 40); // Limit total length
+            }
+          }
+        }
+        
+        // Fallback: Try to extract key nouns from the prompt
+        const nouns = userPrompt.match(/\b(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|layout)\b/gi);
+        if (nouns && nouns.length > 0) {
+          return nouns[0].charAt(0).toUpperCase() + nouns[0].slice(1).toLowerCase();
+        }
+        
+        return 'Generated Scene'; // Better default than just "Scene"
     }
+  }
+
+  /**
+   * Extract a meaningful scene name from the user prompt
+   */
+  private extractSceneNameFromPrompt(userPrompt: string): string {
+    // Common patterns for scene descriptions
+    const patterns = [
+      /(?:create|make|generate|show|display|animate)\s+(?:a\s+)?(.+?)(?:\s+with|\s+that|\s+which|\.$)/i,
+      /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|graphic)/i,
+      /^(.+?)(?:\s+scene|\s+animation)?$/i
+    ];
+    
+    for (const pattern of patterns) {
+      const match = userPrompt.match(pattern);
+      if (match?.[1]) {
+        // Clean up and capitalize the extracted name
+        const cleanName = match[1]
+          .replace(/[.,!?;:]$/, '') // Remove trailing punctuation
+          .trim()
+          .split(' ')
+          .slice(0, 4) // Limit to 4 words
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        
+        if (cleanName && cleanName.length > 2) {
+          return cleanName.substring(0, 40); // Limit total length
+        }
+      }
+    }
+    
+    // Fallback: Try to extract key nouns from the prompt
+    const nouns = userPrompt.match(/\b(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|layout)\b/gi);
+    if (nouns && nouns.length > 0) {
+      return nouns[0].charAt(0).toUpperCase() + nouns[0].slice(1).toLowerCase();
+    }
+    
+    return 'Generated Scene'; // Better default than just "Scene"
   }
 
   /**
@@ -593,7 +664,7 @@ FUNCTION NAME: ${input.functionName}`;
       
       return {
         code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Code generated with ${durationAnalysis.frames} frames duration (${durationAnalysis.confidence} confidence from ${durationAnalysis.source})`,
         debug: {
@@ -625,7 +696,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: "Error Scene", // Error fallback name
         duration: fallbackDuration,
         reasoning: "CodeGenerator encountered an error - auto-fix can restore from layout JSON",
         debug: { 
@@ -723,7 +794,7 @@ Transform the static design into sequential storytelling.`;
       
       return {
         code: cleanCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: this.extractSceneNameFromPrompt(imageToCodeInput.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
         debug: {
@@ -753,7 +824,7 @@ export default function ${input.functionName}() {
       
       return {
         code: errorCode,
-        name: "Scene", // Simple display name, UI will show position-based numbering
+        name: "Image Error", // Error fallback name
         duration: fallbackDuration,
         reasoning: "Image-to-code generation failed - auto-fix available",
         debug: { 

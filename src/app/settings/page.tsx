@@ -1,13 +1,8 @@
-import { redirect } from "next/navigation";
-import { auth } from "~/server/auth";
-import { SettingsPageClient } from "./SettingsPageClient";
+import { redirect } from 'next/navigation';
 
-export default async function SettingsPage() {
-  const session = await auth();
-  
-  if (!session?.user) {
-    redirect("/login");
-  }
-  
-  return <SettingsPageClient user={session.user} />;
+// Settings page has been removed - GitHub connection is now in the Integrations panel
+// within the generate workspace. Users should connect GitHub directly where they use it.
+export default function SettingsPage() {
+  // Redirect to home page
+  redirect('/');
 }
