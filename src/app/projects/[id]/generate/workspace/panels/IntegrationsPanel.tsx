@@ -27,9 +27,10 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
   
   // Update selected repos mutation
   const updateReposMutation = api.github.updateSelectedRepos.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Repository selection saved');
-      refetchGitHub();
+      // Wait for refetch to complete before UI updates
+      await refetchGitHub();
     },
     onError: (error) => {
       toast.error('Failed to save repository selection');
@@ -37,8 +38,22 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
     }
   });
 
+  // Reset repository selection mutation
+  const resetReposMutation = api.github.resetRepositorySelection.useMutation({
+    onSuccess: () => {
+      toast.success('Repository selection reset');
+      // Don't refetch immediately - let the user select new repos first
+      setSelectedRepos([]);
+    },
+    onError: (error) => {
+      toast.error('Failed to reset repository selection');
+      console.error('Failed to reset repos:', error);
+    }
+  });
+
   // Initialize selected repos when data loads
   React.useEffect(() => {
+    console.log('[IntegrationsPanel] GitHub connection data:', githubConnection?.selectedRepos);
     if (githubConnection?.selectedRepos) {
       setSelectedRepos(githubConnection.selectedRepos);
     }
@@ -52,30 +67,50 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
     window.location.href = authUrl;
   };
 
-  const handleGitHubDisconnect = async () => {
-    try {
-      await api.github.disconnect.useMutation().mutateAsync();
+  // Create disconnect mutation hook
+  const disconnectMutation = api.github.disconnect.useMutation({
+    onSuccess: () => {
       toast.success('GitHub disconnected');
       refetchGitHub();
-    } catch (error) {
+    },
+    onError: (error) => {
       toast.error('Failed to disconnect GitHub');
+      console.error('Disconnect error:', error);
+    }
+  });
+
+  const handleGitHubDisconnect = async () => {
+    try {
+      await disconnectMutation.mutateAsync();
+    } catch (error) {
+      // Error is already handled by onError callback
+      console.error('Failed to disconnect:', error);
     }
   };
 
   const handleRepoToggle = (repo: string) => {
+    console.log('[IntegrationsPanel] Toggling repo:', repo);
     setSelectedRepos(prev => {
-      if (prev.includes(repo)) {
-        return prev.filter(r => r !== repo);
-      } else {
-        return [...prev, repo];
-      }
+      const newSelection = prev.includes(repo) 
+        ? prev.filter(r => r !== repo)
+        : [...prev, repo];
+      console.log('[IntegrationsPanel] New selection:', newSelection);
+      return newSelection;
     });
   };
 
   const handleSaveRepoSelection = async () => {
+    console.log('[IntegrationsPanel] Saving repos:', selectedRepos);
+    if (selectedRepos.length === 0) {
+      toast.error('Please select at least one repository');
+      return;
+    }
     setIsSavingRepos(true);
     try {
       await updateReposMutation.mutateAsync({ repositories: selectedRepos });
+      console.log('[IntegrationsPanel] Save successful, repos should be updated');
+    } catch (error) {
+      console.error('[IntegrationsPanel] Save failed:', error);
     } finally {
       setIsSavingRepos(false);
     }
@@ -151,7 +186,7 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
       <div className="flex-1 overflow-hidden">
         {/* GitHub Tab */}
         {activeTab === 'github' && (
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col overflow-hidden">
             {!githubConnected ? (
               // GitHub Connection UI
               <div className="flex-1 p-6">
@@ -197,11 +232,11 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
               </div>
             ) : (
               // GitHub Connected - Repository Selection
-              <div className="h-full flex flex-col">
-                {selectedRepos.length === 0 ? (
+              <div className="h-full flex flex-col overflow-hidden">
+                {(!githubConnection?.selectedRepos?.length || githubConnection.selectedRepos.length === 0) ? (
                   // Repository selection UI
-                  <div className="flex-1 flex flex-col">
-                    <div className="p-4 bg-green-50 border-b border-green-200">
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="p-4 bg-green-50 border-b border-green-200 flex-shrink-0">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <CheckCircle className="h-5 w-5 text-green-600" />
@@ -226,7 +261,7 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                     </div>
                     
                     {/* Call to action */}
-                    <div className="p-4 bg-amber-50 border-b border-amber-200">
+                    <div className="p-4 bg-amber-50 border-b border-amber-200 flex-shrink-0">
                       <p className="text-sm font-medium text-amber-900 mb-1">
                         ⚡ Almost there! Select repositories to enable component discovery
                       </p>
@@ -236,7 +271,7 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                     </div>
                     
                     {/* Repository Search and Selection */}
-                    <div className="p-4 border-b">
+                    <div className="p-4 border-b flex-shrink-0">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <input
@@ -281,7 +316,7 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                     
                     {/* Save Button */}
                     {filteredRepos.length > 0 && (
-                      <div className="p-4 border-t bg-gray-50">
+                      <div className="p-4 border-t bg-gray-50 flex-shrink-0">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm text-gray-600">
                             {selectedRepos.length} {selectedRepos.length === 1 ? 'repository' : 'repositories'} selected
@@ -312,11 +347,21 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                         Searching in {selectedRepos.length} {selectedRepos.length === 1 ? 'repository' : 'repositories'}
                       </p>
                       <Button
-                        onClick={() => setSelectedRepos([])}
+                        onClick={async () => {
+                          await resetReposMutation.mutateAsync();
+                        }}
                         variant="ghost"
                         size="sm"
+                        disabled={resetReposMutation.isPending}
                       >
-                        Change Repos
+                        {resetReposMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Resetting...
+                          </>
+                        ) : (
+                          'Change Repos'
+                        )}
                       </Button>
                     </div>
                     <ComponentDiscoveryPanel projectId={projectId} />

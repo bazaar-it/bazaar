@@ -718,16 +718,28 @@ export default function AirbnbDemoPlayer() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 250, height: 540 });
   const [imagesPreloaded, setImagesPreloaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const playerRef = useRef<any>(null);
 
-  // Simplified loading - don't wait for images
+  // Detect mobile and simplified loading
   useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
     // Just a small delay for component initialization
     const timer = setTimeout(() => {
       setIsLoaded(true);
       setImagesPreloaded(true);
     }, 500);
-    return () => clearTimeout(timer);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   useEffect(() => {
@@ -791,7 +803,7 @@ export default function AirbnbDemoPlayer() {
           }}
           controls={false}
           loop={true}
-          autoPlay={true}
+          autoPlay={!isMobile}
           showVolumeControls={false}
           allowFullscreen={false}
           clickToPlay={false}

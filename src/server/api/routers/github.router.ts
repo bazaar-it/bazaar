@@ -79,6 +79,9 @@ export const githubRouter = createTRPCRouter({
       repositories: z.array(z.string()),
     }))
     .mutation(async ({ ctx, input }) => {
+      console.log('[GitHub Router] Updating selected repos for user:', ctx.session.user.id);
+      console.log('[GitHub Router] Repositories to save:', input.repositories);
+      
       const connections = await ctx.db
         .select()
         .from(githubConnections)
@@ -100,6 +103,8 @@ export const githubRouter = createTRPCRouter({
           selectedRepos: input.repositories,
         })
         .where(eq(githubConnections.id, connection.id));
+      
+      console.log('[GitHub Router] Successfully updated repos for connection:', connection.id);
       
       return { success: true, count: input.repositories.length };
     }),
@@ -159,6 +164,32 @@ export const githubRouter = createTRPCRouter({
       }
     }),
   
+  resetRepositorySelection: protectedProcedure.mutation(async ({ ctx }) => {
+    const connections = await ctx.db
+      .select()
+      .from(githubConnections)
+      .where(and(
+        eq(githubConnections.userId, ctx.session.user.id),
+        eq(githubConnections.isActive, true)
+      ));
+    
+    const connection = connections[0];
+    
+    if (!connection) {
+      throw new Error('No GitHub connection found');
+    }
+    
+    // Reset selected repos to empty array
+    await ctx.db
+      .update(githubConnections)
+      .set({
+        selectedRepos: [],
+      })
+      .where(eq(githubConnections.id, connection.id));
+    
+    return { success: true };
+  }),
+
   testConnection: protectedProcedure.mutation(async ({ ctx }) => {
     const connections = await ctx.db
       .select()

@@ -6,6 +6,15 @@ const AspectRatioTransitionPlayer: React.FC = () => {
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Check if we're on mobile and disable animations for performance
+    const isMobile = window.innerWidth < 768;
+    
+    // On mobile, just show a static frame
+    if (isMobile) {
+      setCurrentFrame(0); // Show vertical format
+      return;
+    }
+    
     const animate = () => {
       setCurrentFrame(prev => (prev + 1) % 360); // 12 seconds at 30fps for better pacing
       animationRef.current = requestAnimationFrame(animate);
