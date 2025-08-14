@@ -106,9 +106,9 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
       {/* Header with Tabs */}
       <div className="border-b">
         <div className="px-4 pt-4 pb-0">
-          <h2 className="text-lg font-semibold">Integrations</h2>
+          <h2 className="text-lg font-semibold">Connect Your Tools</h2>
           <p className="text-sm text-gray-600 mt-1 mb-3">
-            Connect your tools to import and animate components
+            Import and animate your actual components from GitHub and Figma
           </p>
           
           {/* Tab buttons */}
@@ -157,13 +157,22 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
               <div className="flex-1 p-6">
                 <div className="max-w-md mx-auto">
                   <div className="text-center mb-6">
-                    <div className="inline-flex p-3 rounded-full bg-gray-100 mb-4">
-                      <Github className="h-8 w-8 text-gray-700" />
+                    <div className="inline-flex p-3 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 mb-4">
+                      <Github className="h-8 w-8 text-gray-900" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">Connect GitHub</h3>
-                    <p className="text-sm text-gray-600">
-                      Import and animate React, Vue, and Svelte components from your repositories
+                    <h3 className="text-xl font-semibold mb-3">🎬 Animate Your Real Components!</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Connect your GitHub repos and say "animate my navbar" to create stunning videos of your actual UI components.
                     </p>
+                    <div className="text-left bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <p className="text-sm font-medium text-blue-900 mb-2">How it works:</p>
+                      <ul className="text-xs text-blue-800 space-y-1">
+                        <li>• Connect your GitHub account securely</li>
+                        <li>• Select which repositories to search</li>
+                        <li>• Mention any component by name in chat</li>
+                        <li>• Watch it animate with perfect styling</li>
+                      </ul>
+                    </div>
                   </div>
                   
                   <Button
@@ -214,6 +223,16 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                           Disconnect
                         </Button>
                       </div>
+                    </div>
+                    
+                    {/* Call to action */}
+                    <div className="p-4 bg-amber-50 border-b border-amber-200">
+                      <p className="text-sm font-medium text-amber-900 mb-1">
+                        ⚡ Almost there! Select repositories to enable component discovery
+                      </p>
+                      <p className="text-xs text-amber-700">
+                        Choose which repos to search when you mention components in chat
+                      </p>
                     </div>
                     
                     {/* Repository Search and Selection */}

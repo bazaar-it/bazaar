@@ -202,12 +202,12 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
           <p className="mb-4 text-sm text-gray-600">
             Connect your GitHub account to automatically discover and animate components from your repositories.
           </p>
-          <a
-            href="/settings"
+          <button
+            onClick={() => window.location.href = '/api/auth/github/connect'}
             className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
           >
             Connect GitHub
-          </a>
+          </button>
         </div>
       </div>
     );
@@ -225,12 +225,9 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
           <p className="mb-4 text-sm text-gray-600">
             You haven't selected any repositories to search yet.
           </p>
-          <a
-            href="/settings"
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-          >
-            Select Repositories
-          </a>
+          <p className="text-xs text-gray-500">
+            Please select repositories from the GitHub tab.
+          </p>
         </div>
       </div>
     );
