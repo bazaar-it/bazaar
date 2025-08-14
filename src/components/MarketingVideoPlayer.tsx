@@ -16,9 +16,16 @@ const MarketingVideoPlayer: React.FC = () => {
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Check if we're on mobile
+    // Check if we're on mobile and disable animations for performance
     const isMobile = window.innerWidth < 768;
-    const targetFPS = isMobile ? 20 : 30; // Lower FPS on mobile for better performance
+    
+    // On mobile, just show a static frame instead of animating
+    if (isMobile) {
+      setCurrentFrame(52); // Show a nice middle frame
+      return;
+    }
+    
+    const targetFPS = 30;
     const frameInterval = 1000 / targetFPS;
     let lastTimestamp = 0;
     
@@ -37,14 +44,7 @@ const MarketingVideoPlayer: React.FC = () => {
       animationRef.current = requestAnimationFrame(animate);
     };
     
-    // Add a small delay before starting animation on mobile
-    if (isMobile) {
-      setTimeout(() => {
-        animationRef.current = requestAnimationFrame(animate);
-      }, 100);
-    } else {
-      animationRef.current = requestAnimationFrame(animate);
-    }
+    animationRef.current = requestAnimationFrame(animate);
     
     return () => {
       if (animationRef.current) {

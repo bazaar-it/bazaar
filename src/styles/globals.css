@@ -208,19 +208,34 @@ body {
   }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.6s ease-out;
+/* Disable animations on mobile for performance */
+@media (min-width: 768px) {
+  .animate-fade-in {
+    animation: fade-in 0.6s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.6s ease-out;
+  }
+
+  .animate-fade-in-up {
+    opacity: 0;
+    animation: fade-in-up 0.5s ease-out forwards;
+  }
+
+  .animate-pop-in {
+    animation: pop-in 0.4s ease-out;
+  }
 }
 
-.animate-slide-up {
-  animation: slide-up 0.6s ease-out;
-}
-
-.animate-fade-in-up {
-  opacity: 0;
-  animation: fade-in-up 0.5s ease-out forwards;
-}
-
-.animate-pop-in {
-  animation: pop-in 0.4s ease-out;
+/* On mobile, just show content without animations */
+@media (max-width: 767px) {
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-fade-in-up,
+  .animate-pop-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

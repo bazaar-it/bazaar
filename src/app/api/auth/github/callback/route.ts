@@ -56,10 +56,11 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        client_id: process.env.GITHUB_REPO_CLIENT_ID || process.env.AUTH_GITHUB_ID!,
-        client_secret: process.env.GITHUB_REPO_CLIENT_SECRET || process.env.AUTH_GITHUB_SECRET!,
+        // Use GitHub App credentials for repository access, not OAuth login app
+        client_id: process.env.GITHUB_CLIENT_ID!,
+        client_secret: process.env.GITHUB_CLIENT_SECRET!,
         code: code,
-        redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/github/callback`,
+        redirect_uri: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/github/callback`,
       }),
     });
     
@@ -112,11 +113,14 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Clear state cookie
-    const response = NextResponse.redirect(
-      `${process.env.NEXTAUTH_URL}/settings?github=connected`
-    );
+    // Get the return URL from cookie
+    const returnUrl = request.cookies.get('github_oauth_return_url')?.value || 
+      `${process.env.NEXTAUTH_URL}/`;
+    
+    // Clear cookies and redirect back to where user came from
+    const response = NextResponse.redirect(returnUrl);
     response.cookies.delete('github_oauth_state');
+    response.cookies.delete('github_oauth_return_url');
     
     return response;
     
