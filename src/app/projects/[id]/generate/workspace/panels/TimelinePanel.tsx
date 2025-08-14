@@ -533,14 +533,23 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   // Handle keyboard events for delete and play/pause
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Space bar for play/pause
-      if (e.key === ' ' || e.code === 'Space') {
+      // Check if user is typing in an input field
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA' || 
+        activeElement.isContentEditable ||
+        activeElement.getAttribute('role') === 'textbox'
+      );
+
+      // Space bar for play/pause - only if not typing
+      if ((e.key === ' ' || e.code === 'Space') && !isTyping) {
         // Prevent default scrolling behavior
         e.preventDefault();
         togglePlayPause();
       }
-      // Delete/Backspace for deleting selected scene
-      else if (e.key === 'Backspace' || e.key === 'Delete') {
+      // Delete/Backspace for deleting selected scene - only if not typing
+      else if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
         if (selectedSceneId) {
           e.preventDefault();
           handleDeleteScene(selectedSceneId);
