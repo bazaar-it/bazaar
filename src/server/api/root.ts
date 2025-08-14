@@ -9,6 +9,7 @@ import { emailSubscriberRouter } from "~/server/api/routers/emailSubscriber";
 import { scenesRouter } from "~/server/api/routers/scenes";
 import { shareRouter } from "~/server/api/routers/share";
 import { adminRouter } from "~/server/api/routers/admin";
+import { adminMarketingRouter } from "~/server/api/routers/adminMarketing";
 import { createSceneFromPlanRouter } from "~/server/api/routers/generation/create-scene-from-plan";
 import { usageRouter } from "~/server/api/routers/usage";
 import { paymentRouter } from "~/server/api/routers/payment";
@@ -41,6 +42,7 @@ export const appRouter = createTRPCRouter({
   scenes: scenesRouter,
   share: shareRouter,
   admin: adminRouter,
+  adminMarketing: adminMarketingRouter,
   createSceneFromPlan: createSceneFromPlanRouter,
   usage: usageRouter,
   payment: paymentRouter,
