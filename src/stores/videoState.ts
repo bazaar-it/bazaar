@@ -77,6 +77,7 @@ interface ProjectState {
   refreshToken?: string;
   audio?: AudioTrack | null;
   shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
+  draftMessage?: string; // Persist chat input when panels change
 }
 
 interface VideoState {
@@ -149,6 +150,10 @@ interface VideoState {
   setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
   isSceneGenerating: (projectId: string, messageId: string) => boolean;
   clearAllGeneratingScenes: (projectId: string) => void;
+  
+  // Draft message persistence
+  setDraftMessage: (projectId: string, message: string) => void;
+  getDraftMessage: (projectId: string) => string;
 }
 
 export const useVideoState = create<VideoState>()(
@@ -1153,6 +1158,29 @@ export const useVideoState = create<VideoState>()(
         [projectId]: new Set<string>()
       }
     })),
+    
+  // Draft message persistence
+  setDraftMessage: (projectId: string, message: string) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftMessage: message
+          }
+        }
+      };
+    }),
+    
+  getDraftMessage: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.draftMessage || '';
+  },
 }),
     {
       name: 'bazaar-video-state',

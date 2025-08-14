@@ -175,19 +175,22 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                   {assets.map((a: any) => (
                   <div
                     key={a.id}
-                    className="group border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, a.url)}
-                    onClick={() => handleClick(a.url)}
-                    title={a.originalName}
+                    className="group border rounded-lg overflow-hidden"
                   >
-                    {a.type === 'image' || a.type === 'logo' ? (
-                      <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
-                    ) : a.type === 'video' ? (
-                      <video src={a.url} className="w-full h-28 object-cover" muted />
-                    ) : (
-                      <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">Audio</div>
-                    )}
+                    <div
+                      className="cursor-grab active:cursor-grabbing"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, a.url)}
+                      onClick={() => handleClick(a.url)}
+                    >
+                      {a.type === 'image' || a.type === 'logo' ? (
+                        <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
+                      ) : a.type === 'video' ? (
+                        <video src={a.url} className="w-full h-28 object-cover" muted />
+                      ) : (
+                        <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">Audio</div>
+                      )}
+                    </div>
                     <div className="p-2 text-xs text-gray-600 flex items-center justify-between">
                       <span className="truncate max-w-[70%]" title={a.originalName}>{a.originalName}</span>
                       <span>{formatSize(a.fileSize)}</span>

@@ -53,7 +53,10 @@ export default function ChatPanelG({
   onSceneGenerated,
   userId,
 }: ChatPanelGProps) {
-  const [message, setMessage] = useState("");
+  // Get draft message from store to persist across panel changes
+  const draftMessage = useVideoState((state) => state.getDraftMessage(projectId));
+  const setDraftMessage = useVideoState((state) => state.setDraftMessage);
+  const [message, setMessage] = useState(draftMessage);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
   const [generationComplete, setGenerationComplete] = useState(false);
@@ -322,6 +325,7 @@ export default function ChatPanelG({
     
     // Clear input immediately for better UX
     setMessage("");
+    setDraftMessage(projectId, ""); // Clear draft in store too
     setUploadedImages([]);
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
@@ -441,6 +445,8 @@ export default function ChatPanelG({
   const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setMessage(newValue);
+    // Persist to store for panel switching
+    setDraftMessage(projectId, newValue);
     
     // Check for @mention context
     if (textareaRef.current && userAssets?.assets) {
@@ -461,11 +467,12 @@ export default function ChatPanelG({
         setShowMentionAutocomplete(false);
       }
     }
-  }, [userAssets]);
+  }, [userAssets, projectId, setDraftMessage]);
 
   // ✅ NEW: Handle edit scene plan - copy prompt to input
   const handleEditScenePlan = useCallback((prompt: string) => {
     setMessage(prompt);
+    setDraftMessage(projectId, prompt); // Sync with store
     // Focus the textarea after setting the message
     setTimeout(() => {
       if (textareaRef.current) {
@@ -475,7 +482,7 @@ export default function ChatPanelG({
         textareaRef.current.setSelectionRange(length, length);
       }
     }, 50);
-  }, []);
+  }, [projectId, setDraftMessage]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -645,7 +652,9 @@ export default function ChatPanelG({
 
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
-    setMessage("");
+    // Restore draft message from store
+    const draft = useVideoState.getState().getDraftMessage(projectId);
+    setMessage(draft);
     setIsGenerating(false);
     setGenerationPhase('thinking');
     setGenerationComplete(false);
