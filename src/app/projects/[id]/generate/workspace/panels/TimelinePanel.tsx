@@ -266,16 +266,23 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }, 0));
   }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
   
-  // Format time display
-  const formatTime = useCallback((frames: number): string => {
+  // Format time display - show frames prominently
+  const formatTime = useCallback((frames: number, showFrames: boolean = true): string => {
     // Ensure frames is an integer
     frames = Math.round(frames);
     const totalSeconds = Math.floor(frames / FPS);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const frameRemainder = frames % FPS;
+    
+    if (showFrames && zoomScale >= 2) {
+      // When zoomed in, show frame count prominently
+      return `${frames}f (${minutes}:${seconds.toString().padStart(2, '0')})`;
+    }
+    
+    // Standard timecode format
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${frameRemainder.toString().padStart(2, '0')}`;
-  }, []);
+  }, [zoomScale]);
   
   // Handle timeline click for scrubbing
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -384,13 +391,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       // Apply snapping if Shift is NOT held (Shift disables snapping for fine control)
       if (!e.shiftKey) {
-        // Determine snap interval based on zoom level
-        let snapInterval = 30; // 1 second by default
-        if (zoomScale < 0.5) {
+        // Determine snap interval based on zoom level - matches resize snapping
+        let snapInterval = 30; // Default: 1 second
+        
+        if (zoomScale >= 3) {
+          snapInterval = 1; // Frame-level precision when zoomed way in
+        } else if (zoomScale >= 2) {
+          snapInterval = 5; // 5 frames when zoomed in
+        } else if (zoomScale >= 1.5) {
+          snapInterval = 10; // 10 frames at medium zoom
+        } else if (zoomScale >= 1) {
+          snapInterval = 15; // Half second at normal zoom
+        } else if (zoomScale < 0.5) {
           snapInterval = 60; // 2 seconds when zoomed out
-        } else if (zoomScale > 2) {
-          snapInterval = 15; // 0.5 seconds when zoomed in
         }
+        
         newFrame = snapToGrid(newFrame, snapInterval);
       }
       
@@ -423,8 +438,20 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     // Apply snapping for resize operations
     if (!e.shiftKey && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
-      // Snap to nearest second (30 frames) for duration changes
-      const snapInterval = 30;
+      // Dynamic snap interval based on zoom level for fine control
+      let snapInterval = 30; // Default: 1 second
+      
+      if (zoomScale >= 3) {
+        snapInterval = 1; // Frame-level precision when zoomed way in
+      } else if (zoomScale >= 2) {
+        snapInterval = 5; // 5 frames when zoomed in
+      } else if (zoomScale >= 1.5) {
+        snapInterval = 10; // 10 frames at medium zoom
+      } else if (zoomScale >= 1) {
+        snapInterval = 15; // Half second at normal zoom
+      } else if (zoomScale < 0.5) {
+        snapInterval = 60; // 2 seconds when zoomed out
+      }
       
       if (dragInfo.action === 'resize-start') {
         const newDuration = dragInfo.startDuration - deltaFrames;
@@ -715,7 +742,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           <button
             onClick={() => setZoomScale(1)}
             className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            title="Reset zoom to 100%"
+            title={`Zoom: ${Math.round(zoomScale * 100)}%\n${
+              zoomScale >= 3 ? 'Frame-level precision' :
+              zoomScale >= 2 ? '5-frame precision' :
+              zoomScale >= 1.5 ? '10-frame precision' :
+              zoomScale >= 1 ? '0.5 second precision' :
+              '1-2 second precision'
+            }\n(Shift+drag for no snapping)`}
           >
             {Math.round(zoomScale * 100)}%
           </button>
