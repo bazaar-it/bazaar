@@ -68,6 +68,7 @@ interface DragInfo {
 
 export default function TimelinePanel({ projectId, userId, onClose }: TimelinePanelProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timeRulerRef = useRef<HTMLDivElement>(null);
   const audioCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
@@ -673,6 +674,19 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // Calculate timeline height based on content
   const timelineHeight = audioTrack ? 180 : 130; // taller with audio track
   
+  // Synchronize scrolling between time ruler and timeline track
+  const handleTimelineScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (timeRulerRef.current && e.currentTarget === timelineRef.current) {
+      timeRulerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
+  
+  const handleRulerScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (timelineRef.current && e.currentTarget === timeRulerRef.current) {
+      timelineRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
+  
   return (
     <div className="flex flex-col bg-white dark:bg-gray-950" style={{ height: `${timelineHeight}px` }}>
       {/* Timeline Controls - Modern design */}
@@ -777,11 +791,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       {/* Timeline Container */}
       <div className="flex flex-col overflow-hidden bg-white dark:bg-gray-950" style={{ height: `${timelineHeight - 60}px` }}>
-        {/* Time Ruler */}
+        {/* Time Ruler - wrapped in scrollable container */}
         <div 
-          className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden"
-          style={{ width: `${zoomScale * 100}%` }}
+          ref={timeRulerRef}
+          className="overflow-x-auto overflow-y-hidden"
+          onScroll={handleRulerScroll}
         >
+          <div 
+            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative"
+            style={{ width: `${Math.max(100, zoomScale * 100)}%`, minWidth: '100%' }}
+          >
           {/* Dynamic time markers that adapt to zoom */}
           {(() => {
             // Calculate pixel width of the timeline
@@ -817,6 +836,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             
             return markers;
           })()}
+          </div>
         </div>
         
         {/* Timeline Track */}
@@ -825,6 +845,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           className="relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
+          onScroll={handleTimelineScroll}
           style={{ 
             height: `${timelineHeight - 60 - 32}px`,
             cursor: isDragging ? 'grabbing' : 'pointer' 
@@ -833,7 +854,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           <div
             className="relative h-full"
             style={{ 
-              width: `${zoomScale * 100}%`,
+              width: `${Math.max(100, zoomScale * 100)}%`,
               minWidth: '100%'
             }}
           >
@@ -885,12 +906,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             
             {/* Scene Items */}
             <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
-              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
                 Scenes
               </div>
               {scenes.map((scene: Scene, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
+                // When zoomed, scenes need to scale with the container
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id;
