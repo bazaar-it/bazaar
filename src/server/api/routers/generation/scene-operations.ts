@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
 import type { SceneCreateResponse, SceneDeleteResponse } from "~/lib/types/api/universal";
 import { ErrorCode } from "~/lib/types/api/universal";
+import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
 
 /**
  * UNIFIED SCENE GENERATION with Universal Response
@@ -359,8 +360,40 @@ export const generateScene = protectedProcedure
         console.log(`[${response.getRequestId()}] ✅ SCENE PLANNER: Created ${toolResult.additionalMessageIds.length} scene plan messages:`, toolResult.additionalMessageIds);
       }
 
-      // 8. Update assistant message status after execution
-      if (assistantMessageId && toolResult.success) {
+      // 8. Update assistant message with better description after execution
+      if (assistantMessageId && toolResult.success && toolResult.scene) {
+        // Generate a better message based on what actually happened
+        const operationType = decision.toolName === 'editScene' ? 'edit' : 
+                             decision.toolName === 'deleteScene' ? 'delete' :
+                             decision.toolName === 'trimScene' ? 'trim' : 'create';
+        
+        // Get previous duration for trim operations
+        let previousDuration: number | undefined;
+        if (operationType === 'trim' && decision.toolContext?.targetSceneId) {
+          const prevScene = storyboardForBrain.find(s => s.id === decision.toolContext?.targetSceneId);
+          previousDuration = prevScene?.duration;
+        }
+        
+        const betterMessage = formatSceneOperationMessage(
+          operationType,
+          toolResult.scene,
+          {
+            userPrompt: decision.toolContext?.userPrompt,
+            scenesCreated: toolResult.scenes?.length,
+            previousDuration,
+            newDuration: operationType === 'trim' ? toolResult.scene.duration : undefined
+          }
+        );
+        
+        await db.update(messages)
+          .set({
+            content: betterMessage,
+            status: 'success',
+            updatedAt: new Date(),
+          })
+          .where(eq(messages.id, assistantMessageId));
+      } else if (assistantMessageId && toolResult.success) {
+        // Just update status if no scene (e.g., audio tool)
         await db.update(messages)
           .set({
             status: 'success',

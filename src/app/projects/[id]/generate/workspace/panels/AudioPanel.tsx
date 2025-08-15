@@ -55,6 +55,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
 
   // Helper function to sync audio to both Zustand and database
   const syncAudioSettings = (audio: AudioTrack | null) => {
+    console.log('[AudioPanel] Syncing audio settings:', { projectId, audio });
     // Update Zustand state immediately for UI responsiveness
     updateProjectAudio(projectId, audio);
     
@@ -164,6 +165,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
         
         setAudioTrack(newTrack);
         syncAudioSettings(newTrack);
+        console.log('[AudioPanel] Audio uploaded and synced:', newTrack);
         toast.success('Audio uploaded successfully');
       });
     } catch (error) {

@@ -92,22 +92,19 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // Audio state - get from project
   const audioTrack = project?.audio || null;
+  
+  // Debug log when audio changes
+  useEffect(() => {
+    console.log('[Timeline] Audio state from store:', {
+      projectId,
+      hasProject: !!project,
+      hasAudio: !!audioTrack,
+      audioTrack
+    });
+  }, [projectId, project, audioTrack]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [audioWaveform, setAudioWaveform] = useState<number[]>();
   
-  // Debug audio track
-  useEffect(() => {
-    if (audioTrack) {
-      console.log('[Timeline] Audio track details:', {
-        audioTrack,
-        duration: audioTrack.duration,
-        startTime: audioTrack.startTime,
-        endTime: audioTrack.endTime,
-        totalDuration,
-        calculatedWidth: (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100
-      });
-    }
-  }, [audioTrack, totalDuration]);
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
@@ -280,6 +277,27 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return acc + (scene.duration || 150);
     }, 0));
   }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
+  
+  // Debug audio track details after totalDuration is calculated
+  useEffect(() => {
+    if (audioTrack) {
+      const audioWidthPercent = (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100;
+      console.log('[Timeline] Audio track debug:', {
+        hasAudioTrack: !!audioTrack,
+        audioTrack,
+        duration: audioTrack.duration,
+        startTime: audioTrack.startTime,
+        endTime: audioTrack.endTime,
+        totalDuration,
+        calculatedWidthPercent: audioWidthPercent,
+        calculatedWidth: `${audioWidthPercent}%`,
+        FPS,
+        audioInFrames: ((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS
+      });
+    } else {
+      console.log('[Timeline] No audio track present');
+    }
+  }, [audioTrack, totalDuration]);
   
   // Format time display - show frames prominently
   const formatTime = useCallback((frames: number, showFrames: boolean = true): string => {
@@ -685,8 +703,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     };
   }, [selectedSceneId, sceneColors]);
   
-  // Calculate timeline height based on content
-  const timelineHeight = audioTrack ? 180 : 130; // taller with audio track
+  // Calculate timeline height based on content - make it reactive to audio changes
+  const timelineHeight = useMemo(() => {
+    const height = audioTrack ? 180 : 130;
+    console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, height });
+    return height;
+  }, [audioTrack]);
   
   // Synchronize scrolling between time ruler and timeline track
   const handleTimelineScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -856,7 +878,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Timeline Track */}
         <div 
           ref={timelineRef}
-          className="relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
+          className="relative overflow-x-auto overflow-y-auto bg-gray-50 dark:bg-gray-950"
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
           onScroll={handleTimelineScroll}
@@ -866,10 +888,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           }}
         >
           <div
-            className="relative h-full"
+            className="relative"
             style={{ 
               width: `${Math.max(100, zoomScale * 100)}%`,
-              minWidth: '100%'
+              minWidth: '100%',
+              minHeight: '100%'
             }}
           >
             {/* Dynamic grid lines matching time markers */}
@@ -984,6 +1007,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </div>
             
             {/* Audio Track - only show when audio exists */}
+            {console.log('[Timeline Render] Audio track check:', { 
+              hasAudioTrack: !!audioTrack, 
+              audioTrack,
+              projectId,
+              projectAudio: project?.audio 
+            })}
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
                 <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">

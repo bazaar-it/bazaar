@@ -2,7 +2,9 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { eq, and } from "drizzle-orm";
-import { scenes, sceneIterations } from "~/server/db/schema";
+import { scenes, sceneIterations, messages } from "~/server/db/schema";
+import { messageService } from "~/server/services/data/message.service";
+import { formatManualEditMessage } from "~/lib/utils/scene-message-formatter";
 
 export const scenesRouter = createTRPCRouter({
   updateSceneCode: protectedProcedure
@@ -46,9 +48,23 @@ export const scenesRouter = createTRPCRouter({
         .where(eq(scenes.id, input.sceneId))
         .returning();
 
+      // Track manual edit in scene iterations for version control
+      await ctx.db.insert(sceneIterations).values({
+        sceneId: input.sceneId,
+        projectId: input.projectId,
+        operationType: 'edit',
+        editComplexity: 'manual', // Mark as manual edit
+        userPrompt: 'Manual code edit via Code Editor',
+        codeBefore: codeBefore,
+        codeAfter: input.code,
+        generationTimeMs: 0, // Instant for manual edits
+        modelUsed: null,
+        temperature: null,
+        userEditedAgain: false,
+        changeSource: 'user', // Mark as user-initiated change
+      });
 
-
-      console.log(`[scenes.updateSceneCode] ✅ Scene code updated successfully`);
+      console.log(`[scenes.updateSceneCode] ✅ Scene code updated and tracked in iterations`);
       
       return {
         success: true,
@@ -94,7 +110,23 @@ export const scenesRouter = createTRPCRouter({
         .where(eq(scenes.id, input.sceneId))
         .returning();
 
-      console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated successfully`);
+      // Track duration change in iterations
+      await ctx.db.insert(sceneIterations).values({
+        sceneId: input.sceneId,
+        projectId: input.projectId,
+        operationType: 'edit',
+        editComplexity: 'duration', // Duration-only change
+        userPrompt: `Duration changed from ${existingScene.duration} to ${input.duration} frames`,
+        codeBefore: existingScene.tsxCode,
+        codeAfter: existingScene.tsxCode, // Code doesn't change
+        generationTimeMs: 0,
+        modelUsed: null,
+        temperature: null,
+        userEditedAgain: false,
+        changeSource: 'user', // User-initiated change
+      });
+
+      console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated and tracked`);
       
       return {
         success: true,
