@@ -205,12 +205,6 @@ export class UnifiedCodeProcessor {
   private extractSceneNameFromPrompt(userPrompt: string): string {
     // Use the same logic as generateSceneName but without tool-specific handling
     return this.generateSceneName('default', userPrompt, '');
-    const nouns = userPrompt.match(/\b(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|layout)\b/gi);
-    if (nouns && nouns.length > 0) {
-      return nouns[0].charAt(0).toUpperCase() + nouns[0].slice(1).toLowerCase();
-    }
-    
-    return 'Generated Scene'; // Better default than just "Scene"
   }
 
   /**
