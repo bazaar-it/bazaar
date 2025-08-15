@@ -93,7 +93,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // Audio state - get from project
   const audioTrack = project?.audio || null;
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
-  const [audioWaveform, setAudioWaveform] = useState<number[]>([]);
+  const [audioWaveform, setAudioWaveform] = useState<number[]>();
+  
+  // Debug audio track
+  useEffect(() => {
+    if (audioTrack) {
+      console.log('[Timeline] Audio track details:', {
+        audioTrack,
+        duration: audioTrack.duration,
+        startTime: audioTrack.startTime,
+        endTime: audioTrack.endTime,
+        totalDuration,
+        calculatedWidth: (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100
+      });
+    }
+  }, [audioTrack, totalDuration]);
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
@@ -972,9 +986,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             {/* Audio Track - only show when audio exists */}
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
+                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
+                  Audio
+                </div>
                 <div
-                  className="absolute"
+                  className="absolute bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg"
                   style={{
+                    // Audio duration is in seconds, convert to frames
                     left: `${((audioTrack.startTime || 0) * FPS / totalDuration) * 100}%`,
                     width: `${(((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100}%`,
                     height: TIMELINE_ITEM_HEIGHT,
