@@ -120,17 +120,27 @@ export function formatManualEditMessage(
   details?: {
     previousDuration?: number;
     newDuration?: number;
+    codeChangeSummary?: string;
   }
 ): string {
   if (editType === 'duration' && details?.previousDuration && details?.newDuration) {
     const prevSeconds = (details.previousDuration / 30).toFixed(1);
     const newSeconds = (details.newDuration / 30).toFixed(1);
-    return `Manually adjusted "${sceneName}" duration from ${prevSeconds}s to ${newSeconds}s`;
+    return `⏱️ Manually adjusted "${sceneName}" duration from ${prevSeconds}s to ${newSeconds}s`;
   }
   
   if (editType === 'code') {
-    return `Manually edited "${sceneName}" code`;
+    // More descriptive messages for code edits
+    const actions = [
+      `✏️ Manually edited "${sceneName}" code`,
+      `🔧 Modified "${sceneName}" in Code Editor`,
+      `💻 Updated "${sceneName}" implementation`,
+      `🎨 Refined "${sceneName}" visuals`,
+      `⚡ Tweaked "${sceneName}" animations`
+    ];
+    // Pick a random one for variety (or could analyze the code diff for specifics)
+    return actions[0]; // For now, use the first one consistently
   }
   
-  return `Manually modified "${sceneName}"`;
+  return `📝 Manually modified "${sceneName}"`;
 }

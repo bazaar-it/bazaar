@@ -144,11 +144,27 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       // Small delay to ensure canvas is mounted
       setTimeout(() => {
         if (audioCanvasRef.current) {
+          console.log('[Timeline] Canvas found, starting waveform generation');
           generateWaveform(audioTrack.url);
+        } else {
+          console.log('[Timeline] Canvas not found, retrying in 500ms');
+          setTimeout(() => {
+            if (audioCanvasRef.current) {
+              generateWaveform(audioTrack.url);
+            }
+          }, 500);
         }
       }, 100);
     }
   }, [audioTrack?.url]);
+  
+  // Redraw waveform when audioWaveform state updates
+  useEffect(() => {
+    if (audioWaveform && audioCanvasRef.current) {
+      console.log('[Timeline] Redrawing waveform with data:', audioWaveform.length, 'samples');
+      drawWaveform(audioWaveform);
+    }
+  }, [audioWaveform]);
 
   // Generate waveform visualization
   const generateWaveform = async (audioUrl: string) => {
@@ -705,7 +721,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // Calculate timeline height based on content - make it reactive to audio changes
   const timelineHeight = useMemo(() => {
-    const height = audioTrack ? 180 : 130;
+    // 60px for controls header, 32px for time ruler, 60px for scenes row, 70px for audio row with margin
+    const height = audioTrack ? 220 : 150;
     console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, height });
     return height;
   }, [audioTrack]);
@@ -878,7 +895,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Timeline Track */}
         <div 
           ref={timelineRef}
-          className="relative overflow-x-auto overflow-y-auto bg-gray-50 dark:bg-gray-950"
+          className="relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
           onScroll={handleTimelineScroll}

@@ -48,7 +48,20 @@ export const scenesRouter = createTRPCRouter({
         .where(eq(scenes.id, input.sceneId))
         .returning();
 
-      // Track manual edit in scene iterations for version control
+      // Create a descriptive message for the manual edit
+      const sceneName = existingScene.name || `Scene ${existingScene.order + 1}`;
+      const editMessage = formatManualEditMessage('code', sceneName);
+      
+      // Create message in chat
+      const message = await messageService.createMessage({
+        projectId: input.projectId,
+        content: editMessage,
+        role: 'assistant',
+        kind: 'message',
+        status: 'success'
+      });
+
+      // Track manual edit in scene iterations for version control, linked to the message
       await ctx.db.insert(sceneIterations).values({
         sceneId: input.sceneId,
         projectId: input.projectId,
@@ -62,9 +75,10 @@ export const scenesRouter = createTRPCRouter({
         temperature: null,
         userEditedAgain: false,
         changeSource: 'user', // Mark as user-initiated change
+        messageId: message?.id, // Link to the message for restore functionality
       });
 
-      console.log(`[scenes.updateSceneCode] ✅ Scene code updated and tracked in iterations`);
+      console.log(`[scenes.updateSceneCode] ✅ Scene code updated, message created, and tracked in iterations`);
       
       return {
         success: true,
@@ -110,6 +124,22 @@ export const scenesRouter = createTRPCRouter({
         .where(eq(scenes.id, input.sceneId))
         .returning();
 
+      // Create a descriptive message for the duration change
+      const sceneName = existingScene.name || `Scene ${existingScene.order + 1}`;
+      const durationMessage = formatManualEditMessage('duration', sceneName, {
+        previousDuration: existingScene.duration,
+        newDuration: input.duration
+      });
+      
+      // Create message in chat
+      const message = await messageService.createMessage({
+        projectId: input.projectId,
+        content: durationMessage,
+        role: 'assistant',
+        kind: 'message',
+        status: 'success'
+      });
+
       // Track duration change in iterations
       await ctx.db.insert(sceneIterations).values({
         sceneId: input.sceneId,
@@ -124,9 +154,10 @@ export const scenesRouter = createTRPCRouter({
         temperature: null,
         userEditedAgain: false,
         changeSource: 'user', // User-initiated change
+        messageId: message?.id, // Link to the message for restore functionality
       });
 
-      console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated and tracked`);
+      console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated, message created, and tracked`);
       
       return {
         success: true,
