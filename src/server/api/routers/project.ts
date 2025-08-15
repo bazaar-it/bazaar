@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches, scenePlans, scenes, messages } from "~/server/db/schema";
+import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
 import { eq, desc, like, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
@@ -583,5 +583,37 @@ export const projectRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const res = await assetContext.getUserAssets(ctx.session.user.id);
       return res;
+    }),
+
+  // Rename an asset
+  renameAsset: protectedProcedure
+    .input(z.object({
+      assetId: z.string(),
+      newName: z.string().min(1).max(255)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Update the asset's custom name
+      const [updated] = await ctx.db
+        .update(assets)
+        .set({ 
+          customName: input.newName,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(assets.id, input.assetId),
+            eq(assets.userId, ctx.session.user.id)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Asset not found or you don't have permission to rename it"
+        });
+      }
+
+      return { success: true, asset: updated };
     }),
 }); 

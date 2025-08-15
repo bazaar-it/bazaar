@@ -271,22 +271,12 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
                 
                 {/* Timeline panel at bottom */}
                 <Panel defaultSize={25} minSize={15} maxSize={50}>
-                  <div className="h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200 relative">
-                    {/* Close button for timeline */}
-                    <button
-                      onClick={() => setIsTimelineVisible(false)}
-                      className="absolute top-2 right-2 z-50 p-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                      title="Close Timeline"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
+                  <div className="h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200">
                     <TimelinePanel
                       key={`timeline-${projectId}`}
                       projectId={projectId}
                       userId={userId}
+                      onClose={() => setIsTimelineVisible(false)}
                     />
                   </div>
                 </Panel>

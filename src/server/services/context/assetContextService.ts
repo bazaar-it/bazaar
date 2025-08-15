@@ -43,14 +43,19 @@ export class AssetContextService {
     });
 
     // Link to project
-    await db.insert(projectAssets).values({
-      projectId: projectId,
-      assetId: asset.id,
-      addedVia: 'upload',
-      addedAt: new Date()
-    });
-    
-    console.log(`[AssetContext] Saved asset ${asset.id} for project ${projectId}`);
+    try {
+      await db.insert(projectAssets).values({
+        projectId: projectId,
+        assetId: asset.id,
+        addedVia: 'upload',
+        addedAt: new Date()
+      });
+      
+      console.log(`[AssetContext] Successfully linked asset ${asset.id} to project ${projectId}`);
+    } catch (error) {
+      console.error(`[AssetContext] Failed to link asset to project:`, error);
+      // Don't throw - asset is already saved, just not linked to project
+    }
   }
   
   /**

@@ -14,7 +14,8 @@ import {
   GripVertical,
   Music,
   Volume2,
-  Upload
+  Upload,
+  X
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { toast } from 'sonner';
@@ -53,6 +54,7 @@ interface AudioTrack {
 interface TimelinePanelProps {
   projectId: string;
   userId?: string;
+  onClose?: () => void;
 }
 
 interface DragInfo {
@@ -64,7 +66,7 @@ interface DragInfo {
   sceneIndex?: number;
 }
 
-export default function TimelinePanel({ projectId, userId }: TimelinePanelProps) {
+export default function TimelinePanel({ projectId, userId, onClose }: TimelinePanelProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const audioCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -695,8 +697,10 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
           </div>
         </div>
         
-        {/* Zoom Controls */}
-        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+        {/* Right side controls */}
+        <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
@@ -720,6 +724,18 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
+        </div>
+        
+        {/* Close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 transition-colors border border-gray-200 dark:border-gray-700"
+            title="Close Timeline"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         </div>
       </div>
       

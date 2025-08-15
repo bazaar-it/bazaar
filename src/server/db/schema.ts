@@ -585,7 +585,7 @@ export const projectAssets = createTable(
   "project_asset",
   (d) => ({
     id: d.text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-    projectId: d.text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     assetId: d.text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
     addedAt: d.timestamp("added_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     addedVia: d.text("added_via"), // 'upload', 'reference', 'import'
