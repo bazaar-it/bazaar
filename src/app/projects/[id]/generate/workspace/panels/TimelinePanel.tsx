@@ -643,8 +643,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     };
   }, [selectedSceneId, sceneColors]);
   
+  // Calculate timeline height based on content
+  const timelineHeight = audioTrack ? 180 : 130; // taller with audio track
+  
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
+    <div className="flex flex-col bg-white dark:bg-gray-950" style={{ height: `${timelineHeight}px` }}>
       {/* Timeline Controls - Modern design */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
         <div className="flex items-center gap-2">
@@ -740,7 +743,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       </div>
       
       {/* Timeline Container */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-950">
+      <div className="flex flex-col overflow-hidden bg-white dark:bg-gray-950" style={{ height: `${timelineHeight - 60}px` }}>
         {/* Time Ruler */}
         <div 
           className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden"
@@ -786,10 +789,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Timeline Track */}
         <div 
           ref={timelineRef}
-          className="flex-1 relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
+          className="relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
-          style={{ cursor: isDragging ? 'grabbing' : 'pointer' }}
+          style={{ 
+            height: `${timelineHeight - 60 - 32}px`,
+            cursor: isDragging ? 'grabbing' : 'pointer' 
+          }}
         >
           <div
             className="relative h-full"
