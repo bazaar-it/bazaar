@@ -25,7 +25,10 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   const refetch = scope === 'project' ? projectQuery.refetch : userQuery.refetch;
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const renameMutation = api.project.renameAsset.useMutation();
 
   // Update active tab if defaultTab changes (for auto-opening audio)
   useEffect(() => {
@@ -64,6 +67,22 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     if (kb < 1024) return `${Math.max(1, Math.round(kb))}KB`;
     const mb = kb / 1024;
     return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)}MB`;
+  };
+
+  const handleRename = async (assetId: string, newName: string) => {
+    if (!newName.trim()) return;
+    
+    try {
+      await renameMutation.mutateAsync({
+        assetId,
+        newName: newName.trim()
+      });
+      await refetch();
+      toast.success('File renamed successfully');
+    } catch (error) {
+      console.error('Failed to rename asset:', error);
+      toast.error('Failed to rename file');
+    }
   };
 
   const uploadFiles = async (files: File[]) => {
@@ -175,21 +194,60 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                   {assets.map((a: any) => (
                   <div
                     key={a.id}
-                    className="group border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, a.url)}
-                    onClick={() => handleClick(a.url)}
-                    title={a.originalName}
+                    className="group border rounded-lg overflow-hidden"
                   >
-                    {a.type === 'image' || a.type === 'logo' ? (
-                      <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
-                    ) : a.type === 'video' ? (
-                      <video src={a.url} className="w-full h-28 object-cover" muted />
-                    ) : (
-                      <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">Audio</div>
-                    )}
+                    <div
+                      className="cursor-grab active:cursor-grabbing"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, a.url)}
+                      onClick={() => handleClick(a.url)}
+                    >
+                      {a.type === 'image' || a.type === 'logo' ? (
+                        <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
+                      ) : a.type === 'video' ? (
+                        <video src={a.url} className="w-full h-28 object-cover" muted />
+                      ) : (
+                        <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">Audio</div>
+                      )}
+                    </div>
                     <div className="p-2 text-xs text-gray-600 flex items-center justify-between">
-                      <span className="truncate max-w-[70%]" title={a.originalName}>{a.originalName}</span>
+                      {editingId === a.id ? (
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onBlur={() => {
+                            if (editingName !== (a.customName || a.originalName)) {
+                              handleRename(a.id, editingName);
+                            }
+                            setEditingId(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (editingName !== (a.customName || a.originalName)) {
+                                handleRename(a.id, editingName);
+                              }
+                              setEditingId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingId(null);
+                            }
+                          }}
+                          className="flex-1 px-1 border rounded outline-none focus:ring-1 focus:ring-blue-500"
+                          autoFocus
+                        />
+                      ) : (
+                        <span 
+                          className="truncate max-w-[70%] cursor-text hover:text-gray-900" 
+                          title="Click to rename"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(a.id);
+                            setEditingName(a.customName || a.originalName);
+                          }}
+                        >
+                          {a.customName || a.originalName}
+                        </span>
+                      )}
                       <span>{formatSize(a.fileSize)}</span>
                     </div>
                   </div>

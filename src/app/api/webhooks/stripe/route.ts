@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       await db.insert(userCredits).values({
         userId,
         dailyCredits: 5, // 5 daily credits
-        purchasedCredits: 20, // 20 signup bonus (acts like purchased)
-        lifetimeCredits: 20, // Track lifetime total
+        purchasedCredits: 100, // 100 signup bonus - increased from 20
+        lifetimeCredits: 100, // Track lifetime total
         dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
       }).onConflictDoNothing();
 

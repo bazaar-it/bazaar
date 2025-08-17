@@ -118,8 +118,8 @@ export const authConfig = {
         await db.insert(userCredits).values({
           userId: user.id,
           dailyCredits: 5,
-          purchasedCredits: 20, // 20 signup bonus
-          lifetimeCredits: 20,
+          purchasedCredits: 100, // 100 signup bonus - increased from 20
+          lifetimeCredits: 100,
           dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         });
         console.log(`[Auth] Successfully created credits for user: ${user.email}`);

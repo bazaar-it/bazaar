@@ -250,49 +250,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           }}
         >
           <div className="h-full flex flex-col overflow-hidden relative">
-            {/* Conditional vertical layout based on timeline visibility */}
-            {isTimelineVisible ? (
-              <PanelGroup direction="vertical" className="h-full">
-                {/* Main workspace panels */}
-                <Panel defaultSize={75} minSize={30}>
-                  <WorkspaceContentAreaG
-                    ref={workspaceContentAreaRef}
-                    projectId={projectId}
-                    userId={userId}
-                    initialProps={initialProps}
-                    projects={userProjects}
-                    onProjectRename={handleProjectRenamed}
-                    isAdmin={user?.isAdmin}
-                  />
-                </Panel>
-                
-                {/* Resize handle between main area and timeline */}
-                <PanelResizeHandle className="h-[8px] bg-gray-100 hover:bg-gray-200 transition-colors border-t border-b border-gray-200" />
-                
-                {/* Timeline panel at bottom */}
-                <Panel defaultSize={25} minSize={15} maxSize={50}>
-                  <div className="h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-200 relative">
-                    {/* Close button for timeline */}
-                    <button
-                      onClick={() => setIsTimelineVisible(false)}
-                      className="absolute top-2 right-2 z-50 p-1 bg-gray-800 hover:bg-gray-700 rounded text-gray-300 hover:text-white transition-colors"
-                      title="Close Timeline"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                    <TimelinePanel
-                      key={`timeline-${projectId}`}
-                      projectId={projectId}
-                      userId={userId}
-                    />
-                  </div>
-                </Panel>
-              </PanelGroup>
-            ) : (
-              /* No timeline - just the main workspace */
+            {/* Main workspace - always rendered */}
+            <div className="flex-1 overflow-hidden">
               <WorkspaceContentAreaG
                 ref={workspaceContentAreaRef}
                 projectId={projectId}
@@ -302,6 +261,18 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
                 onProjectRename={handleProjectRenamed}
                 isAdmin={user?.isAdmin}
               />
+            </div>
+            
+            {/* Timeline panel - fixed height based on content */}
+            {isTimelineVisible && (
+              <div className="bg-gray-900 border-t border-gray-200">
+                <TimelinePanel
+                  key={`timeline-${projectId}`}
+                  projectId={projectId}
+                  userId={userId}
+                  onClose={() => setIsTimelineVisible(false)}
+                />
+              </div>
             )}
           </div>
         </div>

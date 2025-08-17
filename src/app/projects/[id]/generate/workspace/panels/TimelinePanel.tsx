@@ -14,7 +14,8 @@ import {
   GripVertical,
   Music,
   Volume2,
-  Upload
+  Upload,
+  X
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { toast } from 'sonner';
@@ -53,6 +54,7 @@ interface AudioTrack {
 interface TimelinePanelProps {
   projectId: string;
   userId?: string;
+  onClose?: () => void;
 }
 
 interface DragInfo {
@@ -64,8 +66,9 @@ interface DragInfo {
   sceneIndex?: number;
 }
 
-export default function TimelinePanel({ projectId, userId }: TimelinePanelProps) {
+export default function TimelinePanel({ projectId, userId, onClose }: TimelinePanelProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timeRulerRef = useRef<HTMLDivElement>(null);
   const audioCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
@@ -89,8 +92,19 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   
   // Audio state - get from project
   const audioTrack = project?.audio || null;
+  
+  // Debug log when audio changes
+  useEffect(() => {
+    console.log('[Timeline] Audio state from store:', {
+      projectId,
+      hasProject: !!project,
+      hasAudio: !!audioTrack,
+      audioTrack
+    });
+  }, [projectId, project, audioTrack]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
-  const [audioWaveform, setAudioWaveform] = useState<number[]>([]);
+  const [audioWaveform, setAudioWaveform] = useState<number[]>();
+  
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
@@ -130,11 +144,27 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
       // Small delay to ensure canvas is mounted
       setTimeout(() => {
         if (audioCanvasRef.current) {
+          console.log('[Timeline] Canvas found, starting waveform generation');
           generateWaveform(audioTrack.url);
+        } else {
+          console.log('[Timeline] Canvas not found, retrying in 500ms');
+          setTimeout(() => {
+            if (audioCanvasRef.current) {
+              generateWaveform(audioTrack.url);
+            }
+          }, 500);
         }
       }, 100);
     }
   }, [audioTrack?.url]);
+  
+  // Redraw waveform when audioWaveform state updates
+  useEffect(() => {
+    if (audioWaveform && audioCanvasRef.current) {
+      console.log('[Timeline] Redrawing waveform with data:', audioWaveform.length, 'samples');
+      drawWaveform(audioWaveform);
+    }
+  }, [audioWaveform]);
 
   // Generate waveform visualization
   const generateWaveform = async (audioUrl: string) => {
@@ -264,16 +294,44 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     }, 0));
   }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
   
-  // Format time display
-  const formatTime = useCallback((frames: number): string => {
+  // Debug audio track details after totalDuration is calculated
+  useEffect(() => {
+    if (audioTrack) {
+      const audioWidthPercent = (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100;
+      console.log('[Timeline] Audio track debug:', {
+        hasAudioTrack: !!audioTrack,
+        audioTrack,
+        duration: audioTrack.duration,
+        startTime: audioTrack.startTime,
+        endTime: audioTrack.endTime,
+        totalDuration,
+        calculatedWidthPercent: audioWidthPercent,
+        calculatedWidth: `${audioWidthPercent}%`,
+        FPS,
+        audioInFrames: ((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS
+      });
+    } else {
+      console.log('[Timeline] No audio track present');
+    }
+  }, [audioTrack, totalDuration]);
+  
+  // Format time display - show frames prominently
+  const formatTime = useCallback((frames: number, showFrames: boolean = true): string => {
     // Ensure frames is an integer
     frames = Math.round(frames);
     const totalSeconds = Math.floor(frames / FPS);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const frameRemainder = frames % FPS;
+    
+    if (showFrames && zoomScale >= 2) {
+      // When zoomed in, show frame count prominently
+      return `${frames}f (${minutes}:${seconds.toString().padStart(2, '0')})`;
+    }
+    
+    // Standard timecode format
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${frameRemainder.toString().padStart(2, '0')}`;
-  }, []);
+  }, [zoomScale]);
   
   // Handle timeline click for scrubbing
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -382,13 +440,21 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
       
       // Apply snapping if Shift is NOT held (Shift disables snapping for fine control)
       if (!e.shiftKey) {
-        // Determine snap interval based on zoom level
-        let snapInterval = 30; // 1 second by default
-        if (zoomScale < 0.5) {
+        // Determine snap interval based on zoom level - matches resize snapping
+        let snapInterval = 30; // Default: 1 second
+        
+        if (zoomScale >= 3) {
+          snapInterval = 1; // Frame-level precision when zoomed way in
+        } else if (zoomScale >= 2) {
+          snapInterval = 5; // 5 frames when zoomed in
+        } else if (zoomScale >= 1.5) {
+          snapInterval = 10; // 10 frames at medium zoom
+        } else if (zoomScale >= 1) {
+          snapInterval = 15; // Half second at normal zoom
+        } else if (zoomScale < 0.5) {
           snapInterval = 60; // 2 seconds when zoomed out
-        } else if (zoomScale > 2) {
-          snapInterval = 15; // 0.5 seconds when zoomed in
         }
+        
         newFrame = snapToGrid(newFrame, snapInterval);
       }
       
@@ -421,8 +487,20 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     
     // Apply snapping for resize operations
     if (!e.shiftKey && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
-      // Snap to nearest second (30 frames) for duration changes
-      const snapInterval = 30;
+      // Dynamic snap interval based on zoom level for fine control
+      let snapInterval = 30; // Default: 1 second
+      
+      if (zoomScale >= 3) {
+        snapInterval = 1; // Frame-level precision when zoomed way in
+      } else if (zoomScale >= 2) {
+        snapInterval = 5; // 5 frames when zoomed in
+      } else if (zoomScale >= 1.5) {
+        snapInterval = 10; // 10 frames at medium zoom
+      } else if (zoomScale >= 1) {
+        snapInterval = 15; // Half second at normal zoom
+      } else if (zoomScale < 0.5) {
+        snapInterval = 60; // 2 seconds when zoomed out
+      }
       
       if (dragInfo.action === 'resize-start') {
         const newDuration = dragInfo.startDuration - deltaFrames;
@@ -533,14 +611,23 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
   // Handle keyboard events for delete and play/pause
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Space bar for play/pause
-      if (e.key === ' ' || e.code === 'Space') {
+      // Check if user is typing in an input field
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA' || 
+        activeElement.isContentEditable ||
+        activeElement.getAttribute('role') === 'textbox'
+      );
+
+      // Space bar for play/pause - only if not typing
+      if ((e.key === ' ' || e.code === 'Space') && !isTyping) {
         // Prevent default scrolling behavior
         e.preventDefault();
         togglePlayPause();
       }
-      // Delete/Backspace for deleting selected scene
-      else if (e.key === 'Backspace' || e.key === 'Delete') {
+      // Delete/Backspace for deleting selected scene - only if not typing
+      else if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
         if (selectedSceneId) {
           e.preventDefault();
           handleDeleteScene(selectedSceneId);
@@ -632,8 +719,29 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
     };
   }, [selectedSceneId, sceneColors]);
   
+  // Calculate timeline height based on content - make it reactive to audio changes
+  const timelineHeight = useMemo(() => {
+    // 60px for controls header, 32px for time ruler, 60px for scenes row, 70px for audio row with margin
+    const height = audioTrack ? 220 : 150;
+    console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, height });
+    return height;
+  }, [audioTrack]);
+  
+  // Synchronize scrolling between time ruler and timeline track
+  const handleTimelineScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (timeRulerRef.current && e.currentTarget === timelineRef.current) {
+      timeRulerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
+  
+  const handleRulerScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (timelineRef.current && e.currentTarget === timeRulerRef.current) {
+      timelineRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
+  
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800">
+    <div className="flex flex-col bg-white dark:bg-gray-950" style={{ height: `${timelineHeight}px` }}>
       {/* Timeline Controls - Modern design */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
         <div className="flex items-center gap-2">
@@ -686,8 +794,10 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
           </div>
         </div>
         
-        {/* Zoom Controls */}
-        <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+        {/* Right side controls */}
+        <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
@@ -699,7 +809,13 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
           <button
             onClick={() => setZoomScale(1)}
             className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            title="Reset zoom to 100%"
+            title={`Zoom: ${Math.round(zoomScale * 100)}%\n${
+              zoomScale >= 3 ? 'Frame-level precision' :
+              zoomScale >= 2 ? '5-frame precision' :
+              zoomScale >= 1.5 ? '10-frame precision' :
+              zoomScale >= 1 ? '0.5 second precision' :
+              '1-2 second precision'
+            }\n(Shift+drag for no snapping)`}
           >
             {Math.round(zoomScale * 100)}%
           </button>
@@ -712,15 +828,32 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
         </div>
+        
+        {/* Close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 transition-colors border border-gray-200 dark:border-gray-700"
+            title="Close Timeline"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+        </div>
       </div>
       
       {/* Timeline Container */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-950">
-        {/* Time Ruler */}
+      <div className="flex flex-col overflow-hidden bg-white dark:bg-gray-950" style={{ height: `${timelineHeight - 60}px` }}>
+        {/* Time Ruler - wrapped in scrollable container */}
         <div 
-          className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden"
-          style={{ width: `${zoomScale * 100}%` }}
+          ref={timeRulerRef}
+          className="overflow-x-auto overflow-y-hidden"
+          onScroll={handleRulerScroll}
         >
+          <div 
+            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative"
+            style={{ width: `${Math.max(100, zoomScale * 100)}%`, minWidth: '100%' }}
+          >
           {/* Dynamic time markers that adapt to zoom */}
           {(() => {
             // Calculate pixel width of the timeline
@@ -756,21 +889,27 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
             
             return markers;
           })()}
+          </div>
         </div>
         
         {/* Timeline Track */}
         <div 
           ref={timelineRef}
-          className="flex-1 relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
+          className="relative overflow-x-auto overflow-y-hidden bg-gray-50 dark:bg-gray-950"
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
-          style={{ cursor: isDragging ? 'grabbing' : 'pointer' }}
+          onScroll={handleTimelineScroll}
+          style={{ 
+            height: `${timelineHeight - 60 - 32}px`,
+            cursor: isDragging ? 'grabbing' : 'pointer' 
+          }}
         >
           <div
-            className="relative h-full"
+            className="relative"
             style={{ 
-              width: `${zoomScale * 100}%`,
-              minWidth: '100%'
+              width: `${Math.max(100, zoomScale * 100)}%`,
+              minWidth: '100%',
+              minHeight: '100%'
             }}
           >
             {/* Dynamic grid lines matching time markers */}
@@ -821,12 +960,13 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
             
             {/* Scene Items */}
             <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
-              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
                 Scenes
               </div>
               {scenes.map((scene: Scene, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
+                // When zoomed, scenes need to scale with the container
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id;
@@ -884,11 +1024,21 @@ export default function TimelinePanel({ projectId, userId }: TimelinePanelProps)
             </div>
             
             {/* Audio Track - only show when audio exists */}
+            {console.log('[Timeline Render] Audio track check:', { 
+              hasAudioTrack: !!audioTrack, 
+              audioTrack,
+              projectId,
+              projectAudio: project?.audio 
+            })}
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
+                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
+                  Audio
+                </div>
                 <div
-                  className="absolute"
+                  className="absolute bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg"
                   style={{
+                    // Audio duration is in seconds, convert to frames
                     left: `${((audioTrack.startTime || 0) * FPS / totalDuration) * 100}%`,
                     width: `${(((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100}%`,
                     height: TIMELINE_ITEM_HEIGHT,

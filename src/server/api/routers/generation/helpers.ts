@@ -16,6 +16,7 @@ import type { BrainDecision } from "~/lib/types/ai/brain.types";
 import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
+import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
 
 // Helper function for tool execution and database save
 export async function executeToolFromDecision(
