@@ -1,11 +1,16 @@
 // src/remotion/MainComposition.tsx
 import React from "react";
 import { Composition, Series, AbsoluteFill } from "remotion";
-import { FontLoader, loadFonts } from "./FontLoader";
+import { FontLoaderNew, loadCoreFonts } from "./FontLoaderNew";
 
 // Load fonts immediately when module loads (for Lambda)
 if (typeof window !== 'undefined') {
-  loadFonts();
+  console.log('[MainComposition] Loading fonts at module level');
+  loadCoreFonts().then(() => {
+    console.log('[MainComposition] Core fonts loaded');
+  }).catch(err => {
+    console.error('[MainComposition] Failed to load core fonts:', err);
+  });
 }
 
 // Helper to compile and render scene code
@@ -151,9 +156,12 @@ export const VideoComposition: React.FC<{
     );
   }
 
+  // Extract all scene codes for font loading
+  const sceneCodes = scenes.map(scene => scene.jsCode || scene.tsxCode).filter(Boolean);
+
   // Render scenes in series with font loading
   return (
-    <FontLoader>
+    <FontLoaderNew sceneCodes={sceneCodes}>
       <Series>
         {scenes.map((scene, index) => {
           const duration = scene.duration || 150; // Default 5 seconds at 30fps
@@ -195,7 +203,7 @@ export const VideoComposition: React.FC<{
           );
         })}
       </Series>
-    </FontLoader>
+    </FontLoaderNew>
   );
 };
 

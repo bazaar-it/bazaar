@@ -1232,7 +1232,7 @@ export default function ChatPanelG({
               message.length > SAFE_CHARACTER_LIMIT 
                 ? "border-red-400 border-2" 
                 : "border-gray-300 focus-within:border-gray-400 focus-within:shadow-md",
-              isDragOver && "border-blue-500 bg-blue-50"
+              isDragOver && "border-orange-400 bg-orange-50"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}

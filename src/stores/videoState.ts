@@ -693,18 +693,24 @@ export const useVideoState = create<VideoState>()(
       const oldDuration = existingScene?.duration || 150;
       const durationChange = newDuration - oldDuration;
       
-      // Update the current scene
+      // Update the current scene - ONLY update what's provided
       updatedScenes[sceneIndex] = {
         ...existingScene,
         id: existingScene?.id || sceneId,
-        type: existingScene?.type || 'custom',
+        type: existingScene?.type || updatedScene.type || 'custom',
         start: existingScene?.start || 0,
         duration: newDuration, // Use new duration
+        // Handle name at root level if provided
+        ...(updatedScene.name !== undefined && { name: updatedScene.name }),
         data: {
           ...existingScene?.data,
-          code: updatedScene.tsxCode,
-          name: updatedScene.name || existingScene?.data?.name || 'Scene',
-          props: updatedScene.props || {}
+          // Only update code if it's actually provided
+          ...(updatedScene.tsxCode !== undefined && { code: updatedScene.tsxCode }),
+          // Also update name in data for backward compatibility
+          ...(updatedScene.name !== undefined && { name: updatedScene.name }),
+          ...(updatedScene.data?.name !== undefined && { name: updatedScene.data.name }),
+          // Only update props if provided
+          ...(updatedScene.props !== undefined && { props: updatedScene.props })
         }
       };
       
@@ -714,7 +720,13 @@ export const useVideoState = create<VideoState>()(
         sceneId,
         codeLength: updatedScene.tsxCode?.length,
         codeStart: typeof sceneData.code === 'string' ? sceneData.code.substring(0, 100) : 'N/A',
-        hasRed: typeof sceneData.code === 'string' ? sceneData.code.includes('#ff0000') : false
+        hasRed: typeof sceneData.code === 'string' ? sceneData.code.includes('#ff0000') : false,
+        nameUpdate: {
+          rootName: (updatedScenes[sceneIndex] as any).name,
+          dataName: sceneData.name,
+          providedName: updatedScene.name,
+          providedDataName: updatedScene.data?.name
+        }
       });
       
       // TIMELINE FIX: Recalculate start times for subsequent scenes

@@ -31,7 +31,7 @@ export interface TitleGenerationParams {
 
 // Type definition for title generation response
 export interface TitleGenerationResponse {
-  title: string;
+  titles: string[];
   reasoning?: string;
 }
 
@@ -81,40 +81,51 @@ export async function generateTitle(
       usage: aiResponse.usage
     });
     
-    let args: { title: string; reasoning?: string };
+    let args: { titles: string[]; reasoning?: string };
     try {
       if (!aiResponse.content) {
         throw new Error("LLM response content is empty.");
       }
       args = JSON.parse(aiResponse.content);
       
-      if (!args.title || typeof args.title !== 'string' || args.title.trim() === "") {
-        throw new Error("Parsed title is empty, not a string, or invalid.");
+      if (!args.titles || !Array.isArray(args.titles) || args.titles.length === 0) {
+        throw new Error("Parsed titles array is empty, not an array, or invalid.");
       }
+      
+      // Validate each title
+      const validTitles = args.titles.filter(title => 
+        typeof title === 'string' && title.trim() !== ""
+      );
+      
+      if (validTitles.length === 0) {
+        throw new Error("No valid titles found in response.");
+      }
+      
+      args.titles = validTitles;
     } catch (error) {
       const errMessage = error instanceof Error ? error.message : String(error);
       titleLogger.error(contextId, "Failed to parse LLM JSON response or invalid format", { 
         error: errMessage,
         responseContent: aiResponse.content 
       });
-      return { title: "Untitled Video" };
+      return { titles: ["Untitled Video"] };
     }
     
     const duration = Date.now() - startTime;
-    titleLogger.success(contextId, `Title generated in ${duration}ms: "${args.title}"`, {
-      title: args.title,
+    titleLogger.success(contextId, `${args.titles.length} titles generated in ${duration}ms: ${args.titles.join(', ')}`, {
+      titles: args.titles,
       duration,
       hasReasoning: !!args.reasoning
     });
     
     return {
-      title: args.title,
+      titles: args.titles,
       reasoning: args.reasoning
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     titleLogger.error(contextId, `Failed to generate title: ${errorMessage}`, { error });
     
-    return { title: "Untitled Video" };
+    return { titles: ["Untitled Video"] };
   }
 } 

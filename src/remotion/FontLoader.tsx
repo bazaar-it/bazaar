@@ -129,8 +129,11 @@ const GOOGLE_FONTS = [
 
 // Load fonts via link tags (works in both browser and Lambda)
 export const loadFonts = () => {
+  console.log('[FontLoader] loadFonts called, window exists:', typeof window !== 'undefined');
+  
   // Only load fonts in Lambda/render environment
   if (typeof window === 'undefined' || !window.document) {
+    console.log('[FontLoader] No window/document, skipping font load');
     return;
   }
   

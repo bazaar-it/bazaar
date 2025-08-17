@@ -200,7 +200,7 @@ const ProjectPreview = ({
     <div className="relative">
       <div 
         className={`relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group ${
-          isCurrentProject ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+          isCurrentProject ? 'ring-2 ring-orange-400 ring-offset-2' : ''
         }`}
         onClick={(e) => {
           // Only allow navigation if we're not currently editing this project's title
@@ -252,7 +252,7 @@ const ProjectPreview = ({
         {/* Current project badge */}
         {isCurrentProject && (
           <div className="absolute top-1 sm:top-2 right-1 sm:right-2 z-10">
-            <div className="bg-blue-500 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium">
+            <div className="bg-gradient-to-r from-orange-400 to-orange-300 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium shadow-sm">
               Current
             </div>
           </div>

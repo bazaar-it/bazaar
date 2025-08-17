@@ -35,7 +35,7 @@ CRITICAL RULES:
 
 4. Code structure:
 const { AbsoluteFill, Sequence, interpolate, useCurrentFrame, useVideoConfig } = window.Remotion;
-window.RemotionGoogleFonts.loadFont("Inter", { weights: ["500", "700"] });
+// 100+ Google Fonts pre-loaded - use fontFamily directly (e.g., "Inter", "Roboto", "Playfair Display")
 
 const totalDurationInFrames_[8CHAR] = [TOTAL_FRAMES];
 export const durationInFrames_[8CHAR] = totalDurationInFrames_[8CHAR];

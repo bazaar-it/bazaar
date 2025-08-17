@@ -129,25 +129,23 @@ export const projectRouter = createTRPCRouter({
         console.log('[project.create] Mutation called. Input:', JSON.stringify(input));
         let title = "Untitled Video";
         
-        if (input?.initialMessage) {
-          try {
-            // Use AI to generate a title from the initialMessage
-            const result = await generateTitle({
-              prompt: input.initialMessage,
-              contextId: "project-create"
-            });
-            title = result.title || "Untitled Video";
-          } catch (titleError) {
-            console.error("Error generating AI title:", titleError);
-            // Fall back to default naming scheme on error
-          }
-        }
-        
-        // If AI title generation failed or no initialMessage was provided,
-        // use the existing incremental naming scheme
-        if (title === "Untitled Video" || title === "New Project") {
-          // Get a list of all "Untitled Video" projects with their numbers
-          const userProjects = await executeWithRetry(() => ctx.db
+        // Helper function to check if a title exists for this user
+        const titleExists = async (titleToCheck: string): Promise<boolean> => {
+          const existingTitles = await executeWithRetry(() => ctx.db
+            .select({ title: projects.title })
+            .from(projects)
+            .where(
+              and(
+                eq(projects.userId, ctx.session?.user?.id || 'system'),
+                eq(projects.title, titleToCheck)
+              )
+            ));
+          return existingTitles.length > 0;
+        };
+
+        // Helper function to ensure "Untitled Video" titles are unique with numbering
+        const ensureUntitledVideoUnique = async (): Promise<string> => {
+          const existingTitles = await executeWithRetry(() => ctx.db
             .select({ title: projects.title })
             .from(projects)
             .where(
@@ -157,10 +155,18 @@ export const projectRouter = createTRPCRouter({
               )
             ));
           
-          // Find the highest number used in "Untitled Video X" titles
+          const existingTitleSet = new Set(existingTitles.map(p => p.title));
+          
+          if (!existingTitleSet.has("Untitled Video")) {
+            return "Untitled Video";
+          }
+          
+          // Find the highest number used in "Untitled Video X" format
           let highestNumber = 0;
-          for (const project of userProjects) {
-            const match = /^Untitled Video (\d+)$/.exec(project.title);
+          const titlePattern = /^Untitled Video (\d+)$/;
+          
+          for (const title of existingTitleSet) {
+            const match = titlePattern.exec(title);
             if (match?.[1]) {
               const num = parseInt(match[1], 10);
               if (!isNaN(num) && num > highestNumber) {
@@ -169,9 +175,37 @@ export const projectRouter = createTRPCRouter({
             }
           }
           
-          // Generate a unique title with the next available number
-          const nextNumber = highestNumber + 1;
-          title = userProjects.length === 0 ? "Untitled Video" : `Untitled Video ${nextNumber}`;
+          return `Untitled Video ${highestNumber + 1}`;
+        };
+
+        if (input?.initialMessage) {
+          try {
+            // Use AI to generate 5 title alternatives
+            const result = await generateTitle({
+              prompt: input.initialMessage,
+              contextId: "project-create"
+            });
+            
+            // Try each AI-generated title until we find one that doesn't exist
+            for (const candidateTitle of result.titles) {
+              if (!(await titleExists(candidateTitle))) {
+                title = candidateTitle;
+                break;
+              }
+            }
+            
+            // If all AI titles exist, fall back to numbered Untitled Video
+            if (title === "Untitled Video") {
+              title = await ensureUntitledVideoUnique();
+            }
+          } catch (titleError) {
+            console.error("Error generating AI title:", titleError);
+            // Fall back to numbered Untitled Video scheme on error
+            title = await ensureUntitledVideoUnique();
+          }
+        } else {
+          // No initial message provided, use numbered Untitled Video
+          title = await ensureUntitledVideoUnique();
         }
         
         // Create a new project for the logged-in user with returning clause
@@ -442,9 +476,9 @@ export const projectRouter = createTRPCRouter({
           contextId: input.contextId || "api-call"
         });
         
-        // Return the generated title
+        // Return the first generated title
         return {
-          title: result.title || generateNameFromPrompt(input.prompt),
+          title: result.titles?.[0] || generateNameFromPrompt(input.prompt),
           reasoning: result.reasoning
         };
       } catch (error) {
@@ -496,7 +530,7 @@ export const projectRouter = createTRPCRouter({
         }
 
         // Update the audio field
-        const [updated] = await ctx.db
+        const updated = await ctx.db
           .update(projects)
           .set({
             audio: input.audio,
@@ -505,8 +539,15 @@ export const projectRouter = createTRPCRouter({
           .where(eq(projects.id, input.projectId))
           .returning();
           
+        const result = updated[0];
+        if (!result) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update project audio",
+          });
+        }
         console.log(`[Project] Updated audio for project ${input.projectId}:`, input.audio);
-        return { success: true, audio: updated.audio };
+        return { success: true, audio: result.audio };
       } catch (error) {
         console.error("Error updating project audio:", error);
         if (error instanceof TRPCError) {
@@ -547,7 +588,7 @@ export const projectRouter = createTRPCRouter({
         }
 
         // Toggle the favorite status
-        const [updated] = await ctx.db
+        const updated = await ctx.db
           .update(projects)
           .set({
             isFavorite: !project.isFavorite,
@@ -556,8 +597,15 @@ export const projectRouter = createTRPCRouter({
           .where(eq(projects.id, input.projectId))
           .returning();
 
-        console.log(`[Project] Toggled favorite for project ${input.projectId}: ${updated.isFavorite}`);
-        return { success: true, isFavorite: updated.isFavorite };
+        const result = updated[0];
+        if (!result) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to toggle favorite status",
+          });
+        }
+        console.log(`[Project] Toggled favorite for project ${input.projectId}: ${result.isFavorite}`);
+        return { success: true, isFavorite: result.isFavorite };
       } catch (error) {
         console.error("Error toggling favorite:", error);
         if (error instanceof TRPCError) {

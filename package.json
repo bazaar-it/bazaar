@@ -109,6 +109,7 @@
     "@remotion/bundler": "4.0.320",
     "@remotion/cli": "^4.0.320",
     "@remotion/enable-scss": "4.0.320",
+    "@remotion/fonts": "^4.0.339",
     "@remotion/google-fonts": "4.0.320",
     "@remotion/lambda": "4.0.320",
     "@remotion/paths": "4.0.320",

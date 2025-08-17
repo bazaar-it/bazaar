@@ -12,7 +12,7 @@ export interface LambdaRenderConfig extends RenderConfig {
 }
 
 // Use pre-deployed site URL (deployed via CLI: npx remotion lambda sites create)
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-prod-fix/index.html";
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-fonts-fixed/index.html";
 
 // Check if Lambda is properly configured
 function checkLambdaConfig() {

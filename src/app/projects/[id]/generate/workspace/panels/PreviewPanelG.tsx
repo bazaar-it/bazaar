@@ -86,14 +86,21 @@ export function PreviewPanelG({
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
         }
         
+        // Check if there's a local scene with this ID
+        const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
+        const localName = (localScene as any)?.name || localScene?.data?.name;
+        
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
+          // Preserve local name if it exists and is different from DB name
+          name: localName || dbScene.name,
           data: {
             code: dbScene.tsxCode,
-            name: dbScene.name,
+            // Also preserve local name in data for backward compatibility
+            name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
           }
@@ -131,6 +138,25 @@ export function PreviewPanelG({
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
+  
+  // Initialize preview font loading for any Google Font
+  useEffect(() => {
+    import('../../../../../../remotion/fonts/preview-font-loader').then(({ initializePreviewFonts }) => {
+      initializePreviewFonts();
+    });
+  }, []);
+
+  // Load fonts for current scenes
+  useEffect(() => {
+    if (!dbScenes?.length) return;
+
+    import('../../../../../../remotion/fonts/preview-font-loader').then(({ loadPreviewFonts }) => {
+      const sceneCodes = dbScenes.map(scene => scene.tsxCode || '').filter(Boolean);
+      loadPreviewFonts(sceneCodes).catch((error: any) => {
+        console.warn('[PreviewPanelG] Error loading preview fonts:', error);
+      });
+    });
+  }, [dbScenes]);
   
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
@@ -1292,8 +1318,8 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   fontGroups.forEach((group, index) => {
     const fontsLink = document.createElement('link');
     fontsLink.rel = 'stylesheet';
-    fontsLink.href = `https://fonts.googleapis.com/css2?${group}&display=swap`;
-    fontsLink.setAttribute('data-font-group', `${index + 1}`);
+    fontsLink.href = 'https://fonts.googleapis.com/css2?' + group + '&display=swap';
+    fontsLink.setAttribute('data-font-group', String(index + 1));
     document.head.appendChild(fontsLink);
   });
   

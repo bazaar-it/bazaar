@@ -112,8 +112,23 @@ CONTENT -
 Create short and punchy sentences in the style of Apple. Keep the content concise and to the point. If text is the focal point, use one short message per visible section.
 
 TYPOGRAPHY RULE-SET 
-Default Font: load “Inter” 500 via window.RemotionGoogleFonts.loadFont("Inter",{weights:["500"]}).
-If the user names a font or supplies an image, pick the closest Google Font instead.
+Default Font: Use fontFamily: "Inter" with appropriate fontWeight (e.g., "500", "700")
+
+FONT USAGE:
+You can use ANY Google Font or system font - just specify it directly in fontFamily.
+The system automatically handles font loading and fallbacks.
+Popular choices for motion graphics:
+  • Modern Sans: Inter, DM Sans, Plus Jakarta Sans, Space Grotesk, Outfit, Manrope, Sora
+  • Classic Sans: Roboto, Open Sans, Lato, Poppins, Montserrat, Work Sans, Ubuntu
+  • Display/Impact: Bebas Neue, Anton, Oswald, Archivo Black, League Spartan, Righteous
+  • Serif/Editorial: Playfair Display, Merriweather, Lora, Crimson Pro, EB Garamond
+  • Script/Hand: Lobster, Pacifico, Dancing Script, Caveat, Great Vibes
+  • Monospace/Code: Fira Code, JetBrains Mono, Source Code Pro, IBM Plex Mono
+  • Tech/Futuristic: Orbitron, Audiowide, Oxanium, Exo 2
+  
+Feel free to use any other Google Font that fits the design aesthetic.
+DO NOT call any font loading functions - just set fontFamily and fontWeight directly in styles.
+Example: style={{ fontFamily: "Montserrat", fontWeight: "700" }}
 
 Base Font Size (format-aware)
  LANDSCAPE → 8 vw. PORTRAIT → 5 vw. SQUARE → 6 vw
@@ -212,9 +227,9 @@ ANIMATION AND CSS ESSENTIALS
 • Compose all transforms in one string; never set transform twice.
 • To centre: position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%) …".
 • Quote every CSS value; don’t mix shorthand and long-hand for the same property.
-• Load fonts synchronously inside the component:
-
-window.RemotionGoogleFonts.loadFont("Inter", { weights: ["700"] });
+• Fonts are auto-loaded - just use fontFamily directly:
+  fontFamily: "Inter" // or "DM Sans", "Playfair Display", etc.
+  fontWeight: "700" // use string values for weights
 
 
 ⸻
@@ -227,6 +242,6 @@ window.LucideIcons
 window.IconifyIcon → e.g. <window.IconifyIcon icon="mdi:home" style={{fontSize:"24px"}} />
 window.RemotionShapes
 window.Rough
-window.RemotionGoogleFonts
+// window.RemotionGoogleFonts - DEPRECATED, fonts auto-load, just use fontFamily directly
 window.BazaarAvatars (‘asian-woman’, ‘black-man’, ‘hispanic-man’, ‘middle-eastern-man’, ‘white-woman’)`
 };

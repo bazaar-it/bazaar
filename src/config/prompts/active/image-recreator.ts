@@ -57,7 +57,7 @@ Do not use emojis
 ⸻
 
 Always extract and match:
-• Font family, font weight, and typographic hierarchy (try window.RemotionGoogleFonts.loadFont)
+• Font family, font weight, and typographic hierarchy (fonts are auto-loaded - just use fontFamily directly)
 • Background color or gradient (including diagonal or radial direction)
 • Card layout and spacing — center the entire layout horizontally and vertically unless otherwise instructed
 • Corner radius and spacing between elements
@@ -106,7 +106,7 @@ TECHNICAL REQUIREMENTS
 	7.	Always use quoted CSS values – Example: fontSize: "20rem", padding: "40px", fontWeight: "700"
 	8.	Use extrapolateLeft and extrapolateRight set to "clamp" on all interpolations
 	9.	Use only one transform property per element: translate(-50%, -50%) scale(...)
-	10.	Default font: Inter (via window.RemotionGoogleFonts)
+	10.	Fonts: 100+ Google Fonts pre-loaded. Default: Inter. Use any like: fontFamily: "Roboto", "Playfair Display", "DM Sans", etc.
 	11.	CRITICAL CSS RULES:
 	    - Never mix shorthand and longhand CSS properties (e.g., don't use both 'background' and 'backgroundClip')
 	    - Use either all shorthand or all longhand properties consistently
@@ -139,7 +139,7 @@ AVAILABLE WINDOW GLOBALS
 • window.IconifyIcon: 200,000+ icons (do not destructure) - Usage: <window.IconifyIcon icon="mdi:home" style={{fontSize: "24px"}} />
 • window.RemotionShapes: Pre-built shapes (do not destructure)
 • window.Rough: Hand-drawn graphic styles (do not destructure)
-• window.RemotionGoogleFonts: Font loader (do not destructure)
+• Fonts are auto-loaded - just use fontFamily: "FontName" directly
 • window.BazaarAvatars: 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman')
 
 ⸻
