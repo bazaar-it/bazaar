@@ -734,12 +734,23 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const isSelected = selectedSceneId === scene.id;
     const colors = sceneColors[scene.id] || { primary: '#6b7280', gradient: 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)' };
     
+    // Bazaar gradient colors (purple to pink)
+    const bazaarPurple = 'rgba(168, 85, 247, 0.8)'; // purple-500
+    const bazaarPink = 'rgba(236, 72, 153, 0.8)'; // pink-500
+    
     return {
       background: colors.gradient || colors.primary,
-      border: isSelected ? '2px solid rgba(59, 130, 246, 0.8)' : '1px solid rgba(0, 0, 0, 0.1)',
-      boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+      border: isSelected ? '2px solid transparent' : '1px solid rgba(0, 0, 0, 0.1)',
+      backgroundImage: isSelected ? `linear-gradient(90deg, ${bazaarPurple}, ${bazaarPink})` : undefined,
+      backgroundOrigin: isSelected ? 'border-box' : undefined,
+      backgroundClip: isSelected ? 'padding-box, border-box' : undefined,
+      boxShadow: isSelected 
+        ? `0 0 20px rgba(168, 85, 247, 0.3), 0 0 40px rgba(236, 72, 153, 0.2)` 
+        : '0 1px 3px rgba(0, 0, 0, 0.1)',
       color: '#ffffff',
-      textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)'
+      textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+      position: 'relative' as const,
+      overflow: 'hidden' as const
     };
   }, [selectedSceneId, sceneColors]);
   
@@ -1167,10 +1178,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               </div>
             )}
             
-            {/* Playhead */}
+            {/* Playhead - with Bazaar gradient */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-blue-500 cursor-ew-resize z-30 shadow-lg"
-              style={{ left: `${(currentFrame / totalDuration) * 100}%` }}
+              className="absolute top-0 bottom-0 w-0.5 cursor-ew-resize z-30"
+              style={{ 
+                left: `${(currentFrame / totalDuration) * 100}%`,
+                background: 'linear-gradient(180deg, #a855f7 0%, #ec4899 100%)',
+                boxShadow: '0 0 8px rgba(168, 85, 247, 0.5), 0 0 16px rgba(236, 72, 153, 0.3)'
+              }}
               title={`Frame: ${currentFrame} / ${totalDuration} (${((currentFrame / totalDuration) * 100).toFixed(1)}%)`}
               onMouseDown={(e) => {
                 e.preventDefault();
