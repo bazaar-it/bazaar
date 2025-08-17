@@ -2,6 +2,146 @@
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+import { loadFont } from '@remotion/fonts';
+
+// Font registry for Lambda - using correct R2 URLs with /fonts/ path
+// Complete list of all fonts uploaded to R2 (verified via AWS CLI)
+const FONT_REGISTRY = {
+  'Inter': [
+    { weight: '300', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Light.woff2' },
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Regular.woff2' },
+    { weight: '500', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Medium.woff2' },
+    { weight: '600', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-SemiBold.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Bold.woff2' },
+    { weight: '800', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-ExtraBold.woff2' },
+    { weight: '900', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Black.woff2' },
+  ],
+  'DM Sans': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DMSans-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DMSans-Bold.woff2' },
+  ],
+  'Plus Jakarta Sans': [
+    // Using Google Fonts CDN until we upload these
+    { weight: '400', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-xGJKFADoWW9g.woff2' },
+    { weight: '500', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-xmJaFADoWW9g.woff2' },
+    { weight: '600', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-w6IqFADoWW9g.woff2' },
+    { weight: '700', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-weIqFADoWW9g.woff2' },
+  ],
+  'Roboto': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Roboto-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Roboto-Bold.woff2' },
+  ],
+  'Poppins': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Poppins-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Poppins-Bold.woff2' },
+  ],
+  'Montserrat': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Montserrat-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Montserrat-Bold.woff2' },
+  ],
+  'Playfair Display': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/PlayfairDisplay-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/PlayfairDisplay-Bold.woff2' },
+  ],
+  'Merriweather': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Merriweather-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Merriweather-Bold.woff2' },
+  ],
+  'Lobster': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Lobster-Regular.woff2' },
+  ],
+  'Dancing Script': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DancingScript-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DancingScript-Bold.woff2' },
+  ],
+  'Pacifico': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Pacifico-Regular.woff2' },
+  ],
+  'Fira Code': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/FiraCode-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/FiraCode-Bold.woff2' },
+  ],
+  'JetBrains Mono': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/JetBrainsMono-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/JetBrainsMono-Bold.woff2' },
+  ],
+  'Raleway': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Raleway-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Raleway-Bold.woff2' },
+  ],
+  'Ubuntu': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Ubuntu-Regular.woff2' },
+    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Ubuntu-Bold.woff2' },
+  ],
+  'Bebas Neue': [
+    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/BebasNeue-Regular.woff2' },
+  ],
+};
+
+// Function to extract fonts from scene code
+function extractFontsFromScenes(scenes: any[]): Set<string> {
+  const fonts = new Set<string>();
+  
+  for (const scene of scenes) {
+    const code = scene.jsCode || scene.tsxCode || '';
+    
+    // Match various font patterns
+    const patterns = [
+      /fontFamily:\s*["']([^"']+)["']/g,
+      /font:\s*["']([^"']+)["']/g,
+      /family:\s*["']([^"']+)["']/g,
+    ];
+    
+    for (const pattern of patterns) {
+      const matches = [...code.matchAll(pattern)];
+      for (const match of matches) {
+        const fontString = match[1];
+        const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
+        fonts.add(primaryFont);
+      }
+    }
+  }
+  
+  return fonts;
+}
+
+// Load fonts before rendering
+let fontsLoaded = false;
+
+async function ensureFontsLoaded(scenes: any[]) {
+  if (fontsLoaded) return;
+  
+  const fontsNeeded = extractFontsFromScenes(scenes);
+  console.log('[Lambda Font Loading] Fonts detected in scenes:', Array.from(fontsNeeded));
+  
+  const loadPromises = [];
+  
+  for (const fontName of fontsNeeded) {
+    const fontConfig = FONT_REGISTRY[fontName as keyof typeof FONT_REGISTRY];
+    if (fontConfig) {
+      console.log(`[Lambda Font Loading] Loading font: ${fontName}`);
+      for (const variant of fontConfig) {
+        loadPromises.push(
+          loadFont({
+            family: fontName,
+            url: variant.url,
+            weight: variant.weight,
+            style: 'normal',
+          }).then(() => {
+            console.log(`[Lambda Font Loading] Loaded ${fontName} weight ${variant.weight}`);
+          }).catch((err) => {
+            console.warn(`[Lambda Font Loading] Failed to load ${fontName} weight ${variant.weight}:`, err);
+          })
+        );
+      }
+    } else {
+      console.warn(`[Lambda Font Loading] Font ${fontName} not in registry, skipping`);
+    }
+  }
+  
+  await Promise.all(loadPromises);
+  fontsLoaded = true;
+}
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -265,6 +405,21 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
+  // Load fonts before rendering
+  const [fontsReady, setFontsReady] = React.useState(false);
+  const [handle] = React.useState(() => delayRender());
+  
+  React.useEffect(() => {
+    ensureFontsLoaded(scenes).then(() => {
+      setFontsReady(true);
+      continueRender(handle);
+    }).catch((err) => {
+      console.error('[Lambda Font Loading] Failed to load fonts:', err);
+      setFontsReady(true); // Continue anyway
+      continueRender(handle);
+    });
+  }, []);
+  
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {
     url: audio.url,

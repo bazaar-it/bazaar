@@ -2,160 +2,9 @@
 // This file prepares the render configuration but doesn't execute rendering
 // Actual rendering happens via Lambda
 
-/**
- * Inject font loading code directly into scene for Lambda rendering
- */
-async function injectFontLoadingCode(code: string): Promise<string> {
-  // Extract font families from the code
-  const fontFamilies = new Set<string>();
-  
-  // Match fontFamily in various formats
-  const patterns = [
-    /fontFamily:\s*["']([^"']+)["']/g,
-    /fontFamily:\s*`([^`]+)`/g,
-    /font-family:\s*["']([^"']+)["']/g,
-  ];
-  
-  for (const pattern of patterns) {
-    const matches = [...code.matchAll(pattern)];
-    for (const match of matches) {
-      const fontString = match[1];
-      // Extract just the first font if it's a font stack
-      const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
-      fontFamilies.add(primaryFont);
-    }
-  }
-
-  // SPECIAL CASE: Extract fonts from font data arrays like fontSamples
-  // Look for patterns like: { font: "Inter" } or { family: "Roboto" }
-  const fontArrayPatterns = [
-    /font:\s*["']([^"']+)["']/g,
-    /family:\s*["']([^"']+)["']/g,
-  ];
-  
-  for (const pattern of fontArrayPatterns) {
-    const matches = [...code.matchAll(pattern)];
-    for (const match of matches) {
-      const fontString = match[1];
-      const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
-      fontFamilies.add(primaryFont);
-    }
-  }
-
-  if (fontFamilies.size === 0) {
-    return code;
-  }
-
-  console.log(`[Font Injection] Found fonts in scene:`, Array.from(fontFamilies));
-
-  // Font fallback mapping for Lambda rendering
-  const fontFallbacks: Record<string, string> = {
-    // Apple/Mac fonts
-    'SF Pro': 'Inter',
-    'SF Pro Display': 'Inter',
-    'SF Pro Text': 'Inter',
-    'San Francisco': 'Inter',
-    'Helvetica': 'Inter',
-    'Helvetica Neue': 'Inter',
-    
-    // Windows fonts
-    'Segoe UI': 'Inter',
-    'Calibri': 'Open Sans',
-    'Arial': 'Open Sans',
-    'Verdana': 'Open Sans',
-    'Tahoma': 'Work Sans',
-    
-    // Common fallbacks to our R2 fonts
-    'Product Sans': 'DM Sans',
-    'Google Sans': 'Plus Jakarta Sans',
-    'Proxima Nova': 'Montserrat',
-    'Futura': 'Montserrat',
-    'Avenir': 'Nunito',
-    'Circular': 'DM Sans',
-    'Gotham': 'Montserrat',
-    'Gilroy': 'Plus Jakarta Sans',
-    'Comic Sans': 'Caveat',
-    'Comic Sans MS': 'Caveat',
-    'Brush Script': 'Dancing Script',
-    'Georgia': 'Merriweather',
-    'Times New Roman': 'Merriweather',
-    'Times': 'Merriweather',
-    'Monaco': 'JetBrains Mono',
-    'Courier': 'IBM Plex Mono',
-    'Courier New': 'Source Code Pro',
-    'Consolas': 'Fira Code',
-  };
-
-  // Build font loading code
-  const fontLoadingStatements: string[] = [];
-  const R2_BASE_URL = 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts';
-  
-  for (const fontFamily of fontFamilies) {
-    // Map to available R2 font
-    const mappedFont = fontFallbacks[fontFamily] || fontFamily;
-    
-    // Generate loading statements for common weights
-    const weights = ['400', '700']; // Start with regular and bold
-    
-    for (const weight of weights) {
-      const weightName = weight === '400' ? 'Regular' : weight === '700' ? 'Bold' : weight;
-      const filename = `${mappedFont.replace(/\s+/g, '')}-${weightName}.woff2`;
-      const fontUrl = `${R2_BASE_URL}/${filename}`;
-      
-      fontLoadingStatements.push(`
-        await new Promise((resolve) => {
-          const fontFace = new FontFace('${mappedFont}', 'url(${fontUrl})', { weight: '${weight}' });
-          fontFace.load().then((loadedFont) => {
-            document.fonts.add(loadedFont);
-            console.log('[Lambda Font] Loaded ${mappedFont} weight ${weight}');
-            resolve(loadedFont);
-          }).catch((err) => {
-            console.warn('[Lambda Font] Failed to load ${mappedFont} weight ${weight}:', err);
-            resolve(null);
-          });
-        });`);
-    }
-  }
-
-  if (fontLoadingStatements.length === 0) {
-    return code;
-  }
-
-  // Inject font loading at the beginning of the component
-  const fontLoadingCode = `
-// === FONT LOADING FOR LAMBDA ===
-const loadFontsForLambda = async () => {
-  try {
-    ${fontLoadingStatements.join('\n    ')}
-    console.log('[Lambda Font] All fonts loaded successfully');
-  } catch (error) {
-    console.error('[Lambda Font] Error loading fonts:', error);
-  }
-};
-
-// Load fonts immediately when component is defined
-loadFontsForLambda();
-
-// === END FONT LOADING ===
-`;
-
-  // Insert font loading code at the beginning, after any imports/destructuring
-  const lines = code.split('\n');
-  let insertIndex = 0;
-  
-  // Find a good place to insert (after destructuring, before component definition)
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('const {') || line.includes('= window.Remotion') || line.includes('React.')) {
-      insertIndex = i + 1;
-    } else if (line.startsWith('const Component') || line.startsWith('function') || line.startsWith('export')) {
-      break;
-    }
-  }
-  
-  lines.splice(insertIndex, 0, fontLoadingCode);
-  return lines.join('\n');
-}
+// Font loading is now handled by MainCompositionSimple using @remotion/fonts
+// The old injectFontLoadingCode function has been removed as it used browser APIs (document.fonts)
+// that don't exist in Lambda's Node environment
 
 export interface AudioTrack {
   url: string;
@@ -402,9 +251,8 @@ async function preprocessSceneForLambda(scene: any) {
       '// Font loading handled by @remotion/fonts injection'
     );
 
-    // Inject font loading for detected fonts
-    const fontLoaderCode = await injectFontLoadingCode(transformedCode);
-    transformedCode = fontLoaderCode;
+    // Font loading is now handled by MainCompositionSimple using @remotion/fonts
+    // No need to inject font loading code into the scene
     
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
