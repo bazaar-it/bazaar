@@ -11,6 +11,7 @@ import {
   ZoomOut,
   Trash2,
   Copy,
+  Edit2,
   GripVertical,
   Music,
   Volume2,
@@ -338,19 +339,32 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (isDragging || !timelineRef.current) return;
     
     const rect = timelineRef.current.getBoundingClientRect();
+    const scrollLeft = timelineRef.current.scrollLeft;
     const clickX = e.clientX - rect.left;
     
-    // Clamp to timeline bounds
-    const clampedX = Math.max(0, Math.min(rect.width, clickX));
+    // Account for scroll position and zoom scale
+    const actualClickX = clickX + scrollLeft;
+    const actualWidth = rect.width * zoomScale;
     
-    // Calculate percentage (0 to 1)
-    const percentage = clampedX / rect.width;
+    // Clamp to actual timeline bounds
+    const clampedX = Math.max(0, Math.min(actualWidth, actualClickX));
+    
+    // Calculate percentage (0 to 1) based on actual width
+    const percentage = clampedX / actualWidth;
     
     // Convert to frame
     const newFrame = Math.round(percentage * totalDuration);
     const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
     
-    console.log('[Timeline Click] Seek to frame:', clampedFrame);
+    console.log('[Timeline Click] Seek to frame:', {
+      clickX,
+      scrollLeft,
+      actualClickX,
+      actualWidth,
+      percentage: (percentage * 100).toFixed(1) + '%',
+      frame: clampedFrame,
+      zoomScale
+    });
     
     // Update state and dispatch event
     setCurrentFrame(clampedFrame);
@@ -358,7 +372,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       detail: { frame: clampedFrame }
     });
     window.dispatchEvent(event);
-  }, [isDragging, totalDuration]);
+  }, [isDragging, totalDuration, zoomScale]);
   
   // Handle play/pause
   const togglePlayPause = useCallback(() => {
@@ -428,12 +442,17 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (dragInfo.action === 'playhead') {
       // Get mouse position relative to timeline container
       const mouseX = e.clientX - rect.left;
+      const scrollLeft = timelineRef.current.scrollLeft;
       
-      // Clamp to timeline bounds
-      const clampedX = Math.max(0, Math.min(rect.width, mouseX));
+      // Account for scroll position and zoom scale
+      const actualMouseX = mouseX + scrollLeft;
+      const actualWidth = rect.width * zoomScale;
       
-      // Calculate percentage (0 to 1)
-      const percentage = clampedX / rect.width;
+      // Clamp to actual timeline bounds
+      const clampedX = Math.max(0, Math.min(actualWidth, actualMouseX));
+      
+      // Calculate percentage (0 to 1) based on actual width
+      const percentage = clampedX / actualWidth;
       
       // Convert percentage to frame number
       let newFrame = Math.round(percentage * totalDuration);
@@ -462,11 +481,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       console.log('[Playhead Drag] Position:', {
         mouseX: mouseX.toFixed(1),
-        containerWidth: rect.width.toFixed(1),
+        scrollLeft: scrollLeft.toFixed(1),
+        actualMouseX: actualMouseX.toFixed(1),
+        actualWidth: actualWidth.toFixed(1),
         percentage: (percentage * 100).toFixed(1) + '%',
         frame: clampedFrame,
         snapped: !e.shiftKey,
-        totalDuration
+        totalDuration,
+        zoomScale
       });
       
       // Update local state immediately for visual feedback
@@ -849,9 +871,33 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           ref={timeRulerRef}
           className="overflow-x-auto overflow-y-hidden"
           onScroll={handleRulerScroll}
+          onClick={(e) => {
+            // Move playhead when clicking on time ruler
+            if (timeRulerRef.current) {
+              const rect = timeRulerRef.current.getBoundingClientRect();
+              const scrollLeft = timeRulerRef.current.scrollLeft;
+              const clickX = e.clientX - rect.left;
+              
+              // Account for scroll position and zoom scale
+              const actualClickX = clickX + scrollLeft;
+              const actualWidth = rect.width * zoomScale;
+              
+              // Calculate percentage and frame
+              const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+              const newFrame = Math.round(percentage * totalDuration);
+              const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
+              
+              // Update playhead position
+              setCurrentFrame(clampedFrame);
+              const event = new CustomEvent('timeline-seek', { 
+                detail: { frame: clampedFrame }
+              });
+              window.dispatchEvent(event);
+            }
+          }}
         >
           <div 
-            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative"
+            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative cursor-pointer"
             style={{ width: `${Math.max(100, zoomScale * 100)}%`, minWidth: '100%' }}
           >
           {/* Dynamic time markers that adapt to zoom */}
@@ -901,7 +947,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           onScroll={handleTimelineScroll}
           style={{ 
             height: `${timelineHeight - 60 - 32}px`,
-            cursor: isDragging ? 'grabbing' : 'pointer' 
+            cursor: isDragging ? 'grabbing' : 'crosshair' 
           }}
         >
           <div
@@ -989,8 +1035,31 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       transition: 'all 0.2s ease'
                     }}
                     onClick={(e) => {
-                      e.stopPropagation();
+                      // Select the scene
                       setSelectedSceneId(scene.id);
+                      
+                      // Also move playhead to click position
+                      if (timelineRef.current) {
+                        const rect = timelineRef.current.getBoundingClientRect();
+                        const scrollLeft = timelineRef.current.scrollLeft;
+                        const clickX = e.clientX - rect.left;
+                        
+                        // Account for scroll position and zoom scale
+                        const actualClickX = clickX + scrollLeft;
+                        const actualWidth = rect.width * zoomScale;
+                        
+                        // Calculate percentage and frame
+                        const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+                        const newFrame = Math.round(percentage * totalDuration);
+                        const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
+                        
+                        // Update playhead position
+                        setCurrentFrame(clampedFrame);
+                        const event = new CustomEvent('timeline-seek', { 
+                          detail: { frame: clampedFrame }
+                        });
+                        window.dispatchEvent(event);
+                      }
                     }}
                     onContextMenu={(e) => handleContextMenu(e, scene.id)}
                   >
@@ -1086,16 +1155,40 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         </div>
       </div>
       
-      {/* Context Menu */}
+      {/* Context Menu - using fixed positioning and high z-index */}
       {contextMenu && (
         <div
-          className="absolute bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-[160px] text-sm backdrop-blur-sm"
+          className="fixed bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[180px] text-sm backdrop-blur-sm"
           style={{ 
-            left: Math.min(contextMenu.x, window.innerWidth - 170),
-            top: Math.min(contextMenu.y, window.innerHeight - 120)
+            left: Math.min(contextMenu.x, window.innerWidth - 200),
+            top: Math.min(contextMenu.y, window.innerHeight - 150),
+            zIndex: 9999
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            onClick={() => {
+              const sceneIndex = scenes.findIndex((s: Scene) => s.id === contextMenu.sceneId);
+              const scene = scenes[sceneIndex];
+              if (scene) {
+                const currentName = scene.name || scene.data?.name || `Scene ${sceneIndex + 1}`;
+                const newName = prompt('Enter new scene name:', currentName);
+                if (newName && newName !== currentName) {
+                  // Update in local state
+                  const updatedScene = { ...scene, name: newName };
+                  updateScene(projectId, contextMenu.sceneId, updatedScene);
+                  
+                  // TODO: Add API call to persist the name change
+                  toast.success('Scene renamed to: ' + newName);
+                }
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"
+          >
+            <Edit2 className="w-4 h-4" />
+            Rename Scene
+          </button>
           <button
             onClick={() => handleDuplicateScene(contextMenu.sceneId)}
             className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"

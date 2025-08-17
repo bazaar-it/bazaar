@@ -1,6 +1,12 @@
 // src/remotion/MainComposition.tsx
 import React from "react";
 import { Composition, Series, AbsoluteFill } from "remotion";
+import { FontLoader, loadFonts } from "./FontLoader";
+
+// Load fonts immediately when module loads (for Lambda)
+if (typeof window !== 'undefined') {
+  loadFonts();
+}
 
 // Helper to compile and render scene code
 function compileSceneCode(scene: any): React.ComponentType | null {
@@ -137,7 +143,7 @@ export const VideoComposition: React.FC<{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'sans-serif',
+          fontFamily: 'Inter, sans-serif',
         }}
       >
         <h1>No scenes to render</h1>
@@ -145,48 +151,51 @@ export const VideoComposition: React.FC<{
     );
   }
 
-  // Render scenes in series
+  // Render scenes in series with font loading
   return (
-    <Series>
-      {scenes.map((scene, index) => {
-        const duration = scene.duration || 150; // Default 5 seconds at 30fps
-        const SceneComponent = compileSceneCode(scene);
-        
-        if (!SceneComponent) {
-          // Show error placeholder for invalid scenes
+    <FontLoader>
+      <Series>
+        {scenes.map((scene, index) => {
+          const duration = scene.duration || 150; // Default 5 seconds at 30fps
+          const SceneComponent = compileSceneCode(scene);
+          
+          if (!SceneComponent) {
+            // Show error placeholder for invalid scenes
+            return (
+              <Series.Sequence key={scene.id || index} durationInFrames={duration}>
+                <AbsoluteFill
+                  style={{
+                    backgroundColor: '#fff3cd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px dashed #ffc107',
+                    fontFamily: 'Inter, sans-serif',
+                  }}
+                >
+                  <div style={{ textAlign: 'center', padding: '20px' }}>
+                    <h2 style={{ color: '#856404', fontFamily: 'Inter, sans-serif' }}>
+                      ⚠️ Invalid Scene: {scene.name || `Scene ${index + 1}`}
+                    </h2>
+                    <p style={{ color: '#856404', fontFamily: 'Inter, sans-serif' }}>
+                      This scene could not be compiled
+                    </p>
+                  </div>
+                </AbsoluteFill>
+              </Series.Sequence>
+            );
+          }
+          
           return (
             <Series.Sequence key={scene.id || index} durationInFrames={duration}>
-              <AbsoluteFill
-                style={{
-                  backgroundColor: '#fff3cd',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px dashed #ffc107',
-                }}
-              >
-                <div style={{ textAlign: 'center', padding: '20px' }}>
-                  <h2 style={{ color: '#856404' }}>
-                    ⚠️ Invalid Scene: {scene.name || `Scene ${index + 1}`}
-                  </h2>
-                  <p style={{ color: '#856404' }}>
-                    This scene could not be compiled
-                  </p>
-                </div>
-              </AbsoluteFill>
+              <SceneErrorBoundary sceneName={scene.name || `Scene ${index + 1}`}>
+                <SceneComponent />
+              </SceneErrorBoundary>
             </Series.Sequence>
           );
-        }
-        
-        return (
-          <Series.Sequence key={scene.id || index} durationInFrames={duration}>
-            <SceneErrorBoundary sceneName={scene.name || `Scene ${index + 1}`}>
-              <SceneComponent />
-            </SceneErrorBoundary>
-          </Series.Sequence>
-        );
-      })}
-    </Series>
+        })}
+      </Series>
+    </FontLoader>
   );
 };
 

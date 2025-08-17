@@ -1264,6 +1264,28 @@ ${singleDestructuring}
 // Preserve native Audio constructor for scenes that might need it
 const NativeAudio = window.NativeAudio || window.Audio;
 
+// Load Google Fonts for consistent rendering between preview and export
+if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
+  const link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = 'https://fonts.googleapis.com';
+  document.head.appendChild(link);
+  
+  const link2 = document.createElement('link');
+  link2.rel = 'preconnect';
+  link2.href = 'https://fonts.gstatic.com';
+  link2.crossOrigin = 'anonymous';
+  document.head.appendChild(link2);
+  
+  const fontsLink = document.createElement('link');
+  fontsLink.rel = 'stylesheet';
+  fontsLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100;200;300;400;500;600;700;800;900&family=Montserrat:wght@100;200;300;400;500;600;700;800;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Lato:wght@100;300;400;700;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=Raleway:wght@100;200;300;400;500;600;700;800;900&family=Ubuntu:wght@300;400;500;700&family=Oswald:wght@200;300;400;500;600;700&family=Bebas+Neue:wght@400&display=swap';
+  document.head.appendChild(fontsLink);
+  
+  window.bazaarFontsLoaded = true;
+  console.log('[Bazaar] Google Fonts loaded for consistent rendering');
+}
+
 ${sceneImports.join('\n\n')}
 
 // Enhanced Audio Component with Fade Effects
