@@ -1277,10 +1277,27 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   link2.crossOrigin = 'anonymous';
   document.head.appendChild(link2);
   
-  const fontsLink = document.createElement('link');
-  fontsLink.rel = 'stylesheet';
-  fontsLink.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100;200;300;400;500;600;700;800;900&family=Montserrat:wght@100;200;300;400;500;600;700;800;900&family=Open+Sans:wght@300;400;500;600;700;800&family=Lato:wght@100;300;400;700;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=Raleway:wght@100;200;300;400;500;600;700;800;900&family=Ubuntu:wght@300;400;500;700&family=Oswald:wght@200;300;400;500;600;700&family=Bebas+Neue:wght@400&display=swap';
-  document.head.appendChild(fontsLink);
+  // Load comprehensive font collection in batches to avoid URL length limits
+  const fontGroups = [
+    // Group 1: Core Sans-Serif
+    'Inter:wght@100..900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
+    // Group 2: Extended Sans-Serif
+    'Work+Sans:wght@100..900&family=Rubik:wght@300..900&family=Barlow:wght@100..900&family=Kanit:wght@100..900&family=DM+Sans:wght@400..700&family=Plus+Jakarta+Sans:wght@200..800&family=Space+Grotesk:wght@300..700&family=Outfit:wght@100..900&family=Lexend:wght@100..900&family=Manrope:wght@200..800',
+    // Group 3: Serif & Display
+    'Playfair+Display:wght@400..900&family=Merriweather:wght@300..900&family=Lora:wght@400..700&family=Roboto+Slab:wght@100..900&family=Bebas+Neue&family=Permanent+Marker&family=Lobster&family=Dancing+Script:wght@400..700&family=Pacifico&family=Caveat:wght@400..700',
+    // Group 4: Monospace & Additional
+    'Roboto+Mono:wght@100..700&family=Fira+Code:wght@300..700&family=JetBrains+Mono:wght@100..800&family=Source+Code+Pro:wght@200..900&family=Quicksand:wght@300..700&family=Comfortaa:wght@300..700&family=Righteous&family=Anton&family=Fredoka:wght@300..700&family=Bungee'
+  ];
+  
+  fontGroups.forEach((group, index) => {
+    const fontsLink = document.createElement('link');
+    fontsLink.rel = 'stylesheet';
+    fontsLink.href = `https://fonts.googleapis.com/css2?${group}&display=swap`;
+    fontsLink.setAttribute('data-font-group', `${index + 1}`);
+    document.head.appendChild(fontsLink);
+  });
+  
+  console.log('[Bazaar] Loading 100+ Google Fonts for consistent rendering');
   
   window.bazaarFontsLoaded = true;
   console.log('[Bazaar] Google Fonts loaded for consistent rendering');

@@ -178,13 +178,13 @@ export async function renderVideoOnLambda({
     const bucketMatch = stdout.match(/Bucket:\s*([\w-]+)/);
     const s3UrlMatch = stdout.match(/\+\s*S3\s+(https:\/\/[^\s]+)/);
     
-    if (!renderIdMatch || !bucketMatch) {
+    if (!renderIdMatch?.[1] || !bucketMatch?.[1]) {
       console.error('[LambdaRender] Failed to extract render ID or bucket from output');
       throw new Error('Failed to start render - could not parse CLI output');
     }
     
-    const renderId = renderIdMatch[1];
-    const bucketName = bucketMatch[1];
+    const renderId = renderIdMatch[1]!;
+    const bucketName = bucketMatch[1]!;
     
     console.log(`[LambdaRender] Render started successfully`);
     console.log(`[LambdaRender] Render ID: ${renderId}`);

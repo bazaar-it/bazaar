@@ -86,6 +86,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
   
   // Get video state from Zustand store
   const project = useVideoState(state => state.projects[projectId]);
@@ -1077,10 +1079,49 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       <GripVertical className="w-3 h-3 text-white drop-shadow" />
                     </div>
                     
-                    {/* Scene Label */}
-                    <span className="flex-1 text-center px-8 truncate select-none font-semibold drop-shadow-sm">
-                      {scene.name || scene.data?.name || `Scene ${index + 1}`}
-                    </span>
+                    {/* Scene Label - Editable when in edit mode */}
+                    {editingSceneId === scene.id ? (
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => {
+                          // Save the name
+                          if (editingName.trim()) {
+                            const updatedScene = { ...scene, name: editingName.trim() };
+                            updateScene(projectId, scene.id, updatedScene);
+                          }
+                          setEditingSceneId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            // Save on Enter
+                            if (editingName.trim()) {
+                              const updatedScene = { ...scene, name: editingName.trim() };
+                              updateScene(projectId, scene.id, updatedScene);
+                            }
+                            setEditingSceneId(null);
+                          } else if (e.key === 'Escape') {
+                            // Cancel on Escape
+                            setEditingSceneId(null);
+                          }
+                        }}
+                        className="flex-1 text-center px-2 bg-transparent text-white font-semibold outline-none border-b border-white/50 mx-4"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span 
+                        className="flex-1 text-center px-8 truncate select-none font-semibold drop-shadow-sm cursor-text"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEditingSceneId(scene.id);
+                          setEditingName(scene.name || scene.data?.name || `Scene ${index + 1}`);
+                        }}
+                      >
+                        {scene.name || scene.data?.name || `Scene ${index + 1}`}
+                      </span>
+                    )}
                     
                     {/* Resize Handle End */}
                     <div
@@ -1171,16 +1212,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               const sceneIndex = scenes.findIndex((s: Scene) => s.id === contextMenu.sceneId);
               const scene = scenes[sceneIndex];
               if (scene) {
-                const currentName = scene.name || scene.data?.name || `Scene ${sceneIndex + 1}`;
-                const newName = prompt('Enter new scene name:', currentName);
-                if (newName && newName !== currentName) {
-                  // Update in local state
-                  const updatedScene = { ...scene, name: newName };
-                  updateScene(projectId, contextMenu.sceneId, updatedScene);
-                  
-                  // TODO: Add API call to persist the name change
-                  toast.success('Scene renamed to: ' + newName);
-                }
+                // Start inline editing
+                setEditingSceneId(contextMenu.sceneId);
+                setEditingName(scene.name || scene.data?.name || `Scene ${sceneIndex + 1}`);
               }
               setContextMenu(null);
             }}
