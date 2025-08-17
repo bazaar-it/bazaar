@@ -26,6 +26,22 @@ async function injectFontLoadingCode(code: string): Promise<string> {
     }
   }
 
+  // SPECIAL CASE: Extract fonts from font data arrays like fontSamples
+  // Look for patterns like: { font: "Inter" } or { family: "Roboto" }
+  const fontArrayPatterns = [
+    /font:\s*["']([^"']+)["']/g,
+    /family:\s*["']([^"']+)["']/g,
+  ];
+  
+  for (const pattern of fontArrayPatterns) {
+    const matches = [...code.matchAll(pattern)];
+    for (const match of matches) {
+      const fontString = match[1];
+      const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
+      fontFamilies.add(primaryFont);
+    }
+  }
+
   if (fontFamilies.size === 0) {
     return code;
   }
