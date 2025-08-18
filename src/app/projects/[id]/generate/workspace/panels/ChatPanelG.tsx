@@ -261,12 +261,12 @@ export default function ChatPanelG({
 
   // Smart GitHub component detection
   const checkForGitHubComponents = useCallback((text: string): boolean => {
-    if (!githubConnection?.isConnected || !discoveredComponents?.catalog) return false;
+    if (!githubConnection?.isConnected || !discoveredComponents) return false;
     
     // Get all component names from discovered components
     const componentNames = new Set<string>();
-    Object.values(discoveredComponents.catalog).forEach(components => {
-      components.forEach(comp => {
+    Object.values(discoveredComponents).forEach((components: any[]) => {
+      components.forEach((comp: any) => {
         componentNames.add(comp.name.toLowerCase());
       });
     });

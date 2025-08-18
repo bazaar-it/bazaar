@@ -4,7 +4,8 @@
  */
 
 import type { GitHubComponentContext } from '~/brain/tools/github-component-analyzer';
-import { generateWithAI } from '~/server/services/ai/openai.service';
+// TODO: Replace with actual AI service when needed
+// import { generateWithAI } from '~/server/services/ai/aiClient.service';
 
 export interface ComponentShowcaseVideoRequest {
   componentContext: GitHubComponentContext;
@@ -37,12 +38,13 @@ export async function generateComponentShowcaseVideo(
   const showcasePrompt = createComponentShowcasePrompt(componentContext, triggerType, format, duration);
   
   // Generate Remotion code using AI
-  const generatedCode = await generateWithAI({
-    prompt: showcasePrompt,
-    systemPrompt: 'You are an expert at creating beautiful Remotion component showcase videos.',
-    maxTokens: 4000,
-    temperature: 0.3, // Lower temperature for more consistent results
-  });
+  // TODO: Implement AI generation when service is ready
+  const generatedCode = ''; // await generateWithAI({
+  //   prompt: showcasePrompt,
+  //   systemPrompt: 'You are an expert at creating beautiful Remotion component showcase videos.',
+  //   maxTokens: 4000,
+  //   temperature: 0.3, // Lower temperature for more consistent results
+  // });
   
   // TODO: In a real implementation, you would:
   // 1. Validate the generated code
