@@ -8,7 +8,7 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles, Github } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github, Palette } from 'lucide-react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
@@ -433,7 +433,8 @@ export default function ChatPanelG({
     // Let SSE handle DB sync in background
     // Use finalMessage if it's a YouTube follow-up, otherwise use original message with @mentions
     const displayMessage = finalMessage !== trimmedMessage ? finalMessage : originalMessage;
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode);
+    // Pass both GitHub and Figma modes to generation
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -1424,6 +1425,42 @@ export default function ChatPanelG({
                               ? 'GitHub mode ON (auto-detected component)'
                               : 'GitHub mode ON - will search your repos'
                             : 'Click to search GitHub components'
+                          }
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                  {/* Figma Mode Toggle */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsFigmaMode(!isFigmaMode);
+                            setFigmaModeSource(isFigmaMode ? null : 'manual');
+                          }}
+                          className={cn(
+                            "p-1 rounded-full transition-all duration-200",
+                            isFigmaMode
+                              ? "text-white bg-purple-600 hover:bg-purple-700"
+                              : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                          )}
+                          aria-label="Toggle Figma design search"
+                        >
+                          <Palette className="h-4 w-4" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>
+                          {isFigmaMode 
+                            ? figmaModeSource === 'drag' 
+                              ? 'Figma mode ON (auto-enabled from drag)' 
+                              : figmaModeSource === 'auto'
+                              ? 'Figma mode ON (auto-detected design)'
+                              : 'Figma mode ON - will search your designs'
+                            : 'Click to search Figma designs'
                           }
                         </p>
                       </TooltipContent>

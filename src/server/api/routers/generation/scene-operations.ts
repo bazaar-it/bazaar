@@ -208,7 +208,13 @@ export const generateScene = protectedProcedure
                 hasChildren: figmaComponentData.children?.length > 0,
                 colors: figmaComponentData.colors?.length || 0,
                 texts: figmaComponentData.texts?.length || 0,
+                hasRemotionCode: !!componentResult.remotionCode,
               });
+              
+              // NEW: Include the converted Remotion code in the Figma data
+              if (componentResult.remotionCode) {
+                figmaComponentData.remotionCode = componentResult.remotionCode;
+              }
               
               // Create enhanced prompt with Figma data context
               const enhancedMessage = `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements`;

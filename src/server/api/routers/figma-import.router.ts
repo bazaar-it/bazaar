@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { createTRPCRouter, protectedProcedure } from '~/server/api/trpc';
 import { FigmaDiscoveryService } from '~/server/services/figma/figma-discovery.service';
+import { FigmaConverterService } from '~/server/services/figma/figma-converter.service';
 import { db } from '~/server/db';
 import { figmaConnections } from '~/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -63,11 +64,23 @@ export const figmaImportRouter = createTRPCRouter({
           texts: designData.texts.length,
         });
         
+        // NEW: Convert to Remotion code using the converter service
+        let remotionCode = null;
+        try {
+          const converterService = new FigmaConverterService();
+          remotionCode = await converterService.convertToRemotionCode(nodeData);
+          console.log('🎨 [FIGMA IMPORT] Generated Remotion code (length):', remotionCode?.length || 0);
+        } catch (error) {
+          console.error('🎨 [FIGMA IMPORT] Failed to convert to Remotion code:', error);
+          // Continue without converted code - will fall back to LLM generation
+        }
+        
         return {
           success: true,
           componentName: input.componentName || nodeData.name || 'Figma Component',
           designData,
           rawNode: nodeData, // Include raw data for converter
+          remotionCode, // NEW: Include the converted Remotion code
         };
       } catch (error) {
         console.error('🎨 [FIGMA IMPORT] Failed to fetch component:', error);

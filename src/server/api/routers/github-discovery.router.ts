@@ -23,10 +23,12 @@ export const githubDiscoveryRouter = createTRPCRouter({
   discoverComponents: protectedProcedure
     .input(z.object({
       forceRefresh: z.boolean().optional(),
+      ref: z.string().min(1).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
-      const cacheKey = `discovery:${userId}`;
+      const ref = input?.ref || 'HEAD';
+      const cacheKey = `discovery:${userId}:${ref}`;
       
       // Check cache first
       if (!input?.forceRefresh) {
@@ -93,8 +95,8 @@ export const githubDiscoveryRouter = createTRPCRouter({
           const [owner, repo] = repoFullName.split('/');
           if (!owner || !repo) continue;
           
-          console.log(`[Discovery] Indexing ${repoFullName}`);
-          const catalog = await indexer.discoverComponents(owner, repo);
+          console.log(`[Discovery] Indexing ${repoFullName} @ ${ref}`);
+          const catalog = await indexer.discoverComponents(owner, repo, ref);
           
           // Merge catalogs
           Object.keys(catalog).forEach(category => {
@@ -137,9 +139,12 @@ export const githubDiscoveryRouter = createTRPCRouter({
   /**
    * Return discovery status (last indexed timestamp)
    */
-  getStatus: protectedProcedure.query(async ({ ctx }) => {
+  getStatus: protectedProcedure
+    .input(z.object({ ref: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
     const userId = ctx.session.user.id;
-    const cacheKey = `discovery:${userId}`;
+    const ref = input?.ref || 'HEAD';
+    const cacheKey = `discovery:${userId}:${ref}`;
     const cached = discoveryCache.get(cacheKey);
     return {
       lastIndexedAt: cached ? new Date(cached.timestamp).toISOString() : null,
@@ -149,12 +154,14 @@ export const githubDiscoveryRouter = createTRPCRouter({
   /**
    * Force re-indexing of selected repositories
    */
-  reindex: protectedProcedure.mutation(async ({ ctx }) => {
+  reindex: protectedProcedure
+    .input(z.object({ ref: z.string().min(1).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
     // Simply call discoverComponents with forceRefresh=true
     const catalog = await githubDiscoveryRouter.createCaller({
       db,
       session: ctx.session,
-    }).discoverComponents({ forceRefresh: true });
+    }).discoverComponents({ forceRefresh: true, ref: input?.ref });
     return {
       success: true,
       lastIndexedAt: new Date().toISOString(),
@@ -171,6 +178,7 @@ export const githubDiscoveryRouter = createTRPCRouter({
     .input(z.object({
       repo: z.string(),
       path: z.string(),
+      ref: z.string().min(1).optional(),
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -196,7 +204,7 @@ export const githubDiscoveryRouter = createTRPCRouter({
       }
       
       const indexer = new ComponentIndexerService(connection.accessToken);
-      const preview = await indexer.getComponentPreview(owner, repo, input.path);
+      const preview = await indexer.getComponentPreview(owner, repo, input.path, 50, input.ref);
       
       return { preview };
     }),

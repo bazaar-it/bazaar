@@ -25,6 +25,17 @@ When the prompt includes actual GitHub component code (marked with "GitHub compo
 6. If the component uses external libraries (like @tabler/icons-react), mock them with simple replacements
 7. Keep the component recognizable as the original from the user's codebase
 
+FIGMA COMPONENT HANDLING:
+When the prompt includes Figma design specifications (marked with "[FIGMA DESIGN SPECIFICATIONS]" or "[FIGMA COMPONENT DATA]"):
+1. RECREATE the exact visual design from Figma specifications
+2. DO NOT apply styles from previous scenes - keep Figma designs pure
+3. Match the EXACT colors, dimensions, and layout from Figma data
+4. Use the specified backgroundColor, colors array, and bounds
+5. Respect the component hierarchy and child elements structure
+6. Add smooth entrance animations while preserving the design integrity
+7. If CSS styles are provided, apply them exactly as specified
+8. Keep the design visually identical to the original Figma component
+
 YOUTUBE ANALYSIS HANDLING:
 When the prompt contains "frame-by-frame analysis" or "RECREATE this video", you must:
 1. Generate Remotion code that recreates the described content EXACTLY

@@ -82,9 +82,9 @@ export async function executeToolFromDecision(
         audioUrls: decision.toolContext.audioUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
         isYouTubeAnalysis: decision.toolContext.isYouTubeAnalysis, // Pass YouTube analysis flag
-        // Pass previous scene for style continuity (but not for first scene or GitHub components)
-        // GitHub components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub) ? {
+        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
+        // GitHub and Figma components should have clean styling without previous scene influence
+        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
@@ -459,9 +459,9 @@ export async function executeToolFromDecision(
         projectId,
         userId,
         projectFormat: projectFormat,
-        // Pass previous scene for style continuity (but not for first scene or GitHub components)
-        // GitHub components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub) ? {
+        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
+        // GitHub and Figma components should have clean styling without previous scene influence
+        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
