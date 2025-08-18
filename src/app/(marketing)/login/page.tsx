@@ -4,16 +4,45 @@
 import { signIn } from "next-auth/react";
 import { analytics } from "~/lib/utils/analytics";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useState, useEffect } from "react";
 
 interface LoginPageProps {
   redirectTo?: string;
 }
 
+// Pen loading animasjon komponent
+function LoadingAnimation() {
+  return (
+    <div className="w-full max-w-sm p-8 relative">
+      <div className="text-center mb-6">
+        {/* Animated logo/icon */}
+        <div className="relative w-16 h-16 mx-auto mb-4">
+          {/* Outer ring */}
+          <div className="absolute inset-0 border-2 border-gray-200 rounded-full" />
+          
+          {/* Spinning gradient ring */}
+          <div className="absolute inset-0 border-2 border-transparent border-t-pink-500 border-r-orange-500 rounded-full animate-spin" />
+          
+          {/* Inner dot with pulse */}
+          <div className="absolute inset-4 bg-gradient-to-br from-pink-500 to-orange-600 rounded-full animate-pulse" />
+          
+          {/* Center dot */}
+          <div className="absolute inset-6 bg-white rounded-full" />
+        </div>
+        
+        {/* Loading text */}
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-gray-800">Loading...</h2>
+          <p className="text-sm text-gray-500">Preparing your login options</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
-  const searchParams = useSearchParams();
-  // Check for redirect parameter, then prop, default to /projects/new
-  const redirectTo = searchParams.get('redirect') || redirectToProp || '/projects/new';
+  // Redirect to quick-create which open latest or new project
+  const redirectTo = '/projects/quick-create';
   
   const handleGitHubLogin = () => {
     console.log('[LoginPage] GitHub login clicked, redirecting to:', redirectTo);
@@ -50,7 +79,7 @@ function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
       <div className="flex flex-col gap-4">
         <button
           onClick={handleGitHubLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-lg bg-gray-900 py-3 px-4 text-white hover:bg-gray-800 transition-colors font-medium"
+          className="cursor-pointer flex w-full items-center justify-center gap-3 rounded-lg bg-gray-900 py-3 px-4 text-white hover:bg-gray-800 transition-colors font-medium"
         >
           <span className="flex items-center justify-center w-5 h-5">
             <GitHubIcon className="w-full h-full" />
@@ -60,7 +89,7 @@ function LoginContent({ redirectTo: redirectToProp }: LoginPageProps = {}) {
 
         <button
           onClick={handleGoogleLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-lg bg-blue-600 py-3 px-4 text-white hover:bg-blue-700 transition-colors font-medium"
+          className="cursor-pointer flex w-full items-center justify-center gap-3 rounded-lg bg-blue-600 py-3 px-4 text-white hover:bg-blue-700 transition-colors font-medium"
         >
           <span className="flex items-center justify-center w-5 h-5">
             <GoogleIcon className="w-full h-full" />
@@ -125,23 +154,24 @@ function GoogleIcon({ className }: { className?: string }) {
 }
 
 export default function LoginPage(props: LoginPageProps) {
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Simulate loading time for better UX
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 800); // 800ms delay for smooth transition
+
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <Suspense fallback={
-        <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto mb-6"></div>
-            <div className="space-y-4">
-              <div className="h-10 bg-gray-200 rounded"></div>
-              <div className="h-10 bg-gray-200 rounded"></div>
-            </div>
-          </div>
-        </div>
-      }>
-        <div className="w-full max-w-sm rounded-2xl bg-white shadow-lg">
-          <LoginContent {...props} />
-        </div>
-      </Suspense>
+    <div className="w-full max-w-sm rounded-2xl bg-white shadow-lg overflow-hidden">
+      {isLoaded ? (
+        <LoginContent {...props} />
+      ) : (
+        <LoadingAnimation />
+      )}
     </div>
   );
 } 

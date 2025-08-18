@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 
 interface SearchBarProps {
   opacity: number;
+  scale: number;
+  canAnimate: boolean;
 }
 
 // Add IconifyIcon interface for TypeScript
@@ -14,6 +16,11 @@ interface IconifyIconProps {
 const MarketingVideoPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const animationRef = useRef<number | null>(null);
+  const lastTimestampRef = useRef<number>(0);
+  
+  // Responsive scaling state - moved to main component
+  const [scale, setScale] = useState(1);
+  const [canAnimate, setCanAnimate] = useState(true);
 
   useEffect(() => {
     // Check if we're on mobile and disable animations for performance
@@ -27,10 +34,9 @@ const MarketingVideoPlayer: React.FC = () => {
     
     const targetFPS = 30;
     const frameInterval = 1000 / targetFPS;
-    let lastTimestamp = 0;
     
     const animate = (timestamp: number) => {
-      if (timestamp - lastTimestamp >= frameInterval) {
+      if (timestamp - lastTimestampRef.current >= frameInterval) {
         setCurrentFrame(prev => {
           const next = prev + 1;
           // Reset after video ends (text + 30 frame pause)
@@ -39,7 +45,7 @@ const MarketingVideoPlayer: React.FC = () => {
           }
           return next;
         });
-        lastTimestamp = timestamp;
+        lastTimestampRef.current = timestamp;
       }
       animationRef.current = requestAnimationFrame(animate);
     };
@@ -49,8 +55,33 @@ const MarketingVideoPlayer: React.FC = () => {
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
     };
+  }, []);
+
+  // Handle responsive scaling
+  useEffect(() => {
+    const handleResize = () => {
+      const vw = window.innerWidth;
+      if (vw < 480) {
+        setScale(0.4); // 40% for very small mobile
+      } else if (vw < 768) {
+        setScale(0.5); // 50% for mobile
+      } else if (vw < 1024) {
+        setScale(0.7); // 70% for tablet
+      } else {
+        setScale(1); // 100% for desktop
+      }
+      
+      // Check device performance
+      const isLowEnd = vw < 480 || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
+      setCanAnimate(!isLowEnd);
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Simple icon component with SVG fallbacks
@@ -99,40 +130,10 @@ const MarketingVideoPlayer: React.FC = () => {
     );
   };
 
-  const SearchBar: React.FC<SearchBarProps> = ({ opacity }) => {
+  const SearchBar: React.FC<SearchBarProps> = ({ opacity, scale, canAnimate }) => {
     const frame = currentFrame;
     const width = 1920;
     const height = 1080;
-    
-    // Detect if device can handle animations
-    const [canAnimate, setCanAnimate] = useState(true);
-    
-    // Responsive scaling
-    const [scale, setScale] = useState(1);
-
-    
-         useEffect(() => {
-       const handleResize = () => {
-         const vw = window.innerWidth;
-         if (vw < 480) {
-           setScale(0.4); // 40% for very small mobile
-         } else if (vw < 768) {
-           setScale(0.5); // 50% for mobile
-         } else if (vw < 1024) {
-           setScale(0.7); // 70% for tablet
-         } else {
-           setScale(1); // 100% for desktop
-         }
-         
-         // Check device performance
-         const isLowEnd = vw < 480 || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2);
-         setCanAnimate(!isLowEnd);
-       };
-       
-       handleResize();
-       window.addEventListener('resize', handleResize);
-       return () => window.removeEventListener('resize', handleResize);
-     }, []);
 
         
     const interpolate = (frame: number, inputRange: [number, number], outputRange: [number, number], options?: { extrapolateLeft?: string; extrapolateRight?: string; easing?: string }) => {
@@ -502,9 +503,9 @@ const MarketingVideoPlayer: React.FC = () => {
         overflow: 'visible',
         padding: '0px',
         margin: '0px',
-      }}>
-        <SearchBar opacity={1} />
-      </div>
+             }}>
+         <SearchBar opacity={1} scale={scale} canAnimate={canAnimate} />
+       </div>
     );
   };
 
