@@ -11,8 +11,8 @@ export default function QuickCreatePage() {
   const { data: session, status } = useSession();
   const { lastFormat, updateLastFormat } = useLastUsedFormat();
   
-  // Check for existing projects (for title generation)
-  const { data: existingProjects } = api.project.list.useQuery(undefined, {
+  // Check for existing projects (for title generation and smart redirect)
+  const { data: existingProjects, isLoading: projectsLoading } = api.project.list.useQuery(undefined, {
     enabled: !!session?.user,
   });
 
@@ -38,7 +38,23 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // Don't create if already creating or if we have existing projects
+    // Wait for projects to load
+    if (projectsLoading) return;
+
+    // Smart redirect logic: if user has projects, redirect to latest
+    if (existingProjects && existingProjects.length > 0) {
+      console.log('[QuickCreate] User has projects, redirecting to latest');
+      const latestProject = existingProjects[0]; // Already sorted by updatedAt
+      if (latestProject?.id) {
+        router.push(`/projects/${latestProject.id}/generate`);
+        return;
+      }
+    }
+
+    // User has no projects, create a new one
+    console.log('[QuickCreate] User has no projects, creating new one');
+    
+    // Don't create if already creating
     if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
       return;
     }
@@ -69,7 +85,7 @@ export default function QuickCreatePage() {
     };
 
     createProject();
-  }, [session, status, router, createProjectMutation, existingProjects, lastFormat]);
+  }, [session, status, router, createProjectMutation, existingProjects, lastFormat, projectsLoading]);
 
   // Loading state
   return (
@@ -97,25 +113,29 @@ export default function QuickCreatePage() {
           {/* Text content with better typography */}
           <div className="space-y-3 max-w-sm mx-auto">
             <h1 className="text-2xl font-light text-slate-800 tracking-tight">
-              Setting up your canvas
+              {projectsLoading ? "Checking your projects..." : 
+               existingProjects && existingProjects.length > 0 ? "Opening your latest project..." :
+               "Setting up your canvas"}
             </h1>
             
-            {/* Format badge */}
-            <div className="flex items-center justify-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm">
-                <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                    d={lastFormat === 'portrait' 
-                      ? "M12 18v-5l-4 4m4-4l4 4M8 7h8M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" 
-                      : lastFormat === 'square'
-                      ? "M4 4h16v16H4z"
-                      : "M7 4v16m10-16v16M3 12h18M3 4h18v16H3z"
-                    } 
-                  />
-                </svg>
-                <span className="text-slate-600 font-medium capitalize">{lastFormat}</span>
+            {/* Format badge - only show when creating new project */}
+            {(!projectsLoading && (!existingProjects || existingProjects.length === 0)) && (
+              <div className="flex items-center justify-center gap-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm">
+                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d={lastFormat === 'portrait' 
+                        ? "M12 18v-5l-4 4m4-4l4 4M8 7h8M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" 
+                        : lastFormat === 'square'
+                        ? "M4 4h16v16H4z"
+                        : "M7 4v16m10-16v16M3 12h18M3 4h18v16H3z"
+                      } 
+                    />
+                  </svg>
+                  <span className="text-slate-600 font-medium capitalize">{lastFormat}</span>
+                </div>
               </div>
-            </div>
+            )}
             
             {/* Progress indicator */}
             <div className="flex items-center justify-center gap-1.5 mt-6">
