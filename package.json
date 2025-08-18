@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run generate:types && next build",
+    "build": "npm run generate:types && npm run copy:fonts && next build",
+    "copy:fonts": "node scripts/copy-fonts.js",
     "build:task-processor": "tsc --project tsconfig.task-processor.json",
     "build:log-agent": "cd src/scripts/log-agent && npm run build",
     "check": "next lint && tsc --noEmit",
@@ -109,7 +110,7 @@
     "@remotion/bundler": "4.0.320",
     "@remotion/cli": "^4.0.320",
     "@remotion/enable-scss": "4.0.320",
-    "@remotion/fonts": "^4.0.339",
+    "@remotion/fonts": "4.0.320",
     "@remotion/google-fonts": "4.0.320",
     "@remotion/lambda": "4.0.320",
     "@remotion/paths": "4.0.320",

@@ -41,10 +41,10 @@ ${JSON.stringify(figmaData, null, 2)}
 Create a Remotion component named "${this.sanitizeComponentName(node.name)}" that beautifully recreates and animates this design.`;
 
     try {
-      // Use GPT-5-mini (gpt-4o-mini) for fast, high-quality conversion
+      // Use GPT-4o-mini for fast, high-quality conversion
       const modelConfig: ModelConfig = {
         provider: 'openai',
-        model: 'gpt-5-mini', // This maps to gpt-4o-mini in the actual API
+        model: 'gpt-4o-mini',
         temperature: 0.7,
         maxTokens: 4000
       };
@@ -78,41 +78,164 @@ Create a Remotion component named "${this.sanitizeComponentName(node.name)}" tha
   }
 
   /**
-   * Prepare Figma data for LLM (clean unnecessary fields)
+   * Prepare Figma data for LLM (extract detailed design properties)
    */
   private prepareFigmaData(node: FigmaNode): any {
-    // Remove internal Figma fields that aren't useful for conversion
     const cleaned = {
       name: node.name,
       type: node.type,
       visible: node.visible,
       opacity: node.opacity,
-      // Layout
+      
+      // Layout & Positioning
       absoluteBoundingBox: node.absoluteBoundingBox,
       constraints: node.constraints,
-      // Styling
-      fills: node.fills,
-      strokes: node.strokes,
-      strokeWeight: node.strokeWeight,
-      strokeAlign: node.strokeAlign,
-      // Effects
-      effects: node.effects,
-      // Corner radius
+      size: node.size,
+      
+      // Visual Properties
+      fills: this.extractFills(node.fills),
+      strokes: this.extractStrokes(node.strokes, node.strokeWeight),
+      effects: this.extractEffects(node.effects),
+      
+      // Border Radius
       cornerRadius: (node as any).cornerRadius,
       rectangleCornerRadii: (node as any).rectangleCornerRadii,
-      // Text properties
+      
+      // Layout Mode (Auto Layout)
+      ...(node.type === 'FRAME' ? {
+        layoutMode: (node as any).layoutMode,
+        paddingLeft: (node as any).paddingLeft,
+        paddingRight: (node as any).paddingRight,
+        paddingTop: (node as any).paddingTop,
+        paddingBottom: (node as any).paddingBottom,
+        itemSpacing: (node as any).itemSpacing,
+        primaryAxisAlignItems: (node as any).primaryAxisAlignItems,
+        counterAxisAlignItems: (node as any).counterAxisAlignItems,
+      } : {}),
+      
+      // Text Properties (detailed)
       ...(node.type === 'TEXT' ? {
         characters: (node as any).characters,
-        style: (node as any).style,
-        characterStyleOverrides: (node as any).characterStyleOverrides,
-        styleOverrideTable: (node as any).styleOverrideTable,
+        style: this.extractTextStyle((node as any).style),
+        textAlignHorizontal: (node as any).style?.textAlignHorizontal,
+        textAlignVertical: (node as any).style?.textAlignVertical,
       } : {}),
-      // Children (recursive, but limited depth)
-      children: node.children?.slice(0, 10).map(child => this.prepareFigmaData(child)),
+      
+      // Component Properties
+      ...(node.type === 'COMPONENT' || node.type === 'INSTANCE' ? {
+        componentId: node.componentId,
+        componentProperties: (node as any).componentProperties,
+      } : {}),
+      
+      // Children (recursive with smart limits)
+      children: this.extractChildren(node.children, 0),
     };
 
-    // Remove undefined values
+    // Remove undefined values and return
     return JSON.parse(JSON.stringify(cleaned));
+  }
+
+  /**
+   * Extract fill information with color conversion
+   */
+  private extractFills(fills?: any[]): any[] {
+    if (!fills) return [];
+    
+    return fills.map(fill => ({
+      type: fill.type,
+      visible: fill.visible,
+      opacity: fill.opacity,
+      // Convert Figma color (0-1) to CSS color (0-255)
+      color: fill.color ? this.figmaColorToCSS(fill.color) : undefined,
+      // Gradient information
+      gradientStops: fill.gradientStops?.map((stop: any) => ({
+        position: stop.position,
+        color: this.figmaColorToCSS(stop.color),
+      })),
+      // Image information
+      scaleMode: fill.scaleMode,
+    }));
+  }
+
+  /**
+   * Extract stroke information
+   */
+  private extractStrokes(strokes?: any[], strokeWeight?: number): any {
+    if (!strokes || strokes.length === 0) return null;
+    
+    const stroke = strokes[0]; // Use first stroke
+    return {
+      color: stroke.color ? this.figmaColorToCSS(stroke.color) : undefined,
+      weight: strokeWeight || 1,
+      opacity: stroke.opacity,
+    };
+  }
+
+  /**
+   * Extract shadow/blur effects
+   */
+  private extractEffects(effects?: any[]): any[] {
+    if (!effects) return [];
+    
+    return effects
+      .filter(effect => effect.visible !== false)
+      .map(effect => ({
+        type: effect.type,
+        color: effect.color ? this.figmaColorToCSS(effect.color) : undefined,
+        offset: effect.offset,
+        radius: effect.radius,
+        spread: effect.spread,
+      }));
+  }
+
+  /**
+   * Extract text styling information
+   */
+  private extractTextStyle(style?: any): any {
+    if (!style) return null;
+    
+    return {
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      fontSize: style.fontSize,
+      letterSpacing: style.letterSpacing,
+      lineHeightPx: style.lineHeightPx,
+      lineHeightPercent: style.lineHeightPercent,
+      textAlignHorizontal: style.textAlignHorizontal,
+      textAlignVertical: style.textAlignVertical,
+    };
+  }
+
+  /**
+   * Extract children with depth limiting
+   */
+  private extractChildren(children?: FigmaNode[], depth: number = 0): any[] {
+    if (!children || depth > 2) return []; // Limit recursion depth
+    
+    return children
+      .slice(0, 8) // Limit number of children
+      .map(child => {
+        const childData = this.prepareFigmaData(child);
+        // Add depth info for better processing
+        childData._depth = depth + 1;
+        return childData;
+      });
+  }
+
+  /**
+   * Convert Figma color (0-1 range) to CSS color string
+   */
+  private figmaColorToCSS(figmaColor: any): string {
+    const r = Math.round(figmaColor.r * 255);
+    const g = Math.round(figmaColor.g * 255);
+    const b = Math.round(figmaColor.b * 255);
+    const a = figmaColor.a !== undefined ? figmaColor.a : 1;
+    
+    if (a < 1) {
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    } else {
+      return `rgb(${r}, ${g}, ${b})`;
+    }
   }
 
   /**
@@ -234,7 +357,6 @@ Create a Remotion component named "${this.sanitizeComponentName(node.name)}" tha
    * Generate fallback component if LLM fails
    */
   private generateFallbackComponent(node: FigmaNode, format: string): string {
-    const dimensions = this.getFormatDimensions(format);
     const name = this.sanitizeComponentName(node.name);
     
     return `import { AbsoluteFill, spring, useCurrentFrame, useVideoConfig } from 'remotion';

@@ -1,3 +1,4 @@
+// src/server/api/routers/github.router.ts
 /**
  * GitHub Integration Router
  * Handles GitHub connection, disconnection, and component search
@@ -34,16 +35,17 @@ export const githubRouter = createTRPCRouter({
       });
       
       const { data: user } = await octokit.users.getAuthenticated();
-      const { data: repos } = await octokit.repos.listForAuthenticatedUser({
-        per_page: 100,
-        sort: 'updated',
-      });
+        // Paginate all repos for the authenticated user
+        const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
+          per_page: 100,
+          sort: 'updated',
+        });
       
       return {
         isConnected: true,
         username: user.login,
-        repoCount: repos.length,
-        repositories: repos.map(r => r.full_name),
+         repoCount: repos.length,
+         repositories: repos.map((r: any) => r.full_name),
         selectedRepos: connection.selectedRepos || [],
         connectedAt: connection.createdAt,
       };
@@ -210,16 +212,88 @@ export const githubRouter = createTRPCRouter({
         auth: connection.accessToken,
       });
       
-      const { data: repos } = await octokit.repos.listForAuthenticatedUser({
+      const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
         per_page: 100,
       });
       
       return {
         success: true,
-        repoCount: repos.length,
+         repoCount: repos.length,
       };
     } catch (error) {
       throw new Error('GitHub connection test failed');
     }
   }),
+
+  listRepos: protectedProcedure.query(async ({ ctx }) => {
+    const connections = await ctx.db
+      .select()
+      .from(githubConnections)
+      .where(and(
+        eq(githubConnections.userId, ctx.session.user.id),
+        eq(githubConnections.isActive, true)
+      ));
+
+    const connection = connections[0];
+    if (!connection) return { repos: [], count: 0 };
+
+    const octokit = new Octokit({ auth: connection.accessToken });
+    const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
+      per_page: 100,
+      sort: 'updated',
+    });
+
+    return {
+      repos: repos.map((r: any) => ({
+        fullName: r.full_name as string,
+        private: !!r.private,
+        updatedAt: r.updated_at as string,
+      })),
+      count: repos.length,
+    };
+  }),
+
+  searchComponents: protectedProcedure
+    .input(z.object({
+      query: z.string().min(1),
+      maxResults: z.number().int().min(1).max(20).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const connections = await ctx.db
+        .select()
+        .from(githubConnections)
+        .where(and(
+          eq(githubConnections.userId, ctx.session.user.id),
+          eq(githubConnections.isActive, true)
+        ));
+
+      const connection = connections[0];
+      if (!connection) throw new Error('No GitHub connection found');
+
+      const { GitHubComponentSearchService } = await import('~/server/services/github/component-search.service');
+      const repositories = connection.selectedRepos ?? [];
+
+      if (repositories.length === 0) {
+        return { results: [], count: 0 };
+      }
+
+      const service = new GitHubComponentSearchService(connection.accessToken, ctx.session.user.id);
+      const results = await service.searchComponent(input.query, {
+        repositories,
+        maxResults: input.maxResults ?? 10,
+        useCache: true,
+      });
+
+      return {
+        results: results.map((r) => ({
+          name: r.name,
+          repository: r.repository,
+          path: r.path,
+          score: r.score,
+          language: r.language,
+          lastModified: r.lastModified,
+        })),
+        count: results.length,
+      };
+    }),
 });

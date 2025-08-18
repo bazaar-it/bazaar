@@ -55,6 +55,8 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['core', 'auth']));
   const [selectedComponents, setSelectedComponents] = useState<Set<string>>(new Set());
   const [isDraggingMultiple, setIsDraggingMultiple] = useState(false);
+  const [hoverPreview, setHoverPreview] = useState<{ path: string; repo: string; content: string } | null>(null);
+  const [expandedPreviewKey, setExpandedPreviewKey] = useState<string | null>(null);
   
   // Fetch discovered components
   const { data: catalog, isLoading, refetch } = api.githubDiscovery.discoverComponents.useQuery(
@@ -64,6 +66,9 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
       refetchOnWindowFocus: false,
     }
   );
+  const { data: status } = api.githubDiscovery.getStatus.useQuery();
+  const reindexMutation = api.githubDiscovery.reindex.useMutation();
+  const utils = api.useUtils();
   
   // Check if user has GitHub connected
   const { data: githubConnection } = api.github.getConnection.useQuery();
@@ -240,16 +245,29 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Component Discovery</h2>
-            <p className="text-xs text-gray-500">
-              {totalComponents} components found in {githubConnection.selectedRepos.length} repos
+            <div className="text-xs text-gray-500 flex items-center gap-2">
+              <span>
+                {totalComponents} components found in {githubConnection.selectedRepos.length} repos
+              </span>
               {selectedComponents.size > 0 && (
-                <span className="ml-2 font-medium text-blue-600">
-                  · {selectedComponents.size} selected
-                </span>
+                <span className="font-medium text-blue-600">· {selectedComponents.size} selected</span>
               )}
-            </p>
+              <span className="text-gray-400">·</span>
+              <span>Last indexed: {status?.lastIndexedAt ? new Date(status.lastIndexedAt).toLocaleString() : '—'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                await reindexMutation.mutateAsync();
+                await refetch();
+              }}
+              className="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              disabled={reindexMutation.isPending}
+              title="Re-index repositories"
+            >
+              {reindexMutation.isPending ? 'Re-indexing…' : 'Re-index'}
+            </button>
             {selectedComponents.size > 0 && (
               <button
                 onClick={clearSelections}
@@ -360,13 +378,31 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                       <div className="grid grid-cols-2 gap-2 p-3">
                         {components.map((component) => {
                           const isSelected = isComponentSelected(component);
+                          const isUnsupported = component.framework && component.framework !== 'react';
+                          const key = getComponentKey(component);
                           return (
                             <div
-                              key={`${component.repo}-${component.path}`}
+                              key={key}
                               draggable
-                              onDragStart={(e) => handleDragStart(e, component)}
+                              onDragStart={(e) => {
+                                if (isUnsupported) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                handleDragStart(e, component);
+                              }}
                               onDragEnd={handleDragEnd}
                               onClick={(e) => handleComponentClick(e, component)}
+                              onMouseEnter={async () => {
+                                try {
+                                  const { preview } = await utils.githubDiscovery.getComponentPreview.fetch({
+                                    repo: component.repo,
+                                    path: component.path,
+                                  });
+                                  setHoverPreview({ repo: component.repo, path: component.path, content: preview });
+                                } catch {}
+                              }}
+                              onMouseLeave={() => setHoverPreview(null)}
                               className={`group cursor-move rounded-lg border p-3 transition-all ${
                                 isSelected 
                                   ? 'border-blue-500 bg-blue-50' 
@@ -403,7 +439,32 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                                     )}
                                   </div>
                                 </div>
-                                <span className="text-xs text-gray-400">{component.score}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">{component.score}</span>
+                                  {!isUnsupported && (
+                                    <button
+                                      type="button"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const willExpand = expandedPreviewKey !== key;
+                                        setExpandedPreviewKey(willExpand ? key : null);
+                                        if (willExpand) {
+                                          try {
+                                            const { preview } = await utils.githubDiscovery.getComponentPreview.fetch({
+                                              repo: component.repo,
+                                              path: component.path,
+                                            });
+                                            setHoverPreview({ repo: component.repo, path: component.path, content: preview });
+                                          } catch {}
+                                        }
+                                      }}
+                                      className="rounded px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-100"
+                                      title="Show preview"
+                                    >
+                                      Preview
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               <p className="ml-6 text-xs text-gray-500">
                                 {component.path.split('/').slice(-2).join('/')}
@@ -411,6 +472,17 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                               <p className="ml-6 mt-1 text-xs text-gray-400">
                                 {component.repo.split('/')[1]}
                               </p>
+                              {isUnsupported && (
+                                <div className="mt-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-xs text-yellow-800">
+                                  Not a React (.tsx/.jsx) file. Animation currently supports React components.
+                                </div>
+                              )}
+                              {!isUnsupported && hoverPreview && hoverPreview.path === component.path && hoverPreview.repo === component.repo && hoverPreview.content && (expandedPreviewKey === key || (hoverPreview && hoverPreview.path === component.path)) && (
+                                <pre className="mt-2 max-h-40 overflow-auto rounded bg-gray-900 p-2 text-xs text-gray-100">
+{hoverPreview.content.split('\n').slice(0, 30).join('\n')}
+{hoverPreview.content.split('\n').length > 30 ? '\n…' : ''}
+                                </pre>
+                              )}
                             </div>
                           );
                         })}

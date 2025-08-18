@@ -91,6 +91,12 @@ export interface PRAnalysis {
   mergedAt?: string;
   techStack?: string[];
   brandAssets?: BrandProfile;
+  componentChanges?: {
+    added: ComponentAnalysisResult[];
+    modified: ComponentAnalysisResult[];
+    deleted: string[];
+    totalComponents: number;
+  };
 }
 
 export interface PRFile {
@@ -129,6 +135,7 @@ export interface ChangelogVideoRequest {
 
 export interface ChangelogVideoResponse {
   id: string;
+  projectId: string; // Project that holds this video scene
   videoUrl: string;
   thumbnailUrl: string;
   gifUrl?: string;
@@ -180,6 +187,75 @@ export interface WebhookHeaders {
   'x-github-delivery'?: string;
 }
 
+// Component Showcase Types
+export interface ComponentShowcaseRequest {
+  repository: string;
+  componentName: string;
+  triggerType: 'showcase' | 'demo';
+  accessToken: string;
+  prNumber: number;
+  requester: {
+    username: string;
+    avatar: string;
+    url: string;
+  };
+}
+
+export interface ComponentVideoJob {
+  id: string;
+  repository: string;
+  componentName: string;
+  componentPath?: string;
+  triggerType: 'showcase' | 'demo';
+  prNumber: number;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  gifUrl?: string;
+  generatedCode?: string;
+  errorMessage?: string;
+  createdAt: Date;
+  processedAt?: Date;
+}
+
+export interface ComponentAnalysisResult {
+  name: string;
+  path: string;
+  framework: 'react' | 'vue' | 'svelte' | 'angular';
+  structure: {
+    props?: Record<string, any>;
+    hooks?: string[];
+    imports?: string[];
+    exports?: string[];
+  };
+  styles: {
+    classes?: string[];
+    tailwind?: string[];
+    inline?: Record<string, any>;
+    framework?: string; // e.g., 'tailwind', 'styled-components', 'css-modules'
+  };
+  content: {
+    text?: string[];
+    images?: string[];
+    links?: Array<{ text: string; href: string }>;
+    icons?: Array<{ name: string; library?: string }>;
+  };
+}
+
+export interface ComponentDiscoveryResult {
+  totalComponents: number;
+  categories: {
+    core: ComponentAnalysisResult[];
+    auth: ComponentAnalysisResult[];
+    commerce: ComponentAnalysisResult[];
+    interactive: ComponentAnalysisResult[];
+    content: ComponentAnalysisResult[];
+    custom: ComponentAnalysisResult[];
+  };
+  repository: string;
+  indexedAt: Date;
+}
+
 // Configuration stored in repo
 export interface BazaarConfig {
   changelog?: {
@@ -190,6 +266,15 @@ export interface BazaarConfig {
     autoDeploy: boolean;
     deployTo?: string;
     generateFor?: ('features' | 'fixes' | 'all')[];
+  };
+  components?: {
+    enabled: boolean;
+    showcaseEnabled: boolean;
+    demoEnabled: boolean;
+    autoDetect: boolean;
+    videoFormat: 'landscape' | 'square' | 'portrait';
+    includePaths?: string[];
+    excludePaths?: string[];
   };
   brand?: {
     logo?: string;

@@ -79,8 +79,13 @@ export default function ChatPanelG({
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // GitHub mode state
+  // GitHub mode state - smart auto-detection
   const [isGitHubMode, setIsGitHubMode] = useState(false);
+  const [githubModeSource, setGitHubModeSource] = useState<'manual' | 'drag' | 'auto' | null>(null);
+  
+  // Figma mode state - smart auto-detection
+  const [isFigmaMode, setIsFigmaMode] = useState(false);
+  const [figmaModeSource, setFigmaModeSource] = useState<'manual' | 'drag' | 'auto' | null>(null);
   
   // 🚨 NEW: Auto-expanding textarea state
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,6 +95,13 @@ export default function ChatPanelG({
   
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
+  
+  // Check if user has GitHub connected and get discovered components
+  const { data: githubConnection } = api.github.getConnection.useQuery();
+  const { data: discoveredComponents } = api.githubDiscovery.discoverComponents.useQuery(
+    { forceRefresh: false },
+    { enabled: !!githubConnection?.isConnected }
+  );
   
   // Get video state and current scenes
   const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
@@ -247,6 +259,51 @@ export default function ChatPanelG({
     return "Processing your request...";
   };
 
+  // Smart GitHub component detection
+  const checkForGitHubComponents = useCallback((text: string): boolean => {
+    if (!githubConnection?.isConnected || !discoveredComponents?.catalog) return false;
+    
+    // Get all component names from discovered components
+    const componentNames = new Set<string>();
+    Object.values(discoveredComponents.catalog).forEach(components => {
+      components.forEach(comp => {
+        componentNames.add(comp.name.toLowerCase());
+      });
+    });
+    
+    // Check if message mentions any discovered component
+    const lowerText = text.toLowerCase();
+    for (const compName of componentNames) {
+      if (lowerText.includes(compName)) {
+        return true;
+      }
+    }
+    
+    // Check for explicit paths
+    if (lowerText.includes('src/') || lowerText.includes('components/')) {
+      return true;
+    }
+    
+    return false;
+  }, [githubConnection, discoveredComponents]);
+  
+  // Smart Figma component detection
+  const checkForFigmaComponents = useCallback((text: string): boolean => {
+    const lowerText = text.toLowerCase();
+    
+    // Check for Figma-specific keywords and patterns
+    const figmaPatterns = [
+      /figma\s+(design|component|frame|layer)/i,
+      /my\s+figma\s+/i,
+      /from\s+figma/i,
+      /figma\s+file/i,
+      /design\s+"[^"]+"/i, // Design names in quotes
+      /\(ID:\s*[\w:]+\)/i, // Figma ID pattern
+    ];
+    
+    return figmaPatterns.some(pattern => pattern.test(text));
+  }, []);
+  
   // ✅ HYBRID APPROACH: SSE for messages, mutation for generation
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,6 +311,20 @@ export default function ChatPanelG({
 
     let trimmedMessage = message.trim();
     const originalMessage = trimmedMessage; // Keep original for display
+    
+    // Smart GitHub mode detection
+    if (githubModeSource !== 'manual' && checkForGitHubComponents(trimmedMessage)) {
+      setIsGitHubMode(true);
+      setGitHubModeSource('auto');
+      toast.info('GitHub mode auto-enabled for component');
+    }
+    
+    // Smart Figma mode detection
+    if (figmaModeSource !== 'manual' && checkForFigmaComponents(trimmedMessage)) {
+      setIsFigmaMode(true);
+      setFigmaModeSource('auto');
+      toast.info('Figma mode auto-enabled for design');
+    }
     
     // 🚨 NEW: Get image, video, and audio URLs from uploaded media
     let imageUrls = uploadedImages
@@ -560,6 +631,11 @@ export default function ChatPanelG({
         setMessage((prev) => prev ? `${prev}\n${figmaMessage}` : figmaMessage);
         setIsDragOver(false);
         
+        // AUTO-ENABLE Figma mode when component is dragged
+        setIsFigmaMode(true);
+        setFigmaModeSource('drag');
+        toast.success('Figma mode enabled for component animation');
+        
         // Clean up the drag data
         delete (window as any).figmaDragData;
         return;
@@ -595,6 +671,12 @@ export default function ChatPanelG({
             // Add to existing message or set as new message
             setMessage((prev) => prev ? `${prev}\n${fullMessage}` : fullMessage);
             setIsDragOver(false);
+            
+            // AUTO-ENABLE GitHub mode when component is dragged
+            setIsGitHubMode(true);
+            setGitHubModeSource('drag');
+            toast.success('GitHub mode enabled for component animation');
+            
             return;
           }
         }
@@ -609,7 +691,8 @@ export default function ChatPanelG({
     try {
       const url = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
       if (url && typeof url === 'string' && /^(https?:)?\/\//i.test(url)) {
-        const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase() || '';
+        const urlParts = url.split('?')[0]?.split('#')[0];
+        const ext = urlParts ? urlParts.split('.').pop()?.toLowerCase() ?? '' : '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
@@ -988,6 +1071,8 @@ export default function ChatPanelG({
             }
             
             // No scene to process, clarification message already added above
+            // ✅ FIX: Invalidate messages cache before early return so clarification appears immediately
+            await utils.chat.getMessages.invalidate({ projectId });
             // Early return to skip scene processing
             return;
           }
@@ -1136,6 +1221,20 @@ export default function ChatPanelG({
     },
     onComplete: () => {
       console.log('[ChatPanelG] SSE completed');
+      
+      // Auto-disable GitHub mode after generation if it was auto-enabled
+      if (githubModeSource === 'auto' || githubModeSource === 'drag') {
+        setIsGitHubMode(false);
+        setGitHubModeSource(null);
+        console.log('[ChatPanelG] Auto-disabled GitHub mode after generation');
+      }
+      
+      // Auto-disable Figma mode after generation if it was auto-enabled
+      if (figmaModeSource === 'auto' || figmaModeSource === 'drag') {
+        setIsFigmaMode(false);
+        setFigmaModeSource(null);
+        console.log('[ChatPanelG] Auto-disabled Figma mode after generation');
+      }
     },
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
@@ -1301,7 +1400,10 @@ export default function ChatPanelG({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => setIsGitHubMode(!isGitHubMode)}
+                          onClick={() => {
+                            setIsGitHubMode(!isGitHubMode);
+                            setGitHubModeSource(isGitHubMode ? null : 'manual');
+                          }}
                           className={cn(
                             "p-1 rounded-full transition-all duration-200",
                             isGitHubMode
@@ -1314,7 +1416,16 @@ export default function ChatPanelG({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{isGitHubMode ? 'GitHub mode ON - will search your repos' : 'Click to search GitHub components'}</p>
+                        <p>
+                          {isGitHubMode 
+                            ? githubModeSource === 'drag' 
+                              ? 'GitHub mode ON (auto-enabled from drag)' 
+                              : githubModeSource === 'auto'
+                              ? 'GitHub mode ON (auto-detected component)'
+                              : 'GitHub mode ON - will search your repos'
+                            : 'Click to search GitHub components'
+                          }
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

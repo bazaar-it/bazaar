@@ -71,7 +71,12 @@ export async function generateTitle(
       titleModelConfig,
       messages,
       undefined,
-      { responseFormat: { type: "json_object" } }
+      { 
+        responseFormat: { type: "json_object" },
+        // GPT-5 specific: low verbosity for titles, minimal reasoning
+        verbosity: 'low',
+        reasoning_effort: 'minimal'
+      }
     );
     
     const llmDuration = Date.now() - llmStartTime;

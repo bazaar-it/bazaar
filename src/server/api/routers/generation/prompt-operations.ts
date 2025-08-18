@@ -74,7 +74,10 @@ Examples:
       // Resolve model from central config (promptEnhancer)
       const modelConfig = resolveModel('promptEnhancer');
 
-      const aiResponse = await AIClientService.generateResponse(modelConfig, messages);
+      const aiResponse = await AIClientService.generateResponse(
+        modelConfig, 
+        messages
+      );
       const enhancedPrompt = aiResponse.content;
 
       if (!enhancedPrompt) {

@@ -1,11 +1,17 @@
 # Bazaar-Vid: AI-Powered Video Creation Platform
 
+## Database Access Note
+Use MCP tools to query both dev and prod Neon databases:
+- `mcp__pg-dev__query` - Development database (use when working locally)
+- `mcp__pg-prod__query` - Production database (read-only access)
+
 ## Progress & TODO Guidelines (CRITICAL - READ FIRST)
 
 **All development work MUST follow these guidelines:**
 
 ### Sprint-Based Workflow
-- **Current Sprint**: Sprint 73 - Silent Progressive Auto-Fix (check `/memory-bank/sprints/sprint73_auto_autofixer/` for context)
+- **Current Sprint**: Sprint 98 - Auto-Fix Analysis (check `/memory-bank/sprints/sprint98_autofix_analysis/` for context)
+- **Previous Sprint**: Sprint 91 - Promo Codes & Advanced Analytics (multi-tool system planning)
 - **Documentation First**: For complex tasks, create analysis docs in sprint folder before coding
 - **Progress Tracking**: Update `/memory-bank/progress.md` AND sprint-specific progress files
 - **Memory Bank**: Always check relevant docs in `/memory-bank/` before starting work
@@ -46,7 +52,7 @@ Our journey from complexity to clarity demonstrates how powerful simplification 
 ### Modularization Success Story
 The most dramatic example is ChatPanelG:
 - **Before**: 1400+ lines of tangled logic (messages, uploads, voice, errors, state)
-- **After**: ~760 lines of orchestration + 6 focused components
+- **After**: ~760 lines of orchestration + 5 focused components
 - **Result**: 44% code reduction, 100% clarity improvement
 
 #### Extracted Components:
@@ -56,9 +62,9 @@ components/chat/
 ├── ChatWelcome.tsx        # Welcome screen for new chats  
 ├── GeneratingMessage.tsx  # Loading states during generation
 ├── ImageUpload.tsx        # Image handling with compression
-├── VoiceInput.tsx         # Voice-to-text functionality
-└── AutoFixErrorBanner.tsx # Error detection and auto-fix
+└── VoiceInput.tsx         # Voice-to-text functionality
 ```
+Note: AutoFixErrorBanner.tsx was deleted in Sprint 98 as auto-fix now runs completely silently.
 
 ### How The System Works - Complete Flow
 
@@ -433,15 +439,16 @@ If data loss occurs:
 
 The `memory-bank/` directory contains ALL project documentation:
 - **Progress**: `/memory-bank/progress.md` + sprint-specific files
-- **Sprints**: `/memory-bank/sprints/sprint48/` (current - Mobile Support)
+- **Current Sprint**: `/memory-bank/sprints/sprint98_autofix_analysis/`
 - **Architecture**: System design and patterns
 - **API docs**: Service documentation
 - **Testing**: Test strategies and results
 - **Fixes**: Technical solutions and debugging
 - **Recent Sprints**: 
-  - Sprint 45: Chat modularization & SSE implementation
-  - Sprint 46: Duration system standardization
-  - Sprint 47: General cleaning & motion libraries
+  - Sprint 98: Auto-fix analysis and stabilization
+  - Sprint 91: Promo codes & multi-tool system planning
+  - Sprint 90: Database synchronization
+  - Sprint 76: Critical bug fixes
   - Sprint 48: Mobile/social format support
 
 **ALWAYS check memory bank before starting any work.**
@@ -477,17 +484,22 @@ RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 
 ## Current Development Context
 
-### Sprint 73 Focus - Silent Progressive Auto-Fix
-- Completely automatic error fixing (zero user intervention)
-- Progressive fix strategy (minimal → comprehensive → rewrite)
-- Smart loop detection and prevention
-- Direct tool execution (bypassing brain orchestrator)
+### Sprint 98 Focus - Auto-Fix Analysis & Stabilization
+- Enhanced auto-fix with proper event cleanup and dependency management
+- Fixed useEffect infinite loops and memory leaks
+- Improved event validation to prevent crashes
+- Stable function references for event handlers
 
-### Previous Sprint 48 - Mobile Support
-- Multi-format video support (mobile, square, desktop)
-- Dynamic preview dimensions (no multi-preview panel)
-- Format-specific AI generation guidelines
-- Social media platform optimization
+### Sprint 91 - Promo Codes & Multi-Tool System (Planning Complete)
+- **Multi-Context Tool System**: Architecture for parallel tool execution
+- **Promo Codes**: System designed but migrations not yet pushed
+- **Admin Intelligence**: Natural language SQL queries planned
+- **Progressive UI**: Bullet-point progress like Claude Code
+
+### Recent Sprint Achievements
+- Sprint 90: Database synchronization and performance optimization
+- Sprint 76: Critical bug fixes and system stability
+- Sprint 48: Mobile/social format support
 
 ### Recent Achievements
 - **Silent Auto-Fix (Sprint 73)**: Progressive error fixing with zero user intervention
@@ -503,32 +515,11 @@ RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 - **Auto-Fix Hook**: `/src/hooks/use-auto-fix.ts` - Silent progressive error fixing
 - **Chat Components**: `/src/components/chat/` - Modular UI
 
-### Silent Auto-Fix System (Sprint 73)
-
-#### Overview
-The auto-fix system now operates completely silently in the background, automatically fixing scene compilation errors without any user intervention. When an error occurs, the system:
-
-1. **Detects** errors via PreviewPanelG events
-2. **Queues** fixes with 2-second debounce
-3. **Attempts** progressive fixes:
-   - **Attempt 1**: Minimal targeted fix
-   - **Attempt 2**: Comprehensive error resolution
-   - **Attempt 3**: Complete component rewrite
-4. **Prevents** infinite loops with smart detection
-
-#### Key Features
-- **Zero UI**: No error banners, toasts, or notifications
-- **Progressive Strategy**: Each retry is more aggressive
-- **Loop Detection**: Skips to rewrite if same error repeats
-- **Safety Limits**: Max 3 attempts with exponential backoff
-
-#### Implementation
-- **Hook**: `/src/hooks/use-auto-fix.ts` - Core silent logic
-- **Types**: `/src/lib/types/auto-fix.ts` - Type definitions
-- **Deleted**: `AutoFixErrorBanner.tsx` - No UI needed
-
-#### Debug Mode
-In development, watch console for `[SILENT FIX]` logs to monitor auto-fix activity.
+### Silent Auto-Fix System
+- Automatically fixes scene compilation errors in the background
+- Progressive fix strategy: minimal → comprehensive → rewrite
+- No UI interruptions - completely silent operation
+- Implementation: `/src/hooks/use-auto-fix.ts`
 
 ## Contributing Guidelines
 

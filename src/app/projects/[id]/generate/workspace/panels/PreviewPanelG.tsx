@@ -357,11 +357,35 @@ export default function TestComponent() {
 }`;
 
       // This is REAL validation - if Sucrase can't compile it, it's actually broken
-      const { code: transformedCode } = transform(testCompositeCode, {
-        transforms: ['typescript', 'jsx'],
-        jsxRuntime: 'classic',
-        production: false,
-      });
+      let transformedCode: string;
+      try {
+        const result = transform(testCompositeCode, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+        transformedCode = result.code;
+      } catch (syntaxError) {
+        // Sucrase compilation failed - this is a syntax error
+        console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
+        console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
+        
+        // Still dispatch the error event for auto-fix
+        const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
+        const errorEvent = new CustomEvent('preview-scene-error', {
+          detail: {
+            sceneId,
+            sceneName,
+            sceneIndex: index + 1,
+            error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
+          }
+        });
+        window.dispatchEvent(errorEvent);
+        console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
+        
+        // Re-throw to handle in outer catch
+        throw syntaxError;
+      }
 
       // Scene compiled successfully
       

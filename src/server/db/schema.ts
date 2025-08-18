@@ -387,6 +387,23 @@ export const componentErrorsRelations = relations(componentErrors, ({ one }) => 
   }),
 }));
 
+// --- Webhook Deliveries (GitHub) ---
+// Used to deduplicate GitHub webhook deliveries (x-github-delivery)
+export const webhookDeliveries = createTable(
+  "webhook_delivery",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    deliveryId: d.varchar("delivery_id", { length: 255 }).notNull().unique(),
+    event: d.varchar({ length: 100 }).notNull(),
+    repository: d.varchar({ length: 255 }), // owner/repo, optional for initial insert
+    receivedAt: d.timestamp("received_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("webhook_delivery_delivery_id_idx").on(t.deliveryId),
+    index("webhook_delivery_received_at_idx").on(t.receivedAt),
+  ],
+);
+
 // --- Metrics table ---
 export const metrics = createTable(
   "metric",
@@ -1318,6 +1335,61 @@ export const changelogEntries = createTable("changelog_entries", (d) => ({
 // Changelog relations
 export const changelogEntriesRelations = relations(changelogEntries, ({ }) => ({
   // Could add relations to projects if we link changelogs to Bazaar projects
+}))
+
+// Component Showcase Entries table for GitHub component video generation
+export const componentShowcaseEntries = createTable("component_showcase_entries", (d) => ({
+  id: d.uuid().defaultRandom().primaryKey(),
+  
+  // GitHub repository and component information
+  repository: d.text("repository").notNull(), // e.g., "owner/repo"
+  componentName: d.text("component_name").notNull(),
+  componentPath: d.text("component_path"), // Discovered file path
+  triggerType: d.text("trigger_type", { enum: ['showcase', 'demo'] }).notNull(),
+  
+  // PR and requester information
+  prNumber: d.integer("pr_number").notNull(),
+  requesterUsername: d.text("requester_username").notNull(),
+  requesterAvatar: d.text("requester_avatar"),
+  requesterUrl: d.text("requester_url"),
+  
+  // Generated video information
+  videoUrl: d.text("video_url"),
+  thumbnailUrl: d.text("thumbnail_url"),
+  gifUrl: d.text("gif_url"),
+  videoDuration: d.integer("video_duration"), // in seconds
+  videoFormat: d.text("video_format").default('landscape'),
+  generatedCode: d.text("generated_code"), // Generated Remotion code
+  
+  // Component analysis data (cached from GitHub)
+  componentStructure: d.jsonb("component_structure"), // Parsed component structure
+  componentStyles: d.jsonb("component_styles"), // Extracted styles
+  componentFramework: d.text("component_framework"), // React, Vue, etc.
+  
+  // Processing status
+  status: d.text({ enum: ['queued', 'processing', 'completed', 'failed'] }).default('queued').notNull(),
+  jobId: d.text("job_id"), // Queue job ID
+  errorMessage: d.text("error_message"),
+  
+  // Statistics
+  viewCount: d.integer("view_count").default(0),
+  
+  // Timestamps
+  createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  processedAt: d.timestamp("processed_at", { withTimezone: true }), // When video was generated
+}), (t) => [
+  index("component_showcase_repository_idx").on(t.repository),
+  index("component_showcase_component_idx").on(t.repository, t.componentName),
+  index("component_showcase_status_idx").on(t.status),
+  index("component_showcase_trigger_type_idx").on(t.triggerType),
+  index("component_showcase_created_at_idx").on(t.createdAt),
+  index("component_showcase_pr_idx").on(t.repository, t.prNumber),
+]);
+
+// Component showcase relations
+export const componentShowcaseEntriesRelations = relations(componentShowcaseEntries, ({ }) => ({
+  // Could add relations to GitHub connections if we link showcases to Bazaar users
 }))
 
 // --- Figma Integration Tables ---

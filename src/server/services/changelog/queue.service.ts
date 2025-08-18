@@ -139,8 +139,38 @@ class ChangelogQueue {
    * Notify GitHub with the generated video
    */
   private async notifyGitHub(prAnalysis: PRAnalysis, result: any) {
-    // TODO: Implement GitHub comment
-    console.log(`TODO: Comment on PR #${prAnalysis.prNumber} with video ${result.videoUrl}`);
+    try {
+      const installationId = (prAnalysis as any)?.installationId as number | undefined;
+      const { getInstallationOctokit } = await import('~/server/services/github/octokit-factory');
+      const { getAppUrl } = await import('~/lib/utils/url');
+      const appUrl = getAppUrl ? getAppUrl() : (process.env.NEXTAUTH_URL || 'https://bazaar.it');
+      const shareUrl = `${appUrl}/share/${result.projectId}`; // Public share page
+      const editUrl = `${appUrl}/projects/${result.projectId}/generate`;
+      const owner = prAnalysis.repository.owner;
+      const repo = prAnalysis.repository.name;
+      const prNumber = prAnalysis.prNumber;
+
+      const octokit = installationId
+        ? await getInstallationOctokit(installationId)
+        : new (await import('@octokit/rest')).Octokit({ auth: process.env.GITHUB_TOKEN });
+
+      const body = [
+        `🎬 Changelog video ready for PR #${prNumber}!`,
+        '',
+        `• Watch: ${result.videoUrl}`,
+        `• Share: ${shareUrl} (public)`,
+        `• Edit in Bazaar: ${editUrl} (login required)`,
+      ].join('\n');
+
+      await (octokit as any).issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body,
+      });
+    } catch (e) {
+      console.error('[ChangelogQueue] Failed to comment on PR:', e);
+    }
   }
   
   /**

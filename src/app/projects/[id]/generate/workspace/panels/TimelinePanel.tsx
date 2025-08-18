@@ -321,25 +321,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }, 0));
   }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
   
-  // Debug audio track details after totalDuration is calculated
+  // Audio track calculations
   useEffect(() => {
-    if (audioTrack) {
-      const audioWidthPercent = (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100;
-      console.log('[Timeline] Audio track debug:', {
-        hasAudioTrack: !!audioTrack,
-        audioTrack,
-        duration: audioTrack.duration,
-        startTime: audioTrack.startTime,
-        endTime: audioTrack.endTime,
-        totalDuration,
-        calculatedWidthPercent: audioWidthPercent,
-        calculatedWidth: `${audioWidthPercent}%`,
-        FPS,
-        audioInFrames: ((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS
-      });
-    } else {
-      console.log('[Timeline] No audio track present');
-    }
+    // Audio track state updated
   }, [audioTrack, totalDuration]);
   
   // Format time display - show frames prominently
@@ -1225,15 +1209,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </div>
             
             {/* Audio Track - only show when audio exists */}
-            {(() => {
-              console.log('[Timeline Render] Audio track check:', { 
-                hasAudioTrack: !!audioTrack, 
-                audioTrack,
-                projectId,
-                projectAudio: project?.audio 
-              });
-              return null;
-            })()}
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
                 <div

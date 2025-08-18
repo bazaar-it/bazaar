@@ -4,77 +4,77 @@ import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
 import { loadFont } from '@remotion/fonts';
 
-// Font registry for Lambda - using correct R2 URLs with /fonts/ path
-// Complete list of all fonts uploaded to R2 (verified via AWS CLI)
+// Font registry for Lambda - using staticFile() for bundled fonts
+// Fonts are now bundled with the Lambda site in public/fonts/
 const FONT_REGISTRY = {
   'Inter': [
-    { weight: '300', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Light.woff2' },
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Regular.woff2' },
-    { weight: '500', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Medium.woff2' },
-    { weight: '600', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-SemiBold.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Bold.woff2' },
-    { weight: '800', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-ExtraBold.woff2' },
-    { weight: '900', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Inter-Black.woff2' },
+    { weight: '300', url: staticFile('fonts/Inter-Light.woff2') },
+    { weight: '400', url: staticFile('fonts/Inter-Regular.woff2') },
+    { weight: '500', url: staticFile('fonts/Inter-Medium.woff2') },
+    { weight: '600', url: staticFile('fonts/Inter-SemiBold.woff2') },
+    { weight: '700', url: staticFile('fonts/Inter-Bold.woff2') },
+    { weight: '800', url: staticFile('fonts/Inter-ExtraBold.woff2') },
+    { weight: '900', url: staticFile('fonts/Inter-Black.woff2') },
   ],
   'DM Sans': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DMSans-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DMSans-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/DMSans-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/DMSans-Bold.woff2') },
   ],
   'Plus Jakarta Sans': [
-    // Using Google Fonts CDN until we upload these
-    { weight: '400', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-xGJKFADoWW9g.woff2' },
-    { weight: '500', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-xmJaFADoWW9g.woff2' },
-    { weight: '600', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-w6IqFADoWW9g.woff2' },
-    { weight: '700', url: 'https://fonts.gstatic.com/s/plusjakartasans/v7/LDI2apCTNjkqYNbaNDVrataZD-weIqFADoWW9g.woff2' },
+    // Fallback to Inter which is bundled - Plus Jakarta Sans not available in Lambda bundle
+    { weight: '400', url: staticFile('fonts/Inter-Regular.woff2') },
+    { weight: '500', url: staticFile('fonts/Inter-Medium.woff2') },
+    { weight: '600', url: staticFile('fonts/Inter-SemiBold.woff2') },
+    { weight: '700', url: staticFile('fonts/Inter-Bold.woff2') },
   ],
   'Roboto': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Roboto-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Roboto-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Roboto-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Roboto-Bold.woff2') },
   ],
   'Poppins': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Poppins-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Poppins-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Poppins-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Poppins-Bold.woff2') },
   ],
   'Montserrat': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Montserrat-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Montserrat-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Montserrat-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Montserrat-Bold.woff2') },
   ],
   'Playfair Display': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/PlayfairDisplay-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/PlayfairDisplay-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/PlayfairDisplay-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/PlayfairDisplay-Bold.woff2') },
   ],
   'Merriweather': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Merriweather-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Merriweather-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Merriweather-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Merriweather-Bold.woff2') },
   ],
   'Lobster': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Lobster-Regular.woff2' },
+    { weight: '400', url: staticFile('fonts/Lobster-Regular.woff2') },
   ],
   'Dancing Script': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DancingScript-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/DancingScript-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/DancingScript-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/DancingScript-Bold.woff2') },
   ],
   'Pacifico': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Pacifico-Regular.woff2' },
+    { weight: '400', url: staticFile('fonts/Pacifico-Regular.woff2') },
   ],
   'Fira Code': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/FiraCode-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/FiraCode-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/FiraCode-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/FiraCode-Bold.woff2') },
   ],
   'JetBrains Mono': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/JetBrainsMono-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/JetBrainsMono-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/JetBrainsMono-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/JetBrainsMono-Bold.woff2') },
   ],
   'Raleway': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Raleway-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Raleway-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Raleway-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Raleway-Bold.woff2') },
   ],
   'Ubuntu': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Ubuntu-Regular.woff2' },
-    { weight: '700', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/Ubuntu-Bold.woff2' },
+    { weight: '400', url: staticFile('fonts/Ubuntu-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Ubuntu-Bold.woff2') },
   ],
   'Bebas Neue': [
-    { weight: '400', url: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/fonts/BebasNeue-Regular.woff2' },
+    { weight: '400', url: staticFile('fonts/BebasNeue-Regular.woff2') },
   ],
 };
 
@@ -105,7 +105,9 @@ function extractFontsFromScenes(scenes: any[]): Set<string> {
   return fonts;
 }
 
-// Load fonts before rendering
+// Load fonts before rendering using @remotion/fonts
+// This is Remotion's official approach for Lambda font loading
+// Fonts are loaded synchronously BEFORE rendering starts
 let fontsLoaded = false;
 
 async function ensureFontsLoaded(scenes: any[]) {
@@ -173,6 +175,23 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       console.log(`[DynamicScene] Attempting to create component from jsCode`);
       console.log(`[DynamicScene] First 300 chars of jsCode:`, scene.jsCode.substring(0, 300));
       
+      // Convert export default to variable assignment for Function constructor compatibility
+      let executableCode = scene.jsCode;
+      
+      // Replace export default function with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+function\s+(\w+)/g,
+        'const Component = function $1'
+      );
+      
+      // Replace export default variable with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+([a-zA-Z_$][\w$]*);?/g,
+        'const Component = $1;'
+      );
+      
+      console.log(`[DynamicScene] After export conversion, executableCode starts with:`, executableCode.substring(0, 200));
+      
       // Create a component factory function
       const createComponent = new Function(
         'React',
@@ -215,7 +234,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Override useVideoConfig to use actual dimensions
           const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
-          ${scene.jsCode}
+          ${executableCode}
           
           // Log what we're trying to execute
           console.log('[ComponentFactory] Executing scene code...');
@@ -293,8 +312,8 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     } catch (error) {
       console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
       console.error(`[DynamicScene] Error details:`, {
-        message: error.message,
-        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : 'No stack trace'
       });
     }
   }
@@ -410,7 +429,10 @@ export const VideoComposition: React.FC<{
   const [handle] = React.useState(() => delayRender());
   
   React.useEffect(() => {
+    // Load fonts using bundled staticFile() URLs - no network timeouts in Lambda
+    console.log('[Lambda] Loading fonts from bundled files');
     ensureFontsLoaded(scenes).then(() => {
+      console.log('[Lambda Font Loading] Successfully loaded fonts');
       setFontsReady(true);
       continueRender(handle);
     }).catch((err) => {
@@ -418,7 +440,7 @@ export const VideoComposition: React.FC<{
       setFontsReady(true); // Continue anyway
       continueRender(handle);
     });
-  }, []);
+  }, [scenes, handle]);
   
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {
@@ -502,7 +524,7 @@ export const MainComposition: React.FC = () => {
   return (
     <>
       <Composition
-        id="MainComposition"
+        id="MainCompositionSimple"
         component={VideoComposition}
         durationInFrames={300}
         fps={30}

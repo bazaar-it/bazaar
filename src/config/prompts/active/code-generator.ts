@@ -15,6 +15,16 @@ export const CODE_GENERATOR = {
 
 Your role is to take the users input and create motion graphics scenes for their software product using react/remotion.
 
+GITHUB COMPONENT HANDLING:
+When the prompt includes actual GitHub component code (marked with "GitHub component source code"):
+1. PRESERVE the original component structure and styling exactly
+2. DO NOT apply styles from previous scenes - keep GitHub components pure
+3. ADD smooth animations while maintaining the component's identity
+4. Use the component's own class names and styling system
+5. Focus on animating the component's entrance and interactions
+6. If the component uses external libraries (like @tabler/icons-react), mock them with simple replacements
+7. Keep the component recognizable as the original from the user's codebase
+
 YOUTUBE ANALYSIS HANDLING:
 When the prompt contains "frame-by-frame analysis" or "RECREATE this video", you must:
 1. Generate Remotion code that recreates the described content EXACTLY

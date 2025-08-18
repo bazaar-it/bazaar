@@ -1,3 +1,4 @@
+// src/server/services/github/component-indexer.service.ts
 /**
  * GitHub Component Indexer Service
  * Discovers and categorizes React components in GitHub repositories
@@ -16,6 +17,7 @@ export interface UIComponentItem {
   preview?: string;
   lineCount?: number;
   importCount?: number;
+  framework?: 'react' | 'vue' | 'svelte' | 'js' | 'ts';
 }
 
 export type UICatalog = Record<UICategoryKey, UIComponentItem[]>;
@@ -66,6 +68,25 @@ export class ComponentIndexerService {
     this.octokit = new Octokit({ auth: accessToken });
   }
   
+  private async requestWithRetry<T>(fn: () => Promise<T>, label: string, maxRetries = 3): Promise<T> {
+    let attempt = 0;
+    let lastError: any;
+    while (attempt < maxRetries) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+        const status = error?.status || error?.response?.status;
+        const isRateLimit = status === 403 || status === 429;
+        const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+        console.warn(`[ComponentIndexer] ${label} failed (attempt ${attempt + 1}/${maxRetries}) status=${status}. Retrying in ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
+        attempt++;
+      }
+    }
+    throw lastError;
+  }
+  
   /**
    * Discover components in a repository
    */
@@ -85,8 +106,12 @@ export class ComponentIndexerService {
       
       for (const branch of branchesToTry) {
         try {
-          const result = await this.octokit.git.getRef({ owner, repo, ref: branch });
-          refData = result.data;
+          const result = await this.requestWithRetry(
+            () => this.octokit.git.getRef({ owner, repo, ref: branch }),
+            `getRef(${branch})`
+          );
+          // @ts-expect-error octokit types
+          refData = result.data || result;
           console.log(`[ComponentIndexer] Using branch: ${branch}`);
           break;
         } catch (e) {
@@ -101,12 +126,15 @@ export class ComponentIndexerService {
       const sha = refData.object.sha;
       
       // Get the tree (all files) - this is FAST!
-      const { data: tree } = await this.octokit.git.getTree({
-        owner,
-        repo,
-        tree_sha: sha,
-        recursive: '1', // Get all files recursively
-      });
+      const { data: tree } = await this.requestWithRetry(
+        () => this.octokit.git.getTree({
+          owner,
+          repo,
+          tree_sha: sha,
+          recursive: '1', // Get all files recursively
+        }),
+        'getTree'
+      );
       
       // Filter to component files from various frameworks
       const componentFiles = tree.tree.filter(item => 
@@ -197,12 +225,25 @@ export class ComponentIndexerService {
     const category = this.categorizeComponent(componentName, path);
     const score = this.scoreComponent(componentName, path, category);
     
+    // Framework detection
+    const lower = fileName.toLowerCase();
+    const framework: UIComponentItem['framework'] = lower.endsWith('.tsx') || lower.endsWith('.jsx')
+      ? 'react'
+      : lower.endsWith('.vue')
+      ? 'vue'
+      : lower.endsWith('.svelte')
+      ? 'svelte'
+      : lower.endsWith('.ts')
+      ? 'ts'
+      : 'js';
+
     return {
       name: componentName,
       path,
       repo: `${owner}/${repo}`,
       category,
       score,
+      framework,
     };
   }
   
@@ -301,14 +342,14 @@ export class ComponentIndexerService {
     owner: string,
     repo: string,
     path: string,
-    lines = 50
+    lines = 50,
+    ref?: string
   ): Promise<string> {
-    try {
-      const { data } = await this.octokit.repos.getContent({
-        owner,
-        repo,
-        path,
-      });
+      try {
+      const { data } = await this.requestWithRetry(
+        () => this.octokit.repos.getContent({ owner, repo, path, ref }),
+          `getContent(${path})`
+        );
       
       if ('content' in data && data.content) {
         const content = Buffer.from(data.content, 'base64').toString('utf-8');

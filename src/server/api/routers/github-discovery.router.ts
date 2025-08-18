@@ -1,3 +1,4 @@
+// src/server/api/routers/github-discovery.router.ts
 /**
  * GitHub Component Discovery Router
  * API endpoints for discovering and cataloging components
@@ -132,6 +133,36 @@ export const githubDiscoveryRouter = createTRPCRouter({
       
       return aggregatedCatalog;
     }),
+
+  /**
+   * Return discovery status (last indexed timestamp)
+   */
+  getStatus: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const cacheKey = `discovery:${userId}`;
+    const cached = discoveryCache.get(cacheKey);
+    return {
+      lastIndexedAt: cached ? new Date(cached.timestamp).toISOString() : null,
+    };
+  }),
+
+  /**
+   * Force re-indexing of selected repositories
+   */
+  reindex: protectedProcedure.mutation(async ({ ctx }) => {
+    // Simply call discoverComponents with forceRefresh=true
+    const catalog = await githubDiscoveryRouter.createCaller({
+      db,
+      session: ctx.session,
+    }).discoverComponents({ forceRefresh: true });
+    return {
+      success: true,
+      lastIndexedAt: new Date().toISOString(),
+      counts: Object.fromEntries(
+        Object.entries(catalog).map(([k, v]) => [k, v.length])
+      ),
+    };
+  }),
   
   /**
    * Get component preview (first N lines of code)

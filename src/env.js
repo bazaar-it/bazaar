@@ -37,6 +37,13 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
+    // GitHub App (repo access)
+    GITHUB_APP_ID: z.string().min(1),
+    GITHUB_CLIENT_ID: z.string().min(1),
+    GITHUB_CLIENT_SECRET: z.string().min(1),
+    GITHUB_APP_PRIVATE_KEY: z.string().min(1),
+    GITHUB_WEBHOOK_SECRET: z.string().min(1),
+
     // Worker Configuration (Server-side)
     WORKER_POLLING_INTERVAL: z.preprocess(
       (val) => (val ? parseInt(String(val), 10) : undefined),
@@ -105,6 +112,13 @@ export const env = createEnv({
     // Stripe Environment Variables
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+
+    // GitHub App
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+    GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+    GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET,
     // Worker Configuration Runtime Environment Variables
     WORKER_POLLING_INTERVAL: process.env.WORKER_POLLING_INTERVAL,
     TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
