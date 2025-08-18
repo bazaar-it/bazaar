@@ -2,6 +2,148 @@
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+import { loadFont } from '@remotion/fonts';
+
+// Font registry for Lambda - using staticFile() for bundled fonts
+// Fonts are now bundled with the Lambda site in public/fonts/
+const FONT_REGISTRY = {
+  'Inter': [
+    { weight: '300', url: staticFile('fonts/Inter-Light.woff2') },
+    { weight: '400', url: staticFile('fonts/Inter-Regular.woff2') },
+    { weight: '500', url: staticFile('fonts/Inter-Medium.woff2') },
+    { weight: '600', url: staticFile('fonts/Inter-SemiBold.woff2') },
+    { weight: '700', url: staticFile('fonts/Inter-Bold.woff2') },
+    { weight: '800', url: staticFile('fonts/Inter-ExtraBold.woff2') },
+    { weight: '900', url: staticFile('fonts/Inter-Black.woff2') },
+  ],
+  'DM Sans': [
+    { weight: '400', url: staticFile('fonts/DMSans-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/DMSans-Bold.woff2') },
+  ],
+  'Plus Jakarta Sans': [
+    // Fallback to Inter which is bundled - Plus Jakarta Sans not available in Lambda bundle
+    { weight: '400', url: staticFile('fonts/Inter-Regular.woff2') },
+    { weight: '500', url: staticFile('fonts/Inter-Medium.woff2') },
+    { weight: '600', url: staticFile('fonts/Inter-SemiBold.woff2') },
+    { weight: '700', url: staticFile('fonts/Inter-Bold.woff2') },
+  ],
+  'Roboto': [
+    { weight: '400', url: staticFile('fonts/Roboto-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Roboto-Bold.woff2') },
+  ],
+  'Poppins': [
+    { weight: '400', url: staticFile('fonts/Poppins-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Poppins-Bold.woff2') },
+  ],
+  'Montserrat': [
+    { weight: '400', url: staticFile('fonts/Montserrat-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Montserrat-Bold.woff2') },
+  ],
+  'Playfair Display': [
+    { weight: '400', url: staticFile('fonts/PlayfairDisplay-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/PlayfairDisplay-Bold.woff2') },
+  ],
+  'Merriweather': [
+    { weight: '400', url: staticFile('fonts/Merriweather-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Merriweather-Bold.woff2') },
+  ],
+  'Lobster': [
+    { weight: '400', url: staticFile('fonts/Lobster-Regular.woff2') },
+  ],
+  'Dancing Script': [
+    { weight: '400', url: staticFile('fonts/DancingScript-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/DancingScript-Bold.woff2') },
+  ],
+  'Pacifico': [
+    { weight: '400', url: staticFile('fonts/Pacifico-Regular.woff2') },
+  ],
+  'Fira Code': [
+    { weight: '400', url: staticFile('fonts/FiraCode-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/FiraCode-Bold.woff2') },
+  ],
+  'JetBrains Mono': [
+    { weight: '400', url: staticFile('fonts/JetBrainsMono-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/JetBrainsMono-Bold.woff2') },
+  ],
+  'Raleway': [
+    { weight: '400', url: staticFile('fonts/Raleway-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Raleway-Bold.woff2') },
+  ],
+  'Ubuntu': [
+    { weight: '400', url: staticFile('fonts/Ubuntu-Regular.woff2') },
+    { weight: '700', url: staticFile('fonts/Ubuntu-Bold.woff2') },
+  ],
+  'Bebas Neue': [
+    { weight: '400', url: staticFile('fonts/BebasNeue-Regular.woff2') },
+  ],
+};
+
+// Function to extract fonts from scene code
+function extractFontsFromScenes(scenes: any[]): Set<string> {
+  const fonts = new Set<string>();
+  
+  for (const scene of scenes) {
+    const code = scene.jsCode || scene.tsxCode || '';
+    
+    // Match various font patterns
+    const patterns = [
+      /fontFamily:\s*["']([^"']+)["']/g,
+      /font:\s*["']([^"']+)["']/g,
+      /family:\s*["']([^"']+)["']/g,
+    ];
+    
+    for (const pattern of patterns) {
+      const matches = [...code.matchAll(pattern)];
+      for (const match of matches) {
+        const fontString = match[1];
+        const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
+        fonts.add(primaryFont);
+      }
+    }
+  }
+  
+  return fonts;
+}
+
+// Load fonts before rendering using @remotion/fonts
+// This is Remotion's official approach for Lambda font loading
+// Fonts are loaded synchronously BEFORE rendering starts
+let fontsLoaded = false;
+
+async function ensureFontsLoaded(scenes: any[]) {
+  if (fontsLoaded) return;
+  
+  const fontsNeeded = extractFontsFromScenes(scenes);
+  console.log('[Lambda Font Loading] Fonts detected in scenes:', Array.from(fontsNeeded));
+  
+  const loadPromises = [];
+  
+  for (const fontName of fontsNeeded) {
+    const fontConfig = FONT_REGISTRY[fontName as keyof typeof FONT_REGISTRY];
+    if (fontConfig) {
+      console.log(`[Lambda Font Loading] Loading font: ${fontName}`);
+      for (const variant of fontConfig) {
+        loadPromises.push(
+          loadFont({
+            family: fontName,
+            url: variant.url,
+            weight: variant.weight,
+            style: 'normal',
+          }).then(() => {
+            console.log(`[Lambda Font Loading] Loaded ${fontName} weight ${variant.weight}`);
+          }).catch((err) => {
+            console.warn(`[Lambda Font Loading] Failed to load ${fontName} weight ${variant.weight}:`, err);
+          })
+        );
+      }
+    } else {
+      console.warn(`[Lambda Font Loading] Font ${fontName} not in registry, skipping`);
+    }
+  }
+  
+  await Promise.all(loadPromises);
+  fontsLoaded = true;
+}
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -32,6 +174,23 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     try {
       console.log(`[DynamicScene] Attempting to create component from jsCode`);
       console.log(`[DynamicScene] First 300 chars of jsCode:`, scene.jsCode.substring(0, 300));
+      
+      // Convert export default to variable assignment for Function constructor compatibility
+      let executableCode = scene.jsCode;
+      
+      // Replace export default function with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+function\s+(\w+)/g,
+        'const Component = function $1'
+      );
+      
+      // Replace export default variable with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+([a-zA-Z_$][\w$]*);?/g,
+        'const Component = $1;'
+      );
+      
+      console.log(`[DynamicScene] After export conversion, executableCode starts with:`, executableCode.substring(0, 200));
       
       // Create a component factory function
       const createComponent = new Function(
@@ -75,7 +234,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Override useVideoConfig to use actual dimensions
           const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
-          ${scene.jsCode}
+          ${executableCode}
           
           // Log what we're trying to execute
           console.log('[ComponentFactory] Executing scene code...');
@@ -153,8 +312,8 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     } catch (error) {
       console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
       console.error(`[DynamicScene] Error details:`, {
-        message: error.message,
-        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : 'No stack trace'
       });
     }
   }
@@ -265,6 +424,24 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
+  // Load fonts before rendering
+  const [fontsReady, setFontsReady] = React.useState(false);
+  const [handle] = React.useState(() => delayRender());
+  
+  React.useEffect(() => {
+    // Load fonts using bundled staticFile() URLs - no network timeouts in Lambda
+    console.log('[Lambda] Loading fonts from bundled files');
+    ensureFontsLoaded(scenes).then(() => {
+      console.log('[Lambda Font Loading] Successfully loaded fonts');
+      setFontsReady(true);
+      continueRender(handle);
+    }).catch((err) => {
+      console.error('[Lambda Font Loading] Failed to load fonts:', err);
+      setFontsReady(true); // Continue anyway
+      continueRender(handle);
+    });
+  }, [scenes, handle]);
+  
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {
     url: audio.url,
@@ -347,7 +524,7 @@ export const MainComposition: React.FC = () => {
   return (
     <>
       <Composition
-        id="MainComposition"
+        id="MainCompositionSimple"
         component={VideoComposition}
         durationInFrames={300}
         fps={30}

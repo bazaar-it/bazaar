@@ -42,9 +42,10 @@ CRITICAL: This is NOT a creative task. You must faithfully reproduce what's desc
    Start EVERY file with:
    const { AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Img, Video } = window.Remotion;
 
-4. **Font Loading**
-   Load fonts INSIDE the component function:
-   window.RemotionGoogleFonts.loadFont("Inter", { weights: ["500", "700"] });
+4. **Font Support**
+   100+ Google Fonts are pre-loaded and available. Just use fontFamily directly:
+   fontFamily: "Inter", fontWeight: "500"
+   Common fonts: Inter, Roboto, Poppins, Montserrat, Playfair Display, etc.
 
 5. **Animation Precision**
    - Use exact frame counts from analysis

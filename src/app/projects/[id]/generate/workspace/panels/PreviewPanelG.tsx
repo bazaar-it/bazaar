@@ -86,14 +86,21 @@ export function PreviewPanelG({
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
         }
         
+        // Check if there's a local scene with this ID
+        const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
+        const localName = (localScene as any)?.name || localScene?.data?.name;
+        
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
+          // Preserve local name if it exists and is different from DB name
+          name: localName || dbScene.name,
           data: {
             code: dbScene.tsxCode,
-            name: dbScene.name,
+            // Also preserve local name in data for backward compatibility
+            name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
           }
@@ -131,6 +138,25 @@ export function PreviewPanelG({
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
+  
+  // Initialize preview font loading for any Google Font
+  useEffect(() => {
+    import('../../../../../../remotion/fonts/preview-font-loader').then(({ initializePreviewFonts }) => {
+      initializePreviewFonts();
+    });
+  }, []);
+
+  // Load fonts for current scenes
+  useEffect(() => {
+    if (!dbScenes?.length) return;
+
+    import('../../../../../../remotion/fonts/preview-font-loader').then(({ loadPreviewFonts }) => {
+      const sceneCodes = dbScenes.map(scene => scene.tsxCode || '').filter(Boolean);
+      loadPreviewFonts(sceneCodes).catch((error: any) => {
+        console.warn('[PreviewPanelG] Error loading preview fonts:', error);
+      });
+    });
+  }, [dbScenes]);
   
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
@@ -331,11 +357,35 @@ export default function TestComponent() {
 }`;
 
       // This is REAL validation - if Sucrase can't compile it, it's actually broken
-      const { code: transformedCode } = transform(testCompositeCode, {
-        transforms: ['typescript', 'jsx'],
-        jsxRuntime: 'classic',
-        production: false,
-      });
+      let transformedCode: string;
+      try {
+        const result = transform(testCompositeCode, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+        transformedCode = result.code;
+      } catch (syntaxError) {
+        // Sucrase compilation failed - this is a syntax error
+        console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
+        console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
+        
+        // Still dispatch the error event for auto-fix
+        const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
+        const errorEvent = new CustomEvent('preview-scene-error', {
+          detail: {
+            sceneId,
+            sceneName,
+            sceneIndex: index + 1,
+            error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
+          }
+        });
+        window.dispatchEvent(errorEvent);
+        console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
+        
+        // Re-throw to handle in outer catch
+        throw syntaxError;
+      }
 
       // Scene compiled successfully
       
@@ -1263,6 +1313,45 @@ function EmergencyScene${index}() {
 ${singleDestructuring}
 // Preserve native Audio constructor for scenes that might need it
 const NativeAudio = window.NativeAudio || window.Audio;
+
+// Load Google Fonts for consistent rendering between preview and export
+if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
+  const link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = 'https://fonts.googleapis.com';
+  document.head.appendChild(link);
+  
+  const link2 = document.createElement('link');
+  link2.rel = 'preconnect';
+  link2.href = 'https://fonts.gstatic.com';
+  link2.crossOrigin = 'anonymous';
+  document.head.appendChild(link2);
+  
+  // Load comprehensive font collection in batches to avoid URL length limits
+  const fontGroups = [
+    // Group 1: Core Sans-Serif
+    'Inter:wght@100..900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
+    // Group 2: Extended Sans-Serif
+    'Work+Sans:wght@100..900&family=Rubik:wght@300..900&family=Barlow:wght@100..900&family=Kanit:wght@100..900&family=DM+Sans:wght@400..700&family=Plus+Jakarta+Sans:wght@200..800&family=Space+Grotesk:wght@300..700&family=Outfit:wght@100..900&family=Lexend:wght@100..900&family=Manrope:wght@200..800',
+    // Group 3: Serif & Display
+    'Playfair+Display:wght@400..900&family=Merriweather:wght@300..900&family=Lora:wght@400..700&family=Roboto+Slab:wght@100..900&family=Bebas+Neue&family=Permanent+Marker&family=Lobster&family=Dancing+Script:wght@400..700&family=Pacifico&family=Caveat:wght@400..700',
+    // Group 4: Monospace & Additional
+    'Roboto+Mono:wght@100..700&family=Fira+Code:wght@300..700&family=JetBrains+Mono:wght@100..800&family=Source+Code+Pro:wght@200..900&family=Quicksand:wght@300..700&family=Comfortaa:wght@300..700&family=Righteous&family=Anton&family=Fredoka:wght@300..700&family=Bungee'
+  ];
+  
+  fontGroups.forEach((group, index) => {
+    const fontsLink = document.createElement('link');
+    fontsLink.rel = 'stylesheet';
+    fontsLink.href = 'https://fonts.googleapis.com/css2?' + group + '&display=swap';
+    fontsLink.setAttribute('data-font-group', String(index + 1));
+    document.head.appendChild(fontsLink);
+  });
+  
+  console.log('[Bazaar] Loading 100+ Google Fonts for consistent rendering');
+  
+  window.bazaarFontsLoaded = true;
+  console.log('[Bazaar] Google Fonts loaded for consistent rendering');
+}
 
 ${sceneImports.join('\n\n')}
 

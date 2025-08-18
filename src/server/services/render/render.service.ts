@@ -2,6 +2,10 @@
 // This file prepares the render configuration but doesn't execute rendering
 // Actual rendering happens via Lambda
 
+// Font loading is now handled by MainCompositionSimple using @remotion/fonts
+// The old injectFontLoadingCode function has been removed as it used browser APIs (document.fonts)
+// that don't exist in Lambda's Node environment
+
 export interface AudioTrack {
   url: string;
   name: string;
@@ -208,44 +212,35 @@ async function preprocessSceneForLambda(scene: any) {
       transformedCode = `// Remotion components will be provided by the runtime\n` + transformedCode;
     }
     
-    // Replace export default with a direct assignment
-    transformedCode = transformedCode.replace(
-      /export\s+default\s+function\s+(\w+)/g,
-      'const Component = function $1'
-    );
-    
-    // Also handle arrow function exports
-    transformedCode = transformedCode.replace(
-      /export\s+default\s+(\w+)\s*=\s*\(/g,
-      'const Component = $1 = ('
-    );
-    
-    // Check if we have a Component function
-    if (!transformedCode.includes('const Component = function') && !transformedCode.includes('const Component =')) {
-      // Try to find any function that looks like a component
-      const functionMatch = transformedCode.match(/(?:function|const)\s+(\w*Scene\w*)\s*[=(]/);
-      if (functionMatch) {
-        console.log(`[Preprocess] Found component function: ${functionMatch[1]}, aliasing to Component`);
-        transformedCode = transformedCode + `\n\nconst Component = ${functionMatch[1]};`;
-      } else {
-        console.warn(`[Preprocess] No Component function found after transformation for scene ${scene.id}`);
-        console.log(`[Preprocess] Transformed code snippet:`, transformedCode.substring(0, 200));
-      }
+    // Keep export default for Lambda compatibility - Lambda expects proper ES6 modules
+    // Only convert to const Component if there's no export default
+    if (!transformedCode.includes('export default')) {
+      // If there's a function without export, wrap it as export default
+      transformedCode = transformedCode.replace(
+        /^function\s+(\w+)/gm,
+        'export default function $1'
+      );
     }
     
-    // Ensure the component is available at the end (no export needed for Function constructor)
-    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('return Component')) {
-      transformedCode = transformedCode + '\n\nreturn Component;';
-    }
+    // Keep arrow function exports as export default for Lambda
+    // No need to convert them to const Component
+    
+    // Lambda will import the export default function directly
+    // No need for Component assignment since we're preserving export default
+    
+    // No need for return Component since we're using proper export default for Lambda
     
     // Replace window.React with React
     transformedCode = transformedCode.replace(/window\.React/g, 'React');
     
-    // Remove or replace window.RemotionGoogleFonts (not available in Lambda)
+    // Replace window.RemotionGoogleFonts with actual @remotion/fonts loading
     transformedCode = transformedCode.replace(
       /window\.RemotionGoogleFonts\.loadFont[^;]+;/g,
-      '// Font loading removed for Lambda'
+      '// Font loading handled by @remotion/fonts injection'
     );
+
+    // Font loading is now handled by MainCompositionSimple using @remotion/fonts
+    // No need to inject font loading code into the scene
     
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
@@ -275,12 +270,13 @@ async function preprocessSceneForLambda(scene: any) {
       'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/$1.png'
     );
     
-    // Remove export statements that can't be used inside Function constructor
+    // FOR LAMBDA: Function constructor cannot handle ANY export statements
+    // Remove ALL export statements and convert to variable assignments
     transformedCode = transformedCode
-      .replace(/export\s+default\s+Component;?/g, '')
-      .replace(/export\s+default\s+\w+;?/g, '')
-      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')
-      .replace(/export\s+{\s*[^}]*\s*};?/g, '');
+      .replace(/export\s+default\s+function\s+(\w+)/g, 'const Component = function $1')  // export default function -> const Component
+      .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, 'const Component = $1;')  // export default variable -> const Component
+      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')  // Remove export const
+      .replace(/export\s+{\s*[^}]*\s*};?/g, '');            // Remove export { ... }
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
     console.log(`[Preprocess] Transformation summary:`, {
@@ -288,9 +284,9 @@ async function preprocessSceneForLambda(scene: any) {
       sceneName: scene.name,
       originalCodeLength: tsxCode.length,
       transformedCodeLength: transformedCode.length,
-      hasExportDefault: tsxCode.includes('export default'),
-      hasComponent: transformedCode.includes('const Component'),
-      hasReturn: transformedCode.includes('return Component'),
+      hasExportDefault: transformedCode.includes('export default'),
+      hasComponent: transformedCode.includes('function') || transformedCode.includes('const Component'),
+      hasReturn: transformedCode.includes('return'),
       remotionComponents: remotionComponents.length > 0 ? remotionComponents : 'none',
       reactHooks: reactHooks.length > 0 ? reactHooks : 'none',
       transformedCodePreview: transformedCode.substring(0, 200) + '...'

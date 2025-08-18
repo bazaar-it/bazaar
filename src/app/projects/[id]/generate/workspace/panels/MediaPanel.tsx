@@ -171,7 +171,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
 
             {/* Upload controls */}
             <div
-              className={`mx-3 mt-3 mb-2 rounded-lg border ${isDragging ? 'border-blue-400 bg-blue-50/40' : 'border-dashed border-gray-300'} p-4 text-sm text-gray-600 flex items-center justify-between flex-shrink-0`}
+              className={`mx-3 mt-3 mb-2 rounded-lg border ${isDragging ? 'border-orange-400 bg-orange-50/40' : 'border-dashed border-gray-300'} p-4 text-sm text-gray-600 flex items-center justify-between flex-shrink-0`}
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={onDrop}
@@ -232,7 +232,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                               setEditingId(null);
                             }
                           }}
-                          className="flex-1 px-1 border rounded outline-none focus:ring-1 focus:ring-blue-500"
+                          className="flex-1 px-1 border rounded outline-none focus:ring-1 focus:ring-orange-400"
                           autoFocus
                         />
                       ) : (

@@ -12,7 +12,7 @@ export interface LambdaRenderConfig extends RenderConfig {
 }
 
 // Use pre-deployed site URL (deployed via CLI: npx remotion lambda sites create)
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-vid-v3-prod-fix/index.html";
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-fresh-deploy/index.html";
 
 // Check if Lambda is properly configured
 function checkLambdaConfig() {
@@ -104,7 +104,7 @@ export async function renderVideoOnLambda({
       region: process.env.AWS_REGION as AwsRegion,
       functionName: process.env.REMOTION_FUNCTION_NAME!,
       serveUrl,
-      composition: "MainComposition",
+      composition: "MainCompositionSimple",
       inputProps: {
         scenes,
         projectId,

@@ -1,0 +1,1 @@
+ALTER TABLE "bazaar-vid_project_asset" ALTER COLUMN "project_id" SET DATA TYPE uuid;

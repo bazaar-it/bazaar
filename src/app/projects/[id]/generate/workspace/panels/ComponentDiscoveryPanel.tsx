@@ -55,15 +55,19 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['core', 'auth']));
   const [selectedComponents, setSelectedComponents] = useState<Set<string>>(new Set());
   const [isDraggingMultiple, setIsDraggingMultiple] = useState(false);
+  // No code previews by design
   
   // Fetch discovered components
+  const [refInput, setRefInput] = useState<string>('HEAD');
   const { data: catalog, isLoading, refetch } = api.githubDiscovery.discoverComponents.useQuery(
-    { forceRefresh: false },
+    { forceRefresh: false, ref: refInput || 'HEAD' },
     {
       staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
       refetchOnWindowFocus: false,
     }
   );
+  const { data: status } = api.githubDiscovery.getStatus.useQuery({ ref: refInput || 'HEAD' });
+  const reindexMutation = api.githubDiscovery.reindex.useMutation();
   
   // Check if user has GitHub connected
   const { data: githubConnection } = api.github.getConnection.useQuery();
@@ -240,16 +244,44 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">Component Discovery</h2>
-            <p className="text-xs text-gray-500">
-              {totalComponents} components found in {githubConnection.selectedRepos.length} repos
+            <div className="text-xs text-gray-500 flex items-center gap-2">
+              <span>
+                {totalComponents} components found in {githubConnection.selectedRepos.length} repos
+              </span>
               {selectedComponents.size > 0 && (
-                <span className="ml-2 font-medium text-blue-600">
-                  · {selectedComponents.size} selected
-                </span>
+                <span className="font-medium text-blue-600">· {selectedComponents.size} selected</span>
               )}
-            </p>
+              <span className="text-gray-400">·</span>
+              <span>Last indexed: {status?.lastIndexedAt ? new Date(status.lastIndexedAt).toLocaleString() : '—'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <input
+                value={refInput}
+                onChange={(e) => setRefInput(e.target.value)}
+                placeholder="HEAD or branch name"
+                className="w-36 rounded border px-2 py-1 text-xs text-gray-700"
+              />
+              <button
+                onClick={() => refetch()}
+                className="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                title="Use ref/branch"
+              >
+                Use ref
+              </button>
+            </div>
+            <button
+              onClick={async () => {
+                await reindexMutation.mutateAsync({ ref: refInput || 'HEAD' });
+                await refetch();
+              }}
+              className="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              disabled={reindexMutation.isPending}
+              title="Re-index repositories"
+            >
+              {reindexMutation.isPending ? 'Re-indexing…' : 'Re-index'}
+            </button>
             {selectedComponents.size > 0 && (
               <button
                 onClick={clearSelections}
@@ -360,11 +392,19 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                       <div className="grid grid-cols-2 gap-2 p-3">
                         {components.map((component) => {
                           const isSelected = isComponentSelected(component);
+                          const isUnsupported = component.framework && component.framework !== 'react';
+                          const key = getComponentKey(component);
                           return (
                             <div
-                              key={`${component.repo}-${component.path}`}
+                              key={key}
                               draggable
-                              onDragStart={(e) => handleDragStart(e, component)}
+                              onDragStart={(e) => {
+                                if (isUnsupported) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                handleDragStart(e, component);
+                              }}
                               onDragEnd={handleDragEnd}
                               onClick={(e) => handleComponentClick(e, component)}
                               className={`group cursor-move rounded-lg border p-3 transition-all ${
@@ -411,6 +451,12 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                               <p className="ml-6 mt-1 text-xs text-gray-400">
                                 {component.repo.split('/')[1]}
                               </p>
+                              {isUnsupported && (
+                                <div className="mt-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-xs text-yellow-800">
+                                  Not a React (.tsx/.jsx) file. Animation currently supports React components.
+                                </div>
+                              )}
+                              {/* Preview intentionally removed */}
                             </div>
                           );
                         })}

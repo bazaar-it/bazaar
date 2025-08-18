@@ -208,7 +208,13 @@ export const generateScene = protectedProcedure
                 hasChildren: figmaComponentData.children?.length > 0,
                 colors: figmaComponentData.colors?.length || 0,
                 texts: figmaComponentData.texts?.length || 0,
+                hasRemotionCode: !!componentResult.remotionCode,
               });
+              
+              // NEW: Include the converted Remotion code in the Figma data
+              if (componentResult.remotionCode) {
+                figmaComponentData.remotionCode = componentResult.remotionCode;
+              }
               
               // Create enhanced prompt with Figma data context
               const enhancedMessage = `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements`;
@@ -554,5 +560,60 @@ export const removeScene = protectedProcedure
         'scene.delete',
         'scene'
       ) as any as SceneDeleteResponse;
+    }
+  });
+
+/**
+ * UPDATE SCENE NAME
+ * Updates the name of a specific scene
+ */
+export const updateSceneName = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    sceneId: z.string(),
+    name: z.string().min(1).max(100),
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, sceneId, name } = input;
+    const userId = ctx.session.user.id;
+
+    console.log(`[updateSceneName] Starting scene name update`, { projectId, sceneId, name });
+
+    try {
+      // 1. Verify project ownership and scene existence
+      const scene = await db.query.scenes.findFirst({
+        where: eq(scenes.id, sceneId),
+        with: {
+          project: true,
+        },
+      });
+
+      if (!scene || scene.project.userId !== userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: "Scene not found or access denied",
+        });
+      }
+
+      // 2. Update the scene name
+      const updatedScene = await db.update(scenes)
+        .set({
+          name: name.trim(),
+          updatedAt: new Date(),
+        })
+        .where(eq(scenes.id, sceneId))
+        .returning();
+
+      console.log(`[updateSceneName] Scene name updated successfully`);
+
+      // 3. Return updated scene
+      return {
+        success: true,
+        scene: updatedScene[0],
+      };
+
+    } catch (error) {
+      console.error(`[updateSceneName] Scene name update error:`, error);
+      throw error;
     }
   });

@@ -204,6 +204,7 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
       setIsCompiling(true);
       
       const compileTemplate = async () => {
+        let blobUrl: string | null = null;
         try {
           const code = template.getCode();
           
@@ -216,7 +217,7 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
           
           // Create a blob URL for the module
           const blob = new Blob([transformed], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(blob);
+          blobUrl = URL.createObjectURL(blob);
           
           // Import the module dynamically
           const module = await import(/* webpackIgnore: true */ blobUrl);
@@ -228,13 +229,14 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
             throw new Error('No default export found in template code');
           }
           
-          // Clean up the blob URL immediately
-          URL.revokeObjectURL(blobUrl);
-          
         } catch (error) {
           console.error('Failed to compile database template:', error);
           setCompilationError(error as Error);
         } finally {
+          // Always clean up the blob URL, even if there was an error
+          if (blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+          }
           setIsCompiling(false);
         }
       };
@@ -355,7 +357,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       name: dbTemplate.name,
       duration: dbTemplate.duration,
       previewFrame: dbTemplate.previewFrame || 15,
-      component: null as any, // Database templates don't have components
+      component: null, // Database templates don't have components (type allows null)
       getCode: () => dbTemplate.tsxCode,
       supportedFormats: dbTemplate.supportedFormats as ('landscape' | 'portrait' | 'square')[],
       isFromDatabase: true, // Mark as database template

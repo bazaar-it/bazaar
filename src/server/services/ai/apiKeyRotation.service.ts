@@ -84,7 +84,10 @@ export class APIKeyRotationService {
     if (anthropicKeys.length > 0) {
       this.apiKeys.set('anthropic', anthropicKeys);
       this.currentIndex.set('anthropic', 0);
-      console.log(`[APIKeyRotation] Initialized ${anthropicKeys.length} Anthropic API keys`);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[APIKeyRotation] Initialized ${anthropicKeys.length} Anthropic API keys`);
+      }
     }
     
     // OpenAI keys
@@ -123,7 +126,10 @@ export class APIKeyRotationService {
     if (openaiKeys.length > 0) {
       this.apiKeys.set('openai', openaiKeys);
       this.currentIndex.set('openai', 0);
-      console.log(`[APIKeyRotation] Initialized ${openaiKeys.length} OpenAI API keys`);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[APIKeyRotation] Initialized ${openaiKeys.length} OpenAI API keys`);
+      }
     }
   }
   

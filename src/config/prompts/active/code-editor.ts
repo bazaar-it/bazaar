@@ -101,7 +101,7 @@ export const durationInFrames_[ID] = totalFrames_edit;
 - window.LucideIcons - Additional icon library
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
-- window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
+- 100+ Google Fonts are pre-loaded - just use fontFamily: "FontName" directly (no loading needed)
 - window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.

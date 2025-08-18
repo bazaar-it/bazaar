@@ -71,6 +71,20 @@
       "when": 1755016080201,
       "tag": "0009_mute_overlord",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1755515419021,
+      "tag": "0010_smooth_chameleon",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1755523764617,
+      "tag": "0011_bright_earthquake",
+      "breakpoints": true
     }
   ]
 }

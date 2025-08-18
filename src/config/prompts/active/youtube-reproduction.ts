@@ -52,7 +52,7 @@ export const YOUTUBE_REPRODUCTION = {
 
 2. REQUIRED CODE STRUCTURE:
 const { AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Img, Video } = window.Remotion;
-window.RemotionGoogleFonts.loadFont("Inter", { weights: ["500", "700"] });
+// 100+ Google Fonts pre-loaded - use fontFamily directly (e.g., "Inter", "Roboto", "Playfair Display")
 
 const totalDurationInFrames_[8CHARID] = Math.round([TOTAL_DURATION] * 30);
 export const durationInFrames_[8CHARID] = totalDurationInFrames_[8CHARID];

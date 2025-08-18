@@ -204,12 +204,13 @@ export const addTemplate = protectedProcedure
       }
 
       // 7. Track template usage for analytics
-      await db.insert(templateUsages).values({
-        templateId,
-        userId,
-        projectId,
-        sceneId: newScene.id,
-      });
+      // TODO: Uncomment when templateUsages table is created
+      // await db.insert(templateUsages).values({
+      //   templateId,
+      //   userId,
+      //   projectId,
+      //   sceneId: newScene.id,
+      // });
 
       // 8. Add chat message for context
       await messageService.createMessage({

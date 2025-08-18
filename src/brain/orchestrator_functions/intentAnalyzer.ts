@@ -23,7 +23,9 @@ export class IntentAnalyzer {
           { role: "user", content: userPrompt },
         ],
         undefined,
-        { responseFormat: { type: "json_object" } }
+        { 
+          responseFormat: { type: "json_object" }
+        }
       );
 
       const rawOutput = response.content;

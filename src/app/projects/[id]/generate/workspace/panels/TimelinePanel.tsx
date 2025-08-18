@@ -11,11 +11,14 @@ import {
   ZoomOut,
   Trash2,
   Copy,
+  Edit2,
   GripVertical,
   Music,
   Volume2,
   Upload,
-  X
+  X,
+  Clock,
+  Hash
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { toast } from 'sonner';
@@ -85,6 +88,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
+  const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [displayMode, setDisplayMode] = useState<'frames' | 'time'>('frames');
   
   // Get video state from Zustand store
   const project = useVideoState(state => state.projects[projectId]);
@@ -102,6 +108,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       audioTrack
     });
   }, [projectId, project, audioTrack]);
+  
+  // Debug scene name changes
+  useEffect(() => {
+    console.log('[Timeline] Scenes updated:', scenes.map((s: any) => ({
+      id: s.id,
+      rootName: s.name,
+      dataName: s.data?.name,
+      displayName: s.name || s.data?.name || 'Unnamed'
+    })));
+  }, [scenes]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [audioWaveform, setAudioWaveform] = useState<number[]>();
   
@@ -117,6 +133,17 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene duration:', error);
       toast.error('Failed to save duration changes');
+    }
+  });
+  
+  // API mutation for updating scene name
+  const updateSceneNameMutation = api.generation.updateSceneName.useMutation({
+    onSuccess: () => {
+      console.log('[Timeline] Scene name persisted to database');
+    },
+    onError: (error) => {
+      console.error('[Timeline] Failed to persist scene name:', error);
+      toast.error('Failed to save scene name');
     }
   });
   
@@ -294,25 +321,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }, 0));
   }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
   
-  // Debug audio track details after totalDuration is calculated
+  // Audio track calculations
   useEffect(() => {
-    if (audioTrack) {
-      const audioWidthPercent = (((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100;
-      console.log('[Timeline] Audio track debug:', {
-        hasAudioTrack: !!audioTrack,
-        audioTrack,
-        duration: audioTrack.duration,
-        startTime: audioTrack.startTime,
-        endTime: audioTrack.endTime,
-        totalDuration,
-        calculatedWidthPercent: audioWidthPercent,
-        calculatedWidth: `${audioWidthPercent}%`,
-        FPS,
-        audioInFrames: ((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS
-      });
-    } else {
-      console.log('[Timeline] No audio track present');
-    }
+    // Audio track state updated
   }, [audioTrack, totalDuration]);
   
   // Format time display - show frames prominently
@@ -338,19 +349,32 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (isDragging || !timelineRef.current) return;
     
     const rect = timelineRef.current.getBoundingClientRect();
+    const scrollLeft = timelineRef.current.scrollLeft;
     const clickX = e.clientX - rect.left;
     
-    // Clamp to timeline bounds
-    const clampedX = Math.max(0, Math.min(rect.width, clickX));
+    // Account for scroll position and zoom scale
+    const actualClickX = clickX + scrollLeft;
+    const actualWidth = rect.width * zoomScale;
     
-    // Calculate percentage (0 to 1)
-    const percentage = clampedX / rect.width;
+    // Clamp to actual timeline bounds
+    const clampedX = Math.max(0, Math.min(actualWidth, actualClickX));
+    
+    // Calculate percentage (0 to 1) based on actual width
+    const percentage = clampedX / actualWidth;
     
     // Convert to frame
     const newFrame = Math.round(percentage * totalDuration);
     const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
     
-    console.log('[Timeline Click] Seek to frame:', clampedFrame);
+    console.log('[Timeline Click] Seek to frame:', {
+      clickX,
+      scrollLeft,
+      actualClickX,
+      actualWidth,
+      percentage: (percentage * 100).toFixed(1) + '%',
+      frame: clampedFrame,
+      zoomScale
+    });
     
     // Update state and dispatch event
     setCurrentFrame(clampedFrame);
@@ -358,7 +382,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       detail: { frame: clampedFrame }
     });
     window.dispatchEvent(event);
-  }, [isDragging, totalDuration]);
+  }, [isDragging, totalDuration, zoomScale]);
   
   // Handle play/pause
   const togglePlayPause = useCallback(() => {
@@ -428,31 +452,38 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (dragInfo.action === 'playhead') {
       // Get mouse position relative to timeline container
       const mouseX = e.clientX - rect.left;
+      const scrollLeft = timelineRef.current.scrollLeft;
       
-      // Clamp to timeline bounds
-      const clampedX = Math.max(0, Math.min(rect.width, mouseX));
+      // Account for scroll position and zoom scale
+      const actualMouseX = mouseX + scrollLeft;
+      const actualWidth = rect.width * zoomScale;
       
-      // Calculate percentage (0 to 1)
-      const percentage = clampedX / rect.width;
+      // Clamp to actual timeline bounds
+      const clampedX = Math.max(0, Math.min(actualWidth, actualMouseX));
+      
+      // Calculate percentage (0 to 1) based on actual width
+      const percentage = clampedX / actualWidth;
       
       // Convert percentage to frame number
       let newFrame = Math.round(percentage * totalDuration);
       
       // Apply snapping if Shift is NOT held (Shift disables snapping for fine control)
       if (!e.shiftKey) {
-        // Determine snap interval based on zoom level - matches resize snapping
-        let snapInterval = 30; // Default: 1 second
+        // Determine snap interval based on zoom level - frame precision
+        let snapInterval = 1; // Default to frame precision
         
-        if (zoomScale >= 3) {
-          snapInterval = 1; // Frame-level precision when zoomed way in
-        } else if (zoomScale >= 2) {
-          snapInterval = 5; // 5 frames when zoomed in
+        if (zoomScale >= 2) {
+          snapInterval = 1; // Frame-by-frame when zoomed in
         } else if (zoomScale >= 1.5) {
-          snapInterval = 10; // 10 frames at medium zoom
+          snapInterval = 1; // Frame-by-frame at medium-high zoom too
         } else if (zoomScale >= 1) {
-          snapInterval = 15; // Half second at normal zoom
-        } else if (zoomScale < 0.5) {
-          snapInterval = 60; // 2 seconds when zoomed out
+          snapInterval = 2; // 2 frames at normal zoom
+        } else if (zoomScale >= 0.75) {
+          snapInterval = 3; // 3 frames when slightly zoomed out
+        } else if (zoomScale >= 0.5) {
+          snapInterval = 5; // 5 frames when zoomed out more
+        } else {
+          snapInterval = 10; // 10 frames when very zoomed out
         }
         
         newFrame = snapToGrid(newFrame, snapInterval);
@@ -462,11 +493,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       console.log('[Playhead Drag] Position:', {
         mouseX: mouseX.toFixed(1),
-        containerWidth: rect.width.toFixed(1),
+        scrollLeft: scrollLeft.toFixed(1),
+        actualMouseX: actualMouseX.toFixed(1),
+        actualWidth: actualWidth.toFixed(1),
         percentage: (percentage * 100).toFixed(1) + '%',
         frame: clampedFrame,
         snapped: !e.shiftKey,
-        totalDuration
+        totalDuration,
+        zoomScale
       });
       
       // Update local state immediately for visual feedback
@@ -487,19 +521,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     // Apply snapping for resize operations
     if (!e.shiftKey && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
-      // Dynamic snap interval based on zoom level for fine control
-      let snapInterval = 30; // Default: 1 second
+      // Dynamic snap interval based on zoom level for fine control - frame-by-frame
+      let snapInterval = 1; // Default to frame precision
       
-      if (zoomScale >= 3) {
-        snapInterval = 1; // Frame-level precision when zoomed way in
-      } else if (zoomScale >= 2) {
-        snapInterval = 5; // 5 frames when zoomed in
+      if (zoomScale >= 2) {
+        snapInterval = 1; // Frame-by-frame when zoomed in
       } else if (zoomScale >= 1.5) {
-        snapInterval = 10; // 10 frames at medium zoom
+        snapInterval = 1; // Frame-by-frame at medium-high zoom too
       } else if (zoomScale >= 1) {
-        snapInterval = 15; // Half second at normal zoom
-      } else if (zoomScale < 0.5) {
-        snapInterval = 60; // 2 seconds when zoomed out
+        snapInterval = 2; // 2 frames at normal zoom
+      } else if (zoomScale >= 0.75) {
+        snapInterval = 3; // 3 frames when slightly zoomed out
+      } else if (zoomScale >= 0.5) {
+        snapInterval = 5; // 5 frames when zoomed out more
+      } else {
+        snapInterval = 10; // 10 frames when very zoomed out
       }
       
       if (dragInfo.action === 'resize-start') {
@@ -524,8 +560,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const newDuration = Math.max(30, dragInfo.startDuration - deltaFrames);
       
       if (newDuration !== scene.duration) {
+        // Only update duration, preserve everything else
         updateScene(projectId, dragInfo.sceneId || '', {
-          ...scene,
           duration: newDuration
         });
       }
@@ -535,8 +571,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const newDuration = Math.max(30, dragInfo.startDuration + deltaFrames);
       
       if (newDuration !== scene.duration) {
+        // Only update duration, preserve everything else
         updateScene(projectId, dragInfo.sceneId || '', {
-          ...scene,
           duration: newDuration
         });
       }
@@ -616,7 +652,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const isTyping = activeElement && (
         activeElement.tagName === 'INPUT' || 
         activeElement.tagName === 'TEXTAREA' || 
-        activeElement.isContentEditable ||
+        (activeElement as HTMLElement).isContentEditable ||
         activeElement.getAttribute('role') === 'textbox'
       );
 
@@ -688,7 +724,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             break;
           case 'video':
           case 'custom':
-            colors[scene.id] = { primary: '#3b82f6', gradient: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)' };
+            colors[scene.id] = { primary: '#6b7280', gradient: 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)' };
             break;
           case 'image':
             colors[scene.id] = { primary: '#10b981', gradient: 'linear-gradient(90deg, #10b981 0%, #059669 100%)' };
@@ -712,8 +748,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     return {
       background: colors.gradient || colors.primary,
-      border: isSelected ? '2px solid rgba(59, 130, 246, 0.8)' : '1px solid rgba(0, 0, 0, 0.1)',
-      boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+      border: isSelected ? '2px solid rgba(251, 146, 60, 0.6)' : '1px solid rgba(0, 0, 0, 0.1)',
+      boxShadow: isSelected 
+        ? '0 0 15px rgba(251, 146, 60, 0.3)' 
+        : '0 1px 3px rgba(0, 0, 0, 0.1)',
       color: '#ffffff',
       textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)'
     };
@@ -721,8 +759,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // Calculate timeline height based on content - make it reactive to audio changes
   const timelineHeight = useMemo(() => {
-    // 60px for controls header, 32px for time ruler, 60px for scenes row, 70px for audio row with margin
-    const height = audioTrack ? 220 : 150;
+    // More breathing room: 60px controls, 32px ruler, 80px scenes area, extra for audio
+    const height = audioTrack ? 240 : 180;
     console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, height });
     return height;
   }, [audioTrack]);
@@ -786,11 +824,43 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </button>
           </div>
           
-          {/* Time Display */}
-          <div className="px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-              {formatTime(currentFrame)} / {formatTime(totalDuration)}
-            </span>
+          {/* Frame/Time Counter - Minimal with switch indicator */}
+          <div className="flex items-center gap-1">
+            {displayMode === 'frames' ? (
+              <button
+                onClick={() => setDisplayMode('time')}
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                title="Switch to time display"
+              >
+                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
+                  {currentFrame}
+                </span>
+                <span className="text-sm text-gray-400">/</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
+                  {totalDuration}f
+                </span>
+                <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={() => setDisplayMode('frames')}
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                title="Switch to frame display"
+              >
+                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
+                  {(currentFrame / FPS).toFixed(2)}s
+                </span>
+                <span className="text-sm text-gray-400">/</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
+                  {(totalDuration / FPS).toFixed(2)}s
+                </span>
+                <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
         
@@ -849,9 +919,33 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           ref={timeRulerRef}
           className="overflow-x-auto overflow-y-hidden"
           onScroll={handleRulerScroll}
+          onClick={(e) => {
+            // Move playhead when clicking on time ruler
+            if (timeRulerRef.current) {
+              const rect = timeRulerRef.current.getBoundingClientRect();
+              const scrollLeft = timeRulerRef.current.scrollLeft;
+              const clickX = e.clientX - rect.left;
+              
+              // Account for scroll position and zoom scale
+              const actualClickX = clickX + scrollLeft;
+              const actualWidth = rect.width * zoomScale;
+              
+              // Calculate percentage and frame
+              const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+              const newFrame = Math.round(percentage * totalDuration);
+              const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
+              
+              // Update playhead position
+              setCurrentFrame(clampedFrame);
+              const event = new CustomEvent('timeline-seek', { 
+                detail: { frame: clampedFrame }
+              });
+              window.dispatchEvent(event);
+            }
+          }}
         >
           <div 
-            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative"
+            className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative cursor-pointer"
             style={{ width: `${Math.max(100, zoomScale * 100)}%`, minWidth: '100%' }}
           >
           {/* Dynamic time markers that adapt to zoom */}
@@ -901,7 +995,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           onScroll={handleTimelineScroll}
           style={{ 
             height: `${timelineHeight - 60 - 32}px`,
-            cursor: isDragging ? 'grabbing' : 'pointer' 
+            cursor: isDragging ? 'grabbing' : 'crosshair' 
           }}
         >
           <div
@@ -960,10 +1054,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             
             {/* Scene Items */}
             <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
-              <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
-                Scenes
-              </div>
-              {scenes.map((scene: Scene, index: number) => {
+              {scenes.map((scene: any, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
                 // When zoomed, scenes need to scale with the container
@@ -989,8 +1080,31 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       transition: 'all 0.2s ease'
                     }}
                     onClick={(e) => {
-                      e.stopPropagation();
+                      // Select the scene
                       setSelectedSceneId(scene.id);
+                      
+                      // Also move playhead to click position
+                      if (timelineRef.current) {
+                        const rect = timelineRef.current.getBoundingClientRect();
+                        const scrollLeft = timelineRef.current.scrollLeft;
+                        const clickX = e.clientX - rect.left;
+                        
+                        // Account for scroll position and zoom scale
+                        const actualClickX = clickX + scrollLeft;
+                        const actualWidth = rect.width * zoomScale;
+                        
+                        // Calculate percentage and frame
+                        const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+                        const newFrame = Math.round(percentage * totalDuration);
+                        const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
+                        
+                        // Update playhead position
+                        setCurrentFrame(clampedFrame);
+                        const event = new CustomEvent('timeline-seek', { 
+                          detail: { frame: clampedFrame }
+                        });
+                        window.dispatchEvent(event);
+                      }
                     }}
                     onContextMenu={(e) => handleContextMenu(e, scene.id)}
                   >
@@ -1008,10 +1122,81 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       <GripVertical className="w-3 h-3 text-white drop-shadow" />
                     </div>
                     
-                    {/* Scene Label */}
-                    <span className="flex-1 text-center px-8 truncate select-none font-semibold drop-shadow-sm">
-                      {scene.name || scene.data?.name || `Scene ${index + 1}`}
-                    </span>
+                    {/* Scene Label - Editable when in edit mode */}
+                    {editingSceneId === scene.id ? (
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={() => {
+                          // Save the name - update both Zustand and database
+                          if (editingName.trim()) {
+                            const newName = editingName.trim();
+                            console.log('[Timeline] Saving scene name on blur:', {
+                              sceneId: scene.id,
+                              oldName: scene.name || scene.data?.name,
+                              newName
+                            });
+                            
+                            // Update Zustand immediately for responsive UI
+                            updateScene(projectId, scene.id, {
+                              name: newName
+                            });
+                            
+                            // Persist to database
+                            updateSceneNameMutation.mutate({
+                              projectId,
+                              sceneId: scene.id,
+                              name: newName
+                            });
+                          }
+                          setEditingSceneId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            // Save on Enter - update both Zustand and database
+                            if (editingName.trim()) {
+                              const newName = editingName.trim();
+                              console.log('[Timeline] Saving scene name:', {
+                                sceneId: scene.id,
+                                oldName: scene.name || scene.data?.name,
+                                newName
+                              });
+                              
+                              // Update Zustand immediately for responsive UI
+                              updateScene(projectId, scene.id, {
+                                name: newName
+                              });
+                              
+                              // Persist to database
+                              updateSceneNameMutation.mutate({
+                                projectId,
+                                sceneId: scene.id,
+                                name: newName
+                              });
+                            }
+                            setEditingSceneId(null);
+                          } else if (e.key === 'Escape') {
+                            // Cancel on Escape
+                            setEditingSceneId(null);
+                          }
+                        }}
+                        className="flex-1 text-center px-2 bg-transparent text-white font-semibold outline-none border-b border-white/50 mx-4"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span 
+                        className="flex-1 text-center px-8 truncate select-none font-semibold drop-shadow-sm cursor-text"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEditingSceneId(scene.id);
+                          setEditingName(scene.name || scene.data?.name || `Scene ${index + 1}`);
+                        }}
+                      >
+                        {scene.name || scene.data?.name || `Scene ${index + 1}`}
+                      </span>
+                    )}
                     
                     {/* Resize Handle End */}
                     <div
@@ -1024,19 +1209,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </div>
             
             {/* Audio Track - only show when audio exists */}
-            {console.log('[Timeline Render] Audio track check:', { 
-              hasAudioTrack: !!audioTrack, 
-              audioTrack,
-              projectId,
-              projectAudio: project?.audio 
-            })}
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
-                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 dark:text-gray-400 z-20">
-                  Audio
-                </div>
                 <div
-                  className="absolute bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-400/30 rounded-lg"
+                  className="absolute border border-gray-300/30 rounded-lg"
                   style={{
                     // Audio duration is in seconds, convert to frames
                     left: `${((audioTrack.startTime || 0) * FPS / totalDuration) * 100}%`,
@@ -1057,10 +1233,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               </div>
             )}
             
-            {/* Playhead */}
+            {/* Playhead - with Bazaar orange gradient */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-blue-500 cursor-ew-resize z-30 shadow-lg"
-              style={{ left: `${(currentFrame / totalDuration) * 100}%` }}
+              className="absolute top-0 bottom-0 w-1 cursor-ew-resize z-30"
+              style={{ 
+                left: `${(currentFrame / totalDuration) * 100}%`,
+                background: 'linear-gradient(180deg, #fb923c 0%, #fed7aa 100%)',
+                boxShadow: '0 0 10px rgba(251, 146, 60, 0.6), 0 0 20px rgba(254, 215, 170, 0.4)'
+              }}
               title={`Frame: ${currentFrame} / ${totalDuration} (${((currentFrame / totalDuration) * 100).toFixed(1)}%)`}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -1074,28 +1254,50 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 setIsDragging(true);
               }}
             >
-              {/* Modern playhead indicator */}
-              <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-md" />
+              {/* Modern playhead indicator with Bazaar orange gradient */}
+              <div 
+                className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow-lg"
+                style={{ background: 'linear-gradient(135deg, #fb923c 0%, #fed7aa 100%)' }}
+              />
               <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 
                               w-0 h-0 
-                              border-l-[4px] border-l-transparent
-                              border-r-[4px] border-r-transparent
-                              border-t-[5px] border-t-blue-500 pointer-events-none" />
+                              border-l-[5px] border-l-transparent
+                              border-r-[5px] border-r-transparent
+                              border-t-[6px] pointer-events-none"
+                   style={{ borderTopColor: '#fb923c' }}
+              />
             </div>
           </div>
         </div>
       </div>
       
-      {/* Context Menu */}
+      {/* Context Menu - using fixed positioning and high z-index */}
       {contextMenu && (
         <div
-          className="absolute bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-[160px] text-sm backdrop-blur-sm"
+          className="fixed bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[180px] text-sm backdrop-blur-sm"
           style={{ 
-            left: Math.min(contextMenu.x, window.innerWidth - 170),
-            top: Math.min(contextMenu.y, window.innerHeight - 120)
+            left: Math.min(contextMenu.x, window.innerWidth - 200),
+            top: Math.min(contextMenu.y, window.innerHeight - 150),
+            zIndex: 9999
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            onClick={() => {
+              const sceneIndex = scenes.findIndex((s: any) => s.id === contextMenu.sceneId);
+              const scene = scenes[sceneIndex];
+              if (scene) {
+                // Start inline editing
+                setEditingSceneId(contextMenu.sceneId);
+                setEditingName((scene as any).name || scene.data?.name || `Scene ${sceneIndex + 1}`);
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"
+          >
+            <Edit2 className="w-4 h-4" />
+            Rename Scene
+          </button>
           <button
             onClick={() => handleDuplicateScene(contextMenu.sceneId)}
             className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"

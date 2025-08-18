@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function PrivacyPolicyPage() {
   const router = useRouter();
@@ -9,16 +10,26 @@ export default function PrivacyPolicyPage() {
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-[15px] shadow-lg border border-gray-100 p-8 relative">
-          {/* Close Button */}
-          <button
-            onClick={() => router.back()}
-            className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="Close"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Header with Logo */}
+          <div className="flex items-center justify-between mb-8">
+            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">B</span>
+              </div>
+              <span className="text-xl font-bold text-gray-900">Bazaar</span>
+            </Link>
+            
+            {/* Close Button */}
+            <button
+              onClick={() => router.back()}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
           <h1 className="text-3xl font-bold mb-8 text-gray-900">Privacy Policy</h1>
           <p className="text-sm text-gray-600 mb-8">Last updated: {new Date().toLocaleDateString()}</p>

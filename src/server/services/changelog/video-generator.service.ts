@@ -162,6 +162,7 @@ export async function generateChangelogVideo(
     // 10. Return the result
     const response: ChangelogVideoResponse = {
       id: sceneId,
+      projectId,
       videoUrl,
       thumbnailUrl,
       gifUrl,

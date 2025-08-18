@@ -263,6 +263,40 @@ export const durationInFrames_ERROR = 180;`;
 
     const functionName = this.generateFunctionName();
     
+    // NEW: Check if we already have converted Remotion code
+    if (figmaData.remotionCode) {
+      console.log('🎨 [ADD TOOL] Using pre-converted Remotion code from Figma');
+      
+      // Parse the code to extract the component name
+      const exportMatch = figmaData.remotionCode.match(/export\s+(?:const|function)\s+(\w+)/);
+      const componentName = exportMatch ? exportMatch[1] : functionName;
+      
+      // Replace the function name in the code with our generated one
+      const finalCode = figmaData.remotionCode.replace(
+        /export\s+(?:const|function)\s+\w+/,
+        `export const ${functionName}`
+      );
+      
+      return {
+        success: true,
+        tsxCode: finalCode,
+        name: figmaData.name || 'Figma Component',
+        duration: 150,
+        reasoning: `Generated scene from Figma using pre-converted Remotion code`,
+        chatResponse: `I've perfectly recreated your Figma design "${figmaData.name}" with animations.`,
+        scene: {
+          tsxCode: finalCode,
+          name: figmaData.name || 'Figma Component',
+          duration: 150,
+        },
+        debug: {
+          method: 'pre-converted',
+          figmaType: figmaData.type,
+          codeLength: finalCode.length,
+        },
+      };
+    }
+    
     // Check if we have enhanced data with styles and hierarchy
     const hasEnhancedData = figmaData.styles && figmaData.hierarchy;
     

@@ -24,7 +24,7 @@ export interface MediaAsset {
   usageCount: number;
   tags: string[];
   metadata?: {
-    youtubeTtle?: string;
+    youtubeTitle?: string;
     youtubeChannel?: string;
     youtubeDuration?: string;
     extractedColors?: string[];

@@ -97,15 +97,14 @@ export async function GET(request: NextRequest) {
         const isFirstUserMessage = userMessages.length === 1 && userMessages[0]?.id === userMsg.id;
 
         if (isFirstUserMessage) {
-          console.log('[SSE] First user message detected, generating title...');
+          console.log('[SSE] First user message detected, generating title asynchronously...');
           
-          // Generate title based on the user's first message
-          const titleResult = await generateTitle({
+          // Generate title asynchronously to avoid blocking scene generation
+          generateTitle({
             prompt: userMessage,
             contextId: projectId,
-          });
-
-          let finalTitle = titleResult.title;
+          }).then(async (titleResult) => {
+            let finalTitle = titleResult.title;
           
           // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
           if (finalTitle === "Untitled Video") {
@@ -147,16 +146,20 @@ export async function GET(request: NextRequest) {
 
           console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
           
-          // ✅ NEW: Send title update to client so it can invalidate queries
-          await writer.write(encoder.encode(formatSSE({
-            type: 'title_updated',
-            title: finalTitle,
-            projectId: projectId
-          })));
+            // ✅ NEW: Send title update to client so it can invalidate queries
+            await writer.write(encoder.encode(formatSSE({
+              type: 'title_updated',
+              title: finalTitle,
+              projectId: projectId
+            })));
+          }).catch((titleError) => {
+            // Don't fail the whole request if title generation fails
+            console.error('[SSE] Title generation failed:', titleError);
+          });
         }
       } catch (titleError) {
-        // Don't fail the whole request if title generation fails
-        console.error('[SSE] Title generation failed:', titleError);
+        // Catch any synchronous errors
+        console.error('[SSE] Title generation setup failed:', titleError);
       }
       
       // 3. Just send the user data back - no assistant message yet

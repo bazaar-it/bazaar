@@ -10,8 +10,12 @@ import { z } from 'zod';
 import type { GitHubPREvent, WebhookHeaders } from '~/lib/types/github.types';
 import { analyzeGitHubPR } from '~/server/services/github/pr-analyzer.service';
 import { queueChangelogVideo } from '~/server/services/changelog/queue.service';
+import { queueComponentVideo } from '~/server/services/github/component-video.service';
+import { GitHubComponentSearchService } from '~/server/services/github/component-search.service';
+import { ComponentIndexerService } from '~/server/services/github/component-indexer.service';
 import { db } from '~/server/db';
-import { changelogEntries } from '~/server/db/schema';
+import { changelogEntries, githubConnections } from '~/server/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Environment validation
 const envSchema = z.object({
@@ -39,6 +43,158 @@ function verifyGitHubSignature(
   const b = Buffer.from(receivedHex, 'utf8');
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Handle component trigger commands (@bazaar showcase, demo, components, search)
+ */
+async function handleComponentTrigger({
+  requestId,
+  comment,
+  owner,
+  repo,
+  commentBody,
+}: {
+  requestId: string;
+  comment: any;
+  owner: string;
+  repo: string;
+  commentBody: string;
+}) {
+  console.log(`[${requestId}] Processing component trigger...`);
+
+  // Extract trigger type and parameters
+  let triggerType: 'showcase' | 'demo' | 'components' | 'search';
+  let componentName: string | undefined;
+  let searchQuery: string | undefined;
+
+  if (commentBody.includes('@bazaar showcase')) {
+    triggerType = 'showcase';
+    const showcaseMatch = commentBody.match(/@bazaar\s+showcase\s+([^\s]+)/i);
+    componentName = showcaseMatch?.[1];
+  } else if (commentBody.includes('@bazaar demo')) {
+    triggerType = 'demo';
+    const demoMatch = commentBody.match(/@bazaar\s+demo\s+([^\s]+)/i);
+    componentName = demoMatch?.[1];
+  } else if (commentBody.includes('@bazaar search')) {
+    triggerType = 'search';
+    const searchMatch = commentBody.match(/@bazaar\s+search\s+(.+?)$/im);
+    searchQuery = searchMatch?.[1]?.trim();
+  } else {
+    triggerType = 'components';
+  }
+
+  console.log(`[${requestId}] Trigger type: ${triggerType}, component: ${componentName}, query: ${searchQuery}`);
+
+  try {
+    // For now, we'll use a mock GitHub connection since we don't have user context in webhooks
+    // In a real implementation, you might want to associate repos with Bazaar users
+    const mockAccessToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_APP_PRIVATE_KEY;
+    
+    if (!mockAccessToken) {
+      throw new Error('No GitHub access token available for component discovery');
+    }
+
+    if (triggerType === 'components') {
+      // List all components in the repository
+      const indexer = new ComponentIndexerService(mockAccessToken);
+      const catalog = await indexer.discoverComponents(owner, repo);
+      
+      const componentCounts = {
+        core: catalog.core.length,
+        auth: catalog.auth.length,
+        commerce: catalog.commerce.length,
+        interactive: catalog.interactive.length,
+        content: catalog.content.length,
+        custom: catalog.custom.length,
+      };
+
+      const totalComponents = Object.values(componentCounts).reduce((sum, count) => sum + count, 0);
+
+      console.log(`[${requestId}] Found ${totalComponents} components in ${repo}`);
+
+      // TODO: Comment back on PR with component list
+      return NextResponse.json({
+        status: 'success',
+        message: `Found ${totalComponents} components in repository`,
+        type: 'component_list',
+        repository: `${owner}/${repo}`,
+        components: componentCounts,
+      });
+
+    } else if (triggerType === 'search') {
+      if (!searchQuery) {
+        return NextResponse.json({
+          status: 'error',
+          message: 'Search query required. Usage: @bazaar search <query>',
+        }, { status: 400 });
+      }
+
+      // Search for specific components
+      const searchService = new GitHubComponentSearchService(mockAccessToken, 'webhook');
+      const results = await searchService.searchComponent(searchQuery, {
+        repositories: [`${owner}/${repo}`],
+        maxResults: 10,
+      });
+
+      console.log(`[${requestId}] Search for "${searchQuery}" found ${results.length} results`);
+
+      return NextResponse.json({
+        status: 'success',
+        message: `Found ${results.length} components matching "${searchQuery}"`,
+        type: 'component_search',
+        repository: `${owner}/${repo}`,
+        query: searchQuery,
+        results: results.map(r => ({
+          name: r.name,
+          path: r.path,
+          score: r.score,
+        })),
+      });
+
+    } else if (triggerType === 'showcase' || triggerType === 'demo') {
+      if (!componentName) {
+        return NextResponse.json({
+          status: 'error',
+          message: `Component name required. Usage: @bazaar ${triggerType} <component-name>`,
+        }, { status: 400 });
+      }
+
+      // Queue component showcase video generation
+      const jobId = await queueComponentVideo({
+        repository: `${owner}/${repo}`,
+        componentName,
+        triggerType,
+        accessToken: mockAccessToken,
+        prNumber: comment.issue.number,
+        requester: {
+          username: comment.comment.user.login,
+          avatar: comment.comment.user.avatar_url,
+          url: comment.comment.user.html_url,
+        },
+      });
+
+      console.log(`[${requestId}] Component ${triggerType} video queued with job ID: ${jobId}`);
+
+      return NextResponse.json({
+        status: 'success',
+        message: `Generating ${triggerType} video for ${componentName}...`,
+        type: `component_${triggerType}`,
+        repository: `${owner}/${repo}`,
+        componentName,
+        jobId,
+        prNumber: comment.issue.number,
+      });
+    }
+
+  } catch (error) {
+    console.error(`[${requestId}] Error processing component trigger:`, error);
+    return NextResponse.json({
+      status: 'error',
+      message: 'Failed to process component request',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 });
+  }
 }
 
 /**
@@ -76,8 +232,12 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}] Event type: ${headers['x-github-event']}`);
     console.log(`[${requestId}] Delivery ID: ${headers['x-github-delivery']}`);
     
-    // 4. Verify webhook signature
-    console.log(`[${requestId}] Using webhook secret: ${env.GITHUB_WEBHOOK_SECRET?.substring(0, 10)}...`);
+    // 4. Verify webhook signature and basic UA
+    const userAgent = request.headers.get('user-agent') || '';
+    if (!userAgent.startsWith('GitHub-Hookshot/')) {
+      console.error(`[${requestId}] Invalid User-Agent for GitHub webhook: ${userAgent}`);
+      return NextResponse.json({ error: 'Invalid User-Agent' }, { status: 400 });
+    }
     const isValid = verifyGitHubSignature(
       body,
       headers['x-github-signature-256'],
@@ -85,17 +245,48 @@ export async function POST(request: NextRequest) {
     );
     
     if (!isValid) {
-      console.error(`[${requestId}] Invalid webhook signature - BYPASSING FOR TESTING`);
-      console.error(`[${requestId}] Expected signature: ${headers['x-github-signature-256']?.substring(0, 20)}...`);
-      // Temporarily bypass for testing
-      // return NextResponse.json(
-      //   { error: 'Invalid signature' },
-      //   { status: 401 }
-      // );
+      console.error(`[${requestId}] Invalid webhook signature`);
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
     
-    // 5. Parse event payload
+    // 5. Dedupe deliveries by delivery ID (best effort)
+    try {
+      if (headers['x-github-delivery']) {
+        const { webhookDeliveries } = await import('~/server/db/schema');
+        const { eq } = await import('drizzle-orm');
+        const existing = await db
+          .select({ id: webhookDeliveries.id })
+          .from(webhookDeliveries)
+          .where(eq(webhookDeliveries.deliveryId, headers['x-github-delivery']))
+          .limit(1);
+        if (existing.length > 0) {
+          console.log(`[${requestId}] Duplicate delivery ${headers['x-github-delivery']} ignored`);
+          return NextResponse.json({ status: 'ignored', reason: 'duplicate' });
+        }
+        await db.insert(webhookDeliveries).values({
+          deliveryId: headers['x-github-delivery'],
+          event: headers['x-github-event'] || 'unknown',
+        });
+      }
+    } catch (e) {
+      console.warn(`[${requestId}] Failed to record webhook delivery (non-fatal):`, e);
+    }
+    
+    // 6. Parse event payload
     const event = JSON.parse(body) as GitHubPREvent;
+    
+    // 7. Update repository on dedupe row (best effort)
+    try {
+      const repoFullName = (event as any)?.repository?.full_name as string | undefined;
+      if (headers['x-github-delivery'] && repoFullName) {
+        const { webhookDeliveries } = await import('~/server/db/schema');
+        const { eq } = await import('drizzle-orm');
+        await db
+          .update(webhookDeliveries)
+          .set({ repository: repoFullName })
+          .where(eq(webhookDeliveries.deliveryId, headers['x-github-delivery']!));
+      }
+    } catch {}
     
     // 6. Handle different event types
     const eventType = headers['x-github-event'];
@@ -106,7 +297,7 @@ export async function POST(request: NextRequest) {
       const commentBody = comment.comment?.body?.toLowerCase() || '';
       
       // Check for various trigger phrases (flexible matching)
-      const triggers = [
+      const changelogTriggers = [
         '@bazaar changelog',  // Official app name
         '@bazaar-changelog',  // With hyphen
         '@bazaarchangelog',   // No space
@@ -114,9 +305,18 @@ export async function POST(request: NextRequest) {
         'generate changelog video'
       ];
       
-      const isTriggered = triggers.some(trigger => commentBody.includes(trigger.toLowerCase()));
+      // New component showcase triggers
+      const showcaseTriggers = [
+        '@bazaar showcase',
+        '@bazaar demo',
+        '@bazaar components',
+        '@bazaar search'
+      ];
       
-      if (isTriggered && comment.issue?.pull_request) {
+      const isChangelogTriggered = changelogTriggers.some(trigger => commentBody.includes(trigger.toLowerCase()));
+      const isComponentTriggered = showcaseTriggers.some(trigger => commentBody.includes(trigger.toLowerCase()));
+      
+      if ((isChangelogTriggered || isComponentTriggered) && comment.issue?.pull_request) {
         console.log(`[${requestId}] Manual trigger via comment on PR #${comment.issue?.number}`);
         console.log(`[${requestId}] Comment: ${comment.comment?.body}`);
         
@@ -127,58 +327,68 @@ export async function POST(request: NextRequest) {
             throw new Error('Could not extract repository information');
           }
           
-          // Analyze the PR
-          console.log(`[${requestId}] Analyzing PR #${comment.issue.number}...`);
-          const analysis = await analyzeGitHubPR({
-            owner,
-            repo,
-            prNumber: comment.issue.number,
-          });
+          if (isChangelogTriggered) {
+            // Original changelog video generation
+            console.log(`[${requestId}] Analyzing PR #${comment.issue.number}...`);
+            const analysis = await analyzeGitHubPR({
+              owner,
+              repo,
+              prNumber: comment.issue.number,
+              installationId: (event as any)?.installation?.id,
+            });
+            
+            // Queue video generation
+            console.log(`[${requestId}] Queueing changelog video generation...`);
+            const jobId = await queueChangelogVideo({
+              prAnalysis: analysis,
+              repository: comment.repository.full_name,
+              style: 'automatic',
+              format: 'landscape',
+              branding: 'auto',
+            });
+            
+            // Store in database
+            await db.insert(changelogEntries).values({
+              id: crypto.randomUUID(),
+              prNumber: comment.issue.number,
+              repositoryFullName: comment.repository.full_name,
+              repositoryOwner: owner,
+              repositoryName: repo,
+              title: analysis.title,
+              description: analysis.description || '',
+              type: analysis.type,
+              authorUsername: comment.comment.user.login,
+              authorAvatar: comment.comment.user.avatar_url,
+              authorUrl: comment.comment.user.html_url,
+              mergedAt: new Date(), // Will update when actually merged
+              jobId,
+              status: 'queued',
+              additions: analysis.stats.additions,
+              deletions: analysis.stats.deletions,
+              filesChanged: analysis.stats.filesChanged,
+            });
+            
+            console.log(`[${requestId}] Changelog video generation queued with job ID: ${jobId}`);
+            
+            return NextResponse.json({ 
+              status: 'success',
+              message: 'Changelog video generation started',
+              type: 'changelog',
+              prNumber: comment.issue.number,
+              jobId,
+              repository: comment.repository.full_name,
+            });
+          } else if (isComponentTriggered) {
+            // New component showcase video generation
+            return await handleComponentTrigger({
+              requestId,
+              comment,
+              owner,
+              repo,
+              commentBody
+            });
+          }
           
-          // Queue video generation
-          console.log(`[${requestId}] Queueing video generation...`);
-          const jobId = await queueChangelogVideo({
-            prAnalysis: analysis,
-            repository: comment.repository.full_name,
-            style: 'automatic',
-            format: 'landscape',
-            branding: 'auto',
-          });
-          
-          // Store in database
-          await db.insert(changelogEntries).values({
-            id: crypto.randomUUID(),
-            prNumber: comment.issue.number,
-            repositoryFullName: comment.repository.full_name,
-            repositoryOwner: owner,
-            repositoryName: repo,
-            title: analysis.title,
-            description: analysis.description || '',
-            type: analysis.type,
-            authorUsername: comment.comment.user.login,
-            authorAvatar: comment.comment.user.avatar_url,
-            authorUrl: comment.comment.user.html_url,
-            mergedAt: new Date(), // Will update when actually merged
-            jobId,
-            status: 'queued',
-            additions: analysis.stats.additions,
-            deletions: analysis.stats.deletions,
-            filesChanged: analysis.stats.filesChanged,
-          });
-          
-          console.log(`[${requestId}] Video generation queued with job ID: ${jobId}`);
-          
-          // TODO: Comment back on PR with status
-          // await commentOnPR(owner, repo, comment.issue.number, 
-          //   `🎬 Generating changelog video... Check back in ~2 minutes!`);
-          
-          return NextResponse.json({ 
-            status: 'success',
-            message: 'Changelog video generation started',
-            prNumber: comment.issue.number,
-            jobId,
-            repository: comment.repository.full_name,
-          });
           
         } catch (error) {
           console.error(`[${requestId}] Error processing comment trigger:`, error);
@@ -196,7 +406,7 @@ export async function POST(request: NextRequest) {
       // Not a trigger comment or not on a PR, ignore
       return NextResponse.json({ 
         status: 'ignored',
-        reason: isTriggered ? 'Not a pull request' : 'Comment does not contain trigger phrase'
+        reason: (isChangelogTriggered || isComponentTriggered) ? 'Not a pull request' : 'Comment does not contain trigger phrase'
       });
     }
     

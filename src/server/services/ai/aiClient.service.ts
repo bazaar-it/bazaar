@@ -51,6 +51,9 @@ export interface AIClientOptions {
   skipRateLimit?: boolean; // Skip rate limiting for critical requests
   priority?: number; // Request priority in queue (higher = more important)
   fallbackToOpenAI?: boolean; // Allow fallback to OpenAI if Anthropic fails
+  // GPT-5 specific parameters
+  verbosity?: 'low' | 'medium' | 'high'; // Controls response length/detail
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'; // Controls thinking depth
 }
 
 export class AIClientService {
@@ -225,18 +228,36 @@ export class AIClientService {
           }
         };
       } else if (config.model.startsWith('gpt-5')) {
-        // GPT-5 models have different parameter requirements
-        const response = await client.chat.completions.create({
+        // GPT-5 models use max_completion_tokens instead of max_tokens
+        const gpt5Params: any = {
           model: config.model,
-          messages: messages as any,
-          // GPT-5 only supports default temperature (1.0)
-          // temperature parameter is not supported
-          max_completion_tokens: config.maxTokens, // GPT-5 uses max_completion_tokens
-          ...(options?.responseFormat && { response_format: options.responseFormat }),
-        });
+          messages: messages,
+          max_completion_tokens: config.maxTokens || 4000,
+        };
         
-        // Log GPT-5 usage
+        // Add response format if specified
+        if (options?.responseFormat) {
+          gpt5Params.response_format = options.responseFormat;
+        }
+        
+        const response = await client.chat.completions.create(gpt5Params);
+        
+        // Log GPT-5 usage and debug info
         console.log(`🚀 [GPT-5] Model: ${config.model} | Tokens: ${config.maxTokens}`);
+        
+        if (options?.debug || !response.choices[0]?.message?.content) {
+          console.log('[GPT-5 Debug] Request params:', JSON.stringify(gpt5Params, null, 2));
+          console.log('[GPT-5 Debug] Full response structure:', {
+            hasChoices: !!response.choices,
+            choicesLength: response.choices?.length,
+            firstChoice: response.choices?.[0],
+            message: response.choices?.[0]?.message,
+            hasContent: !!response.choices[0]?.message?.content,
+            contentLength: response.choices[0]?.message?.content?.length || 0,
+            finishReason: response.choices[0]?.finish_reason,
+            usage: response.usage
+          });
+        }
         
         return {
           content: response.choices[0]?.message?.content || '',

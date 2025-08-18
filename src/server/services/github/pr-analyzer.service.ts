@@ -5,12 +5,21 @@
  */
 
 import { Octokit } from '@octokit/rest';
-import type { PRAnalysis, PRFile, PRCommit, BrandProfile } from '~/lib/types/github.types';
+import type { PRAnalysis, PRFile, PRCommit, BrandProfile, ComponentAnalysisResult } from '~/lib/types/github.types';
 
-// Initialize Octokit (GitHub API client)
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN, // Optional: for higher rate limits
-});
+// Lazily-provisioned Octokit. Prefer GitHub App installation tokens when available.
+import { getInstallationOctokit } from './octokit-factory';
+
+async function getOctokit(installationId?: number): Promise<Octokit> {
+  if (installationId) {
+    try {
+      return await getInstallationOctokit(installationId);
+    } catch (e) {
+      console.warn('[PR Analyzer] Failed to get installation Octokit; falling back to token:', e);
+    }
+  }
+  return new Octokit({ auth: process.env.GITHUB_TOKEN });
+}
 
 /**
  * Analyze a GitHub PR to extract information for video generation
@@ -20,8 +29,10 @@ export async function analyzeGitHubPR(params: {
   repo: string;
   prNumber: number;
   prData?: any; // Optional pre-fetched PR data
+  installationId?: number; // Prefer App installation-scoped auth
 }): Promise<PRAnalysis> {
-  const { owner, repo, prNumber, prData } = params;
+  const { owner, repo, prNumber, prData, installationId } = params;
+  const octokit = await getOctokit(installationId);
   
   try {
     // 1. Get PR details (if not provided)
@@ -31,15 +42,14 @@ export async function analyzeGitHubPR(params: {
       pull_number: prNumber,
     })).data;
     
-    // 2. Get PR files
-    const filesResponse = await octokit.pulls.listFiles({
+    // 2. Get PR files (all pages)
+    const filesAll = await (octokit as any).paginate((octokit as any).pulls.listFiles, {
       owner,
       repo,
       pull_number: prNumber,
-      per_page: 100, // Max 300 files
+      per_page: 100,
     });
-    
-    const files: PRFile[] = filesResponse.data.map(file => ({
+    const files: PRFile[] = filesAll.map((file: any) => ({
       path: file.filename,
       additions: file.additions,
       deletions: file.deletions,
@@ -48,15 +58,14 @@ export async function analyzeGitHubPR(params: {
       patch: file.patch,
     }));
     
-    // 3. Get PR commits
-    const commitsResponse = await octokit.pulls.listCommits({
+    // 3. Get PR commits (all pages)
+    const commitsAll = await (octokit as any).paginate((octokit as any).pulls.listCommits, {
       owner,
       repo,
       pull_number: prNumber,
       per_page: 100,
     });
-    
-    const commits: PRCommit[] = commitsResponse.data.map(commit => ({
+    const commits: PRCommit[] = commitsAll.map((commit: any) => ({
       sha: commit.sha,
       message: commit.commit.message,
       author: commit.commit.author?.name || 'Unknown',
@@ -70,12 +79,15 @@ export async function analyzeGitHubPR(params: {
     const impact = detectImpact(files, pr.additions, pr.deletions);
     
     // 6. Detect tech stack from files
-    const techStack = await detectTechStack(owner, repo, files);
+    const techStack = await detectTechStack(owner, repo, files, octokit);
     
     // 7. Try to detect brand assets
-    const brandAssets = await detectBrandAssets(owner, repo);
+    const brandAssets = await detectBrandAssets(owner, repo, octokit);
     
-    // 8. Build analysis result
+    // 8. Detect component changes
+    const componentChanges = await detectComponentChanges(files, owner, repo, installationId);
+    
+    // 9. Build analysis result
     const analysis: PRAnalysis = {
       prNumber,
       title: pr.title,
@@ -104,6 +116,7 @@ export async function analyzeGitHubPR(params: {
       mergedAt: pr.merged_at || undefined,
       techStack,
       brandAssets,
+      componentChanges, // Add component changes to analysis
     };
     
     return analysis;
@@ -202,7 +215,8 @@ function detectImpact(
 async function detectTechStack(
   owner: string, 
   repo: string,
-  files: PRFile[]
+  files: PRFile[],
+  octokit: Octokit
 ): Promise<string[]> {
   const techStack = new Set<string>();
   
@@ -281,7 +295,8 @@ async function detectTechStack(
  */
 async function detectBrandAssets(
   owner: string,
-  repo: string
+  repo: string,
+  octokit: Octokit
 ): Promise<BrandProfile> {
   const brand: BrandProfile = {
     style: 'modern',
@@ -392,6 +407,288 @@ async function detectBrandAssets(
   }
   
   return brand;
+}
+
+/**
+ * Detect component changes in a PR
+ */
+async function detectComponentChanges(
+  files: PRFile[],
+  owner: string,
+  repo: string,
+  installationId?: number
+): Promise<{
+  added: ComponentAnalysisResult[];
+  modified: ComponentAnalysisResult[];
+  deleted: string[];
+  totalComponents: number;
+}> {
+  const result = {
+    added: [] as ComponentAnalysisResult[],
+    modified: [] as ComponentAnalysisResult[],
+    deleted: [] as string[],
+    totalComponents: 0,
+  };
+
+  try {
+    // Filter for component files (React, Vue, Svelte, Angular)
+    const componentFiles = files.filter(file => {
+      const path = file.path.toLowerCase();
+      return (
+        // React/TypeScript components
+        (path.endsWith('.tsx') || path.endsWith('.jsx')) ||
+        // Vue components
+        path.endsWith('.vue') ||
+        // Svelte components
+        path.endsWith('.svelte') ||
+        // Angular components
+        path.endsWith('.component.ts')
+      ) && (
+        // Common component directories
+        path.includes('/components/') ||
+        path.includes('/pages/') ||
+        path.includes('/views/') ||
+        path.includes('/ui/') ||
+        path.includes('/widgets/') ||
+        // Or follows component naming convention
+        /[A-Z][a-zA-Z]*\.(tsx|jsx|vue|svelte|component\.ts)$/.test(path)
+      );
+    });
+
+    result.totalComponents = componentFiles.length;
+
+    if (componentFiles.length === 0) {
+      return result;
+    }
+
+    const octokit = await getOctokit(installationId);
+
+    // Process each component file
+    for (const file of componentFiles.slice(0, 20)) { // Limit to 20 components to avoid API rate limits
+      try {
+        const componentName = extractComponentName(file.path);
+        
+        if (file.status === 'added') {
+          // New component added
+          const componentContent = await fetchFileContent(octokit, owner, repo, file.path);
+          if (componentContent) {
+            const analysis = analyzeComponentStructure(componentName, file.path, componentContent);
+            result.added.push(analysis);
+          }
+        } else if (file.status === 'modified') {
+          // Existing component modified
+          const componentContent = await fetchFileContent(octokit, owner, repo, file.path);
+          if (componentContent) {
+            const analysis = analyzeComponentStructure(componentName, file.path, componentContent);
+            result.modified.push(analysis);
+          }
+        } else if (file.status === 'removed') {
+          // Component deleted
+          result.deleted.push(file.path);
+        }
+      } catch (error) {
+        console.error(`Error analyzing component ${file.path}:`, error);
+        // Continue with other components
+      }
+    }
+
+  } catch (error) {
+    console.error('Error detecting component changes:', error);
+  }
+
+  return result;
+}
+
+/**
+ * Extract component name from file path
+ */
+function extractComponentName(filePath: string): string {
+  const fileName = filePath.split('/').pop() || '';
+  // Remove file extension
+  return fileName
+    .replace(/\.(tsx|jsx|vue|svelte|component\.ts)$/, '')
+    // Convert kebab-case or snake_case to PascalCase
+    .replace(/[-_](.)/g, (_, char) => char.toUpperCase())
+    // Ensure first character is uppercase
+    .replace(/^(.)/, char => char.toUpperCase());
+}
+
+/**
+ * Fetch file content from GitHub
+ */
+async function fetchFileContent(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  path: string
+): Promise<string | null> {
+  try {
+    const { data } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path,
+    });
+
+    if ('content' in data) {
+      return Buffer.from(data.content, 'base64').toString();
+    }
+  } catch (error) {
+    console.error(`Error fetching file content for ${path}:`, error);
+  }
+  return null;
+}
+
+/**
+ * Basic component structure analysis
+ */
+function analyzeComponentStructure(
+  name: string,
+  path: string,
+  content: string
+): ComponentAnalysisResult {
+  const framework = detectFramework(path, content);
+  
+  return {
+    name,
+    path,
+    framework,
+    structure: extractStructure(content, framework),
+    styles: extractStyles(content),
+    content: extractContent(content),
+  };
+}
+
+/**
+ * Detect component framework
+ */
+function detectFramework(
+  path: string,
+  content: string
+): 'react' | 'vue' | 'svelte' | 'angular' {
+  if (path.endsWith('.vue')) return 'vue';
+  if (path.endsWith('.svelte')) return 'svelte';
+  if (path.endsWith('.component.ts')) return 'angular';
+  if (path.endsWith('.tsx') || path.endsWith('.jsx')) return 'react';
+  
+  // Fallback to content analysis
+  if (content.includes('<template>') && content.includes('<script>')) return 'vue';
+  if (content.includes('@Component')) return 'angular';
+  
+  return 'react'; // Default fallback
+}
+
+/**
+ * Extract basic component structure
+ */
+function extractStructure(content: string, framework: string) {
+  const structure: any = {};
+  
+  // Extract imports
+  const importMatches = content.match(/import .+ from .+/g) || [];
+  structure.imports = importMatches.slice(0, 10); // Limit to 10 imports
+  
+  // Extract props (basic detection)
+  if (framework === 'react') {
+    const propsMatch = content.match(/interface\s+\w*Props\s*{([^}]+)}/);
+    if (propsMatch) {
+      structure.props = propsMatch[1].trim().split('\n').map(line => line.trim()).filter(Boolean);
+    }
+    
+    // Extract React hooks
+    const hooksMatches = content.match(/use[A-Z]\w*/g) || [];
+    structure.hooks = [...new Set(hooksMatches)].slice(0, 10);
+  } else if (framework === 'vue') {
+    // Basic Vue props detection
+    const propsMatch = content.match(/props:\s*{([^}]+)}/);
+    if (propsMatch) {
+      structure.props = [propsMatch[1].trim()];
+    }
+  }
+  
+  return structure;
+}
+
+/**
+ * Extract styling information
+ */
+function extractStyles(content: string) {
+  const styles: any = {};
+  
+  // Extract CSS classes
+  const classMatches = content.match(/className=["']([^"']+)["']/g) || 
+                      content.match(/class=["']([^"']+)["']/g) || [];
+  
+  if (classMatches.length > 0) {
+    const allClasses = classMatches
+      .map(match => match.replace(/class(?:Name)?=["']([^"']+)["']/, '$1'))
+      .join(' ')
+      .split(/\s+/);
+    
+    // Separate Tailwind and custom classes
+    const tailwindClasses = allClasses.filter(cls => 
+      /^(bg|text|border|p|m|w|h|flex|grid|rounded|shadow)-/.test(cls)
+    );
+    const customClasses = allClasses.filter(cls => 
+      !/^(bg|text|border|p|m|w|h|flex|grid|rounded|shadow)-/.test(cls)
+    );
+    
+    if (tailwindClasses.length > 0) {
+      styles.tailwind = tailwindClasses.slice(0, 20); // Limit to 20 classes
+    }
+    if (customClasses.length > 0) {
+      styles.classes = customClasses.slice(0, 10);
+    }
+  }
+  
+  // Detect styled-components
+  if (content.includes('styled.') || content.includes('styled(')) {
+    styles.framework = 'styled-components';
+  } else if (styles.tailwind?.length > 0) {
+    styles.framework = 'tailwind';
+  }
+  
+  return styles;
+}
+
+/**
+ * Extract content information
+ */
+function extractContent(content: string) {
+  const contentInfo: any = {};
+  
+  // Extract text content (simplified)
+  const textMatches = content.match(/>([^<]{10,})</g) || [];
+  if (textMatches.length > 0) {
+    contentInfo.text = textMatches
+      .map(match => match.replace(/^>|<$/g, '').trim())
+      .filter(text => text.length > 5)
+      .slice(0, 5);
+  }
+  
+  // Extract image sources
+  const imgMatches = content.match(/src=["']([^"']+)["']/g) || [];
+  if (imgMatches.length > 0) {
+    contentInfo.images = imgMatches
+      .map(match => match.replace(/src=["']([^"']+)["']/, '$1'))
+      .slice(0, 5);
+  }
+  
+  // Extract links
+  const linkMatches = content.match(/<a[^>]+href=["']([^"']+)["'][^>]*>([^<]+)<\/a>/g) || [];
+  if (linkMatches.length > 0) {
+    contentInfo.links = linkMatches
+      .map(match => {
+        const hrefMatch = match.match(/href=["']([^"']+)["']/);
+        const textMatch = match.match(/>([^<]+)</);
+        return {
+          href: hrefMatch?.[1] || '',
+          text: textMatch?.[1]?.trim() || '',
+        };
+      })
+      .slice(0, 5);
+  }
+  
+  return contentInfo;
 }
 
 /**

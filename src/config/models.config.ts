@@ -55,8 +55,9 @@ const optimalPack: ModelPack = {
     brain: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.4 },
     codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
     editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.5, maxTokens: 400 },
-    promptEnhancer: { provider: 'openai', model: 'gpt-5-nano', temperature: 0.4, maxTokens: 300 },
+    // Temporarily use gpt-4o-mini for these until GPT-5 reasoning issue is resolved
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.9, maxTokens: 400 },
+    promptEnhancer: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 300 },
   }
 };
 
@@ -68,7 +69,7 @@ const anthropicPack: ModelPack = {
     brain: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.6 },
     codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
     editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.5, maxTokens: 100 },
+    titleGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.9, maxTokens: 100 },
     promptEnhancer: { provider: 'anthropic', model: 'claude-3-5-haiku-20241022', temperature: 0.3, maxTokens: 8000 },
   }
 };
@@ -78,11 +79,12 @@ const openaiPack: ModelPack = {
   name: 'OpenAI Pack',
   description: 'OpenAI models only - GPT-5 for intelligence, GPT-5-mini for speed',
   models: {
-    brain: { provider: 'openai', model: 'gpt-5', temperature: 0.6 },
-    codeGenerator: { provider: 'openai', model: 'gpt-5', temperature: 0.3, maxTokens: 16000 },
-    editScene: { provider: 'openai', model: 'gpt-5', temperature: 0.3, maxTokens: 16000 },
-    titleGenerator: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.5, maxTokens: 100 },
-    promptEnhancer: { provider: 'openai', model: 'gpt-5-nano', temperature: 0.4, maxTokens: 300 },
+    // Use gpt-4o for complex tasks, gpt-4o-mini for simple ones
+    brain: { provider: 'openai', model: 'gpt-4o', temperature: 0.6 },
+    codeGenerator: { provider: 'openai', model: 'gpt-4o', temperature: 0.3, maxTokens: 16000 },
+    editScene: { provider: 'openai', model: 'gpt-4o', temperature: 0.3, maxTokens: 16000 },
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.9, maxTokens: 100 },
+    promptEnhancer: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 300 },
   }
 };
 

@@ -288,8 +288,8 @@ export const figmaRouter = createTRPCRouter({
       }
 
       return {
-        catalog: cached[0].componentCatalog as UICatalog,
-        indexedAt: cached[0].indexedAt,
+        catalog: cached[0]!.componentCatalog as UICatalog,
+        indexedAt: cached[0]!.indexedAt,
       };
     }),
 
@@ -307,25 +307,32 @@ export const figmaRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const authService = new FigmaAuthService();
-      const connection = await authService.getConnection(ctx.session.user.id);
-
-      if (!connection) {
-        throw new Error('Figma not connected');
+      // Use environment PAT if available
+      const envPat = process.env.FIGMA_PAT;
+      let accessToken: string;
+      
+      if (envPat) {
+        accessToken = envPat;
+      } else {
+        const authService = new FigmaAuthService();
+        const connection = await authService.getConnection(ctx.session.user.id);
+        if (!connection) {
+          throw new Error('Figma not connected');
+        }
+        accessToken = connection.accessToken;
       }
 
-      // For MVP, just create a simple conversion
-      const converterService = new FigmaConverterService();
+      // Get the actual node data from Figma
+      const discoveryService = new FigmaDiscoveryService(accessToken);
+      const actualNode = await discoveryService.getNode(input.fileKey, input.nodeId);
       
-      // Create a mock node for now (in production, fetch actual node data)
-      const mockNode = {
-        id: input.nodeId,
-        name: input.nodeName,
-        type: 'FRAME' as const,
-        children: [],
-      };
+      if (!actualNode) {
+        throw new Error(`Could not fetch node ${input.nodeId} from Figma`);
+      }
 
-      const remotionCode = converterService.convertToRemotionCode(mockNode);
+      // Convert to Remotion code using real node data
+      const converterService = new FigmaConverterService();
+      const remotionCode = await converterService.convertToRemotionCode(actualNode);
 
       // Save import record
       const importRecord = await db.insert(figmaImports).values({
@@ -340,7 +347,7 @@ export const figmaRouter = createTRPCRouter({
 
       return {
         success: true,
-        importId: importRecord[0].id,
+        importId: importRecord[0]!.id,
         remotionCode,
       };
     }),
