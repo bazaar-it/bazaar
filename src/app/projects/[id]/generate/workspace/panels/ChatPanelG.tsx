@@ -699,6 +699,8 @@ export default function ChatPanelG({
           if (responseData.context?.needsClarification) {
             console.log('[ChatPanelG] ✅ Received clarification request:', responseData.context.chatResponse);
             // No scene to process, clarification message already added above
+            // ✅ FIX: Invalidate messages cache before early return so clarification appears immediately
+            await utils.chat.getMessages.invalidate({ projectId });
             // Early return to skip scene processing
             return;
           }
