@@ -165,7 +165,8 @@ const ProjectPreview = ({
   editingValue,
   onEditValueChange,
   onEditKeyPress,
-  onEditBlur
+  onEditBlur,
+  isLoading
 }: { 
   project: Project; 
   onClick: () => void;
@@ -177,6 +178,7 @@ const ProjectPreview = ({
   onEditValueChange: (value: string) => void;
   onEditKeyPress: (e: React.KeyboardEvent) => void;
   onEditBlur: () => void;
+  isLoading?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -208,8 +210,18 @@ const ProjectPreview = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Delete button - only visible on hover */}
-        {isHovered && (
+        {/* Loading overlay - shown when project is being opened */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-30">
+            <div className="text-center">
+              <Loader2 className="h-6 w-6 animate-spin text-white mx-auto mb-2" />
+              <div className="text-white text-sm font-medium">Opening...</div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete button - only visible on hover and not loading */}
+        {isHovered && !isLoading && (
           <div className="absolute top-2 left-2 z-20">
             <Button
               variant="ghost"
@@ -238,8 +250,8 @@ const ProjectPreview = ({
           </div>
         )}
 
-        {/* Project name overlay - only visible on hover */}
-        {isHovered && (
+        {/* Project name overlay - only visible on hover and not loading */}
+        {isHovered && !isLoading && (
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
             <div className="text-white text-xs sm:text-sm font-medium">
               {editingProject === project.id ? (
@@ -421,6 +433,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
   const router = useRouter();
   
   // Fetch all projects
@@ -501,9 +514,17 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   }, [projects, searchQuery, currentProjectId]);
 
   // Handle project navigation
-  const handleProjectClick = useCallback((projectId: string) => {
+  const handleProjectClick = useCallback(async (projectId: string) => {
     if (projectId !== currentProjectId) {
-      router.push(`/projects/${projectId}/generate`);
+      setLoadingProjectId(projectId);
+      try {
+        router.push(`/projects/${projectId}/generate`);
+        // Keep loading state for a short time to show feedback before navigation
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } finally {
+        // Reset loading state after navigation attempt
+        setLoadingProjectId(null);
+      }
     }
   }, [currentProjectId, router]);
   
@@ -627,6 +648,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
                   onEditValueChange={setEditingValue}
                   onEditKeyPress={handleEditKeyPress}
                   onEditBlur={handleSaveEdit}
+                  isLoading={loadingProjectId === project.id}
                 />
               </Card>
             ))}
