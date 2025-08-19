@@ -130,6 +130,7 @@ interface VideoState {
   addScene: (projectId: string, scene: any) => void;
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
+  duplicateScene: (projectId: string, sceneId: string) => string | null;
   updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
   
   // OPTIMIZATION #5: Unified scene selection
@@ -823,6 +824,121 @@ export const useVideoState = create<VideoState>()(
         }
       };
     }),
+
+  duplicateScene: (projectId: string, sceneId: string) => {
+    let newSceneId: string | null = null;
+    
+    set((state) => {
+      console.log('[VideoState.duplicateScene] ⚡ Duplicating scene:', sceneId);
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.duplicateScene] ❌ Project not found:', projectId);
+        return state;
+      }
+      
+      const sceneIndex = project.props.scenes.findIndex((s: any) => s.id === sceneId);
+      if (sceneIndex === -1) {
+        console.log('[VideoState.duplicateScene] ❌ Scene not found:', sceneId);
+        return state;
+      }
+      
+      const originalScene = project.props.scenes[sceneIndex];
+      if (!originalScene) {
+        console.log('[VideoState.duplicateScene] ❌ Original scene is undefined');
+        return state;
+      }
+      
+      // Generate new unique scene ID using timestamp
+      const generatedSceneId = `scene_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      newSceneId = generatedSceneId;
+      
+      // Generate a unique title based on existing scene names
+      const existingNames = project.props.scenes.map((s: any) => 
+        s.data?.name || s.title || `Scene ${s.id}`
+      );
+      
+      const originalName = originalScene.data?.name || originalScene.title || 'Scene';
+      let duplicateName = `${originalName} (Copy)`;
+      let counter = 2;
+      
+      // Ensure unique name
+      while (existingNames.includes(duplicateName)) {
+        duplicateName = `${originalName} (${counter})`;
+        counter++;
+      }
+      
+      // Calculate position for the new scene (insert right after original)
+      const currentTotalDuration = project.props.scenes
+        .slice(0, sceneIndex + 1)
+        .reduce((sum, s) => sum + (s.duration || 150), 0);
+      
+      // Create the duplicated scene with new ID and position
+      const duplicatedScene = {
+        ...originalScene,
+        id: generatedSceneId,
+        start: currentTotalDuration,
+        data: originalScene.data ? {
+          ...originalScene.data,
+          name: duplicateName,
+          componentId: generatedSceneId, // Update component ID to match new scene ID
+        } : {
+          name: duplicateName,
+          componentId: generatedSceneId,
+        }
+      };
+      
+      // Insert the duplicated scene right after the original
+      const updatedScenes = [
+        ...project.props.scenes.slice(0, sceneIndex + 1),
+        duplicatedScene,
+        ...project.props.scenes.slice(sceneIndex + 1)
+      ];
+      
+      // TIMELINE FIX: Recalculate start times for scenes after the duplicated one
+      let currentStart = 0;
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+        if (scene) {
+          updatedScenes[i] = {
+            ...scene,
+            start: currentStart
+          };
+          currentStart += scene.duration || 150;
+        }
+      }
+      
+      // TOTAL DURATION FIX: Recalculate total video duration
+      const totalDuration = updatedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+      
+      console.log('[VideoState.duplicateScene] ✅ Scene duplicated successfully:', generatedSceneId);
+      
+      // Generate new refresh token to trigger re-renders
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: totalDuration
+              },
+              scenes: updatedScenes
+            },
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now(),
+          }
+        }
+      };
+    });
+    
+    return newSceneId;
+  },
 
   updateProjectAudio: (projectId: string, audio: AudioTrack | null) =>
     set((state) => {

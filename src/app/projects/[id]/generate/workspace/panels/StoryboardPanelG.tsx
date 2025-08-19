@@ -7,7 +7,7 @@ import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { PlusIcon, PlayIcon, TrashIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, PlayIcon, TrashIcon, Loader2Icon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -31,7 +31,7 @@ export function StoryboardPanelG({
   selectedSceneId?: string | null;
   onSceneSelect?: (sceneId: string | null) => void;
 }) {
-  const { updateAndRefresh } = useVideoState();
+  const { updateAndRefresh, duplicateScene } = useVideoState();
   const [newScenePrompt, setNewScenePrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -116,6 +116,24 @@ export function StoryboardPanelG({
     // For now, just show a toast - actual deletion would require a mutation
     toast.info("Scene deletion not implemented yet");
   }, []);
+
+  // Handle scene duplication
+  const handleDuplicateScene = useCallback((sceneId: string) => {
+    try {
+      const newSceneId = duplicateScene(projectId, sceneId);
+      
+      if (newSceneId) {
+        toast.success("Scene duplicated successfully!");
+        // Optionally select the new scene
+        setCurrentSelectedSceneId(newSceneId);
+      } else {
+        toast.error("Failed to duplicate scene");
+      }
+    } catch (error) {
+      console.error("Error duplicating scene:", error);
+      toast.error("Failed to duplicate scene");
+    }
+  }, [projectId, duplicateScene, setCurrentSelectedSceneId]);
 
   // Get selected scene data
   const selectedScene = currentSelectedSceneId ? scenes.find(s => s.id === currentSelectedSceneId) : null;
@@ -243,17 +261,32 @@ export function StoryboardPanelG({
                       </div>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteScene(scene.id);
-                    }}
-                    className="text-gray-400 hover:text-red-600"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDuplicateScene(scene.id);
+                      }}
+                      className="text-gray-400 hover:text-blue-600"
+                      title="Duplicate scene"
+                    >
+                      <CopyIcon className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteScene(scene.id);
+                      }}
+                      className="text-gray-400 hover:text-red-600"
+                      title="Delete scene"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
