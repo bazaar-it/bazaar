@@ -7,11 +7,17 @@ import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { PlusIcon, PlayIcon, TrashIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, PlayIcon, TrashIcon, Loader2Icon, Copy } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Separator } from "~/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 
 interface Scene {
   id: string;
@@ -66,6 +72,20 @@ export function StoryboardPanelG({
     forceRefresh(projectId);
   }, [projectId]);
 
+  // Duplicate scene mutation
+  const duplicateSceneMutation = api.generation.duplicateScene.useMutation({
+    onSuccess: (result) => {
+      toast.success("Scene duplicated successfully!");
+      console.log("Scene duplicated:", result);
+      // Force refresh the video state to show the new scene
+      updateAndRefresh();
+    },
+    onError: (error) => {
+      console.error("Failed to duplicate scene:", error);
+      toast.error(`Failed to duplicate scene: ${error.message}`);
+    }
+  });
+
   // Generate scene code mutation - Updated to use MCP API
   const generateSceneWithChatMutation = api.generation.generateScene.useMutation({
     onSuccess: (result: any) => {
@@ -110,6 +130,14 @@ export function StoryboardPanelG({
       console.error("Failed to add scene:", error);
     }
   }, [newScenePrompt, projectId, generateSceneWithChatMutation]);
+
+  // Handle scene duplication
+  const handleDuplicateScene = useCallback((sceneId: string) => {
+    duplicateSceneMutation.mutate({
+      projectId,
+      sceneId,
+    });
+  }, [projectId, duplicateSceneMutation]);
 
   // Handle scene deletion (soft delete by hiding)
   const handleDeleteScene = useCallback((sceneId: string) => {
@@ -216,18 +244,23 @@ export function StoryboardPanelG({
               }
               return uniqueScenes;
             }, []).map((scene: any, index: number) => (
-              <div
-                key={`scene-${scene.id}-${index}`} // More robust key to prevent duplicates
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  currentSelectedSceneId === scene.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-                onClick={() => {
-                  console.log('[StoryboardPanelG] Scene selected:', scene.id);
-                  setCurrentSelectedSceneId(scene.id);
-                }}
-              >
+              <DropdownMenu key={`scene-${scene.id}-${index}`}>
+                <DropdownMenuTrigger asChild>
+                  <div
+                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                      currentSelectedSceneId === scene.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                    onClick={() => {
+                      console.log('[StoryboardPanelG] Scene selected:', scene.id);
+                      setCurrentSelectedSceneId(scene.id);
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
@@ -255,7 +288,42 @@ export function StoryboardPanelG({
                     <TrashIcon className="w-4 h-4" />
                   </Button>
                 </div>
-              </div>
+                  </div>
+                </DropdownMenuTrigger>
+                
+                <DropdownMenuContent 
+                  className="w-48"
+                  sideOffset={5}
+                  align="end"
+                >
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateScene(scene.id);
+                    }}
+                    disabled={duplicateSceneMutation.isPending}
+                    className="flex items-center gap-2"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Duplicate Scene
+                    {duplicateSceneMutation.isPending && (
+                      <Loader2Icon className="w-4 h-4 animate-spin ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteScene(scene.id);
+                    }}
+                    className="flex items-center gap-2 text-red-600 hover:text-red-700"
+                    variant="destructive"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    Delete Scene
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ))}
           </div>
         )}

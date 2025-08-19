@@ -3,6 +3,7 @@ import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
@@ -356,6 +357,101 @@ export const generateScene = protectedProcedure
           console.error(`[${response.getRequestId()}] Failed to update message status:`, updateError);
         }
       }
+      
+      const errorCode = getErrorCode(error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      return response.error(
+        errorCode,
+        errorMessage,
+        'scene.create',
+        'scene'
+      ) as any as SceneCreateResponse;
+    }
+  });
+
+/**
+ * SCENE DUPLICATION with Universal Response
+ */
+export const duplicateScene = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    sceneId: z.string(),
+  }))
+  .mutation(async ({ input, ctx }): Promise<SceneCreateResponse> => {
+    const response = new ResponseBuilder();
+    const { projectId, sceneId } = input;
+    const userId = ctx.session.user.id;
+
+    console.log(`[${response.getRequestId()}] Starting scene duplication`, { projectId, sceneId });
+
+    try {
+      // 1. Verify project ownership and get the scene to duplicate
+      const originalScene = await db.query.scenes.findFirst({
+        where: eq(scenes.id, sceneId),
+        with: {
+          project: true,
+        },
+      });
+
+      if (!originalScene || originalScene.project.userId !== userId) {
+        return response.error(
+          ErrorCode.NOT_FOUND,
+          "Scene not found or access denied",
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
+      }
+
+      // 2. Get the highest order number to place the duplicate after the original
+      const maxOrder = await db.query.scenes.findFirst({
+        where: eq(scenes.projectId, projectId),
+        orderBy: [desc(scenes.order)],
+        columns: { order: true },
+      });
+
+      const nextOrder = (maxOrder?.order || 0) + 1;
+
+      // 3. Create the duplicate scene
+      const [duplicatedScene] = await db.insert(scenes).values({
+        id: randomUUID(),
+        projectId,
+        name: `${originalScene.name} (Copy)`,
+        description: originalScene.description,
+        duration: originalScene.duration,
+        order: nextOrder,
+        tsxCode: originalScene.tsxCode,
+        props: originalScene.props,
+        status: originalScene.status,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      if (!duplicatedScene) {
+        return response.error(
+          ErrorCode.INTERNAL_ERROR,
+          "Failed to create duplicate scene",
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
+      }
+
+      console.log(`[${response.getRequestId()}] Scene duplicated successfully`, {
+        originalId: sceneId,
+        duplicateId: duplicatedScene.id,
+        duplicateName: duplicatedScene.name,
+      });
+
+      // 4. Return success response
+      return response.success(
+        duplicatedScene,
+        'scene.create',
+        'scene',
+        [duplicatedScene.id]
+      ) as SceneCreateResponse;
+
+    } catch (error) {
+      console.error(`[${response.getRequestId()}] Scene duplication error:`, error);
       
       const errorCode = getErrorCode(error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

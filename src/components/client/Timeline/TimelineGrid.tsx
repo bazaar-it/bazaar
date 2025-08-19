@@ -9,6 +9,7 @@ import { ChevronDown, ChevronUp, Lock, Unlock, Eye, EyeOff, Plus } from 'lucide-
 import { useTimelineClick, useTimelineZoom, useTimeline, useTimelineDrag } from './TimelineContext';
 
 interface TimelineGridProps {
+  projectId?: string;
   onDragToChat?: (id: number) => void;
   onTrackAdd?: () => void;
   className?: string;
@@ -19,6 +20,7 @@ interface TimelineGridProps {
  * Supporting multiple tracks with advanced functionality
  */
 const TimelineGrid: React.FC<TimelineGridProps> = ({
+  projectId,
   onDragToChat,
   onTrackAdd,
   className
@@ -311,6 +313,7 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
                       durationInFrames={durationInFrames}
                       currentFrame={currentFrame}
                       zoomLevel={zoomLevel}
+                      projectId={projectId}
                       onDragToChat={onDragToChat ? () => onDragToChat(item.id) : undefined}
                     />
                   ))}

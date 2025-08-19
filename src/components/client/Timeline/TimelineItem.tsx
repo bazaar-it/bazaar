@@ -1,12 +1,21 @@
 //src/components/client/Timeline/TimelineItem.tsx
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { type TimelineItemUnion, TimelineItemType, type TextItem, type CustomItem, type TimelineItemStatus } from '~/lib/types/video/timeline';
 import { cn } from '~/lib/cn';
 import Image from 'next/image';
 import { useTimelineClick, useTimelineDrag } from './TimelineContext';
-import { AlertCircle, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Loader2, Copy, Trash } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { api } from "~/trpc/react";
+import { toast } from "sonner";
+import { useVideoState } from '~/stores/videoState';
 
 interface TimelineItemProps {
   item: TimelineItemUnion;
@@ -15,6 +24,7 @@ interface TimelineItemProps {
   durationInFrames: number;
   currentFrame: number;
   zoomLevel: number;
+  projectId?: string;
   onDragToChat?: () => void;
 }
 
@@ -29,11 +39,46 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
   durationInFrames,
   currentFrame,
   zoomLevel,
+  projectId,
   onDragToChat,
 }) => {
   // Get timeline utilities from context
   const { selectItem } = useTimelineClick();
   const { startDrag, isDraggingInvalid } = useTimelineDrag();
+  const { forceRefresh } = useVideoState();
+  
+  // Context menu state
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  
+  // API mutations
+  const duplicateSceneMutation = api.generation.duplicateScene.useMutation({
+    onSuccess: (result) => {
+      toast.success("Scene duplicated successfully!");
+      console.log("Scene duplicated:", result);
+      // Force refresh the video state to show the new scene
+      if (projectId) {
+        forceRefresh(projectId);
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to duplicate scene:", error);
+      toast.error(`Failed to duplicate scene: ${error.message}`);
+    }
+  });
+  
+  const removeSceneMutation = api.generation.removeScene.useMutation({
+    onSuccess: () => {
+      toast.success("Scene deleted successfully!");
+      // Force refresh the video state to remove the scene
+      if (projectId) {
+        forceRefresh(projectId);
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to delete scene:", error);
+      toast.error(`Failed to delete scene: ${error.message}`);
+    }
+  });
   
   // Calculate position and dimensions as percentages
   const leftPosition = (item.from / durationInFrames) * 100;
@@ -226,29 +271,66 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
     }
   };
 
+  // Handle context menu actions
+  const handleDuplicateScene = () => {
+    if (!projectId) {
+      toast.error("Project ID not available");
+      return;
+    }
+    
+    duplicateSceneMutation.mutate({
+      projectId,
+      sceneId: item.id.toString(),
+    });
+    setIsContextMenuOpen(false);
+  };
+
+  const handleDeleteScene = () => {
+    if (!projectId) {
+      toast.error("Project ID not available");
+      return;
+    }
+    
+    removeSceneMutation.mutate({
+      projectId,
+      sceneId: item.id.toString(),
+    });
+    setIsContextMenuOpen(false);
+  };
+
+  // Handle right-click to show context menu
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsContextMenuOpen(true);
+  };
+
   return (
-    <div
-      className={cn(
-        "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150 border",
-        isSelected ? "ring-2 ring-white shadow-lg dark:ring-blue-300 z-20" : "z-10",
-        isActive ? "border-b-2 border-yellow-300" : "",
-        isDragging ? "opacity-50 cursor-grabbing" : "",
-        isDraggingInvalid ? "ring-2 ring-red-500" : "",
-        "hover:brightness-110",
-        getBorderColorClass()
-      )}
-      style={{
-        left: `${leftPosition}%`,
-        width: `${Math.max(itemWidth, 0.5)}%`, // Ensure minimum width
-        minWidth: '40px',
-        transform: `scale(${isSelected ? 1.02 : 1})`,
-        transition: 'transform 0.1s ease, border 0.2s ease'
-      }}
-      onClick={handleItemClick}
-      onPointerDown={handleItemPointerDown}
-      draggable={!!onDragToChat}
-      onDragStart={handleDragToChatStart}
-    >
+    <DropdownMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
+      <DropdownMenuTrigger asChild>
+        <div
+          className={cn(
+            "absolute flex flex-row h-full rounded-md cursor-grab select-none transition-colors duration-150 border",
+            isSelected ? "ring-2 ring-white shadow-lg dark:ring-blue-300 z-20" : "z-10",
+            isActive ? "border-b-2 border-yellow-300" : "",
+            isDragging ? "opacity-50 cursor-grabbing" : "",
+            isDraggingInvalid ? "ring-2 ring-red-500" : "",
+            "hover:brightness-110",
+            getBorderColorClass()
+          )}
+          style={{
+            left: `${leftPosition}%`,
+            width: `${Math.max(itemWidth, 0.5)}%`, // Ensure minimum width
+            minWidth: '40px',
+            transform: `scale(${isSelected ? 1.02 : 1})`,
+            transition: 'transform 0.1s ease, border 0.2s ease'
+          }}
+          onClick={handleItemClick}
+          onContextMenu={handleContextMenu}
+          onPointerDown={handleItemPointerDown}
+          draggable={!!onDragToChat}
+          onDragStart={handleDragToChatStart}
+        >
       {/* Status Indicator */}
       {statusIndicator}
       
@@ -276,7 +358,40 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
         className="resize-handle absolute right-0 top-0 bottom-0 w-2 cursor-e-resize z-30"
         onPointerDown={(e) => handleResizeStart(e, 'resize-right')}
       />
-    </div>
+        </div>
+      </DropdownMenuTrigger>
+      
+      <DropdownMenuContent 
+        className="w-48 z-50"
+        sideOffset={5}
+        align="start"
+      >
+        <DropdownMenuItem
+          onClick={handleDuplicateScene}
+          disabled={duplicateSceneMutation.isPending || !projectId}
+          className="flex items-center gap-2"
+        >
+          <Copy className="w-4 h-4" />
+          Duplicate Scene
+          {duplicateSceneMutation.isPending && (
+            <Loader2 className="w-4 h-4 animate-spin ml-auto" />
+          )}
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem
+          onClick={handleDeleteScene}
+          disabled={removeSceneMutation.isPending || !projectId}
+          className="flex items-center gap-2 text-red-600 hover:text-red-700"
+          variant="destructive"
+        >
+          <Trash className="w-4 h-4" />
+          Delete Scene
+          {removeSceneMutation.isPending && (
+            <Loader2 className="w-4 h-4 animate-spin ml-auto" />
+          )}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
