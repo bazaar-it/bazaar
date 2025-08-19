@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
-import { Download, Loader2, Check, X, AlertCircle } from "lucide-react";
+import { Download, Loader2, Check, X, AlertCircle, RefreshCw } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import {
@@ -229,13 +229,45 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     );
   }
 
-  // Failed state
+  // Failed state - show error details
   if (status?.status === 'failed') {
+    const errorMessage = status.error || 'Render failed';
+    const isNetworkError = errorMessage.includes('network error');
+    const isFontError = errorMessage.includes('font') || errorMessage.includes('loadFont');
+    
     return (
-      <Button variant="outline" disabled size={size} className={className}>
-        <X className="mr-2 h-4 w-4 text-red-500" />
-        Render Failed
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button 
+          variant="outline" 
+          disabled 
+          size={size} 
+          className={`${className} border-red-500/50`}
+        >
+          <X className="mr-2 h-4 w-4 text-red-500" />
+          Render Failed
+        </Button>
+        <div className="text-xs text-red-500 max-w-xs">
+          {isNetworkError && isFontError ? (
+            <p>Font loading failed - send us an email and we will fix it.</p>
+          ) : isNetworkError ? (
+            <p>Network error during rendering. Please try again.</p>
+          ) : (
+            <p>{errorMessage}</p>
+          )}
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => {
+            setRenderId(null);
+            setDownloadUrl(null);
+            setHasDownloaded(false);
+          }}
+        >
+          <RefreshCw className="mr-2 h-3 w-3" />
+          Try Again
+        </Button>
+      </div>
     );
   }
 

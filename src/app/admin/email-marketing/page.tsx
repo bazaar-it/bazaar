@@ -9,8 +9,11 @@ import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
 import { Switch } from "~/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
+import { render } from '@react-email/render';
+import NewsletterEmailTemplate from '~/components/email/NewsletterEmailTemplate';
 import { 
   Mail, 
   Send, 
@@ -19,36 +22,125 @@ import {
   Clock, 
   Loader2,
   Eye,
+  EyeOff,
   Code,
   Save,
   Plus,
   Search,
-  X
+  X,
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  FileText,
+  Image,
+  Gift,
+  UserCheck
 } from "lucide-react";
 
 interface EmailTemplate {
   id: string;
   name: string;
-  code: string;
+  subject: string;
+  content: string;
+  category: string;
   createdAt: Date;
 }
 
+// Predefined email templates
+const TEMPLATE_LIBRARY = [
+  {
+    id: 'welcome',
+    name: 'Welcome Email',
+    category: 'Onboarding',
+    icon: Sparkles,
+    subject: 'Welcome to Bazaar! 🎬',
+    content: `
+      <h2>Welcome aboard!</h2>
+      <p>We're thrilled to have you join the Bazaar community. Get ready to create amazing videos with AI-powered tools.</p>
+      <h3>Here's what you can do:</h3>
+      <ul>
+        <li>✨ Generate stunning motion graphics from text</li>
+        <li>🎨 Create custom animations with AI</li>
+        <li>🚀 Export videos in multiple formats</li>
+      </ul>
+      <p>Ready to create your first video? Click below to get started!</p>
+    `
+  },
+  {
+    id: 'feature-announcement',
+    name: 'New Feature',
+    category: 'Updates',
+    icon: Gift,
+    subject: 'New Feature: [Feature Name] is Here! 🚀',
+    content: `
+      <h2>Exciting news!</h2>
+      <p>We've just launched [Feature Name] - a game-changing addition to Bazaar that will revolutionize how you create videos.</p>
+      <h3>What's new:</h3>
+      <ul>
+        <li>🎯 [Key benefit 1]</li>
+        <li>⚡ [Key benefit 2]</li>
+        <li>🔥 [Key benefit 3]</li>
+      </ul>
+      <p>Try it out today and let us know what you think!</p>
+    `
+  },
+  {
+    id: 'newsletter',
+    name: 'Monthly Newsletter',
+    category: 'Newsletter',
+    icon: FileText,
+    subject: 'Bazaar Monthly: Tips, Updates & More 📰',
+    content: `
+      <h2>Your Monthly Bazaar Update</h2>
+      <h3>📊 This Month's Highlights:</h3>
+      <ul>
+        <li>New templates added to the library</li>
+        <li>Performance improvements for faster rendering</li>
+        <li>Community spotlight: Amazing videos from our users</li>
+      </ul>
+      <h3>💡 Pro Tip:</h3>
+      <p>Did you know you can use voice commands to generate scenes? Try it in your next project!</p>
+      <h3>🎥 Featured Videos:</h3>
+      <p>Check out these incredible creations from our community...</p>
+    `
+  },
+  {
+    id: 're-engagement',
+    name: 'Re-engagement',
+    category: 'Marketing',
+    icon: UserCheck,
+    subject: 'We miss you! Here\'s what\'s new at Bazaar 💜',
+    content: `
+      <h2>It's been a while!</h2>
+      <p>We noticed you haven't created a video in a few weeks. We've added some exciting features since your last visit:</p>
+      <ul>
+        <li>🎨 50+ new templates</li>
+        <li>🤖 Improved AI generation</li>
+        <li>📱 Mobile-optimized exports</li>
+      </ul>
+      <p>Come back and create something amazing! As a welcome back gift, here's a special offer just for you...</p>
+    `
+  }
+];
+
 export default function EmailMarketingPage() {
   // Email composition state
-  const [emailCode, setEmailCode] = useState('');
-  const [templateName, setTemplateName] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailContent, setEmailContent] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState('compose');
+  
+  // Template state
   const [savedTemplates, setSavedTemplates] = useState<EmailTemplate[]>([]);
+  const [templateName, setTemplateName] = useState('');
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
   
   // Recipient selection state
   const [sendToAll, setSendToAll] = useState(false);
-  const [customEmail, setCustomEmail] = useState('');
+  const [customEmails, setCustomEmails] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [userSearch, setUserSearch] = useState('');
   const [selectedSegment, setSelectedSegment] = useState<'users' | 'subscribers' | 'all' | 'none'>('none');
   const [recipientSearch, setRecipientSearch] = useState('');
-
-  // UI state
-  const [showTemplateForm, setShowTemplateForm] = useState(false);
 
   // Queries
   const { data: emailStats, isLoading: statsLoading } = api.admin.getEmailStats.useQuery();
@@ -57,25 +149,27 @@ export default function EmailMarketingPage() {
     search: recipientSearch,
     limit: 100,
   }, {
-    enabled: selectedSegment !== 'none', // Only fetch when a segment is selected
+    enabled: selectedSegment !== 'none',
   });
 
   // Mutations
   const sendEmailMutation = api.admin.sendNewsletter.useMutation({
     onSuccess: (result) => {
-      toast.success(result.message);
+      toast.success(`Email campaign sent! ${result.totalSent} sent, ${result.totalFailed} failed`);
       // Reset form
-      setEmailCode('');
-      setCustomEmail('');
+      setEmailSubject('');
+      setEmailContent('');
+      setCustomEmails('');
       setSelectedUserIds([]);
       setSendToAll(false);
+      setSelectedSegment('none');
     },
     onError: (error) => {
       toast.error(`Failed to send email: ${error.message}`);
     },
   });
 
-  // Load templates from localStorage
+  // Load saved templates from localStorage
   useEffect(() => {
     const stored = localStorage.getItem('email-templates');
     if (stored) {
@@ -87,17 +181,19 @@ export default function EmailMarketingPage() {
     }
   }, []);
 
-  // Save templates to localStorage
+  // Save template
   const saveTemplate = () => {
-    if (!templateName.trim() || !emailCode.trim()) {
-      toast.error('Template name and code are required');
+    if (!templateName.trim() || !emailContent.trim() || !emailSubject.trim()) {
+      toast.error('Template name, subject, and content are required');
       return;
     }
 
     const newTemplate: EmailTemplate = {
       id: Date.now().toString(),
       name: templateName.trim(),
-      code: emailCode,
+      subject: emailSubject.trim(),
+      content: emailContent,
+      category: 'Custom',
       createdAt: new Date(),
     };
 
@@ -110,9 +206,13 @@ export default function EmailMarketingPage() {
     setShowTemplateForm(false);
   };
 
-  const loadTemplate = (template: EmailTemplate) => {
-    setEmailCode(template.code);
-    toast.success(`Loaded template: ${template.name}`);
+  const loadTemplate = (template: { subject: string; content: string; name?: string }) => {
+    setEmailSubject(template.subject);
+    setEmailContent(template.content);
+    if (template.name) {
+      toast.success(`Loaded template: ${template.name}`);
+    }
+    setActiveTab('compose');
   };
 
   const deleteTemplate = (templateId: string) => {
@@ -122,96 +222,90 @@ export default function EmailMarketingPage() {
     toast.success('Template deleted');
   };
 
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
   const handleSendEmail = async () => {
-    if (!emailCode.trim()) {
-      toast.error('Please enter email content');
+    if (!emailSubject.trim() || !emailContent.trim()) {
+      toast.error('Please enter email subject and content');
       return;
     }
 
+    let emailRecipients: string[] = [];
+    
+    if (selectedSegment === 'none' && customEmails.trim()) {
+      // Custom emails only
+      emailRecipients = customEmails.split(',').map(email => email.trim()).filter(Boolean);
+    } else if (sendToAll && recipients) {
+      // All recipients in segment
+      emailRecipients = recipients.recipients.map(r => r.email);
+    } else if (selectedUserIds.length > 0 && recipients) {
+      // Selected users only
+      const selected = recipients.recipients.filter(r => selectedUserIds.includes(r.id));
+      emailRecipients = selected.map(r => r.email);
+    } else if (customEmails.trim()) {
+      // Custom emails as fallback
+      emailRecipients = customEmails.split(',').map(email => email.trim()).filter(Boolean);
+    }
+
+    if (emailRecipients.length === 0) {
+      toast.error('Please select recipients or enter email addresses');
+      return;
+    }
+
+    // Confirm before sending
+    const confirmed = window.confirm(`Send email to ${emailRecipients.length} recipient(s)?`);
+    if (!confirmed) return;
+
+    await sendEmailMutation.mutateAsync({
+      customEmails: emailRecipients,
+      sendToAll: false,
+      subject: emailSubject,
+      content: emailContent,
+      isCustomCode: false,
+    });
+  };
+
+  const generatePreviewHTML = () => {
+    if (!emailContent.trim()) return '';
+    
     try {
-      let emailRecipients: string[] = [];
-      
-      if (selectedSegment === 'none') {
-        // Only use custom emails when "none" is selected
-        if (customEmail.trim()) {
-          emailRecipients = customEmail.split(',').map(email => email.trim()).filter(Boolean);
-        } else {
-          toast.error('Please enter custom email addresses');
-          return;
-        }
-      } else if (sendToAll) {
-        emailRecipients = recipients?.recipients.map(r => r.email) || [];
-      } else if (customEmail.trim()) {
-        emailRecipients = customEmail.split(',').map(email => email.trim()).filter(Boolean);
-      } else if (selectedUserIds.length > 0) {
-        const selectedRecipients = recipients?.recipients.filter(r => selectedUserIds.includes(r.id)) || [];
-        emailRecipients = selectedRecipients.map(r => r.email);
-      }
-
-      if (emailRecipients.length === 0) {
-        toast.error('Please select recipients or enter custom email addresses');
-        return;
-      }
-
-      // Send emails in batches to avoid overwhelming the API
-      const batchSize = 10;
-      const batches = [];
-      for (let i = 0; i < emailRecipients.length; i += batchSize) {
-        batches.push(emailRecipients.slice(i, i + batchSize));
-      }
-
-      let totalSent = 0;
-      let totalFailed = 0;
-
-      for (const batch of batches) {
-        const results = await Promise.allSettled(
-          batch.map(email => 
-            sendEmailMutation.mutateAsync({
-              customEmails: [email],
-              sendToAll: false,
-              subject: 'Custom Email Campaign',
-              content: emailCode,
-              isCustomCode: true,
-            })
-          )
-        );
-
-        results.forEach(result => {
-          if (result.status === 'fulfilled') {
-            totalSent += result.value.totalSent;
-            totalFailed += result.value.totalFailed;
-          } else {
-            totalFailed += 1;
-          }
-        });
-      }
-
-      toast.success(`Email sent successfully! ${totalSent} sent, ${totalFailed} failed`);
-      
-      // Reset form
-      setEmailCode('');
-      setCustomEmail('');
-      setSelectedUserIds([]);
-      setSendToAll(false);
-      
+      const html = render(NewsletterEmailTemplate({
+        firstName: 'Preview User',
+        subject: emailSubject || 'Email Preview',
+        content: emailContent,
+        ctaText: 'Visit Bazaar',
+        ctaUrl: 'https://bazaar-vid.com'
+      }));
+      return html;
     } catch (error) {
-      console.error('Error sending email:', error);
-      toast.error('Failed to send email');
+      console.error('Preview error:', error);
+      return '<p>Error generating preview</p>';
     }
   };
 
-  const handleUserSelection = (userId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedUserIds(prev => [...prev, userId]);
-    } else {
-      setSelectedUserIds(prev => prev.filter(id => id !== userId));
+  const getRecipientCount = () => {
+    if (selectedSegment === 'none' && customEmails.trim()) {
+      return customEmails.split(',').filter(e => e.trim()).length;
     }
+    if (sendToAll) {
+      return recipients?.totalCount || 0;
+    }
+    if (selectedUserIds.length > 0) {
+      return selectedUserIds.length;
+    }
+    if (customEmails.trim()) {
+      return customEmails.split(',').filter(e => e.trim()).length;
+    }
+    return 0;
   };
-
-  const filteredUsers = recipients?.recipients.filter(user => 
-    user.name?.toLowerCase().includes(recipientSearch.toLowerCase()) ||
-    user.email.toLowerCase().includes(recipientSearch.toLowerCase())
-  ) || [];
 
   if (statsLoading) {
     return (
@@ -228,7 +322,7 @@ export default function EmailMarketingPage() {
         <div>
           <h1 className="text-3xl font-bold">Email Marketing</h1>
           <p className="text-muted-foreground">
-            Create and send custom email campaigns with React code
+            Send beautiful email campaigns to your users
           </p>
         </div>
         <Badge variant="outline" className="flex items-center gap-2">
@@ -237,7 +331,7 @@ export default function EmailMarketingPage() {
         </Badge>
       </div>
 
-      {/* Email Statistics */}
+      {/* Statistics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -246,315 +340,409 @@ export default function EmailMarketingPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{emailStats?.totalUsers || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Available recipients
-            </p>
+            <p className="text-xs text-muted-foreground">Available recipients</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Newsletter Subscribers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Subscribers</CardTitle>
+            <Mail className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{emailStats?.totalSubscribers || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Total subscribers
-            </p>
+            <p className="text-xs text-muted-foreground">Newsletter subscribers</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Emails Today</CardTitle>
+            <CardTitle className="text-sm font-medium">Sent Today</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{emailStats?.emailsSentToday || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Sent today
-            </p>
+            <p className="text-xs text-muted-foreground">Emails sent today</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Open Rate</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{emailStats?.openRate || 0}%</div>
-            <p className="text-xs text-muted-foreground">
-              Email engagement
-            </p>
+            <p className="text-xs text-muted-foreground">Average open rate</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Email Composer */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Code className="h-5 w-5" />
-            Email Campaign Builder
-          </CardTitle>
-          <CardDescription>
-            Build custom emails using React code
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Code Editor */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="emailCode">React Email Code *</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowTemplateForm(!showTemplateForm)}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Save Template
-                </Button>
-              </div>
-            </div>
-            
-            {showTemplateForm && (
-              <div className="flex gap-2 p-3 bg-muted rounded-lg">
-                <Input
-                  placeholder="Template name..."
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={saveTemplate} size="sm">
-                  <Save className="h-4 w-4" />
-                </Button>
-                <Button 
-                  onClick={() => setShowTemplateForm(false)} 
-                  size="sm" 
-                  variant="outline"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
+      {/* Main Content */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Email Composer - Left Side */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Campaign</CardTitle>
+              <CardDescription>
+                Compose your email or choose from templates
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="compose">Compose</TabsTrigger>
+                  <TabsTrigger value="templates">Templates</TabsTrigger>
+                </TabsList>
 
-            <Textarea
-              id="emailCode"
-              placeholder={`// Example React email component
-import * as React from 'react';
+                <TabsContent value="compose" className="space-y-4">
+                  {/* Subject Line */}
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject Line</Label>
+                    <Input
+                      id="subject"
+                      placeholder="Enter email subject..."
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                    />
+                  </div>
 
-export function EmailTemplate({ firstName }: { firstName: string }) {
-  return (
-    <div style={{ fontFamily: 'Arial, sans-serif', padding: '20px' }}>
-      <h1>Hello {firstName}!</h1>
-      <p>This is a custom email built with React.</p>
-      <a href="https://bazaar-vid.com" style={{ 
-        backgroundColor: '#3B82F6', 
-        color: 'white', 
-        padding: '10px 20px', 
-        textDecoration: 'none',
-        borderRadius: '5px' 
-      }}>
-        Visit Bazaar-Vid
-      </a>
-    </div>
-  );
-}`}
-              rows={15}
-              value={emailCode}
-              onChange={(e) => setEmailCode(e.target.value)}
-              className="font-mono text-sm"
-              required
-            />
-          </div>
-
-          {/* Saved Templates */}
-          {savedTemplates.length > 0 && (
-            <div className="space-y-2">
-              <Label>Saved Templates</Label>
-              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {savedTemplates.map((template) => (
-                  <div key={template.id} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-sm">{template.name}</h4>
+                  {/* Email Content */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="content">Email Content (HTML supported)</Label>
                       <Button
-                        onClick={() => deleteTemplate(template.id)}
+                        type="button"
+                        variant="outline"
                         size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0"
+                        onClick={() => setShowPreview(!showPreview)}
                       >
-                        <X className="h-3 w-3" />
+                        {showPreview ? (
+                          <>
+                            <EyeOff className="h-4 w-4 mr-1" />
+                            Hide Preview
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-4 w-4 mr-1" />
+                            Show Preview
+                          </>
+                        )}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {new Date(template.createdAt).toLocaleDateString()}
-                    </p>
-                    <Button
-                      onClick={() => loadTemplate(template)}
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Load Template
-                    </Button>
+                    
+                    <Textarea
+                      id="content"
+                      placeholder="Enter your email content here. HTML tags are supported for formatting."
+                      rows={12}
+                      value={emailContent}
+                      onChange={(e) => setEmailContent(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+
+                    {/* Quick formatting tips */}
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>💡 Tips: Use HTML for formatting</p>
+                      <p>• &lt;h2&gt;Heading&lt;/h2&gt; for titles</p>
+                      <p>• &lt;p&gt;Paragraph&lt;/p&gt; for text</p>
+                      <p>• &lt;ul&gt;&lt;li&gt;Item&lt;/li&gt;&lt;/ul&gt; for lists</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          <Separator />
+                  {/* Save as Template */}
+                  {emailContent.trim() && emailSubject.trim() && (
+                    <div className="flex items-center gap-2">
+                      {showTemplateForm ? (
+                        <>
+                          <Input
+                            placeholder="Template name..."
+                            value={templateName}
+                            onChange={(e) => setTemplateName(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button onClick={saveTemplate} size="sm">
+                            <Save className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            onClick={() => setShowTemplateForm(false)} 
+                            size="sm" 
+                            variant="outline"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowTemplateForm(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Save as Template
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
-          {/* Recipient Selection */}
-          <div className="space-y-4">
-            <Label>Recipients</Label>
-            
-            {/* Segment Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Target Segment
-              </label>
-              <select
-                value={selectedSegment}
-                onChange={(e) => setSelectedSegment(e.target.value as 'users' | 'subscribers' | 'all' | 'none')}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Recipients ({recipients?.segments.users || 0} users + {recipients?.segments.subscribers || 0} subscribers)</option>
-                <option value="users">Registered Users ({recipients?.segments.users || 0})</option>
-                <option value="subscribers">Newsletter Subscribers ({recipients?.segments.subscribers || 0})</option>
-                <option value="none">None</option>
-              </select>
-            </div>
+                  {/* Email Preview */}
+                  {showPreview && emailContent && (
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="bg-muted px-4 py-2 border-b">
+                        <p className="text-sm font-medium">Email Preview</p>
+                      </div>
+                      <div className="bg-white p-4 max-h-96 overflow-y-auto">
+                        <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML() }} />
+                      </div>
+                    </div>
+                  )}
+                </TabsContent>
 
-            {/* Send to All Toggle */}
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={sendToAll}
-                  onChange={(e) => {
-                    setSendToAll(e.target.checked);
-                    if (e.target.checked) {
-                      setCustomEmail('');
-                      setSelectedUserIds([]);
-                    }
-                  }}
-                  className="mr-2"
-                  disabled={selectedSegment === 'none'} // Disable when "none" is selected
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  {selectedSegment === 'none' ? (
-                    <span className="text-gray-400">Send to all (disabled - no segment selected)</span>
-                  ) : (
+                <TabsContent value="templates" className="space-y-4">
+                  {/* Template Library */}
+                  <div className="space-y-3">
+                    <h3 className="font-medium">Template Library</h3>
+                    <div className="grid gap-3">
+                      {TEMPLATE_LIBRARY.map((template) => {
+                        const Icon = template.icon;
+                        return (
+                          <div key={template.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-start gap-3 flex-1">
+                                <Icon className="h-5 w-5 text-muted-foreground mt-0.5" />
+                                <div className="flex-1">
+                                  <h4 className="font-medium">{template.name}</h4>
+                                  <p className="text-sm text-muted-foreground">{template.category}</p>
+                                  <p className="text-sm mt-1">{template.subject}</p>
+                                </div>
+                              </div>
+                              <Button
+                                onClick={() => loadTemplate(template)}
+                                size="sm"
+                                variant="outline"
+                              >
+                                Use Template
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Saved Templates */}
+                  {savedTemplates.length > 0 && (
                     <>
-                      Send to all {selectedSegment === 'all' ? 'recipients' : selectedSegment} 
-                      ({selectedSegment === 'all' ? (recipients?.totalCount || 0) : 
-                        selectedSegment === 'users' ? (recipients?.segments.users || 0) : 
-                        (recipients?.segments.subscribers || 0)} emails)
+                      <Separator />
+                      <div className="space-y-3">
+                        <h3 className="font-medium">Your Saved Templates</h3>
+                        <div className="grid gap-3">
+                          {savedTemplates.map((template) => (
+                            <div key={template.id} className="border rounded-lg p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-medium">{template.name}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {new Date(template.createdAt).toLocaleDateString()}
+                                  </p>
+                                  <p className="text-sm mt-1">{template.subject}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    onClick={() => loadTemplate(template)}
+                                    size="sm"
+                                    variant="outline"
+                                  >
+                                    Use
+                                  </Button>
+                                  <Button
+                                    onClick={() => deleteTemplate(template.id)}
+                                    size="sm"
+                                    variant="ghost"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </>
                   )}
-                </span>
-              </label>
-            </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </div>
 
-            {(!sendToAll || selectedSegment === 'none') && (
-              <>
-                {/* Custom Email Input */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Custom Email Addresses (comma-separated)
-                  </label>
-                  <textarea
-                    value={customEmail}
-                    onChange={(e) => {
-                      setCustomEmail(e.target.value);
-                      if (e.target.value.trim()) {
+        {/* Recipients - Right Side */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recipients</CardTitle>
+              <CardDescription>
+                Choose who receives this email
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Segment Selection */}
+              <div className="space-y-2">
+                <Label>Target Audience</Label>
+                <select
+                  value={selectedSegment}
+                  onChange={(e) => {
+                    setSelectedSegment(e.target.value as any);
+                    setSelectedUserIds([]);
+                    setSendToAll(false);
+                  }}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="none">Custom Recipients</option>
+                  <option value="all">All Users & Subscribers</option>
+                  <option value="users">Registered Users Only</option>
+                  <option value="subscribers">Newsletter Subscribers Only</option>
+                </select>
+              </div>
+
+              {/* Send to All Toggle */}
+              {selectedSegment !== 'none' && (
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="send-all"
+                    checked={sendToAll}
+                    onCheckedChange={(checked) => {
+                      setSendToAll(checked);
+                      if (checked) {
                         setSelectedUserIds([]);
+                        setCustomEmails('');
                       }
                     }}
+                  />
+                  <Label htmlFor="send-all">
+                    Send to all {selectedSegment === 'all' ? 'recipients' : selectedSegment}
+                    {recipients && ` (${recipients.totalCount})`}
+                  </Label>
+                </div>
+              )}
+
+              {/* Custom Emails */}
+              {!sendToAll && (
+                <div className="space-y-2">
+                  <Label>Custom Email Addresses</Label>
+                  <Textarea
                     placeholder="email1@example.com, email2@example.com"
                     rows={3}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={customEmails}
+                    onChange={(e) => setCustomEmails(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Separate multiple emails with commas
+                  </p>
                 </div>
+              )}
 
-                {/* User Search and Selection - Only show when segment is selected and no custom emails */}
-                {selectedSegment !== 'none' && !customEmail.trim() && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Search and Select Recipients
-                    </label>
-                    <input
-                      type="text"
+              {/* User Selection */}
+              {selectedSegment !== 'none' && !sendToAll && (
+                <div className="space-y-2">
+                  <Label>Or Select Specific Users</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search users..."
                       value={recipientSearch}
                       onChange={(e) => setRecipientSearch(e.target.value)}
-                      placeholder="Search by name or email..."
-                      className="w-full p-2 border border-gray-300 rounded-lg mb-3 focus:ring-2 focus:ring-blue-500"
+                      className="pl-8"
                     />
-                    
-                    <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-lg">
-                      {recipients?.recipients.map((recipient) => (
-                        <label key={recipient.id} className="flex items-center p-3 hover:bg-gray-50 border-b last:border-b-0">
-                          <input
-                            type="checkbox"
-                            checked={selectedUserIds.includes(recipient.id)}
-                            onChange={(e) => handleUserSelection(recipient.id, e.target.checked)}
-                            className="mr-3"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium">{recipient.name || recipient.email}</span>
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                recipient.type === 'user' 
-                                  ? 'bg-blue-100 text-blue-800' 
-                                  : 'bg-green-100 text-green-800'
-                              }`}>
-                                {recipient.type === 'user' ? 'User' : 'Subscriber'}
-                              </span>
-                            </div>
-                            {recipient.name && (
-                              <div className="text-sm text-gray-500">{recipient.email}</div>
+                  </div>
+                  
+                  <div className="border rounded-lg max-h-48 overflow-y-auto">
+                    {recipients?.recipients.map((recipient) => (
+                      <div
+                        key={recipient.id}
+                        onClick={() => toggleUserSelection(recipient.id)}
+                        className={`flex items-center p-2 hover:bg-muted/50 cursor-pointer transition-colors ${
+                          selectedUserIds.includes(recipient.id) ? 'bg-muted' : ''
+                        }`}
+                      >
+                        <div className="flex items-center flex-1">
+                          <div className={`w-4 h-4 border rounded mr-2 flex items-center justify-center ${
+                            selectedUserIds.includes(recipient.id) ? 'bg-primary border-primary' : 'border-input'
+                          }`}>
+                            {selectedUserIds.includes(recipient.id) && (
+                              <CheckCircle className="h-3 w-3 text-primary-foreground" />
                             )}
                           </div>
-                        </label>
-                      ))}
-                    </div>
-                    
-                    {selectedUserIds.length > 0 && (
-                      <div className="mt-2 text-sm text-gray-600">
-                        {selectedUserIds.length} recipient{selectedUserIds.length !== 1 ? 's' : ''} selected
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">
+                              {recipient.name || recipient.email}
+                            </p>
+                            {recipient.name && (
+                              <p className="text-xs text-muted-foreground">{recipient.email}</p>
+                            )}
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            {recipient.type}
+                          </Badge>
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                )}
-              </>
-            )}
-          </div>
+                </div>
+              )}
 
-          {/* Send Button */}
-          <Button 
-            onClick={handleSendEmail}
-            className="w-full" 
-            disabled={sendEmailMutation.isPending || !emailCode.trim()}
-          >
-            {sendEmailMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                Send Email Campaign
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+              {/* Recipient Summary */}
+              <div className="bg-muted rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Total Recipients</span>
+                  <Badge variant="secondary">{getRecipientCount()}</Badge>
+                </div>
+              </div>
+
+              {/* Send Button */}
+              <Button 
+                onClick={handleSendEmail}
+                className="w-full" 
+                disabled={sendEmailMutation.isPending || getRecipientCount() === 0 || !emailSubject.trim() || !emailContent.trim()}
+              >
+                {sendEmailMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send Campaign ({getRecipientCount()} recipients)
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Status Card */}
+          {!emailSubject && !emailContent && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center space-x-2 text-amber-600">
+                  <AlertCircle className="h-5 w-5" />
+                  <p className="text-sm font-medium">Getting Started</p>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  1. Choose a template or write your email
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  2. Select your recipients
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  3. Preview and send
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
-} 
+}

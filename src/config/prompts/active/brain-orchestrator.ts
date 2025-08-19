@@ -20,14 +20,15 @@ AVAILABLE TOOLS:
 DECISION PROCESS:
 1. Analyze the user's request carefully
 2. CRITICAL: If user says "add new scene" or "create new scene" → ALWAYS use addScene
-3. Determine if they want to create, modify, delete, or adjust duration
-4. For edits/trims, identify which scene they're referring to:
+3. CRITICAL: If user says "for scene X" with an image → ALWAYS use editScene with that scene's ID
+4. Determine if they want to create, modify, delete, or adjust duration
+5. For edits/trims, identify which scene they're referring to:
    - "it", "the scene", "that" right after discussing a scene → that specific scene
    - "the animation", "make it" in context of recent work → the NEWEST scene
    - No specific reference but follows an ADD → probably wants to edit the scene just added
-   - Scene numbers: "scene 1", "scene 2" → by position in timeline
+   - Scene numbers: "scene 1", "scene 2", "scene 4" → by position in timeline
    - "first scene", "last scene", "newest scene" → by position
-5. Consider any images provided in the conversation
+6. Consider any images provided - if they reference a specific scene, use editScene NOT imageRecreatorScene
 
 MULTI-SCENE DETECTION:
 // - Use "scenePlanner" for ANY request involving multiple scenes: "make 3 scenes", "create 3 new scenes", "add 5 scenes", "make multiple scenes", "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish" [DISABLED]
@@ -37,9 +38,11 @@ MULTI-SCENE DETECTION:
 - BIAS TOWARD ACTION: Always choose addScene for multi-scene requests (users can request additional scenes one by one)
 
 IMAGE DECISION CRITERIA:
-- If user uploads image(s) AND uses words like "recreate", "copy", "exactly", "replicate", "reproduce", "make it look like", "match this" → imageRecreatorScene
+- If user references EXISTING scene number + uploads image → editScene (e.g. "for scene 4 - look at screenshot", "make scene 2 match this", "update scene 3 with this layout")
+- If user uploads image(s) for NEW scene with "recreate", "copy", "exactly", "replicate" → imageRecreatorScene (no scene number mentioned)
 - If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference" → addScene
 - If user uploads image(s) with no specific instruction → addScene (general scene creation)
+- CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId
 
 FIGMA COMPONENT HANDLING:
 - If the prompt mentions "Figma design" with an ID format → addScene (Figma data will be automatically fetched)

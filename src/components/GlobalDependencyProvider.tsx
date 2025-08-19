@@ -11,16 +11,37 @@ import * as LucideIcons from 'lucide-react';
 import rough from 'roughjs';
 import { Icon } from '@iconify/react';
 
-// Import specific Google Fonts
-import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
-import { loadFont as loadRoboto } from '@remotion/google-fonts/Roboto';
-import { loadFont as loadOpenSans } from '@remotion/google-fonts/OpenSans';
-import { loadFont as loadPoppins } from '@remotion/google-fonts/Poppins';
-import { loadFont as loadMontserrat } from '@remotion/google-fonts/Montserrat';
+// Import our custom font system
+import { ensureFontLoaded } from '../remotion/fonts/loader';
 
 export function GlobalDependencyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Preload common fonts for the preview
+      const preloadCommonFonts = async () => {
+        const commonFonts = [
+          'Inter', 'DM Sans', 'Roboto', 'Poppins', 'Montserrat',
+          'Playfair Display', 'Merriweather', 'Lobster', 'Dancing Script',
+          'Pacifico', 'Fira Code', 'JetBrains Mono', 'Raleway', 'Ubuntu',
+          'Bebas Neue', 'Plus Jakarta Sans'
+        ];
+        
+        console.log('[Preview] Preloading common fonts...');
+        
+        for (const font of commonFonts) {
+          try {
+            await ensureFontLoaded(font, '400');
+            await ensureFontLoaded(font, '700');
+          } catch (error) {
+            console.warn(`[Preview] Failed to preload ${font}:`, error);
+          }
+        }
+        
+        console.log('[Preview] Font preloading complete');
+      };
+      
+      // Start preloading fonts in the background
+      preloadCommonFonts();
       (window as any).React = React;
       (window as any).ReactDOM = ReactDOM;
       (window as any).Remotion = Remotion;
@@ -56,49 +77,36 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       (window as any).IconifyIcon = IconifyWrapper;
       
-      // NEW: Add Google Fonts loader
+      // NEW: Add Font loader using our bundled fonts
       (window as any).RemotionGoogleFonts = {
-        loadFont: (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
+        loadFont: async (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
           // Handle case where AI passes options as first parameter
           let fontName: string;
+          let weights: string[] = ['400', '700']; // Default weights
+          
           if (typeof fontNameOrOptions === 'object' && fontNameOrOptions !== null) {
             // If first param is object, try to extract font name
             fontName = fontNameOrOptions.family || fontNameOrOptions.fontFamily || 'Inter';
-            options = fontNameOrOptions;
+            weights = fontNameOrOptions.weights || options?.weights || weights;
           } else {
             fontName = String(fontNameOrOptions || 'Inter');
+            weights = options?.weights || weights;
           }
           
-          // Map common font names to their loaders
-          const fontMap: { [key: string]: () => any } = {
-            'Inter': loadInter,
-            'Roboto': loadRoboto,
-            'OpenSans': loadOpenSans,
-            'Poppins': loadPoppins,
-            'Montserrat': loadMontserrat,
-          };
+          console.log(`[Preview Font Loading] Loading ${fontName} with weights:`, weights);
           
-          const loader = fontMap[fontName];
-          if (loader) {
-            // Note: The actual @remotion/google-fonts loaders don't accept options
-            // in the way the generated code expects. They need to be loaded with
-            // specific weights at import time. For now, we'll just call the loader
-            // and ignore the options to prevent errors.
-            return loader();
+          try {
+            // Load all requested weights for this font
+            for (const weight of weights) {
+              await ensureFontLoaded(fontName, weight);
+            }
+            console.log(`[Preview Font Loading] Successfully loaded ${fontName}`);
+          } catch (error) {
+            console.warn(`[Preview Font Loading] Failed to load ${fontName}, using fallback:`, error);
+            // Fallback to Inter if the specific font fails
+            await ensureFontLoaded('Inter', '400');
           }
-          
-          // Default to Inter if font not found - only warn once per font
-          if (!((window as any)._fontWarnings || ((window as any)._fontWarnings = new Set())).has(fontName)) {
-            console.warn(`Font "${fontName}" not found, defaulting to Inter`);
-            (window as any)._fontWarnings.add(fontName);
-          }
-          return loadInter();
-        },
-        Inter: () => loadInter(),
-        Roboto: () => loadRoboto(),
-        OpenSans: () => loadOpenSans(),
-        Poppins: () => loadPoppins(),
-        Montserrat: () => loadMontserrat(),
+        }
       };
       
       // NEW: Add Avatar System - Ultra Simple (R2 Storage URLs)

@@ -8,10 +8,9 @@ import NewsletterEmailTemplate from '~/components/email/NewsletterEmailTemplate'
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_BASE_URL = 'https://api.resend.com';
 
-// Email from address - use bazaar.it domain
-const FROM_EMAIL = process.env.NODE_ENV === 'production' 
-  ? 'Bazaar <create@bazaar.it>'
-  : 'Bazaar <create@bazaar.it>';
+// Email from address - using your custom domain
+// Make sure bazaar.it is verified in Resend first
+const FROM_EMAIL = 'Bazaar <hello@bazaar.it>';
 
 // Email validation schemas
 const welcomeEmailSchema = z.object({

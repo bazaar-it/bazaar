@@ -122,7 +122,7 @@ export async function renderVideoOnLambda({
       privacy: "public",
       downloadBehavior: {
         type: "download",
-        fileName: `bazaar-vid-${projectId}.${format}`,
+        fileName: `bazaar-vid-export.${format}`,
       },
       webhook: webhookUrl ? {
         url: webhookUrl,
@@ -130,7 +130,7 @@ export async function renderVideoOnLambda({
       } : undefined,
       maxRetries: 3,
       frameRange: totalDuration > 0 ? [0, totalDuration - 1] : undefined,
-      outName: `${projectId}.${format}`,
+      outName: `renders/${projectId}-${Date.now()}.${format}`,
     });
     
     console.log(`[LambdaRender] Render started successfully`);
