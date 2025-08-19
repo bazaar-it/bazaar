@@ -27,6 +27,48 @@ interface UploadedIcon {
   name: string;
 }
 
+interface CachedIconData {
+  icons: IconifyIcon[];
+  svgCache: Record<string, string>;
+  searchQuery: string;
+  timestamp: number;
+}
+
+// Cache configuration
+const CACHE_KEY = 'iconsPanelCache';
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+// Helper functions for localStorage caching
+const saveToCache = (data: CachedIconData) => {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to save icons cache to localStorage:', error);
+  }
+};
+
+const loadFromCache = (): CachedIconData | null => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    
+    const data: CachedIconData = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Check if cache is expired
+    if (now - data.timestamp > CACHE_DURATION) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.warn('Failed to load icons cache from localStorage:', error);
+    localStorage.removeItem(CACHE_KEY);
+    return null;
+  }
+};
+
 export function IconsPanelG({ projectId }: IconsPanelGProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [icons, setIcons] = useState<IconifyIcon[]>([]);
@@ -77,7 +119,17 @@ export function IconsPanelG({ projectId }: IconsPanelGProps) {
       
       setIcons(iconList);
       // Pre-load SVGs for the first batch
-      preloadSvgs(iconList.slice(0, 12));
+      await preloadSvgs(iconList.slice(0, 12));
+      
+      // Save to cache after loading (with updated svgCache from preloadSvgs)
+      setTimeout(() => {
+        saveToCache({
+          icons: iconList,
+          svgCache: {},  // Will be updated by the cache save effect
+          searchQuery: '',  // Random icons have no search query
+          timestamp: Date.now()
+        });
+      }, 1000); // Small delay to allow SVGs to be cached
     } catch (error) {
       console.error('Failed to load random icons:', error);
       toast.error('Failed to load icons');
@@ -104,7 +156,17 @@ export function IconsPanelG({ projectId }: IconsPanelGProps) {
       
       setIcons(iconList);
       // Pre-load SVGs for the first batch
-      preloadSvgs(iconList.slice(0, 16));
+      await preloadSvgs(iconList.slice(0, 16));
+      
+      // Save search results to cache after loading
+      setTimeout(() => {
+        saveToCache({
+          icons: iconList,
+          svgCache: {},  // Will be updated by the cache save effect
+          searchQuery: query,
+          timestamp: Date.now()
+        });
+      }, 1000); // Small delay to allow SVGs to be cached
     } catch (error) {
       console.error('Failed to search icons:', error);
       toast.error('Failed to search icons');
@@ -129,9 +191,19 @@ export function IconsPanelG({ projectId }: IconsPanelGProps) {
     }
   }, [svgCache]);
 
-  // Load random sample of icons on initial render
+  // Load from cache on initial render, fallback to random icons
   useEffect(() => {
-    loadRandomIcons();
+    const cachedData = loadFromCache();
+    if (cachedData) {
+      console.log('[IconsPanelG] Loading from cache:', cachedData.icons.length, 'icons');
+      setIcons(cachedData.icons);
+      setSvgCache(cachedData.svgCache);
+      setSearchQuery(cachedData.searchQuery);
+      setHasSearched(!!cachedData.searchQuery);
+    } else {
+      console.log('[IconsPanelG] No cache found, loading random icons');
+      loadRandomIcons();
+    }
   }, [loadRandomIcons]);
 
   // Search debouncing
@@ -156,6 +228,28 @@ export function IconsPanelG({ projectId }: IconsPanelGProps) {
       }
     };
   }, [searchQuery, hasSearched, searchIcons, loadRandomIcons]);
+
+  // Save current state to cache whenever icons or svgCache changes
+  useEffect(() => {
+    if (icons.length > 0) {
+      const currentCache = loadFromCache();
+      // Only save if we have meaningful changes to avoid excessive localStorage writes
+      if (!currentCache || 
+          currentCache.icons.length !== icons.length || 
+          Object.keys(currentCache.svgCache).length !== Object.keys(svgCache).length) {
+        
+        const cacheData: CachedIconData = {
+          icons,
+          svgCache,
+          searchQuery,
+          timestamp: Date.now()
+        };
+        
+        saveToCache(cacheData);
+        console.log('[IconsPanelG] Saved to cache:', icons.length, 'icons,', Object.keys(svgCache).length, 'SVGs');
+      }
+    }
+  }, [icons, svgCache, searchQuery]);
 
   const handleIconDragStart = useCallback(async (e: React.DragEvent, icon: IconifyIcon) => {
     console.log('[IconsPanelG] Starting drag for icon:', icon.icon);
