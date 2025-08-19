@@ -37,12 +37,22 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
-    // GitHub App (repo access)
-    GITHUB_APP_ID: z.string().min(1),
-    GITHUB_CLIENT_ID: z.string().min(1),
-    GITHUB_CLIENT_SECRET: z.string().min(1),
-    GITHUB_APP_PRIVATE_KEY: z.string().min(1),
-    GITHUB_WEBHOOK_SECRET: z.string().min(1),
+    // GitHub App (repo access) - Optional in non-production
+    GITHUB_APP_ID: process.env.NODE_ENV === "production" 
+      ? z.string().min(1) 
+      : z.string().optional(),
+    GITHUB_CLIENT_ID: process.env.NODE_ENV === "production"
+      ? z.string().min(1)
+      : z.string().optional(),
+    GITHUB_CLIENT_SECRET: process.env.NODE_ENV === "production"
+      ? z.string().min(1)
+      : z.string().optional(),
+    GITHUB_APP_PRIVATE_KEY: process.env.NODE_ENV === "production"
+      ? z.string().min(1)
+      : z.string().optional(),
+    GITHUB_WEBHOOK_SECRET: process.env.NODE_ENV === "production"
+      ? z.string().min(1)
+      : z.string().optional(),
 
     // Worker Configuration (Server-side)
     WORKER_POLLING_INTERVAL: z.preprocess(
