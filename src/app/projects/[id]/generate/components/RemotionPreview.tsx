@@ -194,7 +194,7 @@ export default function RemotionPreview({
             doubleClickToFullscreen
             clickToPlay
             loop={loop}
-            autoPlay={false}
+            autoPlay={true}
             playbackRate={playbackRate}
             initiallyMuted={false}
             inFrame={inFrame}
