@@ -169,7 +169,7 @@ export function ImageUpload({
             <img 
               src={image.url} 
               alt="Upload preview" 
-              className="max-w-32 max-h-32 w-auto h-auto"
+              className="max-w-48 max-h-32 w-auto h-auto object-contain"
               style={{ borderRadius: '15px' }}
             />
           )}
