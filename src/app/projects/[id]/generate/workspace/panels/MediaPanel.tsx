@@ -6,12 +6,13 @@ import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { AudioPanel } from "./AudioPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Upload, Music } from "lucide-react";
+import { Upload, Music, Sparkles } from "lucide-react";
+import { IconPickerPanel } from "~/components/IconPickerPanel";
 
 type MediaPanelProps = {
   projectId: string;
   onInsertToChat?: (url: string) => void;
-  defaultTab?: 'uploads' | 'audio'; // For auto-opening to specific tab
+  defaultTab?: 'uploads' | 'audio' | 'icons'; // For auto-opening to specific tab
 };
 
 export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'uploads' }: MediaPanelProps) {
@@ -131,7 +132,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
-        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
           <TabsTrigger value="uploads" className="flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Uploads
@@ -139,6 +140,10 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
           <TabsTrigger value="audio" className="flex items-center gap-2">
             <Music className="w-4 h-4" />
             Audio
+          </TabsTrigger>
+          <TabsTrigger value="icons" className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4" />
+            Icons
           </TabsTrigger>
         </TabsList>
         
@@ -260,6 +265,10 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
         
         <TabsContent value="audio" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
           <AudioPanel projectId={projectId} />
+        </TabsContent>
+        
+        <TabsContent value="icons" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
+          <IconPickerPanel onInsertToChat={onInsertToChat} />
         </TabsContent>
       </Tabs>
     </div>

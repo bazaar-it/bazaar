@@ -128,6 +128,7 @@ export default function EmailMarketingPage() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailContent, setEmailContent] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [previewHTML, setPreviewHTML] = useState('');
   const [activeTab, setActiveTab] = useState('compose');
   
   // Template state
@@ -273,23 +274,60 @@ export default function EmailMarketingPage() {
     });
   };
 
-  const generatePreviewHTML = () => {
-    if (!emailContent.trim()) return '';
+  // Generate preview HTML when content or subject changes
+  useEffect(() => {
+    const generatePreview = async () => {
+      if (!emailContent.trim()) {
+        setPreviewHTML('');
+        return;
+      }
+      
+      try {
+        // First check if this is raw HTML content
+        let processedContent = emailContent;
+        
+        // If it's plain text, convert to HTML
+        if (!emailContent.includes('<') || !emailContent.includes('>')) {
+          processedContent = emailContent
+            .split('\n')
+            .map(line => line.trim() ? `<p>${line}</p>` : '<br/>')
+            .join('');
+        }
+        
+        // Render the email template
+        const html = await render(NewsletterEmailTemplate({
+          firstName: 'Preview User',
+          subject: emailSubject || 'Email Preview',
+          content: processedContent,
+          ctaText: 'Visit Bazaar',
+          ctaUrl: 'https://bazaar.it'
+        }));
+        
+        setPreviewHTML(html);
+      } catch (error) {
+        console.error('Preview error:', error);
+        // Fallback to basic preview
+        const fallbackHTML = `
+          <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f6f9fc; border-radius: 8px;">
+            <div style="background: white; padding: 32px; border-radius: 8px;">
+              <h2 style="color: #1f2937; margin-bottom: 16px;">${emailSubject || 'Email Preview'}</h2>
+              <div style="color: #374151; line-height: 1.6;">
+                ${emailContent}
+              </div>
+              <div style="margin-top: 24px;">
+                <a href="https://bazaar.it" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
+                  Visit Bazaar
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+        setPreviewHTML(fallbackHTML);
+      }
+    };
     
-    try {
-      const html = render(NewsletterEmailTemplate({
-        firstName: 'Preview User',
-        subject: emailSubject || 'Email Preview',
-        content: emailContent,
-        ctaText: 'Visit Bazaar',
-        ctaUrl: 'https://bazaar-vid.com'
-      }));
-      return html;
-    } catch (error) {
-      console.error('Preview error:', error);
-      return '<p>Error generating preview</p>';
-    }
-  };
+    generatePreview();
+  }, [emailContent, emailSubject]);
 
   const getRecipientCount = () => {
     if (selectedSegment === 'none' && customEmails.trim()) {
@@ -493,7 +531,13 @@ export default function EmailMarketingPage() {
                         <p className="text-sm font-medium">Email Preview</p>
                       </div>
                       <div className="bg-white p-4 max-h-96 overflow-y-auto">
-                        <div dangerouslySetInnerHTML={{ __html: generatePreviewHTML() }} />
+                        {previewHTML ? (
+                          <div dangerouslySetInnerHTML={{ __html: previewHTML }} />
+                        ) : (
+                          <div className="text-center text-muted-foreground py-4">
+                            Generating preview...
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

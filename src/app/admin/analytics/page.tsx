@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
+
+// Lazy load the world map component to avoid SSR issues
+const WorldMap = lazy(() => import('~/components/admin/WorldMap'));
 import { 
   CalendarIcon, 
   TrendingUpIcon, 
@@ -57,13 +60,14 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
-type Timeframe = '24h' | '7d' | '30d';
+type Timeframe = '24h' | '7d' | '30d' | 'all';
 type Metric = 'users' | 'projects' | 'scenes' | 'prompts';
 
 const timeframeLabels = {
   '24h': 'Last 24 Hours',
   '7d': 'Last 7 Days',
-  '30d': 'Last 30 Days'
+  '30d': 'Last 30 Days',
+  'all': 'All Time'
 };
 
 const metricLabels = {
@@ -129,7 +133,13 @@ const generateTemplateUsageData = () => [
 const generateHeatmapData = () => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const data = [];
+  const data: Array<{
+    day: string;
+    hour: string;
+    dayIndex: number;
+    hourIndex: number;
+    value: number;
+  }> = [];
   
   days.forEach((day, dayIndex) => {
     hours.forEach(hour => {
@@ -172,9 +182,75 @@ export default function AnalyticsPage() {
     { enabled: adminCheck?.isAdmin === true }
   );
 
-  const { data: analyticsData } = api.admin.getAnalyticsChart.useQuery(
-    { timeframe: selectedTimeframe, metric: 'users' },
+  const { data: analyticsData } = api.admin.getAnalyticsData.useQuery(
+    { timeframe: selectedTimeframe === 'all' ? '30d' : selectedTimeframe, metric: 'users' },
     { enabled: adminCheck?.isAdmin === true }
+  );
+  
+  // Get real country data from Google Analytics
+  const { data: gaCountryData, isLoading: gaLoading } = api.googleAnalytics.getCountryData.useQuery(
+    { timeframe: selectedTimeframe === '30d' ? '30d' : '7d' },
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
+  );
+  
+  // Get real page views data from Google Analytics
+  const { data: gaPageViews } = api.googleAnalytics.getPageViews.useQuery(
+    { timeframe: selectedTimeframe === '30d' ? '30d' : '7d' },
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
+  );
+  
+  // Get real traffic sources from Google Analytics
+  const { data: gaTrafficSources } = api.googleAnalytics.getTrafficSources.useQuery(
+    { timeframe: selectedTimeframe === '30d' ? '30d' : '7d' },
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
+  );
+  
+  // Get real device categories from Google Analytics
+  const { data: gaDevices } = api.googleAnalytics.getDeviceCategories.useQuery(
+    { timeframe: selectedTimeframe === '30d' ? '30d' : '7d' },
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
+  );
+  
+  // Get real-time users from Google Analytics
+  const { data: gaRealtimeUsers } = api.googleAnalytics.getRealtimeUsers.useQuery(
+    undefined,
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 30000 // Refresh every 30 seconds
+    }
+  );
+  
+  // Get time series data from Google Analytics
+  const { data: gaTimeSeries } = api.googleAnalytics.getTimeSeries.useQuery(
+    { 
+      timeframe: selectedTimeframe === '30d' ? '30d' : '7d',
+      metric: 'users'
+    },
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
+  );
+
+  // Get user engagement statistics
+  const { data: engagementStats } = api.admin.getUserEngagementStats.useQuery(
+    undefined,
+    { 
+      enabled: adminCheck?.isAdmin === true,
+      refetchInterval: 300000 // Refresh every 5 minutes
+    }
   );
 
   // Handle authentication and admin access
@@ -191,11 +267,44 @@ export default function AnalyticsPage() {
   }
 
   // Generate mock data for demonstration
-  const growthData = generateMockGrowthData(selectedTimeframe);
   const funnelData = generateConversionFunnelData();
   const templateData = generateTemplateUsageData();
   const heatmapData = generateHeatmapData();
-  const geoData = generateGeographicData();
+  
+  // Use real time series data for growth chart if available
+  const growthData = gaTimeSeries?.data && gaTimeSeries.data.length > 0
+    ? gaTimeSeries.data.map(item => ({
+        date: item.date,
+        users: item.value,
+        projects: Math.floor(Math.random() * 20) + 5, // Still mock for projects
+        scenes: Math.floor(Math.random() * 30) + 10, // Still mock for scenes
+        prompts: Math.floor(Math.random() * 40) + 15 // Still mock for prompts
+      }))
+    : generateMockGrowthData(selectedTimeframe);
+  
+  // Use real Google Analytics data for countries if available, otherwise use mock data
+  const geoData = gaCountryData?.countries && gaCountryData.countries.length > 0
+    ? gaCountryData.countries.map(country => ({
+        country: country.country,
+        users: country.visitors,
+        percentage: country.percentage
+      }))
+    : generateGeographicData();
+    
+  // Use real page views data if available
+  const pageViewsData = gaPageViews?.pages && gaPageViews.pages.length > 0
+    ? gaPageViews.pages
+    : [];
+    
+  // Use real traffic sources if available
+  const trafficSourcesData = gaTrafficSources?.sources && gaTrafficSources.sources.length > 0
+    ? gaTrafficSources.sources
+    : [];
+    
+  // Use real device data if available
+  const deviceData = gaDevices?.devices && gaDevices.devices.length > 0
+    ? gaDevices.devices
+    : [];
 
   // Custom tooltip for charts
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -283,7 +392,7 @@ export default function AnalyticsPage() {
       {/* Timeframe Selector */}
       <div className="flex items-center gap-4">
         <div className="flex bg-muted rounded-lg p-1">
-          {(['24h', '7d', '30d'] as const).map((timeframe) => (
+          {(['24h', '7d', '30d', 'all'] as const).map((timeframe) => (
             <button
               key={timeframe}
               onClick={() => setSelectedTimeframe(timeframe)}
@@ -299,7 +408,7 @@ export default function AnalyticsPage() {
         </div>
         <Badge variant="outline" className="ml-auto">
           <Activity className="h-3 w-3 mr-1" />
-          Live Data
+          {gaRealtimeUsers?.activeUsers || 0} Live Users
         </Badge>
       </div>
 
@@ -425,10 +534,20 @@ export default function AnalyticsPage() {
           {/* Growth Trends */}
           <Card>
             <CardHeader>
-              <CardTitle>Growth Trends</CardTitle>
-              <CardDescription>
-                Platform activity over {timeframeLabels[selectedTimeframe].toLowerCase()}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Growth Trends</CardTitle>
+                  <CardDescription>
+                    Platform activity over {timeframeLabels[selectedTimeframe].toLowerCase()}
+                  </CardDescription>
+                </div>
+                {gaTimeSeries?.data && gaTimeSeries.data.length > 0 && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live GA Data
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[400px]">
@@ -471,13 +590,20 @@ export default function AnalyticsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Conversion Funnel</CardTitle>
-                <CardDescription>User journey from signup to paid</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Conversion Funnel</CardTitle>
+                    <CardDescription>User journey from signup to paid</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                    MOCK DATA
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {funnelData.map((stage, index) => {
-                    const widthPercentage = (stage.value / funnelData[0].value) * 100;
+                    const widthPercentage = (stage.value / (funnelData[0]?.value || 1)) * 100;
                     return (
                       <div key={stage.stage} className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
@@ -494,9 +620,9 @@ export default function AnalyticsPage() {
                               backgroundColor: COLORS[index % COLORS.length],
                             }}
                           >
-                            {index > 0 && (
+                            {index > 0 && funnelData[index - 1] && (
                               <span className="text-xs text-white font-medium">
-                                {Math.round((stage.value / funnelData[index - 1].value) * 100)}%
+                                {Math.round((stage.value / (funnelData[index - 1]?.value || 1)) * 100)}%
                               </span>
                             )}
                           </div>
@@ -542,17 +668,267 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="users" className="space-y-6">
-          {/* Geographic Distribution */}
+          {/* User Engagement Insights */}
           <Card>
             <CardHeader>
-              <CardTitle>Geographic Distribution</CardTitle>
-              <CardDescription>User distribution by country</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>User Engagement Insights</CardTitle>
+                  <CardDescription>Understanding user behavior and drop-off points</CardDescription>
+                </div>
+                {engagementStats && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live Data
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* Users who never returned */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Never Returned After Signup</span>
+                    <Badge variant="destructive">Critical</Badge>
+                  </div>
+                  <div className="text-3xl font-bold">
+                    {engagementStats?.engagement.usersNeverReturnedPercentage || '0'}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {engagementStats?.engagement.usersNeverReturned || 0} of {engagementStats?.totalUsers || 0} users
+                  </p>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-red-500 h-2 rounded-full transition-all"
+                      style={{ width: `${engagementStats?.engagement.usersNeverReturnedPercentage || 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Users with no prompts */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Signed Up, No Prompts</span>
+                    <Badge variant="outline" className="bg-orange-100 text-orange-800">Warning</Badge>
+                  </div>
+                  <div className="text-3xl font-bold">
+                    {engagementStats?.engagement.usersNoPromptsPercentage || '0'}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {engagementStats?.engagement.usersNoPrompts || 0} users never submitted a prompt
+                  </p>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-orange-500 h-2 rounded-full transition-all"
+                      style={{ width: `${engagementStats?.engagement.usersNoPromptsPercentage || 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Users who never used templates */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Never Used Templates</span>
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Info</Badge>
+                  </div>
+                  <div className="text-3xl font-bold">
+                    {engagementStats?.engagement.usersNoTemplatesPercentage || '0'}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {engagementStats?.engagement.usersNoTemplates || 0} users started from scratch
+                  </p>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-yellow-500 h-2 rounded-full transition-all"
+                      style={{ width: `${engagementStats?.engagement.usersNoTemplatesPercentage || 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Prompt submission breakdown */}
+              <div className="mt-8">
+                <h4 className="text-sm font-semibold mb-4">Detailed Prompt Submission Distribution</h4>
+                <div className="space-y-3">
+                  {[
+                    { range: '0', label: 'No Prompts', color: 'red', key: 'usersNoPrompts' },
+                    { range: '1-4', label: 'Under 5 Prompts', color: 'orange', key: 'usersUnder5Prompts' },
+                    { range: '5-10', label: '5-10 Prompts', color: 'yellow', key: 'users5To10Prompts' },
+                    { range: '11-20', label: '11-20 Prompts', color: 'lime', key: 'users10To20Prompts' },
+                    { range: '21-50', label: '21-50 Prompts', color: 'green', key: 'users20To50Prompts' },
+                    { range: '51-100', label: '51-100 Prompts', color: 'emerald', key: 'users50To100Prompts' },
+                    { range: '101-200', label: '101-200 Prompts', color: 'teal', key: 'users100To200Prompts' },
+                    { range: '201-500', label: '201-500 Prompts', color: 'blue', key: 'users200To500Prompts' },
+                    { range: '500+', label: 'Super Users (500+)', color: 'purple', key: 'usersOver500Prompts' },
+                  ].map((item) => {
+                    const count = engagementStats?.engagement[item.key as keyof typeof engagementStats.engagement] || 0;
+                    const percentage = engagementStats?.engagement[`${item.key}Percentage` as keyof typeof engagementStats.engagement] || '0';
+                    const colorClass = {
+                      red: 'bg-red-100 text-red-700',
+                      orange: 'bg-orange-100 text-orange-700',
+                      yellow: 'bg-yellow-100 text-yellow-700',
+                      lime: 'bg-lime-100 text-lime-700',
+                      green: 'bg-green-100 text-green-700',
+                      emerald: 'bg-emerald-100 text-emerald-700',
+                      teal: 'bg-teal-100 text-teal-700',
+                      blue: 'bg-blue-100 text-blue-700',
+                      purple: 'bg-purple-100 text-purple-700',
+                    }[item.color];
+
+                    return (
+                      <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full ${colorClass} flex items-center justify-center`}>
+                            <span className="text-xs font-bold">{item.range}</span>
+                          </div>
+                          <span className="font-medium">{item.label}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">{percentage}%</p>
+                          <p className="text-xs text-muted-foreground">{count} users</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Active Days Distribution */}
+              <div className="mt-8">
+                <h4 className="text-sm font-semibold mb-4">User Activity Days Distribution</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Days Active</CardTitle>
+                      <CardDescription className="text-xs">How many different days users submitted prompts</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {[
+                          { label: '1 Day Only', key: 'usersActive1Day' },
+                          { label: '2 Days', key: 'usersActive2Days' },
+                          { label: '3-5 Days', key: 'usersActive3To5Days' },
+                          { label: '6-10 Days', key: 'usersActive6To10Days' },
+                          { label: '11-30 Days', key: 'usersActive11To30Days' },
+                          { label: '30+ Days', key: 'usersActiveOver30Days' },
+                        ].map((item) => {
+                          const count = engagementStats?.activeDays?.[item.key as keyof typeof engagementStats.activeDays] || 0;
+                          const percentage = engagementStats?.activeDays?.[`${item.key}Percentage` as keyof typeof engagementStats.activeDays] || '0';
+                          
+                          return (
+                            <div key={item.key} className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span>{item.label}</span>
+                                <span className="font-medium">{count} users ({percentage}%)</span>
+                              </div>
+                              <div className="w-full bg-muted rounded-full h-2">
+                                <div
+                                  className="bg-primary h-2 rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Active Days Chart */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Activity Days Chart</CardTitle>
+                      <CardDescription className="text-xs">Distribution of users by active days</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[200px]">
+                        {engagementStats?.activeDays?.distribution && (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart 
+                              data={Object.entries(engagementStats.activeDays.distribution).map(([days, count]) => ({
+                                days: parseInt(days),
+                                users: count
+                              })).sort((a, b) => a.days - b.days)}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                              <XAxis dataKey="days" label={{ value: 'Days Active', position: 'insideBottom', offset: -5 }} />
+                              <YAxis label={{ value: 'Users', angle: -90, position: 'insideLeft' }} />
+                              <Tooltip />
+                              <Bar dataKey="users" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Retention metrics */}
+              <div className="mt-8 grid gap-4 md:grid-cols-2">
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Day 1 Retention</span>
+                    <Badge variant={Number(engagementStats?.retention.dayRetentionRate) > 50 ? "default" : "destructive"}>
+                      {engagementStats?.retention.dayRetentionRate || '0'}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {engagementStats?.retention.retainedAfterDay || 0} of {engagementStats?.retention.eligibleForDayRetention || 0} users came back after first day
+                  </p>
+                </div>
+
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Week 1 Retention</span>
+                    <Badge variant={Number(engagementStats?.retention.weekRetentionRate) > 30 ? "default" : "destructive"}>
+                      {engagementStats?.retention.weekRetentionRate || '0'}%
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {engagementStats?.retention.retainedAfterWeek || 0} of {engagementStats?.retention.eligibleForWeekRetention || 0} users active after first week
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Geographic Distribution with World Map */}
+          <Card className="col-span-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Geographic Distribution</CardTitle>
+                  <CardDescription>User distribution by country</CardDescription>
+                </div>
+                {gaCountryData?.countries && gaCountryData.countries.length > 0 && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live GA Data
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* World Map Visualization */}
+              {geoData.length > 0 && (
+                <div className="mb-8">
+                  <Suspense fallback={
+                    <div className="h-[400px] flex items-center justify-center bg-muted/10 rounded-lg">
+                      <div className="text-muted-foreground">Loading world map...</div>
+                    </div>
+                  }>
+                    <WorldMap data={geoData} height={400} />
+                  </Suspense>
+                </div>
+              )}
+              
+              {/* Country breakdown with chart and list */}
               <div className="grid gap-6 lg:grid-cols-2">
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={geoData} layout="vertical">
+                    <BarChart data={geoData.slice(0, 10)} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis type="number" />
                       <YAxis dataKey="country" type="category" width={100} className="text-xs" />
@@ -561,19 +937,18 @@ export default function AnalyticsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
                   {geoData.map((country, index) => (
-                    <div key={country.country} className="flex items-center justify-between">
+                    <div key={country.country} className="flex items-center justify-between py-2 px-3 hover:bg-muted/50 rounded-lg transition-colors">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-xs font-semibold">
+                          {index + 1}
+                        </div>
                         <span className="font-medium">{country.country}</span>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold">{country.users.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">{country.percentage}%</p>
+                        <p className="font-semibold">{country.users.toLocaleString()} visitors</p>
+                        <p className="text-xs text-muted-foreground">{country.percentage}% of total</p>
                       </div>
                     </div>
                   ))}
@@ -585,8 +960,15 @@ export default function AnalyticsPage() {
           {/* User Activity Heatmap */}
           <Card>
             <CardHeader>
-              <CardTitle>Peak Usage Hours</CardTitle>
-              <CardDescription>Activity heatmap by day and hour</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Peak Usage Hours</CardTitle>
+                  <CardDescription>Activity heatmap by day and hour</CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                  MOCK DATA
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -642,11 +1024,61 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="content" className="space-y-6">
+          {/* Page Views */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Top Pages</CardTitle>
+                  <CardDescription>Most visited pages on your site</CardDescription>
+                </div>
+                {pageViewsData.length > 0 && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live GA Data
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {pageViewsData.length > 0 ? (
+                  pageViewsData.slice(0, 10).map((page, index) => (
+                    <div key={page.page} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{page.page}</span>
+                        <div className="text-right">
+                          <span className="text-sm font-semibold">{page.views} views</span>
+                          <span className="text-xs text-muted-foreground ml-2">({page.visitors} visitors)</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div
+                          className="bg-primary h-2 rounded-full transition-all"
+                          style={{ width: `${Math.min((page.views / (pageViewsData[0]?.views || 1)) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No page view data available</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          
           {/* Scene Generation Stats */}
           <Card>
             <CardHeader>
-              <CardTitle>Content Generation Statistics</CardTitle>
-              <CardDescription>AI-generated scenes and templates usage</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Content Generation Statistics</CardTitle>
+                  <CardDescription>AI-generated scenes and templates usage</CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                  MOCK DATA
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[400px]">
@@ -669,8 +1101,15 @@ export default function AnalyticsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Template Performance</CardTitle>
-                <CardDescription>Usage vs Export rate</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Template Performance</CardTitle>
+                    <CardDescription>Usage vs Export rate</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                    MOCK DATA
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
@@ -719,11 +1158,140 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="engagement" className="space-y-6">
+          {/* Traffic Sources */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Traffic Sources</CardTitle>
+                  <CardDescription>Where your visitors come from</CardDescription>
+                </div>
+                {trafficSourcesData.length > 0 && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live GA Data
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="h-[300px]">
+                  {trafficSourcesData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RePieChart>
+                        <Pie
+                          data={trafficSourcesData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ source, percentage }) => `${source} (${percentage}%)`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="sessions"
+                        >
+                          {trafficSourcesData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </RePieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      No traffic data available
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {trafficSourcesData.map((source, index) => (
+                    <div key={source.source} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="font-medium">{source.source}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{source.sessions} sessions</p>
+                        <p className="text-xs text-muted-foreground">
+                          {source.visitors} visitors • {source.bounceRate}% bounce
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Device Categories */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Device Categories</CardTitle>
+                  <CardDescription>Visitor devices breakdown</CardDescription>
+                </div>
+                {deviceData.length > 0 && (
+                  <Badge variant="default" className="bg-green-500">
+                    <Activity className="h-3 w-3 mr-1" />
+                    Live GA Data
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="h-[300px]">
+                  {deviceData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={deviceData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="device" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="users" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      No device data available
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {deviceData.map((device, index) => (
+                    <div key={device.device} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="font-medium">{device.device}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">{device.users} users</p>
+                        <p className="text-xs text-muted-foreground">{device.percentage}%</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
           {/* User Engagement Metrics */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
-                <CardTitle>Avg. Session Duration</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Avg. Session Duration</CardTitle>
+                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">
+                    MOCK
+                  </Badge>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">12m 34s</div>

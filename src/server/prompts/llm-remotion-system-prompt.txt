@@ -177,7 +177,7 @@ When generating custom Remotion components:
       "start": 0,
       "duration": 45,
       "data": {
-        "text": "Welcome to Bazaar-Vid!",
+        "text": "Welcome to Bazaar!",
         "color": "#fff",
         "backgroundColor": "#222",
         "fontSize": 70,

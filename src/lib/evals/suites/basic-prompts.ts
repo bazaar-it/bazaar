@@ -157,7 +157,7 @@ export const remotionSceneSuite: EvalSuite = {
       name: 'Simple Text Scene',
       type: 'scene',
       input: {
-        text: 'Create a Remotion scene that displays "Welcome to Bazaar-Vid" with a fade-in animation.',
+        text: 'Create a Remotion scene that displays "Welcome to Bazaar" with a fade-in animation.',
         context: {
           duration: 3,
           dimensions: { width: 1920, height: 1080 },

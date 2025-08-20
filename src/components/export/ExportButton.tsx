@@ -271,7 +271,7 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     );
   }
 
-  // Rendering state
+  // Rendering state with visual progress indicator
   if (renderId && status) {
     const progress = status.progress || 0; // Progress is already 0-100
     const isFFmpegFinalizing = status.isFinalizingFFmpeg;
@@ -280,19 +280,44 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
       <TooltipProvider>
         <Tooltip open={isFFmpegFinalizing}>
           <TooltipTrigger asChild>
-            <Button disabled variant="outline" size={size} className={className}>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {status.status === 'rendering' ? (
-                <>
-                  {progress}%
-                  {isFFmpegFinalizing && (
-                    <AlertCircle className="ml-1 h-3 w-3" />
+            <div className={`${className} relative inline-flex overflow-hidden rounded-md`}>
+              {/* Gray background button */}
+              <Button 
+                disabled 
+                variant="secondary" 
+                size={size} 
+                className="relative w-full border-0"
+                style={{
+                  backgroundColor: 'rgb(107 114 128)', // gray-500
+                  padding: size === 'sm' ? '0.5rem 1rem' : '0.625rem 1.25rem'
+                }}
+              >
+                {/* Orange progress fill - absolute positioned */}
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-orange-500"
+                  style={{
+                    width: `${progress}%`,
+                    transition: 'width 0.5s ease-out',
+                    background: 'linear-gradient(90deg, rgb(251 146 60) 0%, rgb(249 115 22) 100%)'
+                  }}
+                />
+                
+                {/* Button content - above the progress bar */}
+                <span className="relative z-10 flex items-center font-medium text-white">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {status.status === 'rendering' ? (
+                    <>
+                      Rendering {progress}%
+                      {isFFmpegFinalizing && (
+                        <AlertCircle className="ml-1 h-3 w-3" />
+                      )}
+                    </>
+                  ) : (
+                    'Starting...'
                   )}
-                </>
-              ) : (
-                'Starting...'
-              )}
-            </Button>
+                </span>
+              </Button>
+            </div>
           </TooltipTrigger>
           {isFFmpegFinalizing && (
             <TooltipContent side="bottom" className="max-w-[200px]">

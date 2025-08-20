@@ -11,7 +11,7 @@ export const CompositionProps = z.object({
 });
 
 export const defaultMyCompProps: z.infer<typeof CompositionProps> = {
-  title: "Bazaar-Vid",
+  title: "Bazaar",
 };
 
 export const DemoTimelineProps = z.object({
@@ -21,7 +21,7 @@ export const DemoTimelineProps = z.object({
 });
 
 export const defaultDemoProps: z.infer<typeof DemoTimelineProps> = {
-  title: "Bazaar-Vid",
+  title: "Bazaar",
   author: "You",
   imageUrl: "/demo.jpg",
 };

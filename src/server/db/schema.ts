@@ -1508,3 +1508,29 @@ export const evalsTable = createTable("evals", (d) => ({
   index("evals_created_idx").on(t.createdAt),
   index("evals_model_idx").on(t.model),
 ])
+
+// Icon usage tracking table
+export const iconUsage = createTable("icon_usage", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  userId: d.varchar({ length: 255 }).references(() => users.id),
+  projectId: d.uuid().references(() => projects.id, { onDelete: "cascade" }),
+  sceneId: d.uuid().references(() => scenes.id, { onDelete: "cascade" }),
+  iconName: d.varchar({ length: 255 }).notNull(), // e.g., "mdi:home"
+  iconCollection: d.varchar({ length: 100 }), // e.g., "mdi", "fa6-solid"
+  action: d.varchar({ length: 50 }).notNull(), // "selected", "copied", "inserted", "generated"
+  source: d.varchar({ length: 50 }).notNull(), // "picker", "chat", "ai_generated"
+  metadata: d.jsonb().$type<{
+    searchQuery?: string;
+    fromRecent?: boolean;
+    dragDrop?: boolean;
+    fontSize?: string;
+  }>(),
+  createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}), (t) => [
+  index("icon_usage_user_idx").on(t.userId),
+  index("icon_usage_project_idx").on(t.projectId),
+  index("icon_usage_icon_idx").on(t.iconName),
+  index("icon_usage_collection_idx").on(t.iconCollection),
+  index("icon_usage_created_idx").on(t.createdAt),
+  index("icon_usage_action_idx").on(t.action),
+])

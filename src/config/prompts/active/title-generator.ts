@@ -14,7 +14,7 @@ Rules for each title:
 - Clear and memorable
 - Related to the content/theme
 - Each title should be distinctly different from the others.
-- be smart and subtle, not too obvious
+- Be smart and subtle, not too obvious
 
 Examples of good title sets:
 - ["Finance Dashboard", "Data Visualization", "Chart Animation"]

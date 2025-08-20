@@ -38,7 +38,7 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
           </div>
           <div>
             <h2 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors">Admin Panel</h2>
-            <p className="text-xs text-gray-400">Bazaar-Vid Control Center</p>
+            <p className="text-xs text-gray-400">Bazaar Control Center</p>
           </div>
         </Link>
         <nav className="mt-10">

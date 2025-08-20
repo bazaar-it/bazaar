@@ -47,7 +47,13 @@ export class MediaValidation {
     }
     
     // Second pass: Validate against project media context
-    const validation = await mediaContextIntegration.validateGeneratedCode(fixedCode, projectId);
+    // Pass the provided URLs so validation knows these are valid
+    const validation = await mediaContextIntegration.validateGeneratedCode(
+      fixedCode, 
+      projectId,
+      providedUrls, // Pass image URLs
+      undefined     // No video URLs in this context
+    );
     
     if (!validation.valid && validation.fixedCode) {
       fixedCode = validation.fixedCode;

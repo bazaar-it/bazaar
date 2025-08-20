@@ -1,0 +1,320 @@
+/* Lambda Font Fallbacks - Maps custom fonts to system fonts available in Lambda */
+/* This file is used when rendering in AWS Lambda where external fonts cannot be fetched */
+
+/* Sans-serif fonts */
+@font-face {
+  font-family: 'Inter';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Raleway';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Ubuntu';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Open Sans';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Work Sans';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'League Spartan';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Outfit';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Sora';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  src: local('Noto Sans');
+  font-weight: 100 900;
+}
+
+/* Display/decorative fonts - fall back to Noto Sans Bold */
+@font-face {
+  font-family: 'Bebas Neue';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Abril Fatface';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Anton';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Bangers';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Fredoka One';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Fredoka';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Righteous';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Archivo Black';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Audiowide';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Oxanium';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Exo 2';
+  src: local('Noto Sans Bold');
+  font-weight: 100 900;
+}
+
+/* Serif fonts - fall back to serif */
+@font-face {
+  font-family: 'Playfair Display';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Libre Baskerville';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Lora';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Crimson Pro';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'EB Garamond';
+  src: local('serif');
+  font-weight: 100 900;
+}
+
+/* Script/handwriting fonts - fall back to cursive */
+@font-face {
+  font-family: 'Lobster';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Dancing Script';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Pacifico';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Great Vibes';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Kaushan Script';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Lobster Two';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Satisfy';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Allura';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Caveat';
+  src: local('cursive');
+  font-weight: 100 900;
+}
+
+/* Monospace fonts - fall back to monospace */
+@font-face {
+  font-family: 'Fira Code';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Ubuntu Mono';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Source Code Pro';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  src: local('monospace');
+  font-weight: 100 900;
+}
+
+/* Special case - Japanese font */
+@font-face {
+  font-family: 'Noto Sans JP';
+  src: local('Noto Sans Japanese');
+  font-weight: 100 900;
+}

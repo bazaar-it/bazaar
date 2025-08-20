@@ -7,6 +7,7 @@ import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
 import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 import { MediaValidation } from "./mediaValidation";
+import { validateAndFixCode } from "~/lib/utils/codeValidator";
 
 /**
  * Unified Code Processing Service - handles all code generation tools
@@ -50,10 +51,24 @@ export class UnifiedCodeProcessor {
       cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
     }
     
-    // 🚨 FIX: Remove mysterious "x" prefix if present
-    if (cleanCode.startsWith('x\n') || cleanCode.startsWith('x ')) {
-      console.warn('🚨 [UNIFIED PROCESSOR] Removing "x" prefix from generated code');
-      cleanCode = cleanCode.substring(1).trim();
+    // 🚨 CRITICAL FIX: Remove mysterious "x" prefix bug - check multiple patterns
+    // This bug causes "x is not defined" errors and is one of the most common failures
+    const firstLine = cleanCode.split('\n')[0].trim();
+    if (firstLine === 'x' || firstLine === 'x;' || firstLine === 'x ') {
+      console.error('🚨🚨🚨 [UNIFIED PROCESSOR] DETECTED "X" BUG - Removing standalone "x" from first line');
+      console.error('First line was:', firstLine);
+      console.error('Full code preview:', cleanCode.substring(0, 100));
+      
+      // Remove the entire first line if it's just "x"
+      const lines = cleanCode.split('\n');
+      lines.shift(); // Remove first line
+      cleanCode = lines.join('\n').trim();
+      
+      console.error('Fixed code preview:', cleanCode.substring(0, 100));
+    } else if (cleanCode.match(/^x[\s;]/)) {
+      // Also catch "x" followed by whitespace or semicolon at the very start
+      console.error('🚨 [UNIFIED PROCESSOR] Removing "x" prefix pattern from generated code');
+      cleanCode = cleanCode.replace(/^x[\s;]*\n?/, '').trim();
     }
     
     // 🚨 FIX: Replace incorrect currentFrame variable naming
@@ -83,6 +98,22 @@ export class UnifiedCodeProcessor {
       if (sceneMatch) {
         cleanCode = sceneMatch[0];
       }
+    }
+    
+    // 🚨 CRITICAL: Apply comprehensive validation and fixes
+    console.log('[UNIFIED PROCESSOR] Applying validation pipeline...');
+    const validationResult = validateAndFixCode(cleanCode);
+    
+    if (!validationResult.isValid && validationResult.fixedCode) {
+      console.warn('[UNIFIED PROCESSOR] Code had issues, applying fixes:', validationResult.fixesApplied);
+      cleanCode = validationResult.fixedCode;
+    } else if (!validationResult.isValid) {
+      console.error('[UNIFIED PROCESSOR] Code validation failed and could not be fixed:', validationResult.errors);
+      // Continue with the code anyway - better to try than fail completely
+    }
+    
+    if (validationResult.fixesApplied.length > 0) {
+      console.log('[UNIFIED PROCESSOR] Applied fixes:', validationResult.fixesApplied.join(', '));
     }
     
     // Extract duration

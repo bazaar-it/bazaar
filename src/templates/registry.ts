@@ -9,12 +9,10 @@ import AppleSignIn, { templateConfig as appleSignInConfig } from './AppleSignIn'
 import GitHubSignIn, { templateConfig as githubSignInConfig } from './GitHubSignIn';
 import GoogleSignIn, { templateConfig as googleSignInConfig } from './GoogleSignIn';
 import Coding, { templateConfig as codingConfig } from './Coding';
-import BlueGradientText, { templateConfig as blueGradientTextConfig } from './BlueGradientText';
 import GradientText, { templateConfig as gradientTextConfig } from './GradientText';
 import DualScreenApp, { templateConfig as dualScreenAppConfig } from './DualScreenApp';
 import AudioAnimation, { templateConfig as audioAnimationConfig } from './AudioAnimation';
 import PromptUI, { templateConfig as promptUIConfig } from './PromptUI';
-import Generating, { templateConfig as generatingConfig } from './Generating';
 import DotDotDot, { templateConfig as dotDotDotConfig } from './DotDotDot';
 import Placeholders, { templateConfig as placeholdersConfig } from './Placeholders';
 import WordFlip, { templateConfig as wordFlipConfig } from './WordFlip';
@@ -46,10 +44,8 @@ import FruitBG, { templateConfig as fruitBGConfig } from './FruitBG';
 import BahamasBG, { templateConfig as bahamasBGConfig } from './BahamasBG';
 import CoolSkyBG, { templateConfig as coolSkyBGConfig } from './CoolSkyBG';
 import VibeyBG, { templateConfig as vibeyBGConfig } from './VibeyBG';
-import HelloBubbles, { templateConfig as helloBubblesConfig } from './HelloBubbles';
 import VibesBG, { templateConfig as vibesBGConfig } from './VibesBG';
 import FastText, { templateConfig as fastTextConfig } from './FastText';
-import AirbnbApp, { templateConfig as airbnbAppConfig } from './AirbnbApp';
 import ChangelogFeature, { templateConfig as changelogFeatureConfig } from './ChangelogFeature';
 import ChangelogFix, { templateConfig as changelogFixConfig } from './ChangelogFix';
 
@@ -89,73 +85,49 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: FastText,
   }),
   
-  // 2. Airbnb app
-  addFormatSupport({
-    ...airbnbAppConfig,
-    component: AirbnbApp,
-  }),
-  
-  // 3. Prompt UI (now supports vertical with 99% width)
+  // 2. Prompt UI (now supports vertical with 99% width)
   addFormatSupport({
     ...promptUIConfig,
     component: PromptUI,
   }),
   
-  // 4. Today 1%
+  // 3. Today 1%
   addFormatSupport({
     ...today1PercentConfig,
     component: Today1Percent,
   }),
   
-  // 5. Hello Bubbles
-  addFormatSupport({
-    ...helloBubblesConfig,
-    component: HelloBubbles,
-  }),
-  
-  // 6. Generating
-  addFormatSupport({
-    ...generatingConfig,
-    component: Generating,
-  }),
-  
-  // 7. App Download
+  // 4. App Download
   addFormatSupport({
     ...appDownloadConfig,
     component: AppDownload,
   }),
   
-  // 8. App Jiggle
+  // 5. App Jiggle
   addFormatSupport({
     ...appJiggleConfig,
     component: AppJiggle,
   }),
   
-  // 9. Audio Animation
+  // 6. Audio Animation
   addFormatSupport({
     ...audioAnimationConfig,
     component: AudioAnimation,
   }),
   
-  // 10. Gradient Text
+  // 7. Gradient Text
   addFormatSupport({
     ...gradientTextConfig,
     component: GradientText,
   }),
   
-  // 11. Blue Gradient Text
-  addFormatSupport({
-    ...blueGradientTextConfig,
-    component: BlueGradientText,
-  }),
-  
-  // 12. Dark BG Gradient Text
+  // 8. Dark BG Gradient Text
   addFormatSupport({
     ...darkBGGradientTextConfig,
     component: DarkBGGradientText,
   }),
   
-  // 13. Keyboard Animation
+  // 9. Keyboard Animation
   addFormatSupport({
     ...keyboardConfig,
     component: Keyboard,

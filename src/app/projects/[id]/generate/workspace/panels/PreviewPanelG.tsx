@@ -139,24 +139,8 @@ export function PreviewPanelG({
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
   
-  // Initialize preview font loading for any Google Font
-  useEffect(() => {
-    import('../../../../../../remotion/fonts/preview-font-loader').then(({ initializePreviewFonts }) => {
-      initializePreviewFonts();
-    });
-  }, []);
-
-  // Load fonts for current scenes
-  useEffect(() => {
-    if (!dbScenes?.length) return;
-
-    import('../../../../../../remotion/fonts/preview-font-loader').then(({ loadPreviewFonts }) => {
-      const sceneCodes = dbScenes.map(scene => scene.tsxCode || '').filter(Boolean);
-      loadPreviewFonts(sceneCodes).catch((error: any) => {
-        console.warn('[PreviewPanelG] Error loading preview fonts:', error);
-      });
-    });
-  }, [dbScenes]);
+  // Fonts are now loaded via CSS - no JavaScript loading needed
+  // All 99 Google Fonts are available through fonts.css imported in MainCompositionSimple
   
   // Get scenes from reactive state
   const scenes = currentProps?.scenes || [];
@@ -522,76 +506,124 @@ function FallbackScene${sceneIndex}() {
       
       <div style={{
         background: 'white',
-        borderRadius: '20px',
-        padding: '48px',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.08)',
-        maxWidth: '520px',
+        borderRadius: '24px',
+        padding: '56px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+        maxWidth: '680px',
         textAlign: 'center',
         transform: \`scale(\${scale})\`,
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
         position: 'relative',
         zIndex: 1,
       }}>
+        {/* Status Badge */}
+        <div style={{
+          position: 'absolute',
+          top: '24px',
+          right: '24px',
+          background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+          color: 'white',
+          padding: '6px 12px',
+          borderRadius: '20px',
+          fontSize: '0.75rem',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}>
+          <span style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            background: 'white',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
+          AI FIXING IN PROGRESS
+        </div>
+        
         {/* Animated icon */}
         <div style={{ 
-          fontSize: '4rem', 
-          marginBottom: '1.5rem',
+          fontSize: '4.5rem', 
+          marginBottom: '2rem',
           transform: \`translateY(\${iconFloat}px)\`,
           transition: 'transform 0.3s ease',
         }}>
-          🛠️
+          🤖
         </div>
         
         <h3 style={{ 
-          color: '#1f2937', 
-          marginBottom: '16px',
-          fontSize: '1.5rem',
-          fontWeight: '700',
+          color: '#111827', 
+          marginBottom: '12px',
+          fontSize: '1.875rem',
+          fontWeight: '800',
           letterSpacing: '-0.02em',
         }}>
-          Scene ${sceneIndex + 1} Needs Attention
+          Compilation Issue Detected
         </h3>
         
         <p style={{ 
-          color: '#6b7280', 
-          marginBottom: '24px',
-          fontSize: '1rem',
-          lineHeight: '1.6',
-          maxWidth: '400px',
-          margin: '0 auto 24px',
+          color: '#4b5563', 
+          marginBottom: '8px',
+          fontSize: '1.125rem',
+          lineHeight: '1.5',
+          fontWeight: '500',
         }}>
-          <strong>${sceneName || `Scene ${sceneIndex + 1}`}</strong> encountered a temporary issue. 
-          The good news? All other scenes are playing perfectly!
+          Scene: <strong style={{ color: '#111827' }}>${sceneName || `Scene ${sceneIndex + 1}`}</strong>
         </p>
         
-        <button
-          onClick={handleAutoFix}
-          style={{
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '0.875rem 2rem',
-            fontSize: '1rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            marginBottom: '1.5rem',
-            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.25)',
-            transition: 'all 0.2s',
-            transform: 'translateY(0)',
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = 'translateY(-2px)';
-            e.target.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.35)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 4px 14px rgba(59, 130, 246, 0.25)';
-          }}
-        >
-          <span style={{ marginRight: '8px' }}>✨</span>
-          Fix Scene Automatically
-        </button>
+        <p style={{ 
+          color: '#6b7280', 
+          marginBottom: '32px',
+          fontSize: '1rem',
+          lineHeight: '1.6',
+          maxWidth: '500px',
+          margin: '16px auto 32px',
+        }}>
+          The AI-generated code has a compilation error that prevents it from running.
+          <strong style={{ color: '#059669', display: 'block', marginTop: '12px' }}>
+            Good news: Our AI agent is already working on a fix and will automatically update your video when ready!
+          </strong>
+        </p>
+        
+        {/* Progress indicator */}
+        <div style={{
+          background: '#f3f4f6',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '24px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '12px',
+          }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              border: '3px solid #e5e7eb',
+              borderTopColor: '#3b82f6',
+              animation: 'spin 1s linear infinite',
+            }} />
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#111827' }}>
+                Auto-Fix Agent Active
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                Analyzing and repairing code...
+              </div>
+            </div>
+          </div>
+          <div style={{
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            marginTop: '8px',
+          }}>
+            This usually takes 15-30 seconds
+          </div>
+        </div>
         
         <div style={{ 
           display: 'flex',
@@ -600,8 +632,8 @@ function FallbackScene${sceneIndex}() {
           gap: '8px',
           color: '#10b981',
           fontSize: '0.875rem',
-          fontWeight: '500',
-          marginBottom: '1rem',
+          fontWeight: '600',
+          marginBottom: '24px',
         }}>
           <span style={{ 
             width: '8px',
@@ -609,56 +641,68 @@ function FallbackScene${sceneIndex}() {
             borderRadius: '50%',
             background: '#10b981',
             display: 'inline-block',
-            animation: 'pulse 2s ease-in-out infinite',
           }} />
-          Other scenes playing normally
+          Other scenes continue playing normally
         </div>
+        
+        ${errorDetails ? `
+        <div style={{ 
+          marginTop: '24px',
+          padding: '16px',
+          background: '#fef2f2',
+          borderRadius: '12px',
+          border: '1px solid #fecaca',
+          textAlign: 'left',
+        }}>
+          <div style={{ 
+            fontSize: '0.75rem',
+            fontWeight: '600',
+            color: '#991b1b',
+            marginBottom: '8px',
+          }}>
+            Technical Details:
+          </div>
+          <div style={{ 
+            fontSize: '0.7rem',
+            color: '#dc2626',
+            fontFamily: 'monospace',
+            lineHeight: '1.5',
+            wordBreak: 'break-word',
+            maxHeight: '120px',
+            overflowY: 'auto',
+          }}>
+            ${errorDetails}
+          </div>
+        </div>
+        ` : ''}
         
         <div style={{ 
           fontSize: '0.75rem', 
           color: '#9ca3af', 
-          marginTop: '16px', 
+          marginTop: '24px', 
           fontStyle: 'italic',
-          maxWidth: '380px',
-          margin: '16px auto 0',
+          maxWidth: '420px',
+          margin: '24px auto 0',
           lineHeight: '1.5',
+          paddingTop: '20px',
+          borderTop: '1px solid #e5e7eb',
         }}>
           "If you're not embarrassed by the first version of your product, you've launched too late."
           <br />
           <span style={{ fontWeight: '500' }}>— Reid Hoffman</span>
         </div>
-        
-        ${errorDetails ? `
-        <details style={{ 
-          marginTop: '16px',
-          textAlign: 'left',
-          background: '#f9fafb',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb',
-        }}>
-          <summary style={{ 
-            cursor: 'pointer',
-            fontSize: '0.75rem',
-            color: '#6b7280',
-            fontWeight: '500',
-            userSelect: 'none',
-          }}>
-            Technical Details
-          </summary>
-          <div style={{ 
-            fontSize: '0.75rem',
-            color: '#9ca3af',
-            marginTop: '8px',
-            fontFamily: 'monospace',
-            lineHeight: '1.4',
-            wordBreak: 'break-word',
-          }}>
-            ${errorDetails.substring(0, 150)}${errorDetails.length > 150 ? '...' : ''}
-          </div>
-        </details>
-        ` : ''}
       </div>
+      
+      <style jsx>{\`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      \`}</style>
       
       <style jsx>{\`
         @keyframes pulse {
@@ -800,38 +844,161 @@ class SingleSceneErrorBoundary extends React.Component {
           }}>
             <div style={{
               background: 'white',
-              borderRadius: '16px',
-              padding: '32px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-              maxWidth: '450px',
+              borderRadius: '24px',
+              padding: '48px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+              maxWidth: '640px',
               textAlign: 'center',
               transform: \`scale(\${scale})\`,
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+              position: 'relative',
             }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚡</div>
-              <h3 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.25rem', fontWeight: '600' }}>
-                Runtime Error
-              </h3>
-              <p style={{ color: '#b45309', marginBottom: '16px', fontSize: '0.875rem' }}>
-                This scene encountered an error during playback
-              </p>
-              <details style={{ 
-                marginTop: '12px',
-                textAlign: 'left',
-                background: '#fef3c7',
-                padding: '8px 12px',
-                borderRadius: '6px',
+              {/* Status Badge */}
+              <div style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                padding: '6px 12px',
+                borderRadius: '20px',
                 fontSize: '0.75rem',
-                color: '#92400e'
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}>
-                <summary style={{ cursor: 'pointer', fontWeight: '500', userSelect: 'none' }}>
-                  Error Details
-                </summary>
-                <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '0.7rem', opacity: 0.8, wordBreak: 'break-word' }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
+                AI FIXING IN PROGRESS
+              </div>
+              
+              <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>⚡</div>
+              <h3 style={{ color: '#92400e', marginBottom: '12px', fontSize: '1.75rem', fontWeight: '700' }}>
+                Runtime Error Detected
+              </h3>
+              <p style={{ color: '#b45309', marginBottom: '8px', fontSize: '1.125rem', fontWeight: '500' }}>
+                Scene crashed during playback
+              </p>
+              <p style={{ 
+                color: '#6b7280', 
+                marginBottom: '32px',
+                fontSize: '1rem',
+                lineHeight: '1.6',
+                maxWidth: '480px',
+                margin: '16px auto 32px',
+              }}>
+                The scene compiled successfully but encountered an error while running.
+                <strong style={{ color: '#059669', display: 'block', marginTop: '12px' }}>
+                  Don't worry! Our AI agent is automatically fixing this and will update your video shortly.
+                </strong>
+              </p>
+              
+              {/* Progress indicator */}
+              <div style={{
+                background: '#fef3c7',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '24px',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  marginBottom: '12px',
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    border: '3px solid #fed7aa',
+                    borderTopColor: '#f59e0b',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                  <div style={{ textAlign: 'left' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#92400e' }}>
+                      Auto-Fix Agent Working
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#b45309' }}>
+                      Debugging and repairing...
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#92400e',
+                  marginTop: '8px',
+                }}>
+                  Typically resolves in 15-30 seconds
+                </div>
+              </div>
+              
+              <div style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                color: '#10b981',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                marginBottom: '24px',
+              }}>
+                <span style={{ 
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  display: 'inline-block',
+                }} />
+                Your other scenes are playing normally
+              </div>
+              
+              <div style={{ 
+                marginTop: '24px',
+                padding: '16px',
+                background: '#fef2f2',
+                borderRadius: '12px',
+                border: '1px solid #fecaca',
+                textAlign: 'left',
+              }}>
+                <div style={{ 
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  color: '#991b1b',
+                  marginBottom: '8px',
+                }}>
+                  Technical Details:
+                </div>
+                <div style={{ 
+                  fontSize: '0.7rem',
+                  color: '#dc2626',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.5',
+                  wordBreak: 'break-word',
+                  maxHeight: '100px',
+                  overflowY: 'auto',
+                }}>
                   {this.state.error?.message || 'Unknown error'}
                 </div>
-              </details>
+              </div>
             </div>
+            
+            <style jsx>{\`
+              @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.3; }
+              }
+              @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+            \`}</style>
           </AbsoluteFill>
         );
       };
@@ -1032,20 +1199,52 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
           React.createElement('div', {
             style: {
               background: 'white',
-              borderRadius: '16px',
-              padding: '32px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-              maxWidth: '450px',
+              borderRadius: '24px',
+              padding: '48px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+              maxWidth: '640px',
               textAlign: 'center',
               transform: \`scale(\${scale})\`,
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+              position: 'relative',
             }
           }, [
+            // Status Badge
+            React.createElement('div', {
+              key: 'badge',
+              style: {
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }
+            }, [
+              React.createElement('span', {
+                key: 'pulse',
+                style: {
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  animation: 'pulse 1.5s ease-in-out infinite',
+                }
+              }),
+              'AI FIXING IN PROGRESS'
+            ]),
+            
             React.createElement('div', {
               key: 'icon',
               style: { 
-                fontSize: '3rem', 
-                marginBottom: '1rem',
+                fontSize: '4rem', 
+                marginBottom: '1.5rem',
               }
             }, '⚡'),
             
@@ -1054,17 +1253,17 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
               style: { 
                 color: '#92400e', 
                 marginBottom: '12px',
-                fontSize: '1.25rem',
-                fontWeight: '600'
+                fontSize: '1.75rem',
+                fontWeight: '700'
               }
-            }, 'Scene ${index + 1} Runtime Error'),
+            }, 'Runtime Error - Scene ${index + 1}'),
             
             React.createElement('p', {
               key: 'scene-name',
               style: { 
                 color: '#b45309', 
                 marginBottom: '8px',
-                fontSize: '0.875rem',
+                fontSize: '1.125rem',
                 fontWeight: '500'
               }
             }, '${(originalScene.data as any)?.name || 'Unnamed Scene'}'),
@@ -1072,40 +1271,75 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
             React.createElement('p', {
               key: 'msg',
               style: { 
-                color: '#92400e', 
-                marginBottom: '16px',
-                fontSize: '0.875rem',
-                opacity: 0.8
+                color: '#6b7280', 
+                marginBottom: '32px',
+                fontSize: '1rem',
+                lineHeight: '1.6',
+                maxWidth: '480px',
+                margin: '16px auto 32px',
               }
-            }, 'This scene crashed during playback, but other scenes continue normally.'),
+            }, [
+              'The scene compiled successfully but crashed during playback.',
+              React.createElement('strong', {
+                key: 'good-news',
+                style: { color: '#059669', display: 'block', marginTop: '12px' }
+              }, "Don't worry! Our AI agent is automatically fixing this and will update your video shortly.")
+            ]),
             
-            React.createElement('button', {
-              key: 'autofix',
-              onClick: () => {
-                const autoFixEvent = new CustomEvent('trigger-autofix', {
-                  detail: {
-                    sceneId: '${originalScene.id}',
-                    sceneName: '${(originalScene.data as any)?.name || `Scene ${index + 1}`}',
-                    sceneIndex: ${index + 1},
-                    error: this.state.error
-                  }
-                });
-                window.dispatchEvent(autoFixEvent);
-              },
+            // Progress indicator
+            React.createElement('div', {
+              key: 'progress',
               style: {
-                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '0.625rem 1.5rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                marginBottom: '1rem',
-                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-                transition: 'all 0.2s'
+                background: '#fef3c7',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '24px',
               }
-            }, '✨ Auto-Fix Scene'),
+            }, [
+              React.createElement('div', {
+                key: 'progress-content',
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  marginBottom: '12px',
+                }
+              }, [
+                React.createElement('div', {
+                  key: 'spinner',
+                  style: {
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    border: '3px solid #fed7aa',
+                    borderTopColor: '#f59e0b',
+                    animation: 'spin 1s linear infinite',
+                  }
+                }),
+                React.createElement('div', {
+                  key: 'progress-text',
+                  style: { textAlign: 'left' }
+                }, [
+                  React.createElement('div', {
+                    key: 'agent-status',
+                    style: { fontSize: '0.875rem', fontWeight: '600', color: '#92400e' }
+                  }, 'Auto-Fix Agent Working'),
+                  React.createElement('div', {
+                    key: 'agent-action',
+                    style: { fontSize: '0.75rem', color: '#b45309' }
+                  }, 'Debugging and repairing...')
+                ])
+              ]),
+              React.createElement('div', {
+                key: 'eta',
+                style: {
+                  fontSize: '0.75rem',
+                  color: '#92400e',
+                  marginTop: '8px',
+                }
+              }, 'Typically resolves in 15-30 seconds')
+            ]),
             
             React.createElement('div', {
               key: 'status',
@@ -1113,53 +1347,56 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px',
-                color: '#059669',
-                fontSize: '0.75rem',
-                fontWeight: '500',
+                gap: '8px',
+                color: '#10b981',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                marginBottom: '24px',
               }
             }, [
               React.createElement('span', {
                 key: 'dot',
                 style: { 
-                  width: '6px',
-                  height: '6px',
+                  width: '8px',
+                  height: '8px',
                   borderRadius: '50%',
-                  background: '#059669',
+                  background: '#10b981',
                   display: 'inline-block'
                 }
               }),
-              'Other scenes playing normally'
+              'Your other scenes are playing normally'
             ]),
             
-            React.createElement('details', {
+            React.createElement('div', {
               key: 'error-details',
               style: { 
-                marginTop: '12px',
+                marginTop: '24px',
+                padding: '16px',
+                background: '#fef2f2',
+                borderRadius: '12px',
+                border: '1px solid #fecaca',
                 textAlign: 'left',
-                background: '#fef3c7',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                fontSize: '0.75rem',
-                color: '#92400e'
               }
             }, [
-              React.createElement('summary', {
-                key: 'summary',
+              React.createElement('div', {
+                key: 'details-title',
                 style: { 
-                  cursor: 'pointer',
-                  fontWeight: '500',
-                  userSelect: 'none'
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  color: '#991b1b',
+                  marginBottom: '8px',
                 }
-              }, 'Error Details'),
+              }, 'Technical Details:'),
               React.createElement('div', {
                 key: 'error-text',
                 style: { 
-                  marginTop: '4px',
-                  fontFamily: 'monospace',
                   fontSize: '0.7rem',
-                  opacity: 0.8,
-                  wordBreak: 'break-word'
+                  color: '#dc2626',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.5',
+                  wordBreak: 'break-word',
+                  maxHeight: '100px',
+                  overflowY: 'auto',
                 }
               }, this.state.error?.message || 'Unknown error')
             ])

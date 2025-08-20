@@ -2,87 +2,17 @@
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
-import { ensureFonts, ensureFontLoaded } from './fonts/loader';
+// Import CSS fonts - works in both local and Lambda without cancelRender() errors
+import './fonts.css';
 
-// Function to extract fonts from scene code
-function extractFontsFromScenes(scenes: any[]): Array<{family: string; weights: Set<string>}> {
-  const fontMap = new Map<string, Set<string>>();
-  
-  for (const scene of scenes) {
-    const code = scene.jsCode || scene.tsxCode || '';
-    
-    // Match various font patterns, including weight specifications
-    const patterns = [
-      /fontFamily:\s*["']([^"']+)["']/g,
-      /font:\s*["']([^"']+)["']/g,
-      /family:\s*["']([^"']+)["']/g,
-    ];
-    
-    const weightPatterns = [
-      /fontWeight:\s*["']?(\d+|bold|normal)["']?/g,
-      /weight:\s*["']?(\d+|bold|normal)["']?/g,
-    ];
-    
-    // Extract font families
-    for (const pattern of patterns) {
-      const matches = [...code.matchAll(pattern)];
-      for (const match of matches) {
-        const fontString = match[1];
-        const primaryFont = fontString.split(',')[0].trim().replace(/["']/g, '');
-        if (!fontMap.has(primaryFont)) {
-          fontMap.set(primaryFont, new Set(['400'])); // Default to regular
-        }
-      }
-    }
-    
-    // Extract font weights
-    for (const pattern of weightPatterns) {
-      const matches = [...code.matchAll(pattern)];
-      for (const match of matches) {
-        const weight = match[1];
-        const numericWeight = weight === 'bold' ? '700' : weight === 'normal' ? '400' : weight;
-        // Add this weight to all fonts found in this scene
-        for (const [family, weights] of fontMap.entries()) {
-          weights.add(numericWeight);
-        }
-      }
-    }
-  }
-  
-  // Convert to array format
-  return Array.from(fontMap.entries()).map(([family, weights]) => ({
-    family,
-    weights
-  }));
-}
+// Fonts are loaded via CSS @import in fonts.css
+// This works in both local and Lambda without cancelRender() errors
 
-// Load fonts before rendering using @remotion/fonts
-// This is Remotion's official approach for Lambda font loading
-let fontsLoaded = false;
+// Font extraction no longer needed - CSS handles all fonts
 
-async function ensureFontsLoaded(scenes: any[]) {
-  if (fontsLoaded) return;
-  
-  const fontsNeeded = extractFontsFromScenes(scenes);
-  console.log('[Lambda Font Loading] Fonts and weights detected in scenes:', fontsNeeded);
-  
-  // Load all detected fonts with their specific weights
-  const loadPromises: Promise<void>[] = [];
-  for (const {family, weights} of fontsNeeded) {
-    for (const weight of weights) {
-      console.log(`[Lambda Font Loading] Loading ${family} weight ${weight}`);
-      loadPromises.push(ensureFontLoaded(family, weight));
-    }
-  }
-  
-  // Also ensure we always have Inter as fallback
-  loadPromises.push(ensureFontLoaded('Inter', '400'));
-  loadPromises.push(ensureFontLoaded('Inter', '700'));
-  
-  await Promise.all(loadPromises);
-  fontsLoaded = true;
-  console.log('[Lambda Font Loading] All fonts loaded successfully');
-}
+// Fonts are now loaded via CSS import (see fonts.css)
+// This avoids cancelRender() errors in Lambda
+// Remotion automatically waits for CSS fonts to load
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -363,27 +293,15 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
-  // Load fonts before rendering
-  const [fontsReady, setFontsReady] = React.useState(false);
+  // Fonts are loaded via CSS - no delay needed
   const [handle] = React.useState(() => delayRender());
   
   React.useEffect(() => {
-    // Only load fonts that are actually used in scenes - NOT all catalog fonts
-    // This prevents network timeouts in Lambda from trying to load too many fonts
-    console.log('[Lambda] Loading fonts used in scenes (not preloading entire catalog)');
-    ensureFontsLoaded(scenes)
-      .then(() => {
-        console.log('[Lambda Font Loading] Successfully loaded scene fonts');
-        setFontsReady(true);
-        continueRender(handle);
-      })
-      .catch((err) => {
-        console.error('[Lambda Font Loading] Failed to load fonts:', err);
-        // Continue rendering even if fonts fail - better to use fallback fonts than crash
-        setFontsReady(true);
-        continueRender(handle);
-      });
-  }, [scenes, handle]);
+    console.log(`[VideoComposition] Using CSS-loaded fonts from fonts.css`);
+    console.log(`[VideoComposition] Project dimensions: ${width}x${height}`);
+    // Continue immediately - CSS fonts are loaded automatically
+    continueRender(handle);
+  }, [handle, width, height]);
   
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {

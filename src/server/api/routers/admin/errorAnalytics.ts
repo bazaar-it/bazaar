@@ -55,39 +55,24 @@ export const errorAnalyticsRouter = createTRPCRouter({
       const { messages } = await import('~/server/db/schema');
       const { and, gte, lte, eq, or, like, desc } = await import('drizzle-orm');
       
-      // Look for messages that indicate errors or fixes
-      // "fixed issues" messages mean an error occurred and was auto-fixed
-      // "FIX BROKEN SCENE" means auto-fix was triggered
+      // Based on production data analysis - capture ALL error patterns
       const errorMessages = await ctx.db.query.messages.findMany({
         where: and(
           gte(messages.createdAt, startDate),
           lte(messages.createdAt, endDate),
+          eq(messages.role, 'assistant'),
           or(
-            // Auto-fix successful completion messages
-            and(
-              eq(messages.role, 'assistant'),
-              like(messages.content, '%fixed issues%')
-            ),
-            // Auto-fix trigger messages (from user role, sent by auto-fix system)
-            and(
-              eq(messages.role, 'user'),
-              like(messages.content, '%FIX BROKEN SCENE%')
-            ),
-            // Other error patterns
-            and(
-              eq(messages.role, 'assistant'),
-              or(
-                like(messages.content, '%error%'),
-                like(messages.content, '%Error%'),
-                like(messages.content, '%failed%'),
-                like(messages.content, '%undefined%'),
-                like(messages.content, '%is not defined%'),
-                like(messages.content, '%Unexpected token%'),
-                like(messages.content, '%cannot%'),
-                like(messages.content, '%Cannot%'),
-                eq(messages.status, 'error')
-              )
-            )
+            // Auto-fix attempts - "Fixing the..." pattern
+            like(messages.content, 'Fixing%'),
+            // Successful auto-fixes
+            like(messages.content, '%fixed issues%'),
+            // Failed auto-fixes (scene reversions)
+            like(messages.content, 'Reverted scene%'),
+            // Thorough/comprehensive fix attempts
+            like(messages.content, '%Thoroughly fixing%'),
+            like(messages.content, '%Applying a thorough fix%'),
+            // Rewrite attempts
+            like(messages.content, 'Rewriting%scene%')
           )
         ),
         orderBy: desc(messages.createdAt),
@@ -116,73 +101,131 @@ export const errorAnalyticsRouter = createTRPCRouter({
         const content = msg.content;
         let category = 'Other';
 
-        // Categorize by error type - prioritize real compilation errors
-        if (content.includes('is not defined')) {
-          // Extract the undefined variable name
-          const match = content.match(/(\w+) is not defined/);
-          if (match?.[1] === 'x') {
-            category = 'Mysterious "x" variable (first line bug)';
-          } else if (match?.[1]) {
-            category = `Variable not defined: ${match[1]}`;
-          } else {
-            category = 'Variable not defined';
+        // Advanced pattern detection based on production data analysis
+        let severity = 'medium';
+        let actualError = content;
+        
+        // Extract the actual error from fixing messages
+        if (content.startsWith('Fixing')) {
+          // Extract error type from "Fixing the 'x is not defined' error..."
+          const errorMatch = content.match(/['"]([^'"]+)['"]\s*error|error[:\s]+['"]([^'"]+)['"]/i);
+          if (errorMatch) {
+            actualError = errorMatch[1] || errorMatch[2] || content;
           }
-        } else if (content.includes('Unexpected token')) {
-          // Extract details about the syntax error
-          const posMatch = content.match(/\((\d+):(\d+)\)/);
-          if (posMatch) {
-            category = `Syntax error at line ${posMatch[1]}, col ${posMatch[2]}`;
+        } else if (content.startsWith('Reverted scene')) {
+          // Extract from reverted messages which often contain the original error
+          const errorMatch = content.match(/Error:\s*"([^"]+)"/);
+          if (errorMatch) {
+            actualError = errorMatch[1];
+          }
+        }
+        
+        if (actualError.includes('is not defined')) {
+          const match = actualError.match(/(\w+) is not defined/);
+          const variable = match?.[1];
+          
+          if (variable === 'x') {
+            category = '🚨 CRITICAL: Mysterious "x" first-line bug';
+            severity = 'critical';
+          } else if (['Easing', 'spring', 'interpolate', 'useCurrentFrame'].includes(variable || '')) {
+            category = `🔴 HIGH: Missing Remotion import (${variable})`;
+            severity = 'high';
+          } else if (variable?.match(/^card\d+[A-Z]/)) {
+            category = `🔴 HIGH: Generated variable not defined (${variable})`;
+            severity = 'high';
+          } else if (variable) {
+            category = `⚠️  Variable not defined: ${variable}`;
+            severity = 'medium';
+          } else {
+            category = 'Variable not defined (unknown)';
+          }
+        } else if (actualError.includes('Unexpected token')) {
+          const posMatch = actualError.match(/\((\d+):(\d+)\)/);
+          const expectedMatch = actualError.match(/expected "([^"]+)"/);
+          
+          if (expectedMatch?.[1] === ';') {
+            category = '🔴 HIGH: Missing semicolon';
+            severity = 'high';
+          } else if (expectedMatch?.[1] === '}') {
+            category = '🚨 CRITICAL: Unmatched braces/brackets';  
+            severity = 'critical';
+          } else if (posMatch) {
+            category = `🔴 Syntax error at line ${posMatch[1]}, col ${posMatch[2]}`;
+            severity = 'high';
           } else {
             category = 'Syntax error (Unexpected token)';
           }
-        } else if (content.includes('Cannot read properties')) {
-          const propMatch = content.match(/Cannot read properties of (\w+) \(reading '([^']+)'\)/);
+        } else if (actualError.includes('Cannot read properties')) {
+          const propMatch = actualError.match(/Cannot read properties of (\w+) \(reading '([^']+)'\)/);
           if (propMatch) {
-            category = `Cannot read property '${propMatch[2]}' of ${propMatch[1]}`;
+            if (propMatch[1] === 'undefined') {
+              category = `🚨 CRITICAL: Accessing '${propMatch[2]}' on undefined`;
+              severity = 'critical';
+            } else {
+              category = `🔴 Cannot read '${propMatch[2]}' of ${propMatch[1]}`;
+              severity = 'high';
+            }
           } else {
             category = 'Cannot read property';
           }
+        } else if (content.includes('Reverted scene')) {
+          // Scene reversion indicates multiple failed auto-fix attempts
+          category = '🚨 CRITICAL: Auto-fix failed, scene reverted';
+          severity = 'critical';
         } else if (content.includes('fps') && content.includes('undefined')) {
-          category = 'FPS undefined in spring() animation';
+          category = '🔴 HIGH: FPS undefined in spring() animation';
+          severity = 'high';
         } else if (content.includes('currentFrame')) {
-          category = 'currentFrame vs frame naming issue';
+          category = '⚠️  currentFrame vs frame naming mismatch';
+          severity = 'medium';
         } else if (content.includes('import') && (content.includes('not found') || content.includes('Cannot find'))) {
-          category = 'Import/module not found';
+          category = '🔴 HIGH: Import/module not found';
+          severity = 'high';
         } else if (content.includes('fixed issues')) {
-          // These are successful auto-fixes, less interesting for debugging
           const sceneMatch = content.match(/Updated "([^"]+)" - fixed issues/);
-          category = `Auto-fixed: ${sceneMatch?.[1] || 'unknown scene'}`;
-        } else if (content.includes('FIX BROKEN SCENE')) {
-          // Auto-fix trigger messages
-          if (content.includes('REWRITE BROKEN SCENE')) {
-            category = 'Auto-fix attempt 3 (complete rewrite)';
+          category = `✅ Auto-fixed: ${sceneMatch?.[1] || 'scene'}`;
+          severity = 'low';
+        } else if (content.includes('🔧 FIX BROKEN SCENE') || content.includes('🔧 REWRITE BROKEN SCENE')) {
+          // These are the actual error triggers - extract attempt level
+          const sceneName = content.match(/Scene "([^"]+)"/)?.[1] || 'unknown';
+          const errorExtract = actualError.substring(0, 50);
+          
+          if (content.includes('REWRITE BROKEN SCENE') || content.includes('FINAL ATTEMPT')) {
+            category = `🚨 ATTEMPT 3 FAILED: ${sceneName} - ${errorExtract}`;
+            severity = 'critical';
           } else if (content.includes('ATTEMPT 2')) {
-            category = 'Auto-fix attempt 2 (comprehensive)';
+            category = `🔴 ATTEMPT 2: ${sceneName} - ${errorExtract}`;
+            severity = 'high';
           } else {
-            category = 'Auto-fix attempt 1 (targeted)';
+            category = `⚠️  ATTEMPT 1: ${sceneName} - ${errorExtract}`;
+            severity = 'medium';
           }
         } else if (content.includes('SyntaxError')) {
-          category = 'Syntax Error';
+          category = '🔴 HIGH: Syntax Error';
+          severity = 'high';
         } else if (content.includes('TypeError')) {
-          category = 'Type Error';  
+          category = '🔴 HIGH: Type Error';
+          severity = 'high';
         } else if (content.includes('ReferenceError')) {
-          category = 'Reference Error';
+          category = '🔴 HIGH: Reference Error';
+          severity = 'high';
         } else if (content.includes('⏱️ Manually adjusted')) {
-          // These are just duration adjustments, not errors
-          category = 'Duration adjustment (not an error)';
+          category = 'ℹ️  Duration adjustment (not an error)';
+          severity = 'info';
         }
 
-        // Track error patterns
+        // Track error patterns with severity
         if (!errorPatterns[category]) {
-          errorPatterns[category] = { count: 0, examples: [] };
+          errorPatterns[category] = { count: 0, examples: [], severity };
         }
         errorPatterns[category].count++;
         if (errorPatterns[category].examples.length < 3) {
           errorPatterns[category].examples.push(content.substring(0, 200));
         }
 
-        // Track errors by project
-        projectErrors[msg.projectId] = (projectErrors[msg.projectId] || 0) + 1;
+        // Track errors by project (weight critical errors more heavily)
+        const weight = severity === 'critical' ? 3 : severity === 'high' ? 2 : 1;
+        projectErrors[msg.projectId] = (projectErrors[msg.projectId] || 0) + weight;
 
         // Track daily errors
         const day = msg.createdAt.toISOString().split('T')[0];
@@ -208,14 +251,23 @@ export const errorAnalyticsRouter = createTRPCRouter({
         ? ((errorMessages.length / totalMessages) * 100).toFixed(2)
         : '0';
 
-      // Sort error patterns by frequency
+      // Sort error patterns by severity first, then frequency
       const sortedPatterns = Object.entries(errorPatterns)
-        .sort(([, a], [, b]) => b.count - a.count)
+        .sort(([, a], [, b]) => {
+          const severityOrder = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+          const aSeverity = severityOrder[a.severity as keyof typeof severityOrder] || 0;
+          const bSeverity = severityOrder[b.severity as keyof typeof severityOrder] || 0;
+          
+          // First sort by severity, then by count
+          if (bSeverity !== aSeverity) return bSeverity - aSeverity;
+          return b.count - a.count;
+        })
         .map(([pattern, data]) => ({
           pattern,
           count: data.count,
           percentage: ((data.count / errorMessages.length) * 100).toFixed(2),
           examples: data.examples,
+          severity: data.severity,
         }));
 
       // Get top problematic projects
@@ -229,6 +281,26 @@ export const errorAnalyticsRouter = createTRPCRouter({
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, count]) => ({ date, count }));
 
+      // Calculate auto-fix success rate
+      const autoFixAttempts = errorMessages.filter(m => 
+        m.content.includes('🔧 FIX BROKEN SCENE') || 
+        m.content.includes('🔧 REWRITE BROKEN SCENE')
+      ).length;
+      
+      const autoFixSuccesses = errorMessages.filter(m => 
+        m.content.includes('fixed issues')
+      ).length;
+      
+      const autoFixSuccessRate = autoFixAttempts > 0 
+        ? ((autoFixSuccesses / autoFixAttempts) * 100).toFixed(2)
+        : '0';
+
+      // Identify most critical issues
+      const criticalIssues = sortedPatterns
+        .filter(p => p.severity === 'critical')
+        .slice(0, 3)
+        .map(p => p.pattern);
+
       return {
         summary: {
           totalMessages,
@@ -236,6 +308,10 @@ export const errorAnalyticsRouter = createTRPCRouter({
           errorRate: parseFloat(errorRate),
           totalFailedScenes: failedScenes.length,
           uniqueProjectsAffected: Object.keys(projectErrors).length,
+          autoFixAttempts,
+          autoFixSuccesses,
+          autoFixSuccessRate: parseFloat(autoFixSuccessRate),
+          criticalIssues,
         },
         errorPatterns: sortedPatterns,
         topProblematicProjects,

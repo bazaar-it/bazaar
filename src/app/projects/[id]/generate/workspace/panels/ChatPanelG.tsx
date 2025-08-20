@@ -16,6 +16,7 @@ import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/co
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
+import { IconPicker } from "~/components/IconPicker";
 import { 
   parseAssetMentions, 
   resolveAssetMentions, 
@@ -76,6 +77,7 @@ export default function ChatPanelG({
   
   // 🚨 NEW: State for media uploads
   const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
+  const [selectedIcons, setSelectedIcons] = useState<string[]>([]); // Track selected icons
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -324,6 +326,20 @@ export default function ChatPanelG({
       setIsFigmaMode(true);
       setFigmaModeSource('auto');
       toast.info('Figma mode auto-enabled for design');
+    }
+    
+    // Extract icon references from the message
+    const iconPattern = /\[icon:([^\]]+)\]/g;
+    const iconRefs: string[] = [];
+    let iconMatch;
+    while ((iconMatch = iconPattern.exec(trimmedMessage)) !== null) {
+      iconRefs.push(iconMatch[1]);
+    }
+    
+    // If we have icons, append them to the message in a clear format
+    if (iconRefs.length > 0) {
+      trimmedMessage = trimmedMessage.replace(iconPattern, ''); // Remove icon markers
+      trimmedMessage = `${trimmedMessage.trim()}\n\nUse these specific icons: ${iconRefs.map(icon => `<window.IconifyIcon icon="${icon}" />`).join(', ')}`;
     }
     
     // 🚨 NEW: Get image, video, and audio URLs from uploaded media

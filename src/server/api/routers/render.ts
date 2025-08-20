@@ -304,16 +304,11 @@ export const renderRouter = createTRPCRouter({
             let outputUrl = progress.outputFile;
             
             if (outputUrl) {
-              // If it's already a full S3 URL, extract just the key part
+              // If it's already a full S3 URL, use it as-is
               if (outputUrl.startsWith('https://')) {
-                // Extract the key from the full URL
-                const urlParts = outputUrl.split('.amazonaws.com/');
-                if (urlParts.length > 1) {
-                  const key = urlParts[1];
-                  const bucketName = job.bucketName || process.env.REMOTION_BUCKET_NAME || 'remotionlambda-useast1-yb1vzou9i7';
-                  const region = process.env.AWS_REGION || 'us-east-1';
-                  outputUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
-                }
+                // Lambda already returns a complete, valid S3 URL
+                // Just use it directly without any modification
+                outputUrl = progress.outputFile;
               } else {
                 // It's just a key, construct the full URL
                 const bucketName = job.bucketName || process.env.REMOTION_BUCKET_NAME || 'remotionlambda-useast1-yb1vzou9i7';
