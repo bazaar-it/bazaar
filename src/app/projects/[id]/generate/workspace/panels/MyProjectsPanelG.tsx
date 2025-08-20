@@ -5,7 +5,7 @@ import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "~/components/ui/dialog";
-import { SearchIcon, FolderIcon, Loader2, X, Heart } from "lucide-react";
+import { SearchIcon, FolderIcon, Loader2, X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import { Player } from "@remotion/player";
@@ -28,13 +28,14 @@ type Project = {
 };
 
 // Project thumbnail showing static frame 15
-const ProjectThumbnail = ({ project }: { project: Project }) => {
+const ProjectThumbnail = ({ project, isVisible = true }: { project: Project; isVisible?: boolean }) => {
   // ✅ HOOKS FIRST - Call all hooks before any conditional logic
   const { data: scenes, isLoading, error } = api.generation.getProjectScenes.useQuery(
     { projectId: project.id },
     { 
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
       retry: 1,
+      enabled: isVisible, // Only fetch when visible (on current page)
     }
   );
   
@@ -119,13 +120,14 @@ const ProjectThumbnail = ({ project }: { project: Project }) => {
 };
 
 // Project video player for hover state
-const ProjectVideoPlayer = ({ project }: { project: Project }) => {
+const ProjectVideoPlayer = ({ project, isVisible = true }: { project: Project; isVisible?: boolean }) => {
   // ✅ HOOKS FIRST - Call all hooks before any conditional logic
   const { data: scenes, isLoading, error } = api.generation.getProjectScenes.useQuery(
     { projectId: project.id },
     { 
       staleTime: 5 * 60 * 1000, // Cache for 5 minutes
       retry: 1,
+      enabled: isVisible, // Only fetch when visible (on current page)
     }
   );
   
@@ -134,7 +136,7 @@ const ProjectVideoPlayer = ({ project }: { project: Project }) => {
   // ✅ CONDITIONAL LOGIC AFTER HOOKS
   if (compilationError || isCompiling || !component || !playerProps || error || isLoading || !scenes || scenes.length === 0) {
     // Fall back to thumbnail on error/loading/empty
-    return <ProjectThumbnail project={project} />;
+    return <ProjectThumbnail project={project} isVisible={isVisible} />;
   }
 
   return (
@@ -167,7 +169,8 @@ const ProjectPreview = ({
   editingValue,
   onEditValueChange,
   onEditKeyPress,
-  onEditBlur
+  onEditBlur,
+  isVisible = true
 }: { 
   project: Project; 
   onClick: () => void;
@@ -180,6 +183,7 @@ const ProjectPreview = ({
   onEditValueChange: (value: string) => void;
   onEditKeyPress: (e: React.KeyboardEvent) => void;
   onEditBlur: () => void;
+  isVisible?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -244,9 +248,9 @@ const ProjectPreview = ({
         
         {/* Show static frame by default, playing video on hover */}
         {isHovered ? (
-          <ProjectVideoPlayer project={project} />
+          <ProjectVideoPlayer project={project} isVisible={isVisible} />
         ) : (
-          <ProjectThumbnail project={project} />
+          <ProjectThumbnail project={project} isVisible={isVisible} />
         )}
         
         {/* Current project badge */}
@@ -441,6 +445,8 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const projectsPerPage = 10;
   const router = useRouter();
   
   // Fetch all projects
@@ -535,6 +541,17 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
       return new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime();
     });
   }, [projects, searchQuery, currentProjectId]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredAndSortedProjects.length / projectsPerPage);
+  const startIndex = (currentPage - 1) * projectsPerPage;
+  const endIndex = startIndex + projectsPerPage;
+  const paginatedProjects = filteredAndSortedProjects.slice(startIndex, endIndex);
+
+  // Reset to first page when search changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   // Handle project navigation
   const handleProjectClick = useCallback((projectId: string) => {
@@ -656,7 +673,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
           <div 
             className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
           >
-            {filteredAndSortedProjects.map((project) => (
+            {paginatedProjects.map((project) => (
               <Card key={`project-${project.id}`} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
                 <ProjectPreview 
                   project={project} 
@@ -670,6 +687,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
                   onEditValueChange={setEditingValue}
                   onEditKeyPress={handleEditKeyPress}
                   onEditBlur={handleSaveEdit}
+                  isVisible={true} // Projects on current page are visible
                 />
               </Card>
             ))}
@@ -683,6 +701,42 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
             {searchQuery && (
               <p className="text-xs mt-1">Try a different search term</p>
             )}
+          </div>
+        )}
+        
+        {/* Pagination Controls */}
+        {!isLoading && filteredAndSortedProjects.length > projectsPerPage && (
+          <div className="flex items-center justify-between mt-4 pt-4 border-t px-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Previous</span>
+            </Button>
+            
+            <div className="flex items-center gap-1 text-center">
+              <span className="text-sm text-gray-600">
+                {currentPage}/{totalPages}
+              </span>
+              <span className="text-xs text-gray-500 hidden sm:inline">
+                ({filteredAndSortedProjects.length})
+              </span>
+            </div>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         )}
       </div>

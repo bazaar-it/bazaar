@@ -20,24 +20,18 @@ export default function WelcomeEmailTemplate({ firstName = 'there' }: WelcomeEma
   return (
     <Html>
       <Head />
-      <Preview>Welcome to Bazaar-Vid - Create stunning videos with AI</Preview>
+      <Preview>Welcome to Bazaar - Create stunning videos with AI</Preview>
       <Body style={main}>
         <Container style={container}>
           <Section style={logoSection}>
-            <Img
-              src="https://bazaar-vid.vercel.app/bazaar-logo.png"
-              width="120"
-              height="40"
-              alt="Bazaar-Vid"
-              style={logo}
-            />
+            <Text style={logoText}>bazaar.it</Text>
           </Section>
 
           <Section style={content}>
-            <Heading style={h1}>Welcome to Bazaar-Vid, {firstName}! 🎬</Heading>
+            <Heading style={h1}>Welcome to Bazaar, {firstName}! 🎬</Heading>
             
             <Text style={text}>
-              We're thrilled to have you join our community of creators! Bazaar-Vid makes it incredibly easy to create professional videos using the power of AI.
+              We're thrilled to have you join our community of creators! Bazaar makes it incredibly easy to create professional videos using the power of AI.
             </Text>
 
             <Section style={featuresSection}>
@@ -66,7 +60,7 @@ export default function WelcomeEmailTemplate({ firstName = 'there' }: WelcomeEma
 
             <Section style={ctaSection}>
               <Button
-                href="https://bazaar-vid.vercel.app/projects"
+                href="https://bazaar.it/projects"
                 style={button}
               >
                 Start Creating Your First Video
@@ -74,12 +68,12 @@ export default function WelcomeEmailTemplate({ firstName = 'there' }: WelcomeEma
             </Section>
 
             <Text style={text}>
-              Need help getting started? Check out our <Link href="https://bazaar-vid.vercel.app/docs" style={link}>documentation</Link> or reply to this email - we're here to help!
+              Need help getting started? Check out our <Link href="https://bazaar.it/docs" style={link}>documentation</Link> or reply to this email - we're here to help!
             </Text>
 
             <Text style={footer}>
               Best regards,<br />
-              The Bazaar-Vid Team
+              The Bazaar Team
             </Text>
           </Section>
         </Container>
@@ -104,8 +98,13 @@ const logoSection = {
   padding: '32px 32px 0',
 };
 
-const logo = {
-  margin: '0 auto',
+const logoText = {
+  fontSize: '28px',
+  fontWeight: '500',
+  color: '#000000',
+  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  margin: '0',
+  letterSpacing: '-0.02em',
 };
 
 const content = {

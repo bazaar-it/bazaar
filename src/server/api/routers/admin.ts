@@ -3153,4 +3153,363 @@ export default function GeneratedScene() {
         dailyStats,
       };
     }),
+
+  // Get user engagement statistics
+  getUserEngagementStats: adminOnlyProcedure
+    .query(async () => {
+      // Get all users with their activity metrics
+      const allUsers = await db.select({
+        userId: users.id,
+        createdAt: users.createdAt,
+      })
+        .from(users);
+
+      const totalUsers = allUsers.length;
+
+      // Get users with their message counts
+      const userMessages = await db.select({
+        userId: projects.userId,
+        messageCount: count(messages.id),
+      })
+        .from(projects)
+        .leftJoin(messages, eq(messages.projectId, projects.id))
+        .groupBy(projects.userId);
+
+      // Template usage tracking - temporarily disabled until table is created
+      // To enable: Run migration 0013_create_template_usage.sql then uncomment below
+      let templateUsers: { userId: string; hasUsedTemplate: boolean }[] = [];
+      
+      // Check if template_usage table exists
+      const tableExists = await db.execute(sql`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'bazaar-vid_template_usage'
+        ) as exists
+      `);
+      
+      if (tableExists.rows[0]?.exists) {
+        // Table exists, get template usage data
+        templateUsers = await db.select({
+          userId: projects.userId,
+          hasUsedTemplate: sql<boolean>`CASE WHEN COUNT(DISTINCT tu.id) > 0 THEN true ELSE false END`,
+        })
+          .from(projects)
+          .leftJoin(sql`"bazaar-vid_template_usage" tu`, sql`tu.project_id = ${projects.id}`)
+          .groupBy(projects.userId);
+      }
+
+      // Get users who never came back (only signed up, no projects)
+      const userProjects = await db.select({
+        userId: projects.userId,
+        projectCount: count(projects.id),
+      })
+        .from(projects)
+        .groupBy(projects.userId);
+
+      // Create maps for easy lookup
+      const messageMap = new Map(userMessages.map(u => [u.userId, u.messageCount]));
+      const templateMap = new Map(templateUsers.map(u => [u.userId, u.hasUsedTemplate]));
+      const projectMap = new Map(userProjects.map(u => [u.userId, u.projectCount]));
+
+      // Get active days per user (how many different days they submitted prompts)
+      const userActiveDays = await db.select({
+        userId: projects.userId,
+        activeDays: sql<number>`COUNT(DISTINCT DATE(${messages.createdAt}))`,
+      })
+        .from(projects)
+        .innerJoin(messages, eq(messages.projectId, projects.id))
+        .where(sql`${messages.role} = 'user'`)
+        .groupBy(projects.userId);
+
+      const activeDaysMap = new Map(userActiveDays.map(u => [u.userId, u.activeDays]));
+
+      // Get user details for identification
+      const userDetails = await db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+      })
+        .from(users);
+
+      const userDetailsMap = new Map(userDetails.map(u => [u.id, { name: u.name, email: u.email }]));
+
+      // Calculate detailed statistics
+      let usersNoPrompts = 0;
+      let usersNeverReturned = 0;
+      let usersNoTemplates = 0;
+      let usersUnder5Prompts = 0;
+      let users5To10Prompts = 0;
+      let users10To20Prompts = 0;
+      let users20To50Prompts = 0;
+      let users50To100Prompts = 0;
+      let users100To200Prompts = 0;
+      let users200To500Prompts = 0;
+      let usersOver500Prompts = 0;
+
+      // Track users by bracket for identification
+      const usersByBracket: Record<string, Array<{ id: string; name: string | null; email: string | null; count: number; activeDays: number }>> = {
+        noPrompts: [],
+        under5: [],
+        '5to10': [],
+        '10to20': [],
+        '20to50': [],
+        '50to100': [],
+        '100to200': [],
+        '200to500': [],
+        over500: [],
+      };
+
+      // Active days distribution
+      const activeDaysDistribution: Record<number, number> = {};
+
+      for (const user of allUsers) {
+        const messageCount = messageMap.get(user.userId) || 0;
+        const hasUsedTemplate = templateMap.get(user.userId) || false;
+        const projectCount = projectMap.get(user.userId) || 0;
+        const activeDays = activeDaysMap.get(user.userId) || 0;
+        const userInfo = userDetailsMap.get(user.userId) || { name: null, email: null };
+
+        // Track active days distribution
+        if (activeDays > 0) {
+          activeDaysDistribution[activeDays] = (activeDaysDistribution[activeDays] || 0) + 1;
+        }
+
+        // Users who signed up but never created a project (never returned)
+        if (projectCount === 0) {
+          usersNeverReturned++;
+          usersNoPrompts++;
+          usersNoTemplates++;
+          usersByBracket.noPrompts.push({ 
+            id: user.userId, 
+            name: userInfo.name, 
+            email: userInfo.email, 
+            count: 0,
+            activeDays: 0 
+          });
+        } else {
+          // Categorize users by prompt count
+          if (messageCount === 0) {
+            usersNoPrompts++;
+            usersByBracket.noPrompts.push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount < 5) {
+            usersUnder5Prompts++;
+            usersByBracket.under5.push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 10) {
+            users5To10Prompts++;
+            usersByBracket['5to10'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 20) {
+            users10To20Prompts++;
+            usersByBracket['10to20'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 50) {
+            users20To50Prompts++;
+            usersByBracket['20to50'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 100) {
+            users50To100Prompts++;
+            usersByBracket['50to100'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 200) {
+            users100To200Prompts++;
+            usersByBracket['100to200'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else if (messageCount <= 500) {
+            users200To500Prompts++;
+            usersByBracket['200to500'].push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          } else {
+            usersOver500Prompts++;
+            usersByBracket.over500.push({ 
+              id: user.userId, 
+              name: userInfo.name, 
+              email: userInfo.email, 
+              count: messageCount,
+              activeDays 
+            });
+          }
+
+          // Users who never used templates
+          if (!hasUsedTemplate) {
+            usersNoTemplates++;
+          }
+        }
+      }
+
+      // Calculate users active for different day ranges
+      let usersActive1Day = 0;
+      let usersActive2Days = 0;
+      let usersActive3To5Days = 0;
+      let usersActive6To10Days = 0;
+      let usersActive11To30Days = 0;
+      let usersActiveOver30Days = 0;
+
+      for (const [days, count] of Object.entries(activeDaysDistribution)) {
+        const dayNum = parseInt(days);
+        if (dayNum === 1) usersActive1Day += count;
+        else if (dayNum === 2) usersActive2Days += count;
+        else if (dayNum <= 5) usersActive3To5Days += count;
+        else if (dayNum <= 10) usersActive6To10Days += count;
+        else if (dayNum <= 30) usersActive11To30Days += count;
+        else usersActiveOver30Days += count;
+      }
+
+      // Get retention data (users who came back after first day)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      
+      const eligibleForDayRetention = allUsers.filter(u => u.createdAt && u.createdAt < oneDayAgo);
+      const eligibleForWeekRetention = allUsers.filter(u => u.createdAt && u.createdAt < oneWeekAgo);
+
+      // Get users who have activity after their first day
+      const retainedAfterDay = new Set();
+      const retainedAfterWeek = new Set();
+
+      for (const user of eligibleForDayRetention) {
+        const hasActivity = projectMap.get(user.userId) && projectMap.get(user.userId)! > 0;
+        if (hasActivity) {
+          // Check if they have messages created after their signup date + 1 day
+          const userActivity = await db.select({
+            hasLaterActivity: sql<boolean>`EXISTS (
+              SELECT 1 FROM "bazaar-vid_message" m
+              JOIN "bazaar-vid_project" p ON m."projectId" = p.id
+              WHERE p."userId" = ${user.userId}
+              AND m."createdAt" > ${user.createdAt}::timestamp + interval '1 day'
+            )`,
+          })
+            .from(users)
+            .where(eq(users.id, user.userId))
+            .limit(1);
+
+          if (userActivity[0]?.hasLaterActivity) {
+            retainedAfterDay.add(user.userId);
+          }
+        }
+      }
+
+      for (const user of eligibleForWeekRetention) {
+        const hasActivity = projectMap.get(user.userId) && projectMap.get(user.userId)! > 0;
+        if (hasActivity) {
+          // Check if they have messages created after their signup date + 1 week
+          const userActivity = await db.select({
+            hasLaterActivity: sql<boolean>`EXISTS (
+              SELECT 1 FROM "bazaar-vid_message" m
+              JOIN "bazaar-vid_project" p ON m."projectId" = p.id
+              WHERE p."userId" = ${user.userId}
+              AND m."createdAt" > ${user.createdAt}::timestamp + interval '7 days'
+            )`,
+          })
+            .from(users)
+            .where(eq(users.id, user.userId))
+            .limit(1);
+
+          if (userActivity[0]?.hasLaterActivity) {
+            retainedAfterWeek.add(user.userId);
+          }
+        }
+      }
+
+      const dayRetentionRate = eligibleForDayRetention.length > 0 
+        ? (retainedAfterDay.size / eligibleForDayRetention.length) * 100 
+        : 0;
+
+      const weekRetentionRate = eligibleForWeekRetention.length > 0
+        ? (retainedAfterWeek.size / eligibleForWeekRetention.length) * 100
+        : 0;
+
+      return {
+        totalUsers,
+        engagement: {
+          usersNoPrompts,
+          usersNoPromptsPercentage: totalUsers > 0 ? ((usersNoPrompts / totalUsers) * 100).toFixed(1) : '0',
+          usersNeverReturned,
+          usersNeverReturnedPercentage: totalUsers > 0 ? ((usersNeverReturned / totalUsers) * 100).toFixed(1) : '0',
+          usersNoTemplates,
+          usersNoTemplatesPercentage: totalUsers > 0 ? ((usersNoTemplates / totalUsers) * 100).toFixed(1) : '0',
+          usersUnder5Prompts,
+          usersUnder5PromptsPercentage: totalUsers > 0 ? ((usersUnder5Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users5To10Prompts,
+          users5To10PromptsPercentage: totalUsers > 0 ? ((users5To10Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users10To20Prompts,
+          users10To20PromptsPercentage: totalUsers > 0 ? ((users10To20Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users20To50Prompts,
+          users20To50PromptsPercentage: totalUsers > 0 ? ((users20To50Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users50To100Prompts,
+          users50To100PromptsPercentage: totalUsers > 0 ? ((users50To100Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users100To200Prompts,
+          users100To200PromptsPercentage: totalUsers > 0 ? ((users100To200Prompts / totalUsers) * 100).toFixed(1) : '0',
+          users200To500Prompts,
+          users200To500PromptsPercentage: totalUsers > 0 ? ((users200To500Prompts / totalUsers) * 100).toFixed(1) : '0',
+          usersOver500Prompts,
+          usersOver500PromptsPercentage: totalUsers > 0 ? ((usersOver500Prompts / totalUsers) * 100).toFixed(1) : '0',
+        },
+        activeDays: {
+          usersActive1Day,
+          usersActive1DayPercentage: totalUsers > 0 ? ((usersActive1Day / totalUsers) * 100).toFixed(1) : '0',
+          usersActive2Days,
+          usersActive2DaysPercentage: totalUsers > 0 ? ((usersActive2Days / totalUsers) * 100).toFixed(1) : '0',
+          usersActive3To5Days,
+          usersActive3To5DaysPercentage: totalUsers > 0 ? ((usersActive3To5Days / totalUsers) * 100).toFixed(1) : '0',
+          usersActive6To10Days,
+          usersActive6To10DaysPercentage: totalUsers > 0 ? ((usersActive6To10Days / totalUsers) * 100).toFixed(1) : '0',
+          usersActive11To30Days,
+          usersActive11To30DaysPercentage: totalUsers > 0 ? ((usersActive11To30Days / totalUsers) * 100).toFixed(1) : '0',
+          usersActiveOver30Days,
+          usersActiveOver30DaysPercentage: totalUsers > 0 ? ((usersActiveOver30Days / totalUsers) * 100).toFixed(1) : '0',
+          distribution: activeDaysDistribution,
+        },
+        usersByBracket,
+        retention: {
+          dayRetentionRate: dayRetentionRate.toFixed(1),
+          weekRetentionRate: weekRetentionRate.toFixed(1),
+          eligibleForDayRetention: eligibleForDayRetention.length,
+          eligibleForWeekRetention: eligibleForWeekRetention.length,
+          retainedAfterDay: retainedAfterDay.size,
+          retainedAfterWeek: retainedAfterWeek.size,
+        },
+      };
+    }),
 });

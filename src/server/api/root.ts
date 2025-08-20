@@ -22,6 +22,9 @@ import { figmaRouter } from "~/server/api/routers/figma.router";
 import { figmaImportRouter } from "~/server/api/routers/figma-import.router";
 import { evalsRouter } from "~/server/api/routers/evals";
 import { mediaRouter } from "~/server/api/routers/media";
+import { errorAnalyticsRouter } from "~/server/api/routers/admin/errorAnalytics";
+import { googleAnalyticsRouter } from "~/server/api/routers/admin/google-analytics";
+import { iconsRouter } from "~/server/api/routers/icons";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -55,6 +58,9 @@ export const appRouter = createTRPCRouter({
   figmaImport: figmaImportRouter,
   evals: evalsRouter,
   media: mediaRouter,
+  errorAnalytics: errorAnalyticsRouter,
+  googleAnalytics: googleAnalyticsRouter,
+  icons: iconsRouter,
 });
 
 // export type definition of API

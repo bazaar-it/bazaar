@@ -593,10 +593,15 @@ export async function prepareRenderConfig({
     });
   });
 
+  // Font extraction no longer needed - CSS fonts load automatically from fonts.css
+  console.log(`[Fonts] Using CSS fonts - all 99 fonts available via fonts.css`);
+  
   // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
     scenes.map(scene => preprocessSceneForLambda({
       ...scene,
+      // Fonts now load automatically via CSS - no detection needed
+      detectedFonts: [],
       width: renderWidth,
       height: renderHeight
     }))

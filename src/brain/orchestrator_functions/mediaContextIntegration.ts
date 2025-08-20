@@ -86,7 +86,9 @@ const validUrls = ${JSON.stringify(mediaUrls)};
    */
   async validateGeneratedCode(
     code: string, 
-    projectId: string
+    projectId: string,
+    imageUrls?: string[],
+    videoUrls?: string[]
   ): Promise<{
     valid: boolean;
     fixedCode?: string;
@@ -94,8 +96,8 @@ const validUrls = ${JSON.stringify(mediaUrls)};
   }> {
     console.log('🔍 [MEDIA VALIDATION] Checking generated code for URL hallucinations...');
     
-    // Get media context
-    const context = await mediaResolver.resolveMediaReferences(projectId, '', [], []);
+    // Get media context with the actual URLs that were used
+    const context = await mediaResolver.resolveMediaReferences(projectId, '', imageUrls || [], videoUrls || []);
     
     // Validate the code
     const validation = mediaResolver.validateAndFixCode(code, context.mediaContext);

@@ -42,7 +42,7 @@ export default async function AdminLayout({
   
   // Only render admin UI if authorized
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="flex">
         <AdminSidebar />
         <div className="flex-1">

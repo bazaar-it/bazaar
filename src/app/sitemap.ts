@@ -6,12 +6,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = siteConfig.url;
   
   // Static routes that should be in the sitemap
-  const routes = ['', '/login', '/privacy', '/terms'].map(
-    (route) => ({
-      url: `${baseUrl}${route}`,
+  const routes = [
+    { path: '', priority: 1.0 },
+    { path: '/ai-motion-graphics-software-demo', priority: 0.95 },
+    { path: '/faq', priority: 0.9 },
+    { path: '/login', priority: 0.8 },
+    { path: '/privacy', priority: 0.7 },
+    { path: '/terms', priority: 0.7 }
+  ].map(
+    ({ path, priority }) => ({
+      url: `${baseUrl}${path}`,
       lastModified: new Date().toISOString(),
       changeFrequency: 'weekly' as const,
-      priority: route === '' ? 1 : 0.8,
+      priority,
     })
   );
 

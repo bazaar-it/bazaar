@@ -12,7 +12,7 @@ export interface LambdaRenderConfig extends RenderConfig {
 }
 
 // Use pre-deployed site URL (deployed via CLI: npx remotion lambda sites create)
-const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-fresh-deploy/index.html";
+const DEPLOYED_SITE_URL = process.env.REMOTION_SERVE_URL || "https://remotionlambda-useast1-yb1vzou9i7.s3.us-east-1.amazonaws.com/sites/bazaar-google-fonts/index.html";
 
 // Check if Lambda is properly configured
 function checkLambdaConfig() {
@@ -78,6 +78,35 @@ export async function renderVideoOnLambda({
       console.log(`[LambdaRender] Audio trim: ${audio.startTime}s - ${audio.endTime}s`);
     }
     
+    // Log font information being passed to Lambda
+    console.log(`\n[LambdaRender] ===== FONT STATUS BEFORE LAMBDA =====`);
+    const fontsInScenes = new Set<string>();
+    scenes.forEach((scene, idx) => {
+      // Check if scene has pre-detected fonts
+      if ((scene as any).detectedFonts) {
+        console.log(`[LambdaRender] Scene ${idx} has pre-detected fonts:`, (scene as any).detectedFonts);
+        (scene as any).detectedFonts.forEach((f: any) => fontsInScenes.add(f.family));
+      }
+      
+      // Also check in the actual code
+      const code = scene.jsCode || (scene as any).tsxCode || '';
+      const fontMatches = [...code.matchAll(/fontFamily:\s*["']([^"']+)["']/g)];
+      if (fontMatches.length > 0) {
+        console.log(`[LambdaRender] Scene ${idx} contains ${fontMatches.length} fontFamily references in code`);
+        fontMatches.forEach(m => {
+          const font = m[1].split(',')[0].trim();
+          fontsInScenes.add(font);
+        });
+      }
+    });
+    
+    if (fontsInScenes.size > 0) {
+      console.log(`[LambdaRender] Unique fonts detected across all scenes: ${Array.from(fontsInScenes).join(', ')}`);
+    } else {
+      console.log(`[LambdaRender] ⚠️ WARNING: No fonts detected in any scene - will use Inter fallback`);
+    }
+    console.log(`[LambdaRender] ===== END FONT STATUS =====\n`);
+    
     // Log scene details to debug truncation issue
     console.log(`[LambdaRender] Scene data being passed to Lambda:`);
     scenes.forEach((scene, idx) => {
@@ -122,7 +151,7 @@ export async function renderVideoOnLambda({
       privacy: "public",
       downloadBehavior: {
         type: "download",
-        fileName: `bazaar-vid-${projectId}.${format}`,
+        fileName: `bazaar-export.${format}`,
       },
       webhook: webhookUrl ? {
         url: webhookUrl,
@@ -130,7 +159,7 @@ export async function renderVideoOnLambda({
       } : undefined,
       maxRetries: 3,
       frameRange: totalDuration > 0 ? [0, totalDuration - 1] : undefined,
-      outName: `${projectId}.${format}`,
+      outName: `renders/${projectId}-${Date.now()}.${format}`,
     });
     
     console.log(`[LambdaRender] Render started successfully`);
