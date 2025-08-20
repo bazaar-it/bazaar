@@ -8,7 +8,8 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles, Github, Palette } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github, Palette, X } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
@@ -535,6 +536,18 @@ export default function ChatPanelG({
     setMessage(newValue);
     // Persist to store for panel switching
     setDraftMessage(projectId, newValue);
+    
+    // Extract icon references from the message
+    const iconPattern = /\[icon:([^\]]+)\]/g;
+    const icons: string[] = [];
+    let match;
+    while ((match = iconPattern.exec(newValue)) !== null) {
+      icons.push(match[1]);
+    }
+    if (icons.length > 0) {
+      console.log('[ChatPanelG] Extracted icons:', icons);
+    }
+    setSelectedIcons(icons);
     
     // Check for @mention context
     if (textareaRef.current && userAssets?.assets) {
@@ -1356,6 +1369,40 @@ export default function ChatPanelG({
           >
             {/* Text area container with fixed height that stops before icons */}
             <div className="flex flex-col w-full">
+              {/* Icon previews */}
+              {selectedIcons.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
+                  <span className="text-xs text-gray-500 mr-2">Icons:</span>
+                  {selectedIcons.map((iconName, index) => (
+                    <div 
+                      key={`${iconName}-${index}`}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg shadow-sm"
+                    >
+                      <Icon 
+                        icon={iconName} 
+                        width="16" 
+                        height="16"
+                        className="text-gray-700"
+                      />
+                      <span className="text-xs text-gray-700 font-mono">{iconName.split(':')[1] || iconName}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Remove icon from message
+                          const pattern = `[icon:${iconName}]`;
+                          const newMessage = message.replace(pattern, '').trim();
+                          setMessage(newMessage);
+                          setSelectedIcons(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Remove ${iconName}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="relative">
                 <textarea
                   key="chat-input"
