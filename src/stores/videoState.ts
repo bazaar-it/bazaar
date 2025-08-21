@@ -76,6 +76,8 @@ interface ProjectState {
   activeStreamingMessageId?: string | null;
   refreshToken?: string;
   audio?: AudioTrack | null;
+  shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
+  draftMessage?: string; // Persist chat input when panels change
 }
 
 interface VideoState {
@@ -132,11 +134,17 @@ interface VideoState {
   deleteScene: (projectId: string, sceneId: string) => void;
   updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
   
+  // Audio panel auto-opening
+  setShouldOpenAudioPanel: (projectId: string, shouldOpen: boolean) => void;
+  
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) => void;
   
   // Get selected scene
   getSelectedScene: (projectId: string) => InputProps['scenes'][number] | null;
+  
+  // Reorder scenes in timeline
+  reorderScenes: (projectId: string, oldIndex: number, newIndex: number) => void;
   
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
@@ -145,6 +153,10 @@ interface VideoState {
   setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
   isSceneGenerating: (projectId: string, messageId: string) => boolean;
   clearAllGeneratingScenes: (projectId: string) => void;
+  
+  // Draft message persistence
+  setDraftMessage: (projectId: string, message: string) => void;
+  getDraftMessage: (projectId: string) => string;
 }
 
 export const useVideoState = create<VideoState>()(
@@ -684,18 +696,24 @@ export const useVideoState = create<VideoState>()(
       const oldDuration = existingScene?.duration || 150;
       const durationChange = newDuration - oldDuration;
       
-      // Update the current scene
+      // Update the current scene - ONLY update what's provided
       updatedScenes[sceneIndex] = {
         ...existingScene,
         id: existingScene?.id || sceneId,
-        type: existingScene?.type || 'custom',
+        type: existingScene?.type || updatedScene.type || 'custom',
         start: existingScene?.start || 0,
         duration: newDuration, // Use new duration
+        // Handle name at root level if provided
+        ...(updatedScene.name !== undefined && { name: updatedScene.name }),
         data: {
           ...existingScene?.data,
-          code: updatedScene.tsxCode,
-          name: updatedScene.name || existingScene?.data?.name || 'Scene',
-          props: updatedScene.props || {}
+          // Only update code if it's actually provided
+          ...(updatedScene.tsxCode !== undefined && { code: updatedScene.tsxCode }),
+          // Also update name in data for backward compatibility
+          ...(updatedScene.name !== undefined && { name: updatedScene.name }),
+          ...(updatedScene.data?.name !== undefined && { name: updatedScene.data.name }),
+          // Only update props if provided
+          ...(updatedScene.props !== undefined && { props: updatedScene.props })
         }
       };
       
@@ -705,7 +723,13 @@ export const useVideoState = create<VideoState>()(
         sceneId,
         codeLength: updatedScene.tsxCode?.length,
         codeStart: typeof sceneData.code === 'string' ? sceneData.code.substring(0, 100) : 'N/A',
-        hasRed: typeof sceneData.code === 'string' ? sceneData.code.includes('#ff0000') : false
+        hasRed: typeof sceneData.code === 'string' ? sceneData.code.includes('#ff0000') : false,
+        nameUpdate: {
+          rootName: (updatedScenes[sceneIndex] as any).name,
+          dataName: sceneData.name,
+          providedName: updatedScene.name,
+          providedDataName: updatedScene.data?.name
+        }
       });
       
       // TIMELINE FIX: Recalculate start times for subsequent scenes
@@ -850,6 +874,24 @@ export const useVideoState = create<VideoState>()(
       };
     }),
     
+  // Audio panel auto-opening
+  setShouldOpenAudioPanel: (projectId: string, shouldOpen: boolean) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            shouldOpenAudioPanel: shouldOpen,
+          }
+        }
+      };
+    }),
+    
   // OPTIMIZATION #5: Unified scene selection
   selectScene: (projectId: string, sceneId: string | null) =>
     set((state) => ({
@@ -871,6 +913,72 @@ export const useVideoState = create<VideoState>()(
     
     return project.props.scenes.find((s: any) => s.id === selectedSceneId) || null;
   },
+  
+  // Reorder scenes in timeline
+  reorderScenes: (projectId: string, oldIndex: number, newIndex: number) =>
+    set((state) => {
+      console.log('[VideoState.reorderScenes] Reordering scenes:', { oldIndex, newIndex });
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.reorderScenes] Project not found:', projectId);
+        return state;
+      }
+      
+      const scenes = [...project.props.scenes];
+      
+      // Validate indices
+      if (oldIndex < 0 || oldIndex >= scenes.length || 
+          newIndex < 0 || newIndex >= scenes.length) {
+        console.log('[VideoState.reorderScenes] Invalid indices:', { oldIndex, newIndex, scenesLength: scenes.length });
+        return state;
+      }
+      
+      // Move the scene
+      const [movedScene] = scenes.splice(oldIndex, 1);
+      scenes.splice(newIndex, 0, movedScene);
+      
+      // Recalculate start times for all scenes
+      let currentStart = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        if (scene) {
+          scenes[i] = {
+            ...scene,
+            start: currentStart
+          };
+          currentStart += scene.duration || 150;
+        }
+      }
+      
+      // Calculate total duration
+      const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+      
+      console.log('[VideoState.reorderScenes] Scenes reordered successfully');
+      
+      // Generate new refresh token to force UI update
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: totalDuration
+              },
+              scenes
+            },
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now()
+          }
+        }
+      };
+    }),
   
   // Implement missing addUserMessage method
   addUserMessage: (projectId: string, content: string, imageUrls?: string[]) =>
@@ -1131,6 +1239,29 @@ export const useVideoState = create<VideoState>()(
         [projectId]: new Set<string>()
       }
     })),
+    
+  // Draft message persistence
+  setDraftMessage: (projectId: string, message: string) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftMessage: message
+          }
+        }
+      };
+    }),
+    
+  getDraftMessage: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.draftMessage || '';
+  },
 }),
     {
       name: 'bazaar-video-state',

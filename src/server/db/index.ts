@@ -1,11 +1,10 @@
 // src/server/db/index.ts
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
-import { neon, neonConfig } from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless";
 import { env } from "~/env";
 import * as schema from "./schema";
 
-// Recommended by Neon for Drizzle to cache connection details.
-neonConfig.fetchConnectionCache = true;
+// fetchConnectionCache is deprecated and now always true
 
 // Try to use pooling if available, otherwise fall back to HTTP
 let db: ReturnType<typeof drizzleNeon<typeof schema>>;
@@ -22,7 +21,10 @@ try {
   }
 } catch (error) {
   // Fallback to HTTP connection
-  console.log("[DB] Using HTTP-based connection (pooling not available)");
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log("[DB] Using HTTP-based connection (pooling not available)");
+  }
   const sql = neon(env.DATABASE_URL, {
     fetchOptions: {
       keepalive: true,
@@ -37,7 +39,10 @@ export { db };
 // Keep the old HTTP-based connection as a fallback
 // Can be used if WebSocket connections fail in certain environments
 const createHttpConnection = () => {
-  console.log("[DB] Creating HTTP-based fallback connection");
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log("[DB] Creating HTTP-based fallback connection");
+  }
   const sql = neon(env.DATABASE_URL, {
     fetchOptions: {
       keepalive: true,

@@ -238,10 +238,10 @@ export default function ChatExportPage() {
           
           <button
             onClick={() => exportMutation.mutate(filters)}
-            disabled={exportMutation.isLoading}
+            disabled={exportMutation.isPending}
             className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {exportMutation.isLoading ? (
+            {exportMutation.isPending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                 Exporting...

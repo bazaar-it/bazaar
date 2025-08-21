@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches, scenePlans, scenes, messages } from "~/server/db/schema";
+import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
 import { eq, desc, like, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
@@ -11,6 +11,8 @@ import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
+import { assetContext } from "~/server/services/context/assetContextService";
+import type { AssetContext as AssetContextType } from "~/lib/types/asset-context";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -84,7 +86,8 @@ export const projectRouter = createTRPCRouter({
       }
 
       // Ensure the user has access to this project
-      if (projectData.userId !== ctx.session.user.id) {
+      // Exception: system-changelog projects are public (viewable by anyone)
+      if (projectData.userId !== ctx.session.user.id && projectData.userId !== 'system-changelog') {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "You don't have access to this project",
@@ -101,12 +104,16 @@ export const projectRouter = createTRPCRouter({
     
   list: protectedProcedure
     .query(async ({ ctx }) => {
-      // Fetch all projects for the current user, sorted by most recently updated
+      // Fetch all projects for the current user
+      // First sort by favorite status (favorites first), then by most recently updated
       const userProjects = await ctx.db
         .select()
         .from(projects)
         .where(eq(projects.userId, ctx.session.user.id))
-        .orderBy(desc(projects.updatedAt));
+        .orderBy(
+          desc(projects.isFavorite), // Favorites first (true = 1, false = 0)
+          desc(projects.updatedAt)   // Then by most recent
+        );
         
       return userProjects;
     }),
@@ -122,25 +129,23 @@ export const projectRouter = createTRPCRouter({
         console.log('[project.create] Mutation called. Input:', JSON.stringify(input));
         let title = "Untitled Video";
         
-        if (input?.initialMessage) {
-          try {
-            // Use AI to generate a title from the initialMessage
-            const result = await generateTitle({
-              prompt: input.initialMessage,
-              contextId: "project-create"
-            });
-            title = result.title || "Untitled Video";
-          } catch (titleError) {
-            console.error("Error generating AI title:", titleError);
-            // Fall back to default naming scheme on error
-          }
-        }
-        
-        // If AI title generation failed or no initialMessage was provided,
-        // use the existing incremental naming scheme
-        if (title === "Untitled Video" || title === "New Project") {
-          // Get a list of all "Untitled Video" projects with their numbers
-          const userProjects = await executeWithRetry(() => ctx.db
+        // Helper function to check if a title exists for this user
+        const titleExists = async (titleToCheck: string): Promise<boolean> => {
+          const existingTitles = await executeWithRetry(() => ctx.db
+            .select({ title: projects.title })
+            .from(projects)
+            .where(
+              and(
+                eq(projects.userId, ctx.session?.user?.id || 'system'),
+                eq(projects.title, titleToCheck)
+              )
+            ));
+          return existingTitles.length > 0;
+        };
+
+        // Helper function to ensure "Untitled Video" titles are unique with numbering
+        const ensureUntitledVideoUnique = async (): Promise<string> => {
+          const existingTitles = await executeWithRetry(() => ctx.db
             .select({ title: projects.title })
             .from(projects)
             .where(
@@ -150,10 +155,18 @@ export const projectRouter = createTRPCRouter({
               )
             ));
           
-          // Find the highest number used in "Untitled Video X" titles
+          const existingTitleSet = new Set(existingTitles.map(p => p.title));
+          
+          if (!existingTitleSet.has("Untitled Video")) {
+            return "Untitled Video";
+          }
+          
+          // Find the highest number used in "Untitled Video X" format
           let highestNumber = 0;
-          for (const project of userProjects) {
-            const match = /^Untitled Video (\d+)$/.exec(project.title);
+          const titlePattern = /^Untitled Video (\d+)$/;
+          
+          for (const title of existingTitleSet) {
+            const match = titlePattern.exec(title);
             if (match?.[1]) {
               const num = parseInt(match[1], 10);
               if (!isNaN(num) && num > highestNumber) {
@@ -162,9 +175,37 @@ export const projectRouter = createTRPCRouter({
             }
           }
           
-          // Generate a unique title with the next available number
-          const nextNumber = highestNumber + 1;
-          title = userProjects.length === 0 ? "Untitled Video" : `Untitled Video ${nextNumber}`;
+          return `Untitled Video ${highestNumber + 1}`;
+        };
+
+        if (input?.initialMessage) {
+          try {
+            // Use AI to generate 5 title alternatives
+            const result = await generateTitle({
+              prompt: input.initialMessage,
+              contextId: "project-create"
+            });
+            
+            // Try each AI-generated title until we find one that doesn't exist
+            for (const candidateTitle of result.titles) {
+              if (!(await titleExists(candidateTitle))) {
+                title = candidateTitle;
+                break;
+              }
+            }
+            
+            // If all AI titles exist, fall back to numbered Untitled Video
+            if (title === "Untitled Video") {
+              title = await ensureUntitledVideoUnique();
+            }
+          } catch (titleError) {
+            console.error("Error generating AI title:", titleError);
+            // Fall back to numbered Untitled Video scheme on error
+            title = await ensureUntitledVideoUnique();
+          }
+        } else {
+          // No initial message provided, use numbered Untitled Video
+          title = await ensureUntitledVideoUnique();
         }
         
         // Create a new project for the logged-in user with returning clause
@@ -435,9 +476,9 @@ export const projectRouter = createTRPCRouter({
           contextId: input.contextId || "api-call"
         });
         
-        // Return the generated title
+        // Return the first generated title
         return {
-          title: result.title || generateNameFromPrompt(input.prompt),
+          title: result.titles?.[0] || generateNameFromPrompt(input.prompt),
           reasoning: result.reasoning
         };
       } catch (error) {
@@ -489,7 +530,7 @@ export const projectRouter = createTRPCRouter({
         }
 
         // Update the audio field
-        const [updated] = await ctx.db
+        const updated = await ctx.db
           .update(projects)
           .set({
             audio: input.audio,
@@ -498,8 +539,15 @@ export const projectRouter = createTRPCRouter({
           .where(eq(projects.id, input.projectId))
           .returning();
           
+        const result = updated[0];
+        if (!result) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update project audio",
+          });
+        }
         console.log(`[Project] Updated audio for project ${input.projectId}:`, input.audio);
-        return { success: true, audio: updated.audio };
+        return { success: true, audio: result.audio };
       } catch (error) {
         console.error("Error updating project audio:", error);
         if (error instanceof TRPCError) {
@@ -510,5 +558,110 @@ export const projectRouter = createTRPCRouter({
           message: "Failed to update project audio",
         });
       }
+    }),
+  
+  // Toggle favorite status for a project
+  toggleFavorite: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Check if project exists and user has access
+        const [project] = await ctx.db
+          .select()
+          .from(projects)
+          .where(eq(projects.id, input.projectId));
+
+        if (!project) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Project not found",
+          });
+        }
+
+        if (project.userId !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have access to this project",
+          });
+        }
+
+        // Toggle the favorite status
+        const updated = await ctx.db
+          .update(projects)
+          .set({
+            isFavorite: !project.isFavorite,
+            updatedAt: new Date()
+          })
+          .where(eq(projects.id, input.projectId))
+          .returning();
+
+        const result = updated[0];
+        if (!result) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to toggle favorite status",
+          });
+        }
+        console.log(`[Project] Toggled favorite for project ${input.projectId}: ${result.isFavorite}`);
+        return { success: true, isFavorite: result.isFavorite };
+      } catch (error) {
+        console.error("Error toggling favorite:", error);
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to toggle favorite status",
+        });
+      }
+    }),
+  
+  // List uploaded assets for a project
+  getUploads: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const ctx: AssetContextType = await assetContext.getProjectAssets(input.projectId);
+      return ctx;
+    }),
+
+  // List uploaded assets for the current user across all projects
+  getUserUploads: protectedProcedure
+    .query(async ({ ctx }) => {
+      const res = await assetContext.getUserAssets(ctx.session.user.id);
+      return res;
+    }),
+
+  // Rename an asset
+  renameAsset: protectedProcedure
+    .input(z.object({
+      assetId: z.string(),
+      newName: z.string().min(1).max(255)
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Update the asset's custom name
+      const [updated] = await ctx.db
+        .update(assets)
+        .set({ 
+          customName: input.newName,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(assets.id, input.assetId),
+            eq(assets.userId, ctx.session.user.id)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Asset not found or you don't have permission to rename it"
+        });
+      }
+
+      return { success: true, asset: updated };
     }),
 }); 

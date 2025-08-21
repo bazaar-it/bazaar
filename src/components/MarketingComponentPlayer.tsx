@@ -1,13 +1,38 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
+import { useIntersectionAnimation } from '~/hooks/use-intersection-animation';
 
 const MarketingComponentPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const animationRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { isVisible } = useIntersectionAnimation(containerRef, 0.3);
 
   useEffect(() => {
-    const animate = () => {
-      setCurrentFrame(prev => (prev + 1) % 360); // Extended to 360 frames (12 seconds) to accommodate longer text timing
+    if (!isVisible) {
+      // Stop animation when not visible
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      return;
+    }
+    
+    // Only animate when visible
+    const targetFPS = 30; // Back to normal FPS
+    const frameInterval = 1000 / targetFPS;
+    let lastTimestamp = 0;
+    
+    const animate = (timestamp: number) => {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      
+      const deltaTime = timestamp - lastTimestamp;
+      
+      if (deltaTime >= frameInterval) {
+        setCurrentFrame(prev => (prev + 1) % 360); // Extended to 360 frames (12 seconds) to accommodate longer text timing
+        lastTimestamp = timestamp;
+      }
+      
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -18,7 +43,7 @@ const MarketingComponentPlayer: React.FC = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [isVisible]);
 
   // Remotion-like interpolation function for web
   const interpolate = (frame: number, inputRange: [number, number], outputRange: [number, number], options?: { extrapolateLeft?: string; extrapolateRight?: string }) => {
@@ -241,7 +266,7 @@ const MarketingComponentPlayer: React.FC = () => {
   };
 
   return (
-    <>
+    <div ref={containerRef}>
       <style dangerouslySetInnerHTML={{
         __html: `
           .marketing-component-text {
@@ -300,7 +325,7 @@ const MarketingComponentPlayer: React.FC = () => {
       >
         <PromptUI />
       </div>
-    </>
+    </div>
   );
 };
 

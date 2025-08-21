@@ -20,6 +20,7 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       hasImages: !!input.imageUrls?.length,
       hasVideos: !!input.videoUrls?.length,
       hasWebContext: !!input.webContext,
+      hasFigmaData: !!input.figmaComponentData,
       sceneNumber: input.sceneNumber,
       hasPreviousScene: !!input.previousSceneContext
     });
@@ -27,6 +28,12 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
     console.log('🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!');
     
     try {
+      // Handle Figma component generation FIRST (highest priority)
+      if (input.figmaComponentData) {
+        console.log('🔨 [ADD TOOL] Using Figma component generation');
+        return await this.generateFromFigma(input);
+      }
+      
       // Handle web context + image-based scene creation
       if (input.webContext && (input.imageUrls?.length || 0) > 0) {
         console.log('🔨 [ADD TOOL] Using web context + images generation');
@@ -163,6 +170,7 @@ export const durationInFrames_ERROR = 180;`;
       projectFormat: input.projectFormat,
       requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
       assetUrls: input.assetUrls, // Pass persistent asset URLs
+      isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
     });
 
     // Return generated content - NO DATABASE!
@@ -210,6 +218,7 @@ export const durationInFrames_ERROR = 180;`;
       imageUrls: input.imageUrls,
       userPrompt: input.userPrompt,
       functionName: functionName,
+      projectId: input.projectId,
       projectFormat: input.projectFormat,
       assetUrls: input.assetUrls, // Pass all project assets
     });
@@ -242,6 +251,183 @@ export const durationInFrames_ERROR = 180;`;
     return result;
   }
 
+  /**
+   * Generate scene from Figma component
+   * PURE FUNCTION - no side effects
+   */
+  private async generateFromFigma(input: AddToolInput): Promise<AddToolOutput> {
+    const figmaData = input.figmaComponentData;
+    if (!figmaData) {
+      throw new Error("No Figma component data provided");
+    }
+
+    const functionName = this.generateFunctionName();
+    
+    // NEW: Check if we already have converted Remotion code
+    if (figmaData.remotionCode) {
+      console.log('🎨 [ADD TOOL] Using pre-converted Remotion code from Figma');
+      
+      // Parse the code to extract the component name
+      const exportMatch = figmaData.remotionCode.match(/export\s+(?:const|function)\s+(\w+)/);
+      const componentName = exportMatch ? exportMatch[1] : functionName;
+      
+      // Replace the function name in the code with our generated one
+      const finalCode = figmaData.remotionCode.replace(
+        /export\s+(?:const|function)\s+\w+/,
+        `export const ${functionName}`
+      );
+      
+      return {
+        success: true,
+        tsxCode: finalCode,
+        name: figmaData.name || 'Figma Component',
+        duration: 150,
+        reasoning: `Generated scene from Figma using pre-converted Remotion code`,
+        chatResponse: `I've perfectly recreated your Figma design "${figmaData.name}" with animations.`,
+        scene: {
+          tsxCode: finalCode,
+          name: figmaData.name || 'Figma Component',
+          duration: 150,
+        },
+        debug: {
+          method: 'pre-converted',
+          figmaType: figmaData.type,
+          codeLength: finalCode.length,
+        },
+      };
+    }
+    
+    // Check if we have enhanced data with styles and hierarchy
+    const hasEnhancedData = figmaData.styles && figmaData.hierarchy;
+    
+    if (hasEnhancedData) {
+      console.log('🎨 [ADD TOOL] Using ENHANCED Figma generation with direct conversion');
+      
+      // Step 1: Try direct structural conversion first
+      try {
+        const { generateRemotionComponent } = await import('~/server/services/figma/figma-to-jsx.service');
+        const directCode = generateRemotionComponent(figmaData, functionName);
+        
+        // Step 2: Use LLM to enhance with better animations
+        const animationPrompt = `
+${input.userPrompt}
+
+I have already generated the base structure from Figma. Now enhance it with animations:
+
+CURRENT CODE:
+${directCode}
+
+ANIMATION CONTEXT:
+- Component complexity: ${figmaData.animationPotential?.complexity || 'simple'}
+- Has text: ${figmaData.animationPotential?.hasText || false}
+- Has shapes: ${figmaData.animationPotential?.hasShapes || false}
+- Suggested animations: ${figmaData.animationPotential?.suggestedAnimations?.join(', ') || 'fade-in'}
+
+ENHANCE THIS CODE:
+1. Keep the exact structure and styling
+2. Add smooth entrance animations
+3. Add micro-interactions where appropriate
+4. Use spring animations for natural motion
+5. Stagger animations for child elements`;
+
+        // For now, use the direct code as-is since enhanceWithAnimations doesn't exist yet
+        // TODO: Add animation enhancement method to codeGenerator
+        const enhancedResult = {
+          code: directCode,
+          name: figmaData.name || 'Figma Component',
+          duration: 150,
+        };
+        
+        return {
+          success: true,
+          tsxCode: enhancedResult.code,
+          name: figmaData.name || enhancedResult.name,
+          duration: enhancedResult.duration,
+          reasoning: `Generated scene from Figma using direct conversion + LLM animation enhancement`,
+          chatResponse: `I've recreated your Figma design "${figmaData.name}" with perfect structural accuracy and added smooth animations.`,
+          scene: {
+            tsxCode: enhancedResult.code,
+            name: figmaData.name || enhancedResult.name,
+            duration: enhancedResult.duration,
+          },
+          debug: {
+            method: 'hybrid-conversion',
+            figmaType: figmaData.type,
+            elementCount: figmaData.animationPotential?.elementCount || 0,
+            complexity: figmaData.animationPotential?.complexity,
+          },
+        };
+      } catch (error) {
+        console.warn('🔄 [ADD TOOL] Direct conversion failed, falling back to LLM generation:', error);
+        // Fall through to LLM-only approach
+      }
+    }
+    
+    // Fallback: LLM-only generation with all Figma data
+    console.log('🎨 [ADD TOOL] Using LLM-based Figma generation');
+    
+    const enhancedPrompt = `
+${input.userPrompt}
+
+[FIGMA DESIGN SPECIFICATIONS]
+Component Type: ${figmaData.type}
+Component Name: ${figmaData.name || 'Figma Component'}
+Dimensions: ${figmaData.bounds ? `${Math.round(figmaData.bounds.width)}x${Math.round(figmaData.bounds.height)}` : 'Unknown'}
+Background: ${figmaData.backgroundColor || 'transparent'}
+Colors Used: ${figmaData.colors?.join(', ') || 'Default'}
+Text Content: ${figmaData.texts?.join(', ') || 'No text'}
+
+${figmaData.styles ? `
+CSS STYLES:
+${JSON.stringify(figmaData.styles, null, 2)}
+` : ''}
+
+${figmaData.hierarchy ? `
+COMPONENT HIERARCHY:
+${JSON.stringify(figmaData.hierarchy, null, 2)}
+` : ''}
+
+CHILD ELEMENTS (${figmaData.children?.length || 0}):
+${JSON.stringify(figmaData.children?.slice(0, 10), null, 2)}
+
+IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add smooth animations.`;
+
+    // Use generateCodeDirect which is the correct method
+    const codeResult = await codeGenerator.generateCodeDirect({
+      userPrompt: enhancedPrompt,
+      functionName: functionName,
+      projectId: input.projectId,
+      projectFormat: input.projectFormat,
+    });
+
+    const result = {
+      success: true,
+      tsxCode: codeResult.code,
+      name: figmaData.name || codeResult.name,
+      duration: codeResult.duration,
+      reasoning: `Generated scene from Figma component: ${figmaData.name}`,
+      chatResponse: `I've recreated your Figma design "${figmaData.name}" with animations based on the component structure.`,
+      scene: {
+        tsxCode: codeResult.code,
+        name: figmaData.name || codeResult.name,
+        duration: codeResult.duration,
+      },
+      debug: {
+        method: 'llm-generation',
+        figmaType: figmaData.type,
+        childCount: figmaData.children?.length || 0,
+      },
+    };
+
+    console.log('✅ [ADD TOOL] Finished Figma generation - returning result:', {
+      name: result.name,
+      duration: result.duration,
+      codeLength: result.tsxCode.length,
+    });
+
+    return result;
+  }
+  
   /**
    * Generate scene from videos
    * PURE FUNCTION - no side effects

@@ -37,6 +37,13 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
+    // GitHub App (repo access) - Optional in preview/dev environments
+    GITHUB_APP_ID: z.string().optional(),
+    GITHUB_CLIENT_ID: z.string().optional(),
+    GITHUB_CLIENT_SECRET: z.string().optional(),
+    GITHUB_APP_PRIVATE_KEY: z.string().optional(),
+    GITHUB_WEBHOOK_SECRET: z.string().optional(),
+
     // Worker Configuration (Server-side)
     WORKER_POLLING_INTERVAL: z.preprocess(
       (val) => (val ? parseInt(String(val), 10) : undefined),
@@ -63,6 +70,8 @@ export const env = createEnv({
     LOG_AGENT_URL: z.string().url().optional().default("http://localhost:3002"),
     // Model pack selection for AI services
     MODEL_PACK: z.string().optional().default("optimal-pack"),
+    // Google Gemini API
+    GOOGLE_GEMINI_API_KEY: z.string().optional(),
   },
 
   /**
@@ -103,6 +112,13 @@ export const env = createEnv({
     // Stripe Environment Variables
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+
+    // GitHub App
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+    GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+    GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET,
     // Worker Configuration Runtime Environment Variables
     WORKER_POLLING_INTERVAL: process.env.WORKER_POLLING_INTERVAL,
     TASK_PROCESSOR_POLLING_INTERVAL: process.env.TASK_PROCESSOR_POLLING_INTERVAL,
@@ -110,6 +126,7 @@ export const env = createEnv({
     DISABLE_BACKGROUND_WORKERS: process.env.DISABLE_BACKGROUND_WORKERS,
     LOG_AGENT_URL: process.env.LOG_AGENT_URL,
     MODEL_PACK: process.env.MODEL_PACK,
+    GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,

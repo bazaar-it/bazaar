@@ -75,11 +75,11 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
   return (
     <div className="w-full h-full">
       <Player
-        component={playerProps.component}
-        durationInFrames={playerProps.durationInFrames || 150}
-        fps={playerProps.fps || 30}
-        compositionWidth={playerProps.compositionWidth || 1920}
-        compositionHeight={playerProps.compositionHeight || 1080}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={false}
@@ -102,11 +102,11 @@ const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinitio
   return (
     <div className="w-full h-full">
       <Player
-        component={playerProps.component}
-        durationInFrames={playerProps.durationInFrames || 150}
-        fps={playerProps.fps || 30}
-        compositionWidth={playerProps.compositionWidth || 1920}
-        compositionHeight={playerProps.compositionHeight || 1080}
+        component={playerProps?.component || component}
+        durationInFrames={playerProps?.durationInFrames || 150}
+        fps={playerProps?.fps || 30}
+        compositionWidth={playerProps?.compositionWidth || 1920}
+        compositionHeight={playerProps?.compositionHeight || 1080}
         controls={false}
         showVolumeControls={false}
         autoPlay={true}
@@ -204,8 +204,27 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
       setIsCompiling(true);
       
       const compileTemplate = async () => {
+        let blobUrl: string | null = null;
         try {
           const code = template.getCode();
+          
+          // Basic security validation for template code
+          // Check for potentially dangerous patterns
+          const dangerousPatterns = [
+            /eval\s*\(/,
+            /Function\s*\(/,
+            /\.innerHTML\s*=/,
+            /document\.write/,
+            /window\.location/,
+            /__proto__/,
+            /constructor\s*\[/,
+          ];
+          
+          for (const pattern of dangerousPatterns) {
+            if (pattern.test(code)) {
+              throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
+            }
+          }
           
           // Transform TypeScript/JSX to JavaScript using sucrase
           const { code: transformed } = transform(code, {
@@ -214,9 +233,12 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
             production: false,
           });
           
-          // Create a blob URL for the module
-          const blob = new Blob([transformed], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(blob);
+          // Create a blob URL for the module with strict CSP
+          // Note: In production, add CSP headers to prevent XSS
+          const blob = new Blob([transformed], { 
+            type: 'application/javascript'
+          });
+          blobUrl = URL.createObjectURL(blob);
           
           // Import the module dynamically
           const module = await import(/* webpackIgnore: true */ blobUrl);
@@ -228,13 +250,14 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
             throw new Error('No default export found in template code');
           }
           
-          // Clean up the blob URL immediately
-          URL.revokeObjectURL(blobUrl);
-          
         } catch (error) {
           console.error('Failed to compile database template:', error);
           setCompilationError(error as Error);
         } finally {
+          // Always clean up the blob URL, even if there was an error
+          if (blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+          }
           setIsCompiling(false);
         }
       };
@@ -355,7 +378,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       name: dbTemplate.name,
       duration: dbTemplate.duration,
       previewFrame: dbTemplate.previewFrame || 15,
-      component: null as any, // Database templates don't have components
+      component: null, // Database templates don't have components (type allows null)
       getCode: () => dbTemplate.tsxCode,
       supportedFormats: dbTemplate.supportedFormats as ('landscape' | 'portrait' | 'square')[],
       isFromDatabase: true, // Mark as database template

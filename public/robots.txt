@@ -1,6 +1,42 @@
-# Allow all crawlers to access all pages
+# AI/LLM Crawlers - Allow all for content discovery
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Search Engine Crawlers
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Baiduspider
+Allow: /
+Crawl-delay: 2
+
+# General crawlers
 User-agent: *
 Allow: /
+Crawl-delay: 2
+
+# Block admin and sensitive areas
+Disallow: /admin/
+Disallow: /api/auth/
+Disallow: /_next/static/chunks/
+Disallow: /build/
 
 # Sitemap location
 Sitemap: https://bazaar.it/sitemap.xml

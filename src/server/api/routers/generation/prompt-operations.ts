@@ -1,11 +1,13 @@
+//src/server/api/routers/generation/prompt-operations.ts
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
-import { openai } from "~/server/lib/openai";
+import { AIClientService, type AIMessage } from "~/server/services/ai/aiClient.service";
+import { resolveModel } from "~/config/models.config";
 
 /**
  * ENHANCE PROMPT - Expands user prompts into detailed motion graphics instructions
  * 
- * Uses GPT-4.1-nano (fastest model) to transform simple user prompts into comprehensive
+ * Uses centrally configured GPT‑5 nano (via models.config) to transform simple user prompts into comprehensive
  * motion graphics specifications with animation details, visual styles,
  * timing, and effects.
  */
@@ -29,58 +31,118 @@ export const enhancePrompt = protectedProcedure
 
     try {
       // System prompt for motion graphics enhancement
-      const systemPrompt = `You are a motion graphics specialist for Bazaar-Vid. Enhance user prompts to leverage our system's strengths.
+      const systemPromptText = `You are an expert motion graphics creative director. Transform simple ideas into stunning, detailed animation specifications.
 
-IMPORTANT: Simply enhance their prompt into a more actionable creative brief. Do NOT acknowledge or respond to the user.
+CRITICAL: Output ONLY the enhanced prompt. No greetings, no explanations, no acknowledgments. Just the pure creative direction.
 
-Our system excels at:
-- Text animations: typewriter, fade-in, slide-in, bounce, scale, blur, elastic
-- Logo animations: reveal, morph, glitch, draw-on, 3D rotation
-- Data visualizations: animated charts, growing bars, counting numbers, pie charts
-- Transitions: wipe, dissolve, slide, zoom, morph between scenes
-- Backgrounds: animated gradients, particles, geometric patterns, video overlays
-- Icons: 100k+ from Iconify, animated entrances, micro-interactions
-- Layouts: grid systems, masonry, centered stacks, split screens
-- Effects: shadows, glows, blurs, masks, parallax depth
+## WHAT WE CAN ACTUALLY BUILD (Remotion/React)
+You excel at creating:
+• Text Animations: fade in, slide from any direction, typewriter effect, blur-in, word-by-word reveal, letter cascade
+• Scale Effects: smooth scale-in with overshoot, zoom effects, elastic rise, grow from 0
+• Movement: translate animations, parallax layers, floating elements, drift effects
+• Opacity: fade transitions, wipe reveals, cross-dissolves
+• Rotations: 2D rotations on X/Y/Z axis, spinning elements, flip animations
+• Spring Physics: bouncy animations with configurable stiffness and damping
+• Stagger Effects: sequential animations with delays, cascading elements
+• Gradient Backgrounds: animated gradients that shift colors/angles over time
+• Basic Shapes: rectangles, circles, lines with animated properties
+• Grid Layouts: flexbox grids, centered stacks, split screens
+• Image/Video: display with Ken Burns effect, fade transitions, scale animations
 
-Enhance prompts by adding SPECIFIC technical details:
-- Timing: "2s intro", "0.3s stagger", "ease-in-out over 1s", "hold for 3s"
-- Hierarchy: "80px hero text", "24px body", "40% screen width", "centered vertically"
-- Motion paths: "slide from left", "rotate 360°", "scale 0→1", "opacity 0→100%"
-- Colors: "blue to purple gradient", "#FF5733 brand orange", "white text on dark"
-- Composition: "3-column grid", "60/40 split", "full-bleed video", "20px padding"
-- Sequencing: "scene 1: logo (3s) → scene 2: message (5s) → scene 3: CTA (2s)"
+## WHAT WE CANNOT DO (Don't suggest these!)
+❌ Particle systems (no physics engine)
+❌ 3D transformations beyond basic rotateX/Y/Z
+❌ Morphing SVG paths or liquid effects
+❌ Audio-reactive visualizations
+❌ Complex masks or clipping paths
+❌ Blur effects (except simple CSS blur)
+❌ Custom shaders or WebGL effects
+❌ Real-time data fetching
+❌ Interactive elements (it's a video, not an app)
 
-${videoFormat?.format === 'portrait' ? 'Format: Vertical 9:16 for TikTok/Reels. Use large text, centered layouts, thumb-stopping visuals.' : 
-  videoFormat?.format === 'square' ? 'Format: Square 1:1 for Instagram. Use balanced compositions, centered elements.' : 
-  'Format: Landscape 16:9 for YouTube/presentations. Use professional layouts with clear hierarchy.'}
+## ENHANCEMENT STRATEGY
 
-Transform vague requests into specific, executable instructions. Keep it 50-150 words focused on what we can build.
+1. **Focus on Timing**: Be ultra-specific about when things happen
+2. **Layer Simple Effects**: Combine basic animations for complexity
+3. **Use Color Wisely**: Gradients and color transitions are powerful
+4. **Typography First**: Text is our strongest element
+5. **Smooth Motion**: Spring animations and easing create professional feel
 
-Examples:
-- "make an ad" → "6-second ad: Logo scales up with elastic ease (1s), product image slides in from right with parallax (3s), CTA button fades in with pulse loop (2s). Blue gradient background."
-- "finance dashboard" → "Dashboard on dark theme: 4 KPI cards slide in with 0.2s stagger, bar chart grows from 0-100% over 2s, numbers count up from 0, subtle grid layout with 20px gaps."
-- "intro for youtube" → "10s intro: Channel name types out (2s), subscribe button bounces in (1s), video preview grid fades up (2s), all on animated gradient shifting from purple to pink."
-- "make it more dynamic" → "Add spring animations to all entrances, increase stagger to 0.5s, add particle effects to background, make text scale 120% on emphasis."`;
+## TECHNICAL SPECIFICATIONS TO ADD
 
-      // Call OpenAI to enhance the prompt using GPT-4.1-nano (fastest model)
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4.1-nano-2025-04-14",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.4, // Lower temperature for more focused, consistent enhancements
-        max_tokens: 300, // Shorter, more concise enhancements
-      });
+**Timing Blueprint**: Use frames (30fps) or seconds
+- "Frame 0-15: logo fades in → Frame 15-30: scale from 0.8 to 1.2 → Frame 30-90: hold"
+- "Stagger each element 5 frames apart"
+- "Total duration: 150 frames (5 seconds)"
 
-      const enhancedPrompt = completion.choices[0]?.message?.content;
+**Animation Details**: Specific Remotion functions
+- "opacity: interpolate(frame, [0, 30], [0, 1])"
+- "scale: spring({ frame, fps: 30, from: 0, to: 1 })"
+- "translateY: interpolate(frame, [0, 20], [50, 0])"
+
+**Color System**: Hex codes and gradients
+- "Background: linear gradient from #1E40AF (blue) to #7C3AED (purple), rotating from 45° to 135°"
+- "Text: #FFFFFF on dark, #1F2937 on light"
+- "Accent elements: #FBBF24 (amber)"
+
+**Typography**: Realistic sizes
+- "Hero text: 64px bold Inter"
+- "Body text: 24px regular Inter"
+- "Use Plus Jakarta Sans or Inter fonts only (we have these)"
+
+**Layout**: CSS-based positioning
+- "Center element: position absolute, top 50%, left 50%, transform translate(-50%, -50%)"
+- "Grid: display flex, gap 20px, 3 columns"
+- "Maintain 40px padding from edges"
+
+${videoFormat?.format === 'portrait' ? `
+## VERTICAL FORMAT (9:16)
+- Stack elements vertically with flexbox column
+- Minimum 48px text for mobile viewing
+- First element appears in frames 0-10 for immediate impact
+- Keep important content in center 60% (safe from UI)
+- Use translateY animations for vertical flow` : 
+  videoFormat?.format === 'square' ? `
+## SQUARE FORMAT (1:1)
+- Center all primary elements
+- Equal padding on all sides (80px minimum)
+- Radial animations work well (scale from center)
+- Perfect for looping animations (match first and last frame)
+- Bold, simple compositions` : `
+## LANDSCAPE FORMAT (16:9)
+- Wide compositions with horizontal flow
+- Use 3-column or 2-column grids
+- TranslateX animations feel natural
+- Multiple elements can appear simultaneously
+- Professional layouts with clear hierarchy`}
+
+## REALISTIC ENHANCEMENT EXAMPLES
+
+Input: "product launch"
+Output: "Product reveal sequence: Logo fades in centered (frames 0-20, opacity 0→1), then scales up with spring bounce (frames 20-40, scale 0.8→1.2→1). Product image slides in from bottom (frames 30-60, translateY 100→0) with shadow growing underneath. Three feature cards stagger in from right (frames 60-90, 10 frame delays, translateX 50→0). Background: animated gradient #6366F1→#EC4899 rotating slowly. Text: 64px Inter bold for title, 24px for features. Duration: 150 frames."
+
+Input: "startup pitch"
+Output: "Dynamic pitch opener: Company name types out letter by letter (frames 0-60, 2 frames per letter). Three problem points slide in from left with 15-frame stagger (frames 30-90, opacity 0→1, translateX -30→0). Solution text scales up dramatically (frames 90-120, scale 0→1 with spring). Stats counter animates from 0 to final number (frames 120-180). Background: dark #1F2937 with subtle gradient overlay. White text (#FFFFFF) with #FBBF24 accent highlights."
+
+Input: "social media ad"
+Output: "Attention-grabbing ad: Bold headline zooms in with overshoot (frames 0-15, scale 1.5→1). Product images fade in sequence (frames 15-45, 3 images, 10 frame gaps). Price bounces in with spring physics (frames 45-60). CTA button pulses twice (frames 60-90, scale 1→1.1→1). Background gradient shifts from blue #3B82F6 to purple #8B5CF6. Text: 56px Plus Jakarta Sans bold, centered. Total: 90 frames (3 seconds)."
+
+Keep output between 80-150 words. Focus on what Remotion can actually do: timing, positioning, basic transforms, opacity, spring animations.`;
+
+      // Build messages for centralized AI client
+      const messages: AIMessage[] = [
+        { role: 'system', content: systemPromptText },
+        { role: 'user', content: prompt },
+      ];
+
+      // Resolve model from central config (promptEnhancer)
+      const modelConfig = resolveModel('promptEnhancer');
+
+      const aiResponse = await AIClientService.generateResponse(
+        modelConfig, 
+        messages
+      );
+      const enhancedPrompt = aiResponse.content;
 
       if (!enhancedPrompt) {
         throw new Error("Failed to generate enhanced prompt");
@@ -89,7 +151,7 @@ Examples:
       console.log(`[EnhancePrompt] Successfully enhanced prompt`, {
         originalLength: prompt.length,
         enhancedLength: enhancedPrompt.length,
-        model: "gpt-4.1-nano-2025-04-14",
+        model: `${modelConfig.provider}/${modelConfig.model}`,
       });
 
       return {
@@ -97,7 +159,7 @@ Examples:
         originalPrompt: prompt,
         enhancedPrompt,
         metadata: {
-          model: "gpt-4.1-nano-2025-04-14",
+          model: `${modelConfig.provider}/${modelConfig.model}`,
           videoFormat,
           enhancementRatio: Math.round((enhancedPrompt.length / prompt.length) * 100) / 100,
         },
@@ -113,7 +175,7 @@ Examples:
         enhancedPrompt: prompt, // Return original if enhancement fails
         error: error instanceof Error ? error.message : "Failed to enhance prompt",
         metadata: {
-          model: "gpt-4.1-nano-2025-04-14",
+          model: `${resolveModel('promptEnhancer').provider}/${resolveModel('promptEnhancer').model}`,
           videoFormat,
           enhancementRatio: 1,
         },

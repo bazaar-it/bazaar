@@ -55,6 +55,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
 
   // Helper function to sync audio to both Zustand and database
   const syncAudioSettings = (audio: AudioTrack | null) => {
+    console.log('[AudioPanel] Syncing audio settings:', { projectId, audio });
     // Update Zustand state immediately for UI responsiveness
     updateProjectAudio(projectId, audio);
     
@@ -69,9 +70,14 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   useEffect(() => {
     if (project?.audio) {
       console.log('[AudioPanel] Loading audio from database:', project.audio);
-      setAudioTrack(project.audio);
+      // Ensure the audio object has an id property
+      const audioWithId = {
+        ...project.audio,
+        id: project.audio.id || project.audio.url || 'default-id'
+      };
+      setAudioTrack(audioWithId as AudioTrack);
       // Also sync to Zustand for consistency
-      updateProjectAudio(projectId, project.audio);
+      updateProjectAudio(projectId, audioWithId as AudioTrack);
     } else {
       // Fallback to Zustand state if no database audio
       const projectState = useVideoState.getState().projects[projectId];
@@ -145,7 +151,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
       
       // Create audio element to get duration
       // Use native Audio constructor explicitly to avoid conflicts with Remotion's Audio component
-      const audio = new (window as any).NativeAudio(result.url) || new Audio(result.url);
+      const audio = new window.Audio(result.url);
       audio.addEventListener('loadedmetadata', () => {
         const newTrack: AudioTrack = {
           id: result.key,
@@ -159,6 +165,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
         
         setAudioTrack(newTrack);
         syncAudioSettings(newTrack);
+        console.log('[AudioPanel] Audio uploaded and synced:', newTrack);
         toast.success('Audio uploaded successfully');
       });
     } catch (error) {
@@ -203,7 +210,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   };
 
   const handleTrimChange = (type: 'start' | 'end', value: number[]) => {
-    if (!audioTrack) return;
+    if (!audioTrack || value[0] === undefined) return;
     
     const updatedTrack = {
       ...audioTrack,
@@ -215,7 +222,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   };
 
   const handleVolumeChange = (value: number[]) => {
-    if (!audioTrack) return;
+    if (!audioTrack || value[0] === undefined) return;
     
     const updatedTrack = {
       ...audioTrack,
@@ -225,14 +232,14 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     setAudioTrack(updatedTrack);
     syncAudioSettings(updatedTrack);
     
-    if (audioRef.current) {
+    if (audioRef.current && value[0] !== undefined) {
       audioRef.current.volume = value[0];
     }
   };
 
   // Phase 1 Enhancement Handlers
   const handleFadeInChange = (value: number[]) => {
-    if (!audioTrack) return;
+    if (!audioTrack || value[0] === undefined) return;
     
     const updatedTrack = {
       ...audioTrack,
@@ -244,7 +251,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   };
 
   const handleFadeOutChange = (value: number[]) => {
-    if (!audioTrack) return;
+    if (!audioTrack || value[0] === undefined) return;
     
     const updatedTrack = {
       ...audioTrack,
@@ -256,7 +263,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   };
 
   const handleSpeedChange = (value: number[]) => {
-    if (!audioTrack) return;
+    if (!audioTrack || value[0] === undefined) return;
     
     const updatedTrack = {
       ...audioTrack,
@@ -267,7 +274,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
     syncAudioSettings(updatedTrack);
     
     // Update HTML audio element playback rate for preview
-    if (audioRef.current) {
+    if (audioRef.current && value[0] !== undefined) {
       audioRef.current.playbackRate = value[0];
     }
   };

@@ -35,13 +35,7 @@ export default function NewsletterEmailTemplate({
       <Body style={main}>
         <Container style={container}>
           <Section style={logoSection}>
-            <Img
-              src="https://bazaar-vid.vercel.app/bazaar-logo.png"
-              width="120"
-              height="40"
-              alt="Bazaar-Vid"
-              style={logo}
-            />
+            <Text style={logoText}>bazaar.it</Text>
           </Section>
 
           <Section style={contentSection}>
@@ -64,7 +58,7 @@ export default function NewsletterEmailTemplate({
             <Section style={footerSection}>
               <Text style={footerText}>
                 Best regards,<br />
-                The Bazaar-Vid Team
+                The Bazaar Team
               </Text>
               
               <Text style={socialText}>
@@ -72,22 +66,22 @@ export default function NewsletterEmailTemplate({
               </Text>
               
               <Section style={socialLinks}>
-                <Link href="https://twitter.com/bazaarvid" style={socialLink}>
+                <Link href="https://twitter.com/bazaarit" style={socialLink}>
                   Twitter
                 </Link>
                 <Text style={separator}>•</Text>
-                <Link href="https://github.com/bazaarvid" style={socialLink}>
+                <Link href="https://github.com/bazaar-it" style={socialLink}>
                   GitHub
                 </Link>
                 <Text style={separator}>•</Text>
-                <Link href="https://bazaar-vid.vercel.app" style={socialLink}>
+                <Link href="https://bazaar.it" style={socialLink}>
                   Website
                 </Link>
               </Section>
 
               <Text style={unsubscribeText}>
-                You're receiving this email because you signed up for Bazaar-Vid updates.<br />
-                <Link href="https://bazaar-vid.vercel.app/unsubscribe" style={unsubscribeLink}>
+                You're receiving this email because you signed up for Bazaar updates.<br />
+                <Link href="https://bazaar.it/unsubscribe" style={unsubscribeLink}>
                   Unsubscribe from these emails
                 </Link>
               </Text>
@@ -117,8 +111,13 @@ const logoSection = {
   textAlign: 'center' as const,
 };
 
-const logo = {
-  margin: '0 auto',
+const logoText = {
+  fontSize: '28px',
+  fontWeight: '500',
+  color: '#000000',
+  fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  margin: '0',
+  letterSpacing: '-0.02em',
 };
 
 const contentSection = {

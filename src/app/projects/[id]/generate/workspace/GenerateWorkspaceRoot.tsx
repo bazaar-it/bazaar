@@ -15,6 +15,8 @@ import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
 import { useBreakpoint } from '~/hooks/use-breakpoint';
 import MobileAppHeader from '~/components/MobileAppHeader';
 import { CreateTemplateModal } from '~/components/CreateTemplateModal';
+import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import TimelinePanel from './panels/TimelinePanel';
 
 // ✅ NEW: Debug flag for production logging
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -29,6 +31,7 @@ type Props = {
 export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
+  const [isTimelineVisible, setIsTimelineVisible] = useState(false);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
   const { data: session } = useSession();
@@ -98,17 +101,36 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     }
   }, [currentProjectData?.title, title]);
 
+  // Handle panel add when clicked or dragged from sidebar
+  const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {
+    // Special handling for timeline panels
+    if (panelType === 'timeline') {
+      setIsTimelineVisible(true);
+      return;
+    }
+    
+    workspaceContentAreaRef.current?.addPanel(panelType);
+  }, []);
+
+  // ✅ NEW: Auto-open media panel with audio tab when flag is set
+  const shouldOpenAudioPanel = useVideoState(state => state.projects[projectId]?.shouldOpenAudioPanel);
+  useEffect(() => {
+    if (shouldOpenAudioPanel) {
+      console.log('[GenerateWorkspaceRoot] Auto-opening media panel with audio tab');
+      // Open media panel instead of audio panel
+      handleAddPanel('media');
+      // TODO: Need to signal that audio tab should be active
+      // Clear the flag after opening
+      useVideoState.getState().setShouldOpenAudioPanel(projectId, false);
+    }
+  }, [shouldOpenAudioPanel, projectId, handleAddPanel]);
+
   // Sidebar is now fixed width, no expansion state needed
 
   const handleProjectRenamed = useCallback((newTitle: string) => {
     setTitle(newTitle);
     setUserProjects((prev) => prev.map(p => p.id === projectId ? { ...p, name: newTitle } : p));
   }, [projectId]);
-  
-  // Handle panel add when clicked or dragged from sidebar
-  const handleAddPanel = useCallback((panelType: PanelTypeG) => {
-    workspaceContentAreaRef.current?.addPanel(panelType);
-  }, []);
   
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
@@ -228,14 +250,30 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           }}
         >
           <div className="h-full flex flex-col overflow-hidden relative">
-            <WorkspaceContentAreaG
-              ref={workspaceContentAreaRef}
-              projectId={projectId}
-              userId={userId}
-              initialProps={initialProps}
-              projects={userProjects}
-              onProjectRename={handleProjectRenamed}
-            />
+            {/* Main workspace - always rendered */}
+            <div className="flex-1 overflow-hidden">
+              <WorkspaceContentAreaG
+                ref={workspaceContentAreaRef}
+                projectId={projectId}
+                userId={userId}
+                initialProps={initialProps}
+                projects={userProjects}
+                onProjectRename={handleProjectRenamed}
+                isAdmin={user?.isAdmin}
+              />
+            </div>
+            
+            {/* Timeline panel - fixed height based on content */}
+            {isTimelineVisible && (
+              <div className="bg-gray-900 border-t border-gray-200">
+                <TimelinePanel
+                  key={`timeline-${projectId}`}
+                  projectId={projectId}
+                  userId={userId}
+                  onClose={() => setIsTimelineVisible(false)}
+                />
+              </div>
+            )}
           </div>
         </div>
         
@@ -244,6 +282,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
           <GenerateSidebar
             onAddPanel={handleAddPanel}
+            isAdmin={user?.isAdmin}
           />
         </div>
       </div>
@@ -255,9 +294,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
         projectId={projectId}
         scenes={currentScenes.map(scene => ({
           id: scene.id,
-          name: scene.data.name,
+          name: String(scene.data.name || 'Untitled'),
           duration: scene.duration,
-          tsxCode: scene.data.code,
+          tsxCode: String(scene.data.code || ''),
           order: 0,
           projectId,
           props: scene.data.props || {},

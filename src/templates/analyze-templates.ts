@@ -15,23 +15,11 @@ export const templateFormatAnalysis = {
     name: 'Prompt Intro',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Centered text animation, works in all formats'
-  },
-  'blue-gradient-text': {
-    name: 'Blue Gradient Text',
-    supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
-    reason: 'Text animation with responsive layout, optimized for landscape and portrait'
-  },
-  'gradient-text': {
+  },  'gradient-text': {
     name: 'Gradient Text',
     supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
     reason: 'Gradient text with responsive layout, optimized for landscape and portrait'
-  },
-  'generating': {
-    name: 'Generating',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Loading animation, centered content'
-  },
-  'dot-dot-dot': {
+  },  'dot-dot-dot': {
     name: 'Dot Dot Dot',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Simple animation, works in all formats'
@@ -213,13 +201,7 @@ export const templateFormatAnalysis = {
     name: 'Vibey BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Vibey magenta-to-cyan gradient background template adapts perfectly to all aspect ratios'
-  },
-  'hello-bubbles': {
-    name: 'Hello Bubbles',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Animated gradient circles in a grid with zoom effect adapts perfectly to all aspect ratios'
-  },
-  'vibes-bg-gradient': {
+  },  'vibes-bg-gradient': {
     name: 'Rainbow BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Background gradient template with vibrant color transitions adapts to all formats'
@@ -243,13 +225,7 @@ export const templateFormatAnalysis = {
     name: 'Fast Text',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Advanced typography animation with multiple text effects, dynamic sizing adapts perfectly to all aspect ratios'
-  },
-  'airbnb-app': {
-    name: 'Airbnb App',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Complete mobile app simulation with responsive phone frame, adapts to all video formats while maintaining mobile app proportions'
-  },
-};
+  },};
 
 // Helper function to get supported formats for a template
 export function getTemplateSupportedFormats(templateId: string): VideoFormat[] {

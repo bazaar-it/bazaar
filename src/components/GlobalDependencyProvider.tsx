@@ -11,16 +11,13 @@ import * as LucideIcons from 'lucide-react';
 import rough from 'roughjs';
 import { Icon } from '@iconify/react';
 
-// Import specific Google Fonts
-import { loadFont as loadInter } from '@remotion/google-fonts/Inter';
-import { loadFont as loadRoboto } from '@remotion/google-fonts/Roboto';
-import { loadFont as loadOpenSans } from '@remotion/google-fonts/OpenSans';
-import { loadFont as loadPoppins } from '@remotion/google-fonts/Poppins';
-import { loadFont as loadMontserrat } from '@remotion/google-fonts/Montserrat';
+// Fonts are now loaded via CSS - no JavaScript loading needed
 
 export function GlobalDependencyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Fonts now load automatically via CSS @import in fonts.css
+      console.log('[Preview] Using CSS fonts - 99 Google Fonts available');
       (window as any).React = React;
       (window as any).ReactDOM = ReactDOM;
       (window as any).Remotion = Remotion;
@@ -56,49 +53,29 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       (window as any).IconifyIcon = IconifyWrapper;
       
-      // NEW: Add Google Fonts loader
+      // NEW: Add Font loader stub - fonts now load via CSS
       (window as any).RemotionGoogleFonts = {
-        loadFont: (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
+        loadFont: async (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
           // Handle case where AI passes options as first parameter
           let fontName: string;
+          let weights: string[] = ['400', '700']; // Default weights
+          
           if (typeof fontNameOrOptions === 'object' && fontNameOrOptions !== null) {
             // If first param is object, try to extract font name
             fontName = fontNameOrOptions.family || fontNameOrOptions.fontFamily || 'Inter';
-            options = fontNameOrOptions;
+            weights = fontNameOrOptions.weights || options?.weights || weights;
           } else {
             fontName = String(fontNameOrOptions || 'Inter');
+            weights = options?.weights || weights;
           }
           
-          // Map common font names to their loaders
-          const fontMap: { [key: string]: () => any } = {
-            'Inter': loadInter,
-            'Roboto': loadRoboto,
-            'OpenSans': loadOpenSans,
-            'Poppins': loadPoppins,
-            'Montserrat': loadMontserrat,
-          };
+          // Fonts are now loaded via CSS @import in fonts.css
+          // This is just a compatibility stub for scenes that still call loadFont
+          console.log(`[Font Stub] Font request for ${fontName} with weights ${weights.join(', ')} - loaded via CSS`);
           
-          const loader = fontMap[fontName];
-          if (loader) {
-            // Note: The actual @remotion/google-fonts loaders don't accept options
-            // in the way the generated code expects. They need to be loaded with
-            // specific weights at import time. For now, we'll just call the loader
-            // and ignore the options to prevent errors.
-            return loader();
-          }
-          
-          // Default to Inter if font not found - only warn once per font
-          if (!((window as any)._fontWarnings || ((window as any)._fontWarnings = new Set())).has(fontName)) {
-            console.warn(`Font "${fontName}" not found, defaulting to Inter`);
-            (window as any)._fontWarnings.add(fontName);
-          }
-          return loadInter();
-        },
-        Inter: () => loadInter(),
-        Roboto: () => loadRoboto(),
-        OpenSans: () => loadOpenSans(),
-        Poppins: () => loadPoppins(),
-        Montserrat: () => loadMontserrat(),
+          // Return immediately - fonts are already available via CSS
+          return Promise.resolve();
+        }
       };
       
       // NEW: Add Avatar System - Ultra Simple (R2 Storage URLs)

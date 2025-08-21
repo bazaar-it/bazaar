@@ -1,3 +1,4 @@
+// src/app/projects/[id]/generate/workspace/GenerateSidebar.tsx
 "use client";
 
 import { useState, useCallback, useMemo } from 'react';
@@ -16,15 +17,19 @@ import {
   FolderIcon,
   LayoutTemplateIcon,
   Music,
+  Zap,
+  Film,
 } from "lucide-react";
+import { Images } from "lucide-react";
 
 
 interface GenerateSidebarProps {
-  onAddPanel?: (panelType: PanelTypeG) => void;
+  onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
+  isAdmin?: boolean;
 }
 
 interface WorkspacePanelG {
-  type: PanelTypeG;
+  type: PanelTypeG | 'timeline';
   id: string;
   name: string;
   icon: any;
@@ -33,7 +38,7 @@ interface WorkspacePanelG {
 }
 
 interface PanelOption {
-  type: PanelTypeG;
+  type: PanelTypeG | 'timeline';
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -41,25 +46,37 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Video, Audio, Code, Templates
+// Workspace panels in vertical order: Projects, Chat, Video, Timeline, Media, Code, Templates, Integrations
 const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
   { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
-  { type: 'audio', id: 'audio', name: "Audio", icon: Music, href: "#audio", tooltip: "Audio Panel" },
+  { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
+  { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Media & Audio" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
+  { type: 'integrations' as any, id: 'integrations', name: "Integrations", icon: Zap, href: "#integrations", tooltip: "GitHub & Figma Integrations" },
 ];
 
 
 export function GenerateSidebar({ 
-  onAddPanel
+  onAddPanel,
+  isAdmin = false
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
   
+  // Filter nav items based on admin status
+  const visibleNavItems = navItems.filter(item => {
+    // Hide integrations panel for non-admin users
+    if (item.type === 'integrations' && !isAdmin) {
+      return false;
+    }
+    return true;
+  });
+  
   // Handle dragging panel icons from sidebar
-  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG) => {
+  const handleDragStart = (e: React.DragEvent, panelType: PanelTypeG | 'timeline') => {
     e.dataTransfer.setData("text/plain", panelType);
     e.dataTransfer.effectAllowed = "copy";
     setIsDragging(true);
@@ -90,7 +107,7 @@ export function GenerateSidebar({
   };
   
   // Handle clicking on panel icons in sidebar
-  const handlePanelClick = (panelType: PanelTypeG) => {
+  const handlePanelClick = (panelType: PanelTypeG | 'timeline') => {
     if (onAddPanel) {
       onAddPanel(panelType);
     }
@@ -155,7 +172,7 @@ export function GenerateSidebar({
             document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
           }}
         >
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Tooltip key={item.id}>
               <TooltipTrigger asChild>
                 <div className="flex flex-col items-center group cursor-pointer gap-1">
@@ -189,6 +206,7 @@ export function GenerateSidebar({
             document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
           }}
         ></div>
+
 
         {/* Feedback Button - aligned to bottom */}
         <div 

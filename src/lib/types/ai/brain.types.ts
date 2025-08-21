@@ -10,7 +10,7 @@
 // TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'typographyScene' | 'imageRecreatorScene'; // | 'scenePlanner'; [DISABLED]
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'typographyScene' | 'imageRecreatorScene' | 'addAudio'; // | 'scenePlanner'; [DISABLED]
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -23,6 +23,7 @@ export const TOOL_OPERATION_MAP = {
   deleteScene: 'scene.delete',
   typographyScene: 'scene.create',
   imageRecreatorScene: 'scene.create',
+  addAudio: 'audio.add',
   // scenePlanner: 'multi-scene.create' [DISABLED]
 } as const;
 
@@ -47,9 +48,11 @@ export interface BrainDecision {
     referencedSceneIds?: string[]; // For cross-scene references
     imageUrls?: string[];
     videoUrls?: string[];
+    audioUrls?: string[];
     assetUrls?: string[]; // All persistent project assets
     errorDetails?: string;
     modelOverride?: string; // Optional model ID for overriding default model
+    isYouTubeAnalysis?: boolean; // Flag indicating this is YouTube analysis that should be followed closely
     webContext?: {
       originalUrl: string;
       screenshotUrls: {
@@ -90,6 +93,7 @@ export interface OrchestrationInput {
   userId: string;
   userContext?: Record<string, unknown> & {
     modelOverride?: string; // Optional model override for this request
+    useGitHub?: boolean; // Explicit GitHub component search mode
   };
   storyboardSoFar?: Array<{
     id: string;

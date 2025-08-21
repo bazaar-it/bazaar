@@ -2,6 +2,10 @@
 // This file prepares the render configuration but doesn't execute rendering
 // Actual rendering happens via Lambda
 
+// Font loading is now handled by MainCompositionSimple using @remotion/fonts
+// The old injectFontLoadingCode function has been removed as it used browser APIs (document.fonts)
+// that don't exist in Lambda's Node environment
+
 export interface AudioTrack {
   url: string;
   name: string;
@@ -208,61 +212,71 @@ async function preprocessSceneForLambda(scene: any) {
       transformedCode = `// Remotion components will be provided by the runtime\n` + transformedCode;
     }
     
-    // Replace export default with a direct assignment
-    transformedCode = transformedCode.replace(
-      /export\s+default\s+function\s+(\w+)/g,
-      'const Component = function $1'
-    );
-    
-    // Also handle arrow function exports
-    transformedCode = transformedCode.replace(
-      /export\s+default\s+(\w+)\s*=\s*\(/g,
-      'const Component = $1 = ('
-    );
-    
-    // Check if we have a Component function
-    if (!transformedCode.includes('const Component = function') && !transformedCode.includes('const Component =')) {
-      // Try to find any function that looks like a component
-      const functionMatch = transformedCode.match(/(?:function|const)\s+(\w*Scene\w*)\s*[=(]/);
-      if (functionMatch) {
-        console.log(`[Preprocess] Found component function: ${functionMatch[1]}, aliasing to Component`);
-        transformedCode = transformedCode + `\n\nconst Component = ${functionMatch[1]};`;
-      } else {
-        console.warn(`[Preprocess] No Component function found after transformation for scene ${scene.id}`);
-        console.log(`[Preprocess] Transformed code snippet:`, transformedCode.substring(0, 200));
-      }
+    // Keep export default for Lambda compatibility - Lambda expects proper ES6 modules
+    // Only convert to const Component if there's no export default
+    if (!transformedCode.includes('export default')) {
+      // If there's a function without export, wrap it as export default
+      transformedCode = transformedCode.replace(
+        /^function\s+(\w+)/gm,
+        'export default function $1'
+      );
     }
     
-    // Ensure the component is available at the end (no export needed for Function constructor)
-    if ((transformedCode.includes('const Component = function') || transformedCode.includes('const Component =')) && !transformedCode.includes('return Component')) {
-      transformedCode = transformedCode + '\n\nreturn Component;';
-    }
+    // Keep arrow function exports as export default for Lambda
+    // No need to convert them to const Component
+    
+    // Lambda will import the export default function directly
+    // No need for Component assignment since we're preserving export default
+    
+    // No need for return Component since we're using proper export default for Lambda
     
     // Replace window.React with React
     transformedCode = transformedCode.replace(/window\.React/g, 'React');
     
-    // Remove or replace window.RemotionGoogleFonts (not available in Lambda)
+    // Replace window.RemotionGoogleFonts with actual @remotion/fonts loading
     transformedCode = transformedCode.replace(
       /window\.RemotionGoogleFonts\.loadFont[^;]+;/g,
-      '// Font loading removed for Lambda'
+      '// Font loading handled by @remotion/fonts injection'
     );
+
+    // Font loading is now handled by MainCompositionSimple using @remotion/fonts
+    // No need to inject font loading code into the scene
     
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
     transformedCode = await replaceIconifyIcons(transformedCode);
     
-    // Fix avatar URLs - replace local paths with R2 URLs
+    // Fix avatar URLs - replace window.BazaarAvatars with actual URLs
+    // This handles the window.BazaarAvatars['avatar-name'] pattern
     transformedCode = transformedCode.replace(
-      /\/avatars\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/g,
-      'https://pyyqiqdbiygijqaj.public.blob.vercel-storage.com/$1-avatar.png'
+      /window\.BazaarAvatars\[['"]([^'"]+)['"]\]/g,
+      (match: string, avatarId: string) => {
+        // Map avatar IDs to their full public R2 URLs
+        const avatarUrls: Record<string, string> = {
+          'asian-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/asian-woman.png',
+          'black-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/black-man.png',
+          'hispanic-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/hispanic-man.png',
+          'middle-eastern-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/middle-eastern-man.png',
+          'white-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/white-woman.png'
+        };
+        console.log(`[Preprocess] Replacing avatar: ${avatarId} with URL: ${avatarUrls[avatarId]}`);
+        return `"${avatarUrls[avatarId] || 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/default.png'}"`;
+      }
     );
     
-    // Remove export statements that can't be used inside Function constructor
+    // Also fix direct avatar path references (fallback)
+    transformedCode = transformedCode.replace(
+      /\/avatars\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/g,
+      'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/$1.png'
+    );
+    
+    // FOR LAMBDA: Function constructor cannot handle ANY export statements
+    // Remove ALL export statements and convert to variable assignments
     transformedCode = transformedCode
-      .replace(/export\s+default\s+Component;?/g, '')
-      .replace(/export\s+default\s+\w+;?/g, '')
-      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')
-      .replace(/export\s+{\s*[^}]*\s*};?/g, '');
+      .replace(/export\s+default\s+function\s+(\w+)/g, 'const Component = function $1')  // export default function -> const Component
+      .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, 'const Component = $1;')  // export default variable -> const Component
+      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')  // Remove export const
+      .replace(/export\s+{\s*[^}]*\s*};?/g, '');            // Remove export { ... }
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
     console.log(`[Preprocess] Transformation summary:`, {
@@ -270,9 +284,9 @@ async function preprocessSceneForLambda(scene: any) {
       sceneName: scene.name,
       originalCodeLength: tsxCode.length,
       transformedCodeLength: transformedCode.length,
-      hasExportDefault: tsxCode.includes('export default'),
-      hasComponent: transformedCode.includes('const Component'),
-      hasReturn: transformedCode.includes('return Component'),
+      hasExportDefault: transformedCode.includes('export default'),
+      hasComponent: transformedCode.includes('function') || transformedCode.includes('const Component'),
+      hasReturn: transformedCode.includes('return'),
       remotionComponents: remotionComponents.length > 0 ? remotionComponents : 'none',
       reactHooks: reactHooks.length > 0 ? reactHooks : 'none',
       transformedCodePreview: transformedCode.substring(0, 200) + '...'
@@ -326,68 +340,176 @@ async function replaceIconifyIcons(code: string): Promise<string> {
       console.log(`[Preprocess] Found direct icon: ${match[1]}`);
     }
   }
+
+  // Capture variable-based icon references like: icon: myIcon
+  const variableIconRefRegex = /\b(icon|iconName|tabIcon)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)/g;
+  const variableNames = new Set<string>();
+  let vmatch;
+  while ((vmatch = variableIconRefRegex.exec(code)) !== null) {
+    if (vmatch[2]) variableNames.add(vmatch[2]);
+  }
+  // Resolve variable assignments: const myIcon = 'prefix:name'
+  for (const varName of variableNames) {
+    const assignRegex = new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*["']([^"']+)["']`,'g');
+    let amatch;
+    while ((amatch = assignRegex.exec(code)) !== null) {
+      const val = amatch[1];
+      if (val && val.includes(':')) {
+        iconNames.add(val);
+        console.log(`[Preprocess] Resolved variable icon ${varName} -> ${val}`);
+      }
+    }
+  }
   
   // Load all icons first
   const iconMap = new Map<string, string>();
-  for (const iconName of iconNames) {
+  console.log(`[Preprocess] Loading ${iconNames.size} unique icons...`);
+  
+  // Loader with smart fallbacks for common outline names
+  async function loadWithFallback(name: string): Promise<string | null> {
+    const [collection, icon] = name.split(':');
+    if (!collection || !icon) return null;
+    
+    // Try loading the exact icon first
     try {
-      const [collection, icon] = iconName.split(':');
-      if (collection && icon) {
-        const svgString = await loadNodeIcon(collection, icon);
-        if (svgString) {
-          iconMap.set(iconName, svgString);
-          console.log(`[Preprocess] Loaded icon: ${iconName}`);
+      const svg = await loadNodeIcon(collection, icon);
+      if (svg) {
+        console.log(`[Preprocess] Loaded exact icon: ${name}`);
+        return svg;
+      }
+    } catch (e) {
+      console.log(`[Preprocess] Could not load exact icon: ${name}`);
+    }
+    
+    // Handle material-symbols outline variants
+    if (collection === 'material-symbols' && icon.endsWith('-outline')) {
+      const base = icon.replace(/-outline$/, '');
+      
+      // Map common outline names to their actual icon names
+      const iconMapping: Record<string, string[]> = {
+        'favorite-outline': ['favorite', 'heart', 'favorite-border'],
+        'home-outline': ['home', 'house', 'home-work'],
+        'chat-outline': ['chat', 'message', 'chat-bubble'],
+        'person-outline': ['person', 'account-circle', 'person-2'],
+        'search-outline': ['search', 'search-rounded']
+      };
+      
+      // Try mapped alternatives
+      const mappedAlternatives = iconMapping[icon] || [base];
+      
+      for (const alt of mappedAlternatives) {
+        const candidates = [
+          `material-symbols:${alt}`,
+          `material-symbols:${alt}-outline`,
+          `material-symbols:${alt}-rounded`,
+          `mdi:${alt}`,
+          `mdi:${alt}-outline`
+        ];
+        
+        for (const cand of candidates) {
+          const [c2, i2] = cand.split(':');
+          try {
+            const svg2 = await loadNodeIcon(c2 || '', i2 || '');
+            if (svg2) {
+              console.log(`[Preprocess] Using fallback: ${name} -> ${cand}`);
+              return svg2;
+            }
+          } catch {}
         }
       }
-    } catch (error) {
-      console.warn(`[Preprocess] Failed to load icon "${iconName}":`, error);
+    }
+    
+    // Try removing -outline suffix as last resort
+    if (icon.endsWith('-outline')) {
+      const baseIcon = icon.replace(/-outline$/, '');
+      try {
+        const svg = await loadNodeIcon(collection, baseIcon);
+        if (svg) {
+          console.log(`[Preprocess] Using base icon without outline: ${name} -> ${collection}:${baseIcon}`);
+          return svg;
+        }
+      } catch {}
+    }
+    
+    console.warn(`[Preprocess] No icon found for: ${name}`);
+    return null;
+  }
+
+  for (const iconName of iconNames) {
+    const svgString = await loadWithFallback(iconName);
+    if (svgString) {
+      iconMap.set(iconName, svgString);
+      console.log(`[Preprocess] Loaded icon: ${iconName}`);
+    } else {
+      console.warn(`[Preprocess] Icon "${iconName}" not found, using fallback`);
+      // Use a generic icon shape as fallback that's less obtrusive
+      const fallbackSvg = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+      iconMap.set(iconName, fallbackSvg);
     }
   }
   
-  // Build the icon map with actual SVG paths
+  console.log(`[Preprocess] Loaded ${iconNames.size} icons from initial scan`);
+  
+  // Broaden detection: include any literal that looks like an icon name with allowed prefixes
+  // Do this BEFORE building the icon map entries
+  try {
+    const allowedPrefixes = ['material-symbols', 'simple-icons', 'mdi', 'tabler', 'lucide', 'ph', 'bi', 'fa', 'ri', 'ion', 'iconicons'];
+    const allStringLikeIcons = code.match(/["']([a-z0-9_-]+:[a-z0-9_\-]+)["']/gi) || [];
+    for (const m of allStringLikeIcons) {
+      const val = m.slice(1, -1).toLowerCase(); // Ensure lowercase
+      const prefix = val.split(':')[0];
+      if (prefix && allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
+        const svgString = await loadWithFallback(val);
+        if (svgString && !iconMap.has(val)) {
+          iconMap.set(val, svgString);
+          console.log(`[Preprocess] Added additional icon: ${val}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Preprocess] Error loading additional icons:', e);
+  }
+  
+  console.log(`[Preprocess] Total icons loaded: ${iconMap.size}`);
+  
+  // NOW build the icon map entries with ALL collected icons
   const iconMapEntries = [];
   for (const [name, svg] of iconMap.entries()) {
-    // Extract all paths from the SVG (some icons have multiple paths)
+    // Extract viewBox and inner content
     const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
     const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
     
-    // Extract all path elements
-    const paths = [];
-    const pathRegex = /<path[^>]*d="([^"]+)"[^>]*>/g;
-    let pathMatch;
-    while ((pathMatch = pathRegex.exec(svg)) !== null) {
-      paths.push(pathMatch[1]);
-    }
-    
-    if (paths.length > 0) {
-      // Create a function that renders all paths
-      const pathElements = paths.map(d => `React.createElement("path", {d:"${d ? d.replace(/"/g, '\\"') : ''}"})`).join(', ');
-      iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor"}, props), ${pathElements}); }`);
-    }
+    // Extract inner SVG markup to preserve all shapes (paths, circles, rects, etc.)
+    const innerMatch = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
+    const inner = innerMatch?.[1]?.replace(/`/g, '\\`') || '';
+    iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner}\` }}, props)); }`);
   }
   
-  // Create the icon map code that will be injected
-  // Using regular function syntax to avoid destructuring issues in Lambda
+  // Create the icon map code that will be injected (top-level shim)
   const iconMapCode = `
     const __iconMap = {
       ${iconMapEntries.join(',\n      ')}
     };
     const IconifyIcon = function(props) {
-      const iconName = props && props.icon;
+      const _p = props || {};
+      const iconName = _p.icon;
+      const rest = (function(p){ var r={}; for (var k in p){ if(k!== 'icon' && Object.prototype.hasOwnProperty.call(p,k)) r[k]=p[k]; } return r; })(_p);
       if (!iconName) {
-        // No icon name provided - show blue circle
-        return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"blue",border:"2px solid white"}, (props && props.style) || {})});
+        // Return empty span for missing icon prop
+        return React.createElement("span", {style: Object.assign({display:"inline-block",width:"1em",height:"1em"}, rest && rest.style)});
       }
       const IconComponent = __iconMap[iconName];
       if (IconComponent) {
-        // Icon found - render it
-        return IconComponent((props && props.style) || {});
+        return IconComponent(rest);
       }
-      // Icon not found - show red circle so we know the function is being called
-      return React.createElement("div", {style: Object.assign({width:"48px",height:"48px",borderRadius:"50%",background:"red",border:"2px solid white"}, (props && props.style) || {})});
+      // Fallback: simple square icon shape
+      console.warn('Icon not in map:', iconName);
+      return React.createElement("svg", Object.assign({viewBox:"0 0 24 24",width:"1em",height:"1em",fill:"currentColor"}, rest), 
+        React.createElement("rect", {x:"4",y:"4",width:"16",height:"16",rx:"2",fill:"none",stroke:"currentColor",strokeWidth:"2"})
+      );
     };
   `;
-  
+
   // Replace window.IconifyIcon with our local IconifyIcon
   // This handles both JSX and React.createElement forms
   code = code.replace(/window\.IconifyIcon/g, 'IconifyIcon');
@@ -395,35 +517,9 @@ async function replaceIconifyIcons(code: string): Promise<string> {
   // Also handle React.createElement calls that already exist
   code = code.replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(IconifyIcon,');
   
-  // Find where the component function starts and inject the icon map INSIDE it
-  // Look for common patterns: "function Scene", "const Component = function", etc.
-  const componentFunctionPatterns = [
-    /function\s+Scene[^{]*\{/,
-    /const\s+Component\s*=\s*function[^{]*\{/,
-    /function\s+Component[^{]*\{/,
-    /const\s+Scene[^=]*=\s*function[^{]*\{/
-  ];
-  
-  let injected = false;
-  for (const pattern of componentFunctionPatterns) {
-    const match = code.match(pattern);
-    if (match) {
-      const insertPosition = match.index! + match[0].length;
-      // Insert the icon map right after the function opening brace
-      code = code.slice(0, insertPosition) + '\n' + iconMapCode + '\n' + code.slice(insertPosition);
-      console.log(`[Preprocess] Injected icon map inside component function at position ${insertPosition}`);
-      injected = true;
-      break;
-    }
-  }
-  
-  if (!injected) {
-    // Fallback: inject at the beginning if we can't find the component function
-    console.warn('[Preprocess] Could not find component function, injecting icon map at beginning');
-    code = iconMapCode + '\n' + code;
-  }
-  
-  console.log(`[Preprocess] Injected icon map with ${iconMap.size} icons`);
+  // Always inject the shim at the beginning so IconifyIcon exists in any scope
+  code = iconMapCode + '\n' + code;
+  console.log(`[Preprocess] Injected top-level Iconify shim with ${iconMap.size} icons`);
   
   // Log a sample of the transformed code to verify injection
   const codePreview = code.substring(0, 1500);
@@ -497,10 +593,15 @@ export async function prepareRenderConfig({
     });
   });
 
+  // Font extraction no longer needed - CSS fonts load automatically from fonts.css
+  console.log(`[Fonts] Using CSS fonts - all 99 fonts available via fonts.css`);
+  
   // Pre-compile all scenes for Lambda with resolution info
   const processedScenes = await Promise.all(
     scenes.map(scene => preprocessSceneForLambda({
       ...scene,
+      // Fonts now load automatically via CSS - no detection needed
+      detectedFonts: [],
       width: renderWidth,
       height: renderHeight
     }))

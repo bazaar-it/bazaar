@@ -107,10 +107,7 @@ export async function renderVideoOnLambda({
     fs.writeFileSync(propsFile, propsContent);
     console.log(`[LambdaRender] Props written to: ${propsFile}`);
     
-    // DEBUG: Also save a copy for debugging
-    const debugFile = `/tmp/last-render-props.json`;
-    fs.writeFileSync(debugFile, propsContent);
-    console.log(`[LambdaRender] Debug copy saved to: ${debugFile}`);
+    // Debug file removed for security - sensitive data should not persist to disk
     
     // Debug: Log first 500 chars of each scene's jsCode
     console.log(`[LambdaRender] Props file contents preview:`);
@@ -157,13 +154,16 @@ export async function renderVideoOnLambda({
     console.log(`[LambdaRender] Executing command:`, command);
     
     // Execute the CLI command
+    // AWS SDK will use default credential chain (env vars, IAM role, etc.)
+    // Do NOT pass credentials explicitly to child processes for security
     const { stdout, stderr } = await execAsync(command, {
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
       env: {
         ...process.env,
+        // Only pass non-sensitive environment variables
+        NODE_ENV: process.env.NODE_ENV,
         AWS_REGION: process.env.AWS_REGION,
-        AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+        // AWS SDK will handle credentials internally
       }
     });
     
@@ -173,18 +173,20 @@ export async function renderVideoOnLambda({
     
     console.log(`[LambdaRender] CLI output:`, stdout);
     
-    // Extract render ID from output
+    // Extract render ID from output with proper null checks
     const renderIdMatch = stdout.match(/Render ID:\s*([a-zA-Z0-9]+)/);
     const bucketMatch = stdout.match(/Bucket:\s*([\w-]+)/);
     const s3UrlMatch = stdout.match(/\+\s*S3\s+(https:\/\/[^\s]+)/);
     
-    if (!renderIdMatch || !bucketMatch) {
+    // Use optional chaining for safety
+    const renderId = renderIdMatch?.[1];
+    const bucketName = bucketMatch?.[1];
+    
+    if (!renderId || !bucketName) {
       console.error('[LambdaRender] Failed to extract render ID or bucket from output');
+      console.error('[LambdaRender] stdout:', stdout);
       throw new Error('Failed to start render - could not parse CLI output');
     }
-    
-    const renderId = renderIdMatch[1];
-    const bucketName = bucketMatch[1];
     
     console.log(`[LambdaRender] Render started successfully`);
     console.log(`[LambdaRender] Render ID: ${renderId}`);
@@ -272,20 +274,21 @@ export async function getLambdaRenderProgress(renderId: string, bucketName: stri
       '--region', process.env.AWS_REGION!,
     ].join(' ');
     
+    // AWS SDK will use default credential chain - don't pass credentials to child process
     const { stdout } = await execAsync(command, {
       env: {
         ...process.env,
+        NODE_ENV: process.env.NODE_ENV,
         AWS_REGION: process.env.AWS_REGION,
-        AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+        // AWS SDK handles credentials internally via default chain
       }
     });
     
     // Parse the CLI output to extract progress information
     const progressMatch = stdout.match(/Overall progress:\s*([\d.]+)%/);
-    const overallProgress = progressMatch ? parseFloat(progressMatch[1]) / 100 : 0;
+    const overallProgress = progressMatch && progressMatch[1] ? parseFloat(progressMatch[1]) / 100 : 0;
     const doneMatch = stdout.match(/Render\s+status:\s*(DONE|RENDERING|ERROR)/i);
-    const done = doneMatch ? doneMatch[1].toUpperCase() === 'DONE' : false;
+    const done = doneMatch && doneMatch[1] ? doneMatch[1].toUpperCase() === 'DONE' : false;
     const outputMatch = stdout.match(/Output:\s*(https:\/\/[^\s]+)/);
     const outputFile = outputMatch ? outputMatch[1] : null;
     

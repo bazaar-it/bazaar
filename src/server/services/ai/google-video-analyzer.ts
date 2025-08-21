@@ -1,0 +1,248 @@
+// src/server/services/ai/google-video-analyzer.ts
+// Google Gemini Video Analysis Service
+
+export class GoogleVideoAnalyzer {
+  private genAI: any;
+  private model: any;
+
+  constructor(private apiKey: string) {}
+
+  private async ensureClient() {
+    if (this.model) return;
+    try {
+      // Dynamic import to avoid hard dependency at build time
+      const { GoogleGenerativeAI } = await import('@google/generative-ai');
+      this.genAI = new GoogleGenerativeAI(this.apiKey);
+      // Use Gemini 2.5 Flash for video analysis
+      this.model = this.genAI.getGenerativeModel({ 
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          temperature: 0.0,
+          topK: 1,
+          topP: 1.0,
+          maxOutputTokens: 8192,
+        }
+      });
+    } catch (err) {
+      // Provide actionable error if package is missing
+      throw new Error("Missing '@google/generative-ai'. Run: npm install @google/generative-ai");
+    }
+  }
+
+  async analyzeYouTubeVideo(youtubeUrl: string, systemPrompt: string): Promise<string> {
+    console.log('🔍 [GoogleVideoAnalyzer] Starting YouTube analysis');
+    console.log('🔍 [GoogleVideoAnalyzer] URL:', youtubeUrl);
+    console.log('🔍 [GoogleVideoAnalyzer] Prompt length:', systemPrompt.length);
+    
+    // CRITICAL: Log exact URL being sent
+    console.log('🔍 [GoogleVideoAnalyzer] EXACT URL BEING ANALYZED:', youtubeUrl);
+    console.log('🔍 [GoogleVideoAnalyzer] First 200 chars of prompt:', systemPrompt.substring(0, 200));
+    
+    try {
+      await this.ensureClient();
+      console.log('🔍 [GoogleVideoAnalyzer] Calling Gemini API with YouTube URL as fileUri (official format)...');
+      
+      // OFFICIAL FORMAT from Google docs - YouTube URLs as fileUri
+      const result = await this.model.generateContent([
+        systemPrompt,  // Prompt first
+        {
+          fileData: {
+            fileUri: youtubeUrl  // YouTube URL goes in fileUri, no mimeType needed
+          }
+        }
+      ]);
+      
+      console.log('🔍 [GoogleVideoAnalyzer] Got response from Gemini');
+      const response = await result.response;
+      const text = response.text();
+      
+      console.log('🔍 [GoogleVideoAnalyzer] Response length:', text.length);
+      if (text.length === 0) {
+        throw new Error('Gemini returned empty response');
+      }
+      
+      return text;
+    } catch (error) {
+      console.error('🔍 [GoogleVideoAnalyzer] ERROR analyzing YouTube video:', error);
+      
+      // Check for specific error types
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          throw new Error('Google Gemini API key is invalid or missing');
+        }
+        if (error.message.includes('quota')) {
+          throw new Error('Google Gemini API quota exceeded');
+        }
+        if (error.message.includes('not found')) {
+          throw new Error('YouTube video not found or inaccessible');
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  async analyzeUploadedVideo(videoPath: string, systemPrompt: string): Promise<string> {
+    try {
+      await this.ensureClient();
+      // For now, we'll need to convert the video to base64 for inline upload
+      // Note: This is limited to videos under 20MB
+      const fs = await import('fs/promises');
+      const videoData = await fs.readFile(videoPath);
+      const base64Video = videoData.toString('base64');
+      
+      // Generate content with inline video data
+      const result = await this.model.generateContent([
+        {
+          inlineData: {
+            mimeType: 'video/mp4',
+            data: base64Video
+          }
+        },
+        { text: systemPrompt }
+      ]);
+
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error('Error analyzing uploaded video:', error);
+      throw error;
+    }
+  }
+}
+
+// Universal Motion Graphics Analysis Prompt for EXACT Reproduction
+export const MOTION_GRAPHICS_ANALYSIS_PROMPT = `You are a FORENSIC VIDEO ANALYZER creating a blueprint for EXACT code reproduction.
+Your analysis will be converted directly into code - be EXTREMELY PRECISE with all measurements.
+
+CRITICAL REQUIREMENTS:
+1. You MUST analyze EXACTLY 10 seconds = 300 frames at 30fps
+2. Your total frame count MUST add up to 300 frames
+3. Use ABSOLUTE frame numbers - if something happens at frame 150, write "frame 150"
+4. This is for PIXEL-PERFECT reproduction - every measurement matters
+5. IGNORE ALL AUDIO - Do NOT mention lyrics, speech, music, or sound effects
+6. FOCUS ONLY ON VISUAL ELEMENTS - text, colors, animations, transitions
+7. Provide EXACT hex colors, pixel sizes, and coordinates
+
+## YOUR ANALYSIS MUST INCLUDE:
+
+### SCENE BREAKDOWN
+Break the video into scenes based on major visual changes. For each scene:
+- Frame range: [start]-[end] 
+- Total duration in frames
+- What defines this as a distinct scene
+
+### FOR EVERY TEXT ELEMENT:
+- **Content**: The EXACT text visible on screen (NOT audio/lyrics - only displayed text)
+- **Typography**: 
+  - Font family (or closest match: Inter, Arial, Helvetica, etc.)
+  - Font weight (100-900)
+  - Font size (in pixels)
+  - Letter spacing, line height if notable
+- **Position**: 
+  - X/Y coordinates (pixels or percentages)
+  - Alignment (left/center/right)
+  - Container dimensions if bounded
+- **Colors**:
+  - Static: Exact hex code
+  - Gradient: Full definition (type, angle, color stops with positions)
+- **Animation Timeline**:
+  - Frame [X]: Appears at opacity 0
+  - Frame [Y]: Starts fade in
+  - Frame [Z]: Fully visible
+  - Describe EVERY state change
+- **Effects**:
+  - Shadows (x, y, blur, color)
+  - Glows (radius, color, intensity)
+  - Masks or clipping
+  - Blur effects
+
+### FOR EVERY VISUAL ELEMENT:
+- **Type**: Shape, icon, image, UI component, particle
+- **Appearance**:
+  - Size (width × height in pixels)
+  - Colors/gradients/patterns
+  - Border properties
+  - Corner radius
+- **Position Timeline**:
+  - Initial position
+  - Movement path with frame markers
+  - Final position
+- **Transform Timeline**:
+  - Scale changes
+  - Rotation
+  - Skew/perspective
+- **Style Evolution**:
+  - Opacity changes
+  - Color transitions
+  - Blur/filter changes
+
+### ANIMATION DETAILS:
+- **Timing**: Start frame, end frame, duration
+- **Easing**: Linear, ease-in, ease-out, ease-in-out, spring, bounce
+- **Type**: Fade, slide, scale, rotate, wipe, reveal
+- **Direction**: For slides/wipes (top/bottom/left/right)
+- **Stagger**: If multiple elements animate in sequence
+
+### BACKGROUND/ENVIRONMENT:
+- **Color/Gradient**: Full definition at each keyframe
+- **Transitions**: How background changes between scenes
+- **Effects**: Blur, noise, patterns
+- **Particles/Ambience**: Any moving background elements
+
+### TRANSITIONS BETWEEN SCENES:
+- **Type**: Cut, fade, crossfade, wipe, zoom, morph
+- **Duration**: Exact frame count
+- **Direction/Properties**: Any specific transition details
+
+### MICRO-DETAILS THAT MATTER:
+- Text that appears word-by-word vs all at once
+- Gradient animations (colors shifting within text)
+- Subtle movements (even 1-2 pixel shifts)
+- Cursor movements and interactions
+- Hover states or click effects
+- Parallax or depth effects
+- Motion blur or trails
+
+## OUTPUT FORMAT EXAMPLE:
+
+**Scene 1: Frames 0-78 (78 frames)**
+Background: Solid #000000 throughout
+
+Text Element 1:
+- Content: "Building AI agents that can speak"
+- Font: Inter Medium (500), 48px
+- Position: Centered (50%, 50%)
+- Animation:
+  - Frames 0-10: Not visible
+  - Frames 10-20: "Building AI" fades in as #666666
+  - Frames 20-22: Text color transitions to #FFFFFF
+  - Frames 22-47: Gradient wipe animation
+    - Gradient: linear-gradient(90deg, #C850C0 0%, #46A3B4 100%)
+    - Wipe direction: Left to right
+    - Wipe duration: 25 frames
+  - Frames 47-78: Holds with gradient + glow effect
+- Effects:
+  - Glow: 15px blur, rgba(200,80,192,0.8)
+
+**Scene 2: Frames 78-125 (47 frames)**
+[Continue with next scene...]
+
+**Scene 3: Frames 125-220 (95 frames)**
+[Continue with next scene...]
+
+**Scene 4: Frames 220-300 (80 frames)**
+[Continue with next scene...]
+
+FINAL VERIFICATION:
+- Count all your scene frames: They MUST total EXACTLY 300 frames
+- If your scenes add up to less than 300, you missed content
+- The video is 10 seconds at 30fps = 300 frames TOTAL
+- Example: Scene1(78) + Scene2(47) + Scene3(95) + Scene4(80) = 300 ✓
+
+REMEMBER: 
+- Your analysis is the blueprint for EXACT reproduction
+- Describe ACTUAL UI elements (buttons, inputs, cards) not generic "UI form"
+- Include ALL visual details for pixel-perfect recreation
+- NEVER include audio, lyrics, or sound - ONLY visual elements
+- If text appears synced with audio, describe ONLY the visual text animation, not the audio`;

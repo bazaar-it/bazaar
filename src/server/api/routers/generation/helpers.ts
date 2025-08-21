@@ -2,6 +2,7 @@ import { db } from "~/server/db";
 import { scenes, sceneIterations, projects, messages } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
+import { randomUUID } from "crypto";
 import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
@@ -9,10 +10,13 @@ import { trimTool } from "~/tools/trim/trim";
 import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
+import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
 import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
+import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
+import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
 
 // Helper function for tool execution and database save
 export async function executeToolFromDecision(
@@ -57,11 +61,13 @@ export async function executeToolFromDecision(
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
       }
 
-      // Debug logging for video URLs
+      // Debug logging for media URLs
       console.log('📝 [HELPERS] Building ADD tool input:', {
         hasImageUrls: !!decision.toolContext.imageUrls?.length,
         hasVideoUrls: !!decision.toolContext.videoUrls?.length,
+        hasAudioUrls: !!decision.toolContext.audioUrls?.length,
         videoUrls: decision.toolContext.videoUrls,
+        audioUrls: decision.toolContext.audioUrls,
       });
 
       toolInput = {
@@ -73,9 +79,12 @@ export async function executeToolFromDecision(
         storyboardSoFar: storyboard,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
+        audioUrls: decision.toolContext.audioUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
-        // Pass previous scene for style continuity (but not for first scene)
-        previousSceneContext: storyboard.length > 0 ? {
+        isYouTubeAnalysis: decision.toolContext.isYouTubeAnalysis, // Pass YouTube analysis flag
+        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
+        // GitHub and Figma components should have clean styling without previous scene influence
+        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
@@ -89,6 +98,8 @@ export async function executeToolFromDecision(
         webContext: decision.toolContext.webContext,
         // Pass project format for AI context
         projectFormat: projectFormat,
+        // FIGMA: Pass Figma component data if available
+        figmaComponentData: decision.toolContext.figmaComponentData,
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -211,6 +222,7 @@ export async function executeToolFromDecision(
         currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
+        audioUrls: decision.toolContext.audioUrls,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
         formatContext: projectFormat,
@@ -447,8 +459,9 @@ export async function executeToolFromDecision(
         projectId,
         userId,
         projectFormat: projectFormat,
-        // Pass previous scene for style continuity (but not for first scene)
-        previousSceneContext: storyboard.length > 0 ? {
+        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
+        // GitHub and Figma components should have clean styling without previous scene influence
+        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
@@ -577,6 +590,8 @@ export async function executeToolFromDecision(
           storyboardSoFar: storyboard,
           imageUrls: decision.toolContext.imageUrls,
           projectFormat,
+          // FIGMA: Pass Figma component data to fallback
+          figmaComponentData: decision.toolContext.figmaComponentData,
         };
         
         const fallbackResult = await addTool.run(fallbackInput);
@@ -609,6 +624,44 @@ export async function executeToolFromDecision(
       // Fallback: redirect to addScene for multi-scene requests
       console.log('⚠️ [HELPERS] scenePlanner disabled - falling back to addScene');
       throw new Error('scenePlanner is temporarily disabled. Please create scenes one at a time using addScene.');
+
+    case 'addAudio':
+      console.log('🎵 [HELPERS] Processing addAudio tool');
+      
+      // Create the addAudio tool
+      const addAudioTool = new AddAudioTool();
+      
+      const audioInput: AddAudioInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        audioUrls: decision.toolContext.audioUrls || [],
+        targetSceneId: decision.toolContext.targetSceneId,
+      };
+      
+      const audioResult = await addAudioTool.run(audioInput);
+      
+      if (!audioResult.success) {
+        throw new Error(audioResult.error?.message || 'Add audio operation failed');
+      }
+      
+      // Audio was added successfully - create chat response message
+      if (audioResult.chatResponse && messageId) {
+        await messageService.saveMessage({
+          id: randomUUID(),
+          projectId,
+          message: audioResult.chatResponse,
+          role: 'assistant',
+          parentMessageId: messageId,
+          userId,
+          timestamp: new Date(),
+        });
+      }
+      
+      return {
+        success: true,
+        // No scene to return for audio addition
+      };
 
     default:
       throw new Error(`Unknown tool: ${decision.toolName}`);

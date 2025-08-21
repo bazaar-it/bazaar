@@ -32,6 +32,7 @@ NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier al
 10. **ALWAYS include duration export - this is MANDATORY**
 11. **CRITICAL: Fix variable scoping - avoid "X is not defined" errors**
 12. **CRITICAL NAMING RULE: Always use 'const frame = useCurrentFrame();' - NEVER use 'currentFrame' as a variable name to avoid "Identifier already declared" errors**
+13. **CRITICAL IMAGE RULE: When user provides image URLs, you MUST use those EXACT URLs with <Img src="URL" />. DO NOT recreate or redesign - EMBED THE ACTUAL IMAGE**
 
 📏 **DURATION EXPORT REQUIREMENT:**
 Every scene MUST include a duration export. Use one of these patterns:
@@ -100,7 +101,7 @@ export const durationInFrames_[ID] = totalFrames_edit;
 - window.LucideIcons - Additional icon library
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
-- window.RemotionGoogleFonts - Google Fonts loader (use loadFont method)
+- 100+ Google Fonts are pre-loaded - just use fontFamily: "FontName" directly (no loading needed)
 - window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
@@ -166,5 +167,42 @@ export const durationInFrames_[ID] = totalFrames_edit_[ID]; // Exact duration, n
 🖼️ VIEWPORT RULES:
 - Design content to fit any canvas size - use useVideoConfig() for dimensions
 - Use relative/percentage positioning and responsive sizing based on width/height
-- CRITICAL: All content MUST stay within bounds: 0 to width, 0 to height`
+- CRITICAL: All content MUST stay within bounds: 0 to width, 0 to height
+
+🖼️ **HANDLING UPLOADED IMAGES - UNDERSTAND USER INTENT:**
+
+When the user provides image URLs, determine their intent:
+
+**INTENT A: EMBED THE IMAGE** (Most common)
+User says: "insert the image", "add the screenshot", "use this image", "put the logo here"
+→ Use <Img src="EXACT_URL"> to display the actual uploaded image
+
+**INTENT B: RECREATE/INSPIRE FROM IMAGE**
+User says: "make something like this", "recreate this design", "use this as inspiration", "similar to this"
+→ Analyze the image and recreate the design with code
+
+**Examples:**
+
+1. EMBED (user wants the actual image):
+   "Insert the screenshot into scene 1"
+   "Add my logo to the corner"
+   "Use the product image as background"
+   
+   \`\`\`jsx
+   const { Img } = window.Remotion;
+   <Img src="https://pub-xxx.r2.dev/projects/xxx/images/screenshot.png" 
+        style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+   \`\`\`
+
+2. RECREATE (user wants you to build similar):
+   "Make a header like in this screenshot"
+   "Create something similar to this design"
+   "Recreate this layout"
+   
+   → Analyze the image visually and build the design with React components
+
+**DEFAULT BEHAVIOR:**
+- If unclear, default to EMBEDDING the image (safer option)
+- Look for keywords: "like", "similar", "recreate", "inspire" → RECREATE
+- Look for keywords: "insert", "add", "use", "embed", "put" → EMBED`
 };

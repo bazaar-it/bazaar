@@ -23,16 +23,6 @@ const AirbnbDemo = () => {
     { type: 'status_bar_animations', frames: 180 }
   ];
 
-  // Optimized images for mobile - using smaller sizes and format
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-  const imageWidth = isMobile ? 800 : 1200; // Smaller images for mobile
-  
-  const swipeImages = [
-    `https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=${imageWidth}&q=75`, // Original first image
-    `https://images.unsplash.com/photo-1613977257363-707ba9348227?ixlib=rb-4.0.3&auto=format&fit=crop&w=${imageWidth}&q=75`, // Modern desert home
-    `https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?ixlib=rb-4.0.3&auto=format&fit=crop&w=${imageWidth}&q=75`, // Luxury living room
-    `https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=${imageWidth}&q=75`  // Premium bedroom
-  ];
 
   let accumulatedFrames_A8B9C2D3 = 0;
   const sequences_A8B9C2D3 = [];
@@ -714,46 +704,31 @@ const script_A8B9C2D3 = [
 
 const totalFrames_A8B9C2D3 = script_A8B9C2D3.reduce((sum, item) => sum + item.frames, 0);
 
+// Define swipeImages outside the component so it's accessible
+const swipeImages = [
+  `https://images.unsplash.com/photo-1564013799919-ab600027ffc6?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=75`,
+  `https://images.unsplash.com/photo-1613977257363-707ba9348227?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=75`,
+  `https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=75`,
+  `https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=75`
+];
+
 export default function AirbnbDemoPlayer() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 250, height: 540 });
-  const [imagesPreloaded, setImagesPreloaded] = useState(false);
   const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Preload images to avoid decoding errors
+  // Component initialization
   useEffect(() => {
-    const preloadImages = async () => {
-      const imagePromises = swipeImages.map(src => {
-        return new Promise((resolve, reject) => {
-          const img = new Image();
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = src;
-        });
-      });
-      
-      try {
-        await Promise.all(imagePromises);
-        setImagesPreloaded(true);
-      } catch (error) {
-        console.error('Failed to preload images:', error);
-        // Still set as loaded to avoid blocking
-        setImagesPreloaded(true);
-      }
-    };
+    // Just a small delay for component initialization
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 500);
     
-    preloadImages();
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
-
-  useEffect(() => {
-    // Set loaded to true after images are preloaded
-    if (imagesPreloaded) {
-      const timer = setTimeout(() => setIsLoaded(true), 100);
-      return () => clearTimeout(timer);
-    }
-  }, [imagesPreloaded]);
 
   useEffect(() => {
     // Calculate responsive dimensions based on viewport
@@ -763,8 +738,8 @@ export default function AirbnbDemoPlayer() {
       
       // For mobile (width < 768px)
       if (vw < 768) {
-        const width = Math.min(vw * 0.7, 280); // 70% of viewport width, max 280px
-        const height = width * 2.165; // Maintain iPhone aspect ratio (812/375 ≈ 2.165)
+        const width = Math.min(vw * 0.85, 320); // 85% of viewport width, max 320px
+        const height = Math.min(width * 2.165, vh * 0.7); // Maintain aspect ratio but cap at 70% viewport height
         setDimensions({ width, height });
       } else {
         // Desktop default
@@ -777,20 +752,10 @@ export default function AirbnbDemoPlayer() {
     return () => window.removeEventListener('resize', calculateDimensions);
   }, []);
 
-  const handlePlayPause = () => {
-    if (!playerRef.current) return;
-    
-    if (isPlaying) {
-      playerRef.current.pause();
-    } else {
-      playerRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
 
-  if (!isLoaded || !imagesPreloaded) {
+  if (!isLoaded) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg" style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}>
+      <div className="flex items-center justify-center bg-gray-100 rounded-lg" style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto mb-2"></div>
           <p className="text-gray-600 text-sm">Loading Airbnb Demo...</p>
@@ -800,29 +765,37 @@ export default function AirbnbDemoPlayer() {
   }
 
   return (
-    <div className="relative bg-transparent mx-auto" style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}>
+    <div ref={containerRef} className="relative bg-transparent mx-auto" style={{ 
+      width: `${dimensions.width}px`, 
+      height: `${dimensions.height}px`,
+      minHeight: `${dimensions.height}px`, // Prevent layout shift
+      maxHeight: `${dimensions.height}px`  // Fixed height container
+    }}>
       {/* Video Player */}
-      <Player
-        ref={playerRef}
-        component={AirbnbDemo}
-        durationInFrames={totalFrames_A8B9C2D3}
-        compositionWidth={375}
-        compositionHeight={812}
-        fps={30}
-        style={{
-          width: `${dimensions.width}px`,
-          height: `${dimensions.height}px`,
-        }}
-        controls={false}
-        loop={true}
-        autoPlay={true}
-        showVolumeControls={false}
-        allowFullscreen={false}
-        clickToPlay={false}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onFrame={setCurrentFrame}
-      />
+      {typeof window !== 'undefined' && window.Remotion && isLoaded ? (
+        <Player
+          ref={playerRef}
+          component={AirbnbDemo}
+          durationInFrames={totalFrames_A8B9C2D3}
+          compositionWidth={375}
+          compositionHeight={812}
+          fps={30} // Back to normal FPS
+          style={{
+            width: `${dimensions.width}px`,
+            height: `${dimensions.height}px`,
+          }}
+          controls={false}
+          loop={true}
+          autoPlay={true} // Always play
+          showVolumeControls={false}
+          allowFullscreen={false}
+          clickToPlay={false}
+        />
+      ) : (
+        <div className="flex items-center justify-center bg-gray-100 rounded-lg h-full">
+          <p className="text-gray-600 text-sm">Loading player...</p>
+        </div>
+      )}
     </div>
   );
 } 

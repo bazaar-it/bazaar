@@ -57,6 +57,20 @@
     "src/scripts",
     "memory-bank/**/*",
     "drizzle/**/*",
-    "src/tools/edit/deprecated/**/*"
+    "src/tools/edit/deprecated/**/*",
+    "coverage/**/*",
+    "build/**/*",
+    "drizzle-introspected/**/*",
+    "scripts/**/*",
+    "*.cjs",
+    "*.js",
+    "eslint.config.js",
+    "jest.setup.js",
+    "next.config.js",
+    "packages/**/*",
+    "SCENE_*.tsx",
+    "test-*.ts",
+    "src/tools/webAnalysis/integration-test.ts",
+    "src/tools/webAnalysis/test-screenshot.js"
   ]
 }

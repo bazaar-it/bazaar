@@ -395,7 +395,7 @@ export class EvaluationRunner {
       context.chatHistory = [
         {
           role: 'assistant',
-          content: '👋 **Welcome to Bazaar-Vid!** I can help you create amazing motion graphics videos. What would you like to create today?'
+          content: '👋 **Welcome to Bazaar!** I can help you create amazing motion graphics videos. What would you like to create today?'
         },
         {
           role: 'user', 

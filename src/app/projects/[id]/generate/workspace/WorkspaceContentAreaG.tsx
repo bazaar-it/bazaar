@@ -1,6 +1,7 @@
 // src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 "use client";
 
+// src/app/projects/[id]/generate/workspace/WorkspaceContentAreaG.tsx
 import React, { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOverlay, defaultDropAnimationSideEffects } from '@dnd-kit/core';
@@ -16,8 +17,9 @@ import { PreviewPanelG } from './panels/PreviewPanelG';
 import { CodePanelG } from './panels/CodePanelG';
 import { StoryboardPanelG } from './panels/StoryboardPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
+import MediaPanel from './panels/MediaPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
-import { AudioPanel } from './panels/AudioPanel';
+import IntegrationsPanel from './panels/IntegrationsPanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -32,7 +34,8 @@ const PANEL_COMPONENTS_G = {
   storyboard: StoryboardPanelG,
   templates: TemplatesPanelG,
   myprojects: MyProjectsPanelG,
-  audio: AudioPanel,
+  media: MediaPanel,
+  integrations: IntegrationsPanel,
 };
 
 const PANEL_LABELS_G = {
@@ -42,7 +45,8 @@ const PANEL_LABELS_G = {
   storyboard: 'Storyboard',
   templates: 'Templates',
   myprojects: 'My Projects',
-  audio: 'Audio',
+  media: 'Media',
+  integrations: 'Integrations',
 };
 
 export type PanelTypeG = keyof typeof PANEL_COMPONENTS_G;
@@ -59,6 +63,7 @@ interface WorkspaceContentAreaGProps {
   onPanelDragStart?: (panelType: PanelTypeG) => void;
   projects?: any[];
   onProjectRename?: (newTitle: string) => void;
+  isAdmin?: boolean;
 }
 
 export interface WorkspaceContentAreaGHandle {
@@ -101,12 +106,14 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   const isPreviewPanel = id === 'preview';
   const isStoryboardPanel = id === 'storyboard';
   const panelTitle = PANEL_LABELS_G[id as PanelTypeG] || id;
+
+  // Removed header frame counter to avoid duplication and visual clutter.
   
   return (
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-200 overflow-hidden ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden flex flex-col h-full ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
       {!isCodePanel && (
         <div 
@@ -147,17 +154,20 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                 />
               </>
             )}
-            <button 
-              onClick={onRemove} 
-              className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
-              aria-label={`Close ${panelTitle} panel`}
-            >
-              <XIcon className="h-4 w-4" />
-            </button>
+            {/* Hide close button for Preview panel; users should always have video available */}
+            {!isPreviewPanel && (
+              <button 
+                onClick={onRemove} 
+                className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-100"
+                aria-label={`Close ${panelTitle} panel`}
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
-      <div className={`flex-1 min-h-0 ${isCodePanel ? "h-full" : ""}`}>
+      <div className="flex-1 overflow-hidden">
         {children}
       </div>
     </div>
@@ -193,15 +203,6 @@ function DropZoneG({
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-      )
-    },
-    { 
-      type: 'preview', 
-      label: 'Video Player', 
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"/>
         </svg>
       )
     },
@@ -307,7 +308,7 @@ const dropAnimationConfig: DropAnimation = {
 
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
-  ({ projectId, userId, initialProps, projects = [], onProjectRename }, ref) => {
+  ({ projectId, userId, initialProps, projects = [], onProjectRename, isAdmin = false }, ref) => {
     // Initial open panels - start with chat and preview
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
@@ -373,6 +374,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     
     // Get video state methods
     const { updateAndRefresh, getCurrentProps, syncDbMessages } = useVideoState();
+    
+    // Get shouldOpenAudioPanel flag for MediaPanel
+    const shouldOpenAudioPanel = useVideoState(state => state.projects[projectId]?.shouldOpenAudioPanel);
     
     // Consolidated query for all project data
     const { data: fullProjectData } = api.project.getFullProject.useQuery(
@@ -666,6 +670,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
 
     // Add panel method
     const addPanel = useCallback((type: PanelTypeG) => {
+      // Prevent non-admins from adding integrations panel
+      if (type === 'integrations' && !isAdmin) {
+        toast.error('Integrations panel is currently available for administrators only');
+        return;
+      }
+      
       const panelExists = openPanels.some((p) => p.type === type);
       
       if (!panelExists) {
@@ -684,7 +694,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       } else {
         console.log(`Panel ${type} already exists`);
       }
-    }, [openPanels, setIsDraggingFromSidebar]);
+    }, [openPanels, setIsDraggingFromSidebar, isAdmin]);
     
     // Expose methods to parent
     useImperativeHandle(ref, () => ({
@@ -704,8 +714,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
 
     // Memoize current scenes to avoid recalculation on every render
     const currentScenes = useMemo(() => {
-      return getCurrentProps()?.scenes || [];
-    }, [getCurrentProps]);
+      const props = getCurrentProps();
+      return props?.scenes || [];
+    }, [getCurrentProps, projectId]);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
     const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
@@ -718,6 +729,18 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             userId={userId}
             selectedSceneId={selectedSceneId}
             onSceneGenerated={handleSceneGenerated}
+          />;
+        case 'media':
+          return <MediaPanel
+            projectId={projectId}
+            onInsertToChat={(url) => {
+              // Broadcast drag/drop or click-insert to chat textarea via CustomEvent
+              const event = new CustomEvent('chat-insert-media-url', { 
+                detail: { url, name: url.split('/').pop() } 
+              });
+              window.dispatchEvent(event);
+            }}
+            defaultTab={shouldOpenAudioPanel ? 'audio' : 'uploads'}
           />;
         case 'preview':
           return (
@@ -751,9 +774,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return <MyProjectsPanelG 
             currentProjectId={projectId} 
           />;
-        case 'audio':
-          return <AudioPanel 
-            projectId={projectId} 
+        // Old panels removed - now handled by IntegrationsPanel
+        case 'integrations':
+          return <IntegrationsPanel 
+            projectId={projectId}
           />;
         default:
           return null;

@@ -8,6 +8,15 @@ import { SYSTEM_PROMPTS } from '~/config/prompts.config';
 import { apiKeyRotation } from './apiKeyRotation.service';
 import { simpleRateLimiter } from './simpleRateLimiter';
 import { aiMonitoring } from './monitoring.service';
+import { logCurrentModelConfiguration, ACTIVE_MODEL_PACK } from '~/config/models.config';
+
+// Log GPT-5 configuration on startup
+if (ACTIVE_MODEL_PACK === 'openai-pack') {
+  console.log('\n' + '⭐'.repeat(30));
+  console.log('🚀 BAZAAR-VID NOW POWERED BY GPT-5! 🚀');
+  console.log('⭐'.repeat(30) + '\n');
+  logCurrentModelConfiguration();
+}
 
 type SystemPromptConfig = typeof SYSTEM_PROMPTS[keyof typeof SYSTEM_PROMPTS];
 
@@ -42,6 +51,9 @@ export interface AIClientOptions {
   skipRateLimit?: boolean; // Skip rate limiting for critical requests
   priority?: number; // Request priority in queue (higher = more important)
   fallbackToOpenAI?: boolean; // Allow fallback to OpenAI if Anthropic fails
+  // GPT-5 specific parameters
+  verbosity?: 'low' | 'medium' | 'high'; // Controls response length/detail
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'; // Controls thinking depth
 }
 
 export class AIClientService {
@@ -215,8 +227,48 @@ export class AIClientService {
             totalTokens: response.usage?.total_tokens,
           }
         };
+      } else if (config.model.startsWith('gpt-5')) {
+        // GPT-5 models use max_completion_tokens instead of max_tokens
+        const gpt5Params: any = {
+          model: config.model,
+          messages: messages,
+          max_completion_tokens: config.maxTokens || 4000,
+        };
+        
+        // Add response format if specified
+        if (options?.responseFormat) {
+          gpt5Params.response_format = options.responseFormat;
+        }
+        
+        const response = await client.chat.completions.create(gpt5Params);
+        
+        // Log GPT-5 usage and debug info
+        console.log(`🚀 [GPT-5] Model: ${config.model} | Tokens: ${config.maxTokens}`);
+        
+        if (options?.debug || !response.choices[0]?.message?.content) {
+          console.log('[GPT-5 Debug] Request params:', JSON.stringify(gpt5Params, null, 2));
+          console.log('[GPT-5 Debug] Full response structure:', {
+            hasChoices: !!response.choices,
+            choicesLength: response.choices?.length,
+            firstChoice: response.choices?.[0],
+            message: response.choices?.[0]?.message,
+            hasContent: !!response.choices[0]?.message?.content,
+            contentLength: response.choices[0]?.message?.content?.length || 0,
+            finishReason: response.choices[0]?.finish_reason,
+            usage: response.usage
+          });
+        }
+        
+        return {
+          content: response.choices[0]?.message?.content || '',
+          usage: {
+            promptTokens: response.usage?.prompt_tokens,
+            completionTokens: response.usage?.completion_tokens,
+            totalTokens: response.usage?.total_tokens,
+          }
+        };
       } else {
-        // Standard GPT models
+        // Standard GPT-4 and other models
         const response = await client.chat.completions.create({
           model: config.model,
           messages: messages as any,

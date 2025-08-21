@@ -291,13 +291,39 @@ export const renderRouter = createTRPCRouter({
           const { getLambdaRenderProgress } = await import("~/server/services/render/lambda-render.service");
           const progress = await getLambdaRenderProgress(input.renderId, job.bucketName);
           
+          console.log(`[getRenderStatus] Lambda progress for ${input.renderId}:`, {
+            done: progress.done,
+            outputFile: progress.outputFile,
+            overallProgress: progress.overallProgress,
+            errors: progress.errors
+          });
+          
           // Update local state with latest progress
           if (progress.done) {
+            // The outputFile from Lambda might be a full URL or just a key
+            let outputUrl = progress.outputFile;
+            
+            if (outputUrl) {
+              // If it's already a full S3 URL, use it as-is
+              if (outputUrl.startsWith('https://')) {
+                // Lambda already returns a complete, valid S3 URL
+                // Just use it directly without any modification
+                outputUrl = progress.outputFile;
+              } else {
+                // It's just a key, construct the full URL
+                const bucketName = job.bucketName || process.env.REMOTION_BUCKET_NAME || 'remotionlambda-useast1-yb1vzou9i7';
+                const region = process.env.AWS_REGION || 'us-east-1';
+                outputUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${progress.outputFile}`;
+              }
+            }
+            
+            console.log(`[getRenderStatus] Generated output URL: ${outputUrl}`);
+            
             renderState.set(input.renderId, {
               ...job,
               status: 'completed',
               progress: 100,
-              outputUrl: progress.outputFile || undefined,
+              outputUrl: outputUrl,
             });
             
             // Update database tracking
@@ -305,7 +331,7 @@ export const renderRouter = createTRPCRouter({
               renderId: input.renderId,
               status: 'completed',
               progress: 100,
-              outputUrl: progress.outputFile || undefined,
+              outputUrl: outputUrl,
             });
           } else if (progress.errors && progress.errors.length > 0) {
             const errorMessage = typeof progress.errors[0] === 'string' 

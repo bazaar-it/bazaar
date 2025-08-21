@@ -2,6 +2,17 @@
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
 import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+// Import CSS fonts - works in both local and Lambda without cancelRender() errors
+import './fonts.css';
+
+// Fonts are loaded via CSS @import in fonts.css
+// This works in both local and Lambda without cancelRender() errors
+
+// Font extraction no longer needed - CSS handles all fonts
+
+// Fonts are now loaded via CSS import (see fonts.css)
+// This avoids cancelRender() errors in Lambda
+// Remotion automatically waits for CSS fonts to load
 
 // Simple scene component that safely evaluates pre-compiled JavaScript
 const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height?: number }> = ({ scene, index, width = 1920, height = 1080 }) => {
@@ -32,6 +43,23 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     try {
       console.log(`[DynamicScene] Attempting to create component from jsCode`);
       console.log(`[DynamicScene] First 300 chars of jsCode:`, scene.jsCode.substring(0, 300));
+      
+      // Convert export default to variable assignment for Function constructor compatibility
+      let executableCode = scene.jsCode;
+      
+      // Replace export default function with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+function\s+(\w+)/g,
+        'const Component = function $1'
+      );
+      
+      // Replace export default variable with const Component assignment
+      executableCode = executableCode.replace(
+        /export\s+default\s+([a-zA-Z_$][\w$]*);?/g,
+        'const Component = $1;'
+      );
+      
+      console.log(`[DynamicScene] After export conversion, executableCode starts with:`, executableCode.substring(0, 200));
       
       // Create a component factory function
       const createComponent = new Function(
@@ -75,7 +103,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Override useVideoConfig to use actual dimensions
           const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
-          ${scene.jsCode}
+          ${executableCode}
           
           // Log what we're trying to execute
           console.log('[ComponentFactory] Executing scene code...');
@@ -153,8 +181,8 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
     } catch (error) {
       console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
       console.error(`[DynamicScene] Error details:`, {
-        message: error.message,
-        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 5).join('\n') : 'No stack trace'
       });
     }
   }
@@ -265,6 +293,16 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
+  // Fonts are loaded via CSS - no delay needed
+  const [handle] = React.useState(() => delayRender());
+  
+  React.useEffect(() => {
+    console.log(`[VideoComposition] Using CSS-loaded fonts from fonts.css`);
+    console.log(`[VideoComposition] Project dimensions: ${width}x${height}`);
+    // Continue immediately - CSS fonts are loaded automatically
+    continueRender(handle);
+  }, [handle, width, height]);
+  
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {
     url: audio.url,
@@ -347,7 +385,7 @@ export const MainComposition: React.FC = () => {
   return (
     <>
       <Composition
-        id="MainComposition"
+        id="MainCompositionSimple"
         component={VideoComposition}
         durationInFrames={300}
         fps={30}

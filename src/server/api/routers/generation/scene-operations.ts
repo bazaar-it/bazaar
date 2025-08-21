@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
 import type { SceneCreateResponse, SceneDeleteResponse } from "~/lib/types/api/universal";
 import { ErrorCode } from "~/lib/types/api/universal";
+import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
 
 /**
  * UNIFIED SCENE GENERATION with Universal Response
@@ -27,7 +28,9 @@ export const generateScene = protectedProcedure
     userContext: z.object({
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
+      audioUrls: z.array(z.string()).optional(),
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
+      useGitHub: z.boolean().optional(), // Explicit GitHub component search mode
     }).optional(),
     assistantMessageId: z.string().optional(), // For updating existing message
     metadata: z.object({
@@ -139,15 +142,106 @@ export const generateScene = protectedProcedure
       // 4. User message is already created in SSE route, skip creating it here
       // This prevents duplicate messages and ensures correct sequence order
 
+      // 4.5 Check for GitHub connection
+      let githubAccessToken: string | undefined;
+      let githubConnected = false;
+      
+      try {
+        const { githubConnections } = await import("~/server/db/schema/github-connections");
+        const { eq, and } = await import("drizzle-orm");
+        
+        const connections = await ctx.db
+          .select()
+          .from(githubConnections)
+          .where(and(
+            eq(githubConnections.userId, userId),
+            eq(githubConnections.isActive, true)
+          ));
+        
+        if (connections[0]) {
+          githubConnected = true;
+          githubAccessToken = connections[0].accessToken;
+          console.log(`[${response.getRequestId()}] User has GitHub connection`);
+        }
+      } catch (error) {
+        console.error('Failed to check GitHub connection:', error);
+      }
+      
+      // 4.6 Check for Figma component request and fetch data
+      let figmaComponentData: any = null;
+      const figmaMatch = userMessage.match(/Figma design "([^"]+)" \(ID: ([^)]+)\)/i);
+      
+      if (figmaMatch) {
+        const [, componentName, fullId] = figmaMatch;
+        console.log(`🎨 [${response.getRequestId()}] Detected Figma component request:`, { componentName, fullId });
+        
+        // Parse the fullId (format: fileKey:nodeId where nodeId can have colons)
+        // Split only on the first colon to separate fileKey from nodeId
+        if (fullId) {
+          const colonIndex = fullId.indexOf(':');
+          const fileKey = colonIndex > -1 ? fullId.substring(0, colonIndex) : null;
+          const nodeId = colonIndex > -1 ? fullId.substring(colonIndex + 1) : fullId;
+        
+        if (fileKey && nodeId) {
+          try {
+            // Import Figma import router
+            const { figmaImportRouter } = await import('~/server/api/routers/figma-import.router');
+            
+            // Create a caller for the router
+            const caller = figmaImportRouter.createCaller({
+              session: ctx.session,
+              db: ctx.db,
+              headers: ctx.headers,
+            });
+            
+            // Fetch the component data
+            const componentResult = await caller.fetchComponentData({
+              fileKey,
+              nodeId,
+              componentName,
+            });
+            
+            if (componentResult.success && componentResult.designData) {
+              figmaComponentData = componentResult.designData;
+              console.log(`🎨 [${response.getRequestId()}] Fetched Figma component data:`, {
+                type: figmaComponentData.type,
+                hasChildren: figmaComponentData.children?.length > 0,
+                colors: figmaComponentData.colors?.length || 0,
+                texts: figmaComponentData.texts?.length || 0,
+                hasRemotionCode: !!componentResult.remotionCode,
+              });
+              
+              // NEW: Include the converted Remotion code in the Figma data
+              if (componentResult.remotionCode) {
+                figmaComponentData.remotionCode = componentResult.remotionCode;
+              }
+              
+              // Create enhanced prompt with Figma data context
+              const enhancedMessage = `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements`;
+            }
+            } catch (error) {
+              console.error(`🎨 [${response.getRequestId()}] Failed to fetch Figma component:`, error);
+              // Continue without Figma data - will use generic generation
+            }
+          }
+        }
+      }
+
       // 5. Get decision from brain
       console.log(`[${response.getRequestId()}] Getting decision from brain...`);
       console.log(`[${response.getRequestId()}] User context:`, {
         hasImageUrls: !!userContext?.imageUrls?.length,
         hasVideoUrls: !!userContext?.videoUrls?.length,
         videoUrls: userContext?.videoUrls,
+        githubConnected,
       });
+      // Use enhanced message if we have Figma data, otherwise original message
+      const finalPrompt = figmaComponentData ? 
+        `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements` : 
+        userMessage;
+        
       const orchestratorResponse = await orchestrator.processUserInput({
-        prompt: userMessage,
+        prompt: finalPrompt,
         projectId,
         userId,
         storyboardSoFar: storyboardForBrain,
@@ -155,20 +249,17 @@ export const generateScene = protectedProcedure
         userContext: {
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
+          audioUrls: userContext?.audioUrls,
           modelOverride: userContext?.modelOverride,
+          useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
+          githubConnected,
+          githubAccessToken,
+          userId,
+          figmaComponentData, // Pass the Figma component data
         },
       });
 
-      if (!orchestratorResponse.success || !orchestratorResponse.result) {
-        return response.error(
-          ErrorCode.AI_ERROR,
-          orchestratorResponse.error || "Failed to get decision from brain",
-          'scene.create',
-          'scene'
-        ) as any as SceneCreateResponse;
-      }
-
-      // Handle clarification responses
+      // Handle clarification responses FIRST (before checking for result)
       if (orchestratorResponse.needsClarification) {
         console.log(`[${response.getRequestId()}] Brain needs clarification:`, orchestratorResponse.chatResponse);
         
@@ -206,6 +297,16 @@ export const generateScene = protectedProcedure
           },
           assistantMessageId,
         } as any;
+      }
+
+      // Now check for errors (after clarification check)
+      if (!orchestratorResponse.success || !orchestratorResponse.result) {
+        return response.error(
+          ErrorCode.AI_ERROR,
+          orchestratorResponse.error || "Failed to get decision from brain",
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
       }
 
       const decision: BrainDecision = {
@@ -265,8 +366,40 @@ export const generateScene = protectedProcedure
         console.log(`[${response.getRequestId()}] ✅ SCENE PLANNER: Created ${toolResult.additionalMessageIds.length} scene plan messages:`, toolResult.additionalMessageIds);
       }
 
-      // 8. Update assistant message status after execution
-      if (assistantMessageId && toolResult.success) {
+      // 8. Update assistant message with better description after execution
+      if (assistantMessageId && toolResult.success && toolResult.scene) {
+        // Generate a better message based on what actually happened
+        const operationType = decision.toolName === 'editScene' ? 'edit' : 
+                             decision.toolName === 'deleteScene' ? 'delete' :
+                             decision.toolName === 'trimScene' ? 'trim' : 'create';
+        
+        // Get previous duration for trim operations
+        let previousDuration: number | undefined;
+        if (operationType === 'trim' && decision.toolContext?.targetSceneId) {
+          const prevScene = storyboardForBrain.find(s => s.id === decision.toolContext?.targetSceneId);
+          previousDuration = prevScene?.duration;
+        }
+        
+        const betterMessage = formatSceneOperationMessage(
+          operationType,
+          toolResult.scene,
+          {
+            userPrompt: decision.toolContext?.userPrompt,
+            scenesCreated: toolResult.scenes?.length,
+            previousDuration,
+            newDuration: operationType === 'trim' ? toolResult.scene.duration : undefined
+          }
+        );
+        
+        await db.update(messages)
+          .set({
+            content: betterMessage,
+            status: 'success',
+            updatedAt: new Date(),
+          })
+          .where(eq(messages.id, assistantMessageId));
+      } else if (assistantMessageId && toolResult.success) {
+        // Just update status if no scene (e.g., audio tool)
         await db.update(messages)
           .set({
             status: 'success',
@@ -427,5 +560,60 @@ export const removeScene = protectedProcedure
         'scene.delete',
         'scene'
       ) as any as SceneDeleteResponse;
+    }
+  });
+
+/**
+ * UPDATE SCENE NAME
+ * Updates the name of a specific scene
+ */
+export const updateSceneName = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    sceneId: z.string(),
+    name: z.string().min(1).max(100),
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, sceneId, name } = input;
+    const userId = ctx.session.user.id;
+
+    console.log(`[updateSceneName] Starting scene name update`, { projectId, sceneId, name });
+
+    try {
+      // 1. Verify project ownership and scene existence
+      const scene = await db.query.scenes.findFirst({
+        where: eq(scenes.id, sceneId),
+        with: {
+          project: true,
+        },
+      });
+
+      if (!scene || scene.project.userId !== userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: "Scene not found or access denied",
+        });
+      }
+
+      // 2. Update the scene name
+      const updatedScene = await db.update(scenes)
+        .set({
+          name: name.trim(),
+          updatedAt: new Date(),
+        })
+        .where(eq(scenes.id, sceneId))
+        .returning();
+
+      console.log(`[updateSceneName] Scene name updated successfully`);
+
+      // 3. Return updated scene
+      return {
+        success: true,
+        scene: updatedScene[0],
+      };
+
+    } catch (error) {
+      console.error(`[updateSceneName] Scene name update error:`, error);
+      throw error;
     }
   });

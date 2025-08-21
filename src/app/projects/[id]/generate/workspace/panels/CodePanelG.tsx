@@ -398,7 +398,7 @@ export function CodePanelG({
             onClick={handleSave}
             disabled={isSaving || !localCode.trim()}
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 h-6 text-xs flex items-center gap-1"
+            className="bg-gradient-to-r from-orange-400/80 to-orange-300/80 hover:from-orange-400 hover:to-orange-300 text-white px-2 py-1 h-6 text-xs flex items-center gap-1 transition-all"
           >
             <SaveIcon className="h-3 w-3" />
             {isSaving ? 'Saving...' : 'Save'}

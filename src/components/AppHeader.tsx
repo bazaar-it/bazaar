@@ -248,7 +248,7 @@ export default function AppHeader({
     <header className="flex items-center justify-between px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
       {/* Left: Logo only */}
       <div className="flex items-center min-w-[64px]">
-        <a href="/?view" className="flex items-center" aria-label="Go to homepage">
+        <a href="/" className="flex items-center" aria-label="Go to homepage">
           <Image src="/bazaar-logo.png" alt="Bazaar" width={79} height={30} className="object-contain" priority />
         </a>
       </div>
@@ -337,20 +337,48 @@ export default function AppHeader({
             )}
             
             {/* Download button - MP4 1080p */}
-            <Button
-              variant="default"
-              size="sm"
-              className="gap-2 rounded-[15px] shadow-sm bg-black hover:bg-gray-800 text-white"
-              onClick={handleDownload}
-              disabled={startRender.isPending || !!renderId}
-            >
-              {startRender.isPending || !!renderId ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+            {(startRender.isPending || !!renderId) && renderStatus ? (
+              // Rendering state with visual progress bar
+              <div className="relative inline-flex overflow-hidden rounded-[15px]">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="relative gap-2 shadow-sm text-white border-0"
+                  style={{
+                    backgroundColor: 'rgb(107 114 128)', // gray-500
+                  }}
+                  disabled
+                >
+                  {/* Orange progress fill */}
+                  <div 
+                    className="absolute left-0 top-0 bottom-0 bg-orange-500"
+                    style={{
+                      width: `${renderStatus.progress || 0}%`,
+                      transition: 'width 0.5s ease-out',
+                      background: 'linear-gradient(90deg, rgb(251 146 60) 0%, rgb(249 115 22) 100%)'
+                    }}
+                  />
+                  
+                  {/* Button content - above the progress bar */}
+                  <span className="relative z-10 flex items-center">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="ml-2">Rendering {renderStatus.progress || 0}%</span>
+                  </span>
+                </Button>
+              </div>
+            ) : (
+              // Default state
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 rounded-[15px] shadow-sm bg-black hover:bg-gray-800 text-white"
+                onClick={handleDownload}
+                disabled={startRender.isPending}
+              >
                 <DownloadIcon className="h-4 w-4" />
-              )}
-              {startRender.isPending || !!renderId ? "Rendering..." : "Download"}
-            </Button>
+                Download
+              </Button>
+            )}
           </>
         )}
         

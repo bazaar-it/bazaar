@@ -1,13 +1,38 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
+import { useIntersectionAnimation } from '~/hooks/use-intersection-animation';
 
 const AspectRatioTransitionPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
   const animationRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { isVisible } = useIntersectionAnimation(containerRef, 0.3);
 
   useEffect(() => {
-    const animate = () => {
-      setCurrentFrame(prev => (prev + 1) % 360); // 12 seconds at 30fps for better pacing
+    if (!isVisible) {
+      // Stop animation when not visible
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      return;
+    }
+    
+    // Only animate when visible
+    const targetFPS = 30; // Back to normal FPS
+    const frameInterval = 1000 / targetFPS;
+    let lastTimestamp = 0;
+    
+    const animate = (timestamp: number) => {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      
+      const deltaTime = timestamp - lastTimestamp;
+      
+      if (deltaTime >= frameInterval) {
+        setCurrentFrame(prev => (prev + 1) % 360); // 12 seconds at 30fps for better pacing
+        lastTimestamp = timestamp;
+      }
+      
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -18,7 +43,7 @@ const AspectRatioTransitionPlayer: React.FC = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [isVisible]);
 
   const AspectRatioContent: React.FC = () => {
     const frame = currentFrame;
@@ -152,6 +177,7 @@ const AspectRatioTransitionPlayer: React.FC = () => {
 
   return (
     <div 
+      ref={containerRef}
       style={{ 
         width: '100%', 
         background: 'transparent',

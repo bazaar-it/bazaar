@@ -1,37 +1,29 @@
-// src/app/(marketing)/home/page.tsx
+// src/app/(marketing)/page.tsx
 "use client";
-import Image from "next/image";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import dynamic from "next/dynamic";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
 import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
-import GeneratingScenePlanPlayer from "~/components/GeneratingScenePlanPlayer";
+import MarketingHeader from "~/components/marketing/MarketingHeader";
+import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import TemplateScrollGrid from "~/components/TemplateScrollGrid";
-import BazaarShowcasePlayer from "~/components/BazaarShowcasePlayer";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-// Lazy load heavy components
-const LoginModal = lazy(() => import("../login/page"));
+import AirbnbDemoPlayer from "~/components/AirbnbDemoPlayer";
 
-
-export default function NewHomePage() {
+export function Homepage() {
   const { data: session, status } = useSession();
-  const [showLogin, setShowLogin] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
-  const [activeTab, setActiveTab] = useState<'graphs' | 'elements' | 'components'>('graphs');
-  // State for login modal only
-  // removed mounted state to render immediately
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
-  const router = useRouter();
   
-
-
   // Add loading state for unauthenticated Try for Free button
   const [tryForFreeLoading, setTryForFreeLoading] = useState(false);
+  
+  // Ref to access MarketingHeader methods
+  const marketingHeaderRef = useRef<MarketingHeaderRef>(null);
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
@@ -39,33 +31,16 @@ export default function NewHomePage() {
       return;
     } else {
       setIntendedAction('try-for-free');
-      setShowLogin(true);
+      // Open login modal using ref
+      marketingHeaderRef.current?.openLoginModal();
     }
   };
-
+  
 
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-      {/* Header */}
-      <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
-        <div className="flex items-end gap-2">
-          <div className="flex items-baseline gap-2 font-inter">
-            <span className="text-3xl font-semibold text-black">Bazaar</span>
-            <span className="text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
-          </div>
-        </div>
-        <div className="flex gap-4 items-center">
-          {status === "authenticated" ? (
-            <span className="text-base">Logged in as <b>{session.user?.name ?? session.user?.email}</b></span>
-          ) : (
-            <>
-              <button className="text-base px-4 py-2 rounded hover:bg-gray-100 transition" onClick={() => setShowLogin(true)}>Login</button>
-              <button className="text-base px-4 py-2 font-semibold rounded bg-black text-white hover:bg-gray-900 transition" onClick={() => setShowLogin(true)}>Sign Up</button>
-            </>
-          )}
-        </div>
-      </header>
+      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
@@ -107,7 +82,7 @@ export default function NewHomePage() {
           <p className="text-lg md:text-xl text-gray-600 px-4">Bazaar is an AI video generator for creating software demo videos.</p>
         </div>
         
-        <div className="w-full text-center mb-0">
+        <div className="w-full text-center mb-8 md:mb-16">
           {status === "authenticated" && session?.user ? (
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
               <NewProjectButton
@@ -123,9 +98,13 @@ export default function NewHomePage() {
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
               <button
                 onClick={async () => {
+                  if (tryForFreeLoading) return; // Prevent multiple clicks
                   setTryForFreeLoading(true);
-                  await handleTryForFree();
-                  setTryForFreeLoading(false);
+                  try {
+                    await handleTryForFree();
+                  } finally {
+                    setTryForFreeLoading(false);
+                  }
                 }}
                 disabled={tryForFreeLoading}
                 className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
@@ -146,9 +125,9 @@ export default function NewHomePage() {
           </p>
         </div>
         
-        {/* Marketing Video Player - positioned outside container with aggressive negative margin */}
-        <div className="w-full -mt-16 mb-8">
-          <div className="flex justify-center w-full px-0">
+        {/* Marketing Video Player - responsive positioning */}
+        <div className="w-full -mt-8 md:-mt-16 mb-8">
+          <div className="flex justify-center w-full px-2 sm:px-4 md:px-0">
             <div className="w-full max-w-7xl">
               <MarketingVideoPlayer />
             </div>
@@ -165,20 +144,8 @@ export default function NewHomePage() {
           
           {/* Airbnb Video Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
-            <div className="w-full max-w-5xl">
-              {/* Container with 30% reduced height while maintaining aspect ratio */}
-              <div style={{
-                width: '100%',
-                maxWidth: '400px',
-                height: '560px', // Reduced from ~800px (30% reduction)
-                margin: '0 auto',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'transparent'
-              }}>
-                {/* Placeholder for removed AirbnbVideoPlayerWithControls */}
-              </div>
+            <div className="w-full max-w-5xl flex justify-center">
+              <AirbnbDemoPlayer />
             </div>
           </div>
         </section>
@@ -201,21 +168,20 @@ export default function NewHomePage() {
           </div>
         </section>
 
-        {/* Showcase of Three Bazaar Videos Section */}
-        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/50">
+        {/* Showcase of Three Bazaar Videos Section - COMMENTED OUT: Not finished yet */}
+        {/* <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/50">
           <div className="text-center mb-8">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               Made with <span className="moving-gradient-text">Bazaar</span>
             </h2>
           </div>
           
-          {/* Bazaar Showcase Player */}
           <div className="flex justify-center w-full px-2 sm:px-4">
             <div className="w-full max-w-6xl">
               <BazaarShowcasePlayer />
             </div>
           </div>
-        </section>
+        </section> */}
 
         {/* Create in Horizontal, Vertical, Square with Morphing Section */}
         <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
@@ -233,7 +199,7 @@ export default function NewHomePage() {
         <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              25+ Templates to Start From
+              50+ Templates to Start From
             </h2>
           </div>
           
@@ -259,12 +225,16 @@ export default function NewHomePage() {
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <button
                   onClick={async () => {
+                    if (tryForFreeLoading) return; // Prevent multiple clicks
                     setTryForFreeLoading(true);
-                    await handleTryForFree();
-                    setTryForFreeLoading(false);
+                    try {
+                      await handleTryForFree();
+                    } finally {
+                      setTryForFreeLoading(false);
+                    }
                   }}
                   disabled={tryForFreeLoading}
-                  className="inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="cursor-pointer inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
                 >
                   {tryForFreeLoading ? (
                     <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -280,10 +250,7 @@ export default function NewHomePage() {
           </div>
         </section>
 
-
       </main>
-
-
 
       {/* Video Modal */}
       {showVideo && (
@@ -314,25 +281,7 @@ export default function NewHomePage() {
         </div>
       )}
 
-      {/* Login Modal Overlay - Updated to be more compact */}
-      {showLogin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl overflow-hidden w-auto max-w-sm relative">
-            <button 
-              className="absolute top-3 right-3 z-10 text-gray-500 hover:text-black w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors" 
-              onClick={() => setShowLogin(false)}
-              aria-label="Close"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <Suspense fallback={<div className="p-8">Loading...</div>}>
-              <LoginModal redirectTo='/projects/quick-create' />
-            </Suspense>
-          </div>
-        </div>
-      )}
+
       <style jsx global>{`
   .bazaar-gradient-hover {
     transition: background 0.3s, color 0.3s;
@@ -344,4 +293,4 @@ export default function NewHomePage() {
 `}</style>
     </div>
   );
-} 
+}

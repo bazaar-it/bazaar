@@ -113,7 +113,7 @@ export default function MobileAppHeader({
     <header className="flex items-center px-3 py-2 w-full bg-white border-b border-gray-200">
       {/* Logo - Fixed width */}
       <div className="w-16">
-        <a href="/?view" className="flex items-center" aria-label="Go to homepage">
+        <a href="/" className="flex items-center" aria-label="Go to homepage">
           <Image 
             src="/bazaar-logo.png" 
             alt="Bazaar" 
@@ -210,8 +210,6 @@ export default function MobileAppHeader({
               </DropdownMenuItem>
               <ExportDropdown
                 projectId={projectId}
-                userId={userId}
-                variant="dropdown-item"
                 className="w-full"
               />
             </DropdownMenuContent>
