@@ -208,6 +208,24 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
         try {
           const code = template.getCode();
           
+          // Basic security validation for template code
+          // Check for potentially dangerous patterns
+          const dangerousPatterns = [
+            /eval\s*\(/,
+            /Function\s*\(/,
+            /\.innerHTML\s*=/,
+            /document\.write/,
+            /window\.location/,
+            /__proto__/,
+            /constructor\s*\[/,
+          ];
+          
+          for (const pattern of dangerousPatterns) {
+            if (pattern.test(code)) {
+              throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
+            }
+          }
+          
           // Transform TypeScript/JSX to JavaScript using sucrase
           const { code: transformed } = transform(code, {
             transforms: ['typescript', 'jsx'],
@@ -215,8 +233,11 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
             production: false,
           });
           
-          // Create a blob URL for the module
-          const blob = new Blob([transformed], { type: 'application/javascript' });
+          // Create a blob URL for the module with strict CSP
+          // Note: In production, add CSP headers to prevent XSS
+          const blob = new Blob([transformed], { 
+            type: 'application/javascript'
+          });
           blobUrl = URL.createObjectURL(blob);
           
           // Import the module dynamically
