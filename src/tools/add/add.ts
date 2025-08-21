@@ -163,6 +163,12 @@ export const durationInFrames_ERROR = 180;`;
     // DIRECT CODE GENERATION - Skip layout entirely!
     console.log('⚡ [ADD TOOL] Using DIRECT code generation - no layout step!');
     
+    // Check if we have template context for better generation
+    if (input.templateContext?.examples?.length) {
+      console.log(`⚡ [ADD TOOL] Using ${input.templateContext.examples.length} template(s) as context:`,
+        input.templateContext.examples.map(t => t.name).join(', '));
+    }
+    
     const codeResult = await codeGenerator.generateCodeDirect({
       userPrompt: input.userPrompt,
       functionName: functionName,
@@ -171,6 +177,7 @@ export const durationInFrames_ERROR = 180;`;
       requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
       assetUrls: input.assetUrls, // Pass persistent asset URLs
       isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
+      templateContext: input.templateContext, // Pass template context for better generation
     });
 
     // Return generated content - NO DATABASE!

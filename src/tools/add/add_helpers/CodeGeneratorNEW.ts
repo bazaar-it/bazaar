@@ -440,6 +440,15 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
     };
     assetUrls?: string[];
     isYouTubeAnalysis?: boolean;
+    templateContext?: {  // Template examples for better generation
+      examples: Array<{
+        id: string;
+        name: string;
+        code: string;
+        style: string;
+        description: string;
+      }>;
+    };
   }): Promise<CodeGenerationOutput> {
     // Use Sonnet 4 with temperature 0 for YouTube reproduction
     const config = input.isYouTubeAnalysis 
@@ -516,9 +525,37 @@ This is NOT optional - the user explicitly requested this duration!
 
 DO NOT use any other duration value!`;
       }
+      
+      // Add template context if available (only for non-YouTube generation)
+      let templatePrompt = '';
+      if (!input.isYouTubeAnalysis && input.templateContext?.examples?.length) {
+        console.log(`⚡ [CODE GENERATOR] Adding ${input.templateContext.examples.length} template(s) as context`);
+        
+        templatePrompt = `\n\n📚 TEMPLATE EXAMPLES FOR REFERENCE:
+You have been provided with ${input.templateContext.examples.length} high-quality template(s) as style reference.
+These templates demonstrate professional Remotion code patterns.
+
+${input.templateContext.examples.map((ex, i) => `
+TEMPLATE ${i + 1}: ${ex.name}
+Purpose: ${ex.description}
+Style: ${ex.style}
+
+\`\`\`tsx
+${ex.code}
+\`\`\`
+`).join('\n')}
+
+IMPORTANT GUIDELINES:
+1. Use these templates as inspiration for animation patterns and code structure
+2. Adapt the visual style and timing to match the quality level
+3. DO NOT copy exactly - create something new for the user's specific request
+4. Learn from the animation techniques (interpolation, spring, timing)
+5. Match the professional polish and attention to detail
+`;
+      }
 
       const messages = [
-        { role: 'user' as const, content: userPrompt }
+        { role: 'user' as const, content: userPrompt + templatePrompt }
       ];
       
       const response = await AIClientService.generateResponse(

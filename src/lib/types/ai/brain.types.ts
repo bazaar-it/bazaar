@@ -198,7 +198,8 @@ export interface ContextPacket {
       keywords: string[];
       style: string;
       reasoning: string;
-      codePreview: string;
+      code: string;        // Full template code
+      codePreview: string;  // Short preview for logging
     }>;
     message: string;
     matchDetails: string;

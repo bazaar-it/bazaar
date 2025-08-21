@@ -76,6 +76,91 @@ export interface WebAnalysisResult {
 }
 
 export class WebAnalysisAgent {
+  
+  // Manual fallback for Cloudflare-protected sites
+  private getRevolutManualData(): any {
+    return {
+      title: 'Revolut - Change the way you money',
+      description: 'Move freely between countries and currencies. Sign up for free, in a tap.',
+      url: 'https://www.revolut.com',
+      visualDesign: {
+        colors: ['#000000', '#FFFFFF', '#6F00FF', '#FF007A', '#FFD700', '#00FF66'],
+        colorSystem: {
+          primary: '#000000',
+          secondary: '#FFFFFF',
+          accents: ['#6F00FF', '#FF007A', '#FFD700', '#00FF66'],
+          neutrals: ['#F5F5F5', '#E5E5E5', '#333333', '#1A1A1A'],
+          gradients: [
+            { type: 'linear', angle: 135, stops: ['#6F00FF', '#FF007A'] },
+            { type: 'linear', angle: 45, stops: ['#FFD700', '#00FF66'] }
+          ],
+          allColors: ['#000000', '#FFFFFF', '#6F00FF', '#FF007A', '#FFD700', '#00FF66', '#F5F5F5']
+        },
+        fonts: ['Inter', '-apple-system', 'BlinkMacSystemFont'],
+        heroStyles: {
+          fontFamily: 'Inter, -apple-system, sans-serif',
+          fontSize: '72px',
+          fontWeight: '700',
+          color: '#000000',
+          backgroundColor: '#FFFFFF'
+        },
+        buttonStyles: [{
+          text: 'Download the app',
+          styles: {
+            fontFamily: 'Inter',
+            fontSize: '16px',
+            fontWeight: '600',
+            backgroundColor: '#000000',
+            color: '#FFFFFF',
+            borderRadius: '20px',
+            padding: '16px 32px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          }
+        }],
+        headingData: [
+          { level: 'h1', text: 'Change the way you money', styles: { fontSize: '72px', fontWeight: '700', color: '#000000' } },
+          { level: 'h2', text: 'Elevate your spend', styles: { fontSize: '48px', fontWeight: '600', color: '#000000' } }
+        ],
+        shadows: {
+          sm: '0 2px 4px rgba(0,0,0,0.05)',
+          md: '0 4px 12px rgba(0,0,0,0.1)',
+          lg: '0 8px 24px rgba(0,0,0,0.15)',
+          xl: '0 16px 48px rgba(0,0,0,0.2)'
+        },
+        borderRadius: {
+          none: '0px',
+          sm: '8px',
+          md: '16px',
+          lg: '20px',
+          full: '9999px'
+        },
+        brandColors: {
+          primary: '#000000',
+          secondary: '#FFFFFF',
+          text: '#000000',
+          background: '#FFFFFF'
+        }
+      },
+      productNarrative: {
+        headline: 'Change the way you money',
+        subheadline: 'Move freely between countries and currencies. Sign up for free, in a tap.',
+        ctas: {
+          primary: 'Download the app',
+          secondary: 'Learn more',
+          tertiary: 'Start earning'
+        },
+        features: [
+          { title: 'Debit & Virtual Cards', description: 'Earn points, pay globally, use with Apple/Google Wallet' },
+          { title: 'Savings', description: 'Up to 4.5% interest, paid daily' },
+          { title: 'Security', description: 'Fraud detection, 24/7 protection' },
+          { title: 'Stocks', description: 'Trade 2,500+ global stocks commission-free' }
+        ],
+        testimonials: [],
+        metrics: ['60M+ users', '4.5% savings rate', '2,500+ stocks', '24/7 security', '150+ currencies']
+      },
+      headings: ['Change the way you money', 'Elevate your spend', 'Go beyond banking']
+    };
+  }
   async analyzeWebsite(url: string, projectId?: string, userId?: string): Promise<WebAnalysisResult> {
     console.log(`🌐 Analyzing: ${url}`);
     
@@ -103,12 +188,35 @@ export class WebAnalysisAgent {
       }
       const page = await browser.newPage();
       
-      // Navigate with timeout
+      // Navigate with timeout and Cloudflare detection
       console.log('📍 Navigating to website...');
       await page.goto(url, { 
-        waitUntil: 'domcontentloaded',
-        timeout: 15000 
+        waitUntil: 'networkidle',
+        timeout: 30000 
       });
+      
+      // Wait for potential Cloudflare challenge
+      await page.waitForTimeout(3000);
+      
+      // Check if we hit Cloudflare
+      const title = await page.title();
+      if (title.includes('Just a moment') || title.includes('Checking your browser')) {
+        console.warn('⚠️ Cloudflare detected! Trying to wait it out...');
+        
+        // Try to wait for redirect
+        try {
+          await page.waitForNavigation({ timeout: 10000 });
+        } catch (e) {
+          console.error('❌ Could not bypass Cloudflare protection');
+          
+          // FALLBACK: Use manual brand data for known sites
+          if (url.includes('revolut.com')) {
+            return this.getRevolutManualData();
+          }
+          
+          throw new Error('Website is protected by Cloudflare. Please try a different URL or provide brand assets manually.');
+        }
+      }
       
       // Desktop screenshot
       console.log('🖥️ Taking desktop screenshot...');

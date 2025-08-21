@@ -9,6 +9,7 @@ import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/u
 import { assetContext } from "~/server/services/context/assetContextService";
 import type { AssetContext } from "~/lib/types/asset-context";
 import { templateMatcher } from "~/services/ai/templateMatching.service";
+import { templateLoader } from "~/services/ai/templateLoader.service";
 
 export class ContextBuilder {
 
@@ -278,10 +279,20 @@ export class ContextBuilder {
     console.log(`📚 [CONTEXT BUILDER] Found ${matches.length} matching templates:`, 
       matches.map(m => `${m.metadata.name} (score: ${m.score})`).join(', '));
     
-    // Load template code (for now, we'll use a simplified approach)
+    // Load actual template code
     const examples = await Promise.all(matches.map(async (match) => {
-      // In a real implementation, you'd load the actual template code
-      // For now, we'll return metadata that can be used by the code generator
+      // Load the actual template code
+      const code = await templateLoader.loadTemplateCode(match.templateId);
+      
+      if (!code) {
+        console.warn(`📚 [CONTEXT BUILDER] Failed to load template code for ${match.templateId}`);
+      }
+      
+      // Format the template for context
+      const formattedCode = code ? 
+        templateLoader.formatTemplateForContext(code, match.metadata) : 
+        `// Template: ${match.metadata.name}\n// Could not load template code`;
+      
       return {
         id: match.templateId,
         name: match.metadata.name,
@@ -289,8 +300,8 @@ export class ContextBuilder {
         keywords: match.metadata.keywords,
         style: match.metadata.styles[0] || 'modern',
         reasoning: match.reasoning,
-        // Code will be loaded dynamically when needed
-        codePreview: `// ${match.metadata.name}: ${match.metadata.primaryUse}`
+        code: formattedCode,  // Actual template code
+        codePreview: formattedCode.substring(0, 200) + '...' // Preview for logging
       };
     }));
     

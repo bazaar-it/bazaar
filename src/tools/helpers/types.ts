@@ -59,6 +59,15 @@ export interface AddToolInput extends BaseToolInput {
     name: string;
     tsxCode: string;
   }>;
+  templateContext?: {  // Template examples for better generation
+    examples: Array<{
+      id: string;
+      name: string;
+      code: string;
+      style: string;
+      description: string;
+    }>;
+  };
   imageUrls?: string[];
   videoUrls?: string[];
   audioUrls?: string[];
