@@ -2,12 +2,40 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Player } from '@remotion/player';
+import { VideoPlayerErrorBoundary } from './VideoPlayerErrorBoundary';
+
+// TypeScript interfaces for animation sequences
+interface AnimationSequence {
+  type: string;
+  frames: number;
+  start: number;
+  end: number;
+}
+
+interface ScriptItem {
+  type: string;
+  frames: number;
+}
+
+// Image component with fallback support
+const SafeImage = ({ src, fallback, style }: { src: string; fallback: string; style: React.CSSProperties }) => {
+  const { Img } = window.Remotion;
+  const [imageSrc, setImageSrc] = React.useState(src);
+  
+  return (
+    <Img 
+      src={imageSrc}
+      style={style}
+      onError={() => setImageSrc(fallback)}
+    />
+  );
+};
 
 // Remotion composition component using the provided code
 const AirbnbDemo = () => {
   const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Img } = window.Remotion;
 
-  const script_A8B9C2D3 = [
+  const script_A8B9C2D3: ScriptItem[] = [
     { type: 'splash_bg', frames: 15 },
     { type: 'logo_and_tagline', frames: 15 },
     { type: 'transition', frames: 10 },
@@ -25,7 +53,7 @@ const AirbnbDemo = () => {
 
 
   let accumulatedFrames_A8B9C2D3 = 0;
-  const sequences_A8B9C2D3: any[] = [];
+  const sequences_A8B9C2D3: AnimationSequence[] = [];
 
   script_A8B9C2D3.forEach((item, index) => {
     sequences_A8B9C2D3.push({
@@ -138,13 +166,16 @@ const AirbnbDemo = () => {
     }
   );
   
-  // Four property images for cycling
+  // Four property images for cycling with fallback
   const propertyImages = [
     "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=2000&q=80",
     "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=2000&q=80",
     "https://images.unsplash.com/photo-1582063289852-62e3ba2747f8?auto=format&fit=crop&w=2000&q=80",
     "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=2000&q=80"
   ];
+
+  // Fallback image (data URL for a simple placeholder)
+  const fallbackImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui' font-size='20' fill='%239ca3af'%3EProperty Image%3C/text%3E%3C/svg%3E";
   
   // Calculate current and next image indices
   const currentImageIndex = currentSwipeIndex % propertyImages.length;
@@ -445,8 +476,9 @@ const AirbnbDemo = () => {
             zIndex: 10,
           }}>
             {/* Current image */}
-            <Img 
+            <SafeImage 
               src={propertyImages[currentImageIndex] || propertyImages[0]}
+              fallback={fallbackImage}
               style={{
                 width: "100%",
                 height: "100%",
@@ -457,8 +489,9 @@ const AirbnbDemo = () => {
             />
             
             {/* Next image for smooth transition */}
-            <Img 
+            <SafeImage 
               src={propertyImages[nextImageIndex] || propertyImages[0]}
+              fallback={fallbackImage}
               style={{
                 width: "100%",
                 height: "100%",
@@ -652,30 +685,32 @@ const AirbnbDemo = () => {
 
 export default function AirbnbDemoPlayer() {
   return (
-    <div style={{ 
-      width: '100%', 
-      aspectRatio: '16/9',
-      background: '#f9fafb',
-      borderRadius: '12px',
-      overflow: 'hidden'
-    }}>
-      <Player
-        component={AirbnbDemo}
-        durationInFrames={470} // Total frames from script
-        compositionWidth={1920}
-        compositionHeight={1080}
-        fps={30}
-        loop={true}
-        autoPlay={true}
-        controls={false}
-        clickToPlay={false}
-        doubleClickToFullscreen={false}
-        spaceKeyToPlayOrPause={false}
-        style={{
-          width: '100%',
-          height: '100%',
-        }}
-      />
-    </div>
+    <VideoPlayerErrorBoundary playerName="Airbnb Demo">
+      <div style={{ 
+        width: '100%', 
+        aspectRatio: '16/9',
+        background: '#f9fafb',
+        borderRadius: '12px',
+        overflow: 'hidden'
+      }}>
+        <Player
+          component={AirbnbDemo}
+          durationInFrames={470} // Total frames from script
+          compositionWidth={1920}
+          compositionHeight={1080}
+          fps={30}
+          loop={true}
+          autoPlay={true}
+          controls={false}
+          clickToPlay={false}
+          doubleClickToFullscreen={false}
+          spaceKeyToPlayOrPause={false}
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+        />
+      </div>
+    </VideoPlayerErrorBoundary>
   );
 }
