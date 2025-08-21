@@ -205,9 +205,9 @@ export default function RemotionPreview({
           />
           {playerElement && createPortal(
             <>
-              {/* Frame counter with FPS label - aligned with controls */}
+              {/* Frame counter with FPS label - synced with Remotion controls */}
               <div
-                className="pointer-events-none select-none"
+                className="pointer-events-none select-none remotion-frame-counter"
                 style={{
                   position: 'absolute',
                   right: 60, // Position to the left of fullscreen button
@@ -218,6 +218,8 @@ export default function RemotionPreview({
                   alignItems: 'center',
                   gap: '1px',
                   transform: 'translateY(-50%)', // Center vertically
+                  opacity: 1, // Always visible
+                  transition: 'opacity 0.2s ease-in-out',
                 }}
               >
                 {/* Frame number */}
@@ -248,6 +250,8 @@ export default function RemotionPreview({
                   FPS
                 </div>
               </div>
+              
+
               
             </>,
             playerElement
