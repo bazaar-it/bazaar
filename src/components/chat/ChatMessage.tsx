@@ -366,7 +366,7 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
                       <img 
                         src={imageUrl} 
                         alt={`Uploaded image ${index + 1}`}
-                        className="w-full h-20 object-cover rounded border"
+                        className="w-full max-h-32 object-contain rounded border bg-gray-50"
                       />
                       <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
                         ✓
