@@ -144,7 +144,7 @@ export class AIClientService {
         // Use a comparable OpenAI model
         const fallbackConfig: ModelConfig = {
           provider: 'openai',
-          model: 'gpt-4-turbo-preview', // or gpt-4.1 depending on requirements
+          model: 'gpt-4o', // Using GPT-4o as fallback
           temperature: config.temperature,
           maxTokens: Math.min(config.maxTokens || 4096, 4096), // OpenAI has lower limits
         };

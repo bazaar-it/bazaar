@@ -609,6 +609,35 @@ export default function ChatPanelG({
     adjustTextareaHeight();
   }, [message, adjustTextareaHeight]);
 
+  // Auto-focus textarea after generation completes
+  useEffect(() => {
+    if (generationComplete && textareaRef.current) {
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        // Place cursor at end if there's existing text
+        const length = textareaRef.current?.value.length || 0;
+        textareaRef.current?.setSelectionRange(length, length);
+        // Reset the flag
+        setGenerationComplete(false);
+      }, 100);
+    }
+  }, [generationComplete]);
+
+  // Also refocus when isGenerating changes from true to false
+  useEffect(() => {
+    if (!isGenerating && textareaRef.current) {
+      // Small delay to let React finish rendering
+      const timeoutId = setTimeout(() => {
+        if (!document.activeElement || 
+            document.activeElement === document.body ||
+            document.activeElement.tagName === 'BODY') {
+          textareaRef.current?.focus();
+        }
+      }, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isGenerating]);
+
 
   // Create media upload handlers
   const imageHandlers = createMediaUploadHandlers(
@@ -1150,13 +1179,14 @@ export default function ChatPanelG({
                 // Invalidate the scenes query to ensure fresh data
                 await utils.generation.getProjectScenes.invalidate({ projectId });
                 
-              } else if (operation === 'scene.edit' || operation === 'scene.update') {
-                // For edits, use the updateScene method from VideoState
+              } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
+                // For edits and trims, use the updateScene method from VideoState
                 updateScene(projectId, actualScene.id, actualScene);
                 
                 console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
                   sceneId: actualScene.id,
-                  operation
+                  operation,
+                  isTrim: operation === 'scene.trim' || responseData.meta?.editComplexity === 'duration'
                 });
                 
                 // Invalidate the scenes query to ensure fresh data
@@ -1242,6 +1272,20 @@ export default function ChatPanelG({
           // In the catch block, we only have the error object
           const errorMessage = error?.message || '';
           
+          // Check for specific error types
+          const isTimeoutError = 
+            errorMessage.toLowerCase().includes('timeout') ||
+            errorMessage.toLowerCase().includes('timed out') ||
+            errorMessage.includes('network request failed') ||
+            errorMessage.includes('fetch failed') ||
+            error?.code === 'TIMEOUT' ||
+            error?.code === 'ECONNABORTED';
+          
+          const isTrimError = 
+            errorMessage.toLowerCase().includes('trim') ||
+            errorMessage.includes('duration') ||
+            errorMessage.includes('Could not determine new duration');
+          
           const isRateLimitError = 
             errorMessage.includes('Daily limit reached') ||
             errorMessage.includes('Buy more prompts') ||
@@ -1249,9 +1293,33 @@ export default function ChatPanelG({
             error?.data?.cause?.code === 'RATE_LIMITED';
             
           console.log('[ChatPanelG] Error message:', errorMessage);
+          console.log('[ChatPanelG] Is timeout error?', isTimeoutError);
+          console.log('[ChatPanelG] Is trim error?', isTrimError);
           console.log('[ChatPanelG] Is rate limit error?', isRateLimitError);
           
-          if (isRateLimitError) {
+          if (isTimeoutError) {
+            console.log('[ChatPanelG] Timeout error detected');
+            // Add a friendly timeout message to the chat
+            const timeoutMessageId = nanoid();
+            addAssistantMessage(projectId, timeoutMessageId, 
+              "Oops, sorry I hit a timeout! 😅 That request was taking too long. Try again with a simpler prompt, or break it down into smaller steps."
+            );
+            updateMessage(projectId, timeoutMessageId, { status: 'error' });
+            
+            // Also show a toast with helpful guidance
+            toast.error('Request timed out. Try a simpler prompt or break it into smaller steps.');
+          } else if (isTrimError) {
+            console.log('[ChatPanelG] Trim error detected');
+            // Add a friendly trim error message to the chat
+            const trimErrorMessageId = nanoid();
+            addAssistantMessage(projectId, trimErrorMessageId, 
+              "Sorry, I couldn't trim the scene! 🎬 Please specify a clear duration like '3 seconds' or '90 frames', or select a specific scene to trim."
+            );
+            updateMessage(projectId, trimErrorMessageId, { status: 'error' });
+            
+            // Also show a toast with helpful guidance
+            toast.error('Trim failed. Please specify a duration like "3 seconds" or select a scene.');
+          } else if (isRateLimitError) {
             console.log('[ChatPanelG] Rate limit error caught, showing purchase modal');
             setIsPurchaseModalOpen(true);
             // Also show a toast to confirm
@@ -1292,8 +1360,25 @@ export default function ChatPanelG({
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
       
-      // Check if this is a rate limit error
-      if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
+      // Check if this is a timeout error at the SSE level
+      const isTimeoutError = 
+        error.toLowerCase().includes('timeout') ||
+        error.toLowerCase().includes('timed out') ||
+        error.includes('Connection failed') ||
+        error.includes('Connection lost');
+      
+      if (isTimeoutError) {
+        console.log('[ChatPanelG] SSE timeout detected');
+        // Add a friendly timeout message to the chat
+        const timeoutMessageId = nanoid();
+        addAssistantMessage(projectId, timeoutMessageId, 
+          "Oops, sorry I hit a timeout! 😅 The connection took too long. Try again with a simpler prompt, or break it down into smaller steps."
+        );
+        updateMessage(projectId, timeoutMessageId, { status: 'error' });
+        
+        // Also show a toast
+        toast.error('Connection timed out. Try a simpler prompt.');
+      } else if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
         console.log('[ChatPanelG] Rate limit error from SSE, showing purchase modal');
         setIsPurchaseModalOpen(true);
       } else {
