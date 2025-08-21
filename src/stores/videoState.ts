@@ -143,6 +143,9 @@ interface VideoState {
   // Get selected scene
   getSelectedScene: (projectId: string) => InputProps['scenes'][number] | null;
   
+  // Reorder scenes in timeline
+  reorderScenes: (projectId: string, oldIndex: number, newIndex: number) => void;
+  
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
   
@@ -910,6 +913,72 @@ export const useVideoState = create<VideoState>()(
     
     return project.props.scenes.find((s: any) => s.id === selectedSceneId) || null;
   },
+  
+  // Reorder scenes in timeline
+  reorderScenes: (projectId: string, oldIndex: number, newIndex: number) =>
+    set((state) => {
+      console.log('[VideoState.reorderScenes] Reordering scenes:', { oldIndex, newIndex });
+      
+      const project = state.projects[projectId];
+      if (!project) {
+        console.log('[VideoState.reorderScenes] Project not found:', projectId);
+        return state;
+      }
+      
+      const scenes = [...project.props.scenes];
+      
+      // Validate indices
+      if (oldIndex < 0 || oldIndex >= scenes.length || 
+          newIndex < 0 || newIndex >= scenes.length) {
+        console.log('[VideoState.reorderScenes] Invalid indices:', { oldIndex, newIndex, scenesLength: scenes.length });
+        return state;
+      }
+      
+      // Move the scene
+      const [movedScene] = scenes.splice(oldIndex, 1);
+      scenes.splice(newIndex, 0, movedScene);
+      
+      // Recalculate start times for all scenes
+      let currentStart = 0;
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        if (scene) {
+          scenes[i] = {
+            ...scene,
+            start: currentStart
+          };
+          currentStart += scene.duration || 150;
+        }
+      }
+      
+      // Calculate total duration
+      const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+      
+      console.log('[VideoState.reorderScenes] Scenes reordered successfully');
+      
+      // Generate new refresh token to force UI update
+      const newRefreshToken = Date.now().toString();
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            props: {
+              ...project.props,
+              meta: {
+                ...project.props.meta,
+                duration: totalDuration
+              },
+              scenes
+            },
+            refreshToken: newRefreshToken,
+            lastUpdated: Date.now()
+          }
+        }
+      };
+    }),
   
   // Implement missing addUserMessage method
   addUserMessage: (projectId: string, content: string, imageUrls?: string[]) =>

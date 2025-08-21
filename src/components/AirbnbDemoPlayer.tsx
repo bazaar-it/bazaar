@@ -713,32 +713,20 @@ const swipeImages = [
 ];
 
 export default function AirbnbDemoPlayer() {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentFrame, setCurrentFrame] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 250, height: 540 });
-  const [imagesPreloaded, setImagesPreloaded] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const playerRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Detect mobile and simplified loading
+  // Component initialization
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
     // Just a small delay for component initialization
     const timer = setTimeout(() => {
       setIsLoaded(true);
-      setImagesPreloaded(true);
     }, 500);
     
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', checkMobile);
     };
   }, []);
 
@@ -764,16 +752,6 @@ export default function AirbnbDemoPlayer() {
     return () => window.removeEventListener('resize', calculateDimensions);
   }, []);
 
-  const handlePlayPause = () => {
-    if (!playerRef.current) return;
-    
-    if (isPlaying) {
-      playerRef.current.pause();
-    } else {
-      playerRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
 
   if (!isLoaded) {
     return (
@@ -787,29 +765,31 @@ export default function AirbnbDemoPlayer() {
   }
 
   return (
-    <div className="relative bg-transparent mx-auto" style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}>
+    <div ref={containerRef} className="relative bg-transparent mx-auto" style={{ 
+      width: `${dimensions.width}px`, 
+      height: `${dimensions.height}px`,
+      minHeight: `${dimensions.height}px`, // Prevent layout shift
+      maxHeight: `${dimensions.height}px`  // Fixed height container
+    }}>
       {/* Video Player */}
-      {typeof window !== 'undefined' && window.Remotion ? (
+      {typeof window !== 'undefined' && window.Remotion && isLoaded ? (
         <Player
           ref={playerRef}
           component={AirbnbDemo}
           durationInFrames={totalFrames_A8B9C2D3}
           compositionWidth={375}
           compositionHeight={812}
-          fps={30}
+          fps={30} // Back to normal FPS
           style={{
             width: `${dimensions.width}px`,
             height: `${dimensions.height}px`,
           }}
           controls={false}
           loop={true}
-          autoPlay={!isMobile}
+          autoPlay={true} // Always play
           showVolumeControls={false}
           allowFullscreen={false}
           clickToPlay={false}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onFrame={setCurrentFrame}
         />
       ) : (
         <div className="flex items-center justify-center bg-gray-100 rounded-lg h-full">

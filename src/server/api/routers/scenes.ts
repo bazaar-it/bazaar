@@ -7,6 +7,69 @@ import { messageService } from "~/server/services/data/message.service";
 import { formatManualEditMessage } from "~/lib/utils/scene-message-formatter";
 
 export const scenesRouter = createTRPCRouter({
+  reorderScenes: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      sceneIds: z.array(z.string()), // Array of scene IDs in new order
+    }))
+    .mutation(async ({ ctx, input }) => {
+      console.log(`[scenes.reorderScenes] Reordering scenes for project ${input.projectId}`);
+      
+      // Verify project ownership
+      const projectScenes = await ctx.db.query.scenes.findMany({
+        where: eq(scenes.projectId, input.projectId),
+        with: {
+          project: true
+        }
+      });
+
+      if (!projectScenes.length) {
+        throw new Error("No scenes found for this project");
+      }
+
+      const project = projectScenes[0]?.project;
+      if (!project || project.userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized: You don't own this project");
+      }
+
+      // Verify all scene IDs belong to this project
+      const existingSceneIds = new Set(projectScenes.map(s => s.id));
+      const allScenesValid = input.sceneIds.every(id => existingSceneIds.has(id));
+      
+      if (!allScenesValid) {
+        throw new Error("Invalid scene IDs provided");
+      }
+
+      // Update the order field for each scene
+      const updatePromises = input.sceneIds.map((sceneId, index) => 
+        ctx.db
+          .update(scenes)
+          .set({
+            order: index,
+            updatedAt: new Date(),
+          })
+          .where(eq(scenes.id, sceneId))
+      );
+
+      await Promise.all(updatePromises);
+
+      console.log(`[scenes.reorderScenes] ✅ Successfully reordered ${input.sceneIds.length} scenes`);
+      
+      // Create a message in chat for the reorder action
+      const message = await messageService.createMessage({
+        projectId: input.projectId,
+        content: `Reordered scenes in timeline`,
+        role: 'assistant',
+        kind: 'message',
+        status: 'success'
+      });
+      
+      return {
+        success: true,
+        message: 'Scenes reordered successfully'
+      };
+    }),
+
   updateSceneCode: protectedProcedure
     .input(z.object({
       projectId: z.string(),

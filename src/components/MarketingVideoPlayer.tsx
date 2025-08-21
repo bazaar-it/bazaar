@@ -15,28 +15,42 @@ interface IconifyIconProps {
 
 const MarketingVideoPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const animationRef = useRef<number | null>(null);
-  const lastTimestampRef = useRef<number>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Responsive scaling state - moved to main component
   const [scale, setScale] = useState(1);
   const [canAnimate, setCanAnimate] = useState(true);
 
+  // Detect mobile
   useEffect(() => {
-    // Check if we're on mobile and disable animations for performance
-    const isMobile = window.innerWidth < 768;
-    
-    // On mobile, just show a static frame instead of animating
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    // Don't animate on mobile to prevent glitching
     if (isMobile) {
       setCurrentFrame(52); // Show a nice middle frame
       return;
     }
     
+    // Only animate on desktop
     const targetFPS = 30;
     const frameInterval = 1000 / targetFPS;
+    let lastTimestamp = 0;
     
     const animate = (timestamp: number) => {
-      if (timestamp - lastTimestampRef.current >= frameInterval) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      
+      const deltaTime = timestamp - lastTimestamp;
+      
+      if (deltaTime >= frameInterval) {
         setCurrentFrame(prev => {
           const next = prev + 1;
           // Reset after video ends (text + 30 frame pause)
@@ -45,8 +59,9 @@ const MarketingVideoPlayer: React.FC = () => {
           }
           return next;
         });
-        lastTimestampRef.current = timestamp;
+        lastTimestamp = timestamp;
       }
+      
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -58,7 +73,7 @@ const MarketingVideoPlayer: React.FC = () => {
         animationRef.current = null;
       }
     };
-  }, []);
+  }, [isMobile]);
 
   // Handle responsive scaling
   useEffect(() => {
@@ -491,7 +506,7 @@ const MarketingVideoPlayer: React.FC = () => {
     }, []);
     
     return (
-      <div style={{
+      <div ref={containerRef} style={{
         position: 'relative',
         width: '100%',
         height: `${containerHeight}px`, // Responsive height

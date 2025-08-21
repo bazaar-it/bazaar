@@ -6,15 +6,6 @@ const DynamicFormatTitle: React.FC = () => {
   const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Check if we're on mobile and disable animations for performance
-    const isMobile = window.innerWidth < 768;
-    
-    // On mobile, just show a static frame
-    if (isMobile) {
-      setCurrentFrame(30); // Show "Vertical" fully typed
-      return;
-    }
-    
     const animate = () => {
       setCurrentFrame(prev => (prev + 1) % 360); // Same 12-second cycle as AspectRatioTransitionPlayer
       animationRef.current = requestAnimationFrame(animate);

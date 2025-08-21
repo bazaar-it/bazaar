@@ -199,7 +199,7 @@ export function Homepage() {
         <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              25+ Templates to Start From
+              50+ Templates to Start From
             </h2>
           </div>
           
