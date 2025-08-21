@@ -10,8 +10,10 @@ export function uniquifyTemplateCode(templateCode: string, uniqueSuffix: string)
   // Track all identifiers we need to rename
   const identifiersToRename = new Set<string>();
   
-  // 1. Find ALL variable declarations (const, let, var)
-  const varPattern = /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
+  // 1. Find simple variable declarations (const, let, var) - but NOT destructuring
+  // Only match simple assignments like "const myVar = " or "let count = "
+  // Skip destructuring patterns like "const { prop } = " or "const [item] = "
+  const varPattern = /(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?![{\[])/g;
   let match;
   while ((match = varPattern.exec(templateCode)) !== null) {
     const varName = match[1];
@@ -23,6 +25,9 @@ export function uniquifyTemplateCode(templateCode: string, uniqueSuffix: string)
       identifiersToRename.add(varName);
     }
   }
+  
+  // 1b. Handle destructuring assignments specifically - don't rename the destructured variables
+  // Just find the main component function names instead
   
   // 2. Find function declarations
   const funcPattern = /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
@@ -48,6 +53,13 @@ export function uniquifyTemplateCode(templateCode: string, uniqueSuffix: string)
       // Check if this is part of an object property access (e.g., object.property)
       // Don't rename if it's after a dot
       if (offset > 0 && str[offset - 1] === '.') {
+        return match;
+      }
+      
+      // Check if this is an object property key (e.g., { frame: value })
+      // Don't rename if it's followed by a colon (property key)
+      const nextChar = str[offset + match.length];
+      if (nextChar === ':') {
         return match;
       }
       

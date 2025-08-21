@@ -396,6 +396,9 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] No user assets available for @mention resolution');
     }
     
+    // Filter out icon references from imageUrls (they should be processed as icons, not images)
+    imageUrls = imageUrls.filter(url => !url.startsWith('[icon:'));
+    
     if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
     }
@@ -415,6 +418,7 @@ export default function ChatPanelG({
     setMessage("");
     setDraftMessage(projectId, ""); // Clear draft in store too
     setUploadedImages([]);
+    setSelectedIcons([]); // Clear icon previews after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
     
@@ -618,7 +622,26 @@ export default function ChatPanelG({
     const handler = (e: Event) => {
       const { url, name } = (e as CustomEvent).detail || {};
       if (typeof url === 'string' && url.length > 0) {
-        // Add as a new uploadedMedia entry (already uploaded)
+        // Check if this is an icon reference - handle differently than media files
+        if (url.startsWith('[icon:')) {
+          // Icon reference - just add to message, don't treat as uploaded media
+          const reference = url; // Use the icon reference directly
+          setMessage((prev) => {
+            const newMessage = prev ? `${prev} ${reference}` : reference;
+            // Extract and update icon list for preview
+            const iconPattern = /\[icon:([^\]]+)\]/g;
+            const icons: string[] = [];
+            let match;
+            while ((match = iconPattern.exec(newMessage)) !== null) {
+              icons.push(match[1]);
+            }
+            setSelectedIcons(icons);
+            return newMessage;
+          });
+          return;
+        }
+        
+        // Regular media file - add as uploadedMedia entry
         const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
         const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
@@ -633,7 +656,7 @@ export default function ChatPanelG({
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
     return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
-  }, []);
+  }, [setSelectedIcons]);
 
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
