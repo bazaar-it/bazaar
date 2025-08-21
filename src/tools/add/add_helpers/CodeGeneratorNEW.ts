@@ -832,7 +832,7 @@ Transform the static design into sequential storytelling.`;
       
       return {
         code: cleanCode,
-        name: this.extractSceneNameFromPrompt(imageToCodeInput.userPrompt), // Extract meaningful name from prompt
+        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
         debug: {

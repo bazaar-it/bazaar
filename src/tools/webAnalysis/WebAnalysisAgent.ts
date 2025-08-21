@@ -26,12 +26,28 @@ export class WebAnalysisAgent {
   async analyzeWebsite(url: string, projectId?: string, userId?: string): Promise<WebAnalysisResult> {
     console.log(`🌐 Analyzing: ${url}`);
     
+    // Check if we're in production without browser support
+    if (process.env.NODE_ENV === 'production' && !process.env.BROWSERLESS_URL && !process.env.SCREENSHOT_API_KEY) {
+      console.warn('⚠️ Web analysis disabled in production - no browser or API configured');
+      return {
+        success: false,
+        error: 'Web analysis is not available in production. Please configure BROWSERLESS_URL or SCREENSHOT_API_KEY.',
+        url
+      };
+    }
+    
     let browser;
     try {
-      browser = await chromium.launch({ 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
-      });
+      // Try to use Browserless in production if configured
+      if (process.env.BROWSERLESS_URL) {
+        const { chromium: playwrightCore } = await import('playwright-core');
+        browser = await playwrightCore.connect(process.env.BROWSERLESS_URL);
+      } else {
+        browser = await chromium.launch({ 
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
+        });
+      }
       const page = await browser.newPage();
       
       // Navigate with timeout
