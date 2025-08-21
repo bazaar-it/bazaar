@@ -8,6 +8,7 @@ import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.typ
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
 import type { AssetContext } from "~/lib/types/asset-context";
+import { templateMatcher } from "~/services/ai/templateMatching.service";
 
 export class ContextBuilder {
 
@@ -42,6 +43,12 @@ export class ContextBuilder {
       const projectAssets = await assetContext.getProjectAssets(input.projectId);
       console.log(`📚 [CONTEXT BUILDER] Found ${projectAssets.assets.length} persistent assets`);
       console.log(`📚 [CONTEXT BUILDER] Logos: ${projectAssets.logos.length}`);
+      
+      // 6. NEW: Build template context when appropriate
+      const templateContext = await this.buildTemplateContext(input, scenesWithCode);
+      if (templateContext) {
+        console.log(`📚 [CONTEXT BUILDER] Added ${templateContext.examples.length} template examples for better generation`);
+      }
       
       return {
         // Real scene history with full TSX for cross-scene operations
@@ -78,7 +85,10 @@ export class ContextBuilder {
           })),
           logos: projectAssets.logos.map(l => l.url),
           assetUrls: projectAssets.assets.map(a => a.url)
-        } : undefined
+        } : undefined,
+        
+        // NEW: Template context for improved generation
+        templateContext: templateContext
       };
 
     } catch (error) {
@@ -239,5 +249,95 @@ export class ContextBuilder {
       console.error('📚 [CONTEXT BUILDER] Error in web analysis:', error);
       return undefined;
     }
+  }
+  
+  /**
+   * Build template context when appropriate for better generation
+   */
+  private async buildTemplateContext(
+    input: OrchestrationInput,
+    existingScenes: any[]
+  ) {
+    // Determine if we should add template context
+    const shouldUseTemplates = this.shouldAddTemplateContext(input, existingScenes);
+    
+    if (!shouldUseTemplates) {
+      return undefined;
+    }
+    
+    console.log('📚 [CONTEXT BUILDER] Selecting template examples for context engineering');
+    
+    // Get best matching templates
+    const matches = templateMatcher.findBestTemplates(input.prompt, 2);
+    
+    if (matches.length === 0) {
+      console.log('📚 [CONTEXT BUILDER] No matching templates found');
+      return undefined;
+    }
+    
+    console.log(`📚 [CONTEXT BUILDER] Found ${matches.length} matching templates:`, 
+      matches.map(m => `${m.metadata.name} (score: ${m.score})`).join(', '));
+    
+    // Load template code (for now, we'll use a simplified approach)
+    const examples = await Promise.all(matches.map(async (match) => {
+      // In a real implementation, you'd load the actual template code
+      // For now, we'll return metadata that can be used by the code generator
+      return {
+        id: match.templateId,
+        name: match.metadata.name,
+        description: match.metadata.primaryUse,
+        keywords: match.metadata.keywords,
+        style: match.metadata.styles[0] || 'modern',
+        reasoning: match.reasoning,
+        // Code will be loaded dynamically when needed
+        codePreview: `// ${match.metadata.name}: ${match.metadata.primaryUse}`
+      };
+    }));
+    
+    return {
+      examples,
+      message: `Using ${matches.length} template(s) as style reference: ${matches.map(m => m.metadata.name).join(', ')}`,
+      matchDetails: templateMatcher.explainSelection(matches)
+    };
+  }
+  
+  /**
+   * Determine if template context should be added
+   */
+  private shouldAddTemplateContext(
+    input: OrchestrationInput,
+    existingScenes: any[]
+  ): boolean {
+    const promptLower = input.prompt.toLowerCase();
+    
+    // Add templates when:
+    // 1. No existing scenes (first scene in project)
+    if (existingScenes.length === 0) {
+      console.log('📚 [CONTEXT BUILDER] First scene in project - adding template context');
+      return true;
+    }
+    
+    // 2. User explicitly asks for style reference
+    const styleKeywords = ['style', 'like', 'similar', 'inspired', 'based on', 'example'];
+    if (styleKeywords.some(keyword => promptLower.includes(keyword))) {
+      console.log('📚 [CONTEXT BUILDER] Style reference requested - adding template context');
+      return true;
+    }
+    
+    // 3. User is creating specific types of content that benefit from templates
+    const templateBenefitKeywords = [
+      'text animation', 'particles', 'background', 'chart', 'graph',
+      'mobile app', 'ui demo', 'interface', 'transition', 'effect'
+    ];
+    if (templateBenefitKeywords.some(keyword => promptLower.includes(keyword))) {
+      console.log('📚 [CONTEXT BUILDER] Content type benefits from templates - adding context');
+      return true;
+    }
+    
+    // 4. Previous generation failed (if we track this)
+    // This would require tracking generation success/failure
+    
+    // Default: Don't add templates if scenes already exist
+    return false;
   }
 } 

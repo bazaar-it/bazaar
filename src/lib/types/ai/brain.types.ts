@@ -188,6 +188,21 @@ export interface ContextPacket {
     logos: string[];  // Quick access to logo URLs
     assetUrls: string[];  // All asset URLs for prompt enforcement
   };
+  
+  // Template context for improved generation (when no previous scenes exist)
+  templateContext?: {
+    examples: Array<{
+      id: string;
+      name: string;
+      description: string;
+      keywords: string[];
+      style: string;
+      reasoning: string;
+      codePreview: string;
+    }>;
+    message: string;
+    matchDetails: string;
+  };
 }
 
 // ============================================================================

@@ -492,20 +492,77 @@ IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add s
       input.webContext.screenshotUrls.mobile,
     ];
 
-    // Enhanced prompt for web context
+    // Enhanced prompt for MOTION GRAPHICS based on extracted brand
+    const visualDesign = input.webContext.pageData.visualDesign;
+    const narrative = input.webContext.pageData.productNarrative;
     const enhancedPrompt = `${input.userPrompt}
 
-WEBSITE CONTEXT:
-- URL: ${input.webContext.originalUrl}
-- Title: ${input.webContext.pageData.title}
-- Description: ${input.webContext.pageData.description || 'Not available'}
-- Key headings: ${input.webContext.pageData.headings.slice(0, 5).join(', ')}
+🎬 CREATE A MOTION GRAPHICS VIDEO BASED ON THIS BRAND:
 
-BRAND MATCHING INSTRUCTIONS:
-- Use the website screenshots to match the brand's visual identity
-- Extract colors, fonts, and design patterns from the screenshots
-- Maintain brand consistency in the motion graphics
-- The desktop screenshot shows the full layout, mobile shows the mobile design`;
+📊 PRODUCT STORY:
+${narrative ? `
+HEADLINE: "${narrative.headline}"
+SUBHEADLINE: "${narrative.subheadline}"
+
+KEY FEATURES:
+${narrative.features.slice(0, 3).map(f => `• ${f.title}: ${f.description}`).join('\n')}
+
+METRICS TO HIGHLIGHT:
+${narrative.metrics.map(m => `• ${m}`).join('\n')}
+
+TESTIMONIALS:
+${narrative.testimonials.slice(0, 2).map(t => `"${t.quote.slice(0, 100)}..." - ${t.author}`).join('\n')}
+
+CALL-TO-ACTION BUTTONS:
+- Primary: "${narrative.ctas.primary}"
+- Secondary: "${narrative.ctas.secondary}"
+` : 'Extract from website'}
+
+🎨 EXACT BRAND DESIGN SYSTEM:
+${visualDesign ? `
+COLOR SYSTEM:
+- Primary: ${visualDesign.colorSystem.primary}
+- Secondary: ${visualDesign.colorSystem.secondary}
+- Accents: ${visualDesign.colorSystem.accents.join(', ')}
+- Neutrals: ${visualDesign.colorSystem.neutrals.join(', ')}
+${visualDesign.colorSystem.gradients.length > 0 ? `
+GRADIENTS:
+${visualDesign.colorSystem.gradients.map(g => 
+  `- ${g.type}-gradient(${g.angle}deg, ${g.stops.join(', ')})`
+).join('\n')}` : ''}
+
+TYPOGRAPHY:
+- Fonts: ${visualDesign.fonts.join(', ')}
+- H1 Size: ${visualDesign.headingData[0]?.styles.fontSize || '48px'}
+- Body Size: ${visualDesign.buttonStyles[0]?.styles.fontSize || '16px'}
+
+DESIGN TOKENS:
+- Border Radius: ${visualDesign.borderRadius.sm} (small), ${visualDesign.borderRadius.md} (medium), ${visualDesign.borderRadius.lg} (large)
+- Shadows: 
+  • Small: ${visualDesign.shadows.sm}
+  • Medium: ${visualDesign.shadows.md}
+  • Large: ${visualDesign.shadows.lg}
+
+BUTTON STYLE:
+${visualDesign.buttonStyles[0] ? 
+  `- Background: ${visualDesign.buttonStyles[0].styles.backgroundColor}
+- Text Color: ${visualDesign.buttonStyles[0].styles.color}
+- Border Radius: ${visualDesign.buttonStyles[0].styles.borderRadius}
+- Font Size: ${visualDesign.buttonStyles[0].styles.fontSize}
+- Shadow: ${visualDesign.buttonStyles[0].styles.boxShadow}` : 'Default button style'}
+` : 'Extract from screenshots'}
+
+🎯 MOTION GRAPHICS REQUIREMENTS:
+1. Create dynamic scenes that tell the product story
+2. Use EXACTLY the brand colors - no variations
+3. Apply the exact typography scale
+4. Include the metrics and features as animated elements
+5. Use smooth transitions with the brand's design tokens
+6. Create a video that feels like the website came to life
+7. Include CTAs with the exact button styles
+8. Use shadows and border radius from the design system
+
+The goal is a MOTION GRAPHICS VIDEO that perfectly represents this brand, not a website mockup.`;
 
     // Generate code using website screenshots
     const codeResult = await codeGenerator.generateCodeFromImage({
@@ -563,6 +620,7 @@ BRAND MATCHING INSTRUCTIONS:
     ];
 
     // Enhanced prompt combining web context with user images
+    const visualDesign = input.webContext.pageData.visualDesign;
     const enhancedPrompt = `${input.userPrompt}
 
 WEBSITE BRAND CONTEXT:
@@ -570,7 +628,14 @@ WEBSITE BRAND CONTEXT:
 - Title: ${input.webContext.pageData.title}
 - Description: ${input.webContext.pageData.description || 'Not available'}
 
+🎨 EXACT VISUAL DESIGN (EXTRACTED):
+${visualDesign ? `
+FONTS: ${visualDesign.fonts.join(', ')}
+COLORS: Primary: ${visualDesign.brandColors.primary}, Text: ${visualDesign.brandColors.text}, BG: ${visualDesign.brandColors.background}
+` : 'Extract from screenshots'}
+
 COMBINED CONTEXT INSTRUCTIONS:
+- USE THE EXACT FONTS AND COLORS EXTRACTED ABOVE
 - Use the website screenshots (first 2 images) to understand the brand identity
 - Use the additional user images for specific content requirements
 - Blend the brand's visual style with the user's image content
