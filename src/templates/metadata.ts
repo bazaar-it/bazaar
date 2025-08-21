@@ -982,6 +982,37 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     complexity: 'medium',
     primaryUse: 'Hero section and landing page headers',
     similarTo: ['LogoTemplate', 'PromptIntro']
+  },
+  
+  'AirbnbDemo': {
+    id: 'AirbnbDemo',
+    name: 'AirbnbDemo',
+    keywords: ['airbnb', 'demo', 'booking', 'travel', 'vacation', 'rental', 'property', 'stays', 'accommodation', 'listing'],
+    descriptions: [
+      'Airbnb-style property listing demo',
+      'Vacation rental showcase',
+      'Property booking interface'
+    ],
+    userPhrases: [
+      'airbnb demo',
+      'airbnb style',
+      'property listing',
+      'vacation rental',
+      'booking interface',
+      'travel app',
+      'accommodation showcase',
+      'rental property demo'
+    ],
+    categories: ['demo', 'mockup', 'product'],
+    styles: ['modern', 'clean', 'minimal', 'professional'],
+    useCases: ['product demos', 'app showcase', 'property listings', 'travel platforms'],
+    animations: ['fade', 'slide', 'scale'],
+    elements: ['cards', 'images', 'text', 'ratings', 'prices'],
+    colors: ['coral', 'white', 'gray'],
+    duration: 300,
+    complexity: 'medium',
+    primaryUse: 'Airbnb-style property listing and booking demo',
+    similarTo: ['FintechUI', 'MobileApp', 'DualScreenApp']
   }
 };
 

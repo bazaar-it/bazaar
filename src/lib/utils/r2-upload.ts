@@ -3,15 +3,22 @@ import crypto from 'crypto';
 
 /**
  * Upload web analysis screenshots to R2
+ * Handles both old format (object with desktop/mobile) and new format (Buffer)
  */
 export async function uploadWebAnalysisScreenshots(
-  screenshots: { desktop: Buffer; mobile: Buffer },
+  screenshots: { desktop: Buffer; mobile: Buffer } | Buffer,
   projectId: string,
-  userId?: string
-): Promise<{ desktop: string; mobile: string }> {
+  fileType?: string
+): Promise<{ desktop: string; mobile: string } | string> {
+  // Handle single buffer (new V2 format)
+  if (Buffer.isBuffer(screenshots)) {
+    return uploadScreenshotToR2(screenshots, fileType || 'screenshot.png', projectId);
+  }
+  
+  // Handle old format with desktop/mobile
   const [desktopUrl, mobileUrl] = await Promise.all([
-    uploadScreenshotToR2(screenshots.desktop, 'desktop.png', projectId, userId),
-    uploadScreenshotToR2(screenshots.mobile, 'mobile.png', projectId, userId),
+    uploadScreenshotToR2(screenshots.desktop, 'desktop.png', projectId),
+    uploadScreenshotToR2(screenshots.mobile, 'mobile.png', projectId),
   ]);
 
   return {
@@ -29,6 +36,11 @@ export async function uploadScreenshotToR2(
   projectId: string,
   userId?: string
 ): Promise<string> {
+  // Validate buffer
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error(`Invalid buffer provided for ${fileName}`);
+  }
+  
   // Configure S3 client for Cloudflare R2
   const s3Client = new S3Client({
     region: 'auto',
@@ -63,7 +75,7 @@ export async function uploadScreenshotToR2(
   // Construct public URL
   const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${uniqueKey}`;
 
-  console.log(`📸 Screenshot uploaded to R2: ${fileName} (${buffer.length} bytes)`);
+  console.log(`📸 Screenshot uploaded to R2: ${fileName} (${buffer?.length || 0} bytes)`);
   
   return publicUrl;
 }

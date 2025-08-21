@@ -67,6 +67,15 @@ export interface BrainDecision {
       };
       analyzedAt: string;
     };
+    templateContext?: {  // Template examples for better generation
+      examples: Array<{
+        id: string;
+        name: string;
+        code: string;
+        style: string;
+        description: string;
+      }>;
+    };
   };
   
   // Brain's reasoning

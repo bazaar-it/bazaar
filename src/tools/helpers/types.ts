@@ -383,6 +383,15 @@ export const addToolInputSchema = baseToolInputSchema.extend({
     }),
     analyzedAt: z.string(),
   }).optional().describe("Web analysis context with screenshots for brand matching"),
+  templateContext: z.object({
+    examples: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string(),
+      style: z.string(),
+      description: z.string(),
+    })),
+  }).optional().describe("Template examples for better first-scene generation"),
 });
 
 export const editToolInputSchema = baseToolInputSchema.extend({

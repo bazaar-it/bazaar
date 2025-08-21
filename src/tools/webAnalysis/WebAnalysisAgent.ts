@@ -51,6 +51,7 @@ export interface WebAnalysisResult {
         text: string;
         background: string;
       };
+      extraction?: any; // Full V2 extraction data
     };
     productNarrative?: {
       headline: string;
@@ -164,6 +165,61 @@ export class WebAnalysisAgent {
   async analyzeWebsite(url: string, projectId?: string, userId?: string): Promise<WebAnalysisResult> {
     console.log(`🌐 Analyzing: ${url}`);
     
+    // Use V2 agent if Browserless is configured
+    if (process.env.BROWSERLESS_URL && projectId) {
+      try {
+        const { WebAnalysisAgentV2 } = await import('./WebAnalysisAgentV2');
+        const agentV2 = new WebAnalysisAgentV2(projectId);
+        const extractedData = await agentV2.analyze(url);
+        
+        // Convert V2 format to V1 format for compatibility
+        const screenshotUrls = extractedData.media.screenshots.reduce((acc, s) => {
+            if (s.type === 'hero') acc.desktop = s.url;
+            if (s.type === 'mobile') acc.mobile = s.url;
+            return acc;
+          }, { desktop: '', mobile: '' } as any);
+          
+        // Ensure we have both desktop and mobile URLs
+        if (!screenshotUrls.desktop) {
+          screenshotUrls.desktop = extractedData.media.screenshots[0]?.url || '';
+        }
+        if (!screenshotUrls.mobile) {
+          screenshotUrls.mobile = extractedData.media.screenshots.find(s => s.type === 'mobile')?.url || 
+                                   extractedData.media.screenshots[0]?.url || '';
+        }
+        
+        return {
+          success: true,
+          url,
+          screenshotUrls,
+          analyzedAt: new Date().toISOString(),
+          pageData: {
+            title: extractedData.page.title,
+            url: extractedData.page.url,
+            headings: [extractedData.product.value_prop.headline],
+            visualDesign: {
+              colors: [],
+              colorSystem: extractedData.brand.colors,
+              fonts: extractedData.brand.typography.fonts.map(f => f.family),
+              heroStyles: {},
+              buttonStyles: [extractedData.brand.buttons.styles.primary],
+              headingData: Object.entries(extractedData.brand.typography.scale).map(([tag, styles]) => ({
+                tag,
+                styles
+              })),
+              shadows: extractedData.brand.shadows,
+              borderRadius: extractedData.brand.borderRadius,
+              cssVariables: {},
+              brandColors: extractedData.brand.colors,
+              extraction: extractedData // Include full extraction for Hero's Journey
+            }
+          }
+        };
+      } catch (error) {
+        console.error('V2 agent failed, falling back to V1:', error);
+      }
+    }
+    
     // Check if we're in production without browser support
     if (process.env.NODE_ENV === 'production' && !process.env.BROWSERLESS_URL && !process.env.SCREENSHOT_API_KEY) {
       console.warn('⚠️ Web analysis disabled in production - no browser or API configured');
@@ -176,16 +232,11 @@ export class WebAnalysisAgent {
     
     let browser;
     try {
-      // Try to use Browserless in production if configured
-      if (process.env.BROWSERLESS_URL) {
-        const { chromium: playwrightCore } = await import('playwright-core');
-        browser = await playwrightCore.connect(process.env.BROWSERLESS_URL);
-      } else {
-        browser = await chromium.launch({ 
-          headless: true,
-          args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
-        });
-      }
+      // Fallback to regular Playwright
+      browser = await chromium.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'] // For production deployment
+      });
       const page = await browser.newPage();
       
       // Navigate with timeout and Cloudflare detection

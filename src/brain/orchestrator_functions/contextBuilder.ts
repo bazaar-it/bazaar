@@ -213,6 +213,16 @@ export class ContextBuilder {
       if (analysis.screenshotUrls && analysis.pageData) {
         console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.pageData.title}`);
         
+        // Debug: Check if extraction data is present
+        console.log(`📚 [CONTEXT BUILDER] PageData structure:`, {
+          hasPageData: !!analysis.pageData,
+          hasVisualDesign: !!analysis.pageData?.visualDesign,
+          hasExtraction: !!analysis.pageData?.visualDesign?.extraction,
+          extractionKeys: analysis.pageData?.visualDesign?.extraction ? 
+            Object.keys(analysis.pageData.visualDesign.extraction).slice(0, 5) : 
+            'none'
+        });
+        
         const webContext = {
           originalUrl: analysis.url!,
           screenshotUrls: analysis.screenshotUrls,

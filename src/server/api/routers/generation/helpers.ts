@@ -61,14 +61,25 @@ export async function executeToolFromDecision(
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
       }
 
-      // Debug logging for media URLs
+      // Debug logging for media URLs and template context
       console.log('📝 [HELPERS] Building ADD tool input:', {
         hasImageUrls: !!decision.toolContext.imageUrls?.length,
         hasVideoUrls: !!decision.toolContext.videoUrls?.length,
         hasAudioUrls: !!decision.toolContext.audioUrls?.length,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
+        hasTemplateContext: !!decision.toolContext.templateContext,
+        templateCount: decision.toolContext.templateContext?.examples?.length || 0,
       });
+      
+      // DEBUG: Log the full template context to verify it's there
+      if (decision.toolContext.templateContext) {
+        console.log('📝 [HELPERS] Template context details:', {
+          exampleCount: decision.toolContext.templateContext.examples?.length,
+          exampleNames: decision.toolContext.templateContext.examples?.map(e => e.name),
+          firstExampleHasCode: !!decision.toolContext.templateContext.examples?.[0]?.code,
+        });
+      }
 
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
@@ -100,6 +111,8 @@ export async function executeToolFromDecision(
         projectFormat: projectFormat,
         // FIGMA: Pass Figma component data if available
         figmaComponentData: decision.toolContext.figmaComponentData,
+        // TEMPLATE CONTEXT: Pass template examples for better first-scene generation
+        templateContext: decision.toolContext.templateContext,
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);

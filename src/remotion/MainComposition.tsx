@@ -84,6 +84,20 @@ function compileSceneCode(scene: any): React.ComponentType | null {
     return Component;
   } catch (error) {
     console.error('Failed to compile scene:', error);
+    
+    // Dispatch error event for auto-fix system
+    if (typeof window !== 'undefined' && sceneData?.componentId) {
+      window.dispatchEvent(new CustomEvent('preview-scene-error', {
+        detail: {
+          sceneId: sceneData.componentId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          sceneName: sceneData.name || 'Unknown Scene',
+          tsxCode: sceneData.code
+        }
+      }));
+      console.log('[MainComposition] Dispatched preview-scene-error event for auto-fix');
+    }
+    
     return null;
   }
 }
@@ -104,6 +118,19 @@ class SceneErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error(`Scene ${this.props.sceneName} error:`, error, errorInfo);
+    
+    // Dispatch error event for auto-fix system
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('preview-scene-error', {
+        detail: {
+          sceneId: this.props.sceneName, // Using scene name as ID
+          errorMessage: error.message,
+          sceneName: this.props.sceneName,
+          tsxCode: '' // Code not available here
+        }
+      }));
+      console.log('[SceneErrorBoundary] Dispatched preview-scene-error event for auto-fix');
+    }
   }
 
   render() {

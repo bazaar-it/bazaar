@@ -21,6 +21,7 @@ export class HeroJourneyGenerator {
   /**
    * Generate a hero's journey narrative from brand extraction
    * Example: Revolut - "Change the way you money"
+   * Now uses comprehensive extraction data from WebAnalysisAgentV2
    */
   generateNarrative(extraction: any): HeroJourneyScene[] {
     const scenes: HeroJourneyScene[] = [];
@@ -162,7 +163,7 @@ const FONTS = {
   bodySize: '${extraction.brand.typography.scale.body.size}'
 };
 
-export const ${extraction.page.title.replace(/\s+/g, '')}HeroJourney: React.FC = () => {
+export const ${extraction.page?.title?.replace(/\s+/g, '') || 'Brand'}HeroJourney: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -336,7 +337,7 @@ export const ${extraction.page.title.replace(/\s+/g, '')}HeroJourney: React.FC =
               config: { damping: 10, stiffness: 200 }
             })})\`
           }}>
-            ${extraction.ctas[0].label}
+            ${extraction.ctas?.[0]?.label || 'Get Started'}
           </div>
           <div style={{
             fontSize: FONTS.bodySize,
