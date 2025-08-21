@@ -170,7 +170,8 @@ const ProjectPreview = ({
   onEditValueChange,
   onEditKeyPress,
   onEditBlur,
-  isVisible = true
+  isVisible = true,
+  isLoading = false
 }: { 
   project: Project; 
   onClick: () => void;
@@ -184,6 +185,7 @@ const ProjectPreview = ({
   onEditKeyPress: (e: React.KeyboardEvent) => void;
   onEditBlur: () => void;
   isVisible?: boolean;
+  isLoading?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -253,6 +255,15 @@ const ProjectPreview = ({
           <ProjectThumbnail project={project} isVisible={isVisible} />
         )}
         
+        {/* Loading overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-30 flex items-center justify-center rounded">
+            <div className="bg-white/90 rounded-full p-3 shadow-lg">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
+            </div>
+          </div>
+        )}
+
         {/* Current project badge */}
         {isCurrentProject && (
           <div className="absolute top-1 sm:top-2 right-1 sm:right-2 z-10">
@@ -446,6 +457,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
   const projectsPerPage = 10;
   const router = useRouter();
   
@@ -553,9 +565,15 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
     setCurrentPage(1);
   }, [searchQuery]);
 
+  // Clear loading state when currentProjectId changes (successful navigation)
+  React.useEffect(() => {
+    setLoadingProjectId(null);
+  }, [currentProjectId]);
+
   // Handle project navigation
   const handleProjectClick = useCallback((projectId: string) => {
     if (projectId !== currentProjectId) {
+      setLoadingProjectId(projectId);
       router.push(`/projects/${projectId}/generate`);
     }
   }, [currentProjectId, router]);
@@ -688,6 +706,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
                   onEditKeyPress={handleEditKeyPress}
                   onEditBlur={handleSaveEdit}
                   isVisible={true} // Projects on current page are visible
+                  isLoading={loadingProjectId === project.id}
                 />
               </Card>
             ))}
