@@ -132,11 +132,17 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     setUserProjects((prev) => prev.map(p => p.id === projectId ? { ...p, name: newTitle } : p));
   }, [projectId]);
   
+  // Get tRPC utils for cache invalidation
+  const utils = api.useUtils();
+
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data) {
         setTitle(data.title);
+        
+        // Invalidate project cache to ensure all components get updated data
+        await utils.project.invalidate();
       }
     },
     onError: (error: unknown) => {
@@ -163,7 +169,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   // Handle rename action
   const handleRename = useCallback((newName: string) => {
-    if (newName.trim() === title || newName.trim() === "") return;
+    if (newName.trim() === title || newName.trim() === "") {
+      return;
+    }
 
     renameMutation.mutate({
       id: projectId,

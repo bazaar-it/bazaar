@@ -76,6 +76,11 @@ export default function AppHeader({
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
 
+  // Sync newTitle with projectTitle prop when it changes
+  React.useEffect(() => {
+    setNewTitle(projectTitle || "");
+  }, [projectTitle]);
+
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
@@ -234,7 +239,7 @@ export default function AppHeader({
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
-      onRename(newTitle);
+      onRename(newTitle.trim());
     }
     setIsEditingName(false);
   };
