@@ -6,7 +6,7 @@ import { scenes, projects, templateUsages } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder } from "~/lib/api/response-helpers";
-import { uniquifyTemplateCode, generateTemplateSuffix } from "~/lib/utils/uniquifyTemplateCode";
+import { generateTemplateSuffix } from "~/lib/utils/uniquifyTemplateCode";
 
 
 /**
@@ -54,11 +54,10 @@ export const addTemplate = protectedProcedure
       const uniqueSuffix = generateTemplateSuffix();
       const sceneName = `${templateName}_${uniqueSuffix}`;
 
-      // 4. Apply comprehensive uniquification to prevent all conflicts
+      // 4. Get template code (no uniquification needed - scenes run in isolation)
       const { templateCode } = input;
-      const uniqueTemplateCode = uniquifyTemplateCode(templateCode, uniqueSuffix);
       
-      console.log(`[${response.getRequestId()}] Applied comprehensive uniquification with suffix: ${uniqueSuffix}`);
+      console.log(`[${response.getRequestId()}] Using template with unique scene name suffix: ${uniqueSuffix}`);
 
       // 5. Save template as a new scene
       console.log(`[${response.getRequestId()}] Saving template to database`, {
@@ -71,7 +70,7 @@ export const addTemplate = protectedProcedure
       const [newScene] = await db.insert(scenes).values({
         projectId,
         name: sceneName,
-        tsxCode: uniqueTemplateCode,
+        tsxCode: templateCode,
         duration: templateDuration,
         order: sceneOrder,
         props: {},

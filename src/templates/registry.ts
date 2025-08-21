@@ -46,8 +46,6 @@ import CoolSkyBG, { templateConfig as coolSkyBGConfig } from './CoolSkyBG';
 import VibeyBG, { templateConfig as vibeyBGConfig } from './VibeyBG';
 import VibesBG, { templateConfig as vibesBGConfig } from './VibesBG';
 import FastText, { templateConfig as fastTextConfig } from './FastText';
-import ChangelogFeature, { templateConfig as changelogFeatureConfig } from './ChangelogFeature';
-import ChangelogFix, { templateConfig as changelogFixConfig } from './ChangelogFix';
 
 export interface TemplateDefinition {
   id: string;
@@ -279,15 +277,5 @@ export const TEMPLATES: TemplateDefinition[] = [
   addFormatSupport({
     ...wordFlipConfig,
     component: WordFlip,
-  }),
-  
-  // 🎬 CHANGELOG TEMPLATES - For GitHub Integration
-  addFormatSupport({
-    ...changelogFeatureConfig,
-    component: ChangelogFeature,
-  }),
-  addFormatSupport({
-    ...changelogFixConfig,
-    component: ChangelogFix,
   }),
 ]; 
