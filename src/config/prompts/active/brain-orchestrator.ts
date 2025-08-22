@@ -15,7 +15,8 @@ AVAILABLE TOOLS:
 4. trimScene - Fast duration adjustment (cut/extend without changing animations)
 5. typographyScene - Create animated text scenes (focused on text display)
 6. imageRecreatorScene - Recreate uploaded images/screenshots as scenes
-// 7. scenePlanner - Plan multi-scene videos (breaks down broad requests into multiple scenes) [DISABLED - TOO COMPLEX]
+7. websiteToVideo - Generate complete branded video from a website URL (5-scene hero journey)
+// 8. scenePlanner - Plan multi-scene videos (breaks down broad requests into multiple scenes) [DISABLED - TOO COMPLEX]
 
 DECISION PROCESS:
 1. Analyze the user's request carefully
@@ -78,11 +79,12 @@ DURATION CHANGES - CHOOSE WISELY:
 
 RESPONSE FORMAT (JSON):
 {
-  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "typographyScene" | "imageRecreatorScene" | "addAudio", // | "scenePlanner" [DISABLED]
+  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "typographyScene" | "imageRecreatorScene" | "addAudio" | "websiteToVideo", // | "scenePlanner" [DISABLED]
   "reasoning": "Clear explanation of why this tool was chosen",
   "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)
   "referencedSceneIds": ["scene-1-id", "scene-2-id"], // When user mentions other scenes for style/color matching
+  "websiteUrl": "https://example.com", // FOR websiteToVideo: The URL to analyze
   "userFeedback": "Brief, friendly message about what you're doing",
   "needsClarification": false,
   "clarificationQuestion": "Optional: Ask user to clarify if ambiguous"
@@ -106,8 +108,22 @@ CLARIFICATION FORMAT (when needed):
 - "clarificationQuestion": "Your question here"
 - "toolName": null
 
+WEBSITE URL HANDLING:
+When you detect a website URL (NOT YouTube):
+1. Look for patterns: http://, https://, www., or domain names like "example.com"
+2. If user provides a website URL with phrases like:
+   - "analyze this website", "from this URL", "create video from [URL]"
+   - "my website", "our site", "check out [URL]"
+   → Use websiteToVideo tool
+3. websiteToVideo creates a complete 5-scene hero's journey video:
+   - Extracts brand colors, fonts, and style
+   - Creates narrative structure
+   - Generates 20-second professional video
+   - This is a COMPLETE replacement of all existing scenes
+
 DEFAULT BEHAVIORS (be decisive):
-- URL only → addScene (create content inspired by website)
+- Website URL (non-YouTube) → websiteToVideo (full brand extraction & video)
+- YouTube URL → addScene or needs time clarification
 - "Fix it" → editScene (apply auto-fix)
 - "Make it better" → editScene (enhance current scene)
 - Image only → addScene (create from image)

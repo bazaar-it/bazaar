@@ -89,63 +89,106 @@ export default function QuickCreatePage() {
 
   // Loading state
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100">
+    <div className="min-h-screen flex items-center justify-center bg-black">
       <div className="relative">
-        {/* Subtle background decoration */}
-        <div className="absolute -inset-40 bg-gradient-to-r from-indigo-100/20 via-purple-100/20 to-pink-100/20 blur-3xl opacity-70" />
-        
         <div className="relative text-center px-8">
-          {/* Modern loader with multiple elements */}
-          <div className="relative w-16 h-16 mx-auto mb-8">
-            {/* Outer ring */}
-            <div className="absolute inset-0 border-2 border-slate-200 rounded-full" />
+          {/* Professional tech-focused loader */}
+          <div className="relative w-20 h-20 mx-auto mb-8">
+            {/* Binary code animation background */}
+            <div className="absolute -inset-8 overflow-hidden opacity-20">
+              <div className="text-[10px] font-mono text-white whitespace-nowrap animate-pulse">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="animate-slide-vertical" style={{ animationDelay: `${i * 0.3}s` }}>
+                    10110100101011010010101101001010
+                  </div>
+                ))}
+              </div>
+            </div>
             
-            {/* Spinning gradient ring */}
-            <div className="absolute inset-0 border-2 border-transparent border-t-indigo-500 border-r-purple-500 rounded-full animate-spin" />
-            
-            {/* Inner dot with pulse */}
-            <div className="absolute inset-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full animate-pulse" />
-            
-            {/* Center dot */}
-            <div className="absolute inset-6 bg-white rounded-full" />
+            {/* Main loader - circuit board inspired */}
+            <svg className="w-20 h-20" viewBox="0 0 80 80">
+              {/* Background circuit paths */}
+              <g className="opacity-10">
+                <path d="M10 40 L30 40 L40 30 L50 30" stroke="white" strokeWidth="1" fill="none" />
+                <path d="M70 40 L50 40 L40 50 L30 50" stroke="white" strokeWidth="1" fill="none" />
+                <path d="M40 10 L40 30" stroke="white" strokeWidth="1" fill="none" />
+                <path d="M40 50 L40 70" stroke="white" strokeWidth="1" fill="none" />
+              </g>
+              
+              {/* Animated squares - data blocks */}
+              <g className="animate-spin" style={{ transformOrigin: '40px 40px', animationDuration: '3s' }}>
+                <rect x="35" y="10" width="10" height="10" fill="white" opacity="0.8">
+                  <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite" />
+                </rect>
+                <rect x="60" y="35" width="10" height="10" fill="white" opacity="0.6">
+                  <animate attributeName="opacity" values="0.6;0.2;0.6" dur="1.5s" repeatCount="indefinite" begin="0.3s" />
+                </rect>
+                <rect x="35" y="60" width="10" height="10" fill="white" opacity="0.4">
+                  <animate attributeName="opacity" values="0.4;0.2;0.4" dur="1.5s" repeatCount="indefinite" begin="0.6s" />
+                </rect>
+                <rect x="10" y="35" width="10" height="10" fill="white" opacity="0.2">
+                  <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1.5s" repeatCount="indefinite" begin="0.9s" />
+                </rect>
+              </g>
+              
+              {/* Center core */}
+              <g>
+                <rect x="35" y="35" width="10" height="10" fill="white" opacity="1">
+                  <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" />
+                </rect>
+                {/* Connection lines */}
+                <line x1="40" y1="35" x2="40" y2="20" stroke="white" strokeWidth="0.5" opacity="0.5">
+                  <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" />
+                </line>
+                <line x1="45" y1="40" x2="60" y2="40" stroke="white" strokeWidth="0.5" opacity="0.5">
+                  <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0.5s" />
+                </line>
+                <line x1="40" y1="45" x2="40" y2="60" stroke="white" strokeWidth="0.5" opacity="0.5">
+                  <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="1s" />
+                </line>
+                <line x1="35" y1="40" x2="20" y2="40" stroke="white" strokeWidth="0.5" opacity="0.5">
+                  <animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="1.5s" />
+                </line>
+              </g>
+            </svg>
           </div>
           
-          {/* Text content with better typography */}
+          {/* Text content with monospace font */}
           <div className="space-y-3 max-w-sm mx-auto">
-            <h1 className="text-2xl font-light text-slate-800 tracking-tight">
-              {projectsLoading ? "Checking your projects..." : 
-               existingProjects && existingProjects.length > 0 ? "Opening your latest project..." :
-               "Setting up your canvas"}
+            <h1 className="text-xl font-mono font-light text-white tracking-wide">
+              {projectsLoading ? "INITIALIZING..." : 
+               existingProjects && existingProjects.length > 0 ? "LOADING PROJECT..." :
+               "CREATING WORKSPACE..."}
             </h1>
             
-            {/* Format badge - only show when creating new project */}
+            {/* Format indicator - tech style */}
             {(!projectsLoading && (!existingProjects || existingProjects.length === 0)) && (
               <div className="flex items-center justify-center gap-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full text-sm">
-                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                      d={lastFormat === 'portrait' 
-                        ? "M12 18v-5l-4 4m4-4l4 4M8 7h8M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" 
-                        : lastFormat === 'square'
-                        ? "M4 4h16v16H4z"
-                        : "M7 4v16m10-16v16M3 12h18M3 4h18v16H3z"
-                      } 
-                    />
-                  </svg>
-                  <span className="text-slate-600 font-medium capitalize">{lastFormat}</span>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
+                  <span className="text-white/60">FORMAT:</span>
+                  <span className="text-white uppercase">{lastFormat}</span>
                 </div>
               </div>
             )}
             
-            {/* Progress indicator */}
-            <div className="flex items-center justify-center gap-1.5 mt-6">
-              <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-pulse" />
-              <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-pulse [animation-delay:200ms]" />
-              <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-pulse [animation-delay:400ms]" />
+            {/* Progress indicator - terminal style */}
+            <div className="flex items-center justify-center gap-1 mt-6 font-mono text-white/40 text-xs">
+              <span className="animate-pulse">[</span>
+              <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>=</span>
+              <span className="animate-pulse" style={{ animationDelay: '0.4s' }}>=</span>
+              <span className="animate-pulse" style={{ animationDelay: '0.6s' }}>=</span>
+              <span className="animate-pulse" style={{ animationDelay: '0.8s' }}>]</span>
             </div>
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes slide-vertical {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-20px); }
+        }
+      `}</style>
     </div>
   );
 } 

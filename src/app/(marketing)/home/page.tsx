@@ -4,6 +4,7 @@ import { useState, lazy, Suspense, useCallback, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
 import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
@@ -11,7 +12,6 @@ import TemplateScrollGrid from "~/components/TemplateScrollGrid";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-import AirbnbDemoPlayer from "~/components/AirbnbDemoPlayer";
 
 export function Homepage() {
   const { data: session, status } = useSession();
@@ -124,20 +124,21 @@ export function Homepage() {
           </p>
         </div>
         
+        {/* Marketing Video Player - responsive positioning */}
+        <div className="w-full -mt-8 md:-mt-16 mb-8">
+          <div className="flex justify-center w-full px-2 sm:px-4 md:px-0">
+            <div className="w-full max-w-7xl">
+              <MarketingVideoPlayer />
+            </div>
+          </div>
+        </div>
 
-        {/* Create entire videos section */}
+        {/* Create viral videos section */}
         <section className="mt-0 w-full">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               Create <span className="moving-gradient-text">Viral Videos</span> for your App
             </h2>
-          </div>
-          
-          {/* Airbnb Video Player */}
-          <div className="flex justify-center w-full px-2 sm:px-4">
-            <div className="w-full max-w-5xl flex justify-center">
-              <AirbnbDemoPlayer />
-            </div>
           </div>
         </section>
 

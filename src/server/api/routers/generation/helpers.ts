@@ -11,6 +11,7 @@ import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
 import { AddAudioTool } from "~/tools/addAudio/addAudio";
+import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
 import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
@@ -674,6 +675,47 @@ export async function executeToolFromDecision(
       return {
         success: true,
         // No scene to return for audio addition
+      };
+
+    case 'websiteToVideo':
+      console.log('🌐 [HELPERS] Processing websiteToVideo tool');
+      
+      const websiteInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        websiteUrl: decision.toolContext.websiteUrl || decision.toolContext.userPrompt,
+        style: 'dynamic' as const,
+        duration: 20,
+        webContext: decision.toolContext.webContext, // Pass existing web analysis
+      };
+      
+      const websiteResult = await WebsiteToVideoHandler.execute(websiteInput);
+      
+      if (!websiteResult.success) {
+        throw new Error(websiteResult.error?.message || 'Website to video generation failed');
+      }
+      
+      // Website video was generated successfully - create chat response message
+      if (websiteResult.chatResponse && messageId) {
+        await messageService.createMessage({
+          id: randomUUID(),
+          projectId,
+          content: websiteResult.chatResponse,
+          role: 'assistant',
+          timestamp: new Date(),
+        });
+      }
+      
+      // Return multiple scenes that were created
+      const generatedScenes = await db.query.scenes.findMany({
+        where: eq(scenes.projectId, projectId),
+        orderBy: [scenes.order],
+      });
+      
+      return {
+        success: true,
+        scenes: generatedScenes as any,
       };
 
     default:

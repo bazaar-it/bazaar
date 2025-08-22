@@ -1,4 +1,4 @@
-import type { EnhancedWebAnalysis } from "~/tools/webAnalysis/WebAnalysisEnhanced";
+import type { ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV2";
 import type { FormattedBrandStyle } from "./brand-formatter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
@@ -12,7 +12,7 @@ export interface CustomizedScene {
 export interface CustomizationOptions {
   templates: SelectedTemplate[];
   brandStyle: FormattedBrandStyle;
-  websiteData: EnhancedWebAnalysis;
+  websiteData: ExtractedBrandData; // Use V2 data structure
   narrativeScenes: HeroJourneyScene[];
 }
 
@@ -46,7 +46,7 @@ export class TemplateCustomizer {
   private customizeTemplateCode(
     templateCode: string,
     brandStyle: FormattedBrandStyle,
-    websiteData: EnhancedWebAnalysis,
+    websiteData: ExtractedBrandData,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
@@ -128,20 +128,20 @@ export class TemplateCustomizer {
   
   private replaceContent(
     code: string,
-    websiteData: EnhancedWebAnalysis,
+    websiteData: ExtractedBrandData,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
     let result = code;
     
-    // Replace placeholder texts
+    // Replace placeholder texts - handle V2 data structure
     const contentReplacements = [
       { from: /Your Title Here/gi, to: narrativeScene.title },
       { from: /Your text here/gi, to: narrativeScene.narrative },
       { from: /Lorem ipsum.*/gi, to: narrativeScene.narrative },
-      { from: /Welcome to our platform/gi, to: websiteData.copy.valueProposition.headline },
-      { from: /Get Started/gi, to: websiteData.copy.ctas.primary },
-      { from: /Learn More/gi, to: websiteData.copy.ctas.secondary },
+      { from: /Welcome to our platform/gi, to: websiteData.product?.value_prop?.headline || websiteData.page?.title || 'Welcome' },
+      { from: /Get Started/gi, to: websiteData.ctas?.[0]?.label || 'Get Started' },
+      { from: /Learn More/gi, to: websiteData.ctas?.[1]?.label || websiteData.ctas?.[0]?.label || 'Learn More' },
     ];
     
     // Add visual elements as text
@@ -155,14 +155,14 @@ export class TemplateCustomizer {
     // Add specific content based on emotional beat
     switch (narrativeScene.emotionalBeat) {
       case 'problem':
-        result = result.replace(/The Old Way/gi, websiteData.product.problem || 'The challenge');
+        result = result.replace(/The Old Way/gi, websiteData.product?.problem || 'The challenge');
         break;
       case 'discovery':
-        result = result.replace(/Introducing/gi, `Introducing ${websiteData.title}`);
+        result = result.replace(/Introducing/gi, `Introducing ${websiteData.page?.title || websiteData.brand?.name || 'Our Solution'}`);
         break;
       case 'transformation':
         // Add features
-        websiteData.product.features.slice(0, 3).forEach((feature, index) => {
+        (websiteData.product?.features || []).slice(0, 3).forEach((feature, index) => {
           result = result.replace(
             new RegExp(`Benefit ${index + 1}`, 'gi'),
             feature.title
@@ -171,12 +171,12 @@ export class TemplateCustomizer {
         break;
       case 'triumph':
         // Add social proof
-        if (websiteData.socialProof.stats.customers) {
-          result = result.replace(/1000\+/gi, websiteData.socialProof.stats.customers);
+        if (websiteData.social_proof?.stats?.users || websiteData.social_proof?.stats?.customers) {
+          result = result.replace(/1000\+/gi, websiteData.social_proof.stats.users || websiteData.social_proof.stats.customers);
         }
         break;
       case 'invitation':
-        result = result.replace(/Start Your Journey/gi, websiteData.copy.ctas.primary);
+        result = result.replace(/Start Your Journey/gi, websiteData.ctas?.[0]?.label || 'Get Started');
         break;
     }
     

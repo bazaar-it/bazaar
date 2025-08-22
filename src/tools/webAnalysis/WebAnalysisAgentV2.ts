@@ -186,12 +186,50 @@ export class WebAnalysisAgentV2 {
 
       const page = await context.newPage();
       
-      // Navigate to URL
+      // Navigate to URL with fallback strategy
       console.log('📍 Navigating to page...');
-      await page.goto(url, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
+      let navigationSuccess = false;
+      
+      // Strategy 1: Network idle with longer timeout
+      try {
+        await page.goto(url, { 
+          waitUntil: 'networkidle',
+          timeout: 45000
+        });
+        navigationSuccess = true;
+        console.log('✅ Loaded with networkidle');
+      } catch (error) {
+        console.log('⚠️ Network idle failed, trying domcontentloaded...');
+        
+        // Strategy 2: DOM content loaded
+        try {
+          await page.goto(url, { 
+            waitUntil: 'domcontentloaded',
+            timeout: 30000 
+          });
+          navigationSuccess = true;
+          console.log('✅ Loaded with domcontentloaded');
+        } catch (error2) {
+          console.log('⚠️ DOM content loaded failed, trying basic load...');
+          
+          // Strategy 3: Basic load
+          try {
+            await page.goto(url, { 
+              waitUntil: 'load',
+              timeout: 20000 
+            });
+            navigationSuccess = true;
+            console.log('✅ Loaded with basic load');
+          } catch (error3) {
+            console.log('❌ All navigation strategies failed');
+            throw new Error(`Failed to load ${url} - site may be down or blocking requests`);
+          }
+        }
+      }
+      
+      if (!navigationSuccess) {
+        throw new Error(`Unable to navigate to ${url}`);
+      }
 
       // Wait for dynamic content
       await page.waitForTimeout(2000);
@@ -264,17 +302,26 @@ export class WebAnalysisAgentV2 {
     // 2. Scroll to find key product sections
     const sections = ['features', 'benefits', 'cards', 'savings', 'security', 'app'];
     for (const section of sections) {
-      const element = await page.$(`[class*="${section}"], [id*="${section}"], section:has(*:text-matches("${section}", "i"))`);
-      if (element) {
-        await element.scrollIntoViewIfNeeded();
-        await page.waitForTimeout(300);
-        screenshots.push({
-          buffer: await page.screenshot({ type: 'jpeg', quality: 90 }),
-          type: section,
-          description: `${section.charAt(0).toUpperCase() + section.slice(1)} section`
-        });
-        console.log(`  ✓ Captured ${section} section`);
-        if (screenshots.length >= 5) break; // Max 5 meaningful screenshots
+      try {
+        const element = await page.$(`[class*="${section}"], [id*="${section}"], section:has(*:text-matches("${section}", "i"))`);
+        if (element) {
+          // Use a shorter timeout for scrolling to prevent hanging
+          await Promise.race([
+            element.scrollIntoViewIfNeeded(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Scroll timeout')), 5000))
+          ]);
+          await page.waitForTimeout(300);
+          screenshots.push({
+            buffer: await page.screenshot({ type: 'jpeg', quality: 90 }),
+            type: section,
+            description: `${section.charAt(0).toUpperCase() + section.slice(1)} section`
+          });
+          console.log(`  ✓ Captured ${section} section`);
+          if (screenshots.length >= 5) break; // Max 5 meaningful screenshots
+        }
+      } catch (scrollError) {
+        console.log(`  ⏭ Skipped ${section} section (scroll timeout)`);
+        // Continue to next section instead of failing completely
       }
     }
 
@@ -496,7 +543,8 @@ export class WebAnalysisAgentV2 {
         
         document.querySelectorAll('section, [class*="section"], [id]').forEach(el => {
           const id = el.id?.toLowerCase() || '';
-          const className = el.className?.toLowerCase() || '';
+          const classes = typeof el.className === 'string' ? el.className : el.className?.toString() || '';
+          const className = classes.toLowerCase();
           
           for (const keyword of sectionKeywords) {
             if (id.includes(keyword) || className.includes(keyword)) {

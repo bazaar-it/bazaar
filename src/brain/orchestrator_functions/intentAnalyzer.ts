@@ -221,6 +221,7 @@ Respond with JSON only.`;
       targetSceneId: parsed.targetSceneId,
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
       referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
+      websiteUrl: parsed.websiteUrl, // Pass through website URL for websiteToVideo tool
       userFeedback: parsed.userFeedback,
     };
 

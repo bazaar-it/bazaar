@@ -1534,3 +1534,153 @@ export const iconUsage = createTable("icon_usage", (d) => ({
   index("icon_usage_created_idx").on(t.createdAt),
   index("icon_usage_action_idx").on(t.action),
 ])
+
+// Brand profiles table for storing extracted website brand data
+export const brandProfiles = createTable("brand_profile", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  websiteUrl: d.text("website_url").notNull(),
+  
+  // Complete brand extraction data as JSONB
+  brandData: d.jsonb("brand_data").$type<{
+    colors: {
+      primary: string;
+      secondary: string;
+      accents: string[];
+      neutrals: string[];
+      gradients: Array<{
+        stops: string[];
+        angle: number;
+        type: 'linear' | 'radial';
+      }>;
+    };
+    typography: {
+      fonts: Array<{
+        family: string;
+        weights: number[];
+        fallback?: string;
+      }>;
+      scale: Record<string, any>;
+    };
+    buttons: Record<string, any>;
+    shadows: Record<string, string>;
+    borderRadius: Record<string, string>;
+    iconography: {
+      style: 'line' | 'filled' | 'duotone' | 'mixed';
+      detectedIcons: string[];
+    };
+    imageryStyle: string[];
+    backgroundEffects: string[];
+    logo: {
+      light?: string;
+      dark?: string;
+      monochrome?: string;
+      favicon?: string;
+      ogImage?: string;
+    };
+  }>().notNull().default({}),
+  
+  // Individual extraction elements for quick access
+  colors: d.jsonb("colors").default({}),
+  typography: d.jsonb("typography").default({}),
+  logos: d.jsonb("logos").default({}),
+  
+  // Copy and voice data
+  copyVoice: d.jsonb("copy_voice").$type<{
+    voice: {
+      adjectives: string[];
+      tone: string;
+    };
+    valueProposition: {
+      headline: string;
+      subheadline: string;
+    };
+    taglines: string[];
+    ctas: Record<string, string>;
+  }>().default({}),
+  
+  // Product narrative
+  productNarrative: d.jsonb("product_narrative").$type<{
+    audience: Record<string, any>;
+    problem: string;
+    solution: string;
+    useCases: Array<any>;
+    benefits: Array<any>;
+    features: Array<any>;
+  }>().default({}),
+  
+  // Social proof
+  socialProof: d.jsonb("social_proof").$type<{
+    testimonials: Array<any>;
+    caseStudies: Array<any>;
+    trustBadges: Record<string, any>;
+    logos: string[];
+    stats: Record<string, string>;
+  }>().default({}),
+  
+  // Screenshots and media assets
+  screenshots: d.jsonb("screenshots").$type<Array<{
+    url: string;
+    viewport: string;
+    width: number;
+    height: number;
+    s3Url?: string;
+  }>>().default([]),
+  
+  mediaAssets: d.jsonb("media_assets").$type<Array<{
+    url: string;
+    type: string;
+    s3Url?: string;
+  }>>().default([]),
+  
+  // Metadata
+  extractionVersion: d.text("extraction_version").default("1.0.0"),
+  extractionConfidence: d.jsonb("extraction_confidence").default({}),
+  lastAnalyzedAt: d.timestamp("last_analyzed_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("brand_profiles_project_idx").on(t.projectId),
+  index("brand_profiles_url_idx").on(t.websiteUrl),
+  index("brand_profiles_created_idx").on(t.createdAt),
+]);
+
+// Brand profile versions for tracking changes over time
+export const brandProfileVersions = createTable("brand_profile_version", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  brandProfileId: d.uuid("brand_profile_id")
+    .notNull()
+    .references(() => brandProfiles.id, { onDelete: "cascade" }),
+  versionNumber: d.integer("version_number").notNull(),
+  brandData: d.jsonb("brand_data").notNull(),
+  changedBy: d.varchar("changed_by", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  changeReason: d.text("change_reason"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("brand_versions_profile_idx").on(t.brandProfileId),
+  index("brand_versions_created_idx").on(t.createdAt),
+  uniqueIndex("brand_versions_unique_idx").on(t.brandProfileId, t.versionNumber),
+]);
+
+// Relations for brand profiles
+export const brandProfilesRelations = relations(brandProfiles, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [brandProfiles.projectId],
+    references: [projects.id],
+  }),
+  versions: many(brandProfileVersions),
+}));
+
+export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ one }) => ({
+  brandProfile: one(brandProfiles, {
+    fields: [brandProfileVersions.brandProfileId],
+    references: [brandProfiles.id],
+  }),
+  changedByUser: one(users, {
+    fields: [brandProfileVersions.changedBy],
+    references: [users.id],
+  }),
+}))
