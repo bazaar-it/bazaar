@@ -62,6 +62,7 @@ export function PreviewPanelG({
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
+  const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (dbScenes && dbScenes.length > 0 && currentProps) {
@@ -73,8 +74,27 @@ export function PreviewPanelG({
         return;
       }
       
-      // Database scenes updated, syncing to VideoState
-      setLastSyncedSceneIds(currentSceneIds);
+      // 🔍 SMART SYNC: Check if VideoState already has the same scenes
+      const stateSceneIds = currentProps.scenes?.map((s: any) => s.id).sort().join(',') || '';
+      const dbSceneIdsOnly = dbScenes.map(s => s.id).sort().join(',');
+      
+      if (stateSceneIds === dbSceneIdsOnly) {
+        // VideoState already has these scenes, just update sync tracker
+        console.log('[PreviewPanelG] 🎯 VideoState already up-to-date, skipping redundant sync');
+        setLastSyncedSceneIds(currentSceneIds);
+        return;
+      }
+      
+      // Clear existing sync timer
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+      
+      // Debounce the sync to avoid rapid updates
+      const timer = setTimeout(() => {
+        console.log('[PreviewPanelG] 🔄 Database scenes changed, syncing to VideoState...');
+        // Database scenes updated, syncing to VideoState
+        setLastSyncedSceneIds(currentSceneIds);
       
       // Convert database scenes to InputProps format
       let currentStart = 0;
@@ -119,9 +139,19 @@ export function PreviewPanelG({
         }
       };
       
-      replace(projectId, updatedProps);
+        replace(projectId, updatedProps);
+      }, 300); // 300ms debounce for DB sync
+      
+      setSyncDebounceTimer(timer);
     }
-  }, [dbScenes, projectId]);
+    
+    // Cleanup on unmount or deps change
+    return () => {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+    };
+  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -236,8 +266,15 @@ export function PreviewPanelG({
   
   // Memoized scene fingerprint to prevent unnecessary re-renders
   const scenesFingerprint = useMemo(() => {
-    return `${scenes.length}-${scenes.map(s => `${s.id}-${typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0}`).join(',')}`;
-  }, [scenes.length, scenes.map(s => s.id).join(','), scenes.map(s => typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0).join(',')]);
+    // Check both possible code locations and use actual code content hash
+    return scenes.map(s => {
+      const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
+      // Create stable fingerprint including id, duration, and code hash
+      // Use code length + first 200 chars to detect changes while being stable
+      const codeHash = code ? `${code.length}-${code.substring(0, 200).replace(/\s+/g, '')}` : 'empty';
+      return `${s.id}-${s.duration || 150}-${codeHash}`;
+    }).join('|');
+  }, [scenes]);
   
   // Memoized audio fingerprint to prevent unnecessary re-renders
   const audioFingerprint = useMemo(() => {
@@ -795,6 +832,104 @@ ${singleDestructuring}
 // Preserve native Audio constructor for scenes that might need it
 const NativeAudio = window.NativeAudio || window.Audio;
 
+// Create a wrapper component that loads fonts before rendering the scene
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
+
 ${scene.compiledCode}
 
 // Single Scene Error Boundary
@@ -1060,9 +1195,11 @@ export default function SingleSceneComposition() {
   // Get audio from props
   const projectAudio = window.projectAudio;
   
-  return React.createElement(AbsoluteFill, {},
-    projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
-    React.createElement(SingleSceneErrorBoundary)
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      React.createElement(SingleSceneErrorBoundary)
+    )
   );
 }
         `;
@@ -1418,9 +1555,9 @@ function ${compiled.componentName}WithErrorBoundary() {
               sceneImports.push(compiled.compiledCode);
               sceneImports.push(errorBoundaryWrapper);
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName}WithErrorBoundary />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${compiled.componentName}WithErrorBoundary, {})
+                )
               `);
               
             } else {
@@ -1430,9 +1567,9 @@ function ${compiled.componentName}WithErrorBoundary() {
               // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
               sceneImports.push(compiled.compiledCode);
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName} />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${compiled.componentName}, {})
+                )
               `);
             }
 
@@ -1527,9 +1664,9 @@ function EmergencyScene${index}() {
 }`;
             sceneImports.push(emergencyFallback);
             sceneComponents.push(`
-              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                <EmergencyScene${index} />
-              </Series.Sequence>
+              React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(EmergencyScene${index}, {})
+              )
             `);
           }
         });
@@ -1566,8 +1703,8 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   
   // Load comprehensive font collection in batches to avoid URL length limits
   const fontGroups = [
-    // Group 1: Core Sans-Serif
-    'Inter:wght@100..900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
+    // Group 1: Core Sans-Serif - Ensure Inter 700 is explicitly included
+    'Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
     // Group 2: Extended Sans-Serif
     'Work+Sans:wght@100..900&family=Rubik:wght@300..900&family=Barlow:wght@100..900&family=Kanit:wght@100..900&family=DM+Sans:wght@400..700&family=Plus+Jakarta+Sans:wght@200..800&family=Space+Grotesk:wght@300..700&family=Outfit:wght@100..900&family=Lexend:wght@100..900&family=Manrope:wght@200..800',
     // Group 3: Serif & Display
@@ -1589,6 +1726,104 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   window.bazaarFontsLoaded = true;
   console.log('[Bazaar] Google Fonts loaded for consistent rendering');
 }
+
+// Create a wrapper component that loads fonts before rendering scenes
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
 
 ${sceneImports.join('\n\n')}
 
@@ -1651,15 +1886,15 @@ export default function MultiSceneComposition(props) {
     }
   }, [projectAudio]);
   
-  return (
-    <AbsoluteFill>
-      {projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio })}
-      <Loop durationInFrames={${totalDuration}}>
-        <Series>
-          ${sceneComponents.join('\n          ')}
-        </Series>
-      </Loop>
-    </AbsoluteFill>
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      React.createElement(Loop, { durationInFrames: ${totalDuration} },
+        React.createElement(Series, {},
+          ${sceneComponents.join(',\n          ')}
+        )
+      )
+    )
   );
 }
         `;
@@ -1838,29 +2073,65 @@ export default function FallbackComposition() {
     }
   }, [scenes]);
 
-  // 🚨 FIX: Debounced compilation to prevent multiple rapid recompiles
-  const [compilationDebounceTimer, setCompilationDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 🚨 SMART COMPILATION: Use ref to avoid recreating timer on every render
+  const compilationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCompiledFingerprintRef = useRef<string>('');
+  const isCompilingRef = useRef<boolean>(false);
   
   useEffect(() => {
     if (scenes.length > 0) {
-      // Clear existing timer
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
+      
+      // Skip if fingerprint hasn't actually changed (prevents duplicate compiles)
+      if (currentFingerprint === lastCompiledFingerprintRef.current) {
+        console.log('[PreviewPanelG] 🎯 Fingerprint unchanged, skipping compilation');
+        return;
       }
       
-      // Set new debounced timer
-      const timer = setTimeout(() => {
-        // Scenes changed (debounced), recompiling
-        compileMultiSceneComposition();
-      }, 100); // 100ms debounce
+      // Skip if already compiling
+      if (isCompilingRef.current) {
+        console.log('[PreviewPanelG] ⏳ Already compiling, will queue next compilation');
+      }
       
-      setCompilationDebounceTimer(timer);
+      // Clear existing timer
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
+      }
+      
+      // Set new debounced timer with increased delay to batch rapid updates
+      compilationTimerRef.current = setTimeout(async () => {
+        // Double-check fingerprint hasn't become the same during debounce
+        const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
+        if (latestFingerprint === lastCompiledFingerprintRef.current) {
+          console.log('[PreviewPanelG] 🎯 Fingerprint became unchanged during debounce, skipping');
+          return;
+        }
+        
+        // Prevent overlapping compilations
+        if (isCompilingRef.current) {
+          console.log('[PreviewPanelG] ⏳ Still compiling previous, skipping this update');
+          return;
+        }
+        
+        console.log('[PreviewPanelG] 📝 Scene content changed, triggering compilation');
+        console.log('[PreviewPanelG] Old fingerprint:', lastCompiledFingerprintRef.current?.substring(0, 50) + '...');
+        console.log('[PreviewPanelG] New fingerprint:', latestFingerprint.substring(0, 50) + '...');
+        
+        isCompilingRef.current = true;
+        lastCompiledFingerprintRef.current = latestFingerprint;
+        
+        try {
+          await compileMultiSceneComposition();
+        } finally {
+          isCompilingRef.current = false;
+        }
+      }, 600); // Increased to 600ms to better batch rapid updates
     }
     
     // Cleanup on unmount
     return () => {
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
       }
     };
   }, [scenesFingerprint, audioFingerprint, compileMultiSceneComposition]);

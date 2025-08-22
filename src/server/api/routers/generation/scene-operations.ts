@@ -410,7 +410,8 @@ export const generateScene = protectedProcedure
 
       // 9. Return universal response
       // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
-      if (!toolResult.scene) {
+      // Also handle websiteToVideo which returns multiple scenes
+      if (!toolResult.scene && !toolResult.scenes) {
         /* [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
         if (decision.toolName === 'scenePlanner') {
           // Scene planner succeeded - increment usage
@@ -427,6 +428,26 @@ export const generateScene = protectedProcedure
             'scene'
           ) as any as SceneCreateResponse;
         // }
+      }
+      
+      // Handle websiteToVideo which returns multiple scenes
+      if (decision.toolName === 'websiteToVideo' && toolResult.scenes) {
+        // Increment usage for successful generation
+        await UsageService.incrementPromptUsage(userId);
+        
+        // Return the first scene as the primary response, but all scenes are already saved
+        const primaryScene = toolResult.scenes[0];
+        const successResponse = response.success(
+          primaryScene,
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
+        
+        // Add metadata about all scenes created
+        successResponse.data.additionalScenes = toolResult.scenes.length - 1;
+        successResponse.data.allSceneIds = toolResult.scenes.map((s: any) => s.id);
+        
+        return successResponse;
       }
 
       // Scene is already a proper SceneEntity from the database

@@ -30,7 +30,7 @@ export class HeroJourneyGenerator {
     scenes.push({
       title: "The Old World",
       duration: 90, // 3 seconds at 30fps
-      narrative: extraction.product.problem || "The status quo is broken",
+      narrative: extraction.product?.problem || "The status quo is broken",
       visualElements: [
         "Dark, muted colors transitioning",
         "Traditional bank imagery fading/cracking",
@@ -38,7 +38,7 @@ export class HeroJourneyGenerator {
         "Red X marks, barriers, walls"
       ],
       brandElements: {
-        colors: [extraction.brand.colors.neutrals[1], "#FF0000"], // Dark + warning red
+        colors: [extraction.brand?.colors?.neutrals?.[1] || "#1a1a1a", "#FF0000"], // Dark + warning red
         typography: "Heavy, slow text reveal",
         motion: "Slow, restrictive movements"
       },
@@ -49,15 +49,15 @@ export class HeroJourneyGenerator {
     scenes.push({
       title: "The Discovery",
       duration: 60, // 2 seconds
-      narrative: extraction.product.value_prop.headline,
+      narrative: extraction.product?.value_prop?.headline || "A new way forward",
       visualElements: [
         "Logo appears with light burst",
         "Color injection into grayscale world",
-        `"${extraction.product.value_prop.headline}" animates in`,
+        extraction.product?.value_prop?.headline ? `"${extraction.product.value_prop.headline}" animates in` : "Bold text animates in",
         "Phone/app interface materializes"
       ],
       brandElements: {
-        colors: [extraction.brand.colors.primary, extraction.brand.colors.accents[0]], // Brand colors emerge
+        colors: [extraction.brand?.colors?.primary || "#000000", extraction.brand?.colors?.accents?.[0] || "#0066ff"], // Brand colors emerge
         typography: "Bold headline with gradient",
         motion: "Energetic entrance, spring animations"
       },
@@ -72,11 +72,11 @@ export class HeroJourneyGenerator {
       visualElements: [
         // Feature 1: Cards
         "3D card rotating, multiple cards fanning out",
-        `"${extraction.product.features[0].title}" with icon`,
+        extraction.product?.features?.[0]?.title ? `"${extraction.product.features[0].title}" with icon` : "Premium cards showcase",
         
         // Feature 2: Savings
         "Money growing animation, percentage counter",
-        `"${extraction.product.features[1].desc}"`,
+        extraction.product?.features?.[1]?.desc ? `"${extraction.product.features[1].desc}"` : "Smart savings features",
         
         // Feature 3: Global
         "World map with connection lines",
@@ -87,7 +87,7 @@ export class HeroJourneyGenerator {
         "24/7 badge appearing"
       ],
       brandElements: {
-        colors: extraction.brand.colors.accents, // Full color palette
+        colors: extraction.brand?.colors?.accents || ["#0066ff", "#00ff66", "#ff0066"], // Full color palette
         typography: "Dynamic, varied sizes",
         motion: "Quick cuts, parallax layers, smooth transitions"
       },
@@ -100,14 +100,14 @@ export class HeroJourneyGenerator {
       duration: 90, // 3 seconds
       narrative: "Join millions who've already transformed their finances",
       visualElements: [
-        `"${extraction.social_proof.stats.users}" counter animation`,
+        extraction.social_proof?.stats?.users ? `"${extraction.social_proof.stats.users}" counter animation` : "Millions of users counter",
         "Trust badges appearing",
         "Award icons sliding in",
-        `"${extraction.social_proof.stats.rating}" stars filling`,
+        extraction.social_proof?.stats?.rating ? `"${extraction.social_proof.stats.rating}" stars filling` : "5-star rating animation",
         "Happy user testimonials or avatars"
       ],
       brandElements: {
-        colors: [extraction.brand.colors.accents[2], extraction.brand.colors.primary], // Gold/success colors
+        colors: [extraction.brand?.colors?.accents?.[2] || "#FFD700", extraction.brand?.colors?.primary || "#000000"], // Gold/success colors
         typography: "Celebratory, confident",
         motion: "Triumphant, upward movements"
       },
@@ -118,16 +118,16 @@ export class HeroJourneyGenerator {
     scenes.push({
       title: "Your Journey Begins",
       duration: 60, // 2 seconds
-      narrative: extraction.product.value_prop.subhead,
+      narrative: extraction.product?.value_prop?.subhead || "Start your journey today",
       visualElements: [
         "CTA button pulsing",
-        `"${extraction.ctas[0].label}" text`,
+        extraction.ctas?.[0]?.label ? `"${extraction.ctas[0].label}" text` : "Get Started text",
         "App store badges",
         "QR code or download link",
         "Tagline as final message"
       ],
       brandElements: {
-        colors: [extraction.brand.colors.primary, extraction.brand.colors.secondary],
+        colors: [extraction.brand?.colors?.primary || "#000000", extraction.brand?.colors?.secondary || "#666666"],
         typography: "Clear CTA style",
         motion: "Inviting pulse, gentle bounce"
       },

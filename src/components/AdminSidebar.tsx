@@ -25,7 +25,8 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/promo-codes' ? 'promo-codes' :
     pathname === '/admin/paywall-analytics' ? 'paywall-analytics' :
     pathname === '/admin/evals' ? 'evals' :
-    pathname === '/admin/error-analytics' ? 'error-analytics' : 'homepage';
+    pathname === '/admin/error-analytics' ? 'error-analytics' :
+    pathname === '/admin/brand-extraction' ? 'brand-extraction' : 'homepage';
 
   return (
     <div className="w-72 bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl min-h-screen">
@@ -86,6 +87,22 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Analytics
+            </Link>
+
+            {/* Brand Extraction */}
+            <Link 
+              href="/admin/brand-extraction"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'brand-extraction'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+              <span className="font-medium">Brand Extraction</span>
+              <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-500 text-black rounded-full">NEW</span>
             </Link>
 
             {/* Marketing Dashboard */}

@@ -1,4 +1,4 @@
-import { chromium, Page } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import { uploadWebAnalysisScreenshots } from '~/lib/utils/r2-upload';
 
 /**
@@ -661,7 +661,7 @@ export class EnhancedWebAnalyzer {
       const extractLayout = () => {
         const sections = Array.from(document.querySelectorAll('section, [class*="section"]'))
           .map(el => {
-            const classes = el.className;
+            const classes = typeof el.className === 'string' ? el.className : el.className?.toString() || '';
             if (classes.includes('hero')) return 'hero';
             if (classes.includes('feature')) return 'features';
             if (classes.includes('testimonial') || classes.includes('social')) return 'social-proof';
@@ -774,28 +774,121 @@ export class EnhancedWebAnalyzer {
   }
   
   private async captureScreenshots(page: Page, projectId?: string, userId?: string) {
-    // Desktop
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    const desktop = await page.screenshot({ type: 'png', fullPage: false });
+    console.log('📸 Capturing multi-viewport screenshots...');
     
-    // Mobile
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobile = await page.screenshot({ type: 'png', fullPage: false });
+    const viewports = [
+      { name: 'mobile', width: 390, height: 844, device: 'iPhone 14' },
+      { name: 'tablet', width: 768, height: 1024, device: 'iPad' },
+      { name: 'desktop', width: 1440, height: 900, device: 'MacBook' },
+      { name: 'wide', width: 1920, height: 1080, device: 'Full HD' },
+    ];
     
-    // Upload if needed
-    if (projectId) {
-      try {
-        const urls = await uploadWebAnalysisScreenshots(
-          { desktop, mobile },
-          projectId,
-          userId
-        );
-        return { desktop, mobile, urls };
-      } catch (error) {
-        console.error('Failed to upload screenshots:', error);
+    const screenshots: Array<{
+      name: string;
+      viewport: string;
+      width: number;
+      height: number;
+      device: string;
+      buffer: Buffer;
+      url?: string;
+    }> = [];
+    
+    for (const viewport of viewports) {
+      console.log(`  📱 Capturing ${viewport.name} (${viewport.width}x${viewport.height})`);
+      
+      // Set viewport
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      
+      // Wait for any responsive changes to settle
+      await page.waitForTimeout(500);
+      
+      // Capture hero section (above fold)
+      const heroScreenshot = await page.screenshot({ 
+        type: 'png', 
+        fullPage: false,
+        clip: {
+          x: 0,
+          y: 0,
+          width: viewport.width,
+          height: viewport.height
+        }
+      });
+      
+      screenshots.push({
+        name: `${viewport.name}_hero`,
+        viewport: viewport.name,
+        width: viewport.width,
+        height: viewport.height,
+        device: viewport.device,
+        buffer: heroScreenshot,
+      });
+      
+      // For desktop/wide, also capture a scrolled view
+      if (viewport.name === 'desktop' || viewport.name === 'wide') {
+        // Scroll to middle of page
+        await page.evaluate(() => {
+          const maxScroll = document.body.scrollHeight - window.innerHeight;
+          window.scrollTo(0, maxScroll / 2);
+        });
+        await page.waitForTimeout(300);
+        
+        const midScreenshot = await page.screenshot({ 
+          type: 'png', 
+          fullPage: false 
+        });
+        
+        screenshots.push({
+          name: `${viewport.name}_middle`,
+          viewport: viewport.name,
+          width: viewport.width,
+          height: viewport.height,
+          device: viewport.device,
+          buffer: midScreenshot,
+        });
+        
+        // Scroll back to top for next viewport
+        await page.evaluate(() => window.scrollTo(0, 0));
       }
     }
     
-    return { desktop, mobile };
+    // Upload all screenshots if projectId provided
+    if (projectId && userId) {
+      try {
+        console.log('  ☁️ Uploading screenshots to R2...');
+        
+        for (const screenshot of screenshots) {
+          const key = `projects/${projectId}/brand-extraction/${screenshot.name}.png`;
+          const uploadResult = await uploadWebAnalysisScreenshots(
+            { [screenshot.name]: screenshot.buffer },
+            projectId,
+            userId
+          );
+          
+          if (uploadResult && uploadResult[screenshot.name]) {
+            screenshot.url = uploadResult[screenshot.name];
+          }
+        }
+        
+        console.log('  ✅ Screenshots uploaded successfully');
+      } catch (error) {
+        console.error('  ❌ Failed to upload screenshots:', error);
+      }
+    }
+    
+    // Return structured screenshot data
+    return {
+      screenshots: screenshots.map(s => ({
+        name: s.name,
+        viewport: s.viewport,
+        width: s.width,
+        height: s.height,
+        device: s.device,
+        url: s.url,
+      })),
+      raw: screenshots.reduce((acc, s) => {
+        acc[s.name] = s.buffer;
+        return acc;
+      }, {} as Record<string, Buffer>)
+    };
   }
 }

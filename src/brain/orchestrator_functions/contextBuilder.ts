@@ -188,6 +188,31 @@ export class ContextBuilder {
         return undefined;
       }
       
+      // SKIP analysis if the prompt is ONLY a URL (websiteToVideo will handle it)
+      // Extract just the first line (the actual user input) before any [CONTEXT: ...] additions
+      const firstLine = input.prompt.split('\n')[0].trim();
+      const cleanPrompt = firstLine.replace(/[.,;!?)+\s]+$/, '');
+      const cleanUrl = targetUrl.replace(/[.,;!?)+]+$/, '');
+      
+      // Debug logging
+      console.log('📚 [CONTEXT BUILDER] URL Detection Debug:', {
+        originalPrompt: input.prompt,
+        firstLine,
+        cleanPrompt,
+        targetUrl,
+        cleanUrl,
+        isPlainUrl: cleanPrompt === targetUrl || cleanPrompt === cleanUrl || firstLine === targetUrl,
+      });
+      
+      const promptIsJustUrl = cleanPrompt === targetUrl || 
+                              cleanPrompt === cleanUrl ||
+                              firstLine === targetUrl;
+      
+      if (promptIsJustUrl) {
+        console.log('📚 [CONTEXT BUILDER] ✅ Plain URL detected - skipping analysis (websiteToVideo tool will handle)');
+        return undefined;
+      }
+      
       console.log(`📚 [CONTEXT BUILDER] Analyzing website: ${targetUrl}`);
       
       // Dynamic import to ensure server-side only execution
@@ -207,6 +232,16 @@ export class ContextBuilder {
       if (!analysis.success) {
         console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${analysis.error}`);
         return undefined;
+      }
+      
+      // Save to brand profile table
+      try {
+        const { saveBrandProfile } = await import('~/server/services/website/save-brand-profile');
+        await saveBrandProfile(input.projectId, targetUrl, analysis);
+        console.log(`📚 [CONTEXT BUILDER] 💾 Brand profile saved to database`);
+      } catch (error) {
+        console.error(`📚 [CONTEXT BUILDER] Failed to save brand profile:`, error);
+        // Continue even if save fails
       }
       
       // Return structured web context

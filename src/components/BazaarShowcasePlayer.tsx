@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import AirbnbVideoPlayer from "~/components/AirbnbVideoPlayerProper";
-import AirbnbDemoPlayer from "~/components/AirbnbDemoPlayer";
+import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
 
 interface BazaarShowcasePlayerProps {
   className?: string;
@@ -12,10 +12,10 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
   const showcaseVideos = [
     {
       id: 1,
-      title: "Property Listing Demo",
-      description: "Mobile-optimized property browsing experience",
-      type: "airbnb",
-      component: AirbnbDemoPlayer
+      title: "Marketing Demo",
+      description: "Professional marketing video showcase",
+      type: "marketing",
+      component: MarketingVideoPlayer
     },
     {
       id: 2,
@@ -26,10 +26,10 @@ export default function BazaarShowcasePlayer({ className }: BazaarShowcasePlayer
     },
     {
       id: 3,
-      title: "Mobile App Experience",
-      description: "Native mobile app interactions and animations",
-      type: "airbnb",
-      component: AirbnbDemoPlayer
+      title: "Interactive Demo",
+      description: "Dynamic interactions and animations",
+      type: "marketing",
+      component: MarketingVideoPlayer
     }
   ];
 

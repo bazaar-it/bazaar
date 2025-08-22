@@ -319,15 +319,18 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         // Note: The server already creates the "Added template:" message in the database
         // so we don't need to create it client-side to avoid duplicates
         
-        // Still invalidate caches for consistency with database
-        await utils.generation.getProjectScenes.invalidate({ projectId });
-        await utils.chat.getMessages.invalidate({ projectId });
-        
-        // Call the callback if provided
+        // Call the callback first, before cache invalidation to prevent double refresh
         if (onSceneGenerated && result.scene?.id) {
-          console.log('[TemplatesPanelG] Triggering additional video state update...');
+          console.log('[TemplatesPanelG] Calling onSceneGenerated callback...');
           await onSceneGenerated(result.scene.id);
         }
+        
+        // Delay cache invalidation slightly to let video state settle and avoid double compilation
+        setTimeout(async () => {
+          console.log('[TemplatesPanelG] Invalidating caches after state settled...');
+          await utils.generation.getProjectScenes.invalidate({ projectId });
+          await utils.chat.getMessages.invalidate({ projectId });
+        }, 200);
         
         console.log('[TemplatesPanelG] ✅ Video state updated and caches invalidated');
       } else {

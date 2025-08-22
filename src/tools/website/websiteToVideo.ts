@@ -3,7 +3,15 @@
  * Analyzes a website and generates a complete video with hero's journey narrative
  */
 
-import type { ToolExecutionResult } from "~/lib/types/ai/tools.types";
+// Tool execution result interface
+interface ToolExecutionResult {
+  success: boolean;
+  toolName: string;
+  data?: Record<string, any>;
+  error?: { message: string; code: string };
+  reasoning: string;
+  chatResponse?: string;
+}
 
 export interface WebsiteToVideoInput {
   websiteUrl: string;

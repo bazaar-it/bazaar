@@ -138,8 +138,8 @@ export class BrandFormatter {
   private determineAnimationStyle(websiteData: EnhancedWebAnalysis): 'minimal' | 'dynamic' | 'bold' {
     const { brand, layout } = websiteData;
     
-    // Check for animation hints
-    if (layout.motionHints?.hasAnimations) {
+    // Check for animation hints - handle undefined layout
+    if (layout?.motionHints?.hasAnimations) {
       const animTypes = layout.motionHints.animationTypes || [];
       if (animTypes.includes('parallax') || animTypes.includes('3d')) {
         return 'bold';

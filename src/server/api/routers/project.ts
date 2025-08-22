@@ -6,7 +6,7 @@ import { eq, desc, like, and, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
-import { applyPatch } from "fast-json-patch";
+import * as jsonPatch from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
@@ -344,7 +344,7 @@ export const projectRouter = createTRPCRouter({
 
         // Apply the JSON patch
         const patchOperations = input.patch as unknown as Operation[];
-        const nextProps = applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
+        const nextProps = jsonPatch.applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
         
         // Save the new props and the patch
         const updated = await ctx.db
