@@ -1,4 +1,4 @@
-# Bazaar-Vid: AI-Powered Video Creation Platform
+# Bazaar.it: AI-Powered Motion graphics for software demos
 
 ## Database Access Note
 Use MCP tools to query both dev and prod Neon databases:
@@ -42,7 +42,7 @@ Use MCP tools to query both dev and prod Neon databases:
 
 ## Project Overview
 
-Bazaar-Vid is a sophisticated full-stack video creation platform that enables users to generate custom video content through natural language prompts. Built with Next.js 15, Remotion, and AI services, it provides real-time collaboration and dynamic component generation.
+Bazaar.it is a sophisticated full-stack video creation platform that enables users to generate custom video content through natural language prompts. Built with Next.js 15, Remotion, and AI services, it provides real-time collaboration and dynamic component generation.
 
 ## System Architecture & Simplification
 

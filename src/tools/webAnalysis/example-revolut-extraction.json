@@ -1,0 +1,67 @@
+{
+  "page": {
+    "url": "https://www.revolut.com/",
+    "title": "Revolut - Change the way you money",
+    "sections": ["hero", "cards", "savings", "virtual_cards", "social_proof", "salary", "security", "commodities", "stocks", "pricing"]
+  },
+  "brand": {
+    "colors": {
+      "primary": "#000000",
+      "secondary": "#FFFFFF",
+      "accents": ["#6F00FF", "#FF007A", "#FFD700", "#00FF66"],
+      "neutrals": ["#F5F5F5", "#1A1A1A"],
+      "gradients": [
+        {"type": "linear", "angle": 135, "stops": ["#6F00FF", "#FF007A"]},
+        {"type": "linear", "angle": 45, "stops": ["#FFD700", "#00FF66"]}
+      ]
+    },
+    "typography": {
+      "fonts": [{"family": "Inter", "weights": [400, 600, 700]}],
+      "scale": {
+        "h1": {"size": "48px", "weight": "700", "lineHeight": "1.2"},
+        "h2": {"size": "36px", "weight": "600", "lineHeight": "1.3"},
+        "body": {"size": "16px", "weight": "400", "lineHeight": "1.5"}
+      }
+    },
+    "buttons": {
+      "radius": "20px",
+      "padding": "16px 32px",
+      "shadow": "0 4px 12px rgba(0,0,0,0.1)",
+      "styles": {
+        "primary": {
+          "label": "Download the app",
+          "background": "#000000",
+          "color": "#FFFFFF",
+          "hover": {"background": "#1A1A1A", "transform": "translateY(-2px)"}
+        }
+      }
+    },
+    "imagery_style": ["photography", "3D product renders", "gradient overlays"],
+    "voice": {
+      "adjectives": ["confident", "aspirational", "modern", "secure"],
+      "taglines": ["Change the way you money", "Elevate your spend", "Go beyond banking"]
+    }
+  },
+  "product": {
+    "value_prop": {
+      "headline": "Change the way you money",
+      "subhead": "Move freely between countries and currencies. Sign up for free, in a tap."
+    },
+    "problem": "Traditional banking is restrictive, slow, and costly",
+    "solution": "Modern financial app with global money transfers, cards, savings, and investments",
+    "features": [
+      {"title": "Debit & Virtual Cards", "desc": "Earn points, pay globally", "icon": "credit-card"},
+      {"title": "Savings", "desc": "Up to 4.5% interest, paid daily", "icon": "piggy-bank"},
+      {"title": "Security", "desc": "Fraud detection, 24/7 protection", "icon": "shield"},
+      {"title": "Stocks", "desc": "Trade 2,500+ stocks commission-free", "icon": "trending-up"}
+    ],
+    "metrics": ["60M+ users", "4.5% savings rate", "2,500+ stocks", "24/7 security"]
+  },
+  "social_proof": {
+    "stats": {
+      "users": "60+ million worldwide",
+      "rating": "4.5/5 Trustpilot",
+      "awards": ["Fast Company Most Innovative", "FS Tech App of the Year"]
+    }
+  }
+}

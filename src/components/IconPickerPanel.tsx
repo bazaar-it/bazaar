@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { Search, Copy, Check, Info, Palette, Grid3x3 } from 'lucide-react';
+import { initializeOfflineIcons } from '~/lib/iconify-offline';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -16,9 +17,9 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip';
 
-// Popular icon collections with their prefixes
-const ICON_COLLECTIONS = [
-  { name: 'All Collections', prefix: 'all', count: '200,000+' },
+// Popular icon libraries with their prefixes
+const ICON_LIBRARIES = [
+  { name: 'All Libraries', prefix: 'all', count: '200,000+' },
   { name: 'Material Design', prefix: 'mdi', count: '7,000+' },
   { name: 'Font Awesome', prefix: 'fa6-solid', count: '2,000+' },
   { name: 'Heroicons', prefix: 'heroicons', count: '300+' },
@@ -35,56 +36,60 @@ const ICON_COLLECTIONS = [
   { name: 'Ant Design', prefix: 'ant-design', count: '800+' },
 ];
 
-// Common icon searches for software demos
-const QUICK_SEARCHES = [
-  'github', 'git', 'code', 'terminal', 'api', 'database', 'cloud', 'docker',
-  'react', 'vue', 'angular', 'nodejs', 'python', 'javascript', 'typescript',
-  'vscode', 'settings', 'bug', 'debug', 'play', 'stop', 'refresh', 'sync',
-];
 
-// Popular icons for software demos and motion graphics
+
+// Popular Lucide icons for clean, modern interfaces
 const POPULAR_ICONS = [
-  // Developer & Brand Icons (ESSENTIAL FOR SOFTWARE DEMOS)
-  'mdi:github', 'simple-icons:github', 'fa6-brands:github', 'tabler:brand-github',
-  'mdi:gitlab', 'simple-icons:gitlab', 'fa6-brands:gitlab',
-  'simple-icons:visualstudiocode', 'simple-icons:react', 'simple-icons:nodejs',
-  'simple-icons:typescript', 'simple-icons:javascript', 'simple-icons:python',
-  'simple-icons:docker', 'simple-icons:kubernetes', 'simple-icons:amazonaws',
-  'simple-icons:vercel', 'simple-icons:netlify', 'simple-icons:firebase',
-  'mdi:api', 'mdi:database', 'mdi:server', 'mdi:cloud', 'mdi:code-tags',
-  'mdi:console', 'mdi:terminal', 'mdi:source-branch', 'mdi:source-fork',
-  'mdi:source-merge', 'mdi:source-pull', 'mdi:git', 'mdi:npm',
+  // Essential UI icons
+  'lucide:home', 'lucide:menu', 'lucide:search', 'lucide:settings', 'lucide:user',
+  'lucide:bell', 'lucide:heart', 'lucide:star', 'lucide:bookmark', 'lucide:share',
+  'lucide:more-horizontal', 'lucide:more-vertical', 'lucide:x', 'lucide:plus',
+  'lucide:minus', 'lucide:check', 'lucide:chevron-right', 'lucide:chevron-left',
+  'lucide:chevron-up', 'lucide:chevron-down', 'lucide:arrow-right', 'lucide:arrow-left',
+  'lucide:arrow-up', 'lucide:arrow-down', 'lucide:external-link', 'lucide:link',
   
-  // UI/UX Icons for Software
-  'mdi:monitor', 'mdi:laptop', 'mdi:cellphone', 'mdi:tablet', 'mdi:responsive',
-  'mdi:window-maximize', 'mdi:window-minimize', 'mdi:window-close',
-  'mdi:dock-window', 'mdi:application', 'mdi:widgets', 'mdi:view-dashboard',
+  // Media & Content
+  'lucide:play', 'lucide:pause', 'lucide:stop', 'lucide:skip-forward',
+  'lucide:skip-back', 'lucide:volume-2', 'lucide:volume-x', 'lucide:camera',
+  'lucide:video', 'lucide:image', 'lucide:file', 'lucide:folder',
+  'lucide:download', 'lucide:upload', 'lucide:edit', 'lucide:trash-2',
   
-  // Common Software Actions
-  'mdi:play', 'mdi:pause', 'mdi:stop', 'mdi:debug-step-over', 'mdi:bug',
-  'mdi:download', 'mdi:upload', 'mdi:sync', 'mdi:refresh', 'mdi:reload',
-  'mdi:save', 'mdi:content-save', 'mdi:export', 'mdi:import',
+  // Communication
+  'lucide:message-circle', 'lucide:message-square', 'lucide:mail',
+  'lucide:phone', 'lucide:phone-call', 'lucide:video-off', 'lucide:mic',
+  'lucide:mic-off', 'lucide:send', 'lucide:inbox', 'lucide:reply',
   
-  // Navigation & UI Elements
-  'mdi:home', 'mdi:menu', 'mdi:close', 'mdi:settings', 'mdi:magnify',
-  'mdi:chevron-right', 'mdi:chevron-left', 'mdi:arrow-up', 'mdi:arrow-down',
-  'mdi:plus', 'mdi:minus', 'mdi:check', 'mdi:close-circle', 'mdi:alert-circle',
+  // Business & Finance
+  'lucide:shopping-cart', 'lucide:shopping-bag', 'lucide:credit-card',
+  'lucide:dollar-sign', 'lucide:trending-up', 'lucide:trending-down',
+  'lucide:bar-chart', 'lucide:pie-chart', 'lucide:activity', 'lucide:target',
   
-  // File & Folder Icons
-  'mdi:file-code', 'mdi:file-document', 'mdi:folder', 'mdi:folder-open',
-  'mdi:file-tree', 'mdi:file-multiple', 'mdi:zip-box', 'mdi:package-variant',
+  // Technology
+  'lucide:smartphone', 'lucide:laptop', 'lucide:monitor', 'lucide:tablet',
+  'lucide:wifi', 'lucide:wifi-off', 'lucide:bluetooth', 'lucide:battery',
+  'lucide:zap', 'lucide:cpu', 'lucide:hard-drive', 'lucide:server',
   
-  // Communication & Collaboration
-  'mdi:message', 'mdi:comment-text', 'mdi:slack', 'simple-icons:slack',
-  'mdi:microsoft-teams', 'simple-icons:discord', 'mdi:video', 'mdi:microphone',
+  // Tools & Actions
+  'lucide:save', 'lucide:copy', 'lucide:scissors', 'lucide:refresh-cw',
+  'lucide:rotate-ccw', 'lucide:undo', 'lucide:redo', 'lucide:maximize',
+  'lucide:minimize', 'lucide:filter', 'lucide:sort-asc', 'lucide:sort-desc',
   
-  // Data & Analytics
-  'mdi:chart-line', 'mdi:chart-bar', 'mdi:chart-pie', 'mdi:google-analytics',
-  'mdi:trending-up', 'mdi:trending-down', 'mdi:database', 'mdi:table',
+  // Status & Alerts
+  'lucide:check-circle', 'lucide:x-circle', 'lucide:alert-circle',
+  'lucide:alert-triangle', 'lucide:info', 'lucide:help-circle',
+  'lucide:shield', 'lucide:lock', 'lucide:unlock', 'lucide:eye',
+  'lucide:eye-off', 'lucide:thumbs-up', 'lucide:thumbs-down',
   
-  // Security & Auth
-  'mdi:lock', 'mdi:lock-open', 'mdi:shield', 'mdi:key', 'mdi:fingerprint',
-  'mdi:two-factor-authentication', 'mdi:account-key', 'mdi:certificate',
+  // Navigation & Layout
+  'lucide:map-pin', 'lucide:compass', 'lucide:navigation', 'lucide:move',
+  'lucide:grid', 'lucide:layout', 'lucide:sidebar', 'lucide:panel-left',
+  'lucide:panel-right', 'lucide:columns', 'lucide:rows', 'lucide:square',
+  'lucide:circle', 'lucide:triangle', 'lucide:hexagon',
+  
+  // Time & Calendar
+  'lucide:clock', 'lucide:calendar', 'lucide:calendar-days', 'lucide:timer',
+  'lucide:stopwatch', 'lucide:alarm-clock', 'lucide:history', 'lucide:fast-forward',
+  'lucide:rewind', 'lucide:pause-circle', 'lucide:play-circle',
 ];
 
 interface IconPickerPanelProps {
@@ -99,6 +104,11 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
+  // Initialize offline icons once on mount
+  useEffect(() => {
+    initializeOfflineIcons();
+  }, []);
+  
   // Get project ID from URL params
   const params = useParams();
   const projectId = params?.id as string | undefined;
@@ -111,7 +121,7 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
     {
       query: debouncedSearch,
       collection: selectedCollection,
-      limit: 100,
+      limit: 120,
     },
     {
       enabled: true, // Always search, even with empty query (shows popular)
@@ -230,7 +240,7 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
   }, [addToRecentlyUsed, trackIconUsage, projectId, searchQuery, recentlyUsed]);
 
   // Use real search results or fallback to popular icons
-  const displayIcons = searchResults?.icons || POPULAR_ICONS.slice(0, 50);
+  const displayIcons = searchResults?.icons || POPULAR_ICONS.slice(0, 120);
 
   return (
     <div className="h-full flex flex-col">
@@ -247,35 +257,18 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
               className="pl-8 h-8 text-sm"
             />
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <Info className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs">
-                <p className="font-semibold mb-1">How to use icons:</p>
-                <ul className="text-xs space-y-1">
-                  <li>• Click an icon to insert it</li>
-                  <li>• Right-click to copy code</li>
-                  <li>• Drag & drop into chat</li>
-                  <li>• Search 200,000+ icons</li>
-                </ul>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+
         </div>
 
-        {/* Collection filter */}
+        {/* Library filter */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Collection:</span>
+          <span className="text-muted-foreground">Library:</span>
           <select
             value={selectedCollection}
             onChange={(e) => setSelectedCollection(e.target.value)}
             className="flex-1 px-2 py-1 border rounded text-xs bg-background"
           >
-            {ICON_COLLECTIONS.map(col => (
+            {ICON_LIBRARIES.map(col => (
               <option key={col.prefix} value={col.prefix}>
                 {col.name} ({col.count})
               </option>
@@ -283,19 +276,7 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
           </select>
         </div>
 
-        {/* Quick search tags */}
-        <div className="flex flex-wrap gap-1">
-          {QUICK_SEARCHES.slice(0, 8).map(term => (
-            <Badge
-              key={term}
-              variant="outline"
-              className="text-xs cursor-pointer hover:bg-muted"
-              onClick={() => setSearchQuery(term)}
-            >
-              {term}
-            </Badge>
-          ))}
-        </div>
+
       </div>
 
       {/* Icons grid */}
@@ -305,8 +286,8 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
           {recentlyUsed.length > 0 && !searchQuery && (
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2">RECENTLY USED</h3>
-              <div className="grid grid-cols-6 gap-1">
-                {recentlyUsed.slice(0, 12).map((iconName) => (
+              <div className="grid grid-cols-8 gap-1">
+                {recentlyUsed.slice(0, 24).map((iconName) => (
                   <IconButton
                     key={iconName}
                     iconName={iconName}
@@ -333,7 +314,7 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
                 <div className="text-muted-foreground text-sm">Searching 200,000+ icons...</div>
               </div>
             ) : (
-              <div className="grid grid-cols-6 gap-1">
+              <div className="grid grid-cols-8 gap-1">
                 {displayIcons.length > 0 ? (
                   displayIcons.map((iconName) => (
                     <IconButton
@@ -348,8 +329,8 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
                     />
                   ))
                 ) : (
-                  <div className="col-span-6 text-center py-8 text-muted-foreground text-sm">
-                    No icons found. Try a different search or collection.
+                  <div className="col-span-8 text-center py-8 text-muted-foreground text-sm">
+                    No icons found. Try a different search or library.
                   </div>
                 )}
               </div>

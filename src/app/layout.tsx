@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import "~/index.css";
+import "~/remotion/fonts.css"; // Load fonts globally for template previews
 import { TRPCReactProvider } from "~/trpc/react";
 import { ThemeProvider } from "~/components/theme-provider";
 import { SessionProvider } from "next-auth/react";

@@ -440,6 +440,15 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
     };
     assetUrls?: string[];
     isYouTubeAnalysis?: boolean;
+    templateContext?: {  // Template examples for better generation
+      examples: Array<{
+        id: string;
+        name: string;
+        code: string;
+        style: string;
+        description: string;
+      }>;
+    };
   }): Promise<CodeGenerationOutput> {
     // Use Sonnet 4 with temperature 0 for YouTube reproduction
     const config = input.isYouTubeAnalysis 
@@ -516,9 +525,53 @@ This is NOT optional - the user explicitly requested this duration!
 
 DO NOT use any other duration value!`;
       }
+      
+      // Add template context if available (only for non-YouTube generation)
+      let templatePrompt = '';
+      if (!input.isYouTubeAnalysis && input.templateContext?.examples?.length) {
+        console.log(`⚡ [CODE GENERATOR] Adding ${input.templateContext.examples.length} template(s) as context`);
+        
+        // Debug: Check if templates actually have code
+        input.templateContext.examples.forEach((template, i) => {
+          console.log(`⚡ [CODE GENERATOR] Template ${i + 1} (${template.name}):`, {
+            hasCode: !!template.code,
+            codeLength: template.code?.length || 0,
+            firstLine: template.code?.split('\n')[0]?.substring(0, 50) || 'NO CODE'
+          });
+        });
+        
+        templatePrompt = `\n\n📚 CRITICAL: USE PROVIDED TEMPLATES AS YOUR BASE CODE:
+You have been provided with ${input.templateContext.examples.length} carefully selected template(s) that match the user's request.
+
+🎯 MANDATORY APPROACH:
+1. **CHOOSE THE BEST MATCHING TEMPLATE** from below as your starting point
+2. **COPY THE ENTIRE TEMPLATE CODE** as your base
+3. **MODIFY ONLY WHAT'S NEEDED** to match the user's specific request (text, colors, etc)
+4. **PRESERVE THE TEMPLATE'S ANIMATIONS AND STRUCTURE** - they are proven to work well
+
+${input.templateContext.examples.map((ex, i) => `
+═══════════════════════════════════════════════════════════
+TEMPLATE ${i + 1}: ${ex.name}
+Purpose: ${ex.description || 'Professional animation template'}
+Style: ${ex.style || 'modern'}
+
+\`\`\`tsx
+${ex.code}
+\`\`\`
+═══════════════════════════════════════════════════════════
+`).join('\n')}
+
+🔧 MODIFICATION RULES:
+1. START by copying one of the templates above entirely
+2. Change ONLY: text content, specific colors if requested, specific assets
+3. KEEP: All animation logic, timing, spring configs, interpolations, structure
+4. The template's animation patterns are proven - don't reinvent them
+5. If user asks for "intro", use the template and adapt the text to be an intro
+`;
+      }
 
       const messages = [
-        { role: 'user' as const, content: userPrompt }
+        { role: 'user' as const, content: userPrompt + templatePrompt }
       ];
       
       const response = await AIClientService.generateResponse(
@@ -832,7 +885,7 @@ Transform the static design into sequential storytelling.`;
       
       return {
         code: cleanCode,
-        name: this.extractSceneNameFromPrompt(imageToCodeInput.userPrompt), // Extract meaningful name from prompt
+        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
         duration: durationAnalysis.frames,
         reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
         debug: {

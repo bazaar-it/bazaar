@@ -4,7 +4,6 @@ import { useState, lazy, Suspense, useCallback, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
 import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
@@ -125,14 +124,6 @@ export function Homepage() {
           </p>
         </div>
         
-        {/* Marketing Video Player - responsive positioning */}
-        <div className="w-full -mt-8 md:-mt-16 mb-8">
-          <div className="flex justify-center w-full px-2 sm:px-4 md:px-0">
-            <div className="w-full max-w-7xl">
-              <MarketingVideoPlayer />
-            </div>
-          </div>
-        </div>
 
         {/* Create entire videos section */}
         <section className="mt-0 w-full">

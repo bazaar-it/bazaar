@@ -8,7 +8,7 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles, Github, Palette, X } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github, X } from 'lucide-react';
 import { Icon } from '@iconify/react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
@@ -334,7 +334,9 @@ export default function ChatPanelG({
     const iconRefs: string[] = [];
     let iconMatch;
     while ((iconMatch = iconPattern.exec(trimmedMessage)) !== null) {
-      iconRefs.push(iconMatch[1]);
+      if (iconMatch[1]) {
+        iconRefs.push(iconMatch[1]);
+      }
     }
     
     // If we have icons, append them to the message in a clear format
@@ -396,6 +398,9 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] No user assets available for @mention resolution');
     }
     
+    // Filter out icon references from imageUrls (they should be processed as icons, not images)
+    imageUrls = imageUrls.filter(url => !url.startsWith('[icon:'));
+    
     if (imageUrls.length > 0) {
       console.log('[ChatPanelG] 🖼️ Including images in chat submission:', imageUrls);
     }
@@ -415,6 +420,7 @@ export default function ChatPanelG({
     setMessage("");
     setDraftMessage(projectId, ""); // Clear draft in store too
     setUploadedImages([]);
+    setSelectedIcons([]); // Clear icon previews after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
     
@@ -542,7 +548,9 @@ export default function ChatPanelG({
     const icons: string[] = [];
     let match;
     while ((match = iconPattern.exec(newValue)) !== null) {
-      icons.push(match[1]);
+      if (match[1]) {
+        icons.push(match[1]);
+      }
     }
     if (icons.length > 0) {
       console.log('[ChatPanelG] Extracted icons:', icons);
@@ -603,7 +611,36 @@ export default function ChatPanelG({
   // Auto-resize when message changes
   useEffect(() => {
     adjustTextareaHeight();
-  }, [message, adjustTextareaHeight]);
+  }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
+
+  // Auto-focus textarea after generation completes
+  useEffect(() => {
+    if (generationComplete && textareaRef.current) {
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        // Place cursor at end if there's existing text
+        const length = textareaRef.current?.value.length || 0;
+        textareaRef.current?.setSelectionRange(length, length);
+        // Reset the flag
+        setGenerationComplete(false);
+      }, 100);
+    }
+  }, [generationComplete]);
+
+  // Also refocus when isGenerating changes from true to false
+  useEffect(() => {
+    if (!isGenerating && textareaRef.current) {
+      // Small delay to let React finish rendering
+      const timeoutId = setTimeout(() => {
+        if (!document.activeElement || 
+            document.activeElement === document.body ||
+            document.activeElement.tagName === 'BODY') {
+          textareaRef.current?.focus();
+        }
+      }, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isGenerating]);
 
 
   // Create media upload handlers
@@ -618,7 +655,26 @@ export default function ChatPanelG({
     const handler = (e: Event) => {
       const { url, name } = (e as CustomEvent).detail || {};
       if (typeof url === 'string' && url.length > 0) {
-        // Add as a new uploadedMedia entry (already uploaded)
+        // Check if this is an icon reference - handle differently than media files
+        if (url.startsWith('[icon:')) {
+          // Icon reference - just add to message, don't treat as uploaded media
+          const reference = url; // Use the icon reference directly
+          setMessage((prev) => {
+            const newMessage = prev ? `${prev} ${reference}` : reference;
+            // Extract and update icon list for preview
+            const iconPattern = /\[icon:([^\]]+)\]/g;
+            const icons: string[] = [];
+            let match;
+            while ((match = iconPattern.exec(newMessage)) !== null) {
+              icons.push(match[1]);
+            }
+            setSelectedIcons(icons);
+            return newMessage;
+          });
+          return;
+        }
+        
+        // Regular media file - add as uploadedMedia entry
         const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
         const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
@@ -633,7 +689,7 @@ export default function ChatPanelG({
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
     return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
-  }, []);
+  }, [setSelectedIcons]);
 
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1127,13 +1183,14 @@ export default function ChatPanelG({
                 // Invalidate the scenes query to ensure fresh data
                 await utils.generation.getProjectScenes.invalidate({ projectId });
                 
-              } else if (operation === 'scene.edit' || operation === 'scene.update') {
-                // For edits, use the updateScene method from VideoState
+              } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
+                // For edits and trims, use the updateScene method from VideoState
                 updateScene(projectId, actualScene.id, actualScene);
                 
                 console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
                   sceneId: actualScene.id,
-                  operation
+                  operation,
+                  isTrim: operation === 'scene.trim' || responseData.meta?.editComplexity === 'duration'
                 });
                 
                 // Invalidate the scenes query to ensure fresh data
@@ -1219,6 +1276,20 @@ export default function ChatPanelG({
           // In the catch block, we only have the error object
           const errorMessage = error?.message || '';
           
+          // Check for specific error types
+          const isTimeoutError = 
+            errorMessage.toLowerCase().includes('timeout') ||
+            errorMessage.toLowerCase().includes('timed out') ||
+            errorMessage.includes('network request failed') ||
+            errorMessage.includes('fetch failed') ||
+            error?.code === 'TIMEOUT' ||
+            error?.code === 'ECONNABORTED';
+          
+          const isTrimError = 
+            errorMessage.toLowerCase().includes('trim') ||
+            errorMessage.includes('duration') ||
+            errorMessage.includes('Could not determine new duration');
+          
           const isRateLimitError = 
             errorMessage.includes('Daily limit reached') ||
             errorMessage.includes('Buy more prompts') ||
@@ -1226,9 +1297,33 @@ export default function ChatPanelG({
             error?.data?.cause?.code === 'RATE_LIMITED';
             
           console.log('[ChatPanelG] Error message:', errorMessage);
+          console.log('[ChatPanelG] Is timeout error?', isTimeoutError);
+          console.log('[ChatPanelG] Is trim error?', isTrimError);
           console.log('[ChatPanelG] Is rate limit error?', isRateLimitError);
           
-          if (isRateLimitError) {
+          if (isTimeoutError) {
+            console.log('[ChatPanelG] Timeout error detected');
+            // Add a friendly timeout message to the chat
+            const timeoutMessageId = nanoid();
+            addAssistantMessage(projectId, timeoutMessageId, 
+              "Oops, sorry I hit a timeout! 😅 That request was taking too long. Try again with a simpler prompt, or break it down into smaller steps."
+            );
+            updateMessage(projectId, timeoutMessageId, { status: 'error' });
+            
+            // Also show a toast with helpful guidance
+            toast.error('Request timed out. Try a simpler prompt or break it into smaller steps.');
+          } else if (isTrimError) {
+            console.log('[ChatPanelG] Trim error detected');
+            // Add a friendly trim error message to the chat
+            const trimErrorMessageId = nanoid();
+            addAssistantMessage(projectId, trimErrorMessageId, 
+              "Sorry, I couldn't trim the scene! 🎬 Please specify a clear duration like '3 seconds' or '90 frames', or select a specific scene to trim."
+            );
+            updateMessage(projectId, trimErrorMessageId, { status: 'error' });
+            
+            // Also show a toast with helpful guidance
+            toast.error('Trim failed. Please specify a duration like "3 seconds" or select a scene.');
+          } else if (isRateLimitError) {
             console.log('[ChatPanelG] Rate limit error caught, showing purchase modal');
             setIsPurchaseModalOpen(true);
             // Also show a toast to confirm
@@ -1269,8 +1364,25 @@ export default function ChatPanelG({
     onError: (error: string) => {
       console.error('[ChatPanelG] SSE error:', error);
       
-      // Check if this is a rate limit error
-      if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
+      // Check if this is a timeout error at the SSE level
+      const isTimeoutError = 
+        error.toLowerCase().includes('timeout') ||
+        error.toLowerCase().includes('timed out') ||
+        error.includes('Connection failed') ||
+        error.includes('Connection lost');
+      
+      if (isTimeoutError) {
+        console.log('[ChatPanelG] SSE timeout detected');
+        // Add a friendly timeout message to the chat
+        const timeoutMessageId = nanoid();
+        addAssistantMessage(projectId, timeoutMessageId, 
+          "Oops, sorry I hit a timeout! 😅 The connection took too long. Try again with a simpler prompt, or break it down into smaller steps."
+        );
+        updateMessage(projectId, timeoutMessageId, { status: 'error' });
+        
+        // Also show a toast
+        toast.error('Connection timed out. Try a simpler prompt.');
+      } else if (error.includes('RATE_LIMITED') || error.includes('Daily prompt limit reached')) {
         console.log('[ChatPanelG] Rate limit error from SSE, showing purchase modal');
         setIsPurchaseModalOpen(true);
       } else {
@@ -1458,8 +1570,8 @@ export default function ChatPanelG({
                 </div>
 
                 <div className="flex gap-2 items-center">
-                  {/* GitHub Component Mode Toggle */}
-                  <TooltipProvider>
+                  {/* GitHub Component Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1483,19 +1595,19 @@ export default function ChatPanelG({
                         <p>
                           {isGitHubMode 
                             ? githubModeSource === 'drag' 
-                              ? 'GitHub mode ON (auto-enabled from drag)' 
+                              ? 'Stop searching repos (auto-enabled from drag)' 
                               : githubModeSource === 'auto'
-                              ? 'GitHub mode ON (auto-detected component)'
-                              : 'GitHub mode ON - will search your repos'
-                            : 'Click to search GitHub components'
+                              ? 'Stop searching repos (auto-detected component)'
+                              : 'Stop searching repos'
+                            : 'Search repos'
                           }
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
-                  {/* Figma Mode Toggle */}
-                  <TooltipProvider>
+                  {/* Figma Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1507,28 +1619,34 @@ export default function ChatPanelG({
                           className={cn(
                             "p-1 rounded-full transition-all duration-200",
                             isFigmaMode
-                              ? "text-white bg-purple-600 hover:bg-purple-700"
+                              ? "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                               : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                           )}
                           aria-label="Toggle Figma design search"
                         >
-                          <Palette className="h-4 w-4" />
+                          <Icon 
+                            icon="devicon:figma" 
+                            className={cn(
+                              "h-4 w-4 transition-all duration-200",
+                              !isFigmaMode && "grayscale"
+                            )}
+                          />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>
                           {isFigmaMode 
                             ? figmaModeSource === 'drag' 
-                              ? 'Figma mode ON (auto-enabled from drag)' 
+                              ? 'Stop searching Figma (auto-enabled from drag)' 
                               : figmaModeSource === 'auto'
-                              ? 'Figma mode ON (auto-detected design)'
-                              : 'Figma mode ON - will search your designs'
-                            : 'Click to search Figma designs'
+                              ? 'Stop searching Figma (auto-detected design)'
+                              : 'Stop searching Figma'
+                            : 'Search Figma'
                           }
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
                   {/* Enhance Prompt Button */}
                   <TooltipProvider>

@@ -205,29 +205,53 @@ export default function RemotionPreview({
           />
           {playerElement && createPortal(
             <>
-              {/* Frame counter */}
+              {/* Frame counter with FPS label - synced with Remotion controls */}
               <div
-                className="pointer-events-none select-none"
+                className="pointer-events-none select-none remotion-frame-counter"
                 style={{
                   position: 'absolute',
-                  right: 48,
-                  bottom: 34,
+                  right: 60, // Position to the left of fullscreen button
+                  bottom: 26, // Vertically center with control buttons
                   zIndex: 2147483647, // Maximum z-index for fullscreen
-                  color: 'rgba(255,255,255,0.95)',
-                  background: 'rgba(17,17,17,0.45)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  lineHeight: 1,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                  fontWeight: 600,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '1px',
+                  transform: 'translateY(-50%)', // Center vertically
+                  opacity: 1, // Always visible
+                  transition: 'opacity 0.2s ease-in-out',
                 }}
               >
-                {currentFrame}
+                {/* Frame number */}
+                <div
+                  style={{
+                    color: '#ffffff',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    fontWeight: 600,
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {currentFrame}
+                </div>
+                {/* FPS label */}
+                <div
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    fontSize: '8px',
+                    lineHeight: 1,
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    fontWeight: 500,
+                    letterSpacing: '0.3px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  FPS
+                </div>
               </div>
+              
+
               
             </>,
             playerElement

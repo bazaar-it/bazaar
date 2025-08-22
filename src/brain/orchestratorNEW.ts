@@ -29,6 +29,19 @@ export class Orchestrator {
     let enhancedPrompt = input.prompt;
     
     try {
+      // Check for website URL first (before YouTube)
+      const { WebsiteToVideoTool } = await import("~/tools/website/websiteToVideo");
+      if (WebsiteToVideoTool.isWebsiteRequest(input.prompt)) {
+        const websiteUrl = WebsiteToVideoTool.extractUrl(input.prompt);
+        if (websiteUrl && !websiteUrl.includes('youtube.com') && !websiteUrl.includes('youtu.be')) {
+          console.log('🧠 [NEW ORCHESTRATOR] Website URL detected:', websiteUrl);
+          
+          // For website requests, we'll let the intent analyzer decide to use the website tool
+          // But we'll add a hint to the context
+          enhancedPrompt = `${input.prompt}\n\n[CONTEXT: User provided website URL: ${websiteUrl}]`;
+        }
+      }
+      
       // Check if this is a YouTube URL with time specification
       // Only do YouTube analysis if we have both URL and time
       
@@ -231,17 +244,22 @@ export class Orchestrator {
             // Include persistent asset URLs for context
             assetUrls: contextPacket.assetContext?.assetUrls || [],
             // Add YouTube analysis flag
-            isYouTubeAnalysis: hasYouTube && hasTimeSpec
+            isYouTubeAnalysis: hasYouTube && hasTimeSpec,
+            // Include template context for better first-scene generation
+            templateContext: contextPacket.templateContext
           },
           workflow: toolSelection.workflow,
         }
       };
       
-      // Debug logging for video URLs
+      // Debug logging for video URLs and template context
       console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {
         hasImageUrls: !!(input.userContext?.imageUrls as string[])?.length,
         hasVideoUrls: !!(input.userContext?.videoUrls as string[])?.length,
         videoUrls: (input.userContext?.videoUrls as string[]),
+        hasTemplateContext: !!contextPacket.templateContext,
+        templateCount: contextPacket.templateContext?.examples?.length || 0,
+        templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
       });
       
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
