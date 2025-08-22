@@ -37,23 +37,13 @@ export function PromptUsageDropdown() {
 
   return (
     <div className="px-2 py-2 space-y-2">
-      {/* Daily prompts display */}
+      {/* Prompts remaining display */}
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Prompts:</span>
+        <span className="text-muted-foreground">Prompts remaining:</span>
         <span className="font-medium">
-          {used}/{limit} free daily
+          {totalAvailable}
         </span>
       </div>
-
-      {/* Purchased prompts display */}
-      {purchased > 0 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="w-4" /> {/* Spacer for alignment */}
-          <span className="text-blue-600 font-medium">
-            +{purchased} {purchased === 20 ? 'Free' : 'purchased'}
-          </span>
-        </div>
-      )}
 
       {/* Buy more button - always show */}
       <Button

@@ -76,6 +76,11 @@ export default function AppHeader({
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
 
+  // Sync newTitle with projectTitle prop when it changes
+  React.useEffect(() => {
+    setNewTitle(projectTitle || "");
+  }, [projectTitle]);
+
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
@@ -234,7 +239,7 @@ export default function AppHeader({
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
-      onRename(newTitle);
+      onRename(newTitle.trim());
     }
     setIsEditingName(false);
   };
@@ -245,28 +250,28 @@ export default function AppHeader({
   };
 
   return (
-    <header className="flex items-center justify-between px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
-      {/* Left: Logo only */}
-      <div className="flex items-center min-w-[64px]">
+    <header className="flex items-center px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
+      {/* Left: Logo */}
+      <div className="flex items-center flex-shrink-0">
         <a href="/" className="flex items-center" aria-label="Go to homepage">
           <Image src="/bazaar-logo.png" alt="Bazaar" width={79} height={30} className="object-contain" priority />
         </a>
       </div>
 
-      {/* Center: Project Title - Hidden as requested */}
-      <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center">
+      {/* Center: Project Title - Responsive */}
+      <div className="flex-1 flex justify-center px-4 min-w-0">
         {projectTitle ? (
-          <div className="relative w-[280px] flex justify-center">
+          <div className="max-w-[280px] w-full flex justify-center min-w-0">
             {isEditingName ? (
-              <div className="flex items-center w-full">
+              <div className="flex items-center w-full min-w-0">
                 <Input
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
-                  className="w-[240px] h-8 text-sm font-medium rounded-[15px] shadow-sm"
+                  className="flex-1 min-w-0 max-w-[240px] h-8 text-sm font-medium rounded-[15px] shadow-sm"
                   autoFocus
                   disabled={isRenaming}
                 />
-                <div className="flex items-center ml-2">
+                <div className="flex items-center ml-2 flex-shrink-0">
                   <Button 
                     type="button" 
                     size="icon" 
@@ -294,11 +299,12 @@ export default function AppHeader({
               </div>
             ) : (
               <h1
-                className="text-sm font-medium cursor-pointer hover:text-primary px-2 text-center"
+                className="text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0"
                 onClick={() => {
                   setNewTitle(projectTitle);
                   setIsEditingName(true);
                 }}
+                title={projectTitle} // Show full title on hover
               >
                 {projectTitle}
               </h1>
@@ -308,7 +314,7 @@ export default function AppHeader({
       </div>
 
       {/* Right: Share button and User info */}
-      <div className="flex items-center gap-2 min-w-[180px] justify-end">
+      <div className="flex items-center gap-2 flex-shrink-0">
         {/* Share button - simplified auto-copy functionality */}
         {projectId && (
           <>

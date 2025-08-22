@@ -1,8 +1,5 @@
 /**
- * THIS FILE IS AUTO-GENERATED FROM DATABASE SCHEMA
- * DO NOT EDIT MANUALLY - RUN: npm run generate:types
- * 
- * Generated at: 2025-08-21T21:10:26.799Z
+ * Generated at: 2025-08-22T06:46:45.802Z
  */
 
 /**

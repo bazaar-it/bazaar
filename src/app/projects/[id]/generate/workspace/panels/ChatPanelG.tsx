@@ -8,7 +8,7 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
-import { Loader2, Send, ImageIcon, Sparkles, Github, Palette, X } from 'lucide-react';
+import { Loader2, Send, ImageIcon, Sparkles, Github, X } from 'lucide-react';
 import { Icon } from '@iconify/react';
 import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
@@ -334,7 +334,9 @@ export default function ChatPanelG({
     const iconRefs: string[] = [];
     let iconMatch;
     while ((iconMatch = iconPattern.exec(trimmedMessage)) !== null) {
-      iconRefs.push(iconMatch[1]);
+      if (iconMatch[1]) {
+        iconRefs.push(iconMatch[1]);
+      }
     }
     
     // If we have icons, append them to the message in a clear format
@@ -546,7 +548,9 @@ export default function ChatPanelG({
     const icons: string[] = [];
     let match;
     while ((match = iconPattern.exec(newValue)) !== null) {
-      icons.push(match[1]);
+      if (match[1]) {
+        icons.push(match[1]);
+      }
     }
     if (icons.length > 0) {
       console.log('[ChatPanelG] Extracted icons:', icons);
@@ -607,7 +611,7 @@ export default function ChatPanelG({
   // Auto-resize when message changes
   useEffect(() => {
     adjustTextareaHeight();
-  }, [message, adjustTextareaHeight]);
+  }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
   // Auto-focus textarea after generation completes
   useEffect(() => {
@@ -1566,8 +1570,8 @@ export default function ChatPanelG({
                 </div>
 
                 <div className="flex gap-2 items-center">
-                  {/* GitHub Component Mode Toggle */}
-                  <TooltipProvider>
+                  {/* GitHub Component Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1591,19 +1595,19 @@ export default function ChatPanelG({
                         <p>
                           {isGitHubMode 
                             ? githubModeSource === 'drag' 
-                              ? 'GitHub mode ON (auto-enabled from drag)' 
+                              ? 'Stop searching repos (auto-enabled from drag)' 
                               : githubModeSource === 'auto'
-                              ? 'GitHub mode ON (auto-detected component)'
-                              : 'GitHub mode ON - will search your repos'
-                            : 'Click to search GitHub components'
+                              ? 'Stop searching repos (auto-detected component)'
+                              : 'Stop searching repos'
+                            : 'Search repos'
                           }
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
-                  {/* Figma Mode Toggle */}
-                  <TooltipProvider>
+                  {/* Figma Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1615,28 +1619,34 @@ export default function ChatPanelG({
                           className={cn(
                             "p-1 rounded-full transition-all duration-200",
                             isFigmaMode
-                              ? "text-white bg-purple-600 hover:bg-purple-700"
+                              ? "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
                               : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                           )}
                           aria-label="Toggle Figma design search"
                         >
-                          <Palette className="h-4 w-4" />
+                          <Icon 
+                            icon="devicon:figma" 
+                            className={cn(
+                              "h-4 w-4 transition-all duration-200",
+                              !isFigmaMode && "grayscale"
+                            )}
+                          />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>
                           {isFigmaMode 
                             ? figmaModeSource === 'drag' 
-                              ? 'Figma mode ON (auto-enabled from drag)' 
+                              ? 'Stop searching Figma (auto-enabled from drag)' 
                               : figmaModeSource === 'auto'
-                              ? 'Figma mode ON (auto-detected design)'
-                              : 'Figma mode ON - will search your designs'
-                            : 'Click to search Figma designs'
+                              ? 'Stop searching Figma (auto-detected design)'
+                              : 'Stop searching Figma'
+                            : 'Search Figma'
                           }
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
                   {/* Enhance Prompt Button */}
                   <TooltipProvider>
