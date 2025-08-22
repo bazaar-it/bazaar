@@ -171,13 +171,15 @@ export class WebAnalysisAgentV2 {
   async analyze(url: string): Promise<ExtractedBrandData> {
     const startTime = Date.now();
     console.log(`🌐 WebAnalysisV2: Analyzing ${url}`);
+    
+    let context: any = null;
 
     try {
       // Connect to Browserless
       await this.connectBrowser();
       
       // Create stealth context
-      const context = await this.browser.newContext({
+      context = await this.browser.newContext({
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         locale: 'en-US',
@@ -273,6 +275,15 @@ export class WebAnalysisAgentV2 {
       console.error('❌ WebAnalysisV2 Error:', error);
       throw error;
     } finally {
+      // Clean up context first, then browser
+      if (context) {
+        try {
+          await context.close();
+          console.log('🧹 Context closed');
+        } catch (e) {
+          console.error('Failed to close context:', e);
+        }
+      }
       await this.cleanup();
     }
   }

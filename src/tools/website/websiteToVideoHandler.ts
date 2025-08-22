@@ -124,23 +124,30 @@ export class WebsiteToVideoHandler {
       // 6. Clear existing scenes and save new ones
       console.log('🌐 [WEBSITE HANDLER] Step 6: Saving to project...');
       
-      // Clear existing scenes (no transaction support in HTTP mode)
-      await db.delete(scenes).where(eq(scenes.projectId, input.projectId));
+      // Backup existing scenes before deletion (safety measure)
+      const existingScenes = await db.select().from(scenes)
+        .where(eq(scenes.projectId, input.projectId));
       
-      // Add customized scenes - use proper UUID generation
-      const { randomUUID } = await import('crypto');
-      const scenesToInsert = customizedScenes.map((scene, index) => ({
-        id: randomUUID(),
-        projectId: input.projectId,
-        name: scene.name,
-        tsxCode: scene.code,
-        duration: scene.duration,
-        order: index,
-        props: {},
-        layoutJson: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
+      console.log(`🌐 [WEBSITE HANDLER] Backing up ${existingScenes.length} existing scenes`);
+      
+      try {
+        // Clear existing scenes
+        await db.delete(scenes).where(eq(scenes.projectId, input.projectId));
+        
+        // Add customized scenes - use consistent UUID generation
+        const { randomUUID } = require('crypto');
+        const scenesToInsert = customizedScenes.map((scene, index) => ({
+          id: randomUUID(),
+          projectId: input.projectId,
+          name: scene.name,
+          tsxCode: scene.code,
+          duration: scene.duration,
+          order: index,
+          props: {},
+          layoutJson: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }));
       
       console.log('🌐 [WEBSITE HANDLER] Scenes to insert:', {
         count: scenesToInsert.length,
@@ -150,14 +157,24 @@ export class WebsiteToVideoHandler {
         codeExists: scenesToInsert.map(s => !!s.tsxCode)
       });
       
-      if (scenesToInsert.length > 0) {
-        try {
+        if (scenesToInsert.length > 0) {
           await db.insert(scenes).values(scenesToInsert);
           console.log('🌐 [WEBSITE HANDLER] ✅ Scenes inserted successfully');
-        } catch (insertError) {
-          console.error('🌐 [WEBSITE HANDLER] ❌ Failed to insert scenes:', insertError);
-          throw insertError;
         }
+      } catch (error) {
+        console.error('🌐 [WEBSITE HANDLER] ❌ Failed to update scenes, attempting rollback:', error);
+        
+        // Attempt to restore original scenes
+        if (existingScenes.length > 0) {
+          try {
+            await db.insert(scenes).values(existingScenes);
+            console.log('🌐 [WEBSITE HANDLER] ✅ Successfully restored original scenes');
+          } catch (rollbackError) {
+            console.error('🌐 [WEBSITE HANDLER] ❌ Failed to restore original scenes:', rollbackError);
+          }
+        }
+        
+        throw error;
       }
       
       // Update project metadata
