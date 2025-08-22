@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { Search, Copy, Check, Info, Palette, Grid3x3 } from 'lucide-react';
+import { initializeOfflineIcons } from '~/lib/iconify-offline';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -102,6 +103,11 @@ export function IconPickerPanel({ onInsertToChat }: IconPickerPanelProps) {
   const [copiedIcon, setCopiedIcon] = useState<string | null>(null);
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Initialize offline icons once on mount
+  useEffect(() => {
+    initializeOfflineIcons();
+  }, []);
   
   // Get project ID from URL params
   const params = useParams();

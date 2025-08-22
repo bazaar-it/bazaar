@@ -25,6 +25,11 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       hasPreviousScene: !!input.previousSceneContext
     });
     console.log('🔨 [ADD TOOL] Video URLs received:', input.videoUrls);
+    console.log('🔨 [ADD TOOL] Template context received:', {
+      hasTemplateContext: !!input.templateContext,
+      exampleCount: input.templateContext?.examples?.length || 0,
+      exampleNames: input.templateContext?.examples?.map(e => e.name) || [],
+    });
     console.log('🔨 [ADD TOOL] NOTE: This is a PURE FUNCTION - no database access!');
     
     try {
@@ -163,6 +168,12 @@ export const durationInFrames_ERROR = 180;`;
     // DIRECT CODE GENERATION - Skip layout entirely!
     console.log('⚡ [ADD TOOL] Using DIRECT code generation - no layout step!');
     
+    // Check if we have template context for better generation
+    if (input.templateContext?.examples?.length) {
+      console.log(`⚡ [ADD TOOL] Using ${input.templateContext.examples.length} template(s) as context:`,
+        input.templateContext.examples.map(t => t.name).join(', '));
+    }
+    
     const codeResult = await codeGenerator.generateCodeDirect({
       userPrompt: input.userPrompt,
       functionName: functionName,
@@ -171,6 +182,7 @@ export const durationInFrames_ERROR = 180;`;
       requestedDurationFrames: input.requestedDurationFrames, // Pass duration constraint
       assetUrls: input.assetUrls, // Pass persistent asset URLs
       isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
+      templateContext: input.templateContext, // Pass template context for better generation
     });
 
     // Return generated content - NO DATABASE!
@@ -485,6 +497,32 @@ IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add s
     }
 
     const functionName = this.generateFunctionName();
+    
+    // Check if we have V2 extraction data with full brand system
+    // Also check for the existence of key V2 fields
+    const visualDesign = input.webContext.pageData?.visualDesign;
+    const hasV2Extraction = visualDesign?.extraction || 
+                           (visualDesign?.colorSystem && visualDesign?.shadows && visualDesign?.borderRadius);
+    
+    console.log('🔍 [ADD TOOL] Checking for V2 extraction:', {
+      hasWebContext: !!input.webContext,
+      hasPageData: !!input.webContext.pageData,
+      hasVisualDesign: !!visualDesign,
+      hasColorSystem: !!visualDesign?.colorSystem,
+      hasShadows: !!visualDesign?.shadows,
+      hasExtraction: !!visualDesign?.extraction,
+      extractionKeys: visualDesign?.extraction ? Object.keys(visualDesign.extraction).slice(0, 5) : 'none'
+    });
+    
+    // If we have comprehensive extraction, use Hero's Journey
+    if (hasV2Extraction) {
+      console.log('🎬 [ADD TOOL] ✅ USING HERO\'S JOURNEY for comprehensive brand extraction!');
+      // Use the extraction data if available, otherwise construct from visualDesign
+      const extractionData = visualDesign?.extraction || this.constructExtractionFromVisualDesign(input.webContext, visualDesign);
+      return await this.generateHeroJourneyFromExtraction(input, extractionData);
+    } else {
+      console.log('⚠️ [ADD TOOL] No V2 extraction found, falling back to basic generation');
+    }
 
     // Create combined image list with web screenshots
     const allImageUrls = [
@@ -492,20 +530,77 @@ IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add s
       input.webContext.screenshotUrls.mobile,
     ];
 
-    // Enhanced prompt for web context
+    // Enhanced prompt for MOTION GRAPHICS based on extracted brand
+    const brandVisualDesign = input.webContext.pageData.visualDesign;
+    const narrative = input.webContext.pageData.productNarrative;
     const enhancedPrompt = `${input.userPrompt}
 
-WEBSITE CONTEXT:
-- URL: ${input.webContext.originalUrl}
-- Title: ${input.webContext.pageData.title}
-- Description: ${input.webContext.pageData.description || 'Not available'}
-- Key headings: ${input.webContext.pageData.headings.slice(0, 5).join(', ')}
+🎬 CREATE A MOTION GRAPHICS VIDEO BASED ON THIS BRAND:
 
-BRAND MATCHING INSTRUCTIONS:
-- Use the website screenshots to match the brand's visual identity
-- Extract colors, fonts, and design patterns from the screenshots
-- Maintain brand consistency in the motion graphics
-- The desktop screenshot shows the full layout, mobile shows the mobile design`;
+📊 PRODUCT STORY:
+${narrative ? `
+HEADLINE: "${narrative.headline}"
+SUBHEADLINE: "${narrative.subheadline}"
+
+KEY FEATURES:
+${narrative.features.slice(0, 3).map(f => `• ${f.title}: ${f.description}`).join('\n')}
+
+METRICS TO HIGHLIGHT:
+${narrative.metrics.map(m => `• ${m}`).join('\n')}
+
+TESTIMONIALS:
+${narrative.testimonials.slice(0, 2).map(t => `"${t.quote.slice(0, 100)}..." - ${t.author}`).join('\n')}
+
+CALL-TO-ACTION BUTTONS:
+- Primary: "${narrative.ctas.primary}"
+- Secondary: "${narrative.ctas.secondary}"
+` : 'Extract from website'}
+
+🎨 EXACT BRAND DESIGN SYSTEM:
+${brandVisualDesign ? `
+COLOR SYSTEM:
+- Primary: ${brandVisualDesign.colorSystem.primary}
+- Secondary: ${brandVisualDesign.colorSystem.secondary}
+- Accents: ${brandVisualDesign.colorSystem.accents.join(', ')}
+- Neutrals: ${brandVisualDesign.colorSystem.neutrals.join(', ')}
+${brandVisualDesign.colorSystem.gradients.length > 0 ? `
+GRADIENTS:
+${brandVisualDesign.colorSystem.gradients.map(g => 
+  `- ${g.type}-gradient(${g.angle}deg, ${g.stops.join(', ')})`
+).join('\n')}` : ''}
+
+TYPOGRAPHY:
+- Fonts: ${brandVisualDesign.fonts.join(', ')}
+- H1 Size: ${brandVisualDesign.headingData[0]?.styles.fontSize || '48px'}
+- Body Size: ${brandVisualDesign.buttonStyles[0]?.styles.fontSize || '16px'}
+
+DESIGN TOKENS:
+- Border Radius: ${brandVisualDesign.borderRadius.sm} (small), ${brandVisualDesign.borderRadius.md} (medium), ${brandVisualDesign.borderRadius.lg} (large)
+- Shadows: 
+  • Small: ${brandVisualDesign.shadows.sm}
+  • Medium: ${brandVisualDesign.shadows.md}
+  • Large: ${brandVisualDesign.shadows.lg}
+
+BUTTON STYLE:
+${brandVisualDesign.buttonStyles[0] ? 
+  `- Background: ${brandVisualDesign.buttonStyles[0].styles.backgroundColor}
+- Text Color: ${brandVisualDesign.buttonStyles[0].styles.color}
+- Border Radius: ${brandVisualDesign.buttonStyles[0].styles.borderRadius}
+- Font Size: ${brandVisualDesign.buttonStyles[0].styles.fontSize}
+- Shadow: ${brandVisualDesign.buttonStyles[0].styles.boxShadow}` : 'Default button style'}
+` : 'Extract from screenshots'}
+
+🎯 MOTION GRAPHICS REQUIREMENTS:
+1. Create dynamic scenes that tell the product story
+2. Use EXACTLY the brand colors - no variations
+3. Apply the exact typography scale
+4. Include the metrics and features as animated elements
+5. Use smooth transitions with the brand's design tokens
+6. Create a video that feels like the website came to life
+7. Include CTAs with the exact button styles
+8. Use shadows and border radius from the design system
+
+The goal is a MOTION GRAPHICS VIDEO that perfectly represents this brand, not a website mockup.`;
 
     // Generate code using website screenshots
     const codeResult = await codeGenerator.generateCodeFromImage({
@@ -563,6 +658,7 @@ BRAND MATCHING INSTRUCTIONS:
     ];
 
     // Enhanced prompt combining web context with user images
+    const webVisualDesign = input.webContext.pageData.visualDesign;
     const enhancedPrompt = `${input.userPrompt}
 
 WEBSITE BRAND CONTEXT:
@@ -570,7 +666,14 @@ WEBSITE BRAND CONTEXT:
 - Title: ${input.webContext.pageData.title}
 - Description: ${input.webContext.pageData.description || 'Not available'}
 
+🎨 EXACT VISUAL DESIGN (EXTRACTED):
+${webVisualDesign ? `
+FONTS: ${webVisualDesign.fonts?.join(', ')}
+COLORS: Primary: ${webVisualDesign.brandColors?.primary}, Text: ${webVisualDesign.brandColors?.text}, BG: ${webVisualDesign.brandColors?.background}
+` : 'Extract from screenshots'}
+
 COMBINED CONTEXT INSTRUCTIONS:
+- USE THE EXACT FONTS AND COLORS EXTRACTED ABOVE
 - Use the website screenshots (first 2 images) to understand the brand identity
 - Use the additional user images for specific content requirements
 - Blend the brand's visual style with the user's image content
@@ -612,6 +715,139 @@ COMBINED CONTEXT INSTRUCTIONS:
     });
 
     return result;
+  }
+
+  /**
+   * Construct extraction data from visualDesign if full extraction is missing
+   */
+  private constructExtractionFromVisualDesign(webContext: any, visualDesign: any): any {
+    return {
+      page: {
+        url: webContext.originalUrl,
+        title: webContext.pageData?.title || 'Website',
+        sections: []
+      },
+      brand: {
+        colors: visualDesign.colorSystem || {
+          primary: '#000000',
+          secondary: '#FFFFFF',
+          accents: [],
+          neutrals: []
+        },
+        typography: {
+          fonts: visualDesign.fonts?.map((f: any) => ({ family: f, weights: [400, 600, 700] })) || [],
+          scale: visualDesign.headingData?.reduce((acc: any, item: any) => {
+            acc[item.tag] = item.styles;
+            return acc;
+          }, {}) || {}
+        },
+        buttons: {
+          radius: visualDesign.borderRadius?.md || '8px',
+          padding: '16px 32px',
+          shadow: visualDesign.shadows?.md || 'none',
+          styles: {
+            primary: visualDesign.buttonStyles?.[0] || {}
+          }
+        },
+        shadows: visualDesign.shadows || {},
+        borderRadius: visualDesign.borderRadius || {},
+        iconStyle: 'line' as const,
+        imageryStyle: [],
+        backgroundEffects: [],
+        voice: {
+          adjectives: ['modern', 'innovative'],
+          taglines: [],
+          tone: 'professional'
+        }
+      },
+      product: {
+        value_prop: {
+          headline: webContext.pageData?.headings?.[0] || 'Transform Your Experience',
+          subhead: webContext.pageData?.description || ''
+        },
+        problem: '',
+        solution: '',
+        features: [],
+        useCases: [],
+        benefits: [],
+        metrics: [],
+        integrations: [],
+        platforms: ['Web'],
+        onboarding: { freemium: false }
+      },
+      socialProof: {
+        testimonials: [],
+        logos: [],
+        awards: [],
+        stats: {},
+        press: []
+      },
+      layoutMotion: {
+        componentInventory: [],
+        transitions: ['fade'],
+        easingHints: ['ease-in-out'],
+        motionDurationMs: 300,
+        deviceFrames: [],
+        hasVideo: false,
+        hasAnimation: false
+      },
+      media: {
+        screenshots: []
+      },
+      ctas: [{ type: 'primary' as const, label: 'Get Started' }],
+      extractionMeta: {
+        timestamp: new Date().toISOString(),
+        confidence: 0.5,
+        extractionTimeMs: 0
+      }
+    };
+  }
+
+  /**
+   * Generate Hero's Journey motion graphics from comprehensive brand extraction
+   */
+  private async generateHeroJourneyFromExtraction(input: AddToolInput, extraction: any): Promise<AddToolOutput> {
+    const { heroJourneyLLM } = await import('../narrative/herosJourneyLLM');
+    
+    console.log('🎬 [HERO JOURNEY] Starting LLM-based generation with full brand context');
+    
+    const functionName = this.generateFunctionName();
+    
+    // Generate Hero's Journey using LLM with all extraction data
+    const result = await heroJourneyLLM.generateHeroJourney(
+      extraction,
+      input.projectId,
+      functionName
+    );
+    
+    console.log('🎬 [HERO JOURNEY] LLM generation complete:', {
+      duration: result.duration,
+      codeLength: result.code.length
+    });
+    
+    return {
+      success: true,
+      tsxCode: result.code,
+      name: result.name || 'Hero Journey',
+      duration: result.duration,
+      reasoning: result.reasoning,
+      chatResponse: `I've created a Hero's Journey motion graphics video for ${extraction.page.title}, telling their brand story through 5 cinematic acts using their exact colors, fonts, and messaging`,
+      scene: {
+        tsxCode: result.code,
+        name: result.name || 'Hero Journey',
+        duration: result.duration,
+      },
+      debug: {
+        method: 'hero-journey-llm',
+        extraction: {
+          brand: extraction.brand.voice,
+          features: extraction.product.features.length,
+          screenshots: extraction.media.screenshots.length,
+          colors: extraction.brand.colors,
+          fonts: extraction.brand.typography.fonts
+        }
+      },
+    };
   }
 
   /**

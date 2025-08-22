@@ -67,6 +67,15 @@ export interface BrainDecision {
       };
       analyzedAt: string;
     };
+    templateContext?: {  // Template examples for better generation
+      examples: Array<{
+        id: string;
+        name: string;
+        code: string;
+        style: string;
+        description: string;
+      }>;
+    };
   };
   
   // Brain's reasoning
@@ -187,6 +196,22 @@ export interface ContextPacket {
     }>;
     logos: string[];  // Quick access to logo URLs
     assetUrls: string[];  // All asset URLs for prompt enforcement
+  };
+  
+  // Template context for improved generation (when no previous scenes exist)
+  templateContext?: {
+    examples: Array<{
+      id: string;
+      name: string;
+      description: string;
+      keywords: string[];
+      style: string;
+      reasoning: string;
+      code: string;        // Full template code
+      codePreview: string;  // Short preview for logging
+    }>;
+    message: string;
+    matchDetails: string;
   };
 }
 
