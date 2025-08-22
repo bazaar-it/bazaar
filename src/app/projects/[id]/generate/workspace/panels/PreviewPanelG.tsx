@@ -795,6 +795,104 @@ ${singleDestructuring}
 // Preserve native Audio constructor for scenes that might need it
 const NativeAudio = window.NativeAudio || window.Audio;
 
+// Create a wrapper component that loads fonts before rendering the scene
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
+
 ${scene.compiledCode}
 
 // Single Scene Error Boundary
@@ -1060,9 +1158,11 @@ export default function SingleSceneComposition() {
   // Get audio from props
   const projectAudio = window.projectAudio;
   
-  return React.createElement(AbsoluteFill, {},
-    projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
-    React.createElement(SingleSceneErrorBoundary)
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      React.createElement(SingleSceneErrorBoundary)
+    )
   );
 }
         `;
@@ -1566,8 +1666,8 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   
   // Load comprehensive font collection in batches to avoid URL length limits
   const fontGroups = [
-    // Group 1: Core Sans-Serif
-    'Inter:wght@100..900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
+    // Group 1: Core Sans-Serif - Ensure Inter 700 is explicitly included
+    'Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
     // Group 2: Extended Sans-Serif
     'Work+Sans:wght@100..900&family=Rubik:wght@300..900&family=Barlow:wght@100..900&family=Kanit:wght@100..900&family=DM+Sans:wght@400..700&family=Plus+Jakarta+Sans:wght@200..800&family=Space+Grotesk:wght@300..700&family=Outfit:wght@100..900&family=Lexend:wght@100..900&family=Manrope:wght@200..800',
     // Group 3: Serif & Display
@@ -1589,6 +1689,104 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   window.bazaarFontsLoaded = true;
   console.log('[Bazaar] Google Fonts loaded for consistent rendering');
 }
+
+// Create a wrapper component that loads fonts before rendering scenes
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
 
 ${sceneImports.join('\n\n')}
 
@@ -1651,15 +1849,15 @@ export default function MultiSceneComposition(props) {
     }
   }, [projectAudio]);
   
-  return (
-    <AbsoluteFill>
-      {projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio })}
-      <Loop durationInFrames={${totalDuration}}>
-        <Series>
-          ${sceneComponents.join('\n          ')}
-        </Series>
-      </Loop>
-    </AbsoluteFill>
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      React.createElement(Loop, { durationInFrames: ${totalDuration} },
+        React.createElement(Series, {},
+          ${sceneComponents.map(sc => `React.createElement('div', { key: Math.random() }, ${sc.trim()})`).join(',\n          ')}
+        )
+      )
+    )
   );
 }
         `;
