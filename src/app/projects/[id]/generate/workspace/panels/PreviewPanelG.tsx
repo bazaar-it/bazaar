@@ -62,6 +62,7 @@ export function PreviewPanelG({
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
+  const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (dbScenes && dbScenes.length > 0 && currentProps) {
@@ -73,8 +74,27 @@ export function PreviewPanelG({
         return;
       }
       
-      // Database scenes updated, syncing to VideoState
-      setLastSyncedSceneIds(currentSceneIds);
+      // 🔍 SMART SYNC: Check if VideoState already has the same scenes
+      const stateSceneIds = currentProps.scenes?.map((s: any) => s.id).sort().join(',') || '';
+      const dbSceneIdsOnly = dbScenes.map(s => s.id).sort().join(',');
+      
+      if (stateSceneIds === dbSceneIdsOnly) {
+        // VideoState already has these scenes, just update sync tracker
+        console.log('[PreviewPanelG] 🎯 VideoState already up-to-date, skipping redundant sync');
+        setLastSyncedSceneIds(currentSceneIds);
+        return;
+      }
+      
+      // Clear existing sync timer
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+      
+      // Debounce the sync to avoid rapid updates
+      const timer = setTimeout(() => {
+        console.log('[PreviewPanelG] 🔄 Database scenes changed, syncing to VideoState...');
+        // Database scenes updated, syncing to VideoState
+        setLastSyncedSceneIds(currentSceneIds);
       
       // Convert database scenes to InputProps format
       let currentStart = 0;
@@ -119,9 +139,19 @@ export function PreviewPanelG({
         }
       };
       
-      replace(projectId, updatedProps);
+        replace(projectId, updatedProps);
+      }, 300); // 300ms debounce for DB sync
+      
+      setSyncDebounceTimer(timer);
     }
-  }, [dbScenes, projectId]);
+    
+    // Cleanup on unmount or deps change
+    return () => {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+    };
+  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -236,8 +266,13 @@ export function PreviewPanelG({
   
   // Memoized scene fingerprint to prevent unnecessary re-renders
   const scenesFingerprint = useMemo(() => {
-    return `${scenes.length}-${scenes.map(s => `${s.id}-${typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0}`).join(',')}`;
-  }, [scenes.length, scenes.map(s => s.id).join(','), scenes.map(s => typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0).join(',')]);
+    // Check both possible code locations and use actual code content hash
+    return scenes.map(s => {
+      const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
+      // Use first 100 chars of code for fingerprint to detect actual changes
+      return `${s.id}-${code.substring(0, 100)}`;
+    }).join('|');
+  }, [scenes]);
   
   // Memoized audio fingerprint to prevent unnecessary re-renders
   const audioFingerprint = useMemo(() => {
@@ -2036,29 +2071,37 @@ export default function FallbackComposition() {
     }
   }, [scenes]);
 
-  // 🚨 FIX: Debounced compilation to prevent multiple rapid recompiles
-  const [compilationDebounceTimer, setCompilationDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 🚨 SMART COMPILATION: Use ref to avoid recreating timer on every render
+  const compilationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCompiledFingerprintRef = useRef<string>('');
   
   useEffect(() => {
     if (scenes.length > 0) {
+      const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
+      
+      // Skip if fingerprint hasn't actually changed (prevents duplicate compiles)
+      if (currentFingerprint === lastCompiledFingerprintRef.current) {
+        console.log('[PreviewPanelG] 🎯 Fingerprint unchanged, skipping compilation');
+        return;
+      }
+      
       // Clear existing timer
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
       }
       
       // Set new debounced timer
-      const timer = setTimeout(() => {
-        // Scenes changed (debounced), recompiling
+      compilationTimerRef.current = setTimeout(() => {
+        console.log('[PreviewPanelG] 📝 Scene content changed, triggering compilation');
+        lastCompiledFingerprintRef.current = currentFingerprint;
         compileMultiSceneComposition();
-      }, 100); // 100ms debounce
-      
-      setCompilationDebounceTimer(timer);
+      }, 150); // Reduced to 150ms - we now have better duplicate prevention
     }
     
     // Cleanup on unmount
     return () => {
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
       }
     };
   }, [scenesFingerprint, audioFingerprint, compileMultiSceneComposition]);
