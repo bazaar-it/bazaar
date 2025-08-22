@@ -1553,9 +1553,9 @@ function ${compiled.componentName}WithErrorBoundary() {
               sceneImports.push(compiled.compiledCode);
               sceneImports.push(errorBoundaryWrapper);
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName}WithErrorBoundary />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${compiled.componentName}WithErrorBoundary, {})
+                )
               `);
               
             } else {
@@ -1565,9 +1565,9 @@ function ${compiled.componentName}WithErrorBoundary() {
               // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
               sceneImports.push(compiled.compiledCode);
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName} />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${compiled.componentName}, {})
+                )
               `);
             }
 
@@ -1662,9 +1662,9 @@ function EmergencyScene${index}() {
 }`;
             sceneImports.push(emergencyFallback);
             sceneComponents.push(`
-              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                <EmergencyScene${index} />
-              </Series.Sequence>
+              React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(EmergencyScene${index}, {})
+              )
             `);
           }
         });
@@ -1889,7 +1889,7 @@ export default function MultiSceneComposition(props) {
       projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
       React.createElement(Loop, { durationInFrames: ${totalDuration} },
         React.createElement(Series, {},
-          ${sceneComponents.map(sc => `React.createElement('div', { key: Math.random() }, ${sc.trim()})`).join(',\n          ')}
+          ${sceneComponents.join(',\n          ')}
         )
       )
     )
