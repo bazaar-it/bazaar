@@ -84,7 +84,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     } else {
       if (DEBUG) console.log('[GenerateWorkspaceRoot] Project already loaded, skipping initialization');
     }
-  }, [projectId]); // Remove initialProps from dependencies to prevent re-runs
+  }, [projectId, setProject, initialProps, DEBUG]); // Include all dependencies
   
   // ✅ UPDATED: Use current project data title or fallback to initial title
   const [title, setTitle] = useState(
@@ -95,11 +95,11 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   // ✅ NEW: Update title when project data changes (auto-generated titles)
   useEffect(() => {
-    if (currentProjectData?.title && currentProjectData.title !== title) {
-      console.log(`[GenerateWorkspaceRoot] Updating title from "${title}" to "${currentProjectData.title}"`);
+    if (currentProjectData?.title) {
+      console.log(`[GenerateWorkspaceRoot] Updating title to "${currentProjectData.title}"`);
       setTitle(currentProjectData.title);
     }
-  }, [currentProjectData?.title, title]);
+  }, [currentProjectData?.title]); // Only depend on currentProjectData.title to avoid infinite loops
 
   // Handle panel add when clicked or dragged from sidebar
   const handleAddPanel = useCallback((panelType: PanelTypeG | 'timeline') => {

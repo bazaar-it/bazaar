@@ -334,7 +334,9 @@ export default function ChatPanelG({
     const iconRefs: string[] = [];
     let iconMatch;
     while ((iconMatch = iconPattern.exec(trimmedMessage)) !== null) {
-      iconRefs.push(iconMatch[1]);
+      if (iconMatch[1]) {
+        iconRefs.push(iconMatch[1]);
+      }
     }
     
     // If we have icons, append them to the message in a clear format
@@ -542,7 +544,9 @@ export default function ChatPanelG({
     const icons: string[] = [];
     let match;
     while ((match = iconPattern.exec(newValue)) !== null) {
-      icons.push(match[1]);
+      if (match[1]) {
+        icons.push(match[1]);
+      }
     }
     if (icons.length > 0) {
       console.log('[ChatPanelG] Extracted icons:', icons);
@@ -603,7 +607,7 @@ export default function ChatPanelG({
   // Auto-resize when message changes
   useEffect(() => {
     adjustTextareaHeight();
-  }, [message, adjustTextareaHeight]);
+  }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
 
   // Create media upload handlers
@@ -1458,8 +1462,8 @@ export default function ChatPanelG({
                 </div>
 
                 <div className="flex gap-2 items-center">
-                  {/* GitHub Component Mode Toggle */}
-                  <TooltipProvider>
+                  {/* GitHub Component Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1492,10 +1496,10 @@ export default function ChatPanelG({
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
-                  {/* Figma Mode Toggle */}
-                  <TooltipProvider>
+                  {/* Figma Mode Toggle - HIDDEN */}
+                  {/* <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
@@ -1534,7 +1538,7 @@ export default function ChatPanelG({
                         </p>
                       </TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
+                  </TooltipProvider> */}
                   
                   {/* Enhance Prompt Button */}
                   <TooltipProvider>

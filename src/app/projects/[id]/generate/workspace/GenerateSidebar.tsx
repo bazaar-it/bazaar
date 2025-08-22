@@ -46,16 +46,17 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Video, Timeline, Media, Code, Templates, Integrations
+// Workspace panels in vertical order: Projects, Chat, Media, Code, Templates
+// HIDDEN: Video, Timeline, Integrations
 const navItems: WorkspacePanelG[] = [
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
-  { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
-  { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
-  { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Media & Audio" },
+  // { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
+  // { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
+  { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Uploads & icons" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
-  { type: 'integrations' as any, id: 'integrations', name: "Integrations", icon: Zap, href: "#integrations", tooltip: "GitHub & Figma Integrations" },
+  // { type: 'integrations' as any, id: 'integrations', name: "Integrations", icon: Zap, href: "#integrations", tooltip: "GitHub & Figma Integrations" },
 ];
 
 

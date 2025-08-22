@@ -4,26 +4,60 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
-import { AudioPanel } from "./AudioPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Upload, Music, Sparkles } from "lucide-react";
+import { Upload } from "lucide-react";
+import { Icon } from '@iconify/react';
 import { IconPickerPanel } from "~/components/IconPickerPanel";
+
+// Animated audio wave component
+const AudioWaveAnimation = () => {
+  const baseHeights = [12, 20, 28, 24, 16, 32, 22, 14, 26]; // Base heights for bars
+  
+  return (
+    <>
+      <style>{`
+        @keyframes audioFlow {
+          0% { transform: scaleY(0.4); }
+          25% { transform: scaleY(1.2); }
+          50% { transform: scaleY(0.7); }
+          75% { transform: scaleY(1); }
+          100% { transform: scaleY(0.4); }
+        }
+        .audio-bar {
+          animation: audioFlow 2s ease-in-out infinite;
+          transform-origin: bottom;
+        }
+      `}</style>
+      <div className="flex items-end justify-center gap-0.5 h-8">
+        {baseHeights.map((height, i) => (
+          <div
+            key={i}
+            className="w-1 bg-gray-500 rounded-sm audio-bar"
+            style={{
+              height: `${height}px`,
+              animationDelay: `${i * 0.12}s`
+            }}
+          />
+        ))}
+      </div>
+    </>
+  );
+};
 
 type MediaPanelProps = {
   projectId: string;
   onInsertToChat?: (url: string) => void;
-  defaultTab?: 'uploads' | 'audio' | 'icons'; // For auto-opening to specific tab
+  defaultTab?: 'uploads' | 'icons'; // For auto-opening to specific tab
 };
 
 export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'uploads' }: MediaPanelProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [filter, setFilter] = useState<'all'|'images'|'videos'|'audio'|'logos'>('all');
-  const [scope, setScope] = useState<'project'|'user'>('project');
-  const projectQuery = api.project.getUploads.useQuery({ projectId }, { enabled: scope === 'project' });
-  const userQuery = api.project.getUserUploads.useQuery(undefined, { enabled: scope === 'user' });
-  const data = scope === 'project' ? projectQuery.data : userQuery.data as any;
-  const isLoading = scope === 'project' ? projectQuery.isLoading : userQuery.isLoading;
-  const refetch = scope === 'project' ? projectQuery.refetch : userQuery.refetch;
+  // Always show user uploads (all projects) by default
+  const userQuery = api.project.getUserUploads.useQuery();
+  const data = userQuery.data as any;
+  const isLoading = userQuery.isLoading;
+  const refetch = userQuery.refetch;
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,13 +96,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     onInsertToChat?.(url);
   }, [onInsertToChat]);
 
-  const formatSize = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return '—';
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${Math.max(1, Math.round(kb))}KB`;
-    const mb = kb / 1024;
-    return `${mb >= 10 ? mb.toFixed(0) : mb.toFixed(1)}MB`;
-  };
+
 
   const handleRename = async (assetId: string, newName: string) => {
     if (!newName.trim()) return;
@@ -132,63 +160,35 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="h-full flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
+        <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
           <TabsTrigger value="uploads" className="flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Uploads
           </TabsTrigger>
-          <TabsTrigger value="audio" className="flex items-center gap-2">
-            <Music className="w-4 h-4" />
-            Audio
-          </TabsTrigger>
           <TabsTrigger value="icons" className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4" />
+            <Icon icon="tdesign:icon" className="w-4 h-4" />
             Icons
           </TabsTrigger>
         </TabsList>
         
         <TabsContent value="uploads" className="flex-1 flex flex-col overflow-hidden mt-0 data-[state=inactive]:hidden">
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
-              <div className="font-medium">My uploads</div>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                <option value="all">All</option>
-                <option value="images">Images</option>
-                <option value="videos">Videos</option>
-                <option value="audio">Audio</option>
-                <option value="logos">Logos</option>
-              </select>
-            </div>
-            <div className="px-3 pt-2 flex-shrink-0">
-              <div className="inline-flex items-center gap-2 text-xs text-gray-600">
-                <label className="inline-flex items-center gap-1">
-                  <input type="radio" name="scope" value="project" checked={scope==='project'} onChange={() => setScope('project')} /> Project
-                </label>
-                <label className="inline-flex items-center gap-1">
-                  <input type="radio" name="scope" value="user" checked={scope==='user'} onChange={() => setScope('user')} /> All my projects
-                </label>
+          <div 
+            className={`flex-1 flex flex-col overflow-hidden relative ${isDragging ? 'bg-blue-50' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={(e) => {
+              // Only hide drag state if leaving the entire uploads area
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setIsDragging(false);
+              }
+            }}
+            onDrop={onDrop}
+          >
+            {/* Drag overlay */}
+            {isDragging && (
+              <div className="absolute inset-0 z-50 bg-blue-50/80 border-2 border-dashed border-blue-400 rounded-lg flex items-center justify-center">
+                <div className="text-blue-600 text-lg font-medium">Drop files to upload</div>
               </div>
-            </div>
-
-            {/* Upload controls */}
-            <div
-              className={`mx-3 mt-3 mb-2 rounded-lg border ${isDragging ? 'border-orange-400 bg-orange-50/40' : 'border-dashed border-gray-300'} p-4 text-sm text-gray-600 flex items-center justify-between flex-shrink-0`}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={onDrop}
-            >
-              <div>
-                {isUploading ? 'Uploading…' : isDragging ? 'Drop files to upload' : 'Drag & drop files here, or'}
-              </div>
-              <div>
-                <button className="px-3 py-1 border rounded-md" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>Upload</button>
-                <input ref={fileInputRef} type="file" multiple accept="image/*,video/mp4,video/webm,audio/*" className="hidden" onChange={onFileSelect} />
-              </div>
-            </div>
+            )}
 
             {/* Scrollable content area */}
             {isLoading ? (
@@ -196,6 +196,33 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
             ) : (
               <div className="flex-1 overflow-y-auto p-3">
                 <div className="grid grid-cols-2 gap-3">
+                  {/* Upload button as first item in grid */}
+                  <div className="border-2 border-dashed border-gray-300 hover:border-gray-400 rounded-lg transition-colors duration-200 bg-gray-50 hover:bg-gray-100 flex items-center justify-center">
+                    <div className="flex flex-col items-center justify-center text-gray-600 gap-2">
+                      {!isUploading ? (
+                        <>
+                          <button
+                            className="px-4 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-full transition-colors duration-200"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            Upload
+                          </button>
+                          <div className="text-xs text-center px-2 leading-tight">
+                            <div>or drop images, video</div>
+                            <div>or audio here</div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-6 h-6" />
+                          <span className="text-xs font-medium">Uploading…</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <input ref={fileInputRef} type="file" multiple accept="image/*,video/mp4,video/webm,audio/*" className="hidden" onChange={onFileSelect} />
+                  
+                  {/* Existing files */}
                   {assets.map((a: any) => (
                   <div
                     key={a.id}
@@ -211,11 +238,16 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                         <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
                       ) : a.type === 'video' ? (
                         <video src={a.url} className="w-full h-28 object-cover" muted />
+                      ) : a.type === 'audio' ? (
+                        <div className="w-full h-28 flex flex-col items-center justify-center text-sm text-gray-600 bg-gray-50 gap-2">
+                          <AudioWaveAnimation />
+                          <span className="text-xs text-center px-2">Audio</span>
+                        </div>
                       ) : (
-                        <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">Audio</div>
+                        <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">File</div>
                       )}
                     </div>
-                    <div className="p-2 text-xs text-gray-600 flex items-center justify-between">
+                    <div className="p-2 text-xs text-gray-600">
                       {editingId === a.id ? (
                         <input
                           type="text"
@@ -237,12 +269,12 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                               setEditingId(null);
                             }
                           }}
-                          className="flex-1 px-1 border rounded outline-none focus:ring-1 focus:ring-orange-400"
+                          className="w-full px-1 border rounded outline-none focus:ring-1 focus:ring-orange-400"
                           autoFocus
                         />
                       ) : (
                         <span 
-                          className="truncate max-w-[70%] cursor-text hover:text-gray-900" 
+                          className="block truncate cursor-text hover:text-gray-900" 
                           title="Click to rename"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -253,7 +285,6 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                           {a.customName || a.originalName}
                         </span>
                       )}
-                      <span>{formatSize(a.fileSize)}</span>
                     </div>
                   </div>
                 ))}
@@ -261,10 +292,6 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
               </div>
             )}
           </div>
-        </TabsContent>
-        
-        <TabsContent value="audio" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
-          <AudioPanel projectId={projectId} />
         </TabsContent>
         
         <TabsContent value="icons" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">

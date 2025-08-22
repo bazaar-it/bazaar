@@ -39,7 +39,7 @@ const ProjectThumbnail = ({ project, isVisible = true }: { project: Project; isV
     }
   );
   
-  const { component, isCompiling, compilationError, playerProps } = useCompiledProject(scenes || []);
+  const { component, isCompiling, compilationError, playerProps } = useCompiledProject(scenes);
 
   // ✅ CONDITIONAL LOGIC AFTER HOOKS
   if (error) {
@@ -131,7 +131,7 @@ const ProjectVideoPlayer = ({ project, isVisible = true }: { project: Project; i
     }
   );
   
-  const { component, isCompiling, compilationError, playerProps } = useCompiledProject(scenes || []);
+  const { component, isCompiling, compilationError, playerProps } = useCompiledProject(scenes);
 
   // ✅ CONDITIONAL LOGIC AFTER HOOKS
   if (compilationError || isCompiling || !component || !playerProps || error || isLoading || !scenes || scenes.length === 0) {
@@ -319,12 +319,13 @@ const ProjectPreview = ({
 };
 
 // Project compilation hook - compiles TSX from database scenes
-const useCompiledProject = (scenes: any[]) => {
+const useCompiledProject = (scenes: any[] | undefined) => {
   const [component, setComponent] = useState<React.ComponentType<any> | null>(null);
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationError, setCompilationError] = useState<string | null>(null);
 
   React.useEffect(() => {
+    // Handle undefined, null, or empty scenes
     if (!scenes || scenes.length === 0) {
       setComponent(null);
       setIsCompiling(false);
@@ -345,33 +346,126 @@ const useCompiledProject = (scenes: any[]) => {
       return;
     }
 
+    let blobUrl: string | null = null;
+    
     try {
+      // Validate TSX code before transformation
+      if (typeof firstScene.tsxCode !== 'string' || firstScene.tsxCode.trim().length === 0) {
+        throw new Error('Invalid TSX code: empty or non-string');
+      }
+      
+      // Basic security check for potentially dangerous patterns
+      const dangerousPatterns = [
+        /eval\s*\(/,
+        /Function\s*\(/,
+        /document\.write/,
+        /innerHTML\s*=/,
+        /outerHTML\s*=/,
+        /script>/i,
+        /javascript:/i,
+        /vbscript:/i,
+        /data:text\/html/i
+      ];
+      
+      if (dangerousPatterns.some(pattern => pattern.test(firstScene.tsxCode))) {
+        throw new Error('TSX code contains potentially unsafe patterns');
+      }
+
       // Transform TSX to JavaScript using Sucrase
       const transformedCode = transform(firstScene.tsxCode, {
         transforms: ['typescript', 'jsx'],
       }).code;
 
-      // Create a blob URL for the component
-      const blob = new Blob([transformedCode], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
+      // Create a blob URL for the component with proper MIME type
+      const blob = new Blob([transformedCode], { 
+        type: 'application/javascript' 
+      });
+      blobUrl = URL.createObjectURL(blob);
 
-      // Dynamically import the component
+      // Set a timeout for dynamic import to prevent hanging
+      const importTimeout = setTimeout(() => {
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl);
+          blobUrl = null;
+        }
+        setCompilationError('Component compilation timed out');
+        setIsCompiling(false);
+      }, 10000); // 10 second timeout
+
+      // Dynamically import the component with proper error handling
       import(/* webpackIgnore: true */ blobUrl)
         .then((module) => {
+          clearTimeout(importTimeout);
+          
+          if (!module?.default) {
+            throw new Error('Component has no default export');
+          }
+          
+          // Validate that the imported module is a React component
+          if (typeof module.default !== 'function') {
+            throw new Error('Default export is not a React component');
+          }
+          
           setComponent(() => module.default);
           setIsCompiling(false);
-          URL.revokeObjectURL(blobUrl); // Clean up
+          setCompilationError(null);
+          
+          // Clean up blob URL
+          if (blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+            blobUrl = null;
+          }
         })
-        .catch((error) => {
-          console.error('Failed to compile project scene:', error);
-          setCompilationError(error.message);
+        .catch((importError) => {
+          clearTimeout(importTimeout);
+          console.error('Failed to import compiled component:', importError);
+          
+          // Provide more specific error messages based on error type
+          let errorMessage = 'Failed to compile component';
+          
+          if (importError.message?.includes('CSP')) {
+            errorMessage = 'Component blocked by Content Security Policy';
+          } else if (importError.message?.includes('network')) {
+            errorMessage = 'Network error during component compilation';
+          } else if (importError.message?.includes('syntax')) {
+            errorMessage = 'Syntax error in component code';
+          } else if (importError.message) {
+            errorMessage = `Compilation error: ${importError.message}`;
+          }
+          
+          setCompilationError(errorMessage);
           setIsCompiling(false);
-          URL.revokeObjectURL(blobUrl); // Clean up
+          
+          // Ensure blob URL cleanup
+          if (blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+            blobUrl = null;
+          }
         });
-    } catch (error) {
-      console.error('Failed to transform TSX:', error);
-      setCompilationError(error instanceof Error ? error.message : 'Transform failed');
+        
+    } catch (transformError) {
+      console.error('Failed to transform TSX:', transformError);
+      
+      // Provide specific error message for transformation failures
+      let errorMessage = 'Failed to transform component code';
+      if (transformError instanceof Error) {
+        if (transformError.message.includes('unsafe patterns')) {
+          errorMessage = 'Component contains unsafe code patterns';
+        } else if (transformError.message.includes('Invalid TSX')) {
+          errorMessage = 'Invalid component code format';
+        } else {
+          errorMessage = `Transform error: ${transformError.message}`;
+        }
+      }
+      
+      setCompilationError(errorMessage);
       setIsCompiling(false);
+      
+      // Cleanup blob URL if it was created
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+        blobUrl = null;
+      }
     }
   }, [scenes]);
 
@@ -531,27 +625,50 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const filteredAndSortedProjects = useMemo(() => {
     if (!projects) return [];
     
-    // Filter by search query
-    let filtered = projects;
-    if (searchQuery.trim()) {
-      filtered = projects.filter(project =>
-        project.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+    // Memoize search query normalization to avoid repeated toLowerCase calls
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     
-    // Sort: favorites first (except current), current project, then by updated date
-    return filtered.sort((a, b) => {
-      // Current project always first
-      if (a.id === currentProjectId) return -1;
-      if (b.id === currentProjectId) return 1;
-      
-      // Then favorites
-      if (a.isFavorite && !b.isFavorite) return -1;
-      if (!a.isFavorite && b.isFavorite) return 1;
-      
-      // Then by updated date (newest first)
-      return new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime();
-    });
+    // Pre-filter and sort in a single pass for better performance
+    const processed = projects
+      .filter(project => {
+        // Skip filtering if no search query
+        if (!normalizedSearchQuery) return true;
+        // Cache the lowercase title to avoid repeated calls
+        return project.title.toLowerCase().includes(normalizedSearchQuery);
+      })
+      .map(project => {
+        // Pre-calculate sort keys to avoid repeated Date parsing
+        const updatedTime = project.updatedAt ? new Date(project.updatedAt).getTime() : 0;
+        const isCurrentProject = project.id === currentProjectId;
+        
+        return {
+          ...project,
+          _sortKeys: {
+            isCurrentProject,
+            isFavorite: project.isFavorite,
+            updatedTime
+          }
+        };
+      })
+      .sort((a, b) => {
+        // Use pre-calculated sort keys for faster comparison
+        const aKeys = a._sortKeys;
+        const bKeys = b._sortKeys;
+        
+        // Current project always first
+        if (aKeys.isCurrentProject) return -1;
+        if (bKeys.isCurrentProject) return 1;
+        
+        // Then favorites
+        if (aKeys.isFavorite && !bKeys.isFavorite) return -1;
+        if (!aKeys.isFavorite && bKeys.isFavorite) return 1;
+        
+        // Then by updated date (newest first)
+        return bKeys.updatedTime - aKeys.updatedTime;
+      })
+      .map(({ _sortKeys, ...project }) => project); // Remove temporary sort keys
+    
+    return processed;
   }, [projects, searchQuery, currentProjectId]);
 
   // Calculate pagination
