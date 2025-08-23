@@ -132,7 +132,7 @@ export class TemplateCustomizer {
   
   private replaceContent(
     code: string,
-    websiteData: ExtractedBrandData,
+    websiteData: ExtractedBrandDataV4,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
@@ -143,9 +143,9 @@ export class TemplateCustomizer {
       { from: /Your Title Here/gi, to: narrativeScene.title },
       { from: /Your text here/gi, to: narrativeScene.narrative },
       { from: /Lorem ipsum.*/gi, to: narrativeScene.narrative },
-      { from: /Welcome to our platform/gi, to: websiteData.product?.value_prop?.headline || websiteData.page?.title || 'Welcome' },
-      { from: /Get Started/gi, to: websiteData.ctas?.[0]?.label || 'Get Started' },
-      { from: /Learn More/gi, to: websiteData.ctas?.[1]?.label || websiteData.ctas?.[0]?.label || 'Learn More' },
+      { from: /Welcome to our platform/gi, to: websiteData.product?.value_prop?.headline || websiteData.brand?.identity?.name || 'Welcome' },
+      { from: /Get Started/gi, to: websiteData.content?.ctas?.[0]?.label || 'Get Started' },
+      { from: /Learn More/gi, to: websiteData.content?.ctas?.[1]?.label || websiteData.content?.ctas?.[0]?.label || 'Learn More' },
     ];
     
     // Add visual elements as text
@@ -162,25 +162,28 @@ export class TemplateCustomizer {
         result = result.replace(/The Old Way/gi, websiteData.product?.problem || 'The challenge');
         break;
       case 'discovery':
-        result = result.replace(/Introducing/gi, `Introducing ${websiteData.page?.title || websiteData.brand?.name || 'Our Solution'}`);
+        result = result.replace(/Introducing/gi, `Introducing ${websiteData.brand?.identity?.name || 'Our Solution'}`);
         break;
       case 'transformation':
         // Add features
         (websiteData.product?.features || []).slice(0, 3).forEach((feature: any, index: number) => {
           result = result.replace(
             new RegExp(`Benefit ${index + 1}`, 'gi'),
-            feature.title
+            feature.title || feature.name
           );
         });
         break;
       case 'triumph':
         // Add social proof
-        if (websiteData.social_proof?.stats?.users || websiteData.social_proof?.stats?.customers) {
-          result = result.replace(/1000\+/gi, websiteData.social_proof.stats.users || websiteData.social_proof.stats.customers);
+        if (websiteData.socialProof?.stats?.length) {
+          const userStat = websiteData.socialProof.stats.find((s: any) => s.label?.toLowerCase().includes('user'));
+          if (userStat) {
+            result = result.replace(/1000\+/gi, userStat.value);
+          }
         }
         break;
       case 'invitation':
-        result = result.replace(/Start Your Journey/gi, websiteData.ctas?.[0]?.label || 'Get Started');
+        result = result.replace(/Start Your Journey/gi, websiteData.content?.ctas?.[0]?.label || 'Get Started');
         break;
     }
     
