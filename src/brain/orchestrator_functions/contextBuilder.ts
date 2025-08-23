@@ -238,25 +238,29 @@ export class ContextBuilder {
         // Continue even if save fails
       }
       
-      // Return structured web context
-      if (analysis.screenshotUrls && analysis.pageData) {
-        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.pageData.title}`);
+      // Return structured web context for V4
+      if (analysis.screenshots && (analysis.brand || analysis.product)) {
+        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.brand?.identity?.name || 'website'}`);
         
         // Debug: Check if extraction data is present
-        console.log(`📚 [CONTEXT BUILDER] PageData structure:`, {
-          hasPageData: !!analysis.pageData,
-          hasVisualDesign: !!analysis.pageData?.visualDesign,
-          hasExtraction: !!analysis.pageData?.visualDesign?.extraction,
-          extractionKeys: analysis.pageData?.visualDesign?.extraction ? 
-            Object.keys(analysis.pageData.visualDesign.extraction).slice(0, 5) : 
-            'none'
+        console.log(`📚 [CONTEXT BUILDER] V4 Data structure:`, {
+          hasBrand: !!analysis.brand,
+          hasProduct: !!analysis.product,
+          hasScreenshots: !!analysis.screenshots,
+          screenshotCount: analysis.screenshots?.length || 0,
+          brandKeys: analysis.brand ? Object.keys(analysis.brand).slice(0, 5) : 'none'
         });
         
         const webContext = {
-          originalUrl: analysis.url!,
-          screenshotUrls: analysis.screenshotUrls,
-          pageData: analysis.pageData,
-          analyzedAt: analysis.analyzedAt!
+          originalUrl: analysis.metadata?.url || url,
+          screenshotUrls: analysis.screenshots?.map(s => s.url) || [],
+          screenshots: analysis.screenshots,
+          brand: analysis.brand,
+          product: analysis.product,
+          socialProof: analysis.socialProof,
+          content: analysis.content,
+          metadata: analysis.metadata,
+          analyzedAt: new Date().toISOString()
         };
         
         // Fire-and-forget async save to database
@@ -265,11 +269,16 @@ export class ContextBuilder {
             const { webContextService } = await import('~/server/services/data/web-context.service');
             await webContextService.saveWebContext(
               input.projectId,
-              analysis.url!,
+              analysis.metadata?.url || url,
               {
-                screenshotUrls: analysis.screenshotUrls!,
-                pageData: analysis.pageData!,
-                analyzedAt: analysis.analyzedAt!
+                screenshotUrls: analysis.screenshots?.map((s: any) => s.url) || [],
+                pageData: {
+                  title: analysis.brand?.identity?.name || 'Untitled',
+                  visualDesign: {
+                    extraction: analysis
+                  }
+                },
+                analyzedAt: new Date().toISOString()
               },
               input.prompt
             );

@@ -1,4 +1,4 @@
-import type { ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV4";
+import type { ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import type { FormattedBrandStyle } from "./brand-formatter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
@@ -12,7 +12,7 @@ export interface CustomizedScene {
 export interface CustomizationOptions {
   templates: SelectedTemplate[];
   brandStyle: FormattedBrandStyle;
-  websiteData: ExtractedBrandData; // Use V2 data structure
+  websiteData: ExtractedBrandDataV4; // Use V4 data structure
   narrativeScenes: HeroJourneyScene[];
 }
 
@@ -50,7 +50,7 @@ export class TemplateCustomizer {
   private customizeTemplateCode(
     templateCode: string,
     brandStyle: FormattedBrandStyle,
-    websiteData: ExtractedBrandData,
+    websiteData: ExtractedBrandDataV4,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
