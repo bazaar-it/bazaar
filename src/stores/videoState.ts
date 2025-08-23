@@ -51,7 +51,7 @@ export type DbMessage = {
 }
 
 // Define ProjectState interface
-interface AudioTrack {
+export interface AudioTrack {
   id: string;
   url: string;
   name: string;

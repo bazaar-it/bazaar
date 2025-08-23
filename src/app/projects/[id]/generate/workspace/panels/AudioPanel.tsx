@@ -8,25 +8,12 @@ import { Label } from "~/components/ui/label";
 import { Slider } from "~/components/ui/slider";
 import { Music, Upload, Play, Pause, Scissors, Volume2, X, Check, Zap, Volume1 } from "lucide-react";
 import { useVideoState } from "~/stores/videoState";
+import type { AudioTrack } from "~/stores/videoState";
 import { toast } from "sonner";
 import { api } from "~/trpc/react";
 
 interface AudioPanelProps {
   projectId: string;
-}
-
-interface AudioTrack {
-  id?: string;
-  url: string;
-  name: string;
-  duration: number;
-  startTime: number;
-  endTime: number;
-  volume: number;
-  // Phase 1 enhancements
-  fadeInDuration?: number;
-  fadeOutDuration?: number;
-  playbackRate?: number;
 }
 
 export function AudioPanel({ projectId }: AudioPanelProps) {
@@ -70,14 +57,14 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
   useEffect(() => {
     if (project?.audio) {
       console.log('[AudioPanel] Loading audio from database:', project.audio);
-      // Ensure the audio object has an id property
-      const audioWithId = {
+      // Ensure the audio object has an id property (AudioTrack from VideoState requires id)
+      const audioWithId: AudioTrack = {
         ...project.audio,
-        id: project.audio.id || project.audio.url || 'default-id'
-      };
-      setAudioTrack(audioWithId as AudioTrack);
+        id: (project.audio as any).id || project.audio.url || 'default-id'
+      } as AudioTrack;
+      setAudioTrack(audioWithId);
       // Also sync to Zustand for consistency
-      updateProjectAudio(projectId, audioWithId as AudioTrack);
+      updateProjectAudio(projectId, audioWithId);
     } else {
       // Fallback to Zustand state if no database audio
       const projectState = useVideoState.getState().projects[projectId];

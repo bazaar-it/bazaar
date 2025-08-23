@@ -149,7 +149,7 @@ export default function BrandExtractionPage() {
     }
   };
 
-  const getBrandProfileQuery = api.websitePipeline.getBrandProfile.useQuery(
+  const getBrandProfileQuery = api.brandProfile.getByProject.useQuery(
     { projectId: currentProjectId },
     {
       enabled: !!currentProjectId,

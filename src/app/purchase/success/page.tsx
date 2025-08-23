@@ -18,7 +18,7 @@ function PurchaseSuccessContent() {
   useEffect(() => {
     // Invalidate usage queries to force refresh
     utils.usage.getPromptUsage.invalidate();
-    utils.payment.getUserCredits.invalidate();
+    // utils.payment.getUserCredits.invalidate(); // Method doesn't exist, using prompt usage instead
     
     // Show success toast
     toast.success("Payment successful! Your prompts have been added.");

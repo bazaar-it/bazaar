@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
             prompt: userMessage,
             contextId: projectId,
           }).then(async (titleResult) => {
-            let finalTitle = titleResult.title;
+            let finalTitle = titleResult.titles?.[0] || "Untitled Video";
           
           // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
           if (finalTitle === "Untitled Video") {
