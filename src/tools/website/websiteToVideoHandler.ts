@@ -21,6 +21,7 @@ import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
 import { TemplateSelector } from "~/server/services/website/template-selector-v2";
 import { TemplateCustomizerAI } from "~/server/services/website/template-customizer-ai";
 import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/services/website/save-brand-profile";
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface WebsiteToVideoInput {
   userPrompt: string;
@@ -47,8 +48,7 @@ export interface StreamingEvent {
 
 export class WebsiteToVideoHandler {
   static async execute(input: WebsiteToVideoInput): Promise<ToolExecutionResult> {
-    console.log('🌐 [WEBSITE HANDLER] Starting website-to-video generation');
-    console.log('🌐 [WEBSITE HANDLER] Input:', {
+    toolsLogger.info('🌐 [WEBSITE HANDLER] Starting website-to-video generation', {
       url: input.websiteUrl,
       projectId: input.projectId,
       style: input.style || 'dynamic',
@@ -75,19 +75,19 @@ export class WebsiteToVideoHandler {
       const screenshotCollector: any[] = [];
       
       if (input.webContext) {
-        console.log('🌐 [WEBSITE HANDLER] Step 1: Using existing web analysis from context');
+        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Using existing web analysis from context');
         // Handle both V1 format (from context) and V2 format
         if (input.webContext.pageData?.visualDesign?.extraction) {
           // V1 format with embedded V2 data
           websiteData = input.webContext.pageData.visualDesign.extraction;
-          console.log('🌐 [WEBSITE HANDLER] Using V2 data from V1 wrapper');
+          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using V2 data from V1 wrapper');
         } else if (input.webContext.brand && input.webContext.product) {
           // Direct V2 format
           websiteData = input.webContext;
-          console.log('🌐 [WEBSITE HANDLER] Using direct V2 data');
+          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using direct V2 data');
         } else {
           // Fallback to fresh analysis if format is unknown
-          console.log('🌐 [WEBSITE HANDLER] Unknown format, running fresh analysis');
+          toolsLogger.warn('🌐 [WEBSITE HANDLER] Unknown format, running fresh analysis');
           const analyzer = new WebAnalysisAgentV4(input.projectId);
           v4Data = await analyzer.analyze(input.websiteUrl);
           websiteData = convertV4ToSimplified(v4Data);
@@ -95,11 +95,11 @@ export class WebsiteToVideoHandler {
           // Collect screenshots from V4 data
           if (v4Data.screenshots) {
             screenshotCollector.push(...v4Data.screenshots);
-            console.log(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
+            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
           }
         }
       } else {
-        console.log('🌐 [WEBSITE HANDLER] Step 1: Analyzing website...');
+        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Analyzing website...');
         const analyzer = new WebAnalysisAgentV4(input.projectId);
         try {
           v4Data = await analyzer.analyze(input.websiteUrl);
@@ -108,13 +108,11 @@ export class WebsiteToVideoHandler {
           // Collect screenshots from V4 data
           if (v4Data.screenshots) {
             screenshotCollector.push(...v4Data.screenshots);
-            console.log(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
+            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
           }
         } catch (analysisError) {
-          console.log('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data...');
-          console.error('🌐 [WEBSITE HANDLER] Full analysis error:', {
-            message: (analysisError as any).message,
-            stack: (analysisError as any).stack,
+          toolsLogger.warn('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data...');
+          toolsLogger.error('🌐 [WEBSITE HANDLER] Full analysis error', analysisError as Error, {
             url: input.websiteUrl
           });
           // Create minimal fallback data from URL
@@ -146,28 +144,28 @@ export class WebsiteToVideoHandler {
         websiteData.page.title.toLowerCase().includes('utmb') === false;
       
       if (isFallbackData) {
-        console.log('⚠️ [WEBSITE HANDLER] Using fallback data - actual extraction may have failed');
+        toolsLogger.warn('⚠️ [WEBSITE HANDLER] Using fallback data - actual extraction may have failed');
         debugData.extractionStatus = 'fallback';
       } else {
         debugData.extractionStatus = 'success';
       }
       
       // 2. Save to brand_profile table and format brand data
-      console.log('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
       
       // Save to database
       await saveBrandProfile(input.projectId, input.websiteUrl, websiteData);
       
       // Create brand style directly from extracted data (skip formatter)
       const brandStyle = createBrandStyleFromExtraction(websiteData);
-      console.log('🌐 [WEBSITE HANDLER] Brand style created:', {
+      toolsLogger.debug('🌐 [WEBSITE HANDLER] Brand style created', {
         primaryColor: brandStyle.colors.primary,
         primaryFont: brandStyle.typography.primaryFont,
         animationStyle: brandStyle.animation.style
       });
       
       // 3. Generate hero's journey narrative
-      console.log('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
       const storyGenerator = new HeroJourneyGenerator();
       const narrativeScenes = storyGenerator.generateNarrative(websiteData);
       
@@ -184,7 +182,7 @@ export class WebsiteToVideoHandler {
       });
       
       // 4. Select best templates for each narrative beat with brand intelligence
-      console.log('🌐 [WEBSITE HANDLER] Step 4: Selecting templates with brand context...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 4: Selecting templates with brand context...');
       const selector = new TemplateSelector();
       const selectedTemplates = await selector.selectTemplatesForJourney(
         adjustedScenes, 
@@ -201,7 +199,7 @@ export class WebsiteToVideoHandler {
       }));
       
       // 5. ✨ STREAMING: Customize templates with incremental database saves
-      console.log('🌐 [WEBSITE HANDLER] Step 5: Streaming template customization...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 5: Streaming template customization...');
       const customizer = new TemplateCustomizerAI();
       
       // Store generated prompts for debug
@@ -220,7 +218,7 @@ export class WebsiteToVideoHandler {
       // Define streaming callback for immediate database persistence
       const { randomUUID } = require('crypto');
       const onSceneComplete = async (scene: any, index: number) => {
-        console.log(`🌐 [WEBSITE HANDLER] Scene ${index + 1} completed: ${scene.name}`);
+        toolsLogger.debug(`🌐 [WEBSITE HANDLER] Scene ${index + 1} completed: ${scene.name}`);
         
         // Save scene to database immediately
         const sceneId = randomUUID();
@@ -283,7 +281,7 @@ export class WebsiteToVideoHandler {
         })
         .where(eq(projects.id, input.projectId));
       
-      console.log('🌐 [WEBSITE HANDLER] Generation complete!');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Generation complete!');
       
       // Build success message with scene details
       const sceneList = customizedScenes.map((scene, i) => 

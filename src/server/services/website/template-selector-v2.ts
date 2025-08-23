@@ -2,6 +2,7 @@ import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
 import { getTemplateMetadata, TEMPLATE_METADATA } from "./template-metadata";
 import { TemplateLoaderService } from "~/server/services/ai/templateLoader.service";
 import type { SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface SelectedTemplate {
   templateId: string;
@@ -70,7 +71,7 @@ export class TemplateSelector {
     // Analyze brand context for intelligent selection
     const brandContext = brandData ? this.analyzeBrandContext(brandData) : null;
     
-    console.log('🎨 [TEMPLATE SELECTOR] Brand context:', brandContext);
+    toolsLogger.debug('🎨 [TEMPLATE SELECTOR] Brand context', { brandContext });
     
     for (const scene of narrativeScenes) {
       const template = await this.selectTemplateForBeat(scene, style, brandContext);
@@ -92,7 +93,7 @@ export class TemplateSelector {
     // Apply brand-aware filtering if we have brand context
     if (brandContext) {
       templateOptions = this.applyBrandFiltering(templateOptions, brandContext, scene);
-      console.log(`🎨 [TEMPLATE SELECTOR] Filtered templates for ${scene.emotionalBeat} (${brandContext.archetype}):`, templateOptions);
+      toolsLogger.debug(`🎨 [TEMPLATE SELECTOR] Filtered templates for ${scene.emotionalBeat} (${brandContext.archetype})`, { templateOptions });
     }
     
     const loader = new TemplateLoaderService();
@@ -102,7 +103,7 @@ export class TemplateSelector {
       const templateMeta = getTemplateMetadata(templateId);
       
       if (templateMeta) {
-        console.log(`🎨 Selected template ${templateId} for ${scene.emotionalBeat} beat`);
+        toolsLogger.debug(`🎨 Selected template ${templateId} for ${scene.emotionalBeat} beat`);
         
         // Load the actual template code
         const templateCode = await loader.loadTemplateCode(templateId);

@@ -1,6 +1,7 @@
 import { db } from "~/server/db";
 import { brandProfiles } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
+import { dbLogger } from '~/lib/utils/logger';
 
 /**
  * Save extracted brand data to brand_profile table
@@ -10,7 +11,7 @@ export async function saveBrandProfile(
   websiteUrl: string,
   extractedData: any
 ) {
-  console.log('💾 [BRAND PROFILE] Saving brand data to database...');
+  dbLogger.info('💾 [BRAND PROFILE] Saving brand data to database...');
   
   try {
     // Extract brand data from the nested structure (supports V2, V3, and V4)
@@ -98,7 +99,7 @@ export async function saveBrandProfile(
     };
     
     if (existing) {
-      console.log('💾 [BRAND PROFILE] Updating existing profile...');
+      dbLogger.debug('💾 [BRAND PROFILE] Updating existing profile...');
       await db
         .update(brandProfiles)
         .set({
@@ -109,7 +110,7 @@ export async function saveBrandProfile(
       
       return { ...existing, ...profileData };
     } else {
-      console.log('💾 [BRAND PROFILE] Creating new profile...');
+      dbLogger.debug('💾 [BRAND PROFILE] Creating new profile...');
       const [newProfile] = await db
         .insert(brandProfiles)
         .values(profileData)

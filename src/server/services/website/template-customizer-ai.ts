@@ -6,6 +6,7 @@
 import type { SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface CustomizedScene {
   name: string;
@@ -22,7 +23,7 @@ export interface TemplateCustomizationInput {
 
 export class TemplateCustomizerAI {
   async customizeTemplates(input: TemplateCustomizationInput): Promise<CustomizedScene[]> {
-    console.log('🤖 [AI CUSTOMIZER] Customizing templates with brand data');
+    toolsLogger.info('🤖 [AI CUSTOMIZER] Customizing templates with brand data');
     
     const customizedScenes: CustomizedScene[] = [];
     
@@ -31,11 +32,11 @@ export class TemplateCustomizerAI {
       const narrativeScene = input.narrativeScenes[i];
       
       if (!template || !narrativeScene) {
-        console.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
+        toolsLogger.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
         continue;
       }
       
-      console.log(`🤖 [AI CUSTOMIZER] Customizing template: ${template.templateId}`);
+      toolsLogger.debug(`🤖 [AI CUSTOMIZER] Customizing template: ${template.templateId}`);
       
       const customizedCode = await this.customizeWithAI(
         template.templateCode,
@@ -59,7 +60,7 @@ export class TemplateCustomizerAI {
     input: TemplateCustomizationInput,
     onSceneComplete?: (scene: CustomizedScene, index: number) => Promise<void>
   ): Promise<CustomizedScene[]> {
-    console.log('🤖 [AI CUSTOMIZER] Starting streaming customization');
+    toolsLogger.info('🤖 [AI CUSTOMIZER] Starting streaming customization');
     
     const customizedScenes: CustomizedScene[] = [];
     
@@ -68,11 +69,11 @@ export class TemplateCustomizerAI {
       const narrativeScene = input.narrativeScenes[i];
       
       if (!template || !narrativeScene) {
-        console.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
+        toolsLogger.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
         continue;
       }
       
-      console.log(`🤖 [AI CUSTOMIZER] Processing scene ${i + 1}/${input.templates.length}: ${narrativeScene.title}`);
+      toolsLogger.debug(`🤖 [AI CUSTOMIZER] Processing scene ${i + 1}/${input.templates.length}: ${narrativeScene.title}`);
       
       // Generate the scene (reuse existing AI logic)
       const customizedCode = await this.customizeWithAI(
@@ -175,20 +176,20 @@ Return ONLY the modified code, no explanations.`;
         projectId: 'template-customization'
       };
       
-      console.log('🤖 [AI CUSTOMIZER] Using Edit tool with complete brand JSON');
+      toolsLogger.debug('🤖 [AI CUSTOMIZER] Using Edit tool with complete brand JSON');
       const result = await editTool.run(editInput);
       
       if (result.success && result.data?.tsxCode) {
-        console.log('🤖 [AI CUSTOMIZER] Successfully customized with Edit tool');
+        toolsLogger.debug('🤖 [AI CUSTOMIZER] Successfully customized with Edit tool');
         return result.data.tsxCode;
       } else {
-        console.error('🤖 [AI CUSTOMIZER] Edit tool failed:', result.error);
+        toolsLogger.error('🤖 [AI CUSTOMIZER] Edit tool failed', undefined, { error: result.error });
         // Fallback to basic replacement
         return this.basicCustomization(templateCode, brandStyle, websiteData, narrativeScene);
       }
       
     } catch (error: any) {
-      console.error('🤖 [AI CUSTOMIZER] Error using Edit tool:', error);
+      toolsLogger.error('🤖 [AI CUSTOMIZER] Error using Edit tool', error);
       // Fallback to basic replacement if error occurs
       return this.basicCustomization(templateCode, brandStyle, websiteData, narrativeScene);
     }

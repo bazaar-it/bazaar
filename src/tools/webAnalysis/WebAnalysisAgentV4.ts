@@ -5,6 +5,7 @@
 
 import * as playwrightCore from 'playwright-core';
 import { uploadScreenshotToR2 } from '~/lib/utils/r2-upload';
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface ExtractedBrandDataV4 {
   brand?: {
@@ -132,7 +133,7 @@ export class WebAnalysisAgentV4 {
   }
 
   async analyze(url: string): Promise<ExtractedBrandDataV4> {
-    console.log(`🚀 WebAnalysisV4: Starting analysis of ${url}`);
+    toolsLogger.info(`🚀 WebAnalysisV4: Starting analysis of ${url}`);
     
     let context: any = null;
     let page: any = null;
@@ -325,8 +326,8 @@ export class WebAnalysisAgentV4 {
         }
       };
       
-      console.log(`✨ WebAnalysisV4: Analysis complete`);
-      console.log(`🎨 Extracted colors:`, {
+      toolsLogger.info(`✨ WebAnalysisV4: Analysis complete`);
+      toolsLogger.debug(`🎨 Extracted colors`, {
         primary: finalData.brand?.visual?.colors?.primary,
         secondary: finalData.brand?.visual?.colors?.secondary,
         accent: finalData.brand?.visual?.colors?.accent
