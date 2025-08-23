@@ -25,6 +25,10 @@ export default {
   
   // Module name mapping for path aliases (~/...)
   moduleNameMapper: {
+    // Mock the env module first (higher priority)
+    '^~/env\\.js$': '<rootDir>/src/__mocks__/env.js',
+    '^~/env$': '<rootDir>/src/__mocks__/env.js',
+    
     // TypeScript path mapping for ~ alias
     '^~/(.*)$': '<rootDir>/src/$1',
     
