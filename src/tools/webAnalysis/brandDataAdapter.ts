@@ -76,7 +76,19 @@ export interface SimplifiedBrandData {
  * Convert V4 brand data to simplified format for Hero's Journey
  */
 export function convertV4ToSimplified(v4Data: ExtractedBrandDataV4): SimplifiedBrandData {
-  return {
+  // Log what we're converting
+  console.log('🔄 [ADAPTER] Converting V4 data to simplified format:', {
+    hasIdentity: !!v4Data.brand?.identity,
+    identityName: v4Data.brand?.identity?.name,
+    hasVisual: !!v4Data.brand?.visual,
+    primaryColor: v4Data.brand?.visual?.colors?.primary,
+    hasProduct: !!v4Data.product,
+    productHeadline: v4Data.product?.value_prop?.headline,
+    featuresCount: v4Data.product?.features?.length || 0,
+    hasMetrics: !!v4Data.metrics
+  });
+  
+  const result: SimplifiedBrandData = {
     page: {
       url: v4Data.metadata?.url || '',
       title: v4Data.brand?.identity?.name || 'Website',
@@ -137,6 +149,16 @@ export function convertV4ToSimplified(v4Data: ExtractedBrandDataV4): SimplifiedB
     },
     extractionMeta: v4Data.metadata
   };
+  
+  // Log the result
+  console.log('🔄 [ADAPTER] Simplified data result:', {
+    pageTitle: result.page.title,
+    brandColors: result.brand.colors.primary,
+    featuresConverted: result.product.features.length,
+    hasExtractonMeta: !!result.extractionMeta
+  });
+  
+  return result;
 }
 
 /**

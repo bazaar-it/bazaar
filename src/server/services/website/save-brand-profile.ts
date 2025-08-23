@@ -14,28 +14,48 @@ export async function saveBrandProfile(
   dbLogger.info('💾 [BRAND PROFILE] Saving brand data to database...');
   
   try {
-    // Extract brand data from the nested structure (supports V2, V3, and V4)
-    const brandData = extractedData.pageData?.visualDesign?.extraction?.brand || 
-                     extractedData.brand || 
+    // Log the structure we're receiving for debugging
+    dbLogger.debug('💾 [BRAND PROFILE] Received data structure:', {
+      hasPageData: !!extractedData.pageData,
+      hasBrand: !!extractedData.brand,
+      hasProduct: !!extractedData.product,
+      hasSocialProof: !!extractedData.social_proof,
+      topLevelKeys: Object.keys(extractedData)
+    });
+    
+    // Handle SimplifiedBrandData structure from brandDataAdapter
+    const brandData = extractedData.brand || 
+                     extractedData.pageData?.visualDesign?.extraction?.brand || 
                      {};
     
-    const media = extractedData.pageData?.visualDesign?.extraction?.media || 
-                  extractedData.media || 
+    const media = extractedData.media || 
+                  extractedData.pageData?.visualDesign?.extraction?.media || 
                   {};
     
-    const socialProof = extractedData.pageData?.visualDesign?.extraction?.socialProof || 
-                       extractedData.socialProof || 
+    // Note: SimplifiedBrandData uses 'social_proof' not 'socialProof'
+    const socialProof = extractedData.social_proof || 
+                       extractedData.socialProof ||
+                       extractedData.pageData?.visualDesign?.extraction?.socialProof || 
                        {};
     
-    const product = extractedData.pageData?.visualDesign?.extraction?.product || 
-                   extractedData.product || 
+    const product = extractedData.product || 
+                   extractedData.pageData?.visualDesign?.extraction?.product || 
                    {};
     
-    // Extract V4's enhanced data if available
+    // Extract V4's enhanced data if available (these don't exist in SimplifiedBrandData)
     const psychology = extractedData.psychology || {};
     const competitors = extractedData.competitors || [];
     const aiAnalysis = extractedData.aiAnalysis || {};
     const semanticContent = extractedData.semanticContent || {};
+    
+    // Log what we extracted
+    dbLogger.debug('💾 [BRAND PROFILE] Extracted data:', {
+      brandColors: brandData.colors?.primary,
+      brandFonts: brandData.typography?.fonts?.length,
+      productHeadline: product.value_prop?.headline,
+      socialProofStats: socialProof.stats,
+      screenshotsCount: media.screenshots?.length
+    });
     
     // Check if profile already exists
     const existing = await db.query.brandProfiles.findFirst({
@@ -129,14 +149,23 @@ export async function saveBrandProfile(
  * Skips the BrandFormatter since data is already well-structured
  */
 export function createBrandStyleFromExtraction(extractedData: any) {
-  const brand = extractedData.pageData?.visualDesign?.extraction?.brand || 
-                extractedData.brand || 
+  // Handle SimplifiedBrandData structure
+  const brand = extractedData.brand || 
+                extractedData.pageData?.visualDesign?.extraction?.brand || 
                 {};
   
   const typography = brand.typography || {};
   const colors = brand.colors || {};
   const psychology = extractedData.psychology || {};
   const aiAnalysis = extractedData.aiAnalysis || {};
+  
+  // Log what we're working with
+  dbLogger.debug('🎨 [BRAND STYLE] Creating style from:', {
+    primaryColor: colors.primary,
+    secondaryColor: colors.secondary,
+    fonts: typography.fonts,
+    hasButtons: !!brand.buttons
+  });
   
   // Determine animation intensity based on psychological profile
   const animationIntensity = psychology.emotionalProfile?.energy || 

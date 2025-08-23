@@ -2,6 +2,21 @@ import { useCallback, useRef } from 'react';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 
+// Generate a UUID v4 in the browser
+function generateUUID(): string {
+  // Use crypto.randomUUID if available (modern browsers)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 interface UseSSEGenerationOptions {
   projectId: string;
   onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
@@ -97,8 +112,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
                 status: data.isComplete ? 'complete' : 'streaming'
               });
             } else {
-              // Create new assistant message with a unique ID
-              const newMessageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              // Create new assistant message with a proper UUID
+              const newMessageId = generateUUID();
               addAssistantMessage(projectId, newMessageId, data.message);
               currentMessageId = newMessageId;
             }

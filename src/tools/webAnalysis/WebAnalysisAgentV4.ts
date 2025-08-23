@@ -144,6 +144,9 @@ export class WebAnalysisAgentV4 {
       context = await this.createContext();
       page = await context.newPage();
       
+      // Set page timeout for all operations
+      page.setDefaultTimeout(30000);
+      
       // Navigate to the website
       await page.goto(url, { 
         waitUntil: 'networkidle',
@@ -154,10 +157,35 @@ export class WebAnalysisAgentV4 {
       await page.waitForTimeout(2000);
       
       // Extract brand data from the page
+      toolsLogger.info('🔍 WebAnalysisV4: Extracting page data...');
       const extractedData = await this.extractPageData(page);
       
-      // Take screenshots
-      const screenshots = await this.captureScreenshots(page, url);
+      // Log what we actually extracted
+      toolsLogger.debug('🔍 WebAnalysisV4: Extracted raw data:', {
+        companyName: extractedData.companyName,
+        headline: extractedData.headline,
+        subheadline: extractedData.subheadline,
+        featuresCount: extractedData.features?.length || 0,
+        ctasCount: extractedData.ctas?.length || 0,
+        colorsFound: {
+          primary: extractedData.colors?.primary,
+          secondary: extractedData.colors?.secondary,
+          paletteSize: extractedData.colors?.palette?.length || 0
+        },
+        fontsFound: extractedData.fonts,
+        socialProofFound: {
+          testimonials: extractedData.socialProof?.testimonials?.length || 0,
+          stats: extractedData.socialProof?.stats?.length || 0
+        }
+      });
+      
+      // Take screenshots with validation
+      let screenshots: any[] = [];
+      if (page && !page.isClosed()) {
+        screenshots = await this.captureScreenshots(page, url);
+      } else {
+        toolsLogger.warn('⚠️ WebAnalysisV4: Page closed before screenshots, skipping');
+      }
       
       // Get the domain name for brand identity
       const domain = new URL(url).hostname.replace('www.', '');
@@ -349,13 +377,30 @@ export class WebAnalysisAgentV4 {
     if (!process.env.BROWSERLESS_URL) {
       throw new Error('BROWSERLESS_URL not configured');
     }
-    this.browser = await playwrightCore.chromium.connect(process.env.BROWSERLESS_URL);
+    
+    try {
+      this.browser = await playwrightCore.chromium.connect(process.env.BROWSERLESS_URL, {
+        timeout: 30000 // 30 second timeout for connection
+      });
+      toolsLogger.info('✅ Connected to Browserless');
+    } catch (error: any) {
+      toolsLogger.error('❌ Failed to connect to Browserless:', error.message);
+      throw new Error(`Browser connection failed: ${error.message}`);
+    }
   }
 
   private async createContext() {
+    if (!this.browser) {
+      throw new Error('Browser not connected');
+    }
+    
     return await this.browser.newContext({
       viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      // Add more robust settings
+      ignoreHTTPSErrors: true,
+      bypassCSP: true,
+      javaScriptEnabled: true
     });
   }
 
@@ -627,37 +672,39 @@ export class WebAnalysisAgentV4 {
         let problem = '';
         let solution = '';
 
-        // Look for problem indicators
-        const problemSelectors = [
-          '[class*="problem"]', '[class*="challenge"]', '[class*="pain"]',
-          'h2:contains("problem")', 'h3:contains("challenge")'
-        ];
-
-        // Look for solution indicators  
-        const solutionSelectors = [
-          '[class*="solution"]', '[class*="benefit"]', '[class*="advantage"]',
-          'h2:contains("solution")', 'h3:contains("how")'
-        ];
-
-        // Extract problem context from paragraphs mentioning common pain points
-        document.querySelectorAll('p').forEach(p => {
-          const text = cleanText(p.textContent);
-          if (text.match(/difficult|hard|challenge|problem|struggle|frustrat|complex|time.?consuming/i) && 
-              isValidText(text, 30, 300) && !problem) {
-            problem = text;
+        // Look for problem indicators in text content
+        const problemKeywords = ['challenge', 'problem', 'issue', 'struggle', 'pain', 'difficult', 'frustrat', 'complex', 'time-consuming', 'inefficient'];
+        const solutionKeywords = ['solution', 'solve', 'fix', 'improve', 'optimize', 'streamline', 'simplify', 'automate', 'transform', 'enhance'];
+        
+        // Search through all text content
+        const allText = document.querySelectorAll('p, h2, h3, li');
+        
+        allText.forEach((element) => {
+          const text = cleanText(element.textContent).toLowerCase();
+          
+          // Find problem statements
+          if (!problem && problemKeywords.some(keyword => text.includes(keyword))) {
+            if (isValidText(cleanText(element.textContent), 20, 300)) {
+              problem = cleanText(element.textContent);
+            }
+          }
+          
+          // Find solution statements
+          if (!solution && solutionKeywords.some(keyword => text.includes(keyword))) {
+            if (isValidText(cleanText(element.textContent), 20, 300)) {
+              solution = cleanText(element.textContent);
+            }
           }
         });
-
-        // Extract solution from value prop or how-it-works sections
-        document.querySelectorAll('section, [class*="how"], [class*="work"]').forEach(section => {
-          const text = cleanText(section.textContent);
-          if (text.match(/automat|simplif|streamlin|efficien|easy|fast|quick|solution/i) && 
-              isValidText(text, 30, 300) && !solution) {
-            const sentences = text.split('.').filter(s => isValidText(s.trim()));
-            solution = sentences[0] + '.';
-          }
-        });
-
+        
+        // Fallback to feature-based problem/solution
+        if (!problem) {
+          problem = 'Many businesses struggle with outdated processes and inefficient workflows';
+        }
+        if (!solution) {
+          solution = 'Our platform provides modern tools and automation to streamline your operations';
+        }
+        
         return { problem, solution };
       };
 
@@ -795,56 +842,117 @@ export class WebAnalysisAgentV4 {
     });
   }
 
-  private async captureScreenshots(page: any, url: string) {
+  private async captureScreenshots(page: any, _url: string) {
     const screenshots = [];
     
+    // Validate page is still open
+    if (!page || page.isClosed()) {
+      toolsLogger.warn('⚠️ WebAnalysisV4: Page is closed, cannot take screenshots');
+      return screenshots;
+    }
+    
+    // Helper function to safely take screenshot with retry
+    const takeScreenshotWithRetry = async (options: any, maxRetries = 3): Promise<Buffer | null> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Check if page is still valid before each attempt
+          if (page.isClosed()) {
+            toolsLogger.warn(`⚠️ Screenshot attempt ${attempt}: Page is closed`);
+            return null;
+          }
+          
+          const buffer = await page.screenshot(options);
+          return buffer;
+        } catch (error: any) {
+          toolsLogger.warn(`⚠️ Screenshot attempt ${attempt} failed:`, error.message);
+          
+          if (attempt === maxRetries) {
+            toolsLogger.error('❌ All screenshot attempts failed');
+            return null;
+          }
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+      return null;
+    };
+    
     try {
-      // Take hero section screenshot
-      const heroBuffer = await page.screenshot({
+      // Take hero section screenshot with retry
+      toolsLogger.info('📸 Taking hero section screenshot...');
+      const heroBuffer = await takeScreenshotWithRetry({
         type: 'jpeg',
         quality: 90,
-        fullPage: false
+        fullPage: false,
+        clip: { x: 0, y: 0, width: 1920, height: 1080 }
       });
       
-      const heroUrl = await uploadScreenshotToR2(
-        heroBuffer,
-        `${Date.now()}_hero.jpg`,
-        this.projectId
-      );
+      if (heroBuffer) {
+        try {
+          const heroUrl = await uploadScreenshotToR2(
+            heroBuffer,
+            `${Date.now()}_hero.jpg`,
+            this.projectId
+          );
+          
+          screenshots.push({
+            id: `${Date.now()}_hero`,
+            url: heroUrl,
+            type: 'hero',
+            description: 'Hero section',
+            timestamp: new Date().toISOString()
+          });
+          toolsLogger.info('✅ Hero screenshot captured and uploaded successfully');
+        } catch (uploadError: any) {
+          toolsLogger.error('❌ Failed to upload hero screenshot:', uploadError.message);
+          // Continue without this screenshot
+        }
+      } else {
+        toolsLogger.warn('⚠️ Failed to capture hero screenshot');
+      }
       
-      screenshots.push({
-        id: `${Date.now()}_hero`,
-        url: heroUrl,
-        type: 'hero',
-        description: 'Hero section',
-        timestamp: new Date().toISOString()
-      });
+      // Small delay between screenshots
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Take full page screenshot
-      const fullBuffer = await page.screenshot({
+      // Take full page screenshot with retry
+      toolsLogger.info('📸 Taking full page screenshot...');
+      const fullBuffer = await takeScreenshotWithRetry({
         type: 'jpeg',
         quality: 85,
         fullPage: true
       });
       
-      const fullUrl = await uploadScreenshotToR2(
-        fullBuffer,
-        `${Date.now()}_full.jpg`,
-        this.projectId
-      );
+      if (fullBuffer) {
+        try {
+          const fullUrl = await uploadScreenshotToR2(
+            fullBuffer,
+            `${Date.now()}_full.jpg`,
+            this.projectId
+          );
+          
+          screenshots.push({
+            id: `${Date.now()}_full`,
+            url: fullUrl,
+            type: 'full',
+            description: 'Full page',
+            timestamp: new Date().toISOString()
+          });
+          toolsLogger.info('✅ Full page screenshot captured and uploaded successfully');
+        } catch (uploadError: any) {
+          toolsLogger.error('❌ Failed to upload full page screenshot:', uploadError.message);
+          // Continue without this screenshot
+        }
+      } else {
+        toolsLogger.warn('⚠️ Failed to capture full page screenshot');
+      }
       
-      screenshots.push({
-        id: `${Date.now()}_full`,
-        url: fullUrl,
-        type: 'full',
-        description: 'Full page',
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('Screenshot error:', error);
+    } catch (error: any) {
+      toolsLogger.error('❌ Screenshot error:', error.message);
+      // Don't throw, just return what we have
     }
     
+    toolsLogger.info(`📸 Captured ${screenshots.length} screenshot(s)`);
     return screenshots;
   }
 
