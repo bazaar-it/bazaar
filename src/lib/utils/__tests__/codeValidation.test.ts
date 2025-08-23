@@ -20,7 +20,7 @@ export default function Scene() {
       
       const result = validateAndFixCode(badCode);
       expect(result.fixedCode).not.toContain('x\n');
-      expect(result.fixedCode).toStartWith('const {');
+      expect(result.fixedCode).toMatch(/^const \{/);
       expect(result.fixesApplied).toContain('Removed "x" prefix bug');
     });
     

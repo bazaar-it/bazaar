@@ -1,5 +1,6 @@
 // jest.setup.js - Jest setup file 
 require('@testing-library/jest-dom');
+require('jest-extended');
 
 // Add OpenAI Node.js shim for tests
 require('openai/shims/node');
@@ -141,6 +142,24 @@ jest.mock('@aws-sdk/client-lambda', () => ({
   LambdaClient: jest.fn(),
   InvokeCommand: jest.fn()
 }));
+
+// Mock legacy aws-sdk only if a test tries to import it
+jest.mock('aws-sdk', () => ({
+  config: {
+    update: jest.fn(),
+    credentials: null
+  },
+  Lambda: jest.fn().mockImplementation(() => ({
+    invoke: jest.fn().mockReturnValue({
+      promise: jest.fn().mockResolvedValue({ StatusCode: 200 })
+    })
+  })),
+  S3: jest.fn().mockImplementation(() => ({
+    putObject: jest.fn().mockReturnValue({
+      promise: jest.fn().mockResolvedValue({})
+    })
+  }))
+}), { virtual: true });
 
 jest.mock('playwright-core', () => ({
   chromium: {
