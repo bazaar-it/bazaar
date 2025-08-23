@@ -22,7 +22,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     videoUrls?: string[],
     audioUrls?: string[],
     modelOverride?: string,
-    useGitHub?: boolean
+    useGitHub?: boolean,
+    websiteUrl?: string
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -54,6 +55,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     if (useGitHub) {
       params.append('useGitHub', 'true');
     }
+    
+    if (websiteUrl) {
+      params.append('websiteUrl', websiteUrl);
+    }
 
     // Create new EventSource
     const eventSource = new EventSource(`/api/generate-stream?${params.toString()}`);
@@ -80,6 +85,36 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
               useGitHub: data.useGitHub
             });
             eventSource.close();
+            break;
+          
+          // ✅ NEW: Handle streaming assistant message updates
+          case 'assistant_message_chunk':
+            hasReceivedMessage = true;
+            // Website pipeline streaming - update message in real-time
+            if (currentMessageId) {
+              updateMessage(currentMessageId, data.message, data.isComplete);
+            } else {
+              // Create new assistant message
+              const assistantMsg = addAssistantMessage(projectId, data.message);
+              currentMessageId = assistantMsg.id;
+            }
+            
+            // Close stream if message is complete
+            if (data.isComplete) {
+              eventSource.close();
+              onComplete?.();
+            }
+            break;
+            
+          // ✅ NEW: Handle scene streaming events
+          case 'scene_added':
+            console.log(`Scene ${data.data.progress}% complete:`, data.data.sceneName);
+            
+            // Trigger immediate video state refresh
+            utils.scenes.getByProject.invalidate({ projectId });
+            
+            // Optional: Show progress notification
+            // toast.success(`Scene added: ${data.data.sceneName}`);
             break;
           
           // ✅ NEW: Handle title updates
