@@ -150,7 +150,7 @@ export const generateScene = protectedProcedure
         const { githubConnections } = await import("~/server/db/schema/github-connections");
         const { eq, and } = await import("drizzle-orm");
         
-        const connections = await ctx.db
+        const connections = await db
           .select()
           .from(githubConnections)
           .where(and(
@@ -190,9 +190,9 @@ export const generateScene = protectedProcedure
             // Create a caller for the router
             const caller = figmaImportRouter.createCaller({
               session: ctx.session,
-              db: ctx.db,
+              db: db,
               headers: ctx.headers,
-            });
+            } as any);
             
             // Fetch the component data
             const componentResult = await caller.fetchComponentData({
@@ -443,9 +443,14 @@ export const generateScene = protectedProcedure
           'scene'
         ) as any as SceneCreateResponse;
         
-        // Add metadata about all scenes created
-        successResponse.data.additionalScenes = toolResult.scenes.length - 1;
-        successResponse.data.allSceneIds = toolResult.scenes.map((s: any) => s.id);
+        // Add metadata about all scenes created (cast to any for dynamic properties)
+        (successResponse as any).additionalScenes = toolResult.scenes.length - 1;
+        (successResponse as any).allSceneIds = toolResult.scenes.map((s: any) => s.id);
+        
+        // Include debug data for admin panel if present
+        if (toolResult.debugData) {
+          (successResponse as any).debugData = toolResult.debugData;
+        }
         
         return successResponse;
       }
@@ -454,8 +459,8 @@ export const generateScene = protectedProcedure
       // Determine the correct operation based on the tool used
       // Map all operations to valid API response operations
       let operation: 'scene.create' | 'scene.update' | 'scene.delete' = 'scene.create';
-      if (decision.toolName) {
-        const toolOp = TOOL_OPERATION_MAP[decision.toolName];
+      if (decision.toolName && decision.toolName in TOOL_OPERATION_MAP) {
+        const toolOp = TOOL_OPERATION_MAP[decision.toolName as keyof typeof TOOL_OPERATION_MAP];
         switch (toolOp) {
           case 'scene.create':
           // case 'multi-scene.create': // [DISABLED] Map multi-scene to regular scene.create
@@ -475,6 +480,15 @@ export const generateScene = protectedProcedure
       // Increment usage on successful generation
       await UsageService.incrementPromptUsage(userId, userTimezone);
       
+      if (!toolResult.scene) {
+        return response.error(
+          ErrorCode.INTERNAL_ERROR,
+          "Scene creation failed - no scene returned from tool",
+          operation,
+          'scene'
+        ) as any as SceneCreateResponse;
+      }
+
       const successResponse = response.success(
         toolResult.scene, 
         operation, 

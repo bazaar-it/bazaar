@@ -20,6 +20,7 @@ import TemplatesPanelG from './panels/TemplatesPanelG';
 import MediaPanel from './panels/MediaPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import IntegrationsPanel from './panels/IntegrationsPanel';
+import { BrandProfilePanel } from '~/components/admin/BrandProfilePanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
@@ -36,6 +37,7 @@ const PANEL_COMPONENTS_G = {
   myprojects: MyProjectsPanelG,
   media: MediaPanel,
   integrations: IntegrationsPanel,
+  brandprofile: BrandProfilePanel,
 };
 
 const PANEL_LABELS_G = {
@@ -46,6 +48,7 @@ const PANEL_LABELS_G = {
   templates: 'Templates',
   myprojects: 'My Projects',
   media: 'Media',
+  brandprofile: 'Brand Profile',
   integrations: 'Integrations',
 };
 
@@ -740,7 +743,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               });
               window.dispatchEvent(event);
             }}
-            defaultTab={shouldOpenAudioPanel ? 'audio' : 'uploads'}
+            defaultTab={'uploads' as 'uploads' | 'icons'}
           />;
         case 'preview':
           return (
@@ -777,6 +780,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         // Old panels removed - now handled by IntegrationsPanel
         case 'integrations':
           return <IntegrationsPanel 
+            projectId={projectId}
+          />;
+        case 'brandprofile':
+          return <BrandProfilePanel 
             projectId={projectId}
           />;
         default:

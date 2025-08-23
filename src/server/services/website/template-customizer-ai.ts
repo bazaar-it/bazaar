@@ -3,12 +3,10 @@
  * Uses the Edit tool to intelligently modify templates with brand data
  */
 
-import type { ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV2";
-import type { FormattedBrandStyle } from "./brand-formatter";
+import type { SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
-import { EditTool } from "~/tools/edit/edit";
-import type { EditToolInput } from "~/tools/helpers/types";
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface CustomizedScene {
   name: string;
@@ -18,14 +16,14 @@ export interface CustomizedScene {
 
 export interface TemplateCustomizationInput {
   templates: SelectedTemplate[];
-  brandStyle: FormattedBrandStyle;
-  websiteData: ExtractedBrandData;
+  brandStyle: any; // Will be created from SimplifiedBrandData
+  websiteData: SimplifiedBrandData;
   narrativeScenes: HeroJourneyScene[];
 }
 
 export class TemplateCustomizerAI {
   async customizeTemplates(input: TemplateCustomizationInput): Promise<CustomizedScene[]> {
-    console.log('🤖 [AI CUSTOMIZER] Customizing templates with brand data');
+    toolsLogger.info('🤖 [AI CUSTOMIZER] Customizing templates with brand data');
     
     const customizedScenes: CustomizedScene[] = [];
     
@@ -34,11 +32,11 @@ export class TemplateCustomizerAI {
       const narrativeScene = input.narrativeScenes[i];
       
       if (!template || !narrativeScene) {
-        console.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
+        toolsLogger.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
         continue;
       }
       
-      console.log(`🤖 [AI CUSTOMIZER] Customizing template: ${template.templateId}`);
+      toolsLogger.debug(`🤖 [AI CUSTOMIZER] Customizing template: ${template.templateId}`);
       
       const customizedCode = await this.customizeWithAI(
         template.templateCode,
@@ -57,11 +55,56 @@ export class TemplateCustomizerAI {
     
     return customizedScenes;
   }
+
+  async customizeTemplatesStreaming(
+    input: TemplateCustomizationInput,
+    onSceneComplete?: (scene: CustomizedScene, index: number) => Promise<void>
+  ): Promise<CustomizedScene[]> {
+    toolsLogger.info('🤖 [AI CUSTOMIZER] Starting streaming customization');
+    
+    const customizedScenes: CustomizedScene[] = [];
+    
+    for (let i = 0; i < input.templates.length; i++) {
+      const template = input.templates[i];
+      const narrativeScene = input.narrativeScenes[i];
+      
+      if (!template || !narrativeScene) {
+        toolsLogger.warn(`🤖 [AI CUSTOMIZER] Missing template or narrative scene at index ${i}`);
+        continue;
+      }
+      
+      toolsLogger.debug(`🤖 [AI CUSTOMIZER] Processing scene ${i + 1}/${input.templates.length}: ${narrativeScene.title}`);
+      
+      // Generate the scene (reuse existing AI logic)
+      const customizedCode = await this.customizeWithAI(
+        template.templateCode,
+        input.brandStyle,
+        input.websiteData,
+        narrativeScene,
+        template
+      );
+      
+      const scene: CustomizedScene = {
+        name: narrativeScene.title,
+        code: customizedCode,
+        duration: narrativeScene.duration
+      };
+      
+      customizedScenes.push(scene);
+      
+      // ✨ NEW: Stream callback - save scene immediately
+      if (onSceneComplete) {
+        await onSceneComplete(scene, i);
+      }
+    }
+    
+    return customizedScenes;
+  }
   
   private async customizeWithAI(
     templateCode: string,
-    brandStyle: FormattedBrandStyle,
-    websiteData: ExtractedBrandData,
+    brandStyle: any,
+    websiteData: SimplifiedBrandData,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): Promise<string> {
@@ -101,8 +144,8 @@ PRODUCT INFO:
 - Headline: ${websiteData.product?.value_prop?.headline || 'Welcome'}
 - Subhead: ${websiteData.product?.value_prop?.subhead || ''}
 - Problem: ${websiteData.product?.problem || ''}
-- Features: ${websiteData.product?.features?.map(f => f.title).join(', ') || ''}
-- CTAs: ${websiteData.ctas?.map(c => c.label).join(', ') || 'Get Started'}
+- Features: ${websiteData.product?.features?.map((f: any) => f.title).join(', ') || ''}
+- CTAs: ${websiteData.ctas?.map((c: any) => c.label).join(', ') || 'Get Started'}
 
 SOCIAL PROOF:
 - Users: ${websiteData.socialProof?.stats?.users || '1000+'}
@@ -124,28 +167,44 @@ Return ONLY the modified code, no explanations.`;
 
     try {
       // Use the Edit tool instead of direct OpenAI call
+      const { EditTool } = await import('~/tools/edit/edit');
       const editTool = new EditTool();
-      const editInput: EditToolInput = {
+      const editInput: any = {
         tsxCode: templateCode,
         userPrompt: editPrompt,
         sceneId: template.templateId,
         projectId: 'template-customization'
       };
       
-      console.log('🤖 [AI CUSTOMIZER] Using Edit tool with complete brand JSON');
+      toolsLogger.debug('🤖 [AI CUSTOMIZER] Using Edit tool with complete brand JSON');
       const result = await editTool.run(editInput);
       
       if (result.success && result.data?.tsxCode) {
-        console.log('🤖 [AI CUSTOMIZER] Successfully customized with Edit tool');
-        return result.data.tsxCode;
+        toolsLogger.debug('🤖 [AI CUSTOMIZER] Successfully customized with Edit tool');
+        
+        // Check if the tsxCode is actually a JSON string containing the code
+        let code = result.data.tsxCode;
+        if (typeof code === 'string' && code.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(code);
+            if (parsed.code) {
+              toolsLogger.debug('🤖 [AI CUSTOMIZER] Extracted code from JSON wrapper');
+              code = parsed.code;
+            }
+          } catch (e) {
+            // Not JSON, use as-is
+          }
+        }
+        
+        return code;
       } else {
-        console.error('🤖 [AI CUSTOMIZER] Edit tool failed:', result.error);
+        toolsLogger.error('🤖 [AI CUSTOMIZER] Edit tool failed', undefined, { error: result.error });
         // Fallback to basic replacement
         return this.basicCustomization(templateCode, brandStyle, websiteData, narrativeScene);
       }
       
     } catch (error: any) {
-      console.error('🤖 [AI CUSTOMIZER] Error using Edit tool:', error);
+      toolsLogger.error('🤖 [AI CUSTOMIZER] Error using Edit tool', error);
       // Fallback to basic replacement if error occurs
       return this.basicCustomization(templateCode, brandStyle, websiteData, narrativeScene);
     }
@@ -165,8 +224,8 @@ Return ONLY the modified code, no explanations.`;
   
   private basicCustomization(
     code: string,
-    brandStyle: FormattedBrandStyle,
-    websiteData: ExtractedBrandData,
+    brandStyle: any,
+    websiteData: SimplifiedBrandData,
     narrativeScene: HeroJourneyScene
   ): string {
     // Fallback to basic string replacement if AI fails

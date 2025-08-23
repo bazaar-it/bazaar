@@ -216,21 +216,15 @@ export class ContextBuilder {
       console.log(`📚 [CONTEXT BUILDER] Analyzing website: ${targetUrl}`);
       
       // Dynamic import to ensure server-side only execution
-      const { WebAnalysisAgent } = await import('~/tools/webAnalysis/WebAnalysisAgent');
-      const webAgent = new WebAnalysisAgent();
+      const { WebAnalysisAgentV4 } = await import('~/tools/webAnalysis/WebAnalysisAgentV4');
+      const webAgent = new WebAnalysisAgentV4(input.projectId);
       
-      // Validate URL first
-      const validation = await webAgent.validateUrl(targetUrl);
-      if (!validation.valid) {
-        console.log(`📚 [CONTEXT BUILDER] URL validation failed: ${validation.error}`);
-        return undefined;
-      }
-      
-      // Perform web analysis with R2 upload
-      const analysis = await webAgent.analyzeWebsite(targetUrl, input.projectId, input.userId);
-      
-      if (!analysis.success) {
-        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${analysis.error}`);
+      // Perform web analysis with V4
+      let analysis;
+      try {
+        analysis = await webAgent.analyze(targetUrl);
+      } catch (error: any) {
+        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${error.message}`);
         return undefined;
       }
       
@@ -244,25 +238,35 @@ export class ContextBuilder {
         // Continue even if save fails
       }
       
-      // Return structured web context
-      if (analysis.screenshotUrls && analysis.pageData) {
-        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.pageData.title}`);
+      // Return structured web context for V4
+      if (analysis.screenshots && (analysis.brand || analysis.product)) {
+        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.brand?.identity?.name || 'website'}`);
         
         // Debug: Check if extraction data is present
-        console.log(`📚 [CONTEXT BUILDER] PageData structure:`, {
-          hasPageData: !!analysis.pageData,
-          hasVisualDesign: !!analysis.pageData?.visualDesign,
-          hasExtraction: !!analysis.pageData?.visualDesign?.extraction,
-          extractionKeys: analysis.pageData?.visualDesign?.extraction ? 
-            Object.keys(analysis.pageData.visualDesign.extraction).slice(0, 5) : 
-            'none'
+        console.log(`📚 [CONTEXT BUILDER] V4 Data structure:`, {
+          hasBrand: !!analysis.brand,
+          hasProduct: !!analysis.product,
+          hasScreenshots: !!analysis.screenshots,
+          screenshotCount: analysis.screenshots?.length || 0,
+          brandKeys: analysis.brand ? Object.keys(analysis.brand).slice(0, 5) : 'none'
         });
         
+        // Create V4-compatible web context that matches the expected type
         const webContext = {
-          originalUrl: analysis.url!,
-          screenshotUrls: analysis.screenshotUrls,
-          pageData: analysis.pageData,
-          analyzedAt: analysis.analyzedAt!
+          originalUrl: analysis.metadata?.url || targetUrl,
+          screenshotUrls: {
+            desktop: analysis.screenshots?.find(s => s.type === 'desktop')?.url || 
+                    analysis.screenshots?.[0]?.url || '',
+            mobile: analysis.screenshots?.find(s => s.type === 'mobile')?.url || 
+                   analysis.screenshots?.[1]?.url || ''
+          },
+          pageData: {
+            title: analysis.brand?.identity?.name || 'Untitled',
+            description: analysis.brand?.identity?.tagline,
+            headings: [],
+            url: analysis.metadata?.url || targetUrl
+          },
+          analyzedAt: new Date().toISOString()
         };
         
         // Fire-and-forget async save to database
@@ -271,12 +275,8 @@ export class ContextBuilder {
             const { webContextService } = await import('~/server/services/data/web-context.service');
             await webContextService.saveWebContext(
               input.projectId,
-              analysis.url!,
-              {
-                screenshotUrls: analysis.screenshotUrls!,
-                pageData: analysis.pageData!,
-                analyzedAt: analysis.analyzedAt!
-              },
+              analysis.metadata?.url || targetUrl,
+              webContext,
               input.prompt
             );
             console.log(`📚 [CONTEXT BUILDER] 💾 Web context saved to database for future reference`);

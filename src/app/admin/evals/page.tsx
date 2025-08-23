@@ -104,7 +104,7 @@ export default function EvalsPage() {
       await runEvaluation.mutateAsync({
         youtubeUrl,
         model: selectedModel,
-        strategy: selectedStrategy,
+        strategy: selectedStrategy as "direct" | "two-step-describe" | "multi-agent" | "iterative",
         prompt: promptToUse,
       });
     } finally {
@@ -484,7 +484,7 @@ function RemotionPreviewArea({ code }: { code: string }) {
         setError('No default export found in component');
         return null;
       }
-      return React.lazy(async () => ({ default: DefaultExport }));
+      return () => Promise.resolve({ default: DefaultExport });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Runtime error';
       setError(`Runtime error: ${errorMsg}`);

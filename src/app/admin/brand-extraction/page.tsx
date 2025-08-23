@@ -20,6 +20,35 @@ interface ExtractionStep {
   endTime?: number;
 }
 
+interface HeroJourneyScene {
+  title: string;
+  duration: number;
+  narrative: string;
+  visualElements: string[];
+  brandElements: {
+    colors: string[];
+    typography: string;
+    motion: string;
+  };
+  emotionalBeat: string;
+  templateId?: string;
+  generatedPrompt?: string;
+}
+
+// Extended type for admin debugging
+interface AdminSceneResponse {
+  data: any;
+  meta: any;
+  debugData?: {
+    screenshots?: any[];
+    brandExtraction?: any;
+    heroJourney?: any[];
+    templateSelections?: any;
+    generatedPrompts?: any[];
+    extractionStatus?: 'success' | 'fallback';
+  };
+}
+
 export default function BrandExtractionPage() {
   const [url, setUrl] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -28,10 +57,17 @@ export default function BrandExtractionPage() {
     { id: 'validate', name: 'Validating URL', status: 'pending' },
     { id: 'screenshots', name: 'Capturing Screenshots', status: 'pending' },
     { id: 'brand', name: 'Extracting Brand Data', status: 'pending' },
+    { id: 'narrative', name: 'Creating Hero\'s Journey', status: 'pending' },
+    { id: 'templates', name: 'Selecting Templates', status: 'pending' },
+    { id: 'prompts', name: 'Generating Scene Prompts', status: 'pending' },
     { id: 'save', name: 'Saving to Database', status: 'pending' },
-    { id: 'generate', name: 'Generating Video', status: 'pending' },
+    { id: 'generate', name: 'Compiling Video', status: 'pending' },
   ]);
   const [extractedData, setExtractedData] = useState<any>(null);
+  const [heroJourneyData, setHeroJourneyData] = useState<HeroJourneyScene[]>([]);
+  const [screenshotData, setScreenshotData] = useState<any[]>([]);
+  const [generatedPrompts, setGeneratedPrompts] = useState<any[]>([]);
+  const [extractionStatus, setExtractionStatus] = useState<'success' | 'fallback' | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
   // Create a project for admin testing
@@ -39,10 +75,53 @@ export default function BrandExtractionPage() {
   
   // Use the same generation API as chat panel
   const generateScene = api.generation.generateScene.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: AdminSceneResponse) => {
       addLog('🎬 Scene generation completed successfully!');
-      updateStep('screenshots', 'completed');
-      updateStep('brand', 'completed');
+      
+      // Extract and visualize the pipeline data from the response
+      if (data.debugData) {
+        // Check extraction status
+        if (data.debugData.extractionStatus) {
+          setExtractionStatus(data.debugData.extractionStatus);
+          if (data.debugData.extractionStatus === 'fallback') {
+            addLog('⚠️ Using fallback data - website extraction may have failed');
+          }
+        }
+        
+        // Screenshots from web analysis
+        if (data.debugData.screenshots) {
+          setScreenshotData(data.debugData.screenshots);
+          updateStep('screenshots', 'completed', data.debugData.screenshots);
+          addLog(`📸 Captured ${data.debugData.screenshots.length} screenshots`);
+        }
+        
+        // Brand extraction data
+        if (data.debugData.brandExtraction) {
+          updateStep('brand', 'completed', data.debugData.brandExtraction);
+          addLog('🎨 Brand data extracted successfully');
+        }
+        
+        // Hero's Journey narrative
+        if (data.debugData.heroJourney) {
+          setHeroJourneyData(data.debugData.heroJourney);
+          updateStep('narrative', 'completed', data.debugData.heroJourney);
+          addLog(`📖 Created ${data.debugData.heroJourney.length} narrative scenes`);
+        }
+        
+        // Template selections
+        if (data.debugData.templateSelections) {
+          updateStep('templates', 'completed', data.debugData.templateSelections);
+          addLog('🎯 Templates selected for each scene');
+        }
+        
+        // Generated prompts
+        if (data.debugData.generatedPrompts) {
+          setGeneratedPrompts(data.debugData.generatedPrompts);
+          updateStep('prompts', 'completed', data.debugData.generatedPrompts);
+          addLog('✍️ Scene prompts generated');
+        }
+      }
+      
       updateStep('save', 'completed');
       updateStep('generate', 'completed', data);
       toast.success("Video generated successfully!");
@@ -70,7 +149,7 @@ export default function BrandExtractionPage() {
     }
   };
 
-  const getBrandProfileQuery = api.websitePipeline.getBrandProfile.useQuery(
+  const getBrandProfileQuery = api.brandProfile.getByProject.useQuery(
     { projectId: currentProjectId },
     {
       enabled: !!currentProjectId,
@@ -247,47 +326,193 @@ export default function BrandExtractionPage() {
         </div>
       </Card>
 
+      {/* Extraction Status Warning */}
+      {extractionStatus === 'fallback' && (
+        <Card className="p-4 mb-6 border-yellow-500 bg-yellow-50">
+          <div className="flex items-center gap-2 text-yellow-800">
+            <AlertCircle className="w-5 h-5" />
+            <span className="font-medium">Using Fallback Data</span>
+          </div>
+          <p className="text-sm text-yellow-700 mt-2">
+            The website extraction failed (possibly due to Cloudflare protection or site structure). 
+            Generic placeholder data is being used instead of actual brand extraction.
+          </p>
+        </Card>
+      )}
+      
       {/* Results Section */}
       {extractedData && (
         <Tabs defaultValue="screenshots" className="mb-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
+            <TabsTrigger value="journey">Hero's Journey</TabsTrigger>
+            <TabsTrigger value="prompts">Prompts</TabsTrigger>
             <TabsTrigger value="colors">Colors</TabsTrigger>
             <TabsTrigger value="typography">Typography</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
-            <TabsTrigger value="raw">Raw Data</TabsTrigger>
+            <TabsTrigger value="raw">Raw JSON</TabsTrigger>
           </TabsList>
 
           <TabsContent value="screenshots" className="mt-4">
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Image className="w-5 h-5" />
-                Captured Screenshots ({extractedData.screenshots?.length || 0})
+                Captured Screenshots ({screenshotData.length || extractedData.screenshots?.length || 0})
               </h3>
-              {extractedData.screenshots?.length > 0 ? (
-                <div className="grid grid-cols-3 gap-4">
-                  {extractedData.screenshots.map((screenshot: any, index: number) => (
-                    <div key={index} className="space-y-2">
+              {(screenshotData.length > 0 || extractedData.screenshots?.length > 0) ? (
+                <div className="grid grid-cols-2 gap-6">
+                  {(screenshotData.length > 0 ? screenshotData : extractedData.screenshots || []).map((screenshot: any, index: number) => (
+                    <div key={index} className="space-y-3 border rounded-lg p-4">
                       <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
                         <img 
-                          src={screenshot.url} 
+                          src={screenshot.url || screenshot.data} 
                           alt={screenshot.viewport || `Screenshot ${index + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                           onError={(e) => {
                             e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" fill="%23ccc"><text x="50%" y="50%" text-anchor="middle" dy=".3em">Image not found</text></svg>';
                           }}
                         />
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <Badge>{screenshot.viewport || screenshot.type || 'Screenshot'}</Badge>
-                        <span className="text-gray-500">{screenshot.position || screenshot.description}</span>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Badge variant="outline">{screenshot.viewport || screenshot.type || `Screenshot ${index + 1}`}</Badge>
+                          <span className="text-xs text-gray-500">{screenshot.timestamp || new Date().toISOString()}</span>
+                        </div>
+                        {screenshot.scrollPosition && (
+                          <div className="text-sm text-gray-600">
+                            Scroll: {screenshot.scrollPosition}px
+                          </div>
+                        )}
+                        {screenshot.metadata && (
+                          <div className="text-xs bg-gray-50 p-2 rounded font-mono">
+                            {JSON.stringify(screenshot.metadata, null, 2)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  No screenshots captured yet
+                  No screenshots captured yet. Screenshots will appear here when the web agent browses the URL.
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="journey" className="mt-4">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Hero's Journey Narrative Arc</h3>
+              {heroJourneyData.length > 0 ? (
+                <div className="space-y-6">
+                  {heroJourneyData.map((scene, index) => (
+                    <div key={index} className="border rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-lg">{scene.title}</h4>
+                          <Badge variant="outline" className="mt-1">
+                            {scene.emotionalBeat}
+                          </Badge>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600">Duration</div>
+                          <div className="font-mono font-semibold">
+                            {(scene.duration / 30).toFixed(1)}s
+                          </div>
+                          <div className="text-xs text-gray-500">{scene.duration} frames</div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-blue-50 p-3 rounded">
+                        <div className="text-sm font-medium text-blue-900 mb-1">Narrative</div>
+                        <div className="text-sm text-blue-800">{scene.narrative}</div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-sm font-medium text-gray-700 mb-2">Visual Elements</div>
+                        <div className="flex flex-wrap gap-2">
+                          {scene.visualElements.map((element, i) => (
+                            <Badge key={i} variant="secondary">{element}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <div className="font-medium text-gray-700">Colors</div>
+                          <div className="flex gap-1 mt-1">
+                            {scene.brandElements.colors.map((color, i) => (
+                              <div 
+                                key={i}
+                                className="w-6 h-6 rounded border"
+                                style={{ backgroundColor: color }}
+                                title={color}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-700">Typography</div>
+                          <div className="text-xs text-gray-600">{scene.brandElements.typography}</div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-700">Motion</div>
+                          <div className="text-xs text-gray-600">{scene.brandElements.motion}</div>
+                        </div>
+                      </div>
+                      
+                      {scene.templateId && (
+                        <div className="pt-2 border-t">
+                          <span className="text-sm text-gray-600">Template: </span>
+                          <Badge>{scene.templateId}</Badge>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Total Video Duration</div>
+                    <div className="text-2xl font-bold">
+                      {(heroJourneyData.reduce((acc, s) => acc + s.duration, 0) / 30).toFixed(1)} seconds
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {heroJourneyData.reduce((acc, s) => acc + s.duration, 0)} total frames @ 30fps
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Hero's Journey narrative will appear here after brand extraction.
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="prompts" className="mt-4">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Generated Scene Prompts</h3>
+              {generatedPrompts.length > 0 ? (
+                <div className="space-y-4">
+                  {generatedPrompts.map((prompt, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-semibold">Scene {index + 1}: {prompt.sceneName || 'Untitled'}</h4>
+                        <Badge>{prompt.tool || 'edit'}</Badge>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <pre className="text-sm whitespace-pre-wrap font-mono">{prompt.content}</pre>
+                      </div>
+                      {prompt.template && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          Template: <span className="font-medium">{prompt.template}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  Generated prompts will appear here. These are the exact prompts sent to the LLM for each scene.
                 </div>
               )}
             </Card>

@@ -1,6 +1,7 @@
 import { db } from "~/server/db";
 import { brandProfiles } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
+import { dbLogger } from '~/lib/utils/logger';
 
 /**
  * Save extracted brand data to brand_profile table
@@ -10,25 +11,51 @@ export async function saveBrandProfile(
   websiteUrl: string,
   extractedData: any
 ) {
-  console.log('💾 [BRAND PROFILE] Saving brand data to database...');
+  dbLogger.info('💾 [BRAND PROFILE] Saving brand data to database...');
   
   try {
-    // Extract brand data from the nested structure
-    const brandData = extractedData.pageData?.visualDesign?.extraction?.brand || 
-                     extractedData.brand || 
+    // Log the structure we're receiving for debugging
+    dbLogger.debug('💾 [BRAND PROFILE] Received data structure:', {
+      hasPageData: !!extractedData.pageData,
+      hasBrand: !!extractedData.brand,
+      hasProduct: !!extractedData.product,
+      hasSocialProof: !!extractedData.social_proof,
+      topLevelKeys: Object.keys(extractedData)
+    });
+    
+    // Handle SimplifiedBrandData structure from brandDataAdapter
+    const brandData = extractedData.brand || 
+                     extractedData.pageData?.visualDesign?.extraction?.brand || 
                      {};
     
-    const media = extractedData.pageData?.visualDesign?.extraction?.media || 
-                  extractedData.media || 
+    const media = extractedData.media || 
+                  extractedData.pageData?.visualDesign?.extraction?.media || 
                   {};
     
-    const socialProof = extractedData.pageData?.visualDesign?.extraction?.socialProof || 
-                       extractedData.socialProof || 
+    // Note: SimplifiedBrandData uses 'social_proof' not 'socialProof'
+    const socialProof = extractedData.social_proof || 
+                       extractedData.socialProof ||
+                       extractedData.pageData?.visualDesign?.extraction?.socialProof || 
                        {};
     
-    const product = extractedData.pageData?.visualDesign?.extraction?.product || 
-                   extractedData.product || 
+    const product = extractedData.product || 
+                   extractedData.pageData?.visualDesign?.extraction?.product || 
                    {};
+    
+    // Extract V4's enhanced data if available (these don't exist in SimplifiedBrandData)
+    const psychology = extractedData.psychology || {};
+    const competitors = extractedData.competitors || [];
+    const aiAnalysis = extractedData.aiAnalysis || {};
+    const semanticContent = extractedData.semanticContent || {};
+    
+    // Log what we extracted
+    dbLogger.debug('💾 [BRAND PROFILE] Extracted data:', {
+      brandColors: brandData.colors?.primary,
+      brandFonts: brandData.typography?.fonts?.length,
+      productHeadline: product.value_prop?.headline,
+      socialProofStats: socialProof.stats,
+      screenshotsCount: media.screenshots?.length
+    });
     
     // Check if profile already exists
     const existing = await db.query.brandProfiles.findFirst({
@@ -38,7 +65,14 @@ export async function saveBrandProfile(
     const profileData = {
       projectId,
       websiteUrl,
-      brandData: brandData,
+      brandData: {
+        ...brandData,
+        // Include V4's enhanced brand insights
+        psychology: psychology,
+        competitors: competitors,
+        aiAnalysis: aiAnalysis,
+        semanticContent: semanticContent,
+      },
       colors: brandData.colors || {},
       typography: brandData.typography || {},
       logos: brandData.logos || brandData.logo || {},
@@ -47,27 +81,45 @@ export async function saveBrandProfile(
         headlines: product.value_prop ? [
           product.value_prop.headline,
           product.value_prop.subhead
-        ].filter(Boolean) : []
+        ].filter(Boolean) : [],
+        // Include V4's psychological tone insights
+        emotionalTone: psychology.emotionalProfile?.primaryEmotion || brandData.voice?.tone,
+        persuasionStyle: psychology.persuasionTechniques?.[0] || brandData.voice?.style,
       },
-      productNarrative: product,
-      socialProof: socialProof,
+      productNarrative: {
+        ...product,
+        // Include V4's competitive positioning
+        competitiveAdvantage: competitors[0]?.differentiators || product.features,
+        marketPosition: aiAnalysis.marketPosition || null,
+      },
+      socialProof: {
+        ...socialProof,
+        // Include V4's credibility indicators
+        trustSignals: psychology.trustIndicators || socialProof.stats,
+      },
       screenshots: media.screenshots || [],
       mediaAssets: [
         ...(media.screenshots || []),
-        ...(media.lottieUrls?.map((url: string) => ({ type: 'lottie', url })) || [])
+        ...(media.lottieUrls?.map((url: string) => ({ type: 'lottie', url })) || []),
+        ...(media.videos?.map((url: string) => ({ type: 'video', url })) || [])
       ],
-      extractionVersion: '2.0.0',
+      extractionVersion: extractedData.extractionMeta?.version || '4.0.0',
       extractionConfidence: {
-        overall: extractedData.pageData?.visualDesign?.extraction?.extractionMeta?.confidence || 0.95,
-        colors: 0.95,
-        typography: 0.90,
-        content: 0.85
+        overall: extractedData.extractionMeta?.confidence?.overall || 
+                 extractedData.pageData?.visualDesign?.extraction?.extractionMeta?.confidence || 0.95,
+        colors: extractedData.extractionMeta?.confidence?.colors || 0.95,
+        typography: extractedData.extractionMeta?.confidence?.typography || 0.90,
+        content: extractedData.extractionMeta?.confidence?.content || 0.85,
+        // V4 specific confidence scores
+        aiAnalysis: extractedData.extractionMeta?.confidence?.aiAnalysis || 0.92,
+        psychology: extractedData.extractionMeta?.confidence?.psychology || 0.88,
+        competitors: extractedData.extractionMeta?.confidence?.competitors || 0.75,
       },
       lastAnalyzedAt: new Date(),
     };
     
     if (existing) {
-      console.log('💾 [BRAND PROFILE] Updating existing profile...');
+      dbLogger.debug('💾 [BRAND PROFILE] Updating existing profile...');
       await db
         .update(brandProfiles)
         .set({
@@ -78,7 +130,7 @@ export async function saveBrandProfile(
       
       return { ...existing, ...profileData };
     } else {
-      console.log('💾 [BRAND PROFILE] Creating new profile...');
+      dbLogger.debug('💾 [BRAND PROFILE] Creating new profile...');
       const [newProfile] = await db
         .insert(brandProfiles)
         .values(profileData)
@@ -97,12 +149,28 @@ export async function saveBrandProfile(
  * Skips the BrandFormatter since data is already well-structured
  */
 export function createBrandStyleFromExtraction(extractedData: any) {
-  const brand = extractedData.pageData?.visualDesign?.extraction?.brand || 
-                extractedData.brand || 
+  // Handle SimplifiedBrandData structure
+  const brand = extractedData.brand || 
+                extractedData.pageData?.visualDesign?.extraction?.brand || 
                 {};
   
   const typography = brand.typography || {};
   const colors = brand.colors || {};
+  const psychology = extractedData.psychology || {};
+  const aiAnalysis = extractedData.aiAnalysis || {};
+  
+  // Log what we're working with
+  dbLogger.debug('🎨 [BRAND STYLE] Creating style from:', {
+    primaryColor: colors.primary,
+    secondaryColor: colors.secondary,
+    fonts: typography.fonts,
+    hasButtons: !!brand.buttons
+  });
+  
+  // Determine animation intensity based on psychological profile
+  const animationIntensity = psychology.emotionalProfile?.energy || 
+                             aiAnalysis.brandPersonality?.dynamism || 
+                             'medium';
   
   return {
     colors: {
@@ -114,6 +182,8 @@ export function createBrandStyleFromExtraction(extractedData: any) {
       gradient: colors.gradients?.[0] 
         ? `linear-gradient(${colors.gradients[0].angle || 135}deg, ${colors.gradients[0].stops?.join(', ') || `${colors.primary}, ${colors.secondary}`})`
         : `linear-gradient(135deg, ${colors.primary || '#000'}, ${colors.secondary || '#fff'})`,
+      // V4 enhanced: emotion-based accent colors
+      emotionalAccent: psychology.colorPsychology?.emotionalColor || colors.accents?.[1] || colors.primary,
     },
     typography: {
       primaryFont: typography.fonts?.[0]?.family || 'Inter',
@@ -129,26 +199,41 @@ export function createBrandStyleFromExtraction(extractedData: any) {
         medium: 500,
         regular: 400,
       },
+      // V4 enhanced: readability and hierarchy
+      lineHeight: typography.lineHeight || 1.5,
+      letterSpacing: typography.letterSpacing || 'normal',
     },
     animation: {
-      duration: 300,
-      easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      duration: animationIntensity === 'high' ? 400 : animationIntensity === 'low' ? 200 : 300,
+      easing: brand.animations?.easing?.spring || 'cubic-bezier(0.4, 0, 0.2, 1)',
       style: determineAnimationStyle(extractedData),
+      // V4 enhanced: psychological motion preferences
+      intensity: animationIntensity,
+      motionPreference: psychology.userExperience?.motionPreference || 'balanced',
     },
     buttons: {
-      borderRadius: brand.borderRadius?.md || '8px',
+      borderRadius: brand.borders?.radius?.md || '8px',
       padding: brand.buttons?.padding || '12px 24px',
       primaryStyle: {
         background: brand.buttons?.styles?.primary?.background || colors.primary || '#000',
         color: brand.buttons?.styles?.primary?.color || '#ffffff',
         hover: brand.buttons?.styles?.primary?.hover,
       },
+      // V4 enhanced: CTA psychology
+      ctaStyle: psychology.persuasionTechniques?.includes('urgency') ? 'urgent' : 'standard',
     },
     spacing: {
       sm: 8,
       md: 16,
       lg: 32,
       xl: 64,
+    },
+    // V4 additions: Brand personality and voice
+    personality: {
+      tone: psychology.emotionalProfile?.primaryEmotion || brand.voice?.tone || 'professional',
+      energy: animationIntensity,
+      formality: aiAnalysis.brandPersonality?.formality || 'balanced',
+      trustLevel: psychology.trustIndicators?.length || 0,
     },
   };
 }

@@ -10,15 +10,8 @@
  * This file is kept for reference and future integration testing with proper Next.js setup.
  */
 
-// DISABLED: Next.js App Router API routes require special test setup
-// that is not compatible with our current Jest configuration.
-// Use stripe-webhook-unit.test.ts for testing the webhook logic.
-
-describe.skip('Stripe Webhook Handler Integration Tests', () => {
-  it('should be tested using stripe-webhook-unit.test.ts', () => {
-    expect(true).toBe(true);
-  });
-});
+// Integration tests moved to stripe-webhook-unit.test.ts
+// which contains the actual working tests for webhook logic
 
 /**
  * Integration Test Checklist:

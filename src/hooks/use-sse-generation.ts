@@ -2,6 +2,21 @@ import { useCallback, useRef } from 'react';
 import { useVideoState } from '~/stores/videoState';
 import { api } from '~/trpc/react';
 
+// Generate a UUID v4 in the browser
+function generateUUID(): string {
+  // Use crypto.randomUUID if available (modern browsers)
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 interface UseSSEGenerationOptions {
   projectId: string;
   onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
@@ -22,7 +37,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     videoUrls?: string[],
     audioUrls?: string[],
     modelOverride?: string,
-    useGitHub?: boolean
+    useGitHub?: boolean,
+    websiteUrl?: string
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -54,6 +70,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     if (useGitHub) {
       params.append('useGitHub', 'true');
     }
+    
+    if (websiteUrl) {
+      params.append('websiteUrl', websiteUrl);
+    }
 
     // Create new EventSource
     const eventSource = new EventSource(`/api/generate-stream?${params.toString()}`);
@@ -80,6 +100,40 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
               useGitHub: data.useGitHub
             });
             eventSource.close();
+            break;
+          
+          // ✅ NEW: Handle streaming assistant message updates
+          case 'assistant_message_chunk':
+            hasReceivedMessage = true;
+            // Website pipeline streaming - update message in real-time
+            if (currentMessageId) {
+              updateMessage(projectId, currentMessageId, { 
+                content: data.message,
+                status: data.isComplete ? 'complete' : 'streaming'
+              });
+            } else {
+              // Create new assistant message with a proper UUID
+              const newMessageId = generateUUID();
+              addAssistantMessage(projectId, newMessageId, data.message);
+              currentMessageId = newMessageId;
+            }
+            
+            // Close stream if message is complete
+            if (data.isComplete) {
+              eventSource.close();
+              onComplete?.();
+            }
+            break;
+            
+          // ✅ NEW: Handle scene streaming events
+          case 'scene_added':
+            console.log(`Scene ${data.data.progress}% complete:`, data.data.sceneName);
+            
+            // Trigger immediate video state refresh
+            utils.scenes.getByProject.invalidate({ projectId });
+            
+            // Optional: Show progress notification
+            // toast.success(`Scene added: ${data.data.sceneName}`);
             break;
           
           // ✅ NEW: Handle title updates

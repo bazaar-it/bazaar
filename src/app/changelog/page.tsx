@@ -48,12 +48,12 @@ export default function PublicChangelogPage() {
         {!isLoading && data && (
           <div className="flex flex-col gap-16">
             {(data.items || []).map((item) => (
-              <section key={item.id} id={item.version ? `v-${item.version}` : item.id} className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6">
+              <section key={item.id} id={(item as any).version ? `v-${(item as any).version}` : item.id} className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6">
                 {/* Left rail: date + version */}
                 <div className="text-sm text-gray-500 pt-2">
                   <div>{formatDate(item.mergedAt as any)}</div>
-                  {item.version && (
-                    <div className="mt-2 inline-flex items-center px-2 py-1 rounded-md border border-gray-800 text-xs text-gray-300">v{item.version}</div>
+                  {(item as any).version && (
+                    <div className="mt-2 inline-flex items-center px-2 py-1 rounded-md border border-gray-800 text-xs text-gray-300">v{(item as any).version}</div>
                   )}
                 </div>
                 {/* Content */}

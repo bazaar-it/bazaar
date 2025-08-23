@@ -456,8 +456,19 @@ export default function ChatPanelG({
     // Let SSE handle DB sync in background
     // Use finalMessage if it's a YouTube follow-up, otherwise use original message with @mentions
     const displayMessage = finalMessage !== trimmedMessage ? finalMessage : originalMessage;
-    // Pass both GitHub and Figma modes to generation
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode);
+    
+    // ✨ NEW: Extract website URL from message
+    const urlRegex = /https?:\/\/[^\s]+/g;
+    const urls = displayMessage.match(urlRegex);
+    const websiteUrl = urls?.find(url => 
+      !url.includes('youtube.com') && 
+      !url.includes('youtu.be') &&
+      !url.includes('localhost') &&
+      !url.includes('127.0.0.1')
+    );
+    
+    // Pass both GitHub and Figma modes to generation, plus website URL
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -666,7 +677,9 @@ export default function ChatPanelG({
             const icons: string[] = [];
             let match;
             while ((match = iconPattern.exec(newMessage)) !== null) {
-              icons.push(match[1]);
+              if (match[1]) {
+                icons.push(match[1]);
+              }
             }
             setSelectedIcons(icons);
             return newMessage;

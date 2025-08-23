@@ -4,7 +4,7 @@
  */
 
 import { codeGenerator } from '../add/add_helpers/CodeGeneratorNEW';
-import type { ExtractedBrandData } from '../webAnalysis/WebAnalysisAgentV2';
+import type { ExtractedBrandDataV4 } from '../webAnalysis/WebAnalysisAgentV4';
 
 export class HeroJourneyLLM {
   
@@ -12,7 +12,7 @@ export class HeroJourneyLLM {
    * Generate Hero's Journey motion graphics using LLM with full brand context
    */
   async generateHeroJourney(
-    extraction: ExtractedBrandData,
+    extraction: ExtractedBrandDataV4,
     projectId: string,
     functionName: string
   ): Promise<{ code: string; name: string; duration: number; reasoning: string }> {
@@ -23,16 +23,20 @@ export class HeroJourneyLLM {
     // Use the code generator with the hero's journey prompt
     const result = await codeGenerator.generateCode({
       userPrompt: prompt,
+      layoutJson: null, // No layout for hero's journey
       functionName,
       projectId,
-      projectFormat: 'landscape',
-      requestedDurationFrames: 450, // 15 seconds at 30fps
+      projectFormat: {
+        format: 'landscape',
+        width: 1920,
+        height: 1080
+      }
     });
     
     return result;
   }
   
-  private buildHeroJourneyPrompt(extraction: ExtractedBrandData): string {
+  private buildHeroJourneyPrompt(extraction: ExtractedBrandDataV4): string {
     return `
 🎬 CREATE A HERO'S JOURNEY MOTION GRAPHICS VIDEO
 
@@ -43,102 +47,68 @@ This is NOT a website mockup - it's a cinematic motion graphics piece that bring
 🎯 BRAND EXTRACTION DATA
 ====================
 
-📍 WEBSITE: ${extraction.page.url}
-📄 TITLE: ${extraction.page.title}
+📍 WEBSITE: ${extraction.metadata?.url || 'N/A'}
+📄 TITLE: ${extraction.brand?.identity?.name || 'Untitled'}
 
 🎨 VISUAL IDENTITY
 ------------------
-PRIMARY COLOR: ${extraction.brand.colors.primary}
-SECONDARY COLOR: ${extraction.brand.colors.secondary}
-ACCENT COLORS: ${extraction.brand.colors.accents.join(', ')}
-NEUTRAL COLORS: ${extraction.brand.colors.neutrals.join(', ')}
-${extraction.brand.colors.gradients.length > 0 ? `
+PRIMARY COLOR: ${extraction.brand?.visual?.colors?.primary || '#2563eb'}
+SECONDARY COLOR: ${extraction.brand?.visual?.colors?.secondary || '#ffffff'}
+ACCENT COLOR: ${extraction.brand?.visual?.colors?.accent || '#10b981'}
+${extraction.brand?.visual?.colors?.gradients?.length ? `
 GRADIENTS:
-${extraction.brand.colors.gradients.map(g => 
-  `- ${g.type}-gradient(${g.angle || 0}deg, ${g.stops.join(' → ')})`
+${extraction.brand.visual.colors.gradients.map((g: any) => 
+  `- ${g.type}-gradient(${g.angle || 0}deg, ${g.stops?.join(' → ') || ''})`
 ).join('\n')}` : ''}
 
 📝 TYPOGRAPHY
 -------------
-FONTS: ${extraction.brand.typography.fonts.map(f => `${f.family} (weights: ${f.weights.join(', ')})`).join(', ')}
-H1: ${JSON.stringify(extraction.brand.typography.scale.h1)}
-H2: ${JSON.stringify(extraction.brand.typography.scale.h2)}
-H3: ${JSON.stringify(extraction.brand.typography.scale.h3)}
-BODY: ${JSON.stringify(extraction.brand.typography.scale.body)}
-
+FONTS: ${extraction.brand?.visual?.typography?.stack?.primary?.join(', ') || 'Inter, sans-serif'}
 🎯 DESIGN TOKENS
 ----------------
-BUTTON RADIUS: ${extraction.brand.buttons.radius}
-BUTTON PADDING: ${extraction.brand.buttons.padding}
-BUTTON SHADOW: ${extraction.brand.buttons.shadow}
+BUTTON RADIUS: ${extraction.brand?.visual?.borders?.radius?.button || '8px'}
+CARD RADIUS: ${extraction.brand?.visual?.borders?.radius?.card || '12px'}
 
 SHADOWS:
-- Small: ${extraction.brand.shadows.sm}
-- Medium: ${extraction.brand.shadows.md}
-- Large: ${extraction.brand.shadows.lg}
-- XL: ${extraction.brand.shadows.xl}
-
-BORDER RADIUS:
-- Small: ${extraction.brand.borderRadius.sm}
-- Medium: ${extraction.brand.borderRadius.md}
-- Large: ${extraction.brand.borderRadius.lg}
-
-🎨 BRAND STYLE
---------------
-ICON STYLE: ${extraction.brand.iconStyle}
-IMAGERY: ${extraction.brand.imageryStyle.join(', ')}
-EFFECTS: ${extraction.brand.backgroundEffects.join(', ')}
-VOICE: ${extraction.brand.voice.adjectives.join(', ')}
-TAGLINES: ${extraction.brand.voice.taglines.join(' | ')}
+- Small: ${extraction.brand?.visual?.shadows?.sm || '0 1px 2px rgba(0,0,0,0.1)'}
+- Medium: ${extraction.brand?.visual?.shadows?.md || '0 4px 6px rgba(0,0,0,0.1)'}
+- Large: ${extraction.brand?.visual?.shadows?.lg || '0 10px 15px rgba(0,0,0,0.1)'}
 
 💬 PRODUCT NARRATIVE
 --------------------
-HEADLINE: "${extraction.product.value_prop.headline}"
-SUBHEAD: "${extraction.product.value_prop.subhead}"
+HEADLINE: "${extraction.product?.value_prop?.headline || 'Transform Your Business'}"
+SUBHEAD: "${extraction.product?.value_prop?.subhead || 'Professional solutions for modern needs'}"
 
-PROBLEM: ${extraction.product.problem}
-SOLUTION: ${extraction.product.solution}
+PROBLEM: ${extraction.product?.problem || 'Status quo challenges'}
+SOLUTION: ${extraction.product?.solution || 'Innovative approach'}
 
 KEY FEATURES:
-${extraction.product.features.slice(0, 5).map(f => 
-  `• ${f.title}: ${f.desc}`
-).join('\n')}
+${extraction.product?.features?.slice(0, 5).map((f: any) => 
+  `• ${f.title || f.name}: ${f.description || f.desc || ''}`
+).join('\n') || '• Professional features'}
 
-USE CASES: ${extraction.product.useCases.join(', ')}
+USE CASES: ${extraction.product?.useCases?.map((u: any) => u.title).join(', ') || 'Multiple use cases'}
 
 BENEFITS:
-${extraction.product.benefits.map(b => 
-  `• ${b.label}: ${b.metric}`
-).join('\n')}
-
-METRICS/CLAIMS: ${extraction.product.metrics.join(' | ')}
+${extraction.product?.benefits?.map((b: any) => 
+  `• ${b.label || b.title || 'Benefit'}: ${b.metric || b.description || ''}`
+).join('\n') || '• Key benefits'}
 
 🏆 SOCIAL PROOF
 ---------------
-${extraction.socialProof.stats.users ? `USERS: ${extraction.socialProof.stats.users}` : ''}
-${extraction.socialProof.stats.rating ? `RATING: ${extraction.socialProof.stats.rating}` : ''}
-AWARDS: ${extraction.socialProof.awards.join(', ')}
-TRUSTED BY: ${extraction.socialProof.logos.join(', ')}
-
-${extraction.socialProof.testimonials.length > 0 ? `
-TESTIMONIALS:
-${extraction.socialProof.testimonials.slice(0, 2).map(t => 
-  `"${t.quote}" - ${t.name}, ${t.role}`
-).join('\n')}` : ''}
-
-🎬 MOTION & LAYOUT
-------------------
-COMPONENTS: ${extraction.layoutMotion.componentInventory.join(', ')}
-TRANSITIONS: ${extraction.layoutMotion.transitions.join(', ')}
-EASING: ${extraction.layoutMotion.easingHints.join(', ')}
-HAS VIDEO: ${extraction.layoutMotion.hasVideo}
-HAS ANIMATION: ${extraction.layoutMotion.hasAnimation}
+${extraction.metrics?.users ? `USERS: ${extraction.metrics.users}` : ''}
+${extraction.metrics?.rating ? `RATING: ${extraction.metrics.rating}` : ''}
+${extraction.socialProof ? `
+TESTIMONIALS: ${extraction.socialProof.testimonials?.length || 0}
+CUSTOMER LOGOS: ${extraction.socialProof.customerLogos?.length || 0}
+STATS: ${extraction.socialProof.stats?.length || 0}
+` : ''}
 
 🔘 CALL-TO-ACTIONS
 ------------------
-${extraction.ctas.map(cta => 
-  `${cta.type.toUpperCase()}: "${cta.label}"`
-).join('\n')}
+${extraction.content?.ctas?.map((cta: any) => 
+  `${(cta.type || 'button').toUpperCase()}: "${cta.label}"`
+).join('\n') || 'PRIMARY: "Get Started"'}
 
 ====================
 🎭 HERO'S JOURNEY STRUCTURE
@@ -148,7 +118,7 @@ Create a 15-second (450 frames at 30fps) motion graphics video with these 5 acts
 
 ACT 1 - THE PROBLEM (0-3 seconds, frames 0-90)
 ------------------------------------------------
-• Start with the problem: "${extraction.product.problem}"
+• Start with the problem: "${extraction.product?.problem || 'Status quo challenges'}"
 • Use darker, muted versions of brand colors
 • Show frustration, barriers, limitations
 • Slow, restricted animations
@@ -156,7 +126,7 @@ ACT 1 - THE PROBLEM (0-3 seconds, frames 0-90)
 
 ACT 2 - THE DISCOVERY (3-5 seconds, frames 90-150)
 ----------------------------------------------------
-• Introduce the solution: "${extraction.product.value_prop.headline}"
+• Introduce the solution: "${extraction.product?.value_prop?.headline || 'Transform Your Business'}"
 • Brand colors emerge and brighten
 • Logo appears with energy
 • Hope and possibility enter the scene
@@ -181,8 +151,8 @@ ACT 4 - THE TRIUMPH (10-13 seconds, frames 300-390)
 
 ACT 5 - THE INVITATION (13-15 seconds, frames 390-450)
 -------------------------------------------------------
-• Clear call-to-action: "${extraction.ctas[0]?.label || 'Get Started'}"
-• Tagline: "${extraction.brand.voice.taglines[0]}"
+• Clear call-to-action: "${extraction.content?.ctas?.[0]?.label || 'Get Started'}"
+• Tagline: "${extraction.brand?.identity?.tagline || ''}"
 • Button with exact brand styling
 • Inviting, forward-looking energy
 • End on brand's primary color
@@ -199,8 +169,8 @@ ACT 5 - THE INVITATION (13-15 seconds, frames 390-450)
 6. Use motion graphics techniques: parallax, morphing, reveals, particles
 7. Include at least 3 different types of animations per act
 8. Ensure text is readable with proper contrast
-9. Use the brand's imagery style (${extraction.brand.imageryStyle.join(', ')})
-10. Match the brand voice: ${extraction.brand.voice.adjectives.join(', ')}
+9. Use the brand's visual style 
+10. Match the brand voice and tone
 
 ====================
 🚀 TECHNICAL SPECS

@@ -15,11 +15,13 @@ interface ToolExecutionResult {
 import { db } from "~/server/db";
 import { projects, scenes } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
-import { WebAnalysisAgentV2, type ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV2";
+import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
+import { convertV4ToSimplified, createFallbackBrandData, type SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
 import { TemplateSelector } from "~/server/services/website/template-selector-v2";
 import { TemplateCustomizerAI } from "~/server/services/website/template-customizer-ai";
 import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/services/website/save-brand-profile";
+import { toolsLogger } from '~/lib/utils/logger';
 
 export interface WebsiteToVideoInput {
   userPrompt: string;
@@ -29,70 +31,146 @@ export interface WebsiteToVideoInput {
   style?: 'minimal' | 'dynamic' | 'bold';
   duration?: number; // Target duration in seconds
   webContext?: any; // Pass existing web analysis if available
+  streamingCallback?: (event: StreamingEvent) => Promise<void>;
 }
+
+export interface StreamingEvent {
+  type: 'scene_completed' | 'all_scenes_complete';
+  data: {
+    sceneIndex: number;
+    sceneName: string;
+    totalScenes: number;
+    sceneId?: string;
+    projectId: string;
+  };
+}
+
 
 export class WebsiteToVideoHandler {
   static async execute(input: WebsiteToVideoInput): Promise<ToolExecutionResult> {
-    console.log('🌐 [WEBSITE HANDLER] Starting website-to-video generation');
-    console.log('🌐 [WEBSITE HANDLER] Input:', {
+    toolsLogger.info('🌐 [WEBSITE HANDLER] Starting website-to-video generation', {
       url: input.websiteUrl,
       projectId: input.projectId,
       style: input.style || 'dynamic',
       duration: input.duration || 20
     });
+    
+    // Collect debug data for admin panel
+    const debugData: any = {
+      screenshots: [],
+      brandExtraction: null,
+      heroJourney: [],
+      templateSelections: [],
+      generatedPrompts: [],
+      extractionPhases: [], // Track V4's multi-phase extraction
+      aiAnalysis: null, // Store AI-powered insights
+      psychologicalProfile: null, // Brand psychology insights
+      competitorAnalysis: null // Competitive positioning
+    };
 
     try {
       // 1. Use existing web context if available, otherwise analyze
-      let websiteData;
+      let websiteData: SimplifiedBrandData;
+      let v4Data: ExtractedBrandDataV4 | null = null;
+      const screenshotCollector: any[] = [];
       
       if (input.webContext) {
-        console.log('🌐 [WEBSITE HANDLER] Step 1: Using existing web analysis from context');
+        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Using existing web analysis from context');
         // Handle both V1 format (from context) and V2 format
         if (input.webContext.pageData?.visualDesign?.extraction) {
           // V1 format with embedded V2 data
           websiteData = input.webContext.pageData.visualDesign.extraction;
-          console.log('🌐 [WEBSITE HANDLER] Using V2 data from V1 wrapper');
+          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using V2 data from V1 wrapper');
         } else if (input.webContext.brand && input.webContext.product) {
           // Direct V2 format
           websiteData = input.webContext;
-          console.log('🌐 [WEBSITE HANDLER] Using direct V2 data');
+          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using direct V2 data');
         } else {
           // Fallback to fresh analysis if format is unknown
-          console.log('🌐 [WEBSITE HANDLER] Unknown format, running fresh analysis');
-          const analyzer = new WebAnalysisAgentV2(input.projectId);
-          websiteData = await analyzer.analyze(input.websiteUrl);
+          toolsLogger.warn('🌐 [WEBSITE HANDLER] Unknown format, running fresh analysis');
+          const analyzer = new WebAnalysisAgentV4(input.projectId);
+          v4Data = await analyzer.analyze(input.websiteUrl);
+          websiteData = convertV4ToSimplified(v4Data);
+          
+          // Collect screenshots from V4 data
+          if (v4Data.screenshots) {
+            screenshotCollector.push(...v4Data.screenshots);
+            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
+          }
         }
       } else {
-        console.log('🌐 [WEBSITE HANDLER] Step 1: Analyzing website...');
-        const analyzer = new WebAnalysisAgentV2(input.projectId);
+        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Analyzing website...');
+        const analyzer = new WebAnalysisAgentV4(input.projectId);
         try {
-          websiteData = await analyzer.analyze(input.websiteUrl);
+          v4Data = await analyzer.analyze(input.websiteUrl);
+          websiteData = convertV4ToSimplified(v4Data);
+          
+          // Collect screenshots from V4 data
+          if (v4Data.screenshots) {
+            screenshotCollector.push(...v4Data.screenshots);
+            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
+          }
         } catch (analysisError) {
-          console.log('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data...');
+          toolsLogger.warn('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data...');
+          toolsLogger.error('🌐 [WEBSITE HANDLER] Full analysis error', analysisError as Error, {
+            url: input.websiteUrl
+          });
           // Create minimal fallback data from URL
           const domain = new URL(input.websiteUrl).hostname.replace('www.', '');
-          websiteData = WebsiteToVideoHandler.createFallbackWebsiteData(input.websiteUrl, domain);
+          websiteData = createFallbackBrandData(input.websiteUrl, domain);
         }
       }
       
+      // Store debug data with V4's enhanced extraction data
+      debugData.brandExtraction = websiteData;
+      debugData.screenshots = screenshotCollector.length > 0 ? screenshotCollector : 
+        websiteData.media?.screenshots || [];
+      
+      // Store V4's advanced analysis insights if available
+      if (v4Data) {
+        if ((v4Data.metadata as any)?.phases) {
+          debugData.extractionPhases = (v4Data.metadata as any).phases;
+        }
+        if ((v4Data as any).psychology) {
+          debugData.psychologicalProfile = (v4Data as any).psychology;
+        }
+        if ((v4Data as any).competitors) {
+          debugData.competitorAnalysis = (v4Data as any).competitors;
+        }
+      }
+      
+      // Check if we're using fallback data
+      const isFallbackData = !websiteData.extractionMeta || 
+        websiteData.page.title.toLowerCase().includes('utmb') === false;
+      
+      if (isFallbackData) {
+        toolsLogger.warn('⚠️ [WEBSITE HANDLER] Using fallback data - actual extraction may have failed');
+        debugData.extractionStatus = 'fallback';
+      } else {
+        debugData.extractionStatus = 'success';
+      }
+      
       // 2. Save to brand_profile table and format brand data
-      console.log('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
       
       // Save to database
       await saveBrandProfile(input.projectId, input.websiteUrl, websiteData);
       
       // Create brand style directly from extracted data (skip formatter)
       const brandStyle = createBrandStyleFromExtraction(websiteData);
-      console.log('🌐 [WEBSITE HANDLER] Brand style created:', {
+      toolsLogger.debug('🌐 [WEBSITE HANDLER] Brand style created', {
         primaryColor: brandStyle.colors.primary,
         primaryFont: brandStyle.typography.primaryFont,
         animationStyle: brandStyle.animation.style
       });
       
       // 3. Generate hero's journey narrative
-      console.log('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
       const storyGenerator = new HeroJourneyGenerator();
       const narrativeScenes = storyGenerator.generateNarrative(websiteData);
+      
+      // Store hero journey debug data
+      debugData.heroJourney = narrativeScenes;
       
       // Adjust durations for 20-second video (600 frames total)
       const adjustedScenes = narrativeScenes.map((scene, index) => {
@@ -103,41 +181,49 @@ export class WebsiteToVideoHandler {
         };
       });
       
-      // 4. Select best templates for each narrative beat
-      console.log('🌐 [WEBSITE HANDLER] Step 4: Selecting templates...');
+      // 4. Select best templates for each narrative beat with brand intelligence
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 4: Selecting templates with brand context...');
       const selector = new TemplateSelector();
       const selectedTemplates = await selector.selectTemplatesForJourney(
         adjustedScenes, 
-        input.style || 'dynamic'
+        input.style || 'dynamic',
+        websiteData // Pass brand data for intelligent selection
       );
       
-      // 5. Customize templates with brand and content using AI
-      console.log('🌐 [WEBSITE HANDLER] Step 5: Customizing templates with AI...');
+      // Store template selection debug data
+      debugData.templateSelections = selectedTemplates.map((template, i) => ({
+        scene: adjustedScenes[i]?.title,
+        templateId: template.templateId,
+        templateName: template.templateName,
+        emotionalBeat: adjustedScenes[i]?.emotionalBeat
+      }));
+      
+      // 5. ✨ STREAMING: Customize templates with incremental database saves
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 5: Streaming template customization...');
       const customizer = new TemplateCustomizerAI();
-      const customizedScenes = await customizer.customizeTemplates({
-        templates: selectedTemplates,
-        brandStyle,
-        websiteData,
-        narrativeScenes: adjustedScenes,
+      
+      // Store generated prompts for debug
+      selectedTemplates.forEach((template, i) => {
+        debugData.generatedPrompts.push({
+          sceneName: adjustedScenes[i]?.title,
+          tool: 'edit',
+          template: template.templateName,
+          content: `Apply brand colors ${brandStyle.colors.primary}, ${brandStyle.colors.secondary} and content to ${template.templateName} template for ${adjustedScenes[i]?.narrative}`
+        });
       });
       
-      // 6. Clear existing scenes and save new ones
-      console.log('🌐 [WEBSITE HANDLER] Step 6: Saving to project...');
+      // Clear existing scenes BEFORE starting (safety measure)
+      await db.delete(scenes).where(eq(scenes.projectId, input.projectId));
       
-      // Backup existing scenes before deletion (safety measure)
-      const existingScenes = await db.select().from(scenes)
-        .where(eq(scenes.projectId, input.projectId));
-      
-      console.log(`🌐 [WEBSITE HANDLER] Backing up ${existingScenes.length} existing scenes`);
-      
-      try {
-        // Clear existing scenes
-        await db.delete(scenes).where(eq(scenes.projectId, input.projectId));
+      // Define streaming callback for immediate database persistence
+      const { randomUUID } = require('crypto');
+      const onSceneComplete = async (scene: any, index: number) => {
+        toolsLogger.debug(`🌐 [WEBSITE HANDLER] Scene ${index + 1} completed: ${scene.name}`);
         
-        // Add customized scenes - use consistent UUID generation
-        const { randomUUID } = require('crypto');
-        const scenesToInsert = customizedScenes.map((scene, index) => ({
-          id: randomUUID(),
+        // Save scene to database immediately
+        const sceneId = randomUUID();
+        const sceneRecord = {
+          id: sceneId,
           projectId: input.projectId,
           name: scene.name,
           tsxCode: scene.code,
@@ -147,34 +233,45 @@ export class WebsiteToVideoHandler {
           layoutJson: null,
           createdAt: new Date(),
           updatedAt: new Date(),
-        }));
-      
-      console.log('🌐 [WEBSITE HANDLER] Scenes to insert:', {
-        count: scenesToInsert.length,
-        projectId: input.projectId,
-        sceneNames: scenesToInsert.map(s => s.name),
-        sceneDurations: scenesToInsert.map(s => s.duration),
-        codeExists: scenesToInsert.map(s => !!s.tsxCode)
-      });
-      
-        if (scenesToInsert.length > 0) {
-          await db.insert(scenes).values(scenesToInsert);
-          console.log('🌐 [WEBSITE HANDLER] ✅ Scenes inserted successfully');
-        }
-      } catch (error) {
-        console.error('🌐 [WEBSITE HANDLER] ❌ Failed to update scenes, attempting rollback:', error);
+        };
         
-        // Attempt to restore original scenes
-        if (existingScenes.length > 0) {
-          try {
-            await db.insert(scenes).values(existingScenes);
-            console.log('🌐 [WEBSITE HANDLER] ✅ Successfully restored original scenes');
-          } catch (rollbackError) {
-            console.error('🌐 [WEBSITE HANDLER] ❌ Failed to restore original scenes:', rollbackError);
+        // Insert into database
+        await db.insert(scenes).values([sceneRecord]);
+        
+        // Send streaming update to frontend
+        if (input.streamingCallback) {
+          await input.streamingCallback({
+            type: 'scene_completed',
+            data: {
+              sceneIndex: index,
+              sceneName: scene.name,
+              totalScenes: selectedTemplates.length,
+              sceneId,
+              projectId: input.projectId
+            }
+          });
+        }
+      };
+      
+      // Use streaming customization instead of batch
+      const customizedScenes = await customizer.customizeTemplatesStreaming({
+        templates: selectedTemplates,
+        brandStyle,
+        websiteData,
+        narrativeScenes: adjustedScenes,
+      }, onSceneComplete);
+      
+      // Final completion event
+      if (input.streamingCallback) {
+        await input.streamingCallback({
+          type: 'all_scenes_complete',
+          data: {
+            sceneIndex: customizedScenes.length - 1,
+            sceneName: 'Generation Complete',
+            totalScenes: customizedScenes.length,
+            projectId: input.projectId
           }
-        }
-        
-        throw error;
+        });
       }
       
       // Update project metadata
@@ -184,7 +281,7 @@ export class WebsiteToVideoHandler {
         })
         .where(eq(projects.id, input.projectId));
       
-      console.log('🌐 [WEBSITE HANDLER] Generation complete!');
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Generation complete!');
       
       // Build success message with scene details
       const sceneList = customizedScenes.map((scene, i) => 
@@ -208,9 +305,10 @@ export class WebsiteToVideoHandler {
           websiteTitle: websiteData.page.title,
           scenes: customizedScenes,
         },
+        debugData, // Include debug data for admin panel
         reasoning: `Analyzed ${input.websiteUrl} and created ${customizedScenes.length} branded scenes`,
         chatResponse: `I've analyzed ${websiteData.page.title} and created a professional 20-second video with your brand style!\n\n**Generated Scenes:**\n${sceneList}\n\n**Brand Elements Extracted:**\n• Primary color: ${brandStyle.colors.primary}\n• Typography: ${brandStyle.typography.primaryFont}\n• ${websiteData.product.features.length} key features highlighted\n\nThe video follows a hero's journey narrative structure, perfect for showcasing your product.`,
-      };
+      } as any;
       
     } catch (error) {
       console.error('🌐 [WEBSITE HANDLER] Error:', error);
@@ -228,123 +326,5 @@ export class WebsiteToVideoHandler {
     }
   }
 
-  private static createFallbackWebsiteData(url: string, domain: string): ExtractedBrandData {
-    // Create minimal fallback data when website analysis fails
-    return {
-      page: {
-        title: domain.charAt(0).toUpperCase() + domain.slice(1).replace(/[.-]/g, ' '),
-        description: `Professional website for ${domain}`,
-        url: url,
-        canonical: url,
-        headings: [`Welcome to ${domain}`, 'Our Services', 'About Us', 'Contact'],
-        meta: {
-          viewport: 'width=device-width, initial-scale=1',
-          charset: 'utf-8'
-        }
-      },
-      brand: {
-        colors: {
-          primary: '#2563eb', // Default blue
-          secondary: '#1e40af',
-          accents: ['#3b82f6', '#60a5fa'],
-          neutrals: ['#f8fafc', '#e2e8f0', '#64748b'],
-          gradients: [{
-            type: 'linear',
-            angle: 135,
-            stops: ['#2563eb', '#3b82f6']
-          }]
-        },
-        typography: {
-          fonts: [{
-            family: 'Inter',
-            weights: [400, 500, 600, 700]
-          }],
-          scale: {
-            xs: '0.75rem',
-            sm: '0.875rem',
-            base: '1rem',
-            lg: '1.125rem',
-            xl: '1.25rem',
-            '2xl': '1.5rem',
-            '3xl': '1.875rem',
-            '4xl': '2.25rem'
-          }
-        },
-        spacing: {
-          xs: '0.5rem',
-          sm: '1rem',
-          md: '1.5rem',
-          lg: '2rem',
-          xl: '3rem'
-        },
-        borders: {
-          radius: {
-            sm: '0.25rem',
-            md: '0.5rem',
-            lg: '0.75rem'
-          },
-          width: {
-            thin: '1px',
-            medium: '2px',
-            thick: '3px'
-          }
-        },
-        shadows: {
-          sm: '0 1px 2px rgba(0,0,0,0.05)',
-          md: '0 4px 6px rgba(0,0,0,0.1)',
-          lg: '0 10px 15px rgba(0,0,0,0.1)'
-        },
-        buttons: {
-          radius: '0.5rem',
-          padding: '0.75rem 1.5rem'
-        },
-        animations: {
-          duration: {
-            fast: '150ms',
-            normal: '300ms',
-            slow: '500ms'
-          },
-          easing: {
-            ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
-            spring: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)'
-          }
-        },
-        voice: {
-          tone: 'professional',
-          style: 'modern',
-          personality: 'confident'
-        }
-      },
-      product: {
-        value_prop: {
-          headline: `Transform Your Business with ${domain}`,
-          subhead: 'Professional solutions for modern businesses'
-        },
-        problem: 'Many businesses struggle with outdated solutions',
-        features: [
-          { title: 'Professional Service', description: 'High-quality solutions' },
-          { title: 'Expert Team', description: 'Experienced professionals' },
-          { title: 'Modern Approach', description: 'Latest technology and methods' }
-        ]
-      },
-      ctas: [
-        { label: 'Get Started', type: 'primary', placement: 'hero' },
-        { label: 'Learn More', type: 'secondary', placement: 'section' }
-      ],
-      socialProof: {
-        stats: {
-          users: '1000+',
-          rating: '4.9',
-          reviews: 'satisfied customers'
-        }
-      },
-      layoutMotion: {
-        motion_opportunities: [
-          'Fade in hero text',
-          'Slide in features',
-          'Scale buttons on hover'
-        ]
-      }
-    };
-  }
+  // Removed - now using createFallbackBrandData from brandDataAdapter
 }

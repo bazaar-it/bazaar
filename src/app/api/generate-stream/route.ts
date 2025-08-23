@@ -6,6 +6,8 @@ import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { messageService } from '~/server/services/data/message.service';
 import { generateTitle } from '~/server/services/ai/titleGenerator.service';
+import { WebsiteToVideoHandler } from '~/tools/website/websiteToVideoHandler';
+import type { StreamingEvent } from '~/tools/website/websiteToVideoHandler';
 
 // SSE helper to format messages
 function formatSSE(data: any): string {
@@ -46,6 +48,7 @@ export async function GET(request: NextRequest) {
   const audioUrls = searchParams.get('audioUrls');
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
+  const websiteUrl = searchParams.get('websiteUrl');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -104,7 +107,7 @@ export async function GET(request: NextRequest) {
             prompt: userMessage,
             contextId: projectId,
           }).then(async (titleResult) => {
-            let finalTitle = titleResult.title;
+            let finalTitle = titleResult.titles?.[0] || "Untitled Video";
           
           // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
           if (finalTitle === "Untitled Video") {
@@ -162,17 +165,87 @@ export async function GET(request: NextRequest) {
         console.error('[SSE] Title generation setup failed:', titleError);
       }
       
-      // 3. Just send the user data back - no assistant message yet
-      await writer.write(encoder.encode(formatSSE({
-        type: 'ready',
-        userMessageId: userMsg.id,
-        userMessage: userMessage,
-        imageUrls: parsedImageUrls,
-        videoUrls: parsedVideoUrls,
-        audioUrls: parsedAudioUrls,
-        modelOverride: modelOverride,
-        useGitHub: useGitHub
-      })));
+      // ✨ NEW: Check if this is a website-to-video request
+      if (websiteUrl) {
+        console.log('[SSE] Website-to-video pipeline detected:', websiteUrl);
+        
+        // Send initial analysis message
+        await writer.write(encoder.encode(formatSSE({
+          type: 'assistant_message_chunk',
+          message: `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`,
+          isComplete: false
+        })));
+        
+        // Setup streaming callback for real-time updates
+        let assistantMessageContent = `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`;
+        
+        const streamingCallback = async (event: StreamingEvent) => {
+          console.log('[SSE] Streaming event:', event.type);
+          
+          if (event.type === 'scene_completed') {
+            // Send scene progress message
+            const progressMessage = `Creating Scene ${event.data.sceneIndex + 1}/${event.data.totalScenes}: ${event.data.sceneName}...`;
+            assistantMessageContent += `\n\n${progressMessage} ✅`;
+            
+            await writer.write(encoder.encode(formatSSE({
+              type: 'assistant_message_chunk',
+              message: progressMessage,
+              isComplete: false
+            })));
+            
+            // Send scene addition event for immediate timeline update
+            await writer.write(encoder.encode(formatSSE({
+              type: 'scene_added',
+              data: {
+                sceneId: event.data.sceneId,
+                sceneName: event.data.sceneName,
+                progress: Math.round(((event.data.sceneIndex + 1) / event.data.totalScenes) * 100)
+              }
+            })));
+          }
+          
+          if (event.type === 'all_scenes_complete') {
+            // Send final completion message
+            const domain = new URL(websiteUrl).hostname;
+            const completionMessage = `\n\n✨ Complete! Generated ${event.data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
+            assistantMessageContent += completionMessage;
+            
+            await writer.write(encoder.encode(formatSSE({
+              type: 'assistant_message_chunk', 
+              message: completionMessage,
+              isComplete: true
+            })));
+          }
+        };
+        
+        // Execute website pipeline with streaming
+        const result = await WebsiteToVideoHandler.execute({
+          userPrompt: userMessage,
+          projectId,
+          userId,
+          websiteUrl,
+          streamingCallback
+        });
+        
+        if (result.success) {
+          console.log('[SSE] Website pipeline completed successfully');
+        } else {
+          throw new Error(result.error?.message || 'Website pipeline failed');
+        }
+        
+      } else {
+        // 3. Just send the user data back - no assistant message yet (regular flow)
+        await writer.write(encoder.encode(formatSSE({
+          type: 'ready',
+          userMessageId: userMsg.id,
+          userMessage: userMessage,
+          imageUrls: parsedImageUrls,
+          videoUrls: parsedVideoUrls,
+          audioUrls: parsedAudioUrls,
+          modelOverride: modelOverride,
+          useGitHub: useGitHub
+        })));
+      }
 
     } catch (error) {
       console.error('[SSE] Error:', error);
