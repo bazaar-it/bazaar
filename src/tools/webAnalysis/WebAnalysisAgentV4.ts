@@ -167,8 +167,8 @@ export class WebAnalysisAgentV4 {
           identity: {
             name: extractedData.companyName || extractedData.title || domain,
             tagline: extractedData.subheadline || extractedData.description || '',
-            mission: extractedData.socialProof?.stats?.find(s => s.label.toLowerCase().includes('mission'))?.value || '',
-            vision: extractedData.socialProof?.stats?.find(s => s.label.toLowerCase().includes('vision'))?.value || '',
+            mission: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('mission'))?.value || '',
+            vision: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('vision'))?.value || '',
             values: extractedData.socialProof?.customerLogos?.slice(0, 5) || [],
             positioning: extractedData.headline || '',
             archetype: this.inferBrandArchetype(extractedData)
@@ -249,7 +249,7 @@ export class WebAnalysisAgentV4 {
           benefits: this.mapFeaturesToBenefits(extractedData.features || []),
           positioning: {
             category: this.inferCategory(extractedData),
-            differentiators: extractedData.features?.slice(0, 3).map(f => f.title) || []
+            differentiators: extractedData.features?.slice(0, 3).map((f: any) => f.title) || []
           },
           pricing: {
             model: this.inferPricingModel(extractedData),
@@ -257,14 +257,14 @@ export class WebAnalysisAgentV4 {
           },
           journey: {
             awareness: extractedData.problem || '',
-            consideration: extractedData.features?.map(f => f.title).join(', ') || '',
+            consideration: extractedData.features?.map((f: any) => f.title).join(', ') || '',
             decision: extractedData.ctas?.[0]?.label || 'Get Started'
           },
           core: {
             mainFeature: extractedData.features?.[0]?.title || '',
             keyBenefit: extractedData.features?.[0]?.description || ''
           },
-          useCases: extractedData.features?.map(f => ({
+          useCases: extractedData.features?.map((f: any) => ({
             title: f.title,
             description: f.description
           })) || []
@@ -702,9 +702,9 @@ export class WebAnalysisAgentV4 {
           let hex = color;
           
           if (rgbMatch) {
-            const r = parseInt(rgbMatch[1]);
-            const g = parseInt(rgbMatch[2]);
-            const b = parseInt(rgbMatch[3]);
+            const r = parseInt(rgbMatch[1]!);
+            const g = parseInt(rgbMatch[2]!);
+            const b = parseInt(rgbMatch[3]!);
             hex = '#' + [r, g, b].map(x => {
               const hex = x.toString(16);
               return hex.length === 1 ? '0' + hex : hex;

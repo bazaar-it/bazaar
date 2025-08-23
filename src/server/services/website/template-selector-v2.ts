@@ -33,6 +33,11 @@ export class TemplateSelector {
       dynamic: ['GlitchText', 'MorphingText', 'DrawOn'],
       bold: ['ParticleExplosion', 'GlitchText', 'WaveAnimation'],
     },
+    tension: {
+      minimal: ['DarkBGGradientText', 'MorphingText', 'DrawOn'],
+      dynamic: ['GlitchText', 'WaveAnimation', 'MorphingText'],
+      bold: ['ParticleExplosion', 'WaveAnimation', 'GlitchText'],
+    },
     discovery: {
       minimal: ['LogoTemplate', 'FadeIn', 'ScaleIn'],
       dynamic: ['ScaleIn', 'WipeIn', 'SlideIn'],
@@ -221,7 +226,7 @@ return FallbackTemplate;`;
       colorScheme: this.analyzeColorScheme(brandData),
       hasDataFocus: this.detectDataFocus(brandData),
       isAppProduct: this.detectAppProduct(brandData),
-      voiceTone: brandData.content?.voice?.tone || 'professional'
+      voiceTone: brandData.brand?.voice?.tone || 'professional'
     };
   }
   
@@ -287,7 +292,7 @@ return FallbackTemplate;`;
   }
   
   private analyzeColorScheme(brandData: SimplifiedBrandData): BrandContext['colorScheme'] {
-    const primaryColor = brandData.brand?.visual?.colors?.primary;
+    const primaryColor = brandData.brand?.colors?.primary;
     if (!primaryColor) return 'monochrome';
     
     // Simple brightness detection for light/dark
@@ -305,7 +310,7 @@ return FallbackTemplate;`;
   }
   
   private detectDataFocus(brandData: SimplifiedBrandData): boolean {
-    const hasStats = brandData.socialProof && Object.keys(brandData.socialProof).length > 0;
+    const hasStats = brandData.social_proof && Object.keys(brandData.social_proof).length > 0;
     const hasMetrics = brandData.product?.features?.some(f => 
       f.title?.toLowerCase().includes('analytic') || 
       f.title?.toLowerCase().includes('metric') ||
