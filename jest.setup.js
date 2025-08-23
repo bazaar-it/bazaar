@@ -37,7 +37,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.DATABASE_URL_NON_POOLED = 'postgresql://test:test@localhost:5432/test';
 process.env.OPENAI_API_KEY = 'test-key';
-process.env.AUTH_SECRET = 'test-secret';
+process.env.AUTH_SECRET = 'test-secret-that-is-definitely-longer-than-32-characters-for-security';
 process.env.AUTH_GITHUB_ID = 'test-github-id';
 process.env.AUTH_GITHUB_SECRET = 'test-github-secret';
 process.env.AUTH_GOOGLE_ID = 'test-google-id';
@@ -66,6 +66,15 @@ global.console = {
 
 // Mock fetch globally
 global.fetch = jest.fn();
+
+// Mock browser URL API for Blob tests
+global.URL = {
+  ...URL,
+  createObjectURL: jest.fn((blob) => {
+    return `blob:http://localhost:3000/${Math.random().toString(36).substr(2, 9)}`;
+  }),
+  revokeObjectURL: jest.fn()
+};
 
 // Mock ResizeObserver
 global.ResizeObserver = jest.fn().mockImplementation(() => ({

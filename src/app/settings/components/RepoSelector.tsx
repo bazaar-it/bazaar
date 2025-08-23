@@ -14,8 +14,8 @@ import { api } from "~/trpc/react";
 interface Repository {
   name: string;
   fullName: string;
-  description?: string;
-  language?: string;
+  description?: string | null;
+  language?: string | null;
   updatedAt?: string;
   private?: boolean;
 }

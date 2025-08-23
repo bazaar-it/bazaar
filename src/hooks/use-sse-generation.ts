@@ -92,11 +92,15 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             hasReceivedMessage = true;
             // Website pipeline streaming - update message in real-time
             if (currentMessageId) {
-              updateMessage(currentMessageId, data.message, data.isComplete);
+              updateMessage(projectId, currentMessageId, { 
+                content: data.message,
+                status: data.isComplete ? 'complete' : 'streaming'
+              });
             } else {
-              // Create new assistant message
-              const assistantMsg = addAssistantMessage(projectId, data.message);
-              currentMessageId = assistantMsg.id;
+              // Create new assistant message with a unique ID
+              const newMessageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              addAssistantMessage(projectId, newMessageId, data.message);
+              currentMessageId = newMessageId;
             }
             
             // Close stream if message is complete

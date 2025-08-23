@@ -430,13 +430,13 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                                     </h4>
                                     {component.framework && component.framework !== 'react' && (
                                       <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
-                                        component.framework === 'vue' 
+                                        (component.framework as string) === 'vue' 
                                           ? 'bg-green-100 text-green-700'
-                                          : component.framework === 'svelte'
+                                          : (component.framework as string) === 'svelte'
                                           ? 'bg-orange-100 text-orange-700'
-                                          : component.framework === 'solid'
+                                          : (component.framework as string) === 'solid'
                                           ? 'bg-blue-100 text-blue-700'
-                                          : component.framework === 'angular'
+                                          : (component.framework as string) === 'angular'
                                           ? 'bg-red-100 text-red-700'
                                           : 'bg-gray-100 text-gray-700'
                                       }`}>

@@ -251,15 +251,21 @@ export class ContextBuilder {
           brandKeys: analysis.brand ? Object.keys(analysis.brand).slice(0, 5) : 'none'
         });
         
+        // Create V4-compatible web context that matches the expected type
         const webContext = {
-          originalUrl: analysis.metadata?.url || url,
-          screenshotUrls: analysis.screenshots?.map(s => s.url) || [],
-          screenshots: analysis.screenshots,
-          brand: analysis.brand,
-          product: analysis.product,
-          socialProof: analysis.socialProof,
-          content: analysis.content,
-          metadata: analysis.metadata,
+          originalUrl: analysis.metadata?.url || targetUrl,
+          screenshotUrls: {
+            desktop: analysis.screenshots?.find(s => s.type === 'desktop')?.url || 
+                    analysis.screenshots?.[0]?.url || '',
+            mobile: analysis.screenshots?.find(s => s.type === 'mobile')?.url || 
+                   analysis.screenshots?.[1]?.url || ''
+          },
+          pageData: {
+            title: analysis.brand?.identity?.name || 'Untitled',
+            description: analysis.brand?.identity?.tagline,
+            headings: [],
+            url: analysis.metadata?.url || targetUrl
+          },
           analyzedAt: new Date().toISOString()
         };
         
@@ -269,17 +275,8 @@ export class ContextBuilder {
             const { webContextService } = await import('~/server/services/data/web-context.service');
             await webContextService.saveWebContext(
               input.projectId,
-              analysis.metadata?.url || url,
-              {
-                screenshotUrls: analysis.screenshots?.map((s: any) => s.url) || [],
-                pageData: {
-                  title: analysis.brand?.identity?.name || 'Untitled',
-                  visualDesign: {
-                    extraction: analysis
-                  }
-                },
-                analyzedAt: new Date().toISOString()
-              },
+              analysis.metadata?.url || targetUrl,
+              webContext,
               input.prompt
             );
             console.log(`📚 [CONTEXT BUILDER] 💾 Web context saved to database for future reference`);

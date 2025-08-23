@@ -28,15 +28,15 @@ export default function SharePageContent({
   createdAt,
   shareUrl,
 }: SharePageContentProps) {
-  const [isLooping, setIsLooping] = useState(true); // Default to looping
+  const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video'); // Default to looping entire video
 
   return (
     <div className={`w-full ${inputProps.meta?.format === 'portrait' ? 'max-w-2xl' : inputProps.meta?.format === 'square' ? 'max-w-3xl' : 'max-w-4xl'} rounded-xl bg-white dark:bg-black/80 shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800`}>
       <div className="p-6 md:p-8">
         <ShareVideoPlayerClient 
           inputProps={inputProps} 
-          isLooping={isLooping}
-          setIsLooping={setIsLooping}
+          isLooping={loopState !== 'off'}
+          setIsLooping={(isLooping) => setLoopState(isLooping ? 'video' : 'off')}
         />
       </div>
       <div className="bg-gray-50/50 dark:bg-black/30 px-6 py-4 md:px-8 md:py-6 border-t border-gray-200 dark:border-gray-800">
@@ -52,8 +52,12 @@ export default function SharePageContent({
           </div>
           <div className="flex items-center gap-2">
             <LoopToggle 
-              isLooping={isLooping} 
-              onToggle={setIsLooping}
+              loopState={loopState} 
+              onStateChange={setLoopState}
+              scenes={inputProps.scenes.map((scene, index) => ({ 
+                id: scene.id || `scene-${index}`, 
+                name: scene.name 
+              }))}
             />
             <ShareButtons
               shareUrl={shareUrl}

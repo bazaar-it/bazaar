@@ -181,7 +181,22 @@ Return ONLY the modified code, no explanations.`;
       
       if (result.success && result.data?.tsxCode) {
         toolsLogger.debug('🤖 [AI CUSTOMIZER] Successfully customized with Edit tool');
-        return result.data.tsxCode;
+        
+        // Check if the tsxCode is actually a JSON string containing the code
+        let code = result.data.tsxCode;
+        if (typeof code === 'string' && code.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(code);
+            if (parsed.code) {
+              toolsLogger.debug('🤖 [AI CUSTOMIZER] Extracted code from JSON wrapper');
+              code = parsed.code;
+            }
+          } catch (e) {
+            // Not JSON, use as-is
+          }
+        }
+        
+        return code;
       } else {
         toolsLogger.error('🤖 [AI CUSTOMIZER] Edit tool failed', undefined, { error: result.error });
         // Fallback to basic replacement

@@ -23,14 +23,14 @@ export class HeroJourneyLLM {
     // Use the code generator with the hero's journey prompt
     const result = await codeGenerator.generateCode({
       userPrompt: prompt,
+      layoutJson: null, // No layout for hero's journey
       functionName,
       projectId,
       projectFormat: {
         format: 'landscape',
         width: 1920,
         height: 1080
-      },
-      requestedDurationFrames: 450, // 15 seconds at 30fps
+      }
     });
     
     return result;
@@ -151,8 +151,8 @@ ACT 4 - THE TRIUMPH (10-13 seconds, frames 300-390)
 
 ACT 5 - THE INVITATION (13-15 seconds, frames 390-450)
 -------------------------------------------------------
-• Clear call-to-action: "${extraction.ctas[0]?.label || 'Get Started'}"
-• Tagline: "${extraction.brand.voice.taglines[0]}"
+• Clear call-to-action: "${extraction.content?.ctas?.[0]?.label || 'Get Started'}"
+• Tagline: "${extraction.brand?.identity?.tagline || ''}"
 • Button with exact brand styling
 • Inviting, forward-looking energy
 • End on brand's primary color
@@ -169,8 +169,8 @@ ACT 5 - THE INVITATION (13-15 seconds, frames 390-450)
 6. Use motion graphics techniques: parallax, morphing, reveals, particles
 7. Include at least 3 different types of animations per act
 8. Ensure text is readable with proper contrast
-9. Use the brand's imagery style (${extraction.brand.imageryStyle.join(', ')})
-10. Match the brand voice: ${extraction.brand.voice.adjectives.join(', ')}
+9. Use the brand's visual style 
+10. Match the brand voice and tone
 
 ====================
 🚀 TECHNICAL SPECS
