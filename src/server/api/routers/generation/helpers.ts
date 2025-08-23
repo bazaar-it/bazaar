@@ -56,7 +56,7 @@ export async function executeToolFromDecision(
       if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {
         // Safety: Only include scenes that exist in storyboard
         referenceScenes = storyboard.filter(s => 
-          decision.toolContext!.referencedSceneIds!.includes(s.id)
+          decision.toolContext.referencedSceneIds!.includes(s.id)
         );
         
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
@@ -661,10 +661,10 @@ export async function executeToolFromDecision(
       
       // Audio was added successfully - create chat response message
       if (audioResult.chatResponse && messageId) {
-        await messageService.saveMessage({
+        await messageService.createMessage({
           id: randomUUID(),
           projectId,
-          message: audioResult.chatResponse,
+          content: audioResult.chatResponse,
           role: 'assistant',
           parentMessageId: messageId,
           userId,
@@ -716,6 +716,7 @@ export async function executeToolFromDecision(
       return {
         success: true,
         scenes: generatedScenes as any,
+        debugData: websiteResult.debugData, // Pass debug data for admin panel
       };
 
     default:
