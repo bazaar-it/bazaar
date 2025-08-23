@@ -1,4 +1,4 @@
-import type { ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV2";
+import type { ExtractedBrandData } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import type { FormattedBrandStyle } from "./brand-formatter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
@@ -24,6 +24,10 @@ export class TemplateCustomizer {
     for (let i = 0; i < templates.length; i++) {
       const template = templates[i];
       const narrativeScene = narrativeScenes[i];
+      
+      if (!template || !narrativeScene) {
+        continue;
+      }
       
       const customizedCode = this.customizeTemplateCode(
         template.templateCode,
@@ -162,7 +166,7 @@ export class TemplateCustomizer {
         break;
       case 'transformation':
         // Add features
-        (websiteData.product?.features || []).slice(0, 3).forEach((feature, index) => {
+        (websiteData.product?.features || []).slice(0, 3).forEach((feature: any, index: number) => {
           result = result.replace(
             new RegExp(`Benefit ${index + 1}`, 'gi'),
             feature.title

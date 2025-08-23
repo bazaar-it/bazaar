@@ -102,7 +102,7 @@ class GoogleAnalyticsService {
   }
 
   private formatDate(date: Date): string {
-    return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    return date.toISOString().split('T')[0]!; // YYYY-MM-DD format
   }
 
   async getCountryData(timeframe: '7d' | '30d' = '7d') {
@@ -132,7 +132,7 @@ class GoogleAnalyticsService {
         limit: 20
       });
 
-      const countries = this.processCountryResponse(response);
+      const countries = this.processCountryResponse(response as any);
       const totalVisitors = countries.reduce((sum, c) => sum + c.visitors, 0);
       
       return { countries, totalVisitors };
@@ -192,7 +192,7 @@ class GoogleAnalyticsService {
         limit: 15
       });
 
-      const pages = this.processPageViewsResponse(response);
+      const pages = this.processPageViewsResponse(response as any);
       const totalPageViews = pages.reduce((sum, p) => sum + p.views, 0);
       
       return { pages, totalPageViews };
@@ -245,7 +245,7 @@ class GoogleAnalyticsService {
         ]
       });
 
-      const sources = this.processTrafficSourcesResponse(response);
+      const sources = this.processTrafficSourcesResponse(response as any);
       const totalSessions = sources.reduce((sum, s) => sum + s.sessions, 0);
       
       return { sources, totalSessions };
@@ -303,7 +303,7 @@ class GoogleAnalyticsService {
         ]
       });
 
-      const devices = this.processDeviceResponse(response);
+      const devices = this.processDeviceResponse(response as any);
       const totalUsers = devices.reduce((sum, d) => sum + d.users, 0);
       
       return { devices, totalUsers };
@@ -382,7 +382,7 @@ class GoogleAnalyticsService {
         ]
       });
 
-      const data = this.processTimeSeriesResponse(response);
+      const data = this.processTimeSeriesResponse(response as any);
       return { data };
     } catch (error) {
       console.error('[Google Analytics] Error fetching time series:', error);

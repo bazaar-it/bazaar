@@ -105,14 +105,15 @@ export class AssetContextService {
       tags: a.tags || [],
       hash: a.hash,
       uploadedAt: a.uploadedAt.toISOString(),
-      referenceNames: a.customName ? [a.customName, a.customName.toLowerCase()] : []
+      referenceNames: a.customName ? [a.customName, a.customName.toLowerCase()] : [],
+      dimensions: a.width && a.height ? { width: a.width, height: a.height } : undefined
     }));
     
     // Identify logos
     const logos = assetList.filter(a => 
       a.type === 'logo' || 
       a.tags?.includes('logo') ||
-      a.originalName.toLowerCase().includes('logo')
+      a.originalName?.toLowerCase().includes('logo')
     );
     
     // Get recent assets (last 5)
@@ -172,7 +173,8 @@ export class AssetContextService {
       tags: a.tags || [],
       hash: a.hash,
       uploadedAt: a.uploadedAt.toISOString(),
-      referenceNames: a.customName ? [a.customName, a.customName.toLowerCase()] : []
+      referenceNames: a.customName ? [a.customName, a.customName.toLowerCase()] : [],
+      dimensions: a.width && a.height ? { width: a.width, height: a.height } : undefined
     }));
 
     const logos = assetList.filter(a => a.type === 'logo' || a.tags?.includes('logo'));

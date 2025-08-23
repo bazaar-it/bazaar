@@ -86,13 +86,13 @@ function compileSceneCode(scene: any): React.ComponentType | null {
     console.error('Failed to compile scene:', error);
     
     // Dispatch error event for auto-fix system
-    if (typeof window !== 'undefined' && sceneData?.componentId) {
+    if (typeof window !== 'undefined' && scene?.componentId) {
       window.dispatchEvent(new CustomEvent('preview-scene-error', {
         detail: {
-          sceneId: sceneData.componentId,
+          sceneId: scene.componentId,
           errorMessage: error instanceof Error ? error.message : String(error),
-          sceneName: sceneData.name || 'Unknown Scene',
-          tsxCode: sceneData.code
+          sceneName: scene.name || 'Unknown Scene',
+          tsxCode: scene.code
         }
       }));
       console.log('[MainComposition] Dispatched preview-scene-error event for auto-fix');

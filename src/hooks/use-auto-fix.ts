@@ -610,8 +610,10 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         console.log('[SILENT FIX] Current queue:', autoFixQueueRef.current);
         if (autoFixQueueRef.current.size > 0) {
           const firstSceneId = Array.from(autoFixQueueRef.current.keys())[0];
-          console.log('[SILENT FIX] Processing scene:', firstSceneId);
-          processAutoFixQueue(firstSceneId);
+          if (firstSceneId) {
+            console.log('[SILENT FIX] Processing scene:', firstSceneId);
+            processAutoFixQueue(firstSceneId);
+          }
         } else {
           console.log('[SILENT FIX] No items in queue');
         }

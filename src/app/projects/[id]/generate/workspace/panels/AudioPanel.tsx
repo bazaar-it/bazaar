@@ -16,7 +16,7 @@ interface AudioPanelProps {
 }
 
 interface AudioTrack {
-  id: string;
+  id?: string;
   url: string;
   name: string;
   duration: number;

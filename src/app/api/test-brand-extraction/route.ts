@@ -1,139 +1,48 @@
-import { NextResponse } from "next/server";
-import { db } from "~/server/db";
-import { users, projects } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
-import { appRouter } from "~/server/api/root";
-import { createTRPCContext } from "~/server/api/trpc";
+import { NextResponse } from 'next/server';
+import { WebAnalysisAgentV4 } from '~/tools/webAnalysis/WebAnalysisAgentV4';
+import { convertV4ToSimplified } from '~/tools/webAnalysis/brandDataAdapter';
 
-export async function GET() {
-  console.log("🚀 Starting brand extraction test for Stripe.com\n");
-  
+export async function POST(req: Request) {
   try {
-    // Get or create test user
-    console.log("📋 Setting up test user and project...");
-    let user = await db.query.users.findFirst({
-      where: eq(users.email, "test@bazaar.it"),
-    });
+    const { url } = await req.json();
     
-    if (!user) {
-      console.log("Creating test user...");
-      const [newUser] = await db.insert(users).values({
-        id: "test-user-001",
-        email: "test@bazaar.it",
-        name: "Test User",
-      }).returning();
-      user = newUser;
+    if (!url) {
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
-    console.log(`✅ User ready: ${user.email}\n`);
     
-    // Get or create test project
-    let project = await db.query.projects.findFirst({
-      where: eq(projects.userId, user.id),
-    });
+    console.log('🔍 Testing brand extraction for:', url);
     
-    if (!project) {
-      console.log("Creating test project...");
-      const [newProject] = await db.insert(projects).values({
-        userId: user.id,
-        title: "Test Project - Brand Extraction",
-        props: {},
-        isWelcome: false,
-      }).returning();
-      project = newProject;
-    }
-    console.log(`✅ Project ready: ${project.title} (${project.id})\n`);
+    // Run V4 extraction
+    const analyzer = new WebAnalysisAgentV4('test-project');
+    const v4Data = await analyzer.analyze(url);
     
-    // Create tRPC context
-    const headers = new Headers();
-    headers.set("x-user-id", user.id);
-    const ctx = await createTRPCContext({
-      headers,
-    });
+    // Convert to simplified format
+    const simplifiedData = convertV4ToSimplified(v4Data);
     
-    // Create caller
-    const caller = appRouter.createCaller(ctx);
+    // Check if we got real data or fallback
+    const isRealExtraction = v4Data.metadata && 
+      v4Data.brand?.identity?.name &&
+      v4Data.brand?.visual?.colors?.primary;
     
-    // Test brand extraction for Stripe.com
-    console.log("🌐 Extracting brand from: https://stripe.com");
-    console.log("⏳ This will take 30-60 seconds...\n");
-    
-    const startTime = Date.now();
-    
-    const result = await caller.websitePipeline.extractBrandProfile({
-      projectId: project.id,
-      websiteUrl: "https://stripe.com",
-    });
-    
-    const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
-    
-    console.log(`\n✅ Brand extraction completed in ${elapsedTime}s!\n`);
-    
-    // Prepare detailed response
-    const response = {
+    return NextResponse.json({
       success: true,
-      elapsedTime: `${elapsedTime}s`,
-      profileId: result.id,
-      projectId: project.id,
-      extraction: {
-        colors: {
-          primary: result.brandData.colors.primary,
-          secondary: result.brandData.colors.secondary,
-          accents: result.brandData.colors.accents,
-          gradients: result.brandData.colors.gradients?.length || 0,
-        },
-        typography: {
-          fonts: result.brandData.typography.fonts?.map((f: any) => f.family),
-          h1Size: result.brandData.typography.scale?.h1?.size,
-          bodySize: result.brandData.typography.scale?.body?.size,
-        },
-        logos: {
-          primary: result.brandData.logos?.primary?.url,
-          variations: result.brandData.logos?.variations?.length || 0,
-        },
-        copyVoice: {
-          tone: result.brandData.copyVoice?.tone,
-          style: result.brandData.copyVoice?.style,
-          headlineCount: result.brandData.copyVoice?.headlines?.length || 0,
-          sampleHeadline: result.brandData.copyVoice?.headlines?.[0],
-        },
-        socialProof: {
-          testimonials: result.brandData.socialProof?.testimonials?.length || 0,
-          clientLogos: result.brandData.socialProof?.clientLogos?.length || 0,
-          stats: result.brandData.socialProof?.stats?.length || 0,
-        },
-        screenshots: {
-          total: result.screenshots?.length || 0,
-          details: result.screenshots?.map((s: any) => ({
-            viewport: s.viewport,
-            position: s.position,
-            url: s.url,
-          })),
-        },
-        mediaAssets: {
-          total: result.mediaAssets?.length || 0,
-          byType: result.mediaAssets?.reduce((acc: any, asset: any) => {
-            acc[asset.type] = (acc[asset.type] || 0) + 1;
-            return acc;
-          }, {}),
-        },
-      },
-    };
+      isRealExtraction,
+      extractionStatus: isRealExtraction ? 'success' : 'fallback',
+      v4Data,
+      simplifiedData,
+      debug: {
+        hasScreenshots: (v4Data.screenshots?.length || 0) > 0,
+        hasBrandColors: !!v4Data.brand?.visual?.colors,
+        hasProductInfo: !!v4Data.product,
+        hasContent: !!v4Data.content
+      }
+    });
     
-    // Log to server console
-    console.log("📊 Extracted Brand Data:");
-    console.log(JSON.stringify(response, null, 2));
-    
-    return NextResponse.json(response);
-    
-  } catch (error) {
-    console.error("❌ Error during brand extraction:", error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('Brand extraction test failed:', error);
+    return NextResponse.json({ 
+      error: error.message,
+      stack: error.stack 
+    }, { status: 500 });
   }
 }

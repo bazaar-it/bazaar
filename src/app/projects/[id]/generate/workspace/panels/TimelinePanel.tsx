@@ -471,6 +471,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       let cumulativeFrames = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
+        if (!scene) continue;
         const sceneEnd = cumulativeFrames + (scene.duration || 150);
         
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
@@ -629,6 +630,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       let cumulativeFrames = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
+        if (!scene) continue;
         const sceneEnd = cumulativeFrames + (scene.duration || 150);
         
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
@@ -642,7 +644,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             // Create new order array for API
             const newOrder = [...scenes];
             const [movedScene] = newOrder.splice(dragInfo.sceneIndex, 1);
-            newOrder.splice(i, 0, movedScene);
+            if (movedScene) {
+              newOrder.splice(i, 0, movedScene);
+            }
             
             // Persist to database
             reorderScenesMutation.mutate({

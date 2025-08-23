@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -37,6 +37,26 @@ const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 });
 
 export const adminRouter = createTRPCRouter({
+  // Get Brand Profile for a project - admin only
+  getBrandProfile: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => {
+      const profile = await db
+        .select()
+        .from(brandProfiles)
+        .where(eq(brandProfiles.projectId, input.projectId))
+        .limit(1);
+
+      if (!profile[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand profile not found for this project.",
+        });
+      }
+
+      return profile[0];
+    }),
+
   // Check if current user is admin
   checkAdminAccess: protectedProcedure
     .query(async ({ ctx }) => {

@@ -436,6 +436,8 @@ export function ComponentDiscoveryPanel({ onComponentSelect, projectId }: Compon
                                           ? 'bg-orange-100 text-orange-700'
                                           : component.framework === 'solid'
                                           ? 'bg-blue-100 text-blue-700'
+                                          : component.framework === 'angular'
+                                          ? 'bg-red-100 text-red-700'
                                           : 'bg-gray-100 text-gray-700'
                                       }`}>
                                         {component.framework.toUpperCase()}

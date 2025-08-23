@@ -216,21 +216,15 @@ export class ContextBuilder {
       console.log(`📚 [CONTEXT BUILDER] Analyzing website: ${targetUrl}`);
       
       // Dynamic import to ensure server-side only execution
-      const { WebAnalysisAgent } = await import('~/tools/webAnalysis/WebAnalysisAgent');
-      const webAgent = new WebAnalysisAgent();
+      const { WebAnalysisAgentV4 } = await import('~/tools/webAnalysis/WebAnalysisAgentV4');
+      const webAgent = new WebAnalysisAgentV4(input.projectId);
       
-      // Validate URL first
-      const validation = await webAgent.validateUrl(targetUrl);
-      if (!validation.valid) {
-        console.log(`📚 [CONTEXT BUILDER] URL validation failed: ${validation.error}`);
-        return undefined;
-      }
-      
-      // Perform web analysis with R2 upload
-      const analysis = await webAgent.analyzeWebsite(targetUrl, input.projectId, input.userId);
-      
-      if (!analysis.success) {
-        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${analysis.error}`);
+      // Perform web analysis with V4
+      let analysis;
+      try {
+        analysis = await webAgent.analyze(targetUrl);
+      } catch (error: any) {
+        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${error.message}`);
         return undefined;
       }
       

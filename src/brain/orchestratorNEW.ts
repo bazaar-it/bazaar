@@ -83,16 +83,16 @@ export class Orchestrator {
                 return {
                   success: true,
                   needsClarification: true,
-                  chatResponse: `I noticed you're trying to animate "${componentName}" from your GitHub, but you haven't selected any repositories to search yet.\n\nPlease go to Settings → GitHub Integration and select which repositories you want me to search for components.`,
+                  chatResponse: `I noticed you're trying to animate "${componentRef.name}" from your GitHub, but you haven't selected any repositories to search yet.\n\nPlease go to Settings → GitHub Integration and select which repositories you want me to search for components.`,
                   reasoning: "User needs to select repositories first"
                 };
               } else {
                 // Component not found in selected repos
-                console.log(`🧠 [NEW ORCHESTRATOR] Component "${componentName}" not found in selected repos`);
+                console.log(`🧠 [NEW ORCHESTRATOR] Component "${componentRef.name}" not found in selected repos`);
                 return {
                   success: true,
                   needsClarification: true,
-                  chatResponse: `I couldn't find a component called "${componentName}" in your selected repositories.\n\nMake sure the component exists in one of your selected repos, or try a different component name.`,
+                  chatResponse: `I couldn't find a component called "${componentRef.name}" in your selected repositories.\n\nMake sure the component exists in one of your selected repos, or try a different component name.`,
                   reasoning: "Component not found in selected repositories"
                 };
               }

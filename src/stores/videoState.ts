@@ -936,7 +936,9 @@ export const useVideoState = create<VideoState>()(
       
       // Move the scene
       const [movedScene] = scenes.splice(oldIndex, 1);
-      scenes.splice(newIndex, 0, movedScene);
+      if (movedScene) {
+        scenes.splice(newIndex, 0, movedScene);
+      }
       
       // Recalculate start times for all scenes
       let currentStart = 0;

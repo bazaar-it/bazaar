@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
+    const sevenDaysAgoDateString = sevenDaysAgo.toISOString().split('T')[0]!;
     const deletedResult = await db.delete(userUsage)
-      .where(lte(userUsage.date, sevenDaysAgo.toISOString().split('T')[0]));
+      .where(lte(userUsage.date, sevenDaysAgoDateString));
     
     console.log(`🗑️ [DailyReset] Deleted ${deletedResult.rowCount} old usage records`);
     
