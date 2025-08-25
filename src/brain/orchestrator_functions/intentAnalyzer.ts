@@ -29,8 +29,8 @@ export class IntentAnalyzer {
     }
     
     // Scene/act count detection
-    // Match: "6 scenes", "3 acts", "4 parts", "5 segments"
-    const sceneMatch = prompt.match(/(\d+)\s*(?:scene|act|part|segment|section)s?\b/i);
+    // Match: "6 scenes", "3 acts", "4 parts", "5 segments", "6 quick scenes"
+    const sceneMatch = prompt.match(/(\d+)\s*(?:quick\s+)?(?:scene|act|part|segment|section)s?\b/i);
     if (sceneMatch) {
       result.requestedScenes = parseInt(sceneMatch[1]);
       console.log(`🎯 [DURATION] Detected scene count request: ${result.requestedScenes} scenes`);

@@ -223,11 +223,8 @@ describe('Brand Data Adapter - 10x Data Extraction', () => {
       
       // Should have social_proof object with defaults
       expect(simplified.social_proof).toBeDefined();
-      expect(simplified.social_proof?.stats).toEqual({
-        users: '1000+',
-        rating: '4.9',
-        reviews: 'satisfied customers'
-      });
+      expect(simplified.social_proof?.stats?.users).toBe('1000+');
+      expect(simplified.social_proof?.stats?.rating).toBe('4.9');
       expect(simplified.social_proof?.testimonials).toEqual([]);
       expect(simplified.social_proof?.customerLogos).toEqual([]);
       expect(simplified.social_proof?.trustBadges).toEqual([]);

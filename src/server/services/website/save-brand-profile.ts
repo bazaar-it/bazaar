@@ -99,11 +99,13 @@ export async function saveBrandProfile(
       productNarrative: {
         ...product,
         // Include V4's competitive positioning
-        competitiveAdvantage: competitors[0]?.differentiators || product.features,
+        competitiveAdvantage: competitors[0]?.differentiators || product.features?.slice(0, 3),
         marketPosition: aiAnalysis.marketPosition || null,
         // Preserve ALL features, not just first 3
         allFeatures: product.features || [],
-        targetAudience: extractedData.targetAudience || []
+        targetAudience: extractedData.targetAudience || [],
+        // Keep original features field for backward compatibility but limited
+        features: product.features?.slice(0, 3) || []
       },
       socialProof: {
         ...socialProof,
@@ -112,7 +114,12 @@ export async function saveBrandProfile(
         // Preserve all social proof data
         testimonials: socialProof.testimonials || [],
         customerLogos: socialProof.customerLogos || [],
-        allStats: socialProof.stats || {}
+        trustBadges: socialProof.trustBadges || [],
+        allStats: socialProof.stats || {},
+        // Keep a limited stats field for backward compatibility
+        stats: Object.fromEntries(
+          Object.entries(socialProof.stats || {}).slice(0, 3)
+        )
       },
       screenshots: media.screenshots || [],
       mediaAssets: [
