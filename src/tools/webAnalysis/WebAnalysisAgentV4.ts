@@ -11,6 +11,13 @@ export interface ExtractedBrandDataV4 {
   brand?: {
     identity?: {
       name?: string;
+      logo?: {
+        url: string;
+        alt: string;
+        width: number;
+        height: number;
+        type: string;
+      } | null;
       tagline?: string;
       mission?: string;
       vision?: string;
@@ -217,6 +224,7 @@ export class WebAnalysisAgentV4 {
         brand: {
           identity: {
             name: extractedData.companyName || extractedData.title || domain,
+            logo: extractedData.logo || null, // NEW: Company logo with URL, dimensions, and type
             tagline: extractedData.subheadline || extractedData.description || '',
             mission: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('mission'))?.value || '',
             vision: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('vision'))?.value || '',
@@ -383,6 +391,13 @@ export class WebAnalysisAgentV4 {
         secondary: finalData.brand?.visual?.colors?.secondary,
         accent: finalData.brand?.visual?.colors?.accent
       });
+      
+      // Log logo extraction results
+      if (finalData.brand?.identity?.logo?.url) {
+        toolsLogger.info(`🖼️ Logo extracted: ${finalData.brand.identity.logo.type} (${finalData.brand.identity.logo.width}x${finalData.brand.identity.logo.height})`);
+      } else {
+        toolsLogger.warn(`⚠️ No logo found for ${domain}`);
+      }
       
       return finalData;
       
@@ -962,6 +977,166 @@ export class WebAnalysisAgentV4 {
         };
       };
 
+      // 8. EXTRACT LOGO URL (NEW - COMPREHENSIVE)
+      const extractLogoUrl = () => {
+        let logo = {
+          url: '',
+          alt: '',
+          width: 0,
+          height: 0,
+          type: '' // 'img', 'svg', 'background'
+        };
+
+        // Try multiple strategies to find the logo
+        
+        // Strategy 1: Direct logo selectors (most reliable)
+        const logoSelectors = [
+          'img[alt*="logo" i]',
+          'img[src*="logo" i]',
+          '[class*="logo" i] img',
+          '[id*="logo" i] img',
+          'header img',
+          'nav img',
+          '.navbar-brand img',
+          'a[href="/"] img',
+          'a[href="/"] svg',
+          '[class*="brand" i] img',
+          '[class*="brand" i] svg',
+          'h1 img',
+          'h1 svg'
+        ];
+
+        // Try image logos first
+        for (const selector of logoSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            if (element.tagName === 'IMG') {
+              const img = element as HTMLImageElement;
+              // Check if it's a reasonable logo size (not too small, not huge)
+              const width = img.naturalWidth || img.width;
+              const height = img.naturalHeight || img.height;
+              
+              if (width > 30 && width < 500 && height > 20 && height < 300) {
+                logo = {
+                  url: img.src || '',
+                  alt: img.alt || '',
+                  width: width,
+                  height: height,
+                  type: 'img'
+                };
+                break;
+              }
+            }
+          }
+        }
+
+        // Strategy 2: SVG logos (if no img found)
+        if (!logo.url) {
+          const svgSelectors = [
+            'svg[class*="logo" i]',
+            'header svg',
+            'nav svg',
+            '[class*="brand" i] svg',
+            'a[href="/"] svg'
+          ];
+
+          for (const selector of svgSelectors) {
+            const svg = document.querySelector(selector);
+            if (svg) {
+              // For inline SVG, we'll extract the outer HTML
+              const svgElement = svg as SVGElement;
+              const bbox = svgElement.getBoundingClientRect();
+              
+              if (bbox.width > 30 && bbox.width < 500) {
+                // Create a data URL from the SVG
+                const svgString = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const svgUrl = `data:image/svg+xml;base64,${btoa(svgString)}`;
+                
+                logo = {
+                  url: svgUrl,
+                  alt: svgElement.getAttribute('aria-label') || svgElement.getAttribute('title') || companyName || '',
+                  width: Math.round(bbox.width),
+                  height: Math.round(bbox.height),
+                  type: 'svg'
+                };
+                break;
+              }
+            }
+          }
+        }
+
+        // Strategy 3: Background image logos
+        if (!logo.url) {
+          const bgSelectors = [
+            '[class*="logo" i]',
+            '[id*="logo" i]',
+            '.navbar-brand',
+            'header [class*="brand" i]'
+          ];
+
+          for (const selector of bgSelectors) {
+            const element = document.querySelector(selector) as HTMLElement;
+            if (element) {
+              const style = window.getComputedStyle(element);
+              const bgImage = style.backgroundImage;
+              
+              if (bgImage && bgImage !== 'none') {
+                const urlMatch = bgImage.match(/url\(['"]?(.+?)['"]?\)/);
+                if (urlMatch && urlMatch[1]) {
+                  const bbox = element.getBoundingClientRect();
+                  logo = {
+                    url: urlMatch[1],
+                    alt: element.getAttribute('aria-label') || companyName || '',
+                    width: Math.round(bbox.width),
+                    height: Math.round(bbox.height),
+                    type: 'background'
+                  };
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Strategy 4: First image in header (fallback)
+        if (!logo.url) {
+          const headerImg = document.querySelector('header img, nav img');
+          if (headerImg && headerImg.tagName === 'IMG') {
+            const img = headerImg as HTMLImageElement;
+            const width = img.naturalWidth || img.width;
+            const height = img.naturalHeight || img.height;
+            
+            // Even if it doesn't have "logo" in the name, if it's in the header and reasonable size
+            if (width > 30 && width < 500 && height > 20 && height < 300) {
+              logo = {
+                url: img.src || '',
+                alt: img.alt || companyName || '',
+                width: width,
+                height: height,
+                type: 'img'
+              };
+            }
+          }
+        }
+
+        // Strategy 5: Favicon as last resort
+        if (!logo.url) {
+          const favicon = document.querySelector('link[rel*="icon"]') as HTMLLinkElement;
+          if (favicon && favicon.href) {
+            logo = {
+              url: favicon.href,
+              alt: companyName || document.title || '',
+              width: 32,
+              height: 32,
+              type: 'favicon'
+            };
+          }
+        }
+
+        return logo;
+      };
+
       // Execute all extractions
       const companyName = extractCompanyName();
       const valueProps = extractValueProps();
@@ -972,6 +1147,7 @@ export class WebAnalysisAgentV4 {
       const targetAudience = extractTargetAudience();
       const colors = extractColors();
       const fonts = extractFonts();
+      const logo = extractLogoUrl();
       
       // Extract button styles
       const firstButton = document.querySelector('button, .btn, .button');
@@ -989,6 +1165,7 @@ export class WebAnalysisAgentV4 {
         title,
         description,
         companyName,
+        logo, // NEW: Company logo extraction
         
         // Value props
         headline: valueProps.headline || title,
@@ -1017,7 +1194,13 @@ export class WebAnalysisAgentV4 {
   }
 
   private async captureScreenshots(page: any, _url: string) {
-    const screenshots = [];
+    const screenshots: Array<{
+      id: string;
+      url: string;
+      type: string;
+      description: string;
+      timestamp: string;
+    }> = [];
     
     // Validate page is still open
     if (!page || page.isClosed()) {

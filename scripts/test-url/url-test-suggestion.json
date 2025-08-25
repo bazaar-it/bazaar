@@ -1,0 +1,2912 @@
+{
+    "schema_version": "1.0",
+    "generated_at": "2025-08-25T09:51:23.568685Z",
+    "notes": "Baseline golden set scaffold. Fill the `future_expectations` fields as you confirm values via the admin Extraction/BrandJSON viewers. Baseline checks enable auto-scoring immediately without exact strings.",
+    "scoring_weights_default": {
+      "hero_headline_present": 25,
+      "cta_minimum": 15,
+      "section_detection": 30,
+      "palette_present": 15,
+      "typography_present": 15
+    },
+    "entries": [
+      {
+        "name": "Ramp",
+        "domain": "ramp.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Revolut",
+        "domain": "revolut.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Brex",
+        "domain": "brex.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Mercury",
+        "domain": "mercury.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Wise",
+        "domain": "wise.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Monzo",
+        "domain": "monzo.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "N26",
+        "domain": "n26.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Klarna",
+        "domain": "klarna.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Coinbase",
+        "domain": "coinbase.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Robinhood",
+        "domain": "robinhood.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Wealthsimple",
+        "domain": "wealthsimple.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Plaid",
+        "domain": "plaid.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Checkout.com",
+        "domain": "checkout.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Stripe",
+        "domain": "stripe.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Adyen",
+        "domain": "adyen.com",
+        "vertical": "fintech",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Linear",
+        "domain": "linear.app",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Notion",
+        "domain": "notion.so",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Airtable",
+        "domain": "airtable.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Asana",
+        "domain": "asana.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Monday.com",
+        "domain": "monday.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "ClickUp",
+        "domain": "clickup.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Trello",
+        "domain": "trello.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Figma",
+        "domain": "figma.com",
+        "vertical": "design",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Framer",
+        "domain": "framer.com",
+        "vertical": "design",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Webflow",
+        "domain": "webflow.com",
+        "vertical": "design",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Canva",
+        "domain": "canva.com",
+        "vertical": "design",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Dropbox",
+        "domain": "dropbox.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Miro",
+        "domain": "miro.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Loom",
+        "domain": "loom.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Calendly",
+        "domain": "calendly.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Typeform",
+        "domain": "typeform.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Superhuman",
+        "domain": "superhuman.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Grammarly",
+        "domain": "grammarly.com",
+        "vertical": "productivity",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Vercel",
+        "domain": "vercel.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Netlify",
+        "domain": "netlify.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Cloudflare",
+        "domain": "cloudflare.com",
+        "vertical": "infra",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "GitHub",
+        "domain": "github.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "GitLab",
+        "domain": "gitlab.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Sentry",
+        "domain": "sentry.io",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Datadog",
+        "domain": "datadoghq.com",
+        "vertical": "infra",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "PostHog",
+        "domain": "posthog.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Segment",
+        "domain": "segment.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Supabase",
+        "domain": "supabase.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Render",
+        "domain": "render.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Tailscale",
+        "domain": "tailscale.com",
+        "vertical": "infra",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Docker",
+        "domain": "docker.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "HashiCorp",
+        "domain": "hashicorp.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "CircleCI",
+        "domain": "circleci.com",
+        "vertical": "devtools",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "DigitalOcean",
+        "domain": "digitalocean.com",
+        "vertical": "infra",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Intercom",
+        "domain": "intercom.com",
+        "vertical": "support",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Zendesk",
+        "domain": "zendesk.com",
+        "vertical": "support",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "HubSpot",
+        "domain": "hubspot.com",
+        "vertical": "marketing",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Mailchimp",
+        "domain": "mailchimp.com",
+        "vertical": "marketing",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Rippling",
+        "domain": "rippling.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Deel",
+        "domain": "deel.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Gusto",
+        "domain": "gusto.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Personio",
+        "domain": "personio.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Remote",
+        "domain": "remote.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Papaya Global",
+        "domain": "papayaglobal.com",
+        "vertical": "hr",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Okta",
+        "domain": "okta.com",
+        "vertical": "security",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Auth0",
+        "domain": "auth0.com",
+        "vertical": "security",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "1Password",
+        "domain": "1password.com",
+        "vertical": "security",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Dashlane",
+        "domain": "dashlane.com",
+        "vertical": "security",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Amplitude",
+        "domain": "amplitude.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Mixpanel",
+        "domain": "mixpanel.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Hotjar",
+        "domain": "hotjar.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "FullStory",
+        "domain": "fullstory.com",
+        "vertical": "analytics",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Shopify",
+        "domain": "shopify.com",
+        "vertical": "commerce",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      },
+      {
+        "name": "Squarespace",
+        "domain": "squarespace.com",
+        "vertical": "commerce",
+        "expected_baseline": {
+          "hero": {
+            "require_headline": true,
+            "min_ctas": 1
+          },
+          "sections": {
+            "require_any_of": [
+              "features",
+              "benefits",
+              "testimonials",
+              "pricing",
+              "cta"
+            ]
+          },
+          "style": {
+            "require_palette": true,
+            "require_typography": true
+          }
+        },
+        "future_expectations": {
+          "hero_headline_regex": "",
+          "cta_labels_anyof": [],
+          "primary_color_hex_anyof": [],
+          "font_families_anyof": [],
+          "min_feature_cards": null,
+          "has_pricing": null,
+          "has_testimonials": null,
+          "logo_row_min": null
+        },
+        "scoring_weights_override": null,
+        "metadata": {
+          "added_by": "chat",
+          "tags": [
+            "golden",
+            "v2-baseline"
+          ]
+        }
+      }
+    ]
+  }

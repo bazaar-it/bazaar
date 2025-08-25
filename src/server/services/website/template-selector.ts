@@ -72,8 +72,16 @@ export class TemplateSelector {
   ): Promise<SelectedTemplate> {
     let templateName: string;
     
-    // Try intelligent selection first if enabled
-    if (this.useIntelligentSelection && brandData) {
+    // Try brand-aware selection first
+    if (this.useBrandAwareSelection && brandData) {
+      const brandAwareTemplate = await this.selectBrandAwareTemplate(scene, style, brandData, usedTemplates);
+      if (brandAwareTemplate) {
+        return this.loadTemplate(brandAwareTemplate, scene);
+      }
+    }
+    
+    // Try intelligent selection if brand-aware didn't work
+    if (this.useIntelligentSelection) {
       try {
         // Build a context-aware prompt for template selection
         const selectionPrompt = `${scene.narrative} ${scene.emotionalBeat} ${style} style`;
@@ -129,6 +137,10 @@ export class TemplateSelector {
       console.log(`🎲 [TEMPLATE SELECTOR] Beat: ${scene.emotionalBeat}, Style: ${style}, Selected: ${templateName} (from ${options.length} options)`);
     }
     
+    return this.loadTemplate(templateName, scene);
+  }
+  
+  private async loadTemplate(templateName: string, scene: HeroJourneyScene): Promise<SelectedTemplate> {
     // For server-side, we'll use the template loader service to get actual code
     // This avoids importing Remotion components in server code
     const { TemplateLoaderService } = await import('~/services/ai/templateLoader.service');
@@ -177,6 +189,177 @@ export class TemplateSelector {
     });
     
     return replacements;
+  }
+  
+  private async selectBrandAwareTemplate(
+    scene: HeroJourneyScene,
+    style: 'minimal' | 'dynamic' | 'bold',
+    brandData: any,
+    usedTemplates?: Set<string>
+  ): Promise<string | null> {
+    try {
+      // Extract brand context
+      const brandContext = {
+        archetype: brandData?.brand?.identity?.archetype || null,
+        industry: this.inferIndustry(brandData),
+        audience: this.extractFirstAudience(brandData),
+        hasMetrics: brandData?.socialProof?.stats?.length > 0,
+        primaryColor: brandData?.brand?.visual?.colors?.primary,
+        emotionalBeat: scene.emotionalBeat
+      };
+      
+      // Get all templates that match the emotional beat
+      const candidates = Object.values(templateMetadata).filter(template => {
+        // Must have enhanced metadata
+        if (!template.emotionalBeats) return false;
+        
+        // Must match emotional beat
+        if (!template.emotionalBeats.includes(scene.emotionalBeat)) return false;
+        
+        // Must not be already used
+        if (usedTemplates?.has(template.id)) return false;
+        
+        // Must match style preference
+        if (style === 'minimal' && template.visualComplexity && template.visualComplexity > 2) return false;
+        if (style === 'bold' && template.visualComplexity && template.visualComplexity < 3) return false;
+        
+        return true;
+      });
+      
+      if (candidates.length === 0) return null;
+      
+      // Score each candidate based on brand fit
+      const scored = candidates.map(template => ({
+        id: template.id,
+        score: this.scoreTemplateFit(template, brandContext),
+        template
+      }));
+      
+      // Sort by score and pick from top 3 for variety
+      const sorted = scored.sort((a, b) => b.score - a.score);
+      const topChoices = sorted.slice(0, 3);
+      
+      if (topChoices.length > 0) {
+        const selected = topChoices[Math.floor(Math.random() * topChoices.length)];
+        
+        console.log(`🎯 [BRAND-AWARE] Selected: ${selected.id} for "${scene.emotionalBeat}"`);
+        console.log(`   Score: ${selected.score}/100`);
+        console.log(`   Industry match: ${brandContext.industry} → ${selected.template.industries?.join(', ')}`); 
+        console.log(`   Archetype match: ${brandContext.archetype} → ${selected.template.brandArchetypes?.join(', ')}`);
+        
+        return selected.id;
+      }
+    } catch (error) {
+      console.error('[BRAND-AWARE] Selection error:', error);
+    }
+    
+    return null;
+  }
+  
+  private scoreTemplateFit(template: TemplateMetadata, brandContext: any): number {
+    let score = 0;
+    
+    // Industry match (0-30 points)
+    if (template.industries && brandContext.industry) {
+      if (template.industries.includes(brandContext.industry)) {
+        score += 30;
+      } else if (template.industries.includes('general')) {
+        score += 10;
+      }
+    }
+    
+    // Brand archetype match (0-25 points)
+    if (template.brandArchetypes && brandContext.archetype) {
+      if (template.brandArchetypes.includes(brandContext.archetype)) {
+        score += 25;
+      }
+    }
+    
+    // Target audience match (0-20 points)
+    if (template.targetAudiences && brandContext.audience) {
+      if (template.targetAudiences.includes(brandContext.audience)) {
+        score += 20;
+      } else if (template.targetAudiences.includes('general')) {
+        score += 8;
+      }
+    }
+    
+    // Data compatibility (0-15 points)
+    if (brandContext.hasMetrics && template.dataFriendly) {
+      score += 15;
+    }
+    
+    // Visual style bonus (0-10 points)
+    // Prefer templates marked as adaptable for color compatibility
+    if (template.colorCompatibility === 'adaptable') {
+      score += 10;
+    } else if (brandContext.primaryColor) {
+      // Check if template color scheme matches brand
+      const isDarkBrand = this.isColorDark(brandContext.primaryColor);
+      if ((isDarkBrand && template.colorCompatibility === 'dark') ||
+          (!isDarkBrand && template.colorCompatibility === 'light')) {
+        score += 5;
+      }
+    }
+    
+    return score;
+  }
+  
+  private inferIndustry(brandData: any): string {
+    // Try to infer industry from brand data
+    const productCategory = brandData?.product?.positioning?.category?.toLowerCase() || '';
+    const headline = brandData?.headline?.toLowerCase() || '';
+    const features = brandData?.features || [];
+    
+    // Check for specific industry keywords
+    if (productCategory.includes('financ') || headline.includes('payment') || headline.includes('expense')) {
+      return 'fintech';
+    }
+    if (productCategory.includes('develop') || headline.includes('code') || headline.includes('api')) {
+      return 'developer-tools';
+    }
+    if (productCategory.includes('health') || headline.includes('medical')) {
+      return 'healthcare';
+    }
+    if (productCategory.includes('educat') || headline.includes('learn')) {
+      return 'education';
+    }
+    if (productCategory.includes('commerce') || headline.includes('shop') || headline.includes('buy')) {
+      return 'ecommerce';
+    }
+    if (features.some((f: any) => f.title?.toLowerCase().includes('analytic') || f.title?.toLowerCase().includes('dashboard'))) {
+      return 'saas';
+    }
+    
+    return 'general';
+  }
+  
+  private extractFirstAudience(brandData: any): string {
+    const audiences = brandData?.product?.targetAudience || [];
+    if (audiences.length === 0) return 'general';
+    
+    const firstAudience = audiences[0].toLowerCase();
+    
+    // Map to our audience roles
+    if (firstAudience.includes('cfo') || firstAudience.includes('executive')) return 'executive';
+    if (firstAudience.includes('developer') || firstAudience.includes('engineer')) return 'developer';
+    if (firstAudience.includes('designer')) return 'designer';
+    if (firstAudience.includes('market')) return 'marketer';
+    if (firstAudience.includes('founder') || firstAudience.includes('entrepreneur')) return 'founder';
+    if (firstAudience.includes('student')) return 'student';
+    if (firstAudience.includes('investor')) return 'investor';
+    
+    return 'general';
+  }
+  
+  private isColorDark(hexColor: string): boolean {
+    // Simple luminance check
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance < 0.5;
   }
   
   private getFallbackTemplate(scene: HeroJourneyScene): SelectedTemplate {
