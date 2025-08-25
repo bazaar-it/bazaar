@@ -8,6 +8,47 @@ import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "~/l
 export class IntentAnalyzer {
   private modelConfig = getModel("brain");
   
+  /**
+   * Detect duration and scene count from user prompt
+   */
+  private detectDurationIntent(prompt: string): {
+    requestedDurationSeconds?: number;
+    requestedScenes?: number;
+  } {
+    const result: {
+      requestedDurationSeconds?: number;
+      requestedScenes?: number;
+    } = {};
+    
+    // Duration detection patterns
+    // Match: "10 seconds", "10 sec", "10s", "10-second"
+    const durationMatch = prompt.match(/(\d+)[\s-]*(?:second|sec|s)\b/i);
+    if (durationMatch) {
+      result.requestedDurationSeconds = parseInt(durationMatch[1]);
+      console.log(`🎯 [DURATION] Detected duration request: ${result.requestedDurationSeconds} seconds`);
+    }
+    
+    // Scene/act count detection
+    // Match: "6 scenes", "3 acts", "4 parts", "5 segments"
+    const sceneMatch = prompt.match(/(\d+)\s*(?:scene|act|part|segment|section)s?\b/i);
+    if (sceneMatch) {
+      result.requestedScenes = parseInt(sceneMatch[1]);
+      console.log(`🎯 [DURATION] Detected scene count request: ${result.requestedScenes} scenes`);
+    }
+    
+    // Alternative scene patterns
+    // Match: "make it 6 scenes long", "create 5 scene video"
+    if (!result.requestedScenes) {
+      const altSceneMatch = prompt.match(/(?:make|create|generate)\s+(?:it\s+)?(\d+)\s+scene/i);
+      if (altSceneMatch) {
+        result.requestedScenes = parseInt(altSceneMatch[1]);
+        console.log(`🎯 [DURATION] Detected alt scene count: ${result.requestedScenes} scenes`);
+      }
+    }
+    
+    return result;
+  }
+  
   async analyzeIntent(input: OrchestrationInput, contextPacket: ContextPacket): Promise<ToolSelectionResult> {
     console.log('\n🎯 [NEW INTENT ANALYZER] === ANALYZING INTENT ===');
     console.log('🎯 [NEW INTENT ANALYZER] User prompt:', input.prompt.substring(0, 50) + '...');
@@ -186,12 +227,16 @@ Respond with JSON only.`;
   }
 
   private processBrainDecision(parsed: any, input: OrchestrationInput): ToolSelectionResult {
+    // Extract duration and scene count from user prompt
+    const durationInfo = this.detectDurationIntent(input.prompt);
+    
     // Check for multi-step workflow
     if (parsed.workflow && Array.isArray(parsed.workflow)) {
       return {
         success: true,
         workflow: parsed.workflow,
         reasoning: parsed.reasoning || "Multi-step workflow planned",
+        ...durationInfo // Add duration info to workflow
       };
     }
     
@@ -217,6 +262,7 @@ Respond with JSON only.`;
     const result: ToolSelectionResult = {
       success: true,
       toolName: parsed.toolName,
+      ...durationInfo, // Add duration info to single tool
       reasoning: parsed.reasoning,
       targetSceneId: parsed.targetSceneId,
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim

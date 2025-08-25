@@ -686,7 +686,8 @@ export async function executeToolFromDecision(
         userId,
         websiteUrl: decision.toolContext.websiteUrl || decision.toolContext.userPrompt,
         style: 'dynamic' as const,
-        duration: 20,
+        duration: decision.toolContext.requestedDurationSeconds || 20, // Use requested duration or default 20s
+        sceneCount: decision.toolContext.requestedScenes, // Pass requested scene count
         webContext: decision.toolContext.webContext, // Pass existing web analysis
       };
       

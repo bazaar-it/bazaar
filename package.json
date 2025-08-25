@@ -56,6 +56,8 @@
     "test:streaming:edge": "NODE_ENV=development dotenv -e .env.local -- jest src/tests/integration/streaming-edge-cases.test.ts",
     "test:sse": "NODE_ENV=development dotenv -e .env.local -- jest src/tests/integration/sse-streaming.test.ts",
     "test:streaming:all": "NODE_ENV=development dotenv -e .env.local -- jest src/tests/integration/streaming*.test.ts src/tests/integration/sse*.test.ts",
+    "test:brand-extraction": "NODE_ENV=development dotenv -e .env.local -- jest src/tests/integration/brand-extraction-enhanced.test.ts",
+    "test:brand-extraction:e2e": "RUN_E2E_TESTS=true NODE_ENV=development dotenv -e .env.local -- jest src/tests/integration/brand-extraction-enhanced.test.ts",
     "test:ci": "NODE_ENV=development dotenv -e .env.local -- node node_modules/jest/bin/jest.js --ci --coverage",
     "typecheck": "tsc --noEmit",
     "log:agent": "npm run log-agent",

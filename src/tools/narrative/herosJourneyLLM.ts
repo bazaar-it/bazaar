@@ -36,12 +36,105 @@ export class HeroJourneyLLM {
     return result;
   }
   
+  private selectNarrativeStructureForBrand(extraction: ExtractedBrandDataV4) {
+    const narrativeStructures = [
+      {
+        name: "Classic Hero's Journey",
+        acts: ["The Problem", "The Discovery", "The Transformation", "The Triumph", "The Call to Action"],
+        style: "dramatic and transformative"
+      },
+      {
+        name: "Rising Action",
+        acts: ["The Hook", "Building Tension", "The Crescendo", "Peak Moment", "Resolution"],
+        style: "building energy and excitement"
+      },
+      {
+        name: "Emotional Rollercoaster",
+        acts: ["Initial Excitement", "The Challenge", "Moment of Doubt", "The Breakthrough", "Celebration"],
+        style: "emotional ups and downs"
+      },
+      {
+        name: "Product Demo Flow",
+        acts: ["Pain Point", "Solution Introduction", "Feature Showcase", "Benefits Realized", "Get Started"],
+        style: "practical and benefit-focused"
+      },
+      {
+        name: "Brand Story Arc",
+        acts: ["Our Heritage", "The Innovation", "Making Impact", "Future Vision", "Join Us"],
+        style: "brand-centric storytelling"
+      },
+      {
+        name: "Customer Success Story",
+        acts: ["Before", "The Search", "Finding Us", "The Experience", "Life After"],
+        style: "customer perspective"
+      },
+      {
+        name: "Problem-Agitate-Solve",
+        acts: ["The Problem", "Why It Matters", "Failed Attempts", "Our Solution", "Your Success"],
+        style: "persuasive and solution-oriented"
+      }
+    ];
+    
+    // Analyze brand personality to choose best narrative structure
+    let selectedStructure;
+    
+    // Check brand attributes to intelligently select narrative
+    const brandName = extraction.brand?.identity?.name?.toLowerCase() || '';
+    const tagline = extraction.brand?.identity?.tagline?.toLowerCase() || '';
+    const problem = extraction.product?.problem?.toLowerCase() || '';
+    
+    // Smart selection based on brand characteristics
+    if (problem.includes('pain') || problem.includes('frustrat') || problem.includes('problem')) {
+      // Strong problem focus → Problem-Agitate-Solve
+      selectedStructure = narrativeStructures.find(s => s.name === "Problem-Agitate-Solve");
+    } else if (brandName.includes('tech') || brandName.includes('ai') || tagline.includes('innovat')) {
+      // Tech/Innovation brand → Product Demo Flow
+      selectedStructure = narrativeStructures.find(s => s.name === "Product Demo Flow");
+    } else if (extraction.brand?.identity?.mission?.includes('customer') || tagline.includes('you')) {
+      // Customer-focused → Customer Success Story
+      selectedStructure = narrativeStructures.find(s => s.name === "Customer Success Story");
+    } else if (extraction.brand?.identity?.values?.includes('heritage') || extraction.brand?.identity?.values?.includes('tradition')) {
+      // Heritage brand → Brand Story Arc
+      selectedStructure = narrativeStructures.find(s => s.name === "Brand Story Arc");
+    } else {
+      // Random selection for variety
+      const randomOptions = [
+        narrativeStructures.find(s => s.name === "Classic Hero's Journey"),
+        narrativeStructures.find(s => s.name === "Rising Action"),
+        narrativeStructures.find(s => s.name === "Emotional Rollercoaster")
+      ].filter(Boolean);
+      selectedStructure = randomOptions[Math.floor(Math.random() * randomOptions.length)];
+    }
+    
+    // Fallback to random if no match
+    if (!selectedStructure) {
+      selectedStructure = narrativeStructures[Math.floor(Math.random() * narrativeStructures.length)];
+    }
+    
+    console.log(`🎭 [HERO JOURNEY LLM] Selected "${selectedStructure.name}" based on brand: ${brandName || 'unknown'}`);
+    return selectedStructure;
+  }
+  
   private buildHeroJourneyPrompt(extraction: ExtractedBrandDataV4): string {
+    const selectedStructure = this.selectNarrativeStructureForBrand(extraction);
+    
     return `
-🎬 CREATE A HERO'S JOURNEY MOTION GRAPHICS VIDEO
+🎬 CREATE A UNIQUE ${selectedStructure.name.toUpperCase()} MOTION GRAPHICS VIDEO
 
-You are creating a 15-second narrative motion graphics video that tells the brand's story through 5 acts.
+You are creating a 15-second narrative motion graphics video that tells the brand's story.
 This is NOT a website mockup - it's a cinematic motion graphics piece that brings the brand to life.
+
+⚡ IMPORTANT: Create a UNIQUE narrative using the "${selectedStructure.name}" structure.
+The narrative should feel ${selectedStructure.style}.
+
+YOUR 5 ACTS MUST BE:
+${selectedStructure.acts.map((act, i) => `ACT ${i + 1}: ${act}`).join('\n')}
+
+CRITICAL: 
+- DO NOT use generic hero's journey beats
+- DO NOT repeat the same visual metaphors
+- BE CREATIVE with transitions and visual storytelling
+- MATCH the brand's personality and voice
 
 ====================
 🎯 BRAND EXTRACTION DATA

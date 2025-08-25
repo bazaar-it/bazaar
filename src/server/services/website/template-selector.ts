@@ -16,6 +16,8 @@ export interface SelectedTemplate {
 }
 
 export class TemplateSelector {
+  private useIntelligentSelection = true; // Feature flag for smart selection
+  
   // Map emotional beats to template categories
   private beatToTemplateMap = {
     problem: {
@@ -47,13 +49,16 @@ export class TemplateSelector {
   
   async selectTemplatesForJourney(
     narrativeScenes: HeroJourneyScene[],
-    style: 'minimal' | 'dynamic' | 'bold' = 'dynamic'
+    style: 'minimal' | 'dynamic' | 'bold' = 'dynamic',
+    brandData?: any // Pass brand data for intelligent selection
   ): Promise<SelectedTemplate[]> {
     const selectedTemplates: SelectedTemplate[] = [];
+    const usedTemplates = new Set<string>(); // Track used templates to avoid repetition
     
     for (const scene of narrativeScenes) {
-      const template = await this.selectTemplateForBeat(scene, style);
+      const template = await this.selectTemplateForBeat(scene, style, brandData, usedTemplates);
       selectedTemplates.push(template);
+      usedTemplates.add(template.templateId);
     }
     
     return selectedTemplates;
@@ -61,14 +66,68 @@ export class TemplateSelector {
   
   private async selectTemplateForBeat(
     scene: HeroJourneyScene,
-    style: 'minimal' | 'dynamic' | 'bold'
+    style: 'minimal' | 'dynamic' | 'bold',
+    brandData?: any,
+    usedTemplates?: Set<string>
   ): Promise<SelectedTemplate> {
-    // Get template options for this emotional beat
-    const templateOptions = this.beatToTemplateMap[scene.emotionalBeat]?.[style] || 
-                           this.beatToTemplateMap.discovery[style];
+    let templateName: string;
     
-    // Pick the first available template (you could randomize this)
-    const templateName = templateOptions[0];
+    // Try intelligent selection first if enabled
+    if (this.useIntelligentSelection && brandData) {
+      try {
+        // Build a context-aware prompt for template selection
+        const selectionPrompt = `${scene.narrative} ${scene.emotionalBeat} ${style} style`;
+        
+        // Import and use the template matcher
+        const { templateMatcher } = await import('~/services/ai/templateMatching.service');
+        const matches = await templateMatcher.findBestTemplates(selectionPrompt, 5);
+        
+        // Filter out already used templates for variety
+        const availableMatches = matches.filter(m => !usedTemplates?.has(m.templateId));
+        
+        if (availableMatches.length > 0) {
+          // Pick from top 2 matches randomly for some variety
+          const topMatches = availableMatches.slice(0, 2);
+          const selected = topMatches[Math.floor(Math.random() * topMatches.length)];
+          templateName = selected.templateId;
+          
+          console.log(`🧠 [TEMPLATE SELECTOR] AI Selected: ${templateName} for "${scene.emotionalBeat}" (score: ${selected.score})`);
+          console.log(`   Reasoning: ${selected.reasoning}`);
+        } else {
+          // Fall back to random selection from mapping
+          const templateOptions = this.beatToTemplateMap[scene.emotionalBeat]?.[style] || 
+                                 this.beatToTemplateMap.discovery[style];
+          
+          // Filter out used templates
+          const availableOptions = templateOptions.filter((t: string) => !usedTemplates?.has(t));
+          const options = availableOptions.length > 0 ? availableOptions : templateOptions;
+          
+          const randomIndex = Math.floor(Math.random() * options.length);
+          templateName = options[randomIndex];
+          console.log(`🎲 [TEMPLATE SELECTOR] Random fallback: ${templateName}`);
+        }
+      } catch (error) {
+        console.error('Failed to use intelligent selection:', error);
+        // Fall back to random selection
+        const templateOptions = this.beatToTemplateMap[scene.emotionalBeat]?.[style] || 
+                               this.beatToTemplateMap.discovery[style];
+        const randomIndex = Math.floor(Math.random() * templateOptions.length);
+        templateName = templateOptions[randomIndex];
+      }
+    } else {
+      // Use random selection from mapping
+      const templateOptions = this.beatToTemplateMap[scene.emotionalBeat]?.[style] || 
+                             this.beatToTemplateMap.discovery[style];
+      
+      // Filter out used templates for variety
+      const availableOptions = templateOptions.filter((t: string) => !usedTemplates?.has(t));
+      const options = availableOptions.length > 0 ? availableOptions : templateOptions;
+      
+      const randomIndex = Math.floor(Math.random() * options.length);
+      templateName = options[randomIndex];
+      
+      console.log(`🎲 [TEMPLATE SELECTOR] Beat: ${scene.emotionalBeat}, Style: ${style}, Selected: ${templateName} (from ${options.length} options)`);
+    }
     
     // For server-side, we'll use the template loader service to get actual code
     // This avoids importing Remotion components in server code
