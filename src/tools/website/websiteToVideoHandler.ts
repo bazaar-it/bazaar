@@ -18,6 +18,7 @@ import { eq, asc } from "drizzle-orm";
 import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import { convertV4ToSimplified, createFallbackBrandData, type SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
+import { HeroJourneyLLM } from "~/tools/narrative/herosJourneyLLM";
 import { TemplateSelector } from "~/server/services/website/template-selector-v2";
 import { TemplateCustomizerAI } from "~/server/services/website/template-customizer-ai";
 import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/services/website/save-brand-profile";
@@ -169,42 +170,42 @@ export class WebsiteToVideoHandler {
       const arcConfig = this.determineArcConfig(input);
       toolsLogger.info(`🎬 [WEBSITE HANDLER] Arc config: ${arcConfig.sceneCount} scenes, ${arcConfig.totalDuration} frames (${arcConfig.totalDuration/30}s)`);
       
-      // 4. Generate DYNAMIC hero's journey narrative
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 4: Creating narrative structure...');
+      // 4. Generate DYNAMIC hero's journey narrative with LLM
+      toolsLogger.info('🤖 [WEBSITE HANDLER] Step 4: Creating unique narrative with LLM...');
       
       let narrativeScenes;
       
-      // Try LLM generation if more than default 5 scenes or specific duration requested
-      if (arcConfig.sceneCount !== 5 || input.duration || input.sceneCount) {
-        try {
-          const { heroJourneyLLM } = await import('../narrative/herosJourneyLLM');
-          
-          // TODO: Implement generateDynamicNarrative method that respects scene count
-          // For now, use enhanced hardcoded generator
-          toolsLogger.info(`🎭 [WEBSITE HANDLER] Generating ${arcConfig.sceneCount}-scene narrative`);
-          
-          const storyGenerator = new HeroJourneyGenerator();
-          const baseScenes = storyGenerator.generateNarrative(websiteData);
-          
-          // Adapt to requested scene count
-          narrativeScenes = this.adaptNarrativeToSceneCount(baseScenes, arcConfig);
-          
-          debugData.narrativeGeneration = {
-            method: 'dynamic',
-            sceneCount: arcConfig.sceneCount,
-            totalDuration: arcConfig.totalDuration
-          };
-        } catch (error) {
-          toolsLogger.warn('⚠️ [WEBSITE HANDLER] Dynamic generation failed, using fallback');
-          const storyGenerator = new HeroJourneyGenerator();
-          narrativeScenes = storyGenerator.generateNarrative(websiteData);
-          debugData.narrativeGeneration = { method: 'fallback' };
-        }
-      } else {
-        // Standard 5-scene generation
+      // ALWAYS use LLM for unique narratives
+      try {
+        const llmGenerator = new HeroJourneyLLM();
+        
+        toolsLogger.info(`🎨 [WEBSITE HANDLER] Generating unique ${arcConfig.sceneCount}-scene narrative with LLM`);
+        
+        // Generate unique narrative with LLM
+        narrativeScenes = await this.generateNarrativeWithLLM(
+          llmGenerator,
+          websiteData,
+          arcConfig
+        );
+        
+        debugData.narrativeGeneration = {
+          method: 'llm',
+          sceneCount: arcConfig.sceneCount,
+          totalDuration: arcConfig.totalDuration
+        };
+        
+        toolsLogger.info('✨ [WEBSITE HANDLER] LLM generated unique narrative successfully');
+      } catch (error) {
+        toolsLogger.warn('⚠️ [WEBSITE HANDLER] Falling back to hardcoded narrative', error);
+        
         const storyGenerator = new HeroJourneyGenerator();
-        narrativeScenes = storyGenerator.generateNarrative(websiteData);
-        debugData.narrativeGeneration = { method: 'standard' };
+        const baseScenes = storyGenerator.generateNarrative(websiteData);
+        narrativeScenes = this.adaptNarrativeToSceneCount(baseScenes, arcConfig);
+        
+        debugData.narrativeGeneration = { 
+          method: 'fallback',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
       }
       
       // Store hero journey debug data
@@ -403,6 +404,51 @@ export class WebsiteToVideoHandler {
     }
     
     return { sceneCount, totalDuration };
+  }
+  
+  /**
+   * Generate narrative using LLM
+   */
+  private async generateNarrativeWithLLM(
+    llmGenerator: HeroJourneyLLM,
+    websiteData: ExtractedBrandDataV4,
+    arcConfig: { sceneCount: number; totalDuration: number }
+  ): Promise<HeroJourneyScene[]> {
+    try {
+      // Use the new LLM method to generate unique narrative scenes
+      const scenes = await llmGenerator.generateNarrativeScenes(
+        websiteData,
+        arcConfig.sceneCount,
+        arcConfig.totalDuration
+      );
+      
+      return scenes;
+    } catch (error) {
+      console.error('LLM narrative generation failed:', error);
+      // Fallback to hardcoded and adapt
+      const hardcodedGenerator = new HeroJourneyGenerator();
+      const baseScenes = hardcodedGenerator.generateNarrative(websiteData);
+      return this.adaptNarrativeToSceneCount(baseScenes, arcConfig);
+    }
+  }
+  
+  /**
+   * Build prompt for LLM narrative generation
+   */
+  private buildLLMPrompt(
+    websiteData: ExtractedBrandDataV4,
+    arcConfig: { sceneCount: number; totalDuration: number }
+  ): string {
+    const durationSeconds = arcConfig.totalDuration / 30;
+    
+    return `Create a ${arcConfig.sceneCount}-scene narrative for a ${durationSeconds}-second motion graphics video.
+    
+Brand: ${websiteData.brand?.identity?.name || 'Unknown'}
+Tagline: ${websiteData.brand?.identity?.tagline || ''}
+Problem: ${websiteData.product?.problem || ''}
+Solution: ${websiteData.product?.value_prop?.headline || ''}
+
+Generate ${arcConfig.sceneCount} unique scenes that tell a compelling story.`;
   }
   
   /**

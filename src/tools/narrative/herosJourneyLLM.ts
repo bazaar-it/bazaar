@@ -5,8 +5,85 @@
 
 import { codeGenerator } from '../add/add_helpers/CodeGeneratorNEW';
 import type { ExtractedBrandDataV4 } from '../webAnalysis/WebAnalysisAgentV4';
+import { AIClientService } from "~/server/services/ai/aiClient.service";
+import { getModel } from "~/config/models.config";
+import type { HeroJourneyScene } from './herosJourney';
 
 export class HeroJourneyLLM {
+  
+  /**
+   * Generate narrative scenes using LLM (returns scene structure, not code)
+   */
+  async generateNarrativeScenes(
+    extraction: ExtractedBrandDataV4,
+    sceneCount: number = 5,
+    totalDuration: number = 450
+  ): Promise<HeroJourneyScene[]> {
+    const modelConfig = getModel("generation");
+    const durationSeconds = totalDuration / 30;
+    
+    // Select narrative structure based on brand
+    const structure = this.selectNarrativeStructureForBrand(extraction);
+    
+    const prompt = `Generate a ${sceneCount}-scene narrative for a ${durationSeconds}-second motion graphics video.
+
+NARRATIVE STRUCTURE: ${structure.name}
+STYLE: ${structure.style}
+
+BRAND INFO:
+- Name: ${extraction.brand?.identity?.name || 'Unknown'}
+- Tagline: ${extraction.brand?.identity?.tagline || 'N/A'}
+- Problem: ${extraction.product?.problem || 'Status quo'}
+- Solution: ${extraction.product?.value_prop?.headline || 'Innovation'}
+- Features: ${extraction.product?.features?.map(f => f.title).join(', ') || 'Various features'}
+
+Create ${sceneCount} unique scenes following the "${structure.name}" structure.
+Each scene should have:
+- title: Catchy scene title
+- duration: Duration in frames (total must equal ${totalDuration})
+- narrative: What happens in this scene
+- visualElements: Array of 3-4 visual elements
+- emotionalBeat: One of 'problem', 'tension', 'discovery', 'transformation', 'triumph', 'invitation'
+
+Return a JSON array of ${sceneCount} scenes.`;
+
+    try {
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [
+          { role: "system", content: "You are a creative director creating unique motion graphics narratives. Always return valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        undefined,
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const parsed = JSON.parse(response.content || '{}');
+      const scenes = parsed.scenes || [];
+      
+      // Ensure we have the right number of scenes
+      if (scenes.length !== sceneCount) {
+        throw new Error(`Expected ${sceneCount} scenes but got ${scenes.length}`);
+      }
+      
+      // Add brand elements to each scene
+      return scenes.map((scene: any) => ({
+        ...scene,
+        brandElements: {
+          colors: [
+            extraction.brand?.visual?.colors?.primary || '#000000',
+            extraction.brand?.visual?.colors?.secondary || '#ffffff'
+          ],
+          typography: extraction.brand?.visual?.typography?.stack?.primary?.[0] || 'Inter',
+          motion: scene.emotionalBeat === 'problem' ? 'slow' : 'dynamic'
+        }
+      }));
+      
+    } catch (error) {
+      console.error('LLM narrative generation failed:', error);
+      throw error;
+    }
+  }
   
   /**
    * Generate Hero's Journey motion graphics using LLM with full brand context
