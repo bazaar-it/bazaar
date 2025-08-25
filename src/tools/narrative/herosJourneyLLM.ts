@@ -5,8 +5,85 @@
 
 import { codeGenerator } from '../add/add_helpers/CodeGeneratorNEW';
 import type { ExtractedBrandDataV4 } from '../webAnalysis/WebAnalysisAgentV4';
+import { AIClientService } from "~/server/services/ai/aiClient.service";
+import { getModel } from "~/config/models.config";
+import type { HeroJourneyScene } from './herosJourney';
 
 export class HeroJourneyLLM {
+  
+  /**
+   * Generate narrative scenes using LLM (returns scene structure, not code)
+   */
+  async generateNarrativeScenes(
+    extraction: ExtractedBrandDataV4,
+    sceneCount: number = 5,
+    totalDuration: number = 450
+  ): Promise<HeroJourneyScene[]> {
+    const modelConfig = getModel("generation");
+    const durationSeconds = totalDuration / 30;
+    
+    // Select narrative structure based on brand
+    const structure = this.selectNarrativeStructureForBrand(extraction);
+    
+    const prompt = `Generate a ${sceneCount}-scene narrative for a ${durationSeconds}-second motion graphics video.
+
+NARRATIVE STRUCTURE: ${structure.name}
+STYLE: ${structure.style}
+
+BRAND INFO:
+- Name: ${extraction.brand?.identity?.name || 'Unknown'}
+- Tagline: ${extraction.brand?.identity?.tagline || 'N/A'}
+- Problem: ${extraction.product?.problem || 'Status quo'}
+- Solution: ${extraction.product?.value_prop?.headline || 'Innovation'}
+- Features: ${extraction.product?.features?.map(f => f.title).join(', ') || 'Various features'}
+
+Create ${sceneCount} unique scenes following the "${structure.name}" structure.
+Each scene should have:
+- title: Catchy scene title
+- duration: Duration in frames (total must equal ${totalDuration})
+- narrative: What happens in this scene
+- visualElements: Array of 3-4 visual elements
+- emotionalBeat: One of 'problem', 'tension', 'discovery', 'transformation', 'triumph', 'invitation'
+
+Return a JSON array of ${sceneCount} scenes.`;
+
+    try {
+      const response = await AIClientService.generateResponse(
+        modelConfig,
+        [
+          { role: "system", content: "You are a creative director creating unique motion graphics narratives. Always return valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        undefined,
+        { responseFormat: { type: "json_object" } }
+      );
+
+      const parsed = JSON.parse(response.content || '{}');
+      const scenes = parsed.scenes || [];
+      
+      // Ensure we have the right number of scenes
+      if (scenes.length !== sceneCount) {
+        throw new Error(`Expected ${sceneCount} scenes but got ${scenes.length}`);
+      }
+      
+      // Add brand elements to each scene
+      return scenes.map((scene: any) => ({
+        ...scene,
+        brandElements: {
+          colors: [
+            extraction.brand?.visual?.colors?.primary || '#000000',
+            extraction.brand?.visual?.colors?.secondary || '#ffffff'
+          ],
+          typography: extraction.brand?.visual?.typography?.stack?.primary?.[0] || 'Inter',
+          motion: scene.emotionalBeat === 'problem' ? 'slow' : 'dynamic'
+        }
+      }));
+      
+    } catch (error) {
+      console.error('LLM narrative generation failed:', error);
+      throw error;
+    }
+  }
   
   /**
    * Generate Hero's Journey motion graphics using LLM with full brand context
@@ -36,12 +113,105 @@ export class HeroJourneyLLM {
     return result;
   }
   
+  private selectNarrativeStructureForBrand(extraction: ExtractedBrandDataV4) {
+    const narrativeStructures = [
+      {
+        name: "Classic Hero's Journey",
+        acts: ["The Problem", "The Discovery", "The Transformation", "The Triumph", "The Call to Action"],
+        style: "dramatic and transformative"
+      },
+      {
+        name: "Rising Action",
+        acts: ["The Hook", "Building Tension", "The Crescendo", "Peak Moment", "Resolution"],
+        style: "building energy and excitement"
+      },
+      {
+        name: "Emotional Rollercoaster",
+        acts: ["Initial Excitement", "The Challenge", "Moment of Doubt", "The Breakthrough", "Celebration"],
+        style: "emotional ups and downs"
+      },
+      {
+        name: "Product Demo Flow",
+        acts: ["Pain Point", "Solution Introduction", "Feature Showcase", "Benefits Realized", "Get Started"],
+        style: "practical and benefit-focused"
+      },
+      {
+        name: "Brand Story Arc",
+        acts: ["Our Heritage", "The Innovation", "Making Impact", "Future Vision", "Join Us"],
+        style: "brand-centric storytelling"
+      },
+      {
+        name: "Customer Success Story",
+        acts: ["Before", "The Search", "Finding Us", "The Experience", "Life After"],
+        style: "customer perspective"
+      },
+      {
+        name: "Problem-Agitate-Solve",
+        acts: ["The Problem", "Why It Matters", "Failed Attempts", "Our Solution", "Your Success"],
+        style: "persuasive and solution-oriented"
+      }
+    ];
+    
+    // Analyze brand personality to choose best narrative structure
+    let selectedStructure;
+    
+    // Check brand attributes to intelligently select narrative
+    const brandName = extraction.brand?.identity?.name?.toLowerCase() || '';
+    const tagline = extraction.brand?.identity?.tagline?.toLowerCase() || '';
+    const problem = extraction.product?.problem?.toLowerCase() || '';
+    
+    // Smart selection based on brand characteristics
+    if (problem.includes('pain') || problem.includes('frustrat') || problem.includes('problem')) {
+      // Strong problem focus → Problem-Agitate-Solve
+      selectedStructure = narrativeStructures.find(s => s.name === "Problem-Agitate-Solve");
+    } else if (brandName.includes('tech') || brandName.includes('ai') || tagline.includes('innovat')) {
+      // Tech/Innovation brand → Product Demo Flow
+      selectedStructure = narrativeStructures.find(s => s.name === "Product Demo Flow");
+    } else if (extraction.brand?.identity?.mission?.includes('customer') || tagline.includes('you')) {
+      // Customer-focused → Customer Success Story
+      selectedStructure = narrativeStructures.find(s => s.name === "Customer Success Story");
+    } else if (extraction.brand?.identity?.values?.includes('heritage') || extraction.brand?.identity?.values?.includes('tradition')) {
+      // Heritage brand → Brand Story Arc
+      selectedStructure = narrativeStructures.find(s => s.name === "Brand Story Arc");
+    } else {
+      // Random selection for variety
+      const randomOptions = [
+        narrativeStructures.find(s => s.name === "Classic Hero's Journey"),
+        narrativeStructures.find(s => s.name === "Rising Action"),
+        narrativeStructures.find(s => s.name === "Emotional Rollercoaster")
+      ].filter(Boolean);
+      selectedStructure = randomOptions[Math.floor(Math.random() * randomOptions.length)];
+    }
+    
+    // Fallback to random if no match
+    if (!selectedStructure) {
+      selectedStructure = narrativeStructures[Math.floor(Math.random() * narrativeStructures.length)];
+    }
+    
+    console.log(`🎭 [HERO JOURNEY LLM] Selected "${selectedStructure.name}" based on brand: ${brandName || 'unknown'}`);
+    return selectedStructure;
+  }
+  
   private buildHeroJourneyPrompt(extraction: ExtractedBrandDataV4): string {
+    const selectedStructure = this.selectNarrativeStructureForBrand(extraction);
+    
     return `
-🎬 CREATE A HERO'S JOURNEY MOTION GRAPHICS VIDEO
+🎬 CREATE A UNIQUE ${selectedStructure.name.toUpperCase()} MOTION GRAPHICS VIDEO
 
-You are creating a 15-second narrative motion graphics video that tells the brand's story through 5 acts.
+You are creating a 15-second narrative motion graphics video that tells the brand's story.
 This is NOT a website mockup - it's a cinematic motion graphics piece that brings the brand to life.
+
+⚡ IMPORTANT: Create a UNIQUE narrative using the "${selectedStructure.name}" structure.
+The narrative should feel ${selectedStructure.style}.
+
+YOUR 5 ACTS MUST BE:
+${selectedStructure.acts.map((act, i) => `ACT ${i + 1}: ${act}`).join('\n')}
+
+CRITICAL: 
+- DO NOT use generic hero's journey beats
+- DO NOT repeat the same visual metaphors
+- BE CREATIVE with transitions and visual storytelling
+- MATCH the brand's personality and voice
 
 ====================
 🎯 BRAND EXTRACTION DATA

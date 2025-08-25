@@ -1684,3 +1684,277 @@ export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ 
     references: [users.id],
   }),
 }))
+
+// ============================================================================
+// Brand Extraction V2 Tables (Sprint 99.5: URL to Video V2)
+// ============================================================================
+
+/**
+ * Brand Extraction table - stores comprehensive website analysis
+ * Uses GPT-4.1-mini to extract everything from screenshots and HTML
+ */
+export const brandExtractions = createTable("brand_extraction", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  url: d.text("url").notNull(),
+  projectId: d.uuid("project_id")
+    .references(() => projects.id, { onDelete: "set null" }),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Extraction metadata
+  extractionId: d.text("extraction_id").notNull().unique(),
+  extractionVersion: d.text("extraction_version").notNull().default("2.0.0"),
+  extractionStatus: d.text("extraction_status").notNull().default("processing"), // processing, completed, failed
+  
+  // Core brand data (for quick access)
+  brandName: d.text("brand_name"),
+  brandTagline: d.text("brand_tagline"),
+  primaryColor: d.text("primary_color"),
+  secondaryColor: d.text("secondary_color"),
+  
+  // Complete analysis data from GPT-4.1-mini
+  visualAnalysis: d.jsonb("visual_analysis").$type<Record<string, any>>().notNull().default({}),
+  contentAnalysis: d.jsonb("content_analysis").$type<Record<string, any>>().default({}),
+  synthesis: d.jsonb("synthesis").$type<Record<string, any>>().default({}),
+  
+  // Extracted structured data
+  brandData: d.jsonb("brand_data").$type<Record<string, any>>().notNull().default({}),
+  designData: d.jsonb("design_data").$type<Record<string, any>>().notNull().default({}),
+  productData: d.jsonb("product_data").$type<Record<string, any>>().notNull().default({}),
+  socialProofData: d.jsonb("social_proof_data").$type<Record<string, any>>().notNull().default({}),
+  contentData: d.jsonb("content_data").$type<Record<string, any>>().notNull().default({}),
+  sectionsData: d.jsonb("sections_data").$type<any[]>().notNull().default([]),
+  
+  // Screenshots and media
+  screenshots: d.jsonb("screenshots").$type<Array<{
+    id: string;
+    type: string;
+    url: string;
+    dimensions?: { width: number; height: number };
+  }>>().notNull().default([]),
+  htmlContent: d.text("html_content"),
+  stylesExtracted: d.jsonb("styles_extracted").$type<Record<string, any>>().default({}),
+  
+  // Confidence and metrics
+  confidence: d.jsonb("confidence").$type<{
+    overall: number;
+    brand?: number;
+    design?: number;
+    product?: number;
+    socialProof?: number;
+    content?: number;
+  }>().notNull().default({ overall: 0.5 }),
+  processingTimeMs: d.integer("processing_time_ms"),
+  tokensUsed: d.integer("tokens_used"),
+  
+  // Timestamps
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  analyzedAt: d.timestamp("analyzed_at", { withTimezone: true }),
+}), (t) => [
+  index("brand_extraction_url_idx").on(t.url),
+  index("brand_extraction_project_idx").on(t.projectId),
+  index("brand_extraction_user_idx").on(t.userId),
+  index("brand_extraction_status_idx").on(t.extractionStatus),
+  index("brand_extraction_created_idx").on(t.createdAt.desc()),
+  index("brand_extraction_brand_name_idx").on(t.brandName),
+]);
+
+/**
+ * Story Arc table - stores hero's journey narratives
+ * Generated from brand extractions using HeroJourneyV2
+ */
+export const storyArcs = createTable("story_arc", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  extractionId: d.uuid("extraction_id")
+    .notNull()
+    .references(() => brandExtractions.id, { onDelete: "cascade" }),
+  projectId: d.uuid("project_id")
+    .references(() => projects.id, { onDelete: "set null" }),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Story arc metadata
+  title: d.text("title").notNull(),
+  narrativeStructure: d.text("narrative_structure").notNull(),
+  totalDurationFrames: d.integer("total_duration_frames").notNull(),
+  totalDurationSeconds: d.numeric("total_duration_seconds", { precision: 5, scale: 2 }).notNull(),
+  style: d.text("style").notNull().default("professional"), // dramatic, energetic, professional, playful
+  
+  // Brand context
+  brandContext: d.jsonb("brand_context").$type<{
+    name: string;
+    tagline: string;
+    mainProblem: string;
+    mainSolution: string;
+    keyFeatures: string[];
+  }>().notNull().default({ name: '', tagline: '', mainProblem: '', mainSolution: '', keyFeatures: [] }),
+  
+  // Scenes data
+  scenes: d.jsonb("scenes").$type<any[]>().notNull().default([]),
+  
+  // Generation metadata
+  generationModel: d.text("generation_model"),
+  generationPrompt: d.text("generation_prompt"),
+  generationTimeMs: d.integer("generation_time_ms"),
+  
+  // Status tracking
+  status: d.text("status").notNull().default("draft"), // draft, approved, rendered, published
+  approvedBy: d.varchar("approved_by", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  approvedAt: d.timestamp("approved_at", { withTimezone: true }),
+  
+  // Timestamps
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("story_arc_extraction_idx").on(t.extractionId),
+  index("story_arc_project_idx").on(t.projectId),
+  index("story_arc_user_idx").on(t.userId),
+  index("story_arc_status_idx").on(t.status),
+  index("story_arc_created_idx").on(t.createdAt.desc()),
+]);
+
+/**
+ * Story Arc Scene table - individual scenes within a story arc
+ * Each scene has complete specifications for video generation
+ */
+export const storyArcScenes = createTable("story_arc_scene", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  storyArcId: d.uuid("story_arc_id")
+    .notNull()
+    .references(() => storyArcs.id, { onDelete: "cascade" }),
+  sceneNumber: d.integer("scene_number").notNull(),
+  
+  // Scene details
+  title: d.text("title").notNull(),
+  durationFrames: d.integer("duration_frames").notNull(),
+  narrative: d.text("narrative").notNull(),
+  emotionalBeat: d.text("emotional_beat").notNull(), // problem, tension, discovery, transformation, triumph, invitation
+  
+  // Visual specifications
+  visuals: d.jsonb("visuals").$type<{
+    background: string;
+    elements: string[];
+    animations: string[];
+    transitions: string;
+  }>().notNull().default({ background: '', elements: [], animations: [], transitions: '' }),
+  textContent: d.jsonb("text_content").$type<{
+    headline?: string;
+    subheadline?: string;
+    bodyText?: string[];
+    cta?: string;
+  }>().notNull().default({}),
+  uiElements: d.jsonb("ui_elements").$type<{
+    buttons?: any[];
+    cards?: any[];
+    icons?: string[];
+    stats?: any[];
+  }>().notNull().default({}),
+  styling: d.jsonb("styling").$type<{
+    colors: {
+      primary: string;
+      secondary: string;
+      accent?: string;
+    };
+    typography: {
+      font: string;
+      weight: string;
+    };
+  }>().notNull().default({ colors: { primary: '#000000', secondary: '#ffffff' }, typography: { font: 'Inter', weight: '400' } }),
+  
+  // Template information
+  templateName: d.text("template_name").notNull(),
+  templateVariant: d.text("template_variant"),
+  templateCapabilities: d.jsonb("template_capabilities").$type<string[]>().notNull().default([]),
+  
+  // Edit instructions
+  editPrompt: d.text("edit_prompt"),
+  editStatus: d.text("edit_status").default("pending"), // pending, generated, approved, rendered
+  
+  // Generated code
+  generatedCode: d.text("generated_code"),
+  codeVersion: d.integer("code_version").default(1),
+  
+  // Timestamps
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("story_arc_scene_arc_idx").on(t.storyArcId),
+  index("story_arc_scene_number_idx").on(t.storyArcId, t.sceneNumber),
+  index("story_arc_scene_template_idx").on(t.templateName),
+]);
+
+/**
+ * Extraction Cache table - for performance optimization
+ * Caches extraction results to avoid re-processing same URLs
+ */
+export const extractionCache = createTable("extraction_cache", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  url: d.text("url").notNull(),
+  urlHash: d.text("url_hash").notNull(),
+  extractionId: d.uuid("extraction_id")
+    .notNull()
+    .references(() => brandExtractions.id, { onDelete: "cascade" }),
+  cacheKey: d.text("cache_key").notNull().unique(),
+  cacheData: d.jsonb("cache_data").notNull(),
+  expiresAt: d.timestamp("expires_at", { withTimezone: true }).notNull(),
+  hitCount: d.integer("hit_count").default(0),
+  lastAccessedAt: d.timestamp("last_accessed_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("extraction_cache_url_hash_idx").on(t.urlHash),
+  index("extraction_cache_extraction_idx").on(t.extractionId),
+  index("extraction_cache_expires_idx").on(t.expiresAt),
+  uniqueIndex("extraction_cache_key_idx").on(t.cacheKey),
+]);
+
+// Relations for Brand Extraction V2
+export const brandExtractionsRelations = relations(brandExtractions, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [brandExtractions.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [brandExtractions.userId],
+    references: [users.id],
+  }),
+  storyArcs: many(storyArcs),
+  cacheEntries: many(extractionCache),
+}));
+
+export const storyArcsRelations = relations(storyArcs, ({ one, many }) => ({
+  extraction: one(brandExtractions, {
+    fields: [storyArcs.extractionId],
+    references: [brandExtractions.id],
+  }),
+  project: one(projects, {
+    fields: [storyArcs.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [storyArcs.userId],
+    references: [users.id],
+  }),
+  approvedByUser: one(users, {
+    fields: [storyArcs.approvedBy],
+    references: [users.id],
+  }),
+  scenes: many(storyArcScenes),
+}));
+
+export const storyArcScenesRelations = relations(storyArcScenes, ({ one }) => ({
+  storyArc: one(storyArcs, {
+    fields: [storyArcScenes.storyArcId],
+    references: [storyArcs.id],
+  }),
+}));
+
+export const extractionCacheRelations = relations(extractionCache, ({ one }) => ({
+  extraction: one(brandExtractions, {
+    fields: [extractionCache.extractionId],
+    references: [brandExtractions.id],
+  }),
+}))

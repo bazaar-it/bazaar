@@ -11,6 +11,13 @@ export interface ExtractedBrandDataV4 {
   brand?: {
     identity?: {
       name?: string;
+      logo?: {
+        url: string;
+        alt: string;
+        width: number;
+        height: number;
+        type: string;
+      } | null;
       tagline?: string;
       mission?: string;
       vision?: string;
@@ -87,8 +94,23 @@ export interface ExtractedBrandDataV4 {
     journey?: any;
     core?: any;
     useCases?: any[];
+    targetAudience?: string[];
   };
-  socialProof?: any;
+  socialProof?: {
+    testimonials?: Array<{
+      quote: string;
+      author?: string;
+      company?: string;
+    }>;
+    customerLogos?: string[];
+    stats?: Array<{
+      value: string;
+      label: string;
+      full?: string;
+    }>;
+    trustBadges?: string[];
+    mediaLogos?: string[];
+  };
   content?: {
     hero?: {
       headline?: string;
@@ -160,23 +182,30 @@ export class WebAnalysisAgentV4 {
       toolsLogger.info('🔍 WebAnalysisV4: Extracting page data...');
       const extractedData = await this.extractPageData(page);
       
-      // Log what we actually extracted
-      toolsLogger.debug('🔍 WebAnalysisV4: Extracted raw data:', {
+      // Log what we actually extracted - COMPREHENSIVE
+      toolsLogger.info('🔍 WebAnalysisV4: Extraction Summary:', {
         companyName: extractedData.companyName,
-        headline: extractedData.headline,
-        subheadline: extractedData.subheadline,
+        headline: extractedData.headline?.substring(0, 50) + '...',
         featuresCount: extractedData.features?.length || 0,
+        firstThreeFeatures: extractedData.features?.slice(0, 3).map((f: any) => f.title),
         ctasCount: extractedData.ctas?.length || 0,
+        ctaLabels: extractedData.ctas?.map((c: any) => c.label),
+        targetAudienceCount: extractedData.targetAudience?.length || 0,
+        targetAudiences: extractedData.targetAudience,
         colorsFound: {
           primary: extractedData.colors?.primary,
           secondary: extractedData.colors?.secondary,
           paletteSize: extractedData.colors?.palette?.length || 0
         },
-        fontsFound: extractedData.fonts,
         socialProofFound: {
           testimonials: extractedData.socialProof?.testimonials?.length || 0,
-          stats: extractedData.socialProof?.stats?.length || 0
-        }
+          customerLogos: extractedData.socialProof?.customerLogos?.length || 0,
+          customerLogosSample: extractedData.socialProof?.customerLogos?.slice(0, 5),
+          stats: extractedData.socialProof?.stats?.length || 0,
+          statsSample: extractedData.socialProof?.stats?.slice(0, 3)
+        },
+        problem: extractedData.problem ? 'Found' : 'Not found',
+        solution: extractedData.solution ? 'Found' : 'Not found'
       });
       
       // Take screenshots with validation
@@ -195,6 +224,7 @@ export class WebAnalysisAgentV4 {
         brand: {
           identity: {
             name: extractedData.companyName || extractedData.title || domain,
+            logo: extractedData.logo || null, // NEW: Company logo with URL, dimensions, and type
             tagline: extractedData.subheadline || extractedData.description || '',
             mission: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('mission'))?.value || '',
             vision: extractedData.socialProof?.stats?.find((s: any) => s.label.toLowerCase().includes('vision'))?.value || '',
@@ -276,6 +306,7 @@ export class WebAnalysisAgentV4 {
           solution: extractedData.solution || this.inferSolution(extractedData),
           features: extractedData.features || [],
           benefits: this.mapFeaturesToBenefits(extractedData.features || []),
+          targetAudience: extractedData.targetAudience || [],
           positioning: {
             category: this.inferCategory(extractedData),
             differentiators: extractedData.features?.slice(0, 3).map((f: any) => f.title) || []
@@ -360,6 +391,13 @@ export class WebAnalysisAgentV4 {
         secondary: finalData.brand?.visual?.colors?.secondary,
         accent: finalData.brand?.visual?.colors?.accent
       });
+      
+      // Log logo extraction results
+      if (finalData.brand?.identity?.logo?.url) {
+        toolsLogger.info(`🖼️ Logo extracted: ${finalData.brand.identity.logo.type} (${finalData.brand.identity.logo.width}x${finalData.brand.identity.logo.height})`);
+      } else {
+        toolsLogger.warn(`⚠️ No logo found for ${domain}`);
+      }
       
       return finalData;
       
@@ -502,30 +540,38 @@ export class WebAnalysisAgentV4 {
         return { headline, subheadline, description };
       };
 
-      // 3. EXTRACT PRODUCT FEATURES comprehensively  
+      // 3. EXTRACT PRODUCT FEATURES comprehensively - ENHANCED V2
       const extractFeatures = () => {
         const features: any[] = [];
+        const processedTexts = new Set<string>();
         
+        // Expanded selectors for maximum coverage
         const featureSelectors = [
           '[class*="feature"]', '[class*="benefit"]', '[class*="service"]',
           '[class*="product"]', '[data-testid*="feature"]', '.card',
           'section [class*="grid"] > div', 'section [class*="column"]',
-          '[class*="solution"]', '[class*="offering"]'
+          '[class*="solution"]', '[class*="offering"]', '[class*="capability"]',
+          '[class*="tool"]', '[class*="function"]', '[class*="advantage"]'
         ];
 
-        const processedTexts = new Set<string>();
-
+        // First pass: structured feature containers
         for (const selector of featureSelectors) {
           const containers = document.querySelectorAll(selector);
           
           containers.forEach((container) => {
-            // Look for feature title
-            const titleElement = container.querySelector('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"]');
+            // Look for feature title with multiple fallbacks
+            const titleElement = container.querySelector('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="heading"], strong, b');
             const title = cleanText(titleElement?.textContent);
             
-            // Look for feature description
-            const descElement = container.querySelector('p, [class*="desc"], [class*="text"], .content');
-            const description = cleanText(descElement?.textContent);
+            // Look for feature description with multiple options
+            const descElements = container.querySelectorAll('p, [class*="desc"], [class*="text"], .content, span');
+            let description = '';
+            for (const el of descElements) {
+              const text = cleanText(el.textContent);
+              if (text && text !== title && text.length > description.length && text.length < 500) {
+                description = text;
+              }
+            }
             
             // Look for icons
             const iconElement = container.querySelector('svg, img, [class*="icon"], i[class*="icon"]');
@@ -536,22 +582,78 @@ export class WebAnalysisAgentV4 {
                         iconElement.getAttribute('class') || '';
             }
 
-            if (isValidText(title, 5, 100) && !processedTexts.has(title)) {
-              processedTexts.add(title);
+            // More flexible validation
+            if (title && title.length >= 3 && title.length <= 150 && !processedTexts.has(title.toLowerCase())) {
+              processedTexts.add(title.toLowerCase());
               features.push({
                 name: title,
                 title,
-                description: isValidText(description, 10, 500) ? description : '',
-                desc: isValidText(description, 10, 500) ? description : '',
+                description: description || title,
+                desc: description || title,
                 icon: iconName
               });
             }
           });
           
-          if (features.length >= 8) break; // Limit features
+          if (features.length >= 30) break; // Even higher limit
         }
 
-        return features;
+        // Second pass: Look for feature lists
+        const lists = document.querySelectorAll('ul:not(nav ul), ol:not(nav ol)');
+        lists.forEach(list => {
+          const items = list.querySelectorAll('li');
+          if (items.length >= 2 && items.length <= 20) {
+            // Check if parent or nearby has feature-related context
+            const parent = list.closest('[class*="feature"], [class*="benefit"], [class*="capability"], section');
+            if (parent || list.previousElementSibling?.textContent?.toLowerCase().includes('feature')) {
+              items.forEach(item => {
+                const text = cleanText(item.textContent);
+                if (text && text.length >= 5 && text.length <= 100 && !processedTexts.has(text.toLowerCase())) {
+                  processedTexts.add(text.toLowerCase());
+                  features.push({
+                    name: text,
+                    title: text,
+                    description: text,
+                    desc: text,
+                    icon: ''
+                  });
+                }
+              });
+            }
+          }
+        });
+
+        // Third pass: Look for sections with consistent structure
+        const sections = document.querySelectorAll('section, article, [class*="container"]');
+        sections.forEach(section => {
+          const headings = section.querySelectorAll('h3, h4, h5');
+          if (headings.length >= 3 && headings.length <= 15) {
+            // This might be a feature section
+            headings.forEach(heading => {
+              const title = cleanText(heading.textContent);
+              if (title && !processedTexts.has(title.toLowerCase()) && title.length <= 80) {
+                const nextElement = heading.nextElementSibling;
+                const description = nextElement ? cleanText(nextElement.textContent) : '';
+                
+                // Check if it looks feature-related
+                const featureKeywords = /deploy|build|scale|secure|manage|automate|integrate|optimize|monitor|analyze|collaborate|preview|rollback|performance|security|api|gateway|compute|infrastructure|ai|ml|data|workflow|pipeline|testing|debug|ship|deliver/i;
+                if (featureKeywords.test(title) || featureKeywords.test(description)) {
+                  processedTexts.add(title.toLowerCase());
+                  features.push({
+                    name: title,
+                    title,
+                    description: description || title,
+                    desc: description || title,
+                    icon: ''
+                  });
+                }
+              }
+            });
+          }
+        });
+
+        // Remove duplicates and return up to 30 features
+        return features.slice(0, 30);
       };
 
       // 4. EXTRACT REAL CTAs from buttons and links
@@ -623,32 +725,52 @@ export class WebAnalysisAgentV4 {
           });
         });
 
-        // Extract customer logos
+        // Extract customer logos with better detection
         const logoSelectors = [
           '[class*="customer"] img', '[class*="client"] img', 
-          '[class*="partner"] img', '[class*="logo"] img'
+          '[class*="partner"] img', '[class*="logo"] img',
+          // Enhanced selectors for better coverage
+          'img[alt*="customer" i]', 'img[alt*="client" i]', 
+          'img[alt*="partner" i]', '[class*="logos"] img',
+          '[class*="trusted"] img', '[class*="brands"] img'
         ];
         
+        const processedLogos = new Set<string>();
         logoSelectors.forEach(selector => {
           document.querySelectorAll(selector).forEach(img => {
             const alt = (img as HTMLImageElement).alt;
             const src = (img as HTMLImageElement).src;
-            if (alt && isValidText(alt, 2, 50)) {
-              logos.push(alt);
+            
+            // Better logo name extraction
+            let logoName = '';
+            if (alt && !alt.toLowerCase().includes('logo') && isValidText(alt, 2, 50)) {
+              logoName = alt;
+            } else if (src) {
+              // Try to extract company name from src URL
+              const match = src.match(/\/([^/]+?)(?:-logo|\.png|\.jpg|\.svg)/i);
+              if (match && match[1]) {
+                logoName = match[1].replace(/[-_]/g, ' ');
+              }
+            }
+            
+            if (logoName && !processedLogos.has(logoName.toLowerCase())) {
+              processedLogos.add(logoName.toLowerCase());
+              logos.push(logoName);
             }
           });
         });
 
-        // Extract stats/metrics
+        // Extract stats/metrics with better pattern matching
         const statSelectors = [
           '[class*="stat"]', '[class*="metric"]', '[class*="number"]',
-          '[class*="counter"]', '[data-testid*="stat"]'
+          '[class*="counter"]', '[data-testid*="stat"]', '[class*="count"]'
         ];
 
+        // First, extract from structured elements
         statSelectors.forEach(selector => {
           document.querySelectorAll(selector).forEach(element => {
             const text = cleanText(element.textContent);
-            const numberMatch = text.match(/[\d,]+(\+|%|k|m|b)?/gi);
+            const numberMatch = text.match(/[\d,]+(\+|%|k|m|b|x)?/gi);
             
             if (numberMatch) {
               const label = text.replace(numberMatch[0], '').trim();
@@ -660,10 +782,31 @@ export class WebAnalysisAgentV4 {
           });
         });
 
+        // Second, extract performance metrics from text (e.g., "24x faster", "95% reduction")
+        const bodyText = document.body.innerText;
+        const performancePatterns = [
+          /(\d+(?:\.\d+)?x)\s+(faster|slower|better|improvement)/gi,
+          /(\d+(?:\.\d+)?)%\s+(reduction|improvement|increase|decrease)/gi,
+          /(\d+(?:,\d{3})*(?:\.\d+)?(?:k|m|b)?)\s+(users?|customers?|developers?|teams?)/gi
+        ];
+        
+        performancePatterns.forEach(pattern => {
+          const matches = bodyText.matchAll(pattern);
+          for (const match of matches) {
+            if (stats.length < 15) { // Increased limit
+              stats.push({
+                value: match[1],
+                label: match[2],
+                full: match[0]
+              });
+            }
+          }
+        });
+
         return {
-          testimonials: testimonials.slice(0, 5),
-          customerLogos: logos.slice(0, 10),
-          stats: stats.slice(0, 8)
+          testimonials: testimonials.slice(0, 10), // Increased limits
+          customerLogos: logos.slice(0, 20),
+          stats: stats.slice(0, 15)
         };
       };
 
@@ -697,15 +840,57 @@ export class WebAnalysisAgentV4 {
           }
         });
         
-        // Fallback to feature-based problem/solution
-        if (!problem) {
-          problem = 'Many businesses struggle with outdated processes and inefficient workflows';
-        }
-        if (!solution) {
-          solution = 'Our platform provides modern tools and automation to streamline your operations';
-        }
+        // Don't use generic fallbacks - return empty if not found
+        // This allows the system to know when data is missing
+        // if (!problem) {
+        //   problem = 'Many businesses struggle with outdated processes and inefficient workflows';
+        // }
+        // if (!solution) {
+        //   solution = 'Our platform provides modern tools and automation to streamline your operations';
+        // }
         
         return { problem, solution };
+      };
+
+      // 7. EXTRACT TARGET AUDIENCE SEGMENTS (NEW)
+      const extractTargetAudience = () => {
+        const audiences = new Set<string>();
+        
+        // Keywords that indicate target audiences
+        const audiencePatterns = [
+          /for\s+([\w\s]+(?:engineers?|developers?|designers?|managers?|teams?|founders?|startups?|enterprises?|businesses?))/gi,
+          /([\w\s]+(?:engineers?|developers?|designers?|managers?|teams?|founders?|startups?|enterprises?))\s+(?:can|will|love|need)/gi,
+          /built\s+for\s+([\w\s]+)/gi,
+          /perfect\s+for\s+([\w\s]+)/gi,
+          /designed\s+for\s+([\w\s]+)/gi,
+          /trusted\s+by\s+([\w\s]+)/gi,
+          /used\s+by\s+([\w\s]+)/gi
+        ];
+        
+        const bodyText = document.body.innerText;
+        audiencePatterns.forEach(pattern => {
+          const matches = bodyText.matchAll(pattern);
+          for (const match of matches) {
+            const audience = cleanText(match[1]);
+            if (audience && audience.length > 3 && audience.length < 50) {
+              audiences.add(audience);
+            }
+          }
+        });
+        
+        // Look for specific sections about users/customers
+        const userSections = document.querySelectorAll('[class*="user"], [class*="customer"], [class*="audience"], [class*="persona"]');
+        userSections.forEach(section => {
+          const headings = section.querySelectorAll('h3, h4, h5, strong');
+          headings.forEach(heading => {
+            const text = cleanText(heading.textContent);
+            if (text && text.length < 50) {
+              audiences.add(text);
+            }
+          });
+        });
+        
+        return Array.from(audiences).slice(0, 10);
       };
 
       // Color extraction (keep existing logic)
@@ -792,6 +977,166 @@ export class WebAnalysisAgentV4 {
         };
       };
 
+      // 8. EXTRACT LOGO URL (NEW - COMPREHENSIVE)
+      const extractLogoUrl = () => {
+        let logo = {
+          url: '',
+          alt: '',
+          width: 0,
+          height: 0,
+          type: '' // 'img', 'svg', 'background'
+        };
+
+        // Try multiple strategies to find the logo
+        
+        // Strategy 1: Direct logo selectors (most reliable)
+        const logoSelectors = [
+          'img[alt*="logo" i]',
+          'img[src*="logo" i]',
+          '[class*="logo" i] img',
+          '[id*="logo" i] img',
+          'header img',
+          'nav img',
+          '.navbar-brand img',
+          'a[href="/"] img',
+          'a[href="/"] svg',
+          '[class*="brand" i] img',
+          '[class*="brand" i] svg',
+          'h1 img',
+          'h1 svg'
+        ];
+
+        // Try image logos first
+        for (const selector of logoSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            if (element.tagName === 'IMG') {
+              const img = element as HTMLImageElement;
+              // Check if it's a reasonable logo size (not too small, not huge)
+              const width = img.naturalWidth || img.width;
+              const height = img.naturalHeight || img.height;
+              
+              if (width > 30 && width < 500 && height > 20 && height < 300) {
+                logo = {
+                  url: img.src || '',
+                  alt: img.alt || '',
+                  width: width,
+                  height: height,
+                  type: 'img'
+                };
+                break;
+              }
+            }
+          }
+        }
+
+        // Strategy 2: SVG logos (if no img found)
+        if (!logo.url) {
+          const svgSelectors = [
+            'svg[class*="logo" i]',
+            'header svg',
+            'nav svg',
+            '[class*="brand" i] svg',
+            'a[href="/"] svg'
+          ];
+
+          for (const selector of svgSelectors) {
+            const svg = document.querySelector(selector);
+            if (svg) {
+              // For inline SVG, we'll extract the outer HTML
+              const svgElement = svg as SVGElement;
+              const bbox = svgElement.getBoundingClientRect();
+              
+              if (bbox.width > 30 && bbox.width < 500) {
+                // Create a data URL from the SVG
+                const svgString = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                const svgUrl = `data:image/svg+xml;base64,${btoa(svgString)}`;
+                
+                logo = {
+                  url: svgUrl,
+                  alt: svgElement.getAttribute('aria-label') || svgElement.getAttribute('title') || companyName || '',
+                  width: Math.round(bbox.width),
+                  height: Math.round(bbox.height),
+                  type: 'svg'
+                };
+                break;
+              }
+            }
+          }
+        }
+
+        // Strategy 3: Background image logos
+        if (!logo.url) {
+          const bgSelectors = [
+            '[class*="logo" i]',
+            '[id*="logo" i]',
+            '.navbar-brand',
+            'header [class*="brand" i]'
+          ];
+
+          for (const selector of bgSelectors) {
+            const element = document.querySelector(selector) as HTMLElement;
+            if (element) {
+              const style = window.getComputedStyle(element);
+              const bgImage = style.backgroundImage;
+              
+              if (bgImage && bgImage !== 'none') {
+                const urlMatch = bgImage.match(/url\(['"]?(.+?)['"]?\)/);
+                if (urlMatch && urlMatch[1]) {
+                  const bbox = element.getBoundingClientRect();
+                  logo = {
+                    url: urlMatch[1],
+                    alt: element.getAttribute('aria-label') || companyName || '',
+                    width: Math.round(bbox.width),
+                    height: Math.round(bbox.height),
+                    type: 'background'
+                  };
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // Strategy 4: First image in header (fallback)
+        if (!logo.url) {
+          const headerImg = document.querySelector('header img, nav img');
+          if (headerImg && headerImg.tagName === 'IMG') {
+            const img = headerImg as HTMLImageElement;
+            const width = img.naturalWidth || img.width;
+            const height = img.naturalHeight || img.height;
+            
+            // Even if it doesn't have "logo" in the name, if it's in the header and reasonable size
+            if (width > 30 && width < 500 && height > 20 && height < 300) {
+              logo = {
+                url: img.src || '',
+                alt: img.alt || companyName || '',
+                width: width,
+                height: height,
+                type: 'img'
+              };
+            }
+          }
+        }
+
+        // Strategy 5: Favicon as last resort
+        if (!logo.url) {
+          const favicon = document.querySelector('link[rel*="icon"]') as HTMLLinkElement;
+          if (favicon && favicon.href) {
+            logo = {
+              url: favicon.href,
+              alt: companyName || document.title || '',
+              width: 32,
+              height: 32,
+              type: 'favicon'
+            };
+          }
+        }
+
+        return logo;
+      };
+
       // Execute all extractions
       const companyName = extractCompanyName();
       const valueProps = extractValueProps();
@@ -799,8 +1144,10 @@ export class WebAnalysisAgentV4 {
       const ctas = extractCTAs();
       const socialProof = extractSocialProof();
       const problemSolution = extractProblemSolution();
+      const targetAudience = extractTargetAudience();
       const colors = extractColors();
       const fonts = extractFonts();
+      const logo = extractLogoUrl();
       
       // Extract button styles
       const firstButton = document.querySelector('button, .btn, .button');
@@ -818,6 +1165,7 @@ export class WebAnalysisAgentV4 {
         title,
         description,
         companyName,
+        logo, // NEW: Company logo extraction
         
         // Value props
         headline: valueProps.headline || title,
@@ -836,6 +1184,9 @@ export class WebAnalysisAgentV4 {
         problem: problemSolution.problem,
         solution: problemSolution.solution,
         
+        // Target audience
+        targetAudience,
+        
         // Social proof
         socialProof
       };
@@ -843,7 +1194,13 @@ export class WebAnalysisAgentV4 {
   }
 
   private async captureScreenshots(page: any, _url: string) {
-    const screenshots = [];
+    const screenshots: Array<{
+      id: string;
+      url: string;
+      type: string;
+      description: string;
+      timestamp: string;
+    }> = [];
     
     // Validate page is still open
     if (!page || page.isClosed()) {

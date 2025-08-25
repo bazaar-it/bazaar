@@ -1,13 +1,18 @@
 /**
- * Template Metadata System
- * Maps templates to user language and intent for intelligent matching
+ * Enhanced Template Metadata System
+ * Maps templates to user language, brand attributes, and emotional beats for intelligent matching
  */
+
+export type EmotionalBeat = 'problem' | 'discovery' | 'transformation' | 'triumph' | 'invitation';
+export type BrandArchetype = 'innovator' | 'sophisticate' | 'protector' | 'everyman' | 'achiever' | 'creator' | 'explorer' | 'hero' | 'rebel' | 'ruler' | 'caregiver' | 'sage';
+export type Industry = 'fintech' | 'saas' | 'ecommerce' | 'healthcare' | 'education' | 'developer-tools' | 'security' | 'marketing' | 'hr-tech' | 'logistics' | 'real-estate' | 'travel' | 'fashion' | 'food' | 'entertainment' | 'nonprofit' | 'government' | 'general';
+export type AudienceRole = 'executive' | 'manager' | 'developer' | 'designer' | 'marketer' | 'sales' | 'founder' | 'investor' | 'consumer' | 'student' | 'educator' | 'healthcare-professional' | 'general';
 
 export interface TemplateMetadata {
   id: string;
   name: string;
   
-  // Matching fields
+  // Matching fields (existing)
   keywords: string[];
   descriptions: string[];
   userPhrases: string[];
@@ -15,16 +20,28 @@ export interface TemplateMetadata {
   styles: string[];
   useCases: string[];
   
-  // Technical metadata
+  // Technical metadata (existing)
   animations: string[];
   elements: string[];
   colors: string[];
   duration: number;
   complexity: 'simple' | 'medium' | 'complex';
   
-  // Scoring hints
+  // Scoring hints (existing)
   primaryUse: string;
   similarTo: string[];
+  
+  // NEW: Brand alignment fields
+  emotionalBeats?: EmotionalBeat[];  // Which emotional beats this template works for
+  brandArchetypes?: BrandArchetype[];  // Compatible brand personalities
+  industries?: Industry[];  // Best-fit industries
+  targetAudiences?: AudienceRole[];  // Ideal audience types
+  
+  // NEW: Visual compatibility
+  colorCompatibility?: 'dark' | 'light' | 'adaptable';  // How well it adapts to brand colors
+  dataFriendly?: boolean;  // Good for displaying metrics/stats
+  textHeavy?: boolean;  // Primarily text-based content
+  visualComplexity?: 1 | 2 | 3 | 4 | 5;  // 1=minimal, 5=complex
 }
 
 export const templateMetadata: Record<string, TemplateMetadata> = {
@@ -57,7 +74,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 270,
     complexity: 'simple',
     primaryUse: 'Animated headlines with changing words',
-    similarTo: ['TypingTemplate', 'MorphingText', 'CarouselText', 'FastText']
+    similarTo: ['TypingTemplate', 'MorphingText', 'CarouselText', 'FastText'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'invitation'],
+    brandArchetypes: ['innovator', 'creator', 'explorer', 'achiever'],
+    industries: ['saas', 'developer-tools', 'marketing', 'education', 'general'],
+    targetAudiences: ['founder', 'marketer', 'developer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 2
   },
 
   'TypingTemplate': {
@@ -86,7 +113,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'simple',
     primaryUse: 'Classic typewriter text animation',
-    similarTo: ['WordFlip', 'FastText', 'MorphingText']
+    similarTo: ['WordFlip', 'FastText', 'MorphingText'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'invitation'],
+    brandArchetypes: ['creator', 'sage', 'explorer', 'everyman'],
+    industries: ['developer-tools', 'education', 'marketing', 'general'],
+    targetAudiences: ['developer', 'educator', 'marketer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 1
   },
 
   'MorphingText': {
@@ -114,7 +151,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'medium',
     primaryUse: 'Smooth text morphing animation',
-    similarTo: ['WordFlip', 'GradientText', 'CarouselText']
+    similarTo: ['WordFlip', 'GradientText', 'CarouselText'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['innovator', 'sophisticate', 'creator'],
+    industries: ['saas', 'fintech', 'fashion', 'marketing'],
+    targetAudiences: ['executive', 'designer', 'marketer'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 3
   },
 
   'CarouselText': {
@@ -142,7 +189,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 240,
     complexity: 'medium',
     primaryUse: 'Text carousel for multiple messages',
-    similarTo: ['WordFlip', 'MorphingText', 'FastText']
+    similarTo: ['WordFlip', 'MorphingText', 'FastText'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'triumph'],
+    brandArchetypes: ['achiever', 'innovator', 'everyman'],
+    industries: ['ecommerce', 'saas', 'marketing', 'general'],
+    targetAudiences: ['consumer', 'marketer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: true,
+    visualComplexity: 2
   },
 
   'FastText': {
@@ -170,7 +227,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 90,
     complexity: 'simple',
     primaryUse: 'Fast-paced text animation',
-    similarTo: ['WordFlip', 'GlitchText', 'HighlightSweep']
+    similarTo: ['WordFlip', 'GlitchText', 'HighlightSweep'],
+    // Brand alignment
+    emotionalBeats: ['problem', 'triumph', 'invitation'],
+    brandArchetypes: ['hero', 'rebel', 'achiever'],
+    industries: ['fintech', 'security', 'ecommerce', 'marketing'],
+    targetAudiences: ['executive', 'sales', 'consumer'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 1
   },
 
   'GradientText': {
@@ -198,7 +265,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'simple',
     primaryUse: 'Animated gradient text effect',
-    similarTo: ['DarkBGGradientText', 'GlitchText', 'HighlightSweep']
+    similarTo: ['DarkBGGradientText', 'GlitchText', 'HighlightSweep'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'triumph'],
+    brandArchetypes: ['creator', 'innovator', 'explorer'],
+    industries: ['fashion', 'entertainment', 'marketing', 'education'],
+    targetAudiences: ['designer', 'marketer', 'student', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'light',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 2
   },
 
   'GlitchText': {
@@ -226,7 +303,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 150,
     complexity: 'medium',
     primaryUse: 'Glitch text effect for tech content',
-    similarTo: ['FastText', 'HighlightSweep', 'Code']
+    similarTo: ['FastText', 'HighlightSweep', 'Code'],
+    // Brand alignment
+    emotionalBeats: ['problem', 'discovery'],
+    brandArchetypes: ['rebel', 'innovator', 'hero'],
+    industries: ['security', 'developer-tools', 'entertainment'],
+    targetAudiences: ['developer', 'designer', 'consumer'],
+    // Visual compatibility
+    colorCompatibility: 'dark',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 3
   },
 
   // Background Templates
@@ -259,7 +346,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 90,
     complexity: 'medium',
     primaryUse: 'Tech/AI product backgrounds with floating particles',
-    similarTo: ['PulsingCircles', 'FloatingElements', 'ParticleExplosion', 'DotRipple']
+    similarTo: ['PulsingCircles', 'FloatingElements', 'ParticleExplosion', 'DotRipple'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['innovator', 'creator', 'explorer'],
+    industries: ['saas', 'developer-tools', 'fintech', 'healthcare'],
+    targetAudiences: ['developer', 'executive', 'investor'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 3
   },
 
   'PulsingCircles': {
@@ -287,7 +384,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'simple',
     primaryUse: 'Rhythmic pulsing circle animation',
-    similarTo: ['FloatingParticles', 'DotRipple', 'WaveAnimation']
+    similarTo: ['FloatingParticles', 'DotRipple', 'WaveAnimation'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['sage', 'caregiver', 'creator'],
+    industries: ['healthcare', 'education', 'entertainment'],
+    targetAudiences: ['consumer', 'educator', 'healthcare-professional'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 2
   },
 
   'ParticleExplosion': {
@@ -315,7 +422,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 120,
     complexity: 'medium',
     primaryUse: 'Dramatic particle explosion effect',
-    similarTo: ['FloatingParticles', 'DotRipple', 'FloatingElements']
+    similarTo: ['FloatingParticles', 'DotRipple', 'FloatingElements'],
+    // Brand alignment
+    emotionalBeats: ['triumph', 'invitation'],
+    brandArchetypes: ['hero', 'achiever', 'rebel'],
+    industries: ['entertainment', 'ecommerce', 'marketing'],
+    targetAudiences: ['consumer', 'marketer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 4
   },
 
   'WaveAnimation': {
@@ -343,7 +460,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 240,
     complexity: 'medium',
     primaryUse: 'Smooth wave animation effect',
-    similarTo: ['DotRipple', 'PulsingCircles', 'FloatingElements']
+    similarTo: ['DotRipple', 'PulsingCircles', 'FloatingElements'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['explorer', 'creator', 'sage'],
+    industries: ['travel', 'healthcare', 'education'],
+    targetAudiences: ['consumer', 'educator', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 3
   },
 
   'DotRipple': {
@@ -371,7 +498,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'simple',
     primaryUse: 'Ripple effect with dots',
-    similarTo: ['PulsingCircles', 'WaveAnimation', 'FloatingParticles']
+    similarTo: ['PulsingCircles', 'WaveAnimation', 'FloatingParticles'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['sophisticate', 'sage', 'creator'],
+    industries: ['fintech', 'healthcare', 'saas'],
+    targetAudiences: ['executive', 'designer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 2
   },
 
   // UI/Interface Templates
@@ -403,7 +540,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 90,
     complexity: 'complex',
     primaryUse: 'Mobile app demonstrations and showcases',
-    similarTo: ['DualScreenApp', 'AppJiggle', 'AppDownload', 'FintechUI']
+    similarTo: ['DualScreenApp', 'AppJiggle', 'AppDownload', 'FintechUI'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'invitation'],
+    brandArchetypes: ['innovator', 'creator', 'achiever'],
+    industries: ['saas', 'ecommerce', 'fintech', 'healthcare', 'general'],
+    targetAudiences: ['consumer', 'developer', 'designer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 4
   },
 
   'DualScreenApp': {
@@ -431,7 +578,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'complex',
     primaryUse: 'Dual screen app comparison',
-    similarTo: ['MobileApp', 'AppJiggle', 'FintechUI']
+    similarTo: ['MobileApp', 'AppJiggle', 'FintechUI'],
+    // Brand alignment
+    emotionalBeats: ['transformation', 'triumph'],
+    brandArchetypes: ['achiever', 'innovator', 'ruler'],
+    industries: ['saas', 'ecommerce', 'marketing'],
+    targetAudiences: ['marketer', 'designer', 'executive'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 5
   },
 
   'FintechUI': {
@@ -460,7 +617,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 240,
     complexity: 'complex',
     primaryUse: 'Financial technology interface demo',
-    similarTo: ['GrowthGraph', 'TeslaStockGraph', 'MobileApp']
+    similarTo: ['GrowthGraph', 'TeslaStockGraph', 'MobileApp'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation', 'triumph'],
+    brandArchetypes: ['protector', 'ruler', 'achiever'],
+    industries: ['fintech', 'banking', 'crypto', 'insurance'],
+    targetAudiences: ['executive', 'investor', 'consumer'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 5
   },
 
   'PromptUI': {
@@ -552,7 +719,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'medium',
     primaryUse: 'Business metrics and growth visualization',
-    similarTo: ['TeslaStockGraph', 'FintechUI', 'AudioAnimation']
+    similarTo: ['TeslaStockGraph', 'FintechUI', 'AudioAnimation'],
+    // Brand alignment
+    emotionalBeats: ['triumph', 'transformation'],
+    brandArchetypes: ['achiever', 'ruler', 'sage'],
+    industries: ['fintech', 'saas', 'ecommerce', 'marketing'],
+    targetAudiences: ['executive', 'investor', 'manager'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 3
   },
 
   'TeslaStockGraph': {
@@ -581,7 +758,17 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 240,
     complexity: 'medium',
     primaryUse: 'Stock market data visualization',
-    similarTo: ['GrowthGraph', 'FintechUI']
+    similarTo: ['GrowthGraph', 'FintechUI'],
+    // Brand alignment
+    emotionalBeats: ['triumph', 'transformation'],
+    brandArchetypes: ['achiever', 'ruler', 'protector'],
+    industries: ['fintech', 'crypto', 'banking'],
+    targetAudiences: ['investor', 'executive', 'trader'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 3
   },
 
   // Code/Tech Templates
@@ -1013,6 +1200,229 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     complexity: 'medium',
     primaryUse: 'Airbnb-style property listing and booking demo',
     similarTo: ['FintechUI', 'MobileApp', 'DualScreenApp']
+  },
+
+  // Additional Templates from Registry
+  'DarkBGGradientText': {
+    id: 'DarkBGGradientText',
+    name: 'DarkBGGradientText',
+    keywords: ['dark', 'gradient', 'text', 'background', 'dramatic'],
+    descriptions: [
+      'Gradient text on dark background',
+      'Dramatic text with dark theme',
+      'Premium gradient text effect'
+    ],
+    userPhrases: [
+      'dark theme text',
+      'gradient on dark',
+      'dramatic text',
+      'premium text effect'
+    ],
+    categories: ['text-animation', 'effects', 'premium'],
+    styles: ['dramatic', 'premium', 'dark', 'sophisticated'],
+    useCases: ['hero-sections', 'luxury-brands', 'tech-products'],
+    animations: ['gradient-shift', 'glow'],
+    elements: ['text', 'background'],
+    colors: ['dark', 'gradient'],
+    duration: 180,
+    complexity: 'simple',
+    primaryUse: 'Premium gradient text on dark backgrounds',
+    similarTo: ['GradientText', 'GlitchText'],
+    // Brand alignment
+    emotionalBeats: ['problem', 'discovery', 'triumph'],
+    brandArchetypes: ['sophisticate', 'innovator', 'ruler'],
+    industries: ['luxury', 'fintech', 'security', 'developer-tools'],
+    targetAudiences: ['executive', 'investor', 'developer'],
+    // Visual compatibility
+    colorCompatibility: 'dark',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 2
+  },
+
+  'Today1Percent': {
+    id: 'Today1Percent',
+    name: 'Today1Percent',
+    keywords: ['1%', 'percent', 'improvement', 'daily', 'progress', 'growth'],
+    descriptions: [
+      '1% daily improvement concept',
+      'Incremental progress visualization',
+      'Compound growth animation'
+    ],
+    userPhrases: [
+      '1 percent better',
+      'daily improvement',
+      'compound growth',
+      'incremental progress'
+    ],
+    categories: ['motivation', 'data-viz', 'growth'],
+    styles: ['inspirational', 'minimal', 'clean'],
+    useCases: ['motivation', 'coaching', 'education', 'self-improvement'],
+    animations: ['count-up', 'grow', 'scale'],
+    elements: ['text', 'percentage', 'chart'],
+    colors: ['green', 'minimal'],
+    duration: 180,
+    complexity: 'simple',
+    primaryUse: 'Daily improvement and growth motivation',
+    similarTo: ['GrowthGraph', 'WordFlip'],
+    // Brand alignment
+    emotionalBeats: ['transformation', 'triumph'],
+    brandArchetypes: ['achiever', 'sage', 'hero'],
+    industries: ['education', 'healthcare', 'saas', 'nonprofit'],
+    targetAudiences: ['educator', 'student', 'founder', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: true,
+    textHeavy: false,
+    visualComplexity: 2
+  },
+
+  'DrawOn': {
+    id: 'DrawOn',
+    name: 'DrawOn',
+    keywords: ['draw', 'sketch', 'line', 'animation', 'handwritten'],
+    descriptions: [
+      'Hand-drawn animation effect',
+      'Sketching line animation',
+      'Drawing reveal animation'
+    ],
+    userPhrases: [
+      'draw animation',
+      'sketch effect',
+      'hand-drawn',
+      'drawing reveal'
+    ],
+    categories: ['effects', 'animation', 'creative'],
+    styles: ['creative', 'playful', 'organic'],
+    useCases: ['creative-content', 'education', 'explainers'],
+    animations: ['draw', 'reveal', 'sketch'],
+    elements: ['lines', 'paths'],
+    colors: ['monochrome', 'sketch'],
+    duration: 240,
+    complexity: 'medium',
+    primaryUse: 'Hand-drawn sketch animations',
+    similarTo: ['WipeIn', 'SlideIn'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['creator', 'explorer', 'everyman'],
+    industries: ['education', 'marketing', 'entertainment'],
+    targetAudiences: ['educator', 'designer', 'student'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 3
+  },
+
+  'WipeIn': {
+    id: 'WipeIn',
+    name: 'WipeIn',
+    keywords: ['wipe', 'reveal', 'transition', 'slide', 'uncover'],
+    descriptions: [
+      'Wipe transition effect',
+      'Content reveal animation',
+      'Slide wipe entrance'
+    ],
+    userPhrases: [
+      'wipe effect',
+      'reveal animation',
+      'slide reveal',
+      'wipe transition'
+    ],
+    categories: ['transitions', 'effects', 'animation'],
+    styles: ['smooth', 'clean', 'professional'],
+    useCases: ['transitions', 'reveals', 'presentations'],
+    animations: ['wipe', 'slide', 'reveal'],
+    elements: ['mask', 'content'],
+    colors: ['any'],
+    duration: 120,
+    complexity: 'simple',
+    primaryUse: 'Smooth wipe transitions',
+    similarTo: ['SlideIn', 'FadeIn', 'DrawOn'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'transformation'],
+    brandArchetypes: ['everyman', 'creator', 'achiever'],
+    industries: ['general'],
+    targetAudiences: ['general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 1
+  },
+
+  'HighlightSweep': {
+    id: 'HighlightSweep',
+    name: 'HighlightSweep',
+    keywords: ['highlight', 'sweep', 'emphasis', 'marker', 'underline'],
+    descriptions: [
+      'Highlighting sweep animation',
+      'Text emphasis effect',
+      'Marker highlight animation'
+    ],
+    userPhrases: [
+      'highlight text',
+      'sweep effect',
+      'emphasis animation',
+      'marker effect'
+    ],
+    categories: ['text-animation', 'effects', 'emphasis'],
+    styles: ['attention-grabbing', 'educational', 'clear'],
+    useCases: ['emphasis', 'education', 'presentations', 'tutorials'],
+    animations: ['sweep', 'highlight', 'underline'],
+    elements: ['text', 'highlight'],
+    colors: ['yellow', 'accent'],
+    duration: 150,
+    complexity: 'simple',
+    primaryUse: 'Text highlighting and emphasis',
+    similarTo: ['GradientText', 'FastText'],
+    // Brand alignment
+    emotionalBeats: ['discovery', 'invitation'],
+    brandArchetypes: ['educator', 'sage', 'caregiver'],
+    industries: ['education', 'marketing', 'saas'],
+    targetAudiences: ['educator', 'student', 'marketer'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: true,
+    visualComplexity: 2
+  },
+
+  'Placeholders': {
+    id: 'Placeholders',
+    name: 'Placeholders',
+    keywords: ['placeholder', 'skeleton', 'loading', 'shimmer'],
+    descriptions: [
+      'Content placeholder animation',
+      'Skeleton loading effect',
+      'Shimmer placeholder'
+    ],
+    userPhrases: [
+      'loading placeholder',
+      'skeleton screen',
+      'shimmer effect',
+      'content loading'
+    ],
+    categories: ['loading', 'ui-component', 'effects'],
+    styles: ['minimal', 'subtle', 'modern'],
+    useCases: ['loading-states', 'ui-demos', 'app-features'],
+    animations: ['shimmer', 'pulse', 'fade'],
+    elements: ['blocks', 'lines'],
+    colors: ['gray', 'subtle'],
+    duration: 180,
+    complexity: 'simple',
+    primaryUse: 'Loading placeholder animations',
+    similarTo: ['DotRipple', 'PulsingCircles'],
+    // Brand alignment
+    emotionalBeats: ['discovery'],
+    brandArchetypes: ['everyman', 'creator'],
+    industries: ['saas', 'ecommerce', 'general'],
+    targetAudiences: ['developer', 'designer', 'general'],
+    // Visual compatibility
+    colorCompatibility: 'adaptable',
+    dataFriendly: false,
+    textHeavy: false,
+    visualComplexity: 1
   }
 };
 

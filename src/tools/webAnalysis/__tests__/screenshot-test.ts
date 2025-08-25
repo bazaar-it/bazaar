@@ -50,8 +50,6 @@ async function testScreenshots() {
 }
 
 // Run the test if this file is executed directly
-if (require.main === module) {
-  testScreenshots().catch(console.error);
-}
+testScreenshots().catch(console.error);
 
 export { testScreenshots };

@@ -62,17 +62,27 @@ export async function saveBrandProfile(
       where: eq(brandProfiles.projectId, projectId),
     });
     
+    // Only include V4 enhanced fields if they have actual data
+    const enhancedBrandData: any = { ...brandData };
+    
+    // Only add these fields if they contain data
+    if (psychology && Object.keys(psychology).length > 0) {
+      enhancedBrandData.psychology = psychology;
+    }
+    if (competitors && competitors.length > 0) {
+      enhancedBrandData.competitors = competitors;
+    }
+    if (aiAnalysis && Object.keys(aiAnalysis).length > 0) {
+      enhancedBrandData.aiAnalysis = aiAnalysis;
+    }
+    if (semanticContent && Object.keys(semanticContent).length > 0) {
+      enhancedBrandData.semanticContent = semanticContent;
+    }
+    
     const profileData = {
       projectId,
       websiteUrl,
-      brandData: {
-        ...brandData,
-        // Include V4's enhanced brand insights
-        psychology: psychology,
-        competitors: competitors,
-        aiAnalysis: aiAnalysis,
-        semanticContent: semanticContent,
-      },
+      brandData: enhancedBrandData,
       colors: brandData.colors || {},
       typography: brandData.typography || {},
       logos: brandData.logos || brandData.logo || {},
@@ -89,13 +99,27 @@ export async function saveBrandProfile(
       productNarrative: {
         ...product,
         // Include V4's competitive positioning
-        competitiveAdvantage: competitors[0]?.differentiators || product.features,
+        competitiveAdvantage: competitors[0]?.differentiators || product.features?.slice(0, 3),
         marketPosition: aiAnalysis.marketPosition || null,
+        // Preserve ALL features, not just first 3
+        allFeatures: product.features || [],
+        targetAudience: extractedData.targetAudience || [],
+        // Keep original features field for backward compatibility but limited
+        features: product.features?.slice(0, 3) || []
       },
       socialProof: {
         ...socialProof,
         // Include V4's credibility indicators
         trustSignals: psychology.trustIndicators || socialProof.stats,
+        // Preserve all social proof data
+        testimonials: socialProof.testimonials || [],
+        customerLogos: socialProof.customerLogos || [],
+        trustBadges: socialProof.trustBadges || [],
+        allStats: socialProof.stats || {},
+        // Keep a limited stats field for backward compatibility
+        stats: Object.fromEntries(
+          Object.entries(socialProof.stats || {}).slice(0, 3)
+        )
       },
       screenshots: media.screenshots || [],
       mediaAssets: [

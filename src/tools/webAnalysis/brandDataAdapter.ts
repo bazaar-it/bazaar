@@ -12,6 +12,7 @@ export interface SimplifiedBrandData {
     description?: string;
     headings?: string[];
   };
+  targetAudience?: string[];
   brand: {
     colors: {
       primary: string;
@@ -95,6 +96,7 @@ export function convertV4ToSimplified(v4Data: ExtractedBrandDataV4): SimplifiedB
       description: v4Data.brand?.identity?.tagline || '',
       headings: []
     },
+    targetAudience: v4Data.product?.targetAudience || [],
     brand: {
       colors: {
         primary: v4Data.brand?.visual?.colors?.primary || '#000000',
@@ -131,17 +133,25 @@ export function convertV4ToSimplified(v4Data: ExtractedBrandDataV4): SimplifiedB
       },
       problem: v4Data.product?.problem || 'Outdated solutions',
       solution: v4Data.product?.solution || 'Modern approach',
-      features: v4Data.product?.features?.slice(0, 3).map(f => ({
-        title: f.name || 'Feature',
-        desc: f.description || '',
+      features: v4Data.product?.features?.map(f => ({
+        title: f.name || f.title || 'Feature',
+        desc: f.description || f.desc || '',
         icon: f.icon
       })) || []
     },
     social_proof: {
       stats: {
         users: v4Data.metrics?.users?.toString() || '1000+',
-        rating: v4Data.metrics?.rating?.toString() || '4.9'
-      }
+        rating: v4Data.metrics?.rating?.toString() || '4.9',
+        // Include ALL extracted stats
+        ...(v4Data.socialProof?.stats?.reduce((acc: any, stat: any) => {
+          acc[stat.label] = stat.value;
+          return acc;
+        }, {}) || {})
+      },
+      testimonials: v4Data.socialProof?.testimonials || [],
+      customerLogos: v4Data.socialProof?.customerLogos || [],
+      trustBadges: v4Data.socialProof?.trustBadges || []
     },
     ctas: v4Data.content?.ctas || [],
     media: {
@@ -150,11 +160,18 @@ export function convertV4ToSimplified(v4Data: ExtractedBrandDataV4): SimplifiedB
     extractionMeta: v4Data.metadata
   };
   
-  // Log the result
+  // Log the COMPLETE result
   console.log('🔄 [ADAPTER] Simplified data result:', {
     pageTitle: result.page.title,
     brandColors: result.brand.colors.primary,
     featuresConverted: result.product.features.length,
+    targetAudienceCount: result.targetAudience?.length || 0,
+    socialProof: {
+      testimonials: result.social_proof.testimonials?.length || 0,
+      customerLogos: result.social_proof.customerLogos?.length || 0,
+      statsCount: Object.keys(result.social_proof.stats || {}).length
+    },
+    ctasCount: result.ctas?.length || 0,
     hasExtractonMeta: !!result.extractionMeta
   });
   

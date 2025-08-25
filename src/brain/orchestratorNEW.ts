@@ -235,6 +235,8 @@ export class Orchestrator {
             targetSceneId: toolSelection.targetSceneId,
             targetDuration: toolSelection.targetDuration,
             requestedDurationFrames, // ADD THIS - explicit duration from prompt
+            requestedDurationSeconds: toolSelection.requestedDurationSeconds, // Duration in seconds
+            requestedScenes: toolSelection.requestedScenes, // Requested scene count
             referencedSceneIds: toolSelection.referencedSceneIds,
             websiteUrl: toolSelection.websiteUrl, // Pass website URL for websiteToVideo tool
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,

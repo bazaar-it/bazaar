@@ -59,7 +59,7 @@ export default {
   
   // Handle ESM modules in node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(nanoid|@testing-library|@remotion|chalk|uuid)/)',
+    'node_modules/(?!(nanoid|@testing-library|@remotion|chalk|uuid|@auth)/)',
   ],
   
   // ESM settings - moved to transform config above to avoid deprecation warning

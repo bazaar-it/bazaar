@@ -18,6 +18,7 @@ import { eq, asc } from "drizzle-orm";
 import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import { convertV4ToSimplified, createFallbackBrandData, type SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
+import { HeroJourneyLLM } from "~/tools/narrative/herosJourneyLLM";
 import { TemplateSelector } from "~/server/services/website/template-selector-v2";
 import { TemplateCustomizerAI } from "~/server/services/website/template-customizer-ai";
 import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/services/website/save-brand-profile";
@@ -30,6 +31,7 @@ export interface WebsiteToVideoInput {
   websiteUrl: string;
   style?: 'minimal' | 'dynamic' | 'bold';
   duration?: number; // Target duration in seconds
+  sceneCount?: number; // Requested number of scenes
   webContext?: any; // Pass existing web analysis if available
   streamingCallback?: (event: StreamingEvent) => Promise<void>;
 }
@@ -164,10 +166,47 @@ export class WebsiteToVideoHandler {
         animationStyle: brandStyle.animation.style
       });
       
-      // 3. Generate hero's journey narrative
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
-      const storyGenerator = new HeroJourneyGenerator();
-      const narrativeScenes = storyGenerator.generateNarrative(websiteData);
+      // 3. Determine arc configuration based on user input
+      const arcConfig = this.determineArcConfig(input);
+      toolsLogger.info(`🎬 [WEBSITE HANDLER] Arc config: ${arcConfig.sceneCount} scenes, ${arcConfig.totalDuration} frames (${arcConfig.totalDuration/30}s)`);
+      
+      // 4. Generate DYNAMIC hero's journey narrative with LLM
+      toolsLogger.info('🤖 [WEBSITE HANDLER] Step 4: Creating unique narrative with LLM...');
+      
+      let narrativeScenes;
+      
+      // ALWAYS use LLM for unique narratives
+      try {
+        const llmGenerator = new HeroJourneyLLM();
+        
+        toolsLogger.info(`🎨 [WEBSITE HANDLER] Generating unique ${arcConfig.sceneCount}-scene narrative with LLM`);
+        
+        // Generate unique narrative with LLM
+        narrativeScenes = await this.generateNarrativeWithLLM(
+          llmGenerator,
+          websiteData,
+          arcConfig
+        );
+        
+        debugData.narrativeGeneration = {
+          method: 'llm',
+          sceneCount: arcConfig.sceneCount,
+          totalDuration: arcConfig.totalDuration
+        };
+        
+        toolsLogger.info('✨ [WEBSITE HANDLER] LLM generated unique narrative successfully');
+      } catch (error) {
+        toolsLogger.warn('⚠️ [WEBSITE HANDLER] Falling back to hardcoded narrative', error);
+        
+        const storyGenerator = new HeroJourneyGenerator();
+        const baseScenes = storyGenerator.generateNarrative(websiteData);
+        narrativeScenes = this.adaptNarrativeToSceneCount(baseScenes, arcConfig);
+        
+        debugData.narrativeGeneration = { 
+          method: 'fallback',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
       
       // Store hero journey debug data
       debugData.heroJourney = narrativeScenes;
@@ -323,6 +362,266 @@ export class WebsiteToVideoHandler {
         reasoning: 'Website analysis or video generation failed',
         chatResponse: `I encountered an issue analyzing the website. This might be due to:\n• The website being protected by Cloudflare\n• Invalid or inaccessible URL\n• Connection timeout\n\nPlease verify the URL is accessible and try again.`,
       };
+    }
+  }
+
+  /**
+   * Determine arc configuration based on user input
+   */
+  private determineArcConfig(input: WebsiteToVideoInput): {
+    sceneCount: number;
+    totalDuration: number; // in frames
+  } {
+    let sceneCount = 5; // default
+    let totalDuration = 450; // default 15 seconds at 30fps
+    
+    if (input.sceneCount) {
+      // User specified exact scene count
+      sceneCount = Math.min(Math.max(input.sceneCount, 2), 10); // Clamp 2-10
+      totalDuration = sceneCount * 90; // ~3 seconds per scene average
+      toolsLogger.info(`📊 [ARC CONFIG] User requested ${input.sceneCount} scenes → ${sceneCount} scenes`);
+    } else if (input.duration) {
+      // User specified duration, calculate optimal scene count
+      totalDuration = input.duration * 30; // Convert to frames
+      
+      if (input.duration <= 6) {
+        sceneCount = 2;
+      } else if (input.duration <= 10) {
+        sceneCount = 3;
+      } else if (input.duration <= 15) {
+        sceneCount = 4;
+      } else if (input.duration <= 20) {
+        sceneCount = 5;
+      } else if (input.duration <= 25) {
+        sceneCount = 6;
+      } else if (input.duration <= 30) {
+        sceneCount = 7;
+      } else {
+        sceneCount = Math.min(Math.ceil(input.duration / 5), 10); // ~5 seconds per scene for long videos
+      }
+      
+      toolsLogger.info(`📊 [ARC CONFIG] User requested ${input.duration}s → ${sceneCount} scenes`);
+    }
+    
+    return { sceneCount, totalDuration };
+  }
+  
+  /**
+   * Generate narrative using LLM
+   */
+  private async generateNarrativeWithLLM(
+    llmGenerator: HeroJourneyLLM,
+    websiteData: ExtractedBrandDataV4,
+    arcConfig: { sceneCount: number; totalDuration: number }
+  ): Promise<HeroJourneyScene[]> {
+    try {
+      // Use the new LLM method to generate unique narrative scenes
+      const scenes = await llmGenerator.generateNarrativeScenes(
+        websiteData,
+        arcConfig.sceneCount,
+        arcConfig.totalDuration
+      );
+      
+      return scenes;
+    } catch (error) {
+      console.error('LLM narrative generation failed:', error);
+      // Fallback to hardcoded and adapt
+      const hardcodedGenerator = new HeroJourneyGenerator();
+      const baseScenes = hardcodedGenerator.generateNarrative(websiteData);
+      return this.adaptNarrativeToSceneCount(baseScenes, arcConfig);
+    }
+  }
+  
+  /**
+   * Build prompt for LLM narrative generation
+   */
+  private buildLLMPrompt(
+    websiteData: ExtractedBrandDataV4,
+    arcConfig: { sceneCount: number; totalDuration: number }
+  ): string {
+    const durationSeconds = arcConfig.totalDuration / 30;
+    
+    return `Create a ${arcConfig.sceneCount}-scene narrative for a ${durationSeconds}-second motion graphics video.
+    
+Brand: ${websiteData.brand?.identity?.name || 'Unknown'}
+Tagline: ${websiteData.brand?.identity?.tagline || ''}
+Problem: ${websiteData.product?.problem || ''}
+Solution: ${websiteData.product?.value_prop?.headline || ''}
+
+Generate ${arcConfig.sceneCount} unique scenes that tell a compelling story.`;
+  }
+  
+  /**
+   * Adapt narrative to requested scene count
+   */
+  private adaptNarrativeToSceneCount(
+    baseScenes: HeroJourneyScene[], 
+    arcConfig: { sceneCount: number; totalDuration: number }
+  ): HeroJourneyScene[] {
+    const { sceneCount, totalDuration } = arcConfig;
+    
+    // Distribute duration across scenes
+    const durations = this.distributeDuration(totalDuration, sceneCount);
+    
+    if (sceneCount === baseScenes.length) {
+      // Just adjust durations
+      return baseScenes.map((scene, i) => ({
+        ...scene,
+        duration: durations[i]
+      }));
+    } else if (sceneCount < baseScenes.length) {
+      // Merge scenes
+      const mergedScenes: HeroJourneyScene[] = [];
+      
+      if (sceneCount === 2) {
+        // Hook + CTA
+        mergedScenes.push({
+          ...baseScenes[0],
+          title: "The Challenge",
+          duration: durations[0],
+          narrative: baseScenes[0].narrative + " " + baseScenes[1].narrative
+        });
+        mergedScenes.push({
+          ...baseScenes[4],
+          title: "Your Solution",
+          duration: durations[1]
+        });
+      } else if (sceneCount === 3) {
+        // Problem + Solution + CTA
+        mergedScenes.push(baseScenes[0]); // Problem
+        mergedScenes.push({
+          ...baseScenes[2],
+          title: "The Solution",
+          duration: durations[1],
+          narrative: baseScenes[1].narrative + " " + baseScenes[2].narrative
+        });
+        mergedScenes.push(baseScenes[4]); // CTA
+      } else if (sceneCount === 4) {
+        // Skip triumph scene
+        mergedScenes.push(...baseScenes.slice(0, 3));
+        mergedScenes.push(baseScenes[4]);
+      }
+      
+      // Update durations
+      return mergedScenes.map((scene, i) => ({
+        ...scene,
+        duration: durations[i]
+      }));
+    } else {
+      // Expand scenes - add more detailed breakdowns
+      const expandedScenes: HeroJourneyScene[] = [];
+      
+      if (sceneCount === 6) {
+        expandedScenes.push(baseScenes[0]); // Problem
+        expandedScenes.push(baseScenes[1]); // Discovery
+        expandedScenes.push({
+          ...baseScenes[2],
+          title: "Key Features",
+          duration: durations[2],
+          emotionalBeat: 'transformation'
+        });
+        expandedScenes.push({
+          ...baseScenes[2],
+          title: "Benefits",
+          duration: durations[3],
+          narrative: "See the benefits in action",
+          emotionalBeat: 'transformation'
+        });
+        expandedScenes.push(baseScenes[3]); // Triumph
+        expandedScenes.push(baseScenes[4]); // CTA
+      } else if (sceneCount === 7) {
+        // Add intro and more detail
+        expandedScenes.push({
+          title: "Opening Hook",
+          duration: durations[0],
+          narrative: "Attention-grabbing opener",
+          visualElements: ["Logo animation", "Brand colors"],
+          brandElements: baseScenes[0].brandElements,
+          emotionalBeat: 'discovery'
+        });
+        expandedScenes.push(...baseScenes);
+        expandedScenes.push({
+          title: "Final Impact",
+          duration: durations[6],
+          narrative: "Leave a lasting impression",
+          visualElements: ["Brand reinforcement"],
+          brandElements: baseScenes[4].brandElements,
+          emotionalBeat: 'invitation'
+        });
+      }
+      
+      // For 8+ scenes, duplicate and modify transformation scenes
+      else {
+        expandedScenes.push(...baseScenes.slice(0, 2));
+        const extraScenes = sceneCount - 4;
+        for (let i = 0; i < extraScenes; i++) {
+          expandedScenes.push({
+            ...baseScenes[2],
+            title: `Feature ${i + 1}`,
+            duration: durations[2 + i],
+            narrative: `Showcase feature ${i + 1}`,
+            emotionalBeat: 'transformation'
+          });
+        }
+        expandedScenes.push(baseScenes[3]);
+        expandedScenes.push(baseScenes[4]);
+      }
+      
+      // Update durations
+      return expandedScenes.slice(0, sceneCount).map((scene, i) => ({
+        ...scene,
+        duration: durations[i]
+      }));
+    }
+  }
+  
+  /**
+   * Distribute total duration across scenes intelligently
+   */
+  private distributeDuration(totalFrames: number, sceneCount: number): number[] {
+    if (sceneCount === 2) {
+      // 60/40 split
+      return [
+        Math.floor(totalFrames * 0.6),
+        Math.floor(totalFrames * 0.4)
+      ];
+    } else if (sceneCount === 3) {
+      // 30/40/30 split
+      return [
+        Math.floor(totalFrames * 0.3),
+        Math.floor(totalFrames * 0.4),
+        Math.floor(totalFrames * 0.3)
+      ];
+    } else if (sceneCount === 4) {
+      // 25/25/35/15 split
+      return [
+        Math.floor(totalFrames * 0.25),
+        Math.floor(totalFrames * 0.25),
+        Math.floor(totalFrames * 0.35),
+        Math.floor(totalFrames * 0.15)
+      ];
+    } else if (sceneCount === 5) {
+      // Classic 20/13/34/20/13 split
+      return [
+        Math.floor(totalFrames * 0.2),
+        Math.floor(totalFrames * 0.13),
+        Math.floor(totalFrames * 0.34),
+        Math.floor(totalFrames * 0.2),
+        Math.floor(totalFrames * 0.13)
+      ];
+    } else {
+      // Even distribution with slight emphasis on middle
+      const baseFrames = Math.floor(totalFrames / sceneCount);
+      const durations = new Array(sceneCount).fill(baseFrames);
+      
+      // Add remaining frames to middle scenes
+      const remainder = totalFrames - (baseFrames * sceneCount);
+      const middleIndex = Math.floor(sceneCount / 2);
+      for (let i = 0; i < remainder; i++) {
+        durations[middleIndex - Math.floor(i/2) + (i%2)] += 1;
+      }
+      
+      return durations;
     }
   }
 

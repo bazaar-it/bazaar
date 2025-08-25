@@ -26,7 +26,8 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/paywall-analytics' ? 'paywall-analytics' :
     pathname === '/admin/evals' ? 'evals' :
     pathname === '/admin/error-analytics' ? 'error-analytics' :
-    pathname === '/admin/brand-extraction' ? 'brand-extraction' : 'homepage';
+    pathname === '/admin/brand-extraction' ? 'brand-extraction' :
+    pathname === '/admin/extraction-lab' ? 'extraction-lab' : 'homepage';
 
   return (
     <div className="w-72 bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl min-h-screen">
@@ -103,6 +104,22 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
               </svg>
               <span className="font-medium">Brand Extraction</span>
               <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-500 text-black rounded-full">NEW</span>
+            </Link>
+
+            {/* Extraction Lab V2 */}
+            <Link 
+              href="/admin/extraction-lab"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'extraction-lab'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              <span className="font-medium">Extraction Lab</span>
+              <span className="ml-2 px-2 py-0.5 text-xs bg-green-500 text-black rounded-full">V2</span>
             </Link>
 
             {/* Marketing Dashboard */}
