@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Upload, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
+import { Upload, MoreVertical, Edit, Trash2, Loader2, Search } from "lucide-react";
 import { Icon } from '@iconify/react';
 import { IconPickerPanel } from "~/components/IconPickerPanel";
 
@@ -50,9 +50,12 @@ type MediaPanelProps = {
   defaultTab?: 'uploads' | 'icons'; // For auto-opening to specific tab
 };
 
+type FilterType = 'all'|'images'|'videos'|'audio'|'logos';
+
 export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'uploads' }: MediaPanelProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [filter, setFilter] = useState<'all'|'images'|'videos'|'audio'|'logos'>('all');
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [searchQuery, setSearchQuery] = useState("");
   // Always show user uploads (all projects) by default
   const userQuery = api.project.getUserUploads.useQuery();
   const data = userQuery.data as any;
@@ -95,13 +98,33 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
 
   const assets = useMemo(() => {
     const list = data?.assets || [];
-    if (filter === 'all') return list;
-    if (filter === 'images') return list.filter((a: any) => a.type === 'image' || a.type === 'logo');
-    if (filter === 'videos') return list.filter((a: any) => a.type === 'video');
-    if (filter === 'audio') return list.filter((a: any) => a.type === 'audio');
-    if (filter === 'logos') return list.filter((a: any) => a.type === 'logo');
-    return list;
-  }, [data, filter]);
+    
+    // First apply type filter
+    let filtered = list;
+    if (filter === 'all') filtered = list;
+    else if (filter === 'images') filtered = list.filter((a: any) => a.type === 'image' || a.type === 'logo');
+    else if (filter === 'videos') filtered = list.filter((a: any) => a.type === 'video');
+    else if (filter === 'audio') filtered = list.filter((a: any) => a.type === 'audio');
+    else if (filter === 'logos') filtered = list.filter((a: any) => a.type === 'logo');
+    
+    // Then apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((asset: any) => {
+        // Search in custom name
+        if (asset.customName?.toLowerCase().includes(query)) return true;
+        // Search in original name
+        if (asset.originalName?.toLowerCase().includes(query)) return true;
+        // Search in tags
+        if (asset.tags?.some((tag: string) => tag.toLowerCase().includes(query))) return true;
+        // Search in type
+        if (asset.type?.toLowerCase().includes(query)) return true;
+        return false;
+      });
+    }
+    
+    return filtered;
+  }, [data, filter, searchQuery]);
 
   const handleDragStart = useCallback((e: React.DragEvent, url: string) => {
     e.dataTransfer.setData('text/plain', url);
@@ -222,6 +245,37 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
             }}
             onDrop={onDrop}
           >
+            {/* Search field */}
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, tags or type..."
+                  className="w-full pl-10 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Filter buttons */}
+            <div className="flex gap-1 mt-2 px-3">
+              {(['all', 'images', 'videos', 'audio', 'logos'] as FilterType[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`flex-1 px-3 py-1 text-xs rounded-full transition-colors cursor-pointer ${
+                    filter === f 
+                      ? 'bg-black text-white' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+            </div>
+
             {/* Drag overlay */}
             {isDragging && (
               <div className="absolute inset-0 z-50 bg-blue-50/80 border-2 border-dashed border-blue-400 rounded-lg flex items-center justify-center">
@@ -236,7 +290,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
               <div className="flex-1 overflow-y-auto p-3">
                 <div className="grid grid-cols-2 gap-3">
                   {/* Upload button as first item in grid */}
-                  <div className="border-2 border-dashed border-gray-300 hover:border-gray-400 rounded-lg transition-colors duration-200 bg-gray-50 hover:bg-gray-100 flex items-center justify-center">
+                  <div className="border-2 border-dashed border-gray-300 hover:border-gray-400 rounded-lg transition-colors duration-200 bg-gray-50 hover:bg-gray-100 flex items-center justify-center w-full h-37">
                     <div className="flex flex-col items-center justify-center text-gray-600 gap-2">
                       {!isUploading ? (
                         <>
@@ -330,7 +384,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                          </div>
                        )}
                      </div>
-                                         <div className="p-2 text-xs text-gray-600">
+                     <div className="p-2 text-xs text-gray-600">
                        {loadingAssetId === a.id ? (
                          <div className="flex items-center gap-2">
                            <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
