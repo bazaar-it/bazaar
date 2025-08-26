@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Upload } from "lucide-react";
+import { Upload, MoreVertical, Edit, Trash2, Loader2 } from "lucide-react";
 import { Icon } from '@iconify/react';
 import { IconPickerPanel } from "~/components/IconPickerPanel";
 
@@ -62,8 +62,11 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [loadingAssetId, setLoadingAssetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const renameMutation = api.project.renameAsset.useMutation();
+  const deleteMutation = api.project.softDeleteAsset.useMutation();
 
   // Update active tab if defaultTab changes (for auto-opening audio)
   useEffect(() => {
@@ -77,6 +80,18 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     const id = setInterval(() => { refetch(); }, 10000);
     return () => clearInterval(id);
   }, [refetch]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
+    };
+    
+    if (openMenuId) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openMenuId]);
 
   const assets = useMemo(() => {
     const list = data?.assets || [];
@@ -101,6 +116,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   const handleRename = async (assetId: string, newName: string) => {
     if (!newName.trim()) return;
     
+    setLoadingAssetId(assetId);
     try {
       await renameMutation.mutateAsync({
         assetId,
@@ -111,6 +127,29 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     } catch (error) {
       console.error('Failed to rename asset:', error);
       toast.error('Failed to rename file');
+    } finally {
+      setLoadingAssetId(null);
+    }
+  };
+
+  const handleEditName = (assetId: string, currentName: string) => {
+    setEditingId(assetId);
+    setEditingName(currentName);
+    setOpenMenuId(null);
+  };
+
+  const handleDelete = async (assetId: string) => {
+    setLoadingAssetId(assetId);
+    try {
+      await deleteMutation.mutateAsync({ assetId });
+      await refetch();
+      toast.success('File deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete asset:', error);
+      toast.error('Failed to delete file');
+    } finally {
+      setLoadingAssetId(null);
+      setOpenMenuId(null);
     }
   };
 
@@ -226,7 +265,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                   {assets.map((a: any) => (
                   <div
                     key={a.id}
-                    className="group border rounded-lg overflow-hidden"
+                    className={`group border rounded-lg overflow-hidden relative ${loadingAssetId === a.id ? 'opacity-50' : ''}`}
                   >
                     <div
                       className="cursor-grab active:cursor-grabbing"
@@ -234,7 +273,11 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                       onDragStart={(e) => handleDragStart(e, a.url)}
                       onClick={() => handleClick(a.url)}
                     >
-                      {a.type === 'image' || a.type === 'logo' ? (
+                      {loadingAssetId === a.id ? (
+                        <div className="w-full h-28 flex items-center justify-center bg-gray-50">
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                        </div>
+                      ) : a.type === 'image' || a.type === 'logo' ? (
                         <img src={a.url} alt={a.originalName} className="w-full h-28 object-cover" />
                       ) : a.type === 'video' ? (
                         <video src={a.url} className="w-full h-28 object-cover" muted />
@@ -247,45 +290,90 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                         <div className="w-full h-28 flex items-center justify-center text-sm text-gray-600 bg-gray-50">File</div>
                       )}
                     </div>
-                    <div className="p-2 text-xs text-gray-600">
-                      {editingId === a.id ? (
-                        <input
-                          type="text"
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onBlur={() => {
-                            if (editingName !== (a.customName || a.originalName)) {
-                              handleRename(a.id, editingName);
-                            }
-                            setEditingId(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              if (editingName !== (a.customName || a.originalName)) {
-                                handleRename(a.id, editingName);
-                              }
-                              setEditingId(null);
-                            } else if (e.key === 'Escape') {
-                              setEditingId(null);
-                            }
-                          }}
-                          className="w-full px-1 border rounded outline-none focus:ring-1 focus:ring-orange-400"
-                          autoFocus
-                        />
-                      ) : (
-                        <span 
-                          className="block truncate cursor-text hover:text-gray-900" 
-                          title="Click to rename"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(a.id);
-                            setEditingName(a.customName || a.originalName);
-                          }}
-                        >
-                          {a.customName || a.originalName}
-                        </span>
-                      )}
-                    </div>
+                    
+                                         {/* Three dots menu button */}
+                     <div className="absolute top-1 right-1 opacity-50 hover:opacity-100 transition-opacity duration-200">
+                       <button
+                         className="w-6 h-6 bg-black/70 hover:bg-black/90 text-white rounded-full flex items-center justify-center transition-colors duration-200 cursor-pointer"
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           setOpenMenuId(openMenuId === a.id ? null : a.id);
+                         }}
+                         disabled={loadingAssetId === a.id}
+                       >
+                         <MoreVertical className="w-3 h-3" />
+                       </button>
+                       
+                       {/* Dropdown menu */}
+                       {openMenuId === a.id && (
+                         <div className="absolute top-8 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-32">
+                           <button
+                             className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-200"
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleEditName(a.id, a.customName || a.originalName);
+                             }}
+                           >
+                             <Edit className="w-3 h-3" />
+                             Edit name
+                           </button>
+                                                       <button
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 transition-colors duration-200 text-red-600"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(a.id);
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                         </div>
+                       )}
+                     </div>
+                                         <div className="p-2 text-xs text-gray-600">
+                       {loadingAssetId === a.id ? (
+                         <div className="flex items-center gap-2">
+                           <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
+                           <span className="text-gray-400">Processing...</span>
+                         </div>
+                       ) : editingId === a.id ? (
+                         <input
+                           type="text"
+                           value={editingName}
+                           onChange={(e) => setEditingName(e.target.value)}
+                           onBlur={() => {
+                             if (editingName !== (a.customName || a.originalName)) {
+                               handleRename(a.id, editingName);
+                             }
+                             setEditingId(null);
+                           }}
+                           onKeyDown={(e) => {
+                             if (e.key === 'Enter') {
+                               if (editingName !== (a.customName || a.originalName)) {
+                                 handleRename(a.id, editingName);
+                               }
+                               setEditingId(null);
+                             } else if (e.key === 'Escape') {
+                               setEditingId(null);
+                             }
+                           }}
+                           className="w-full px-1 border rounded outline-none focus:ring-1 focus:ring-orange-400"
+                           autoFocus
+                         />
+                       ) : (
+                         <span 
+                           className="block truncate cursor-text hover:text-gray-900" 
+                           title="Click to rename"
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             setEditingId(a.id);
+                             setEditingName(a.customName || a.originalName);
+                           }}
+                         >
+                           {a.customName || a.originalName}
+                         </span>
+                       )}
+                     </div>
                   </div>
                 ))}
                 </div>
