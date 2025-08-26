@@ -695,9 +695,11 @@ export default function ChatPanelG({
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
         const id = nanoid();
         setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
-        // Append either the custom name reference or URL to the message
-        const reference = name ? `use the ${name}` : url;
-        setMessage((prev) => prev ? `${prev}\n${reference}` : reference);
+        
+        if (name) {
+          const reference = `use the ${name}`;
+          setMessage((prev) => prev ? `${prev}\n${reference}` : reference);
+        }
       }
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
@@ -795,9 +797,16 @@ export default function ChatPanelG({
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+        
+        // Get the media name if available
+        const mediaName = e.dataTransfer.getData('media/name') || '';
+        
         const id = nanoid();
-        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
-        setMessage((prev) => prev ? `${prev}\n${url}` : url);
+        // Create a proper File object with the correct name
+        const fileName = mediaName || url.split('/').pop() || 'audio-file';
+        const file = new File([], fileName, { type: isAudio ? 'audio/mpeg' : isVideo ? 'video/mp4' : 'image/jpeg' });
+        
+        setUploadedImages((prev) => ([...prev, { id, file, status: 'uploaded', url, type, isLoaded: true }]));
       }
     } catch {}
     setIsDragOver(false);

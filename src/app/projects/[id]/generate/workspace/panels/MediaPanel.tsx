@@ -126,8 +126,9 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     return filtered;
   }, [data, filter, searchQuery]);
 
-  const handleDragStart = useCallback((e: React.DragEvent, url: string) => {
+  const handleDragStart = useCallback((e: React.DragEvent, url: string, asset: any) => {
     e.dataTransfer.setData('text/plain', url);
+    e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
   }, []);
 
   const handleClick = useCallback((url: string) => {
@@ -324,7 +325,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                     <div
                       className="cursor-grab active:cursor-grabbing"
                       draggable
-                      onDragStart={(e) => handleDragStart(e, a.url)}
+                      onDragStart={(e) => handleDragStart(e, a.url, a)}
                       onClick={() => handleClick(a.url)}
                     >
                       {loadingAssetId === a.id ? (
