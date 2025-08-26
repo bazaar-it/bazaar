@@ -3532,4 +3532,166 @@ export default function GeneratedScene() {
         },
       };
     }),
+
+  // Search for a project by ID - admin only (uses production database)
+  searchProject: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => {
+      // Get the project with all related data
+      const projectData = await db
+        .select({
+          id: projects.id,
+          name: projects.name,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+          userId: projects.userId,
+          music: projects.music,
+          shareLink: projects.shareLink,
+        })
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .limit(1);
+
+      if (!projectData[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      const project = projectData[0];
+
+      // Parse music field if it's a string
+      let parsedMusic = null;
+      if (project.music) {
+        try {
+          parsedMusic = typeof project.music === 'string' 
+            ? JSON.parse(project.music) 
+            : project.music;
+        } catch (e) {
+          console.warn('Failed to parse music field:', e);
+          parsedMusic = null;
+        }
+      }
+
+      // Get user info
+      const userData = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        })
+        .from(users)
+        .where(eq(users.id, project.userId))
+        .limit(1);
+
+      // Get all scenes
+      const projectScenes = await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.projectId, project.id))
+        .orderBy(asc(scenes.order));
+
+      // Get all messages
+      const projectMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.projectId, project.id))
+        .orderBy(asc(messages.createdAt));
+
+      return {
+        ...project,
+        music: parsedMusic,
+        user: userData[0] || null,
+        scenes: projectScenes,
+        messages: projectMessages,
+      };
+    }),
+
+  // Duplicate a project - admin only
+  duplicateProject: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get the original project
+      const originalProject = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .limit(1);
+
+      if (!originalProject[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Original project not found",
+        });
+      }
+
+      const original = originalProject[0];
+
+      // Create new project for the admin user
+      const newProjectId = crypto.randomUUID();
+      const newProject = await db
+        .insert(projects)
+        .values({
+          id: newProjectId,
+          name: `${original.name} (Copy)`,
+          userId: ctx.session.user.id, // Admin becomes the owner
+          music: original.music,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      if (!newProject[0]) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create new project",
+        });
+      }
+
+      // Get all scenes from original project
+      const originalScenes = await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.projectId, input.projectId))
+        .orderBy(asc(scenes.order));
+
+      // Duplicate all scenes
+      if (originalScenes.length > 0) {
+        const newScenes = originalScenes.map(scene => ({
+          id: crypto.randomUUID(),
+          projectId: newProjectId,
+          name: scene.name,
+          code: scene.code,
+          duration: scene.duration,
+          order: scene.order,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }));
+
+        await db.insert(scenes).values(newScenes);
+      }
+
+      // Copy initial messages (optional - you might want to skip user messages)
+      const originalMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.projectId, input.projectId))
+        .limit(2); // Just copy the first system message if exists
+
+      if (originalMessages.length > 0) {
+        const systemMessage = originalMessages.find(m => m.role === 'system');
+        if (systemMessage) {
+          await db.insert(messages).values({
+            id: crypto.randomUUID(),
+            projectId: newProjectId,
+            content: systemMessage.content,
+            role: 'system',
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      return newProject[0];
+    }),
 });
