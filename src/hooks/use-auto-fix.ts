@@ -5,7 +5,18 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
 import { toolsLogger } from '~/lib/utils/logger';
-import { autofixMetrics, logAutofixEvent } from '~/lib/utils/autofix-metrics';
+// Session ID generation for tracking
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server-session';
+  
+  // Check if we already have a session ID
+  let sessionId = sessionStorage.getItem('autofix-session-id');
+  if (!sessionId) {
+    sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem('autofix-session-id', sessionId);
+  }
+  return sessionId;
+};
 
 interface Scene {
   id: string;
@@ -31,6 +42,20 @@ const CIRCUIT_BREAKER_THRESHOLD = 5; // Number of consecutive failures to trip
 const CIRCUIT_BREAKER_RESET_MS = 120000; // 2 minutes to reset after tripping
 
 export function useAutoFix(projectId: string, scenes: Scene[]) {
+  // API mutations for metrics
+  const saveMetricMutation = api.admin.saveAutofixMetric.useMutation();
+  const updateSessionMutation = api.admin.updateAutofixSession.useMutation();
+  
+  // Session tracking
+  const sessionId = getSessionId();
+  const sessionMetrics = useRef({
+    totalErrors: 0,
+    uniqueErrors: new Set<string>(),
+    successfulFixes: 0,
+    failedFixes: 0,
+    totalApiCalls: 0,
+    totalCost: 0,
+  });
   // 🛑 EMERGENCY KILL SWITCH CHECK
   const isKillSwitchEnabled = () => {
     // Check hardcoded constant first
@@ -170,8 +195,44 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     }
     
     const startTime = Date.now();
-    const recordCompletion = autofixMetrics.recordFixAttempt(sceneId, errorDetails.errorMessage, startTime);
-    logAutofixEvent('FIX_ATTEMPT_START', { sceneId, attemptNumber, errorMessage: errorDetails.errorMessage });
+    // Record fix attempt start in database
+    const recordMetric = async (success: boolean, strategy?: string) => {
+      const fixDuration = Date.now() - startTime;
+      
+      // Save metric to database
+      await saveMetricMutation.mutateAsync({
+        projectId,
+        sceneId,
+        errorMessage: errorDetails.errorMessage,
+        errorType: errorDetails.errorType,
+        errorSignature: getErrorSignature(sceneId, errorDetails.errorMessage),
+        fixAttemptNumber: attemptNumber,
+        fixStrategy: strategy || 'progressive',
+        fixSuccess: success,
+        fixDurationMs: fixDuration,
+        apiCallsCount: 1,
+        estimatedCost: 0.003, // Rough estimate
+        sessionId,
+        userAgent: navigator?.userAgent,
+      });
+      
+      // Update session metrics
+      if (success) {
+        sessionMetrics.current.successfulFixes++;
+      } else {
+        sessionMetrics.current.failedFixes++;
+      }
+      sessionMetrics.current.totalApiCalls++;
+      sessionMetrics.current.totalCost += 0.003;
+      
+      // Update session in database
+      await updateSessionMutation.mutateAsync({
+        sessionId,
+        projectId,
+        ...sessionMetrics.current,
+        uniqueErrors: sessionMetrics.current.uniqueErrors.size,
+      });
+    };
 
     // Progressive fix prompts based on attempt number
     let fixPrompt: string;
@@ -231,9 +292,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
           // Success - remove from queue
           autoFixQueueRef.current.delete(sceneId);
           
-          // Record success metrics
-          recordCompletion(true);
-          logAutofixEvent('FIX_SUCCESS', { sceneId, attemptNumber });
+          // Record success metrics to database
+          await recordMetric(true, 'progressive');
           
           // Dispatch success event for PreviewPanel
           const successEvent = new CustomEvent('scene-fixed', {
@@ -269,8 +329,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       if (DEBUG_AUTOFIX) {
         toolsLogger.error('[SILENT FIX] All API retries failed', lastError as Error);
       }
-      recordCompletion(false);
-      logAutofixEvent('FIX_FAILED', { sceneId, attemptNumber, error: String(lastError) });
+      // Record failure to database
+      await recordMetric(false, 'progressive');
       throw lastError; // Re-throw for the outer retry logic in processAutoFixQueue
     }
     
@@ -336,14 +396,14 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       
       // Enter cooldown
       setIsInCooldown(true);
-      autofixMetrics.recordCooldownTriggered();
-      logAutofixEvent('COOLDOWN_TRIGGERED', { fixCount: recentHistory.length });
+      // Log cooldown in console for debugging
+      console.log('[AutoFix] Cooldown triggered', { fixCount: recentHistory.length });
       setTimeout(() => {
         setIsInCooldown(false);
         if (DEBUG_AUTOFIX) {
           toolsLogger.info('[SILENT FIX] Cooldown period ended');
         }
-        logAutofixEvent('COOLDOWN_ENDED');
+        console.log('[AutoFix] Cooldown ended');
       }, COOLDOWN_PERIOD_MS);
       
       // Clear all queued fixes to prevent further attempts
@@ -414,8 +474,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
             toolsLogger.error(`[SILENT FIX] 🔴 Circuit breaker TRIPPED after ${newCount} consecutive failures!`);
           }
           setCircuitBreakerTrippedAt(Date.now());
-          autofixMetrics.recordCircuitBreakerTrip();
-          logAutofixEvent('CIRCUIT_BREAKER_TRIPPED', { consecutiveFailures: newCount });
+          // Record circuit breaker trip to database
+          await updateSessionMutation.mutateAsync({
+            sessionId,
+            projectId,
+            circuitBreakerTripped: true,
+          });
+          console.log('[AutoFix] Circuit breaker tripped', { consecutiveFailures: newCount });
           
           // Clear the entire queue when circuit breaker trips
           autoFixQueueRef.current.clear();
@@ -455,7 +520,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       if (DEBUG_AUTOFIX) {
         toolsLogger.warn('[SILENT FIX] 🛑 KILL SWITCH ACTIVE - Auto-fix disabled');
       }
-      logAutofixEvent('KILL_SWITCH_ACTIVE', { reason: 'Auto-fix disabled via kill switch' });
+      console.log('[AutoFix] Kill switch active');
       return;
     }
     
@@ -475,23 +540,30 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
           eventProject: projectId
         });
       }
-      autofixMetrics.recordCrossProjectIgnored();
-      logAutofixEvent('CROSS_PROJECT_IGNORED', { currentProject: currentProjectIdRef.current, eventProject: projectId });
+      console.log('[AutoFix] Cross-project event ignored', { 
+        currentProject: currentProjectIdRef.current, 
+        eventProject: projectId 
+      });
       return;
     }
     
     // Add comprehensive event validation
     if (!event?.detail) {
       toolsLogger.error('[SILENT FIX] Invalid error event: missing detail property');
-      logAutofixEvent('ERROR_INVALID_EVENT', { reason: 'missing detail' });
+      console.warn('[AutoFix] Invalid event - missing detail');
       return;
     }
     
     const { sceneId, sceneName, error } = event.detail;
     
     // Track error detection
-    autofixMetrics.recordErrorDetected(sceneId, error?.message || String(error));
-    logAutofixEvent('ERROR_DETECTED', { sceneId, sceneName, error: error?.message });
+    // Track error detection in session
+    sessionMetrics.current.totalErrors++;
+    sessionMetrics.current.uniqueErrors.add(getErrorSignature(sceneId, error?.message || String(error)));
+    
+    if (DEBUG_AUTOFIX) {
+      console.log('[AutoFix] Error detected', { sceneId, sceneName, error: error?.message });
+    }
     
     // Validate required fields
     if (!sceneId || typeof sceneId !== 'string') {
@@ -518,8 +590,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
           errorSignature 
         });
       }
-      autofixMetrics.recordDuplicateIgnored();
-      logAutofixEvent('DUPLICATE_ERROR_IGNORED', { sceneId, errorSignature });
+      if (DEBUG_AUTOFIX) {
+        console.log('[AutoFix] Duplicate error ignored', { sceneId, errorSignature });
+      }
       return;
     }
     
@@ -533,8 +606,12 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
           minRequired: MIN_TIME_BETWEEN_FIXES_MS 
         });
       }
-      autofixMetrics.recordRateLimited();
-      logAutofixEvent('RATE_LIMITED', { timeSinceLastFix, minRequired: MIN_TIME_BETWEEN_FIXES_MS });
+      if (DEBUG_AUTOFIX) {
+        console.log('[AutoFix] Rate limited', { 
+          timeSinceLastFix, 
+          minRequired: MIN_TIME_BETWEEN_FIXES_MS 
+        });
+      }
       return;
     }
     
@@ -660,8 +737,19 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     lastFixAttemptTime.current = 0;
     
     // Track project switch in metrics
-    autofixMetrics.recordProjectSwitch();
-    logAutofixEvent('PROJECT_SWITCH', { projectId });
+    // Start new session for new project
+    sessionMetrics.current = {
+      totalErrors: 0,
+      uniqueErrors: new Set<string>(),
+      successfulFixes: 0,
+      failedFixes: 0,
+      totalApiCalls: 0,
+      totalCost: 0,
+    };
+    
+    if (DEBUG_AUTOFIX) {
+      console.log('[AutoFix] Project switch', { projectId });
+    }
     
     if (DEBUG_AUTOFIX) {
       toolsLogger.debug('[SILENT FIX] Setting up event listeners for new project', {
@@ -750,29 +838,20 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     };
   }, [projectId, handlePreviewError, handleSceneDeleted, handleSceneFixed]); // Include stable handlers in deps
 
-  // Add a manual trigger for debugging and metrics viewing
+  // Add a manual trigger for debugging
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Expose metrics report function
-      (window as any).getAutofixReport = () => {
-        const report = autofixMetrics.getReport();
-        const comparison = autofixMetrics.compareWithBaseline();
-        console.log('=== AUTOFIX METRICS REPORT ===');
-        console.log('Summary:', report.summary);
-        console.log('Performance:', report.performance);
-        console.log('Reliability:', report.reliability);
-        console.log('Top Errors:', report.topErrors);
-        console.log('\n=== IMPROVEMENT vs BASELINE ===');
-        console.log('Improvements:', comparison.improvements);
-        console.log('Baseline:', comparison.baseline);
-        console.log('Current:', comparison.current);
-        return { report, comparison };
-      };
-      
-      // Expose metrics reset
-      (window as any).resetAutofixMetrics = () => {
-        autofixMetrics.reset();
-        console.log('Autofix metrics reset!');
+      // Expose session metrics for debugging
+      (window as any).getAutofixSession = () => {
+        console.log('=== AUTOFIX SESSION METRICS ===');
+        console.log('Session ID:', sessionId);
+        console.log('Total Errors:', sessionMetrics.current.totalErrors);
+        console.log('Unique Errors:', sessionMetrics.current.uniqueErrors.size);
+        console.log('Successful Fixes:', sessionMetrics.current.successfulFixes);
+        console.log('Failed Fixes:', sessionMetrics.current.failedFixes);
+        console.log('API Calls:', sessionMetrics.current.totalApiCalls);
+        console.log('Estimated Cost:', `$${sessionMetrics.current.totalCost.toFixed(4)}`);
+        return sessionMetrics.current;
       };
       
       // Expose kill switch controls
@@ -806,16 +885,6 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         }
         
         return { isActive, hardcoded, localStorage, maxZero };
-      };
-      
-      // Expose logs viewer
-      (window as any).getAutofixLogs = () => {
-        const logs = JSON.parse(sessionStorage.getItem('autofix-logs') || '[]');
-        console.log(`=== AUTOFIX EVENT LOGS (${logs.length} events) ===`);
-        logs.slice(-20).forEach((log: any) => {
-          console.log(`${log.timestamp} - ${log.event}`, log.data || '');
-        });
-        return logs;
       };
       
       // Keep the manual trigger
