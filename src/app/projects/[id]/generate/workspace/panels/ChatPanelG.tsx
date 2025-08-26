@@ -14,6 +14,7 @@ import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
+import { type DraftAttachment } from "~/stores/videoState";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
@@ -49,15 +50,44 @@ interface ChatPanelGProps {
   userId?: string;
 }
 
+// Helper functions to convert between UploadedMedia and DraftAttachment
+const convertToDraftAttachment = (media: UploadedMedia): DraftAttachment => ({
+  id: media.id,
+  status: media.status,
+  url: media.url,
+  error: media.error,
+  type: media.type,
+  isLoaded: media.isLoaded,
+  duration: media.duration,
+  name: media.file.name,
+  fileName: media.file.name,
+  fileSize: media.file.size,
+  mimeType: media.file.type,
+});
+
+const convertFromDraftAttachment = (draft: DraftAttachment): UploadedMedia => ({
+  id: draft.id,
+  file: new File([], draft.fileName || 'file', { type: draft.mimeType || 'application/octet-stream' }),
+  status: draft.status,
+  url: draft.url,
+  error: draft.error,
+  type: draft.type,
+  isLoaded: draft.isLoaded,
+  duration: draft.duration,
+});
+
 export default function ChatPanelG({
   projectId,
   selectedSceneId,
   onSceneGenerated,
   userId,
 }: ChatPanelGProps) {
-  // Get draft message from store to persist across panel changes
+  // Get draft message and attachments from store to persist across panel changes
   const draftMessage = useVideoState((state) => state.getDraftMessage(projectId));
+  const draftAttachments = useVideoState((state) => state.getDraftAttachments(projectId));
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
+  const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
+  const clearDraft = useVideoState((state) => state.clearDraft);
   const [message, setMessage] = useState(draftMessage);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
@@ -76,8 +106,10 @@ export default function ChatPanelG({
   const inputRef = useRef<HTMLInputElement>(null);
   
   
-  // 🚨 NEW: State for media uploads
-  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
+  // Use draft attachments from VideoState instead of local state
+  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>(
+    draftAttachments.map(convertFromDraftAttachment)
+  );
   const [selectedIcons, setSelectedIcons] = useState<string[]>([]); // Track selected icons
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -420,6 +452,7 @@ export default function ChatPanelG({
     setMessage("");
     setDraftMessage(projectId, ""); // Clear draft in store too
     setUploadedImages([]);
+    setDraftAttachments(projectId, []); // Clear draft attachments in store too
     setSelectedIcons([]); // Clear icon previews after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
@@ -593,6 +626,9 @@ export default function ChatPanelG({
   const handleEditScenePlan = useCallback((prompt: string) => {
     setMessage(prompt);
     setDraftMessage(projectId, prompt); // Sync with store
+    // Clear attachments when editing scene plan
+    setUploadedImages([]);
+    setDraftAttachments(projectId, []);
     // Focus the textarea after setting the message
     setTimeout(() => {
       if (textareaRef.current) {
@@ -602,7 +638,7 @@ export default function ChatPanelG({
         textareaRef.current.setSelectionRange(length, length);
       }
     }, 50);
-  }, [projectId, setDraftMessage]);
+  }, [projectId, setDraftMessage, setDraftAttachments]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -623,6 +659,12 @@ export default function ChatPanelG({
   useEffect(() => {
     adjustTextareaHeight();
   }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
+
+  // Sync draft attachments with VideoState
+  useEffect(() => {
+    const draftAttachments = uploadedImages.map(convertToDraftAttachment);
+    setDraftAttachments(projectId, draftAttachments);
+  }, [uploadedImages, projectId, setDraftAttachments]);
 
   // Auto-focus textarea after generation completes
   useEffect(() => {
@@ -843,13 +885,14 @@ export default function ChatPanelG({
 
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
-    // Restore draft message from store
+    // Restore draft message and attachments from store
     const draft = useVideoState.getState().getDraftMessage(projectId);
+    const draftAttachments = useVideoState.getState().getDraftAttachments(projectId);
     setMessage(draft);
     setIsGenerating(false);
     setGenerationPhase('thinking');
     setGenerationComplete(false);
-    setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
+    setUploadedImages(draftAttachments.map(convertFromDraftAttachment)); // Restore draft attachments when switching projects
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
