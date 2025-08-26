@@ -403,7 +403,7 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 90,
     complexity: 'complex',
     primaryUse: 'Mobile app demonstrations and showcases',
-    similarTo: ['DualScreenApp', 'AppJiggle', 'AppDownload', 'FintechUI']
+    similarTo: ['DualScreenApp', 'AppDownload']
   },
 
   'DualScreenApp': {
@@ -431,36 +431,7 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 180,
     complexity: 'complex',
     primaryUse: 'Dual screen app comparison',
-    similarTo: ['MobileApp', 'AppJiggle', 'FintechUI']
-  },
-
-  'FintechUI': {
-    id: 'FintechUI',
-    name: 'FintechUI',
-    keywords: ['fintech', 'finance', 'dashboard', 'charts', 'banking', 'money', 'crypto', 'trading'],
-    descriptions: [
-      'Financial technology interface',
-      'Banking dashboard animation',
-      'Trading platform UI'
-    ],
-    userPhrases: [
-      'finance dashboard',
-      'banking app',
-      'crypto interface',
-      'trading platform',
-      'financial ui',
-      'money app'
-    ],
-    categories: ['ui-demo', 'finance', 'dashboard', 'data-viz'],
-    styles: ['professional', 'corporate', 'trustworthy', 'modern'],
-    useCases: ['fintech-products', 'banking', 'crypto', 'trading', 'dashboards'],
-    animations: ['count-up', 'slide', 'fade', 'chart-grow'],
-    elements: ['charts', 'numbers', 'cards', 'graphs'],
-    colors: ['blue', 'green', 'white', 'professional'],
-    duration: 240,
-    complexity: 'complex',
-    primaryUse: 'Financial technology interface demo',
-    similarTo: ['GrowthGraph', 'TeslaStockGraph', 'MobileApp']
+    similarTo: ['MobileApp']
   },
 
   'PromptUI': {
@@ -519,42 +490,10 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 120,
     complexity: 'simple',
     primaryUse: 'Interactive cursor demonstration',
-    similarTo: ['Keyboard', 'AppJiggle', 'PromptUI']
+    similarTo: ['Keyboard', 'PromptUI']
   },
 
   // Data Visualization Templates
-  'GrowthGraph': {
-    id: 'GrowthGraph',
-    name: 'GrowthGraph',
-    keywords: ['graph', 'chart', 'growth', 'data', 'analytics', 'statistics', 'bar', 'visualization', 'metrics', 'performance'],
-    descriptions: [
-      'Animated bar graph showing growth',
-      'Data visualization with spring animations',
-      'Statistics chart with smooth animations'
-    ],
-    userPhrases: [
-      'growth chart',
-      'animate statistics',
-      'data visualization',
-      'performance metrics',
-      'bar graph animation',
-      'show analytics',
-      'revenue growth',
-      'success metrics',
-      'business growth'
-    ],
-    categories: ['data-viz', 'charts', 'analytics', 'business'],
-    styles: ['professional', 'clean', 'corporate', 'informative'],
-    useCases: ['reports', 'presentations', 'dashboards', 'pitch-decks', 'earnings'],
-    animations: ['grow', 'spring', 'fade', 'count-up'],
-    elements: ['bars', 'labels', 'grid', 'values', 'axes'],
-    colors: ['blue', 'green', 'gradient', 'corporate'],
-    duration: 180,
-    complexity: 'medium',
-    primaryUse: 'Business metrics and growth visualization',
-    similarTo: ['TeslaStockGraph', 'FintechUI', 'AudioAnimation']
-  },
-
   'TeslaStockGraph': {
     id: 'TeslaStockGraph',
     name: 'TeslaStockGraph',
@@ -581,7 +520,7 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 240,
     complexity: 'medium',
     primaryUse: 'Stock market data visualization',
-    similarTo: ['GrowthGraph', 'FintechUI']
+    similarTo: ['AudioAnimation']
   },
 
   // Code/Tech Templates
@@ -841,34 +780,6 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
   },
 
   // App-specific Templates
-  'AppJiggle': {
-    id: 'AppJiggle',
-    name: 'AppJiggle',
-    keywords: ['app', 'jiggle', 'shake', 'icon', 'delete', 'ios'],
-    descriptions: [
-      'iOS app jiggle animation',
-      'App deletion mode',
-      'Icon shake effect'
-    ],
-    userPhrases: [
-      'app jiggle',
-      'ios delete mode',
-      'shaking icons',
-      'app wiggle',
-      'delete apps animation'
-    ],
-    categories: ['mobile', 'ios', 'interaction'],
-    styles: ['ios', 'playful', 'interactive'],
-    useCases: ['app-management', 'ios-demos', 'tutorials'],
-    animations: ['jiggle', 'shake', 'rotate'],
-    elements: ['app-icons', 'delete-badge'],
-    colors: ['ios-colors'],
-    duration: 180,
-    complexity: 'simple',
-    primaryUse: 'iOS app management demonstration',
-    similarTo: ['MobileApp', 'AppDownload']
-  },
-
   'AppDownload': {
     id: 'AppDownload',
     name: 'AppDownload',
@@ -894,7 +805,7 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 120,
     complexity: 'simple',
     primaryUse: 'App download progress animation',
-    similarTo: ['AppJiggle', 'MobileApp']
+    similarTo: ['MobileApp']
   },
 
   // Background Color Templates
@@ -1012,7 +923,7 @@ export const templateMetadata: Record<string, TemplateMetadata> = {
     duration: 300,
     complexity: 'medium',
     primaryUse: 'Airbnb-style property listing and booking demo',
-    similarTo: ['FintechUI', 'MobileApp', 'DualScreenApp']
+    similarTo: ['MobileApp', 'DualScreenApp']
   }
 };
 
