@@ -474,8 +474,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
             toolsLogger.error(`[SILENT FIX] 🔴 Circuit breaker TRIPPED after ${newCount} consecutive failures!`);
           }
           setCircuitBreakerTrippedAt(Date.now());
-          // Record circuit breaker trip to database
-          await updateSessionMutation.mutateAsync({
+          // Record circuit breaker trip to database (fire and forget)
+          updateSessionMutation.mutate({
             sessionId,
             projectId,
             circuitBreakerTripped: true,
