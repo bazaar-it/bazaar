@@ -1684,3 +1684,102 @@ export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ 
     references: [users.id],
   }),
 }))
+
+// Auto-fix metrics table for tracking error corrections
+export const autofixMetrics = createTable("autofix_metrics", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  sceneId: d.uuid("scene_id")
+    .references(() => scenes.id, { onDelete: "cascade" }),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Error information
+  errorMessage: d.text("error_message").notNull(),
+  errorType: d.varchar("error_type", { length: 100 }), // 'compilation', 'runtime', 'timeout', etc.
+  errorSignature: d.varchar("error_signature", { length: 255 }), // Hash for deduplication
+  
+  // Fix attempt details
+  fixAttemptNumber: d.integer("fix_attempt_number").notNull().default(1),
+  fixStrategy: d.varchar("fix_strategy", { length: 50 }), // 'minimal', 'comprehensive', 'rewrite'
+  fixSuccess: d.boolean("fix_success").notNull().default(false),
+  fixDurationMs: d.integer("fix_duration_ms"),
+  
+  // Cost tracking
+  apiCallsCount: d.integer("api_calls_count").default(0),
+  estimatedCost: d.real("estimated_cost"),
+  
+  // Metadata
+  sessionId: d.varchar("session_id", { length: 100 }),
+  userAgent: d.text("user_agent"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("autofix_project_idx").on(t.projectId),
+  index("autofix_user_idx").on(t.userId),
+  index("autofix_scene_idx").on(t.sceneId),
+  index("autofix_created_idx").on(t.createdAt),
+  index("autofix_signature_idx").on(t.errorSignature),
+  index("autofix_session_idx").on(t.sessionId),
+])
+
+// Auto-fix session summaries for aggregated metrics
+export const autofixSessions = createTable("autofix_sessions", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  sessionId: d.varchar("session_id", { length: 100 }).notNull().unique(),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: d.uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" }),
+  
+  // Session metrics
+  totalErrors: d.integer("total_errors").notNull().default(0),
+  uniqueErrors: d.integer("unique_errors").notNull().default(0),
+  successfulFixes: d.integer("successful_fixes").notNull().default(0),
+  failedFixes: d.integer("failed_fixes").notNull().default(0),
+  totalApiCalls: d.integer("total_api_calls").notNull().default(0),
+  totalCost: d.real("total_cost"),
+  
+  // Circuit breaker state
+  circuitBreakerTripped: d.boolean("circuit_breaker_tripped").default(false),
+  killSwitchActivated: d.boolean("kill_switch_activated").default(false),
+  
+  // Timestamps
+  startedAt: d.timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: d.timestamp("ended_at", { withTimezone: true }),
+}), (t) => [
+  index("autofix_session_user_idx").on(t.userId),
+  index("autofix_session_project_idx").on(t.projectId),
+  index("autofix_session_started_idx").on(t.startedAt),
+])
+
+// Relations for auto-fix metrics
+export const autofixMetricsRelations = relations(autofixMetrics, ({ one }) => ({
+  project: one(projects, {
+    fields: [autofixMetrics.projectId],
+    references: [projects.id],
+  }),
+  scene: one(scenes, {
+    fields: [autofixMetrics.sceneId],
+    references: [scenes.id],
+  }),
+  user: one(users, {
+    fields: [autofixMetrics.userId],
+    references: [users.id],
+  }),
+}))
+
+export const autofixSessionsRelations = relations(autofixSessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [autofixSessions.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [autofixSessions.projectId],
+    references: [projects.id],
+  }),
+  metrics: many(autofixMetrics),
+}))
