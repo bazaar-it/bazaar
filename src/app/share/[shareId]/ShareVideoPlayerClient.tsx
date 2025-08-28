@@ -10,6 +10,7 @@ import { LoopToggle } from '~/components/ui/LoopToggle';
 
 interface ShareVideoPlayerClientProps {
   inputProps: InputProps;
+  audio?: any;
   isLooping: boolean;
   setIsLooping: (value: boolean) => void;
 }
@@ -80,12 +81,28 @@ const DynamicScene: React.FC<{ code: string; sceneProps: any }> = ({ code, scene
     return <Component {...sceneProps} />;
 };
 
-export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLooping }: ShareVideoPlayerClientProps) {
+export default function ShareVideoPlayerClient({ inputProps, audio, isLooping, setIsLooping }: ShareVideoPlayerClientProps) {
+  
+  // Set audio in window for Remotion compositions to access
+  useEffect(() => {
+    if (audio) {
+      (window as any).projectAudio = audio;
+      console.log('[ShareVideoPlayerClient] Audio set in window:', audio);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if ((window as any).projectAudio) {
+        delete (window as any).projectAudio;
+      }
+    };
+  }, [audio]);
   
   console.log('[ShareVideoPlayerClient] Rendering with inputProps:', {
     sceneCount: inputProps?.scenes?.length || 0,
     duration: inputProps?.meta?.duration || 0,
-    title: inputProps?.meta?.title || 'Untitled'
+    title: inputProps?.meta?.title || 'Untitled',
+    hasAudio: !!audio
   });
 
   // Validate inputProps
@@ -136,7 +153,7 @@ export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLoo
         
         <Player
           component={composition}
-          inputProps={{ scenes: inputProps.scenes }}
+          inputProps={{ scenes: inputProps.scenes, audio }}
           durationInFrames={totalDuration}
           compositionWidth={width}
           compositionHeight={height}
@@ -144,16 +161,44 @@ export default function ShareVideoPlayerClient({ inputProps, isLooping, setIsLoo
           style={{
             width: '100%',
             height: '100%',
+            aspectRatio: `${width} / ${height}`,
           }}
           controls
           showVolumeControls
           doubleClickToFullscreen
           clickToPlay
           loop={isLooping}
-          autoPlay={true}
+          autoPlay={false}
+          allowFullscreen
           renderLoading={() => (
-            <AbsoluteFill style={{backgroundColor: '#1a202c', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem'}}>
-              Loading Video...
+            <AbsoluteFill style={{
+              backgroundColor: '#1a202c', 
+              color: 'white', 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              fontSize: '1.5rem'
+            }}>
+              <div className="flex flex-col items-center">
+                <div className="animate-pulse">Loading HD Video...</div>
+                {audio && <div className="text-sm mt-2 opacity-70">Preparing audio track...</div>}
+              </div>
+            </AbsoluteFill>
+          )}
+          errorFallback={({ error }) => (
+            <AbsoluteFill style={{
+              backgroundColor: '#991b1b',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '2rem',
+              fontSize: '1rem'
+            }}>
+              <div className="text-center">
+                <div className="font-bold mb-2">Error loading video</div>
+                <div className="text-sm opacity-90">{error?.message || 'Unknown error'}</div>
+              </div>
             </AbsoluteFill>
           )}
         />

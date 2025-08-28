@@ -18,6 +18,7 @@ interface SharePageContentProps {
   viewCount: number;
   createdAt: Date;
   shareUrl: string;
+  audio?: any;
 }
 
 export default function SharePageContent({
@@ -27,6 +28,7 @@ export default function SharePageContent({
   viewCount,
   createdAt,
   shareUrl,
+  audio,
 }: SharePageContentProps) {
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video'); // Default to looping entire video
 
@@ -35,6 +37,7 @@ export default function SharePageContent({
       <div className="p-6 md:p-8">
         <ShareVideoPlayerClient 
           inputProps={inputProps} 
+          audio={audio}
           isLooping={loopState !== 'off'}
           setIsLooping={(isLooping) => setLoopState(isLooping ? 'video' : 'off')}
         />

@@ -104,6 +104,7 @@ export const shareRouter = createTRPCRouter({
               id: true,
               title: true,
               props: true,
+              audio: true,
             },
             with: {
               scenes: {
@@ -190,7 +191,8 @@ export const shareRouter = createTRPCRouter({
         project: {
             id: sharedVideo.project.id,
             title: sharedVideo.project.title,
-            inputProps: projectInputProps 
+            inputProps: projectInputProps,
+            audio: sharedVideo.project.audio
         }
       };
     }),
