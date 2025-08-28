@@ -128,8 +128,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for persisting duration changes
   const updateSceneDurationMutation = api.scenes.updateSceneDuration.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('[Timeline] Scene duration persisted to database');
+      // Invalidate iterations query to ensure restore button updates
+      await utils.generation.getBatchMessageIterations.invalidate();
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene duration:', error);

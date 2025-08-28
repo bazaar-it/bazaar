@@ -150,12 +150,18 @@ export default function ChatPanelG({
     { messageIds },
     { 
       enabled: messageIds.length > 0,
-      staleTime: 60000, // Cache for 1 minute
+      staleTime: 0, // Always fetch fresh data to ensure restore button shows immediately
+      refetchInterval: false, // Don't poll, but always get fresh data on mount/invalidation
     }
   );
 
   // ✅ CORRECT: Use the generation endpoint that goes through Brain Orchestrator
-  const generateSceneMutation = api.generation.generateScene.useMutation();
+  const generateSceneMutation = api.generation.generateScene.useMutation({
+    onSettled: async () => {
+      // Invalidate iterations query after any scene operation to ensure restore button appears
+      await utils.generation.getBatchMessageIterations.invalidate();
+    }
+  });
 
   // Auto-scroll function
   const scrollToBottom = useCallback(() => {
@@ -624,34 +630,124 @@ export default function ChatPanelG({
     adjustTextareaHeight();
   }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
+  // Robust focus management that works across environments
+  const focusTextarea = useCallback(() => {
+    if (!textareaRef.current) return false;
+    
+    const element = textareaRef.current;
+    
+    // Check if element can receive focus
+    if (element.disabled || element.readOnly) return false;
+    
+    // Check if already focused
+    if (document.activeElement === element) return true;
+    
+    // Check if another input/textarea has focus (don't steal focus from other inputs)
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      if (activeEl !== element) return false;
+    }
+    
+    try {
+      // Use preventScroll to avoid jarring jumps
+      element.focus({ preventScroll: true });
+      
+      // Verify focus was successful
+      if (document.activeElement === element) {
+        // Move cursor to end
+        const length = element.value.length;
+        element.setSelectionRange(length, length);
+        return true;
+      }
+    } catch (e) {
+      // Focus might fail in some browsers/situations
+      console.debug('Focus failed:', e);
+    }
+    
+    return false;
+  }, []);
+
   // Auto-focus textarea after generation completes
   useEffect(() => {
     if (generationComplete && textareaRef.current) {
-      setTimeout(() => {
-        textareaRef.current?.focus();
-        // Place cursor at end if there's existing text
-        const length = textareaRef.current?.value.length || 0;
-        textareaRef.current?.setSelectionRange(length, length);
-        // Reset the flag
-        setGenerationComplete(false);
-      }, 100);
+      let attempts = 0;
+      const maxAttempts = 5;
+      let rafId: number;
+      let timeoutId: NodeJS.Timeout;
+      
+      const attemptFocus = () => {
+        attempts++;
+        
+        if (focusTextarea() || attempts >= maxAttempts) {
+          // Success or max attempts reached
+          setGenerationComplete(false);
+          return;
+        }
+        
+        // Try again with exponential backoff
+        const delay = Math.min(50 * Math.pow(2, attempts - 1), 500);
+        timeoutId = setTimeout(attemptFocus, delay);
+      };
+      
+      // Start with requestAnimationFrame to align with browser paint
+      rafId = requestAnimationFrame(() => {
+        attemptFocus();
+      });
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(timeoutId);
+      };
     }
-  }, [generationComplete]);
+  }, [generationComplete, focusTextarea]);
 
   // Also refocus when isGenerating changes from true to false
   useEffect(() => {
     if (!isGenerating && textareaRef.current) {
-      // Small delay to let React finish rendering
-      const timeoutId = setTimeout(() => {
-        if (!document.activeElement || 
-            document.activeElement === document.body ||
-            document.activeElement.tagName === 'BODY') {
-          textareaRef.current?.focus();
+      let rafId: number;
+      let timeoutIds: NodeJS.Timeout[] = [];
+      
+      // Multi-strategy approach for maximum compatibility
+      const strategies = [
+        { delay: 0, method: 'immediate' },      // Try immediately
+        { delay: 0, method: 'microtask' },      // After microtask queue
+        { delay: 16, method: 'frame' },         // After ~1 frame (60fps)
+        { delay: 100, method: 'short' },        // Short delay
+        { delay: 300, method: 'medium' },       // Medium delay (original)
+      ];
+      
+      const tryFocus = () => {
+        // Only try to focus if nothing else important has focus
+        const activeEl = document.activeElement;
+        const shouldFocus = !activeEl || 
+                           activeEl === document.body ||
+                           activeEl.tagName === 'BODY';
+        
+        if (shouldFocus) {
+          focusTextarea();
         }
-      }, 200);
-      return () => clearTimeout(timeoutId);
+      };
+      
+      // Execute strategies
+      strategies.forEach(({ delay, method }) => {
+        if (method === 'immediate') {
+          tryFocus();
+        } else if (method === 'microtask') {
+          Promise.resolve().then(tryFocus);
+        } else if (method === 'frame') {
+          rafId = requestAnimationFrame(tryFocus);
+        } else {
+          const id = setTimeout(tryFocus, delay);
+          timeoutIds.push(id);
+        }
+      });
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        timeoutIds.forEach(clearTimeout);
+      };
     }
-  }, [isGenerating]);
+  }, [isGenerating, focusTextarea]);
 
 
   // Create media upload handlers

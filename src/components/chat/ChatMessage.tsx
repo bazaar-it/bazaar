@@ -130,7 +130,8 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
     { messageId: message.id! },
     { 
       enabled: hasIterationsProp === undefined && !message.isUser && !!message.id && !!projectId,
-      staleTime: 60000, // Cache for 1 minute
+      staleTime: 0, // Always fetch fresh data to ensure restore button shows immediately
+      refetchInterval: false, // Don't poll, but always get fresh data on mount
     }
   );
   

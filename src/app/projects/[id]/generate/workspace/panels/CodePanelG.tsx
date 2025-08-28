@@ -152,9 +152,12 @@ export function CodePanelG({
 
   // Save code mutation
   const saveCodeMutation = api.scenes.updateSceneCode.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Code saved successfully!");
       setIsSaving(false);
+      
+      // Invalidate iterations query to ensure restore button updates
+      await utils.generation.getBatchMessageIterations.invalidate();
       
       // 🚨 CRITICAL FIX: Use updateAndRefresh instead of updateScene to trigger proper video refresh
       if (selectedScene) {
@@ -202,12 +205,13 @@ export function CodePanelG({
 
   // Add scene mutation - use chat generation
   const addSceneMutation = api.generation.generateScene.useMutation({
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       toast.success("Scene added successfully!");
       
       // Invalidate caches to refresh scenes
-      utils.generation.getProjectScenes.invalidate({ projectId });
-      utils.chat.getMessages.invalidate({ projectId });
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      await utils.chat.getMessages.invalidate({ projectId });
+      await utils.generation.getBatchMessageIterations.invalidate();
       
       // Update VideoState store immediately to ensure scene is available
       if (result.data) {
