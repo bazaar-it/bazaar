@@ -449,6 +449,13 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         description: string;
       }>;
     };
+    storyboardContext?: Array<{  // ALL existing scenes for consistency
+      id: string;
+      name: string;
+      duration: number;
+      order: number;
+      tsxCode: string;
+    }>;
     promptVersion?: "original" | "v2" | "v3-taste" | "v4-balanced";
   }): Promise<CodeGenerationOutput> {
     // Use Sonnet 4 with temperature 0 for YouTube reproduction
@@ -551,6 +558,21 @@ FUNCTION NAME: ${input.functionName}`;
         userPrompt += `\nFor example: If user asks for "the logo" or "that image from before", use one of these assets.`;
       }
 
+      // Add storyboard context if available (for consistency across scenes)
+      if (input.storyboardContext && input.storyboardContext.length > 0) {
+        userPrompt += `\n\n📽️ EXISTING SCENES IN PROJECT (for consistency):
+You have ${input.storyboardContext.length} existing scene(s) in this project. Maintain visual consistency with them.
+
+${input.storyboardContext.slice(-2).map((scene, i) => `
+Scene ${scene.order} - "${scene.name}" (${scene.duration} frames):
+\`\`\`tsx
+${scene.tsxCode.substring(0, 500)}...
+\`\`\`
+`).join('\n')}
+
+IMPORTANT: Extract and match the visual style, colors, fonts, and animation patterns from these existing scenes.`;
+      }
+      
       // Add duration constraint if specified
       if (input.requestedDurationFrames) {
         userPrompt += `\n\n🚨 CRITICAL DURATION REQUIREMENT 🚨

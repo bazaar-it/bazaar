@@ -184,6 +184,8 @@ export const durationInFrames_ERROR = 180;`;
       isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
       templateContext: input.templateContext, // Pass template context for better generation
       promptVersion: (input as any).promptVersion, // Pass prompt version for A/B testing
+      // CRITICAL: Pass ALL scene context for consistency
+      storyboardContext: input.storyboardSoFar, // We have this but weren't using it!
     });
 
     // Return generated content - NO DATABASE!

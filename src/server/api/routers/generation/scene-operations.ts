@@ -127,11 +127,11 @@ export const generateScene = protectedProcedure
         }));
       }
 
-      // 3. Get chat history
+      // 3. Get FULL chat history - we have 1M+ context window!
       const recentMessages = await db.query.messages.findMany({
         where: eq(messages.projectId, projectId),
         orderBy: [desc(messages.sequence)],
-        limit: 10,
+        // Remove limit to get ALL messages for complete context
       });
       
       const chatHistory = recentMessages.reverse().map(msg => ({
