@@ -47,7 +47,7 @@ const AudioWaveAnimation = () => {
 type MediaPanelProps = {
   projectId: string;
   onInsertToChat?: (url: string) => void;
-  defaultTab?: 'uploads' | 'icons' | 'iconify'; // For auto-opening to specific tab
+  defaultTab?: 'uploads' | 'icons'; // For auto-opening to specific tab
 };
 
 type FilterType = 'all'|'images'|'videos'|'audio'|'logos';
