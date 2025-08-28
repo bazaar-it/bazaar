@@ -5,25 +5,90 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
 import { toolsLogger } from '~/lib/utils/logger';
+// Session ID generation for tracking
+const getSessionId = () => {
+  if (typeof window === 'undefined') return 'server-session';
+  
+  // Check if we already have a session ID
+  let sessionId = sessionStorage.getItem('autofix-session-id');
+  if (!sessionId) {
+    sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem('autofix-session-id', sessionId);
+  }
+  return sessionId;
+};
 
 interface Scene {
   id: string;
   [key: string]: any;
 }
 
-const DEBUG_AUTOFIX = false; // Disable debug logging in production
+const DEBUG_AUTOFIX = true; // Enable temporarily to debug infinite loops
+
+// EMERGENCY KILL SWITCH - Set to true to completely disable auto-fix
+const AUTOFIX_KILL_SWITCH = false; // EMERGENCY: Set to true to disable all auto-fixing
+// Alternative: Set via localStorage in browser console:
+// localStorage.setItem('autofix-kill-switch', 'true');
 
 // Cost control constants - CRITICAL FOR API BUDGET
-const MAX_FIXES_PER_SESSION = 10; // Maximum total fixes in a session
-const MAX_FIXES_PER_SCENE = 3; // Already enforced per scene
-const COOLDOWN_PERIOD_MS = 60000; // 1 minute cooldown after hitting limits
+const MAX_FIXES_PER_SESSION = 5; // Reduced from 10 to prevent runaway costs
+const MAX_FIXES_PER_SCENE = 2; // Reduced from 3 - if 2 attempts fail, stop
+const COOLDOWN_PERIOD_MS = 120000; // 2 minute cooldown (increased from 1)
 const FIX_HISTORY_WINDOW_MS = 300000; // 5 minute sliding window for rate limiting
+const MIN_TIME_BETWEEN_FIXES_MS = 10000; // Minimum 10 seconds between any fix attempts
 
 // Circuit breaker constants
 const CIRCUIT_BREAKER_THRESHOLD = 5; // Number of consecutive failures to trip
 const CIRCUIT_BREAKER_RESET_MS = 120000; // 2 minutes to reset after tripping
 
 export function useAutoFix(projectId: string, scenes: Scene[]) {
+  // API mutations for metrics
+  const saveMetricMutation = api.admin.saveAutofixMetric.useMutation();
+  const updateSessionMutation = api.admin.updateAutofixSession.useMutation();
+  
+  // Session tracking
+  const sessionId = getSessionId();
+  const sessionMetrics = useRef({
+    totalErrors: 0,
+    uniqueErrors: new Set<string>(),
+    successfulFixes: 0,
+    failedFixes: 0,
+    totalApiCalls: 0,
+    totalCost: 0,
+  });
+  // 🛑 EMERGENCY KILL SWITCH CHECK
+  const isKillSwitchEnabled = () => {
+    // Check hardcoded constant first
+    if (AUTOFIX_KILL_SWITCH) return true;
+    
+    // Check localStorage for runtime toggle
+    if (typeof window !== 'undefined') {
+      const killSwitch = localStorage.getItem('autofix-kill-switch');
+      if (killSwitch === 'true') return true;
+    }
+    
+    // Check if completely disabled via MAX_FIXES
+    if (MAX_FIXES_PER_SESSION === 0) return true;
+    
+    return false;
+  };
+  
+  // 🔥 CRITICAL: Track current projectId to prevent cross-project contamination
+  const currentProjectIdRef = useRef(projectId);
+  
+  // 🚨 FIX: Add error signature tracking to prevent fixing same error repeatedly
+  const fixedErrorSignatures = useRef<Set<string>>(new Set());
+  const lastFixAttemptTime = useRef<number>(0);
+  
+  // Generate error signature to detect repeated errors
+  const getErrorSignature = (sceneId: string, errorMessage: string): string => {
+    // Create a stable signature from error key parts
+    const normalizedError = errorMessage
+      .replace(/at line \d+/g, '')
+      .replace(/column \d+/g, '')
+      .trim();
+    return `${sceneId}:${normalizedError}`;
+  };
   // 🚨 FIX: Use useMemo to stabilize scenes array reference to prevent infinite re-renders
   const sceneIds = scenes.map(s => s.id).join(',');
   const stableScenes = useMemo(() => scenes, [sceneIds]);
@@ -128,19 +193,129 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     if (DEBUG_AUTOFIX) {
       toolsLogger.debug('[SILENT FIX] Executing fix attempt', { attemptNumber, sceneId, errorDetails });
     }
+    
+    const startTime = Date.now();
+    
+    // Get context from ALL working scenes - models can handle it!
+    const getWorkingSceneContext = () => {
+      // Find ALL working scenes (not broken, not being fixed)
+      const workingScenes = scenesRef.current.filter(s => 
+        s.id !== sceneId && 
+        !autoFixQueueRef.current.has(s.id) &&
+        !fixingScenesRef.current.has(s.id)
+      );
+      
+      if (workingScenes.length === 0) return '';
+      
+      // Take up to 3 working scenes as examples (models can easily handle this)
+      const exampleScenes = workingScenes.slice(0, 3);
+      
+      const examples = exampleScenes.map((scene, index) => {
+        const code = (scene as any).data?.code || '';
+        const name = (scene as any).data?.name || `Scene ${index + 1}`;
+        
+        if (!code) return '';
+        
+        return `
+=== WORKING EXAMPLE ${index + 1}: "${name}" ===
+This scene compiles and works correctly. Study its patterns:
 
-    // Progressive fix prompts based on attempt number
+\`\`\`tsx
+${code}
+\`\`\`
+`;
+      }).filter(Boolean).join('\n');
+      
+      if (!examples) return '';
+      
+      return `
+CRITICAL CONTEXT - These scenes from the same project are WORKING CORRECTLY.
+Use them as reference for proper patterns and structure:
+
+${examples}
+
+COMMON MISTAKES TO AVOID (based on patterns above):
+1. NEVER add "const padding = 16; const margin = 8; const gap = 12;" if they don't exist in working examples
+2. NEVER duplicate the fps parameter: spring({ frame, fps, config }) is correct, NOT spring({ frame, fps, fps, config })
+3. Match the exact import style from working examples
+4. Use the same naming conventions for scripts, sequences, and components
+5. If working scenes don't have certain variables, DON'T add them
+6. Pay attention to the exact structure of spring() calls in working examples`;
+    };
+    // Record fix attempt start in database
+    const recordMetric = async (success: boolean, strategy?: string) => {
+      const fixDuration = Date.now() - startTime;
+      
+      // Save metric to database
+      await saveMetricMutation.mutateAsync({
+        projectId,
+        sceneId,
+        errorMessage: errorDetails.errorMessage,
+        errorType: errorDetails.errorType,
+        errorSignature: getErrorSignature(sceneId, errorDetails.errorMessage),
+        fixAttemptNumber: attemptNumber,
+        fixStrategy: strategy || 'progressive',
+        fixSuccess: success,
+        fixDurationMs: fixDuration,
+        apiCallsCount: 1,
+        estimatedCost: 0.003, // Rough estimate
+        sessionId,
+        userAgent: navigator?.userAgent,
+      });
+      
+      // Update session metrics
+      if (success) {
+        sessionMetrics.current.successfulFixes++;
+      } else {
+        sessionMetrics.current.failedFixes++;
+      }
+      sessionMetrics.current.totalApiCalls++;
+      sessionMetrics.current.totalCost += 0.003;
+      
+      // Update session in database
+      await updateSessionMutation.mutateAsync({
+        sessionId,
+        projectId,
+        ...sessionMetrics.current,
+        uniqueErrors: sessionMetrics.current.uniqueErrors.size,
+      });
+    };
+
+    // Get context from working scenes
+    const workingSceneContext = getWorkingSceneContext();
+    
+    // Progressive fix prompts based on attempt number WITH CONTEXT
     let fixPrompt: string;
     
     if (attemptNumber === 1) {
-      // Attempt 1: Quick targeted fix
-      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". Fix ONLY this specific error. Make minimal changes to resolve the compilation issue.`;
+      // Attempt 1: Quick targeted fix with context
+      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". 
+
+${workingSceneContext}
+
+Fix ONLY this specific error. Make minimal changes to resolve the compilation issue. Match the patterns from the working examples above.`;
     } else if (attemptNumber === 2) {
-      // Attempt 2: Comprehensive fix
-      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". Fix ALL compilation errors, check imports, undefined variables, and syntax issues. Be more thorough this time.`;
+      // Attempt 2: Comprehensive fix with context
+      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". 
+
+${workingSceneContext}
+
+Fix ALL compilation errors. Study the working examples carefully and match their exact patterns. Check:
+- No duplicate variable declarations
+- Correct spring() parameter syntax (no duplicate fps)
+- Proper imports matching the examples
+- Remove any auto-generated defaults that don't exist in working scenes`;
     } else {
-      // Attempt 3: Nuclear option - rewrite
-      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}". REWRITE this component using simpler, more reliable code that will definitely compile. Keep the same visual output but prioritize making it work.`;
+      // Attempt 3: Nuclear option - rewrite based on working examples
+      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}".
+
+${workingSceneContext}
+
+REWRITE this component by closely following the structure of the working examples above. Use their exact patterns for:
+- Variable declarations (don't add padding/margin/gap if they don't use them)
+- Spring animations (exact syntax from examples)
+- Component structure
+Keep similar visual output but use the proven patterns from the working scenes.`;
     }
     
     // Add retry logic for API failures
@@ -187,6 +362,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
           // Success - remove from queue
           autoFixQueueRef.current.delete(sceneId);
           
+          // Record success metrics to database
+          await recordMetric(true, 'progressive');
+          
           // Dispatch success event for PreviewPanel
           const successEvent = new CustomEvent('scene-fixed', {
             detail: { sceneId }
@@ -221,6 +399,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       if (DEBUG_AUTOFIX) {
         toolsLogger.error('[SILENT FIX] All API retries failed', lastError as Error);
       }
+      // Record failure to database
+      await recordMetric(false, 'progressive');
       throw lastError; // Re-throw for the outer retry logic in processAutoFixQueue
     }
     
@@ -286,11 +466,14 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       
       // Enter cooldown
       setIsInCooldown(true);
+      // Log cooldown in console for debugging
+      console.log('[AutoFix] Cooldown triggered', { fixCount: recentHistory.length });
       setTimeout(() => {
         setIsInCooldown(false);
         if (DEBUG_AUTOFIX) {
           toolsLogger.info('[SILENT FIX] Cooldown period ended');
         }
+        console.log('[AutoFix] Cooldown ended');
       }, COOLDOWN_PERIOD_MS);
       
       // Clear all queued fixes to prevent further attempts
@@ -305,9 +488,9 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       return;
     }
     
-    // Check retry limits
-    if (queueItem.attempts >= 3) {
-      // Max retries reached, give up silently
+    // Check retry limits (reduced to 2)
+    if (queueItem.attempts >= MAX_FIXES_PER_SCENE) {
+      // Max retries reached, give up and log
       autoFixQueueRef.current.delete(sceneId);
       
       if (DEBUG_AUTOFIX) {
@@ -361,6 +544,13 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
             toolsLogger.error(`[SILENT FIX] 🔴 Circuit breaker TRIPPED after ${newCount} consecutive failures!`);
           }
           setCircuitBreakerTrippedAt(Date.now());
+          // Record circuit breaker trip to database (fire and forget)
+          updateSessionMutation.mutate({
+            sessionId,
+            projectId,
+            circuitBreakerTripped: true,
+          });
+          console.log('[AutoFix] Circuit breaker tripped', { consecutiveFailures: newCount });
           
           // Clear the entire queue when circuit breaker trips
           autoFixQueueRef.current.clear();
@@ -395,17 +585,55 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
   
   // Create stable event handlers using useCallback with minimal dependencies
   const handlePreviewError = useCallback((event: CustomEvent) => {
+    // 🛑 KILL SWITCH: Check if auto-fix is disabled
+    if (isKillSwitchEnabled()) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] 🛑 KILL SWITCH ACTIVE - Auto-fix disabled');
+      }
+      console.log('[AutoFix] Kill switch active');
+      return;
+    }
+    
     if (DEBUG_AUTOFIX) {
-      toolsLogger.debug('[SILENT FIX] Preview error event received', { detail: event.detail });
+      toolsLogger.debug('[SILENT FIX] Preview error event received', { 
+        detail: event.detail,
+        currentProject: currentProjectIdRef.current,
+        eventProject: projectId
+      });
+    }
+    
+    // 🔥 CRITICAL: Verify event is for current project to prevent cross-contamination
+    if (currentProjectIdRef.current !== projectId) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] Ignoring error from different project', {
+          currentProject: currentProjectIdRef.current,
+          eventProject: projectId
+        });
+      }
+      console.log('[AutoFix] Cross-project event ignored', { 
+        currentProject: currentProjectIdRef.current, 
+        eventProject: projectId 
+      });
+      return;
     }
     
     // Add comprehensive event validation
     if (!event?.detail) {
       toolsLogger.error('[SILENT FIX] Invalid error event: missing detail property');
+      console.warn('[AutoFix] Invalid event - missing detail');
       return;
     }
     
     const { sceneId, sceneName, error } = event.detail;
+    
+    // Track error detection
+    // Track error detection in session
+    sessionMetrics.current.totalErrors++;
+    sessionMetrics.current.uniqueErrors.add(getErrorSignature(sceneId, error?.message || String(error)));
+    
+    if (DEBUG_AUTOFIX) {
+      console.log('[AutoFix] Error detected', { sceneId, sceneName, error: error?.message });
+    }
     
     // Validate required fields
     if (!sceneId || typeof sceneId !== 'string') {
@@ -420,6 +648,40 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     
     if (!error) {
       toolsLogger.error('[SILENT FIX] Invalid error event: error is missing', undefined, { detail: event.detail });
+      return;
+    }
+    
+    // 🚨 FIX: Check if we've already fixed this exact error
+    const errorSignature = getErrorSignature(sceneId, error?.message || String(error));
+    if (fixedErrorSignatures.current.has(errorSignature)) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] Already attempted to fix this exact error, skipping', { 
+          sceneId, 
+          errorSignature 
+        });
+      }
+      if (DEBUG_AUTOFIX) {
+        console.log('[AutoFix] Duplicate error ignored', { sceneId, errorSignature });
+      }
+      return;
+    }
+    
+    // 🚨 FIX: Enforce minimum time between fixes
+    const now = Date.now();
+    const timeSinceLastFix = now - lastFixAttemptTime.current;
+    if (timeSinceLastFix < MIN_TIME_BETWEEN_FIXES_MS) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] Too soon since last fix attempt', { 
+          timeSinceLastFix, 
+          minRequired: MIN_TIME_BETWEEN_FIXES_MS 
+        });
+      }
+      if (DEBUG_AUTOFIX) {
+        console.log('[AutoFix] Rate limited', { 
+          timeSinceLastFix, 
+          minRequired: MIN_TIME_BETWEEN_FIXES_MS 
+        });
+      }
       return;
     }
     
@@ -461,10 +723,19 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       previousErrors: existingItem?.previousErrors || []
     };
     
-    // Use stable ref for processAutoFixQueue
+    // Use stable ref for processAutoFixQueue with longer debounce
     queueItem.debounceTimer = setTimeout(() => {
-      processAutoFixQueueRef.current(sceneId);
-    }, 2000);
+      // Double-check project hasn't changed
+      if (currentProjectIdRef.current === projectId) {
+        lastFixAttemptTime.current = Date.now();
+        fixedErrorSignatures.current.add(errorSignature);
+        processAutoFixQueueRef.current(sceneId);
+      } else {
+        if (DEBUG_AUTOFIX) {
+          toolsLogger.warn('[SILENT FIX] Project changed, cancelling queued fix');
+        }
+      }
+    }, 5000); // Increased from 2000ms to 5000ms
     
     // Add to queue
     autoFixQueueRef.current.set(sceneId, queueItem);
@@ -520,8 +791,39 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
 
   // Listen for preview panel errors - now with stable handlers
   useEffect(() => {
+    // 🛑 KILL SWITCH: Don't set up listeners if disabled
+    if (isKillSwitchEnabled()) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] 🛑 Kill switch active - not setting up event listeners');
+      }
+      return;
+    }
+    
+    // 🔥 CRITICAL: Update project ID ref when it changes
+    currentProjectIdRef.current = projectId;
+    
+    // 🚨 FIX: Clear error signatures when project changes
+    fixedErrorSignatures.current.clear();
+    lastFixAttemptTime.current = 0;
+    
+    // Track project switch in metrics
+    // Start new session for new project
+    sessionMetrics.current = {
+      totalErrors: 0,
+      uniqueErrors: new Set<string>(),
+      successfulFixes: 0,
+      failedFixes: 0,
+      totalApiCalls: 0,
+      totalCost: 0,
+    };
+    
     if (DEBUG_AUTOFIX) {
-      toolsLogger.debug('[SILENT FIX] Setting up event listeners', {
+      console.log('[AutoFix] Project switch', { projectId });
+    }
+    
+    if (DEBUG_AUTOFIX) {
+      toolsLogger.debug('[SILENT FIX] Setting up event listeners for new project', {
+        projectId,
         autoFixQueueSize: autoFixQueueRef.current.size,
         fixingScenes: Array.from(fixingScenesRef.current)
       });
@@ -563,7 +865,10 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     // FIX 4: Implement proper cleanup on dependency changes, not just unmount
     return () => {
       if (DEBUG_AUTOFIX) {
-        toolsLogger.debug('[SILENT FIX] Cleaning up event listeners and timers - projectId changed or unmounting');
+        toolsLogger.debug('[SILENT FIX] 🧹 FULL CLEANUP - projectId changed or unmounting', {
+          oldProjectId: projectId,
+          queueSize: autoFixQueueRef.current.size
+        });
       }
       
       // Remove event listeners
@@ -587,15 +892,72 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       // Clear fixing scenes set
       setFixingScenes(new Set());
       
+      // 🚨 FIX: Reset all tracking state
+      setFixHistory([]);
+      setIsInCooldown(false);
+      setConsecutiveFailures(0);
+      setCircuitBreakerTrippedAt(null);
+      
+      // Clear error signature tracking
+      fixedErrorSignatures.current.clear();
+      lastFixAttemptTime.current = 0;
+      
       if (DEBUG_AUTOFIX) {
-        toolsLogger.debug('[SILENT FIX] Cleanup complete, queue cleared');
+        toolsLogger.debug('[SILENT FIX] ✅ Complete cleanup done, all state reset');
       }
     };
   }, [projectId, handlePreviewError, handleSceneDeleted, handleSceneFixed]); // Include stable handlers in deps
 
-  // Add a manual trigger for debugging - expose it on window in dev mode
+  // Add a manual trigger for debugging
   useEffect(() => {
-    if (DEBUG_AUTOFIX && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
+      // Expose session metrics for debugging
+      (window as any).getAutofixSession = () => {
+        console.log('=== AUTOFIX SESSION METRICS ===');
+        console.log('Session ID:', sessionId);
+        console.log('Total Errors:', sessionMetrics.current.totalErrors);
+        console.log('Unique Errors:', sessionMetrics.current.uniqueErrors.size);
+        console.log('Successful Fixes:', sessionMetrics.current.successfulFixes);
+        console.log('Failed Fixes:', sessionMetrics.current.failedFixes);
+        console.log('API Calls:', sessionMetrics.current.totalApiCalls);
+        console.log('Estimated Cost:', `$${sessionMetrics.current.totalCost.toFixed(4)}`);
+        return sessionMetrics.current;
+      };
+      
+      // Expose kill switch controls
+      (window as any).enableAutofixKillSwitch = () => {
+        localStorage.setItem('autofix-kill-switch', 'true');
+        console.log('🛑 Auto-fix KILL SWITCH ENABLED! Auto-fix is now disabled.');
+        console.log('To re-enable, run: disableAutofixKillSwitch()');
+      };
+      
+      (window as any).disableAutofixKillSwitch = () => {
+        localStorage.removeItem('autofix-kill-switch');
+        console.log('✅ Auto-fix kill switch disabled. Auto-fix is now active.');
+      };
+      
+      (window as any).autofixKillSwitchStatus = () => {
+        const hardcoded = AUTOFIX_KILL_SWITCH;
+        const localStorage = window.localStorage.getItem('autofix-kill-switch') === 'true';
+        const maxZero = MAX_FIXES_PER_SESSION === 0;
+        const isActive = hardcoded || localStorage || maxZero;
+        
+        console.log('=== AUTO-FIX KILL SWITCH STATUS ===');
+        console.log('Kill Switch Active:', isActive ? '🛑 YES' : '✅ NO');
+        console.log('Hardcoded Constant:', hardcoded ? 'true' : 'false');
+        console.log('LocalStorage Setting:', localStorage ? 'true' : 'false');
+        console.log('MAX_FIXES_PER_SESSION:', MAX_FIXES_PER_SESSION);
+        console.log('');
+        if (isActive) {
+          console.log('⚠️ Auto-fix is currently DISABLED');
+        } else {
+          console.log('✅ Auto-fix is currently ACTIVE');
+        }
+        
+        return { isActive, hardcoded, localStorage, maxZero };
+      };
+      
+      // Keep the manual trigger
       (window as any).forceAutoFix = () => {
         toolsLogger.debug('[SILENT FIX] Manual trigger activated');
         toolsLogger.debug('[SILENT FIX] Current queue', { queue: autoFixQueueRef.current });

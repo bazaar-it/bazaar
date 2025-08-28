@@ -26,9 +26,10 @@ type Props = {
   userId: string;
   initialProps: InputProps;
   initialProjects: { id: string; name: string }[];
+  initialAudio?: any;
 };
 
-export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects }: Props) {
+export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects, initialAudio }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
@@ -72,7 +73,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
       projectId,
       isProjectLoaded,
       hasCurrentScenes: currentProps?.scenes?.length || 0,
-      initialScenes: initialProps?.scenes?.length || 0
+      initialScenes: initialProps?.scenes?.length || 0,
+      hasAudio: !!initialAudio
     });
     
     // Only initialize if:
@@ -81,10 +83,16 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     if (!isProjectLoaded || (!currentProps?.scenes?.length && initialProps?.scenes?.length)) {
       if (DEBUG) console.log('[GenerateWorkspaceRoot] Initializing project with server data');
       setProject(projectId, initialProps, { force: true });
+      
+      // Set audio if provided
+      if (initialAudio) {
+        useVideoState.getState().updateProjectAudio(projectId, initialAudio);
+        console.log('[GenerateWorkspaceRoot] Set initial audio:', initialAudio);
+      }
     } else {
       if (DEBUG) console.log('[GenerateWorkspaceRoot] Project already loaded, skipping initialization');
     }
-  }, [projectId, setProject, initialProps, DEBUG]); // Include all dependencies
+  }, [projectId, setProject, initialProps, initialAudio, DEBUG]); // Include all dependencies
   
   // ✅ UPDATED: Use current project data title or fallback to initial title
   const [title, setTitle] = useState(

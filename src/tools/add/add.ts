@@ -183,6 +183,7 @@ export const durationInFrames_ERROR = 180;`;
       assetUrls: input.assetUrls, // Pass persistent asset URLs
       isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
       templateContext: input.templateContext, // Pass template context for better generation
+      promptVersion: (input as any).promptVersion, // Pass prompt version for A/B testing
     });
 
     // Return generated content - NO DATABASE!

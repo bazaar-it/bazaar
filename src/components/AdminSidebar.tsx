@@ -26,7 +26,9 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/paywall-analytics' ? 'paywall-analytics' :
     pathname === '/admin/evals' ? 'evals' :
     pathname === '/admin/error-analytics' ? 'error-analytics' :
-    pathname === '/admin/brand-extraction' ? 'brand-extraction' : 'homepage';
+    pathname === '/admin/brand-extraction' ? 'brand-extraction' :
+    pathname === '/admin/project-search' ? 'project-search' :
+    pathname === '/admin/prompt-ab-testing' ? 'prompt-ab-testing' : 'homepage';
 
   return (
     <div className="w-72 bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl min-h-screen">
@@ -72,6 +74,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13.5 10.5V6.75a2.25 2.25 0 10-4.5 0v3.75m1.5 0h3a1.5 1.5 0 011.5 1.5v.75m-4.5-2.25h3m-3 0a1.5 1.5 0 00-1.5 1.5v.75m1.5-2.25a1.5 1.5 0 011.5-1.5h1.5a1.5 1.5 0 011.5 1.5v2.25" />
               </svg>
               <span className="font-medium">User Management</span>
+            </Link>
+
+            {/* Project Search */}
+            <Link 
+              href="/admin/project-search"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'project-search'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="font-medium">Project Search</span>
             </Link>
 
             {/* Analytics */}
@@ -238,6 +255,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               Error Analytics
+            </Link>
+
+            {/* Prompt A/B Testing */}
+            <Link 
+              href="/admin/prompt-ab-testing"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'prompt-ab-testing'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              Prompt A/B Testing
             </Link>
 
             {/* Coming Soon section */}

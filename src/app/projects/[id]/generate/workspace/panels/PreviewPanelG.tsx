@@ -14,7 +14,6 @@ import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
-import { useAutoFix } from '~/hooks/use-auto-fix';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -56,8 +55,8 @@ export function PreviewPanelG({
     }
   );
 
-  // Initialize auto-fixer to listen for compilation errors
-  useAutoFix(projectId, dbScenes || []);
+  // NOTE: Auto-fix hook is now only used in ChatPanelG to avoid duplicate event listeners
+  // PreviewPanelG only dispatches errors, ChatPanelG handles the fixing
   
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
