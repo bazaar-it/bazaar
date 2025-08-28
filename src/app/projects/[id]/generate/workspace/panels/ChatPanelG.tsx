@@ -18,7 +18,7 @@ import { type DraftAttachment } from "~/stores/videoState";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
-import { IconPicker } from "~/components/IconPicker";
+
 import { 
   parseAssetMentions, 
   resolveAssetMentions, 
@@ -176,7 +176,8 @@ export default function ChatPanelG({
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
     .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-') && !m.id.startsWith('system-') && !m.id.startsWith('user-'))
-    .map(m => m.id);
+    .map(m => m.id)
+    .filter(id => id && id.length > 0); // Additional validation to ensure no empty IDs
 
   const { data: messageIterations } = api.generation.getBatchMessageIterations.useQuery(
     { messageIds },
@@ -832,11 +833,6 @@ export default function ChatPanelG({
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
         const id = nanoid();
         setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
-        
-        if (name) {
-          const reference = `use the ${name}`;
-          setMessage((prev) => prev ? `${prev}\n${reference}` : reference);
-        }
       }
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
