@@ -206,8 +206,12 @@ export async function executeToolFromDecision(
         throw new Error("Scene not found for editing");
       }
       
-      // Handle referenced scenes for style/color matching in edits
-      let editReferenceScenes = undefined;
+      // IMPROVED: Always provide neighboring scenes for better context
+      // Find the index of the scene being edited
+      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext.targetSceneId);
+      let editReferenceScenes: Array<{id: string, name: string, tsxCode: string}> = [];
+      
+      // Add explicitly referenced scenes if any
       if (decision.toolContext.referencedSceneIds && decision.toolContext.referencedSceneIds.length > 0) {
         editReferenceScenes = decision.toolContext.referencedSceneIds
           .map(refId => storyboard.find(s => s.id === refId))
@@ -217,13 +221,88 @@ export async function executeToolFromDecision(
             name: scene.name,
             tsxCode: scene.tsxCode
           }));
+      }
+      
+      // SMART CONTEXT: Add neighboring scenes for continuity
+      if (targetSceneIndex !== -1) {
+        const isLastScene = targetSceneIndex === storyboard.length - 1;
+        const isFirstScene = targetSceneIndex === 0;
         
-        if (editReferenceScenes.length > 0) {
-          console.log('🔗 [HELPERS] Using reference scenes for edit:', {
-            targetScene: sceneToEdit.name,
-            referenceScenes: editReferenceScenes.map(r => r.name)
-          });
+        if (isLastScene && storyboard.length > 1) {
+          // For last scene: add 2 previous scenes
+          if (targetSceneIndex > 0) {
+            const prevScene = storyboard[targetSceneIndex - 1];
+            if (!editReferenceScenes.find(s => s.id === prevScene.id)) {
+              editReferenceScenes.push({
+                id: prevScene.id,
+                name: prevScene.name + ' (previous)',
+                tsxCode: prevScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex > 1) {
+            const prevPrevScene = storyboard[targetSceneIndex - 2];
+            if (!editReferenceScenes.find(s => s.id === prevPrevScene.id)) {
+              editReferenceScenes.push({
+                id: prevPrevScene.id,
+                name: prevPrevScene.name + ' (2 before)',
+                tsxCode: prevPrevScene.tsxCode
+              });
+            }
+          }
+        } else if (isFirstScene && storyboard.length > 1) {
+          // For first scene: add next 2 scenes
+          if (targetSceneIndex < storyboard.length - 1) {
+            const nextScene = storyboard[targetSceneIndex + 1];
+            if (!editReferenceScenes.find(s => s.id === nextScene.id)) {
+              editReferenceScenes.push({
+                id: nextScene.id,
+                name: nextScene.name + ' (next)',
+                tsxCode: nextScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex < storyboard.length - 2) {
+            const nextNextScene = storyboard[targetSceneIndex + 2];
+            if (!editReferenceScenes.find(s => s.id === nextNextScene.id)) {
+              editReferenceScenes.push({
+                id: nextNextScene.id,
+                name: nextNextScene.name + ' (2 after)',
+                tsxCode: nextNextScene.tsxCode
+              });
+            }
+          }
+        } else {
+          // Middle scene: add n-1 and n+1
+          if (targetSceneIndex > 0) {
+            const prevScene = storyboard[targetSceneIndex - 1];
+            if (!editReferenceScenes.find(s => s.id === prevScene.id)) {
+              editReferenceScenes.push({
+                id: prevScene.id,
+                name: prevScene.name + ' (previous)',
+                tsxCode: prevScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex < storyboard.length - 1) {
+            const nextScene = storyboard[targetSceneIndex + 1];
+            if (!editReferenceScenes.find(s => s.id === nextScene.id)) {
+              editReferenceScenes.push({
+                id: nextScene.id,
+                name: nextScene.name + ' (next)',
+                tsxCode: nextScene.tsxCode
+              });
+            }
+          }
         }
+        
+        console.log('🔗 [HELPERS] Smart context for edit:', {
+          targetScene: sceneToEdit.name,
+          targetIndex: targetSceneIndex,
+          isLastScene,
+          isFirstScene,
+          neighboringScenes: editReferenceScenes.map(r => r.name)
+        });
       }
       
       toolInput = {
