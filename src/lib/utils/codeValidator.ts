@@ -55,48 +55,31 @@ function validateSyntax(code: string): ValidationError[] {
 }
 
 /**
- * Check for common reference errors without executing
+ * Check for CRITICAL errors only - things that will actually break
  */
 function checkReferences(code: string): ValidationError[] {
   const errors: ValidationError[] = [];
   
-  // Check for currentFrame instead of frame
+  // Check for currentFrame instead of frame (breaks Remotion conventions)
   if (/const\s+currentFrame\s*=\s*useCurrentFrame\(\)/.test(code)) {
     errors.push({
       type: 'reference',
-      message: 'Using "currentFrame" as variable name causes "Identifier already declared" error. Use "frame" instead.',
+      message: 'Using "currentFrame" breaks Remotion conventions. Use "frame" instead.',
       severity: 'error',
     });
   }
   
-  // Check for missing fps in spring calls
-  if (/spring\s*\(\s*\{\s*frame\s*,\s*(?!fps)/.test(code)) {
+  // Check for duplicate fps in spring (causes syntax error)
+  if (/spring\s*\(\s*\{[^}]*fps\s*,\s*fps\s*,/.test(code)) {
     errors.push({
       type: 'reference',
-      message: 'spring() calls missing fps parameter',
+      message: 'Duplicate fps parameter in spring() call',
       severity: 'error',
     });
   }
   
-  // Check for undefined position variables
-  const positionVars = code.matchAll(/\b(card\d+[XY]|position[XY])\b/g);
-  const defined = new Set<string>();
-  const defPattern = /(?:const|let|var)\s+(\w+)\s*=/g;
-  let match;
-  while ((match = defPattern.exec(code)) !== null) {
-    defined.add(match[1]);
-  }
-  
-  for (const posMatch of positionVars) {
-    const varName = posMatch[1];
-    if (!defined.has(varName)) {
-      errors.push({
-        type: 'undefined',
-        message: `Variable "${varName}" is used but not defined`,
-        severity: 'error',
-      });
-    }
-  }
+  // DISABLED: Don't check for undefined variables - too many false positives
+  // The generation should handle this, not post-processing
   
   return errors;
 }
@@ -129,67 +112,62 @@ function checkImports(code: string): ValidationError[] {
 }
 
 /**
- * Apply template-based fixes in the correct order
+ * Apply ONLY critical fixes that actually break Remotion
+ * Everything else should be handled during generation, not after
  */
 export function applyTemplateFixes(code: string): { code: string; fixes: string[] } {
   let fixedCode = code;
   const fixesApplied: string[] = [];
   
-  console.log('[CODE VALIDATOR] Starting template-based fixes');
+  console.log('[CODE VALIDATOR] Applying critical fixes only');
   
-  // 1. First fix the "x" variable bug (critical - corrupts everything)
+  // 1. Remove the "x" streaming artifact (CRITICAL - corrupts everything)
   const firstLine = fixedCode.split('\n')[0].trim();
   if (firstLine === 'x' || firstLine === 'x;' || firstLine === 'x ') {
-    console.error('[CODE VALIDATOR] Detected "x" bug - removing first line');
+    console.error('[CODE VALIDATOR] Removing streaming artifact "x"');
     const lines = fixedCode.split('\n');
     lines.shift();
     fixedCode = lines.join('\n').trim();
-    fixesApplied.push('Removed "x" prefix bug');
+    fixesApplied.push('Removed streaming artifact');
   }
   
-  // 2. Fix duplicate declarations (causes immediate errors)
-  const beforeDuplicates = fixedCode;
-  fixedCode = fixAllDuplicates(fixedCode);
-  if (fixedCode !== beforeDuplicates) {
-    fixesApplied.push('Fixed duplicate declarations');
+  // 2. Fix duplicate fps in spring calls (CRITICAL - syntax error)
+  const duplicateFpsPattern = /spring\s*\(\s*\{([^}]*?)fps\s*,\s*fps\s*,/g;
+  if (duplicateFpsPattern.test(fixedCode)) {
+    fixedCode = fixedCode.replace(duplicateFpsPattern, 'spring({$1fps,');
+    fixesApplied.push('Fixed duplicate fps parameters');
   }
   
-  // 3. Fix missing Remotion imports (needed for code to run)
-  const beforeImports = fixedCode;
-  fixedCode = fixAllRemotionImports(fixedCode);
-  if (fixedCode !== beforeImports) {
-    fixesApplied.push('Fixed missing Remotion imports');
-  }
-  
-  // 4. Fix undefined variables (add sensible defaults)
-  const beforeUndefined = fixedCode;
-  fixedCode = fixAllUndefinedVariables(fixedCode);
-  if (fixedCode !== beforeUndefined) {
-    fixesApplied.push('Added defaults for undefined variables');
-  }
-  
-  // 5. Fix currentFrame naming issue
+  // 3. Fix currentFrame to frame (CRITICAL - Remotion convention)
   if (/const\s+currentFrame\s*=\s*useCurrentFrame\(\)/.test(fixedCode)) {
     fixedCode = fixedCode.replace(
       /const\s+currentFrame\s*=\s*useCurrentFrame\(\)/g,
       'const frame = useCurrentFrame()'
     );
     fixedCode = fixedCode.replace(/\bcurrentFrame\b/g, 'frame');
-    fixesApplied.push('Fixed currentFrame variable naming');
+    fixesApplied.push('Fixed frame variable naming');
   }
   
-  // 6. Ensure duration export exists
+  // 4. Ensure duration export exists (CRITICAL - Remotion requirement)
   if (!/export\s+const\s+durationInFrames/.test(fixedCode)) {
-    // Try to find a duration value in the code
     const durationMatch = fixedCode.match(/durationInFrames[_\w]*\s*=\s*(\d+)/);
     const duration = durationMatch ? durationMatch[1] : '150';
-    
-    // Add export at the end
-    fixedCode += `\n\n// Auto-generated duration export\nexport const durationInFrames = ${duration};`;
-    fixesApplied.push('Added missing duration export');
+    fixedCode += `\n\nexport const durationInFrames = ${duration};`;
+    fixesApplied.push('Added duration export');
   }
   
-  console.log(`[CODE VALIDATOR] Applied ${fixesApplied.length} fixes`);
+  // 5. Ensure Remotion imports exist (CRITICAL - nothing works without this)
+  if (!/const\s*\{[^}]*\}\s*=\s*window\.Remotion/.test(fixedCode)) {
+    fixedCode = fixAllRemotionImports(fixedCode);
+    fixesApplied.push('Added Remotion imports');
+  }
+  
+  // DISABLED: These "helpful" fixes cause more problems:
+  // - fixAllDuplicates: Removes valid variables in different scopes
+  // - fixAllUndefinedVariables: Adds variables that break compilation
+  // The real fix is proper scene isolation during generation
+  
+  console.log(`[CODE VALIDATOR] Applied ${fixesApplied.length} critical fixes`);
   
   return { code: fixedCode, fixes: fixesApplied };
 }
