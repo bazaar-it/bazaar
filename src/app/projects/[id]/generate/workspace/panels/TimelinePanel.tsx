@@ -211,7 +211,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const generateWaveform = async (audioUrl: string) => {
     try {
       console.log('[Timeline] Starting waveform generation...');
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Import audio context manager dynamically to avoid SSR issues
+      const { getAudioContext, enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+      
+      // Try to get existing context, or create one with user gesture
+      let audioContext = getAudioContext();
+      if (!audioContext) {
+        console.log('[Timeline] No audio context available, attempting to create with user gesture...');
+        audioContext = enableAudioWithGesture();
+      }
+      
+      if (!audioContext) {
+        console.warn('[Timeline] Cannot create waveform without user interaction - skipping visualization');
+        return []; // Return empty waveform data
+      }
       const response = await fetch(audioUrl);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -246,6 +260,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
     } catch (error) {
       console.error('[Timeline] Failed to generate waveform:', error);
+      // Return empty array if waveform generation fails
+      return [];
     }
   };
   
