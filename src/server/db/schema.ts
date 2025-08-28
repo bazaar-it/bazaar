@@ -1580,12 +1580,34 @@ export const brandProfiles = createTable("brand_profile", (d) => ({
       favicon?: string;
       ogImage?: string;
     };
-  }>().notNull().default({}),
+  }>().notNull().$default(() => ({
+    colors: {
+      primary: '',
+      secondary: '',
+      accents: [],
+      neutrals: [],
+      gradients: []
+    },
+    typography: {
+      fonts: [],
+      scale: {}
+    },
+    buttons: {},
+    shadows: {},
+    borderRadius: {},
+    iconography: {
+      style: 'line' as const,
+      detectedIcons: []
+    },
+    imageryStyle: [],
+    backgroundEffects: [],
+    logo: {}
+  })),
   
   // Individual extraction elements for quick access
-  colors: d.jsonb("colors").default({}),
-  typography: d.jsonb("typography").default({}),
-  logos: d.jsonb("logos").default({}),
+  colors: d.jsonb("colors").$default(() => ({})),
+  typography: d.jsonb("typography").$default(() => ({})),
+  logos: d.jsonb("logos").$default(() => ({})),
   
   // Copy and voice data
   copyVoice: d.jsonb("copy_voice").$type<{
@@ -1599,7 +1621,18 @@ export const brandProfiles = createTable("brand_profile", (d) => ({
     };
     taglines: string[];
     ctas: Record<string, string>;
-  }>().default({}),
+  }>().$default(() => ({
+    voice: {
+      adjectives: [],
+      tone: ''
+    },
+    valueProposition: {
+      headline: '',
+      subheadline: ''
+    },
+    taglines: [],
+    ctas: {}
+  })),
   
   // Product narrative
   productNarrative: d.jsonb("product_narrative").$type<{
@@ -1609,7 +1642,14 @@ export const brandProfiles = createTable("brand_profile", (d) => ({
     useCases: Array<any>;
     benefits: Array<any>;
     features: Array<any>;
-  }>().default({}),
+  }>().$default(() => ({
+    audience: {},
+    problem: '',
+    solution: '',
+    useCases: [],
+    benefits: [],
+    features: []
+  })),
   
   // Social proof
   socialProof: d.jsonb("social_proof").$type<{
@@ -1618,7 +1658,13 @@ export const brandProfiles = createTable("brand_profile", (d) => ({
     trustBadges: Record<string, any>;
     logos: string[];
     stats: Record<string, string>;
-  }>().default({}),
+  }>().$default(() => ({
+    testimonials: [],
+    caseStudies: [],
+    trustBadges: {},
+    logos: [],
+    stats: {}
+  })),
   
   // Screenshots and media assets
   screenshots: d.jsonb("screenshots").$type<Array<{
@@ -1637,7 +1683,7 @@ export const brandProfiles = createTable("brand_profile", (d) => ({
   
   // Metadata
   extractionVersion: d.text("extraction_version").default("1.0.0"),
-  extractionConfidence: d.jsonb("extraction_confidence").default({}),
+  extractionConfidence: d.jsonb("extraction_confidence").$default(() => ({})),
   lastAnalyzedAt: d.timestamp("last_analyzed_at", { withTimezone: true }),
   createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

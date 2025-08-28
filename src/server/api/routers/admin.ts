@@ -3891,4 +3891,79 @@ export default function GeneratedScene() {
         timeframe: input.timeframe,
       };
     }),
+
+  // Test different system prompts in parallel
+  testSystemPrompts: adminOnlyProcedure
+    .input(z.object({
+      prompt: z.string(),
+      versions: z.array(z.enum(["original", "v2", "v3-taste", "v4-balanced"])),
+      format: z.object({
+        width: z.number(),
+        height: z.number(),
+        format: z.string()
+      })
+    }))
+    .mutation(async ({ input }) => {
+      const startTime = Date.now();
+      
+      // Import code generator dynamically
+      const { codeGenerator } = await import("~/tools/add/add_helpers/CodeGeneratorNEW");
+      
+      // Generate code for each version in parallel
+      const generationPromises = input.versions.map(async (version) => {
+        const versionStartTime = Date.now();
+        
+        try {
+          // Call code generator with specific version
+          const result = await codeGenerator.generateCodeDirect({
+            userPrompt: input.prompt,
+            functionName: `Scene_${version.replace('-', '_')}_${Date.now()}`,
+            projectId: 'test-project', // Test project ID
+            projectFormat: input.format,
+            promptVersion: version // Pass the version to use
+          });
+          
+          return {
+            version,
+            code: result.code,
+            duration: result.duration,
+            name: result.name,
+            generationTime: Date.now() - versionStartTime,
+            tokenUsage: 0 // Would need to track this in the generator
+          };
+        } catch (error) {
+          console.error(`Failed to generate with ${version}:`, error);
+          // Return error placeholder
+          return {
+            version,
+            code: `// Error generating with ${version}\n// ${error instanceof Error ? error.message : 'Unknown error'}`,
+            duration: 180,
+            name: `Error - ${version}`,
+            generationTime: Date.now() - versionStartTime,
+            tokenUsage: 0
+          };
+        }
+      });
+      
+      const results = await Promise.all(generationPromises);
+      
+      return {
+        results,
+        totalTime: Date.now() - startTime,
+        prompt: input.prompt
+      };
+    }),
+    
+  // Get available prompt versions
+  getAvailablePrompts: adminOnlyProcedure
+    .query(async () => {
+      return {
+        versions: [
+          { id: "original", name: "Original", description: "Current production prompt" },
+          { id: "v2", name: "V2 - Few Shot (9)", description: "9 conversational examples" },
+          { id: "v3-taste", name: "V3 - Taste Focus", description: "3 high-quality examples" },
+          { id: "v4-balanced", name: "V4 - Balanced", description: "3 balanced examples" }
+        ]
+      };
+    }),
 });

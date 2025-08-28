@@ -3,8 +3,6 @@ import KnowsCode, { templateConfig as knowsCodeConfig } from './KnowsCode';
 import { type VideoFormat } from '../app/projects/new/FormatSelector';
 import { templateFormatAnalysis } from './analyze-templates';
 import PromptIntro, { templateConfig as promptIntroConfig } from './PromptIntro';
-import FintechUI, { templateConfig as fintechConfig } from './FintechUI';
-import GrowthGraph, { templateConfig as growthConfig } from './GrowthGraph';
 import AppleSignIn, { templateConfig as appleSignInConfig } from './AppleSignIn';
 import GitHubSignIn, { templateConfig as githubSignInConfig } from './GitHubSignIn';
 import GoogleSignIn, { templateConfig as googleSignInConfig } from './GoogleSignIn';
@@ -28,7 +26,6 @@ import TeslaStockGraph, { templateConfig as teslaStockGraphConfig } from './Tesl
 import CursorClickScene, { templateConfig as cursorClickSceneConfig } from './CursorClickScene';
 import MobileApp, { templateConfig as mobileAppConfig } from './MobileApp';
 import AppDownload, { templateConfig as appDownloadConfig } from './AppDownload';
-import AppJiggle, { templateConfig as appJiggleConfig } from './AppJiggle';
 import Keyboard, { templateConfig as keyboardConfig } from './Keyboard';
 import DarkBGGradientText, { templateConfig as darkBGGradientTextConfig } from './DarkBGGradientText';
 import Today1Percent, { templateConfig as today1PercentConfig } from './Today1Percent';
@@ -99,12 +96,6 @@ export const TEMPLATES: TemplateDefinition[] = [
   addFormatSupport({
     ...appDownloadConfig,
     component: AppDownload,
-  }),
-  
-  // 5. App Jiggle
-  addFormatSupport({
-    ...appJiggleConfig,
-    component: AppJiggle,
   }),
   
   // 6. Audio Animation
@@ -219,20 +210,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: FadeIn,
   }),
   addFormatSupport({
-    ...fintechConfig,
-    component: FintechUI,
-  }),
-  addFormatSupport({
     ...githubSignInConfig,
     component: GitHubSignIn,
   }),
   addFormatSupport({
     ...googleSignInConfig,
     component: GoogleSignIn,
-  }),
-  addFormatSupport({
-    ...growthConfig,
-    component: GrowthGraph,
   }),
   addFormatSupport({
     ...highlightSweepConfig,

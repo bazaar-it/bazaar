@@ -36,7 +36,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
       notFound();
     }
 
-    const { project: projectResult, scenes: existingScenes } = fullProjectData;
+    const { project: projectResult, scenes: existingScenes, audio } = fullProjectData;
     
     let actualInitialProps: InputProps;
     
@@ -86,6 +86,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         userId={session.user.id}
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={actualInitialProps}
+        initialAudio={audio}
       />
     );
   } catch (error) {

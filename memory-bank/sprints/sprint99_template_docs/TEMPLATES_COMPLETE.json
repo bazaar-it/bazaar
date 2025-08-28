@@ -1,0 +1,49 @@
+{
+  "templates": [
+    {
+      "id": "acdb2ab4-e40c-415d-a697-4d79f6d45cd3",
+      "name": "Corporate Credit Card_axjz2xbo",
+      "description": "Corporate Credit Card"
+    },
+    {
+      "id": "7bda89d2-fd1d-4f06-821c-997fcacbfeaf",
+      "name": "Message notification _vo5hrbok",
+      "description": "Message Notification"
+    },
+    {
+      "id": "6929100c-c7f5-4117-8148-117446ac2b7f",
+      "name": "UI Data Visualisation _3u9bhd7z",
+      "description": "UI Data Visualization"
+    },
+    {
+      "id": "9f79c9f1-fde5-44d8-af31-f7ac6ba034a4",
+      "name": "Home screen notifications_hrdmduof",
+      "description": "Home Screen Notifications"
+    },
+    {
+      "id": "6f23a6a8-0eef-430e-a998-721606173f8c",
+      "name": "Testimonials _hey9u57z",
+      "description": "Testimonials"
+    },
+    {
+      "id": "2e0f1411-d452-4d79-a1a7-167f407ab96c",
+      "name": "Google Sign In_rowq30p8",
+      "description": "Google Sign In"
+    },
+    {
+      "id": "e9443f6e-5573-44cf-9a72-ec21f71673ea",
+      "name": "Pill Shaped Bar Chart_h7zvil42",
+      "description": "Pill Shaped Bar Chart"
+    },
+    {
+      "id": "9360a385-8ae9-4daf-9297-c2049f72b086",
+      "name": "Yellow Bar Chart_st249iaw",
+      "description": "Yellow Bar Chart"
+    },
+    {
+      "id": "97651087-3d1c-474d-8fea-e3b95bf232e0",
+      "name": "Really Cool bar Chart",
+      "description": "Really Cool Bar Chart"
+    }
+  ]
+}

@@ -203,23 +203,34 @@ const ${funcName} = () => {
     }
   }
   
-  // Pattern 3: Common missing variables from errors
+  // Pattern 3: DISABLED - These generic variable names cause more problems than they solve
+  // They collide with existing code and break compilation
+  // If we REALLY need to add them, they should have unique suffixes like padding_auto_1
+  
+  // COMMENTING OUT THE PROBLEMATIC AUTO-ADDING
+  /*
   const commonMissing = [
-    { pattern: /\bspacing\b/, default: 'const spacing = 20;' },
-    { pattern: /\bpadding\b/, default: 'const padding = 16;' },
-    { pattern: /\bmargin\b/, default: 'const margin = 8;' },
-    { pattern: /\bgap\b/, default: 'const gap = 12;' },
+    { name: 'spacing', pattern: /\b(?<!['"`])spacing(?!['"`:])\b/, default: 'const spacing = 20;' },
+    { name: 'padding', pattern: /\b(?<!['"`])padding(?!['"`:])\b/, default: 'const padding = 16;' },
+    { name: 'margin', pattern: /\b(?<!['"`])margin(?!['"`:])\b/, default: 'const margin = 8;' },
+    { name: 'gap', pattern: /\b(?<!['"`])gap(?!['"`:])\b/, default: 'const gap = 12;' },
   ];
   
-  for (const { pattern, default: defaultValue } of commonMissing) {
-    if (pattern.test(code)) {
-      const varName = pattern.source.replace(/\\b/g, '');
-      if (!definedVars.has(varName)) {
-        fixes.push(defaultValue);
-        console.warn(`[UNDEFINED FIX] Adding default for ${varName}`);
-      }
+  for (const { name, pattern, default: defaultValue } of commonMissing) {
+    // Check if used as a variable (not in style object)
+    // Look for patterns like: padding={padding} or padding: padding (not padding: 16)
+    const varUsagePattern = new RegExp(`(?:=\\{${name}\\}|:\\s*${name}(?:\\s|,|\\}))`, 'g');
+    
+    if (varUsagePattern.test(code) && !definedVars.has(name)) {
+      fixes.push(defaultValue);
+      console.warn(`[UNDEFINED FIX] Adding default for ${name}`);
     }
   }
+  */
+  
+  // If we MUST add these variables, use unique names to avoid collisions
+  // But for now, just skip them entirely since they're breaking everything
+  console.log('[UNDEFINED FIX] Skipping padding/margin/gap auto-generation - causes too many conflicts');
   
   if (fixes.length === 0) {
     console.log('[UNDEFINED FIX] No undefined variables detected');

@@ -53,12 +53,20 @@ export function fixDuplicateDeclarations(code: string): string {
     }
   });
   
-  // Find duplicates
+  // Find duplicates - but EXCLUDE common iterator variables that are likely in different scopes
+  const scopeSafeVariables = new Set(['x', 'y', 'i', 'j', 'k', 'index', 'item', 'el', 'element', 'val', 'value', 'key']);
   const duplicates = new Map<string, number[]>();
+  
   declarations.forEach((lineNumbers, identifier) => {
     if (lineNumbers.length > 1) {
+      // Skip common iterator variables - they're likely in different scopes
+      if (scopeSafeVariables.has(identifier)) {
+        console.log(`[DUPLICATE FIX] Skipping "${identifier}" - likely in different scopes (found on lines: ${lineNumbers.map(n => n + 1).join(', ')})`);
+        return;
+      }
+      
       duplicates.set(identifier, lineNumbers);
-      console.warn(`[DUPLICATE FIX] Found duplicate declaration of "${identifier}" on lines: ${lineNumbers.join(', ')}`);
+      console.warn(`[DUPLICATE FIX] Found duplicate declaration of "${identifier}" on lines: ${lineNumbers.map(n => n + 1).join(', ')}`);
     }
   });
   
