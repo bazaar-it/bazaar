@@ -69,6 +69,21 @@ export interface AudioTrack {
   loop?: boolean;           // Loop the audio
 }
 
+// Draft attachment interface
+export interface DraftAttachment {
+  id: string;
+  status: 'uploading' | 'uploaded' | 'error';
+  url?: string;
+  error?: string;
+  type?: 'image' | 'video' | 'audio';
+  isLoaded?: boolean;
+  duration?: number;
+  name?: string;
+  fileName?: string; // Store filename for reference
+  fileSize?: number; // Store file size for reference
+  mimeType?: string; // Store MIME type for reference
+}
+
 interface ProjectState {
   props: InputProps;
   chatHistory: ChatMessage[];
@@ -78,6 +93,7 @@ interface ProjectState {
   audio?: AudioTrack | null;
   shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
   draftMessage?: string; // Persist chat input when panels change
+  draftAttachments?: DraftAttachment[]; // Persist uploaded attachments when panels change
 }
 
 interface VideoState {
@@ -157,6 +173,9 @@ interface VideoState {
   // Draft message persistence
   setDraftMessage: (projectId: string, message: string) => void;
   getDraftMessage: (projectId: string) => string;
+  setDraftAttachments: (projectId: string, attachments: DraftAttachment[]) => void;
+  getDraftAttachments: (projectId: string) => DraftAttachment[];
+  clearDraft: (projectId: string) => void;
 }
 
 export const useVideoState = create<VideoState>()(
@@ -1264,6 +1283,45 @@ export const useVideoState = create<VideoState>()(
     const project = state.projects[projectId];
     return project?.draftMessage || '';
   },
+
+  setDraftAttachments: (projectId: string, attachments: DraftAttachment[]) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftAttachments: attachments
+          }
+        }
+      };
+    }),
+
+  getDraftAttachments: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.draftAttachments || [];
+  },
+
+  clearDraft: (projectId: string) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftMessage: undefined,
+            draftAttachments: undefined
+          }
+        }
+      };
+    }),
 }),
     {
       name: 'bazaar-video-state',

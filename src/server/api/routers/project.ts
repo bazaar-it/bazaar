@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
-import { eq, desc, like, and, ne } from "drizzle-orm";
+import { eq, desc, like, and, ne, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
@@ -663,5 +663,37 @@ export const projectRouter = createTRPCRouter({
       }
 
       return { success: true, asset: updated };
+    }),
+
+  // Delete an asset (soft delete)
+  softDeleteAsset: protectedProcedure
+    .input(z.object({
+      assetId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Soft delete the asset by setting deletedAt
+      const [deleted] = await ctx.db
+        .update(assets)
+        .set({
+          deletedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(assets.id, input.assetId),
+            eq(assets.userId, ctx.session.user.id),
+            isNull(assets.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Asset not found or you don't have permission to delete it"
+        });
+      }
+
+      return { success: true, assetId: input.assetId };
     }),
 }); 
