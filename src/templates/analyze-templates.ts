@@ -187,16 +187,12 @@ export const templateFormatAnalysis = {
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Cool sky 3-color blue-to-white gradient background template adapts perfectly to all aspect ratios'
   },
-  'dark-bg-gradient-text': {
-    name: 'Dark BG Gradient Text',
-    supportedFormats: ['portrait', 'square'] as VideoFormat[],
-    reason: 'Dark background with gradient text, optimized for portrait and square'
-  },
   'vibey-bg': {
     name: 'Vibey BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Vibey magenta-to-cyan gradient background template adapts perfectly to all aspect ratios'
-  },  'vibes-bg-gradient': {
+  },
+  'vibes-bg-gradient': {
     name: 'Rainbow BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Background gradient template with vibrant color transitions adapts to all formats'
