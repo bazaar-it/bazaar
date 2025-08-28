@@ -1,4 +1,7 @@
-import { GeneratorMessage } from '~/lib/types/ai';
+export interface GeneratorMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
 
 export function buildCodeGeneratorV4Messages(
   userRequest: string,
