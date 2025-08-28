@@ -10,7 +10,7 @@
 // TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'typographyScene' | 'imageRecreatorScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner'; [DISABLED]
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'imageRecreatorScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner'; [DISABLED]
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -21,9 +21,9 @@ export const TOOL_OPERATION_MAP = {
   editScene: 'scene.update',
   trimScene: 'scene.update',
   deleteScene: 'scene.delete',
-  typographyScene: 'scene.create',
   imageRecreatorScene: 'scene.create',
   addAudio: 'audio.add',
+  websiteToVideo: 'scene.create',
   // scenePlanner: 'multi-scene.create' [DISABLED]
 } as const;
 

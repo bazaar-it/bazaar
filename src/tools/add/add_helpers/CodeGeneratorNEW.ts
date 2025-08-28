@@ -3,11 +3,11 @@ import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
-import { TYPOGRAPHY_AGENT } from "~/config/prompts/active/typography-generator";
 import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 import { MediaValidation } from "./mediaValidation";
 import { validateAndFixCode } from "~/lib/utils/codeValidator";
+import { codeCache } from "~/server/services/generation/code-cache.service";
 
 /**
  * Unified Code Processing Service - handles all code generation tools
@@ -238,80 +238,6 @@ export class UnifiedCodeProcessor {
     return this.generateSceneName('default', userPrompt, '');
   }
 
-  /**
-   * TYPOGRAPHY: Generate animated text scenes
-   */
-  async generateTypographyScene(input: {
-    userPrompt: string;
-    functionName: string;
-    projectFormat?: {
-      format: 'landscape' | 'portrait' | 'square';
-      width: number;
-      height: number;
-    };
-    previousSceneContext?: {
-      tsxCode: string;
-      style?: string;
-    };
-  }): Promise<CodeGenerationOutput> {
-    console.log('🎨 [UNIFIED PROCESSOR] TYPOGRAPHY: Generating text scene');
-    
-    try {
-      // Prepare the messages with optional previous scene context
-      // Replace placeholders in TYPOGRAPHY_AGENT content
-      const typographyPrompt = TYPOGRAPHY_AGENT.content
-        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
-        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
-        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
-      
-      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system' as const, content: typographyPrompt }
-      ];
-
-      // Add previous scene context if available
-      if (input.previousSceneContext?.tsxCode) {
-        messages.push({
-          role: 'user' as const,
-          content: `Previous scene code for visual harmony reference:\n\`\`\`tsx\n${input.previousSceneContext.tsxCode}\n\`\`\`\n\nMaintain visual harmony with the established theme. Use similar colors, gradients, and fonts for consistency, but create unique text animations appropriate for the content.`
-        });
-        messages.push({
-          role: 'assistant' as const,
-          content: 'I understand. I will maintain visual harmony with the previous scene while creating unique text animations.'
-        });
-      }
-
-      // Add the main user prompt
-      messages.push({
-        role: 'user' as const,
-        content: input.userPrompt
-      });
-
-      const response = await AIClientService.generateResponse(
-        getModel('codeGenerator'),
-        messages
-      );
-      
-      const rawOutput = response?.content;
-      if (!rawOutput) {
-        throw new Error("No response from Typography LLM");
-      }
-      
-      const result = this.processAIResponse(rawOutput, 'TYPOGRAPHY', input.userPrompt, input.functionName);
-      
-      return {
-        ...result,
-        debug: {
-          method: 'typography',
-          promptLength: input.userPrompt.length,
-          responseLength: rawOutput.length,
-        }
-      };
-      
-    } catch (error) {
-      console.error('[UNIFIED PROCESSOR] Typography generation failed:', error);
-      throw error;
-    }
-  }
 
   /**
    * IMAGE RECREATOR: Generate scenes from images
@@ -468,6 +394,29 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       console.log('🎥 [CODE GENERATOR] YouTube Reproduction Mode: Using Sonnet 4 with temperature 0');
     }
     
+    // Check cache first (skip for YouTube since it's unique)
+    if (!input.isYouTubeAnalysis && input.projectId) {
+      const cached = codeCache.get(input.userPrompt, input.projectId, {
+        format: input.projectFormat?.format,
+        previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+      });
+      
+      if (cached) {
+        console.log('💾 [CODE GENERATOR] Using cached code, saving ~8s');
+        return {
+          code: cached.tsxCode,
+          name: cached.name,
+          duration: cached.duration,
+          reasoning: `Cached: ${input.userPrompt}`,
+          debug: {
+            cached: true,
+            hitCount: cached.hitCount,
+            originalTimestamp: cached.timestamp.toISOString(),
+          }
+        };
+      }
+    }
+    
     try {
       let systemPrompt: { role: 'system'; content: string };
       let userPrompt: string;
@@ -563,12 +512,18 @@ FUNCTION NAME: ${input.functionName}`;
         userPrompt += `\n\n📽️ EXISTING SCENES IN PROJECT (for consistency):
 You have ${input.storyboardContext.length} existing scene(s) in this project. Maintain visual consistency with them.
 
-${input.storyboardContext.slice(-2).map((scene, i) => `
+${input.storyboardContext.slice(-3).map((scene, i) => {
+  // Include full code for the most recent scene, excerpts for others
+  const isLastScene = i === input.storyboardContext.slice(-3).length - 1;
+  const codeToShow = isLastScene ? scene.tsxCode : scene.tsxCode.substring(0, 1500);
+  
+  return `
 Scene ${scene.order} - "${scene.name}" (${scene.duration} frames):
 \`\`\`tsx
-${scene.tsxCode.substring(0, 500)}...
+${codeToShow}${!isLastScene ? '...' : ''}
 \`\`\`
-`).join('\n')}
+`;
+}).join('\n')}
 
 IMPORTANT: Extract and match the visual style, colors, fonts, and animation patterns from these existing scenes.`;
       }
@@ -699,6 +654,18 @@ ${ex.code}
       
       // Use the unified processAIResponse method for consistent code extraction
       const result = this.processAIResponse(rawOutput, 'CODE_GENERATOR', input.userPrompt, input.functionName);
+      
+      // Cache the generated code for future use (skip YouTube)
+      if (!input.isYouTubeAnalysis && input.projectId) {
+        codeCache.set(input.userPrompt, input.projectId, {
+          tsxCode: result.code,
+          name: result.name,
+          duration: result.duration,
+        }, {
+          format: input.projectFormat?.format,
+          previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+        });
+      }
       
       return {
         ...result,

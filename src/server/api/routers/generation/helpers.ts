@@ -7,14 +7,13 @@ import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
 import { trimTool } from "~/tools/trim/trim";
-import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
 import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
-import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
@@ -544,73 +543,36 @@ export async function executeToolFromDecision(
       };
 
     case 'typographyScene':
-      console.log('🎨 [HELPERS] Using TYPOGRAPHY tool');
+      // Typography is now handled by addScene tool
+      console.log('🎨 [HELPERS] Typography now handled by ADD tool');
       
-      // Build typography input with proper type checking
-      const typographyInput: TypographyToolInput = {
+      // Build add tool input for text scenes
+      const typographyInput: AddToolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
         userId,
-        projectFormat: projectFormat,
-        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
-        // GitHub and Figma components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
-          tsxCode: storyboard[storyboard.length - 1].tsxCode,
-          style: undefined
-        } : undefined,
+        sceneNumber: storyboard.length + 1,
+        storyboardSoFar: storyboard,
+        projectFormat,
       };
       
-      try {
-        const typographyResult = await typographyTool.run(typographyInput);
-        
-        if (!typographyResult.success || !typographyResult.data) {
-          console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator');
-          throw new Error(typographyResult.error?.message || 'Typography generation failed');
-        }
-        
-        // Save to database (same pattern as addScene)
-        const [typographyScene] = await db.insert(scenes).values({
-          projectId,
-          name: typographyResult.data.name,
-          tsxCode: typographyResult.data.tsxCode,
-          duration: typographyResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        return { success: true, scene: typographyScene as any };
-        
-      } catch (error) {
-        console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator:', error);
-        
-        // Fall back to code-generator for text-based requests
-        const fallbackInput: AddToolInput = {
-          userPrompt: decision.toolContext.userPrompt,
-          projectId,
-          userId,
-          sceneNumber: storyboard.length + 1,
-          storyboardSoFar: storyboard,
-          projectFormat,
-        };
-        
-        const fallbackResult = await addTool.run(fallbackInput);
-        
-        if (!fallbackResult.success || !fallbackResult.data) {
-          throw new Error(fallbackResult.error?.message || 'Both typography and fallback generation failed');
-        }
-        
-        // Save to database with fallback result
-        const [fallbackScene] = await db.insert(scenes).values({
-          projectId,
-          name: fallbackResult.data.name,
-          tsxCode: fallbackResult.data.tsxCode,
-          duration: fallbackResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        return { success: true, scene: fallbackScene as any };
+      const typographyResult = await addTool.run(typographyInput);
+      
+      if (!typographyResult.success || !typographyResult.data) {
+        throw new Error(typographyResult.error?.message || 'Text scene generation failed');
       }
+      
+      // Save to database
+      const [typographyScene] = await db.insert(scenes).values({
+        projectId,
+        name: typographyResult.data.name,
+        tsxCode: typographyResult.data.tsxCode,
+        duration: typographyResult.data.duration || 90, // Default for text scenes
+        order: storyboard.length,
+        props: {},
+      }).returning();
+      
+      return { success: true, scene: typographyScene as any };
 
     case 'imageRecreatorScene':
       console.log('🖼️ [HELPERS] Using IMAGE RECREATOR tool');
@@ -943,21 +905,10 @@ async function executeIndividualScene(
     // Execute appropriate tool with fallback
     switch (plan.toolType) {
       case 'typography':
+        // Typography is now handled by addTool
+        console.log(`🎨 [MULTI-SCENE] Typography now handled by ADD tool for scene ${sceneOrder}`);
+        
         try {
-          toolResult = await typographyTool.run({
-            userPrompt: plan.prompt,
-            projectId,
-            userId,
-            projectFormat,
-          });
-          
-          if (!toolResult.success || !toolResult.data) {
-            throw new Error(toolResult.error?.message || 'Typography tool failed');
-          }
-        } catch (error) {
-          console.warn(`🔄 [MULTI-SCENE] Typography tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
-          
-          // Fall back to code-generator
           toolResult = await addTool.run({
             userPrompt: plan.prompt,
             projectId,
@@ -966,6 +917,13 @@ async function executeIndividualScene(
             storyboardSoFar: storyboard,
             projectFormat,
           });
+          
+          if (!toolResult.success || !toolResult.data) {
+            throw new Error(toolResult.error?.message || 'Text scene generation failed');
+          }
+        } catch (error) {
+          console.warn(`🔄 [MULTI-SCENE] Text scene generation failed for scene ${sceneOrder}:`, error);
+          throw error; // No fallback needed as we're already using addTool
         }
         break;
         

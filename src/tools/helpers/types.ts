@@ -176,26 +176,7 @@ export interface TrimToolOutput extends BaseToolOutput {
 
 // ============================================================================
 // NEW SPECIALIZED TOOL TYPES
-// ============================================================================
 
-export interface TypographyToolInput extends BaseToolInput {
-  textStyle?: 'fast' | 'typewriter' | 'cascade';
-  projectFormat?: {
-    format: 'landscape' | 'portrait' | 'square';
-    width: number;
-    height: number;
-  };
-  previousSceneContext?: {
-    tsxCode: string;
-    style?: string;
-  };
-}
-
-export interface TypographyToolOutput extends BaseToolOutput {
-  tsxCode: string;
-  name: string;
-  duration: number;
-}
 
 export interface ImageRecreatorToolInput extends BaseToolInput {
   imageUrls: string[];
