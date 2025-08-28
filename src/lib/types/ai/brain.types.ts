@@ -241,5 +241,5 @@ export interface ToolSelectionResult {
 // ============================================================================
 
 export function isValidToolName(value: string): value is ToolName {
-  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'typographyScene', 'imageRecreatorScene', 'addAudio', 'websiteToVideo'].includes(value); // , 'scenePlanner' [DISABLED]
+  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'imageRecreatorScene', 'addAudio', 'websiteToVideo'].includes(value); // , 'scenePlanner' [DISABLED]
 }

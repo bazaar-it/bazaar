@@ -422,15 +422,6 @@ export const trimToolInputSchema = baseToolInputSchema.extend({
 // SCHEMAS FOR NEW SPECIALIZED TOOLS
 // ============================================================================
 
-export const typographyToolInputSchema = baseToolInputSchema.extend({
-  textStyle: z.enum(['fast', 'typewriter', 'cascade']).optional(),
-  projectFormat: z.object({
-    format: z.enum(['landscape', 'portrait', 'square']),
-    width: z.number(),
-    height: z.number(),
-  }).optional(),
-});
-
 export const imageRecreatorToolInputSchema = baseToolInputSchema.extend({
   imageUrls: z.array(z.string()).min(1, "At least one image URL is required"),
   recreationType: z.enum(['full', 'segment']).optional(),
