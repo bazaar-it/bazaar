@@ -74,7 +74,7 @@ export interface WorkspaceContentAreaGHandle {
 }
 
 // Sortable panel wrapper
-function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setCurrentPlaybackSpeed, currentLoopState, setCurrentLoopState, selectedSceneId, onSceneSelect, scenes }: { 
+function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setPlaybackSpeed, currentLoopState, setCurrentLoopState, selectedSceneId, onSceneSelect, scenes }: { 
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties; 
@@ -82,7 +82,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   onRemove?: () => void;
   projectId?: string;
   currentPlaybackSpeed?: number;
-  setCurrentPlaybackSpeed?: (speed: number) => void;
+  setPlaybackSpeed?: (projectId: string, speed: number) => void;
   currentLoopState?: LoopState;
   setCurrentLoopState?: (state: LoopState) => void;
   selectedSceneId?: string | null;
@@ -149,7 +149,9 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
                 <PlaybackSpeedSlider
                   currentSpeed={currentPlaybackSpeed || 1}
                   onSpeedChange={(speed) => {
-                    setCurrentPlaybackSpeed?.(speed);
+                    if (projectId && setPlaybackSpeed) {
+                      setPlaybackSpeed(projectId, speed);
+                    }
                     // Dispatch event to PreviewPanelG
                     const event = new CustomEvent('playback-speed-change', { detail: { speed } });
                     window.dispatchEvent(event);
@@ -318,8 +320,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       { id: 'preview', type: 'preview' },
     ]);
     
-    // Playback speed state for preview panel header
-    const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(1);
+    // Playback speed state from Zustand (persistent across sessions)
+    const { setPlaybackSpeed } = useVideoState();
+    const currentPlaybackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1);
     
     // Loop state for preview panel header - always default to 'video'
     // The actual project-specific state will be loaded by PreviewPanelG
@@ -330,8 +333,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       const handleSpeedLoaded = (event: Event) => {
         const customEvent = event as CustomEvent;
         const speed = customEvent.detail?.speed;
-        if (typeof speed === 'number') {
-          setCurrentPlaybackSpeed(speed);
+        if (typeof speed === 'number' && projectId) {
+          setPlaybackSpeed(projectId, speed);
         }
       };
       
@@ -853,7 +856,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                             onRemove={() => panel?.id ? removePanel(panel.id) : null}
                             projectId={projectId}
                             currentPlaybackSpeed={currentPlaybackSpeed}
-                            setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
+                            setPlaybackSpeed={setPlaybackSpeed}
                             currentLoopState={currentLoopState}
                             setCurrentLoopState={setCurrentLoopState}
                             selectedSceneId={selectedSceneId}

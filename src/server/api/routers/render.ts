@@ -21,6 +21,7 @@ export const renderRouter = createTRPCRouter({
       projectId: z.string(),
       format: z.enum(['mp4', 'webm', 'gif']).default('mp4'),
       quality: z.enum(['low', 'medium', 'high']).default('high'),
+      playbackSpeed: z.number().min(0.25).max(4).default(1).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Check daily quota
@@ -127,6 +128,7 @@ export const renderRouter = createTRPCRouter({
         scenes: scenesWithCode,
         format: input.format,
         quality: input.quality,
+        playbackSpeed: input.playbackSpeed,
         projectProps: project.props,
         audio: project.audio, // Get audio from database
       });
