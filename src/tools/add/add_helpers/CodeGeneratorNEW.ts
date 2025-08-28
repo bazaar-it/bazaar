@@ -449,6 +449,7 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         description: string;
       }>;
     };
+    promptVersion?: "original" | "v2" | "v3-taste" | "v4-balanced";
   }): Promise<CodeGenerationOutput> {
     // Use Sonnet 4 with temperature 0 for YouTube reproduction
     const config = input.isYouTubeAnalysis 
@@ -489,8 +490,45 @@ CRITICAL: Create all visuals with CSS and React components. NO stock photos or e
 
 Output only code.`;
         
+      } else if (input.promptVersion && input.promptVersion !== 'original') {
+        // Use versioned prompts for A/B testing
+        let messages: Array<{role: string; content: string}> = [];
+        
+        if (input.promptVersion === 'v2') {
+          const { buildCodeGeneratorV2Messages } = await import('~/config/prompts/active/code-generator-v2');
+          messages = buildCodeGeneratorV2Messages(
+            input.userPrompt,
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        } else if (input.promptVersion === 'v3-taste') {
+          const { buildCodeGeneratorV3Messages } = await import('~/config/prompts/active/code-generator-v3-taste');
+          messages = buildCodeGeneratorV3Messages(
+            input.userPrompt,
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        } else if (input.promptVersion === 'v4-balanced') {
+          const { buildCodeGeneratorV4Messages } = await import('~/config/prompts/active/code-generator-v4-balanced-taste');
+          messages = buildCodeGeneratorV4Messages(
+            input.userPrompt,
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        }
+        
+        // Extract system and user messages
+        const systemMsg = messages.find(m => m.role === 'system');
+        const userMessages = messages.filter(m => m.role === 'user');
+        const lastUserMsg = userMessages[userMessages.length - 1];
+        
+        systemPrompt = { role: 'system' as const, content: systemMsg?.content || '' };
+        userPrompt = lastUserMsg?.content || input.userPrompt;
+        
+        // For v2, v3, v4 - we need to pass the full conversation to get few-shot examples
+        // This will be handled in the AIClientService call below
       } else {
-        // Regular creative generation
+        // Regular creative generation (original)
         systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
           FUNCTION_NAME: input.functionName,
           WIDTH: input.projectFormat?.width.toString() || '1920',
@@ -570,14 +608,62 @@ ${ex.code}
 `;
       }
 
-      const messages = [
-        { role: 'user' as const, content: userPrompt + templatePrompt }
-      ];
+      // Prepare messages based on prompt version
+      let messages: Array<{role: 'system' | 'user' | 'assistant'; content: string}>;
+      let finalSystemPrompt = systemPrompt;
+      
+      if (input.promptVersion && input.promptVersion !== 'original') {
+        // For versioned prompts, we need to rebuild the full conversation
+        let fullMessages: Array<{role: string; content: string}> = [];
+        
+        if (input.promptVersion === 'v2') {
+          const { buildCodeGeneratorV2Messages } = await import('~/config/prompts/active/code-generator-v2');
+          fullMessages = buildCodeGeneratorV2Messages(
+            userPrompt.replace('USER REQUEST: "', '').replace('"\n\nFUNCTION NAME:', '').replace(`\n\nFUNCTION NAME: ${input.functionName}`, ''),
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        } else if (input.promptVersion === 'v3-taste') {
+          const { buildCodeGeneratorV3Messages } = await import('~/config/prompts/active/code-generator-v3-taste');
+          fullMessages = buildCodeGeneratorV3Messages(
+            userPrompt.replace('USER REQUEST: "', '').replace('"\n\nFUNCTION NAME:', '').replace(`\n\nFUNCTION NAME: ${input.functionName}`, ''),
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        } else if (input.promptVersion === 'v4-balanced') {
+          const { buildCodeGeneratorV4Messages } = await import('~/config/prompts/active/code-generator-v4-balanced-taste');
+          fullMessages = buildCodeGeneratorV4Messages(
+            userPrompt.replace('USER REQUEST: "', '').replace('"\n\nFUNCTION NAME:', '').replace(`\n\nFUNCTION NAME: ${input.functionName}`, ''),
+            true, // include examples
+            input.projectFormat || { width: 1920, height: 1080, format: "16:9" }
+          );
+        }
+        
+        // Extract system message and other messages
+        const systemMsg = fullMessages.find(m => m.role === 'system');
+        if (systemMsg) {
+          finalSystemPrompt = { role: 'system' as const, content: systemMsg.content };
+          messages = fullMessages.filter(m => m.role !== 'system').map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content
+          }));
+        } else {
+          messages = fullMessages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content
+          }));
+        }
+      } else {
+        // Original version
+        messages = [
+          { role: 'user' as const, content: userPrompt + templatePrompt }
+        ];
+      }
       
       const response = await AIClientService.generateResponse(
         config,
         messages,
-        { role: 'system', content: systemPrompt.content },
+        finalSystemPrompt,
         { 
           fallbackToOpenAI: true, // Enable fallback for code generation
           priority: 5

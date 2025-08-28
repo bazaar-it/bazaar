@@ -195,6 +195,53 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     }
     
     const startTime = Date.now();
+    
+    // Get context from ALL working scenes - models can handle it!
+    const getWorkingSceneContext = () => {
+      // Find ALL working scenes (not broken, not being fixed)
+      const workingScenes = scenesRef.current.filter(s => 
+        s.id !== sceneId && 
+        !autoFixQueueRef.current.has(s.id) &&
+        !fixingScenesRef.current.has(s.id)
+      );
+      
+      if (workingScenes.length === 0) return '';
+      
+      // Take up to 3 working scenes as examples (models can easily handle this)
+      const exampleScenes = workingScenes.slice(0, 3);
+      
+      const examples = exampleScenes.map((scene, index) => {
+        const code = (scene as any).data?.code || '';
+        const name = (scene as any).data?.name || `Scene ${index + 1}`;
+        
+        if (!code) return '';
+        
+        return `
+=== WORKING EXAMPLE ${index + 1}: "${name}" ===
+This scene compiles and works correctly. Study its patterns:
+
+\`\`\`tsx
+${code}
+\`\`\`
+`;
+      }).filter(Boolean).join('\n');
+      
+      if (!examples) return '';
+      
+      return `
+CRITICAL CONTEXT - These scenes from the same project are WORKING CORRECTLY.
+Use them as reference for proper patterns and structure:
+
+${examples}
+
+COMMON MISTAKES TO AVOID (based on patterns above):
+1. NEVER add "const padding = 16; const margin = 8; const gap = 12;" if they don't exist in working examples
+2. NEVER duplicate the fps parameter: spring({ frame, fps, config }) is correct, NOT spring({ frame, fps, fps, config })
+3. Match the exact import style from working examples
+4. Use the same naming conventions for scripts, sequences, and components
+5. If working scenes don't have certain variables, DON'T add them
+6. Pay attention to the exact structure of spring() calls in working examples`;
+    };
     // Record fix attempt start in database
     const recordMetric = async (success: boolean, strategy?: string) => {
       const fixDuration = Date.now() - startTime;
@@ -234,18 +281,41 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
       });
     };
 
-    // Progressive fix prompts based on attempt number
+    // Get context from working scenes
+    const workingSceneContext = getWorkingSceneContext();
+    
+    // Progressive fix prompts based on attempt number WITH CONTEXT
     let fixPrompt: string;
     
     if (attemptNumber === 1) {
-      // Attempt 1: Quick targeted fix
-      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". Fix ONLY this specific error. Make minimal changes to resolve the compilation issue.`;
+      // Attempt 1: Quick targeted fix with context
+      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". 
+
+${workingSceneContext}
+
+Fix ONLY this specific error. Make minimal changes to resolve the compilation issue. Match the patterns from the working examples above.`;
     } else if (attemptNumber === 2) {
-      // Attempt 2: Comprehensive fix
-      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". Fix ALL compilation errors, check imports, undefined variables, and syntax issues. Be more thorough this time.`;
+      // Attempt 2: Comprehensive fix with context
+      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". 
+
+${workingSceneContext}
+
+Fix ALL compilation errors. Study the working examples carefully and match their exact patterns. Check:
+- No duplicate variable declarations
+- Correct spring() parameter syntax (no duplicate fps)
+- Proper imports matching the examples
+- Remove any auto-generated defaults that don't exist in working scenes`;
     } else {
-      // Attempt 3: Nuclear option - rewrite
-      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}". REWRITE this component using simpler, more reliable code that will definitely compile. Keep the same visual output but prioritize making it work.`;
+      // Attempt 3: Nuclear option - rewrite based on working examples
+      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}".
+
+${workingSceneContext}
+
+REWRITE this component by closely following the structure of the working examples above. Use their exact patterns for:
+- Variable declarations (don't add padding/margin/gap if they don't use them)
+- Spring animations (exact syntax from examples)
+- Component structure
+Keep similar visual output but use the proven patterns from the working scenes.`;
     }
     
     // Add retry logic for API failures
