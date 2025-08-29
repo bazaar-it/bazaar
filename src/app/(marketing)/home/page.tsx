@@ -4,10 +4,11 @@ import { useState, lazy, Suspense, useCallback, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
-import MarketingVideoPlayer from "~/components/MarketingVideoPlayer";
+
 import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
+import HomePageTextAnimation from "~/components/HomePageTextAnimation";
 import TemplateScrollGrid from "~/components/TemplateScrollGrid";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
@@ -21,8 +22,21 @@ export function Homepage() {
   // Add loading state for unauthenticated Try for Free button
   const [tryForFreeLoading, setTryForFreeLoading] = useState(false);
   
+  // Mobile detection state
+  const [isMobile, setIsMobile] = useState(false);
+  
   // Ref to access MarketingHeader methods
   const marketingHeaderRef = useRef<MarketingHeaderRef>(null);
+
+  // Mobile detection effect
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleTryForFree = async () => {
     if (status === "authenticated" && session?.user) {
@@ -125,10 +139,10 @@ export function Homepage() {
         </div>
         
         {/* Marketing Video Player - responsive positioning */}
-        <div className="w-full -mt-8 md:-mt-16 mb-8">
-          <div className="flex justify-center w-full px-2 sm:px-4 md:px-0">
-            <div className="w-full max-w-7xl">
-              <MarketingVideoPlayer />
+        <div className="w-full mb-8">
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-4xl">
+              <HomePageTextAnimation />
             </div>
           </div>
         </div>
@@ -139,6 +153,25 @@ export function Homepage() {
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               Create <span className="moving-gradient-text">Viral Videos</span> for your App
             </h2>
+          </div>
+          
+          {/* YouTube Video Embed */}
+          <div className="flex justify-center w-full px-2 sm:px-4">
+            <div className="w-full max-w-4xl">
+              <div className="aspect-video rounded-lg overflow-hidden shadow-lg">
+                <iframe
+                  width="100%"
+                  height="100%"
+                  src="https://www.youtube.com/embed/vTx7ZwA2G6k?si=wKqcpCqGhDiWlha1"
+                  title="YouTube video player"
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+            </div>
           </div>
         </section>
 
@@ -176,7 +209,7 @@ export function Homepage() {
         </section> */}
 
         {/* Create in Horizontal, Vertical, Square with Morphing Section */}
-        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
+        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-gray-50/50 to-white">
           <DynamicFormatTitle />
           
           {/* Aspect Ratio Transition Player */}
@@ -188,7 +221,7 @@ export function Homepage() {
         </section>
 
         {/* 25 Templates Section */}
-        <section className="mt-16 w-full py-12 md:py-20 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
+        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
           <div className="text-center mb-8 md:mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
               50+ Templates to Start From
