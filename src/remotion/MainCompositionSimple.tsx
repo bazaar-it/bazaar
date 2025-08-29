@@ -1,7 +1,7 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
 // Import CSS fonts - works in both local and Lambda without cancelRender() errors
 import './fonts.css';
 
@@ -236,44 +236,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
   );
 };
 
-// Helper function to extract duration from scene code
-const extractSceneDuration = (scene: any): number => {
-  if (!scene.jsCode) return scene.duration || 150;
-  
-  try {
-    // Transform the code to handle ES6 exports
-    let codeWithExports = scene.jsCode;
-    
-    // Transform "export const durationInFrames = X;" to "exports.durationInFrames = X;"
-    codeWithExports = codeWithExports.replace(
-      /export\s+const\s+durationInFrames\s*=\s*([^;]+);?/g,
-      'const durationInFrames = $1; exports.durationInFrames = durationInFrames;'
-    );
-    
-    const durationExtractor = new Function(`
-      try {
-        let exports = {};
-        ${codeWithExports}
-        // Try to get duration from exports or local scope
-        return exports.durationInFrames || (typeof durationInFrames !== 'undefined' ? durationInFrames : null);
-      } catch (e) {
-        console.warn('Duration extraction error:', e);
-        return null;
-      }
-    `);
-    
-    const extractedDuration = durationExtractor();
-    if (extractedDuration && extractedDuration > 0) {
-      console.log(`[DurationExtractor] Successfully extracted duration: ${extractedDuration} frames`);
-      return extractedDuration;
-    }
-    console.warn(`[DurationExtractor] Failed to extract valid duration, using fallback: ${scene.duration || 150} frames`);
-    return scene.duration || 150;
-  } catch (error) {
-    console.warn('[DurationExtractor] Failed to extract scene duration:', error);
-    return scene.duration || 150;
-  }
-};
+// Duration extraction removed - DB duration is the single source of truth
 
 // Video composition component
 export const VideoComposition: React.FC<{
@@ -330,11 +293,33 @@ export const VideoComposition: React.FC<{
     );
   }
 
-  // Calculate total video duration for audio looping
-  const totalVideoDuration = scenes.reduce((sum, scene) => {
-    return sum + extractSceneDuration(scene);
+  // Sort scenes by order field to ensure consistency with Timeline
+  const sortedScenes = [...scenes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  
+  // Calculate total video duration for audio looping - use DB durations strictly
+  const totalVideoDuration = sortedScenes.reduce((sum, scene) => {
+    return sum + (scene.duration || 150); // Use DB duration as truth
   }, 0);
 
+  // Build sequences with cumulative start positions - DB as truth
+  let cumulativeStart = 0;
+  const sequences = sortedScenes.map((scene, index) => {
+    const dbDuration = scene.duration || 150; // Use DB duration strictly
+    const sequenceElement = (
+      <Sequence
+        key={scene.id || index}
+        from={cumulativeStart}
+        durationInFrames={dbDuration}
+      >
+        <DynamicScene scene={{...scene, duration: dbDuration}} index={index} width={width} height={height} />
+      </Sequence>
+    );
+    
+    console.log(`[VideoComposition] Scene ${index} (${scene.id}): from=${cumulativeStart}, duration=${dbDuration} frames`);
+    cumulativeStart += dbDuration;
+    return sequenceElement;
+  });
+  
   return (
     <AbsoluteFill>
       {/* Background audio track */}
@@ -362,21 +347,8 @@ export const VideoComposition: React.FC<{
         </>
       )}
       
-      {/* Video scenes */}
-      <Series>
-        {scenes.map((scene, index) => {
-          // Extract the real duration from the scene code
-          const realDuration = extractSceneDuration(scene);
-          
-          console.log(`[VideoComposition] Scene ${index} duration: ${realDuration} frames (${Math.round(realDuration / 30)}s)`);
-          
-          return (
-            <Series.Sequence key={scene.id || index} durationInFrames={realDuration}>
-              <DynamicScene scene={{...scene, duration: realDuration}} index={index} width={width} height={height} />
-            </Series.Sequence>
-          );
-        })}
-      </Series>
+      {/* Video scenes with DB duration enforcement via Sequence */}
+      {sequences}
     </AbsoluteFill>
   );
 };
@@ -397,10 +369,10 @@ export const MainComposition: React.FC = () => {
           audio: undefined,
         }}
         calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number; audio?: any } }) => {
-          // Calculate total duration by extracting from each scene's code
-          const totalDuration = (props.scenes || []).reduce((sum: number, scene: any) => {
-            const sceneDuration = extractSceneDuration(scene);
-            return sum + sceneDuration;
+          // Calculate total duration using DB durations strictly - sort first
+          const sortedScenes = [...(props.scenes || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          const totalDuration = sortedScenes.reduce((sum: number, scene: any) => {
+            return sum + (scene.duration || 150); // DB duration as truth
           }, 0);
           
           console.log(`[MainComposition] Total calculated duration: ${totalDuration} frames (${Math.round(totalDuration / 30)}s)`);

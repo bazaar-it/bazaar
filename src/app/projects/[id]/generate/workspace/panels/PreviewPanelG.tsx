@@ -14,6 +14,7 @@ import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
+import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -73,16 +74,7 @@ export function PreviewPanelG({
         return;
       }
       
-      // 🔍 SMART SYNC: Check if VideoState already has the same scenes
-      const stateSceneIds = currentProps.scenes?.map((s: any) => s.id).sort().join(',') || '';
-      const dbSceneIdsOnly = dbScenes.map(s => s.id).sort().join(',');
-      
-      if (stateSceneIds === dbSceneIdsOnly) {
-        // VideoState already has these scenes, just update sync tracker
-        console.log('[PreviewPanelG] 🎯 VideoState already up-to-date, skipping redundant sync');
-        setLastSyncedSceneIds(currentSceneIds);
-        return;
-      }
+      // Do not skip based on ID set alone; order/duration may have changed
       
       // Clear existing sync timer
       if (syncDebounceTimer) {
@@ -95,9 +87,10 @@ export function PreviewPanelG({
         // Database scenes updated, syncing to VideoState
         setLastSyncedSceneIds(currentSceneIds);
       
-      // Convert database scenes to InputProps format
+      // Convert database scenes to InputProps format (sorted by order)
+      const ordered = [...dbScenes].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
       let currentStart = 0;
-      const convertedScenes = dbScenes.map((dbScene: any) => {
+      const convertedScenes = ordered.map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
         
         // Debug log to check if tsxCode exists
@@ -114,6 +107,7 @@ export function PreviewPanelG({
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
+          order: dbScene.order ?? 0,
           // Preserve local name if it exists and is different from DB name
           name: localName || dbScene.name,
           data: {
@@ -171,8 +165,14 @@ export function PreviewPanelG({
   // Fonts are now loaded via CSS - no JavaScript loading needed
   // All 99 Google Fonts are available through fonts.css imported in MainCompositionSimple
   
-  // Get scenes from reactive state
-  const scenes = currentProps?.scenes || [];
+  // Get scenes from reactive state - ALWAYS sort by order field for consistency
+  const unsortedScenes = currentProps?.scenes || [];
+  const scenes = useMemo(() => 
+    [...unsortedScenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0)),
+    [unsortedScenes]
+  );
+  const ranges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
+  const activeRange = useMemo(() => findSceneAtFrame(ranges, currentFrame), [ranges, currentFrame]);
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -252,26 +252,50 @@ export function PreviewPanelG({
       }
     };
     
+    // New: Provide precise current frame on demand
+    const handleRequestCurrentFrame = () => {
+      try {
+        const frame = (playerRef.current as any)?.getCurrentFrame?.();
+        if (typeof frame === 'number') {
+          const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
+          window.dispatchEvent(ev);
+        }
+      } catch {}
+    };
+    
+    const handleRequestPlayState = () => {
+      try {
+        const ev = new CustomEvent('preview-play-state-change', { detail: { playing: isPlaying } });
+        window.dispatchEvent(ev);
+      } catch {}
+    };
+
     window.addEventListener('timeline-seek' as any, handleTimelineSeek);
     window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    window.addEventListener('request-play-state' as any, handleRequestPlayState);
+    window.addEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     
     return () => {
       window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
       window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+      window.removeEventListener('request-play-state' as any, handleRequestPlayState);
+      window.removeEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     };
   }, [isPlaying, setCurrentFrame]);
 
   // (moved below selectedSceneRange definition to avoid TDZ)
   
-  // Memoized scene fingerprint to prevent unnecessary re-renders
+  // Memoized scene fingerprint to prevent unnecessary re-renders - order-aware
   const scenesFingerprint = useMemo(() => {
+    // Sort scenes first to ensure consistent fingerprint regardless of state order
+    const sortedForFingerprint = [...scenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
     // Check both possible code locations and use actual code content hash
-    return scenes.map(s => {
+    return sortedForFingerprint.map((s, idx) => {
       const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
-      // Create stable fingerprint including id, duration, and code hash
-      // Use code length + first 200 chars to detect changes while being stable
+      // Create stable fingerprint including id, duration, order, and code hash
+      // Include index to detect reordering
       const codeHash = code ? `${code.length}-${code.substring(0, 200).replace(/\s+/g, '')}` : 'empty';
-      return `${s.id}-${s.duration || 150}-${codeHash}`;
+      return `${idx}-${s.id}-${(s as any).order ?? 0}-${s.duration || 150}-${codeHash}`;
     }).join('|');
   }, [scenes]);
   
@@ -510,6 +534,30 @@ function FallbackScene${sceneIndex}() {
       justifyContent: 'center',
       opacity,
     }}>
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          background: 'rgba(17,24,39,0.8)',
+          color: '#e5e7eb',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11,
+          lineHeight: 1.2,
+          borderRadius: 8,
+          padding: '8px 10px',
+          zIndex: 9999,
+          pointerEvents: 'none'
+        }}>
+          <div>frame: {currentFrame}</div>
+          <div>
+            active: {activeRange ? (String(activeRange.index) + ' (' + (activeRange.id ? activeRange.id.slice(0, 8) : '') + ')') : 'none'}
+          </div>
+          <div>
+            ranges: {ranges.map(r => '[' + r.index + ':' + r.start + '-' + r.end + ']').join(' ')}
+          </div>
+        </div>
+      )}
       {/* Animated background shapes */}
       <div style={{
         position: 'absolute',
@@ -753,15 +801,43 @@ function FallbackScene${sceneIndex}() {
 
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
-    // Filter scenes that have code in their data
-    const scenesWithCode = scenes.filter(scene => (scene.data as any)?.code);
+    // ALWAYS use ALL scenes sorted by order - no filtering!
+    const orderedScenes = [...scenes].sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
     
-    if (scenesWithCode.length === 0) {
-      setComponentError(new Error('No scenes with code found.'));
+    if (orderedScenes.length === 0) {
+      // Provide a minimal placeholder component so the Player stays stable when there are no scenes
+      const placeholder = `
+const { AbsoluteFill } = window.Remotion;
+
+export default function EmptyComposition() {
+  return React.createElement(AbsoluteFill, { style: { backgroundColor: 'white' } });
+}`;
+      try {
+        const { code: transformed } = transform(placeholder, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+        const blob = new Blob([transformed], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        setComponentBlobUrl(url);
+        setComponentImporter(() => () => import(/* webpackIgnore: true */ url));
+        setComponentError(null);
+      } catch (e) {
+        setComponentImporter(null);
+        setComponentError(new Error('No scenes to preview.')); 
+      }
       return;
     }
 
-    console.log('[PreviewPanelG] Compiling composition with', scenesWithCode.length, 'scenes...');
+    console.log('[PreviewPanelG] Compiling composition with ALL', orderedScenes.length, 'scenes (including fallbacks)...');
+    console.log('[PreviewPanelG] Scene positions for compilation:', orderedScenes.map((s: any, i: number) => ({
+      id: s.id,
+      order: s.order,
+      start: s.start,
+      duration: s.duration,
+      calculatedStart: orderedScenes.slice(0, i).reduce((acc: number, sc: any) => acc + (sc.duration || 150), 0)
+    })));
     
     setIsCompiling(true);
     setComponentError(null);
@@ -777,8 +853,9 @@ function FallbackScene${sceneIndex}() {
 
     try {
       // 🚨 FIXED: Compile each scene individually with ISOLATION (no cascade failures)
+      // Compile ALL scenes, not just those with code - use fallbacks for empty ones
       compiledScenes = await Promise.all(
-        scenesWithCode.map((scene, index) => compileSceneDirectly(scene, index))
+        orderedScenes.map((scene, index) => compileSceneDirectly(scene, index))
       );
       
       const validScenes = compiledScenes.filter(s => s.isValid).length;
@@ -1252,18 +1329,54 @@ export default function SingleSceneComposition() {
         // Multi-scene composition logic with compiled scenes
         const sceneImports: string[] = [];
         const sceneComponents: string[] = [];
-        const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-        const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'Audio', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
-
+        // Use ALL scenes for total duration - critical for sync!
+        const totalDuration = orderedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+        const allImports = new Set(['Series', 'AbsoluteFill', 'Audio', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+        
+        // Create a map of compiled scenes by ID for proper lookup
+        const compiledById = new Map();
         compiledScenes.forEach((compiled, index) => {
-          const originalScene = scenesWithCode[index];
-          if (!compiled || !originalScene) return;
+          const originalScene = orderedScenes[index];
+          if (originalScene) {
+            compiledById.set(originalScene.id, compiled);
+          }
+        });
+
+        // Build scene components for ALL ordered scenes
+        orderedScenes.forEach((originalScene, index) => {
+          const compiled = compiledById.get(originalScene.id);
+          // CRITICAL: Never skip scenes! Use fallback if compilation failed
+          if (!originalScene) return; // Only skip if scene itself is missing
           
           try {
             // 🚨 CRITICAL FIX: Handle both valid AND invalid scenes gracefully
-            if (compiled.isValid) {
+            if (compiled && compiled.isValid) {
               // ✅ VALID SCENE: Process normally
               const sceneCode = compiled.compiledCode;
+              // Isolate this scene in a namespace to prevent top-level identifier collisions when multiple scenes are concatenated
+              const sceneNamespaceName = `SceneNS_${index}`;
+              // Read offset and prepare optional remapping of frame reads
+              const startOffset = ((originalScene as any).data?.props?.startOffset) || 0;
+              // Build a code header that defines an offsetted frame helper without shadowing the real useCurrentFrame
+              const offsetHeader = (startOffset && startOffset > 0)
+                ? `// Frame offset helper for Scene ${index}\nconst __offsetUseCurrentFrame_${index} = () => (useCurrentFrame() + ${startOffset});`
+                : '';
+              // If offset is present, rewrite both bare and window-qualified useCurrentFrame() calls to the offset helper
+              const codeForNamespace = (startOffset && startOffset > 0)
+                ? sceneCode
+                    // Replace fully-qualified calls first to avoid leaving window.Remotion.__offset...
+                    .replace(/window\.Remotion\s*\.useCurrentFrame\s*\(\s*\)/g, `__offsetUseCurrentFrame_${index}()`)
+                    // Then replace bare hook calls
+                    .replace(/\buseCurrentFrame\s*\(\s*\)/g, `__offsetUseCurrentFrame_${index}()`)
+                : sceneCode;
+              const wrappedSceneCode = [
+                `// Isolated namespace for Scene ${index}`,
+                `const ${sceneNamespaceName} = (() => {`,
+                offsetHeader,
+                codeForNamespace,
+                `  return { Comp: ${compiled.componentName} };`,
+                `})();`
+              ].filter(Boolean).join('\n');
               const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
               remotionFunctions.forEach(func => {
                 if (sceneCode.includes(func)) {
@@ -1274,7 +1387,7 @@ export default function SingleSceneComposition() {
               // ✅ VALID: Add working scene with error boundary for runtime protection
               const errorBoundaryWrapper = `
 // React Error Boundary for Scene ${index} (Valid)
-class ${compiled.componentName}ErrorBoundary extends React.Component {
+class ${sceneNamespaceName}ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -1543,23 +1656,24 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
       return React.createElement(ErrorDisplay);
     }
 
-    return React.createElement(${compiled.componentName});
+    return React.createElement(${sceneNamespaceName}.Comp);
   }
 }
 
-function ${compiled.componentName}WithErrorBoundary() {
-  return React.createElement(${compiled.componentName}ErrorBoundary);
+function ${sceneNamespaceName}WithErrorBoundary() {
+  return React.createElement(${sceneNamespaceName}ErrorBoundary);
 }`;
               
-              sceneImports.push(compiled.compiledCode);
+              sceneImports.push(wrappedSceneCode);
               sceneImports.push(errorBoundaryWrapper);
+              // Render with error boundary; offset applied via namespaced useCurrentFrame
               sceneComponents.push(`
                 React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
-                  React.createElement(${compiled.componentName}WithErrorBoundary, {})
+                  React.createElement(${sceneNamespaceName}WithErrorBoundary, {})
                 )
               `);
               
-            } else {
+            } else if (compiled) {
               // 🚨 INVALID SCENE: Already has fallback code, just add it with error boundary
               // Scene isolation: failed compilation, using safe fallback
               
@@ -1568,6 +1682,21 @@ function ${compiled.componentName}WithErrorBoundary() {
               sceneComponents.push(`
                 React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
                   React.createElement(${compiled.componentName}, {})
+                )
+              `);
+            } else {
+              // 🚨 NO COMPILATION RESULT: Scene wasn't compiled at all (e.g., no code)
+              // Add a placeholder to maintain timeline sync
+              const placeholderScene = createFallbackScene(
+                (originalScene.data as any)?.name || (originalScene as any).name || `Scene ${index + 1}`,
+                index,
+                'Scene has no code',
+                originalScene.id
+              );
+              sceneImports.push(placeholderScene);
+              sceneComponents.push(`
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(FallbackScene${index}, {})
                 )
               `);
             }
@@ -1888,10 +2017,9 @@ export default function MultiSceneComposition(props) {
   return React.createElement(FontLoader, {},
     React.createElement(AbsoluteFill, {},
       projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
-      React.createElement(Loop, { durationInFrames: ${totalDuration} },
-        React.createElement(Series, {},
-          ${sceneComponents.join(',\n          ')}
-        )
+      // NO LOOP! Direct Series for proper frame mapping
+      React.createElement(Series, {},
+        ${sceneComponents.join(',\n          ')}
       )
     )
   );
@@ -1950,7 +2078,7 @@ export default function MultiSceneComposition(props) {
       // Try to identify which scene might be causing the issue
       let problematicSceneInfo = null;
       if (error instanceof Error) {
-        problematicSceneInfo = detectProblematicScene(error, compiledScenes, scenesWithCode);
+        problematicSceneInfo = detectProblematicScene(error, compiledScenes, orderedScenes);
         
         if (problematicSceneInfo) {
           const enhancedMessage = enhanceErrorMessage(error, problematicSceneInfo);
@@ -1964,7 +2092,7 @@ export default function MultiSceneComposition(props) {
       // 🚨 CRITICAL FIX: Dispatch error event for autofixer when compilation fails
       if (problematicSceneInfo) {
         // We know which specific scene is problematic
-        const problematicScene = scenesWithCode[problematicSceneInfo.sceneIndex];
+        const problematicScene = orderedScenes[problematicSceneInfo.sceneIndex];
         if (problematicScene) {
           // Compilation error: dispatching error for specific scene
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -1979,7 +2107,7 @@ export default function MultiSceneComposition(props) {
         }
       } else {
         // Fallback to first scene if we can't identify the specific one
-        const firstSceneWithCode = scenesWithCode[0];
+        const firstSceneWithCode = orderedScenes[0];
         if (firstSceneWithCode) {
           // Compilation error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -2052,7 +2180,7 @@ export default function FallbackComposition() {
         console.error('[PreviewPanelG] Even fallback compilation failed:', fallbackError);
         
         // 🚨 CRITICAL FIX: Dispatch error event even for fallback failures
-        const firstSceneWithCode = scenesWithCode[0];
+        const firstSceneWithCode = orderedScenes[0];
         if (firstSceneWithCode) {
           // Fallback error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -2276,6 +2404,14 @@ export default function FallbackComposition() {
     }
   }, [projectId]);
 
+  // Ensure loop target changes take effect immediately by nudging refreshToken
+  useEffect(() => {
+    // Remount the Remotion Player when switching between scene/video loop or when scene range changes
+    const start = selectedSceneRange?.start ?? -1;
+    const end = selectedSceneRange?.end ?? -1;
+    setRefreshToken(`loop-${loopState}-${start}-${end}-${Date.now()}`);
+  }, [loopState, selectedSceneRange?.start, selectedSceneRange?.end]);
+
   // Cleanup effect for component unmount
   useEffect(() => {
     return () => {
@@ -2291,10 +2427,10 @@ export default function FallbackComposition() {
 
   // Player props
   const playerProps = useMemo(() => {
-    if (!scenes.length) return null;
-    
     // Calculate total duration of all scenes for proper multi-scene playback
-    const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+    const totalDuration = scenes.length
+      ? scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0)
+      : 150; // Minimal placeholder duration when no scenes
     
     // Get format dimensions from project props, fallback to landscape
     const width = currentProps?.meta?.width || 1920;
@@ -2306,7 +2442,7 @@ export default function FallbackComposition() {
       width,
       height,
       format,
-      durationInFrames: totalDuration, // Use total duration, not just last scene
+      durationInFrames: totalDuration, // Use total duration (or placeholder when empty)
       inputProps: {
         audio: projectAudio || null
       }
@@ -2343,6 +2479,7 @@ export default function FallbackComposition() {
             )}
           >
             <ErrorBoundary FallbackComponent={ErrorFallback}>
+              {/* Compute safe scene loop window (exclusive outFrame) to satisfy Player constraints */}
               <RemotionPreview
                 lazyComponent={componentImporter}
                 durationInFrames={playerProps.durationInFrames}
@@ -2354,8 +2491,22 @@ export default function FallbackComposition() {
                 playerRef={playerRef}
                 playbackRate={playbackSpeed}
                 loop={loopState !== 'off'}
-                inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
-                outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
+                // Remotion Player expects inFrame < outFrame < (durationInFrames - 1)
+                inFrame={(() => {
+                  if (loopState !== 'scene' || !selectedSceneRange || !playerProps) return undefined;
+                  return Math.max(0, selectedSceneRange.start);
+                })()}
+                outFrame={(() => {
+                  if (loopState !== 'scene' || !selectedSceneRange || !playerProps) return undefined;
+                  const total = playerProps.durationInFrames;
+                  const start = Math.max(0, selectedSceneRange.start);
+                  const endInclusive = Math.min(total - 1, selectedSceneRange.end);
+                  const maxOutExclusive = Math.max(1, total - 2);
+                  const desiredOutExclusive = endInclusive + 1; // exclusive end
+                  const outExclusive = Math.min(desiredOutExclusive, maxOutExclusive);
+                  // Validate window
+                  return outExclusive > start ? outExclusive : undefined;
+                })()}
                 onPlay={() => {
                   setIsPlaying(true);
                   const event = new CustomEvent('preview-play-state-change', { 

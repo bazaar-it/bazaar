@@ -993,14 +993,15 @@ export const useVideoState = create<VideoState>()(
         scenes.splice(newIndex, 0, movedScene);
       }
       
-      // Recalculate start times for all scenes
+      // Recalculate start times AND order field for all scenes
       let currentStart = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         if (scene) {
           scenes[i] = {
             ...scene,
-            start: currentStart
+            start: currentStart,
+            order: i  // CRITICAL: Update order field to match new position!
           };
           currentStart += scene.duration || 150;
         }

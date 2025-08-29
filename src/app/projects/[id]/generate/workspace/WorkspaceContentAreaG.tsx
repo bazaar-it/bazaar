@@ -24,8 +24,8 @@ import { BrandProfilePanel } from '~/components/admin/BrandProfilePanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
-import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
-import { LoopToggle, type LoopState } from "~/components/ui/LoopToggle";
+// Removed playback-speed slider from Preview header; Timeline owns playback speed now.
+import type { LoopState } from "~/components/ui/LoopToggle";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -128,37 +128,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
             {...listeners}
           >{panelTitle}</span>
           <div className="flex items-center gap-1">
-            {isPreviewPanel && (
-              <>
-                <LoopToggle
-                  loopState={currentLoopState || 'video'}
-                  onStateChange={(state) => {
-                    console.log('[WorkspaceContentAreaG] Loop state changed:', state);
-                    setCurrentLoopState?.(state);
-                    // Dispatch event to PreviewPanelG
-                    const event = new CustomEvent('loop-state-change', { detail: { state } });
-                    window.dispatchEvent(event);
-                  }}
-                  selectedSceneId={selectedSceneId}
-                  onSceneSelect={(sceneId) => {
-                    console.log('[WorkspaceContentAreaG] Scene selected for loop:', sceneId);
-                    onSceneSelect?.(sceneId);
-                  }}
-                  scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
-                />
-                <PlaybackSpeedSlider
-                  currentSpeed={currentPlaybackSpeed || 1}
-                  onSpeedChange={(speed) => {
-                    if (projectId && setPlaybackSpeed) {
-                      setPlaybackSpeed(projectId, speed);
-                    }
-                    // Dispatch event to PreviewPanelG
-                    const event = new CustomEvent('playback-speed-change', { detail: { speed } });
-                    window.dispatchEvent(event);
-                  }}
-                />
-              </>
-            )}
+            {/* Playback speed is controlled from Timeline; no controls here. */}
             {/* Hide close button for Preview panel; users should always have video available */}
             {!isPreviewPanel && (
               <button 
@@ -725,7 +695,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     }, [getCurrentProps, projectId]);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
-    const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
+  const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
       if (!panel) return null;
       
       switch (panel.type) {
@@ -792,7 +762,19 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         default:
           return null;
       }
-    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel, userId]);
+  }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel, userId]);
+
+    // Sync selected scene from TimelinePanel (global event)
+    useEffect(() => {
+      const onTimelineSelect = (e: Event) => {
+        const sceneId = (e as CustomEvent).detail?.sceneId as string | null | undefined;
+        if (typeof sceneId === 'string') {
+          setSelectedSceneId(sceneId);
+        }
+      };
+      window.addEventListener('timeline-select-scene', onTimelineSelect as EventListener);
+      return () => window.removeEventListener('timeline-select-scene', onTimelineSelect as EventListener);
+    }, []);
 
     // Render empty state if no panels are open
     if (openPanels.length === 0) {

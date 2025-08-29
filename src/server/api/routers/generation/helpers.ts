@@ -336,8 +336,11 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
-      // Use duration from edit result if provided, otherwise keep existing
-      let editFinalDuration = editResult.data.duration;
+      // Preserve manual trims by default: only change duration if explicitly requested
+      let editFinalDuration = sceneToEdit.duration;
+      if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
+        editFinalDuration = editResult.data.duration;
+      }
       
       // Update database
       console.log('💾 [ROUTER] Updating scene in database:', {
@@ -349,7 +352,7 @@ export async function executeToolFromDecision(
       const [updatedScene] = await db.update(scenes)
         .set({
           tsxCode: editResult.data.tsxCode,
-          duration: editFinalDuration || sceneToEdit.duration,
+          duration: editFinalDuration,
           props: editResult.data.props || sceneToEdit.props,
           updatedAt: new Date(),
         })
