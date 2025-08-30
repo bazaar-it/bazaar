@@ -660,15 +660,12 @@ export async function executeToolFromDecision(
       }
       
       // Audio was added successfully - create chat response message
-      if (audioResult.chatResponse && messageId) {
+      if (audioResult.data?.chatResponse && messageId) {
         await messageService.createMessage({
           id: randomUUID(),
           projectId,
-          content: audioResult.chatResponse,
+          content: audioResult.data.chatResponse,
           role: 'assistant',
-          parentMessageId: messageId,
-          userId,
-          timestamp: new Date(),
         });
       }
       
@@ -703,7 +700,6 @@ export async function executeToolFromDecision(
           projectId,
           content: websiteResult.chatResponse,
           role: 'assistant',
-          timestamp: new Date(),
         });
       }
       

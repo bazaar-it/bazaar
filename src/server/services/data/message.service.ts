@@ -30,6 +30,7 @@ export class MessageService {
     role: 'user' | 'assistant';
     imageUrls?: string[];
     videoUrls?: string[];
+    audioUrls?: string[];
     status?: string;
     kind?: string;
     id?: string;
@@ -45,6 +46,7 @@ export class MessageService {
       createdAt: new Date(),
       imageUrls: data.imageUrls,
       videoUrls: data.videoUrls,
+      audioUrls: data.audioUrls,
       status: data.status,
       kind: data.kind,
     };

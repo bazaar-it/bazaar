@@ -14,7 +14,7 @@ import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
-import { type DraftAttachment } from "~/stores/videoState";
+import { type DraftAttachment, type DbMessage } from "~/stores/videoState";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
@@ -42,6 +42,7 @@ interface ComponentMessage {
   kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
   videoUrls?: string[];
+  audioUrls?: string[];
 }
 
 interface ChatPanelGProps {
@@ -132,8 +133,7 @@ export default function ChatPanelG({
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
   
-  // Load messages from database to ensure video persistence after refresh
-  const { data: dbMessages } = api.chat.getMessages.useQuery({ projectId });
+
   
   // Check if user has GitHub connected and get discovered components
   const { data: githubConnection } = api.github.getConnection.useQuery();
@@ -151,6 +151,14 @@ export default function ChatPanelG({
   const selectedScene = selectedSceneId ? scenes.find((s: any) => s.id === selectedSceneId) : null;
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
+  // Load messages from database on mount
+  const { data: dbMessages } = api.chat.getMessages.useQuery({ 
+    projectId 
+  }, {
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minute cache
+  });
+
   const messages = getProjectChatHistory(projectId);
   
   // Debug: Log messages to check for duplicates
@@ -161,9 +169,15 @@ export default function ChatPanelG({
   useEffect(() => {
     if (dbMessages && dbMessages.length > 0) {
       console.log('[ChatPanelG] Syncing database messages to VideoState:', dbMessages.length);
-      syncDbMessages(projectId, dbMessages);
+      const typedMessages: DbMessage[] = dbMessages.map(msg => ({
+        ...msg,
+        role: msg.role as 'user' | 'assistant',
+        kind: msg.kind as 'status' | 'text' | 'error' | 'tool_result' | 'scene_plan' | undefined
+      }));
+      syncDbMessages(projectId, typedMessages);
     }
   }, [dbMessages, projectId, syncDbMessages]);
+
 
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
@@ -183,6 +197,7 @@ export default function ChatPanelG({
       kind: msg.kind,
       imageUrls: msg.imageUrls,
       videoUrls: msg.videoUrls,
+      audioUrls: msg.audioUrls,
     }));
   }, [messages]);
 
@@ -466,7 +481,7 @@ export default function ChatPanelG({
     }
     
     // Show user message immediately (with original text including @mentions for display)
-    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined, videoUrls.length > 0 ? videoUrls : undefined);
+    addUserMessage(projectId, originalMessage);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -1595,6 +1610,7 @@ export default function ChatPanelG({
                 kind: msg.kind,
                 imageUrls: msg.imageUrls,
                 videoUrls: msg.videoUrls,
+                audioUrls: msg.audioUrls,
               }}
               onImageClick={(imageUrl) => {
                 // TODO: Implement image click handler

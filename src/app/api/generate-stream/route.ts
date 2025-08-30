@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
           role: "user",
           imageUrls: parsedImageUrls?.length > 0 ? parsedImageUrls : undefined,
           videoUrls: parsedVideoUrls?.length > 0 ? parsedVideoUrls : undefined,
+          audioUrls: parsedAudioUrls?.length > 0 ? parsedAudioUrls : undefined,
         });
       }, 3, 1000);
 

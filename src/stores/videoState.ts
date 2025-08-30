@@ -23,6 +23,7 @@ export interface ChatMessage {
   executionTimeSeconds?: number | null;
   imageUrls?: string[]; // Support for uploaded images
   videoUrls?: string[]; // Support for uploaded videos
+  audioUrls?: string[]; // Support for uploaded audio files
 }
 
 // Define message update parameters for streaming support
@@ -53,6 +54,8 @@ export type DbMessage = {
   imageUrls?: string[] | null;
   // Support for uploaded videos
   videoUrls?: string[] | null;
+  // Support for uploaded audio files
+  audioUrls?: string[] | null;
 }
 
 // Define ProjectState interface
@@ -448,7 +451,9 @@ export const useVideoState = create<VideoState>()(
         id: m.id.substring(0, 8),
         role: m.role,
         seq: m.sequence,
-        content: m.content.substring(0, 30) + '...'
+        content: m.content.substring(0, 30) + '...',
+        hasAudioUrls: !!m.audioUrls && m.audioUrls.length > 0,
+        audioUrlsCount: m.audioUrls?.length || 0
       })));
       
       console.log('[videoState.syncDbMessages] Current chatHistory before sync:', state.projects[projectId]?.chatHistory.length || 0, 'messages');
@@ -465,7 +470,8 @@ export const useVideoState = create<VideoState>()(
         kind: dbMessage.kind || (dbMessage.role === "user" ? "text" : "text"), // User messages are also 'text' type
         jobId: null, // DB messages don't have jobId
         imageUrls: dbMessage.imageUrls || undefined, // Include uploaded images from database
-        videoUrls: dbMessage.videoUrls || undefined // Include uploaded videos from database
+        videoUrls: dbMessage.videoUrls || undefined, // Include uploaded videos from database
+        audioUrls: dbMessage.audioUrls || undefined // Include uploaded audio files from database
       }));
       
       // Helper function to check if two messages are duplicates
@@ -1009,7 +1015,7 @@ export const useVideoState = create<VideoState>()(
     }),
   
   // Implement missing addUserMessage method
-  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[]) =>
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[]) =>
     set((state) => {
       const project = state.projects[projectId];
       if (!project) return state;
@@ -1037,7 +1043,8 @@ export const useVideoState = create<VideoState>()(
         sequence: maxSequence + 1,
         status: 'success',
         imageUrls: imageUrls, // Include uploaded images with message
-        videoUrls: videoUrls // Include uploaded videos with message
+        videoUrls: videoUrls, // Include uploaded videos with message
+        audioUrls: audioUrls // Include uploaded audio files with message
       };
       
       console.log('[VideoState] Adding user message:', { id: newMessage.id, content: content.substring(0, 50) + '...' });

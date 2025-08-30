@@ -35,6 +35,7 @@ export const chatRouter = createTRPCRouter({
                     kind: true,
                     imageUrls: true,
                     videoUrls: true,
+                    audioUrls: true,
                     createdAt: true,
                     sequence: true,
                 },

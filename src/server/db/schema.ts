@@ -157,6 +157,7 @@ export const messages = createTable(
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
     imageUrls: d.jsonb("image_urls").$type<string[]>(), // Support for uploaded images
     videoUrls: d.jsonb("video_urls").$type<string[]>(), // Support for uploaded videos
+    audioUrls: d.jsonb("audio_urls").$type<string[]>(), // Support for uploaded audio files
     sequence: d.integer().notNull().default(0), // Message sequence number for ordering
     createdAt: d
       .timestamp({ withTimezone: true })
