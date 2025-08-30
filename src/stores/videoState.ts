@@ -48,6 +48,8 @@ export type DbMessage = {
   updatedAt?: Date;
   status?: 'pending' | 'success' | 'error' | 'building';
   kind?: 'text' | 'tool_result' | 'error' | 'status' | 'scene_plan';
+  // Support for uploaded images
+  imageUrls?: string[] | null;
 }
 
 // Define ProjectState interface
@@ -458,7 +460,8 @@ export const useVideoState = create<VideoState>()(
         sequence: dbMessage.sequence,
         status: dbMessage.status || "success",
         kind: dbMessage.kind || (dbMessage.role === "user" ? "text" : "text"), // User messages are also 'text' type
-        jobId: null // DB messages don't have jobId
+        jobId: null, // DB messages don't have jobId
+        imageUrls: dbMessage.imageUrls || undefined // Include uploaded images from database
       }));
       
       // Helper function to check if two messages are duplicates
