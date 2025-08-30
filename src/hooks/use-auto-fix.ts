@@ -68,7 +68,7 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
     }
     
     // Check if completely disabled via MAX_FIXES
-    if (MAX_FIXES_PER_SESSION === 0) return true;
+    if (MAX_FIXES_PER_SESSION <= 0) return true;
     
     return false;
   };
@@ -946,7 +946,7 @@ COMMON MISTAKES TO AVOID (based on patterns above):
       (window as any).autofixKillSwitchStatus = () => {
         const hardcoded = AUTOFIX_KILL_SWITCH;
         const localStorage = window.localStorage.getItem('autofix-kill-switch') === 'true';
-        const maxZero = MAX_FIXES_PER_SESSION === 0;
+        const maxZero = MAX_FIXES_PER_SESSION <= 0;
         const isActive = hardcoded || localStorage || maxZero;
         
         console.log('=== AUTO-FIX KILL SWITCH STATUS ===');

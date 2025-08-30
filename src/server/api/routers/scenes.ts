@@ -242,6 +242,8 @@ export const scenesRouter = createTRPCRouter({
       projectId: z.string(),
       sceneId: z.string(),
       code: z.string(),
+      // New: Only allow duration updates when explicitly requested
+      overwriteDuration: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       console.log(`[scenes.updateSceneCode] Updating scene ${input.sceneId} in project ${input.projectId}`);
@@ -269,16 +271,28 @@ export const scenesRouter = createTRPCRouter({
       const codeBefore = existingScene.tsxCode;
 
       // Update scene code
-      // Extract duration from code (best-effort) to keep DB in sync with TSX
+      // Preserve manual trims by default: do NOT change duration unless explicitly requested
       const extracted = extractDurationFromCode(input.code);
+      const updateFields: Record<string, any> = {
+        tsxCode: input.code,
+        updatedAt: new Date(),
+      };
+      if (input.overwriteDuration && extracted && extracted > 0) {
+        updateFields.duration = extracted;
+        console.log('[scenes.updateSceneCode] Overwriting duration from code on request', {
+          sceneId: input.sceneId,
+          extracted,
+        });
+      } else if (!input.overwriteDuration && extracted && extracted > 0) {
+        console.log('[scenes.updateSceneCode] Duration found in code but NOT applied (overwriteDuration=false)', {
+          sceneId: input.sceneId,
+          extracted,
+        });
+      }
 
       const updatedScenes = await ctx.db
         .update(scenes)
-        .set({
-          tsxCode: input.code,
-          ...(extracted && extracted > 0 ? { duration: extracted } : {}),
-          updatedAt: new Date(),
-        })
+        .set(updateFields)
         .where(eq(scenes.id, input.sceneId))
         .returning();
 

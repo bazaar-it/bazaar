@@ -301,12 +301,16 @@ export async function GET(request: NextRequest) {
     }
   })();
 
-  // Return SSE response
+  // Return SSE response with proper timeout configuration
   return new Response(stream.readable, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable proxy buffering
     },
   });
 }
+
+// Export runtime config for longer execution
+export const maxDuration = 300; // 5 minutes

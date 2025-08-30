@@ -85,6 +85,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     ...promptUIConfig,
     component: PromptUI,
   }),
+
+  
+  
   
   // 3. Today 1%
   addFormatSupport({

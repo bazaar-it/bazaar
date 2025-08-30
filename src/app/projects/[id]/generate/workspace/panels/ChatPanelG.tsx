@@ -1229,6 +1229,17 @@ export default function ChatPanelG({
     }
   });
 
+  // Restore scene mutation
+  const restoreSceneMutation = api.generation.restoreScene.useMutation({
+    onSuccess: () => {
+      toast.success('Scene restored');
+    },
+    onError: (error) => {
+      console.error('Failed to restore scene:', error);
+      toast.error('Failed to restore scene');
+    }
+  });
+
   // Handle enhance prompt
   const handleEnhancePrompt = useCallback(async () => {
     if (!message.trim() || isEnhancing || isGenerating) return;

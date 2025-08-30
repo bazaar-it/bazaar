@@ -366,6 +366,13 @@ export async function executeToolFromDecision(
       if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
         setFields.duration = editResult.data.duration;
         durationChanged = editResult.data.duration !== sceneToEdit.duration;
+      } else if (typeof editResult.data.duration === 'number') {
+        // Guardrail: Tool returned a duration but user didn't request — ignore and log
+        console.log('⛔ [ROUTER] Ignoring duration from tool (no explicit user request)', {
+          sceneId: decision.toolContext.targetSceneId,
+          suggested: editResult.data.duration,
+          current: sceneToEdit.duration,
+        });
       }
 
       // Update database without touching duration unless explicitly requested

@@ -149,13 +149,13 @@ export default function AdminProjectSearchPage() {
                           <p className="text-sm text-muted-foreground">
                             Duration: {scene.duration}s | Order: {scene.order}
                           </p>
-                          {scene.code && (
+                          {scene.tsxCode && (
                             <details className="mt-2">
                               <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                                View Code ({scene.code.length} characters)
+                                View Code ({scene.tsxCode.length} characters)
                               </summary>
                               <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
-                                <code>{scene.code.substring(0, 500)}...</code>
+                                <code>{scene.tsxCode.substring(0, 500)}...</code>
                               </pre>
                             </details>
                           )}
