@@ -356,26 +356,27 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
-      // Preserve manual trims by default: only change duration if explicitly requested
-      let editFinalDuration = sceneToEdit.duration;
+      // Preserve manual trims by default: ONLY change duration if explicitly requested
+      const setFields: any = {
+        tsxCode: editResult.data.tsxCode,
+        props: editResult.data.props || sceneToEdit.props,
+        updatedAt: new Date(),
+      };
+      let durationChanged = false;
       if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
-        editFinalDuration = editResult.data.duration;
+        setFields.duration = editResult.data.duration;
+        durationChanged = editResult.data.duration !== sceneToEdit.duration;
       }
-      
-      // Update database
+
+      // Update database without touching duration unless explicitly requested
       console.log('💾 [ROUTER] Updating scene in database:', {
         sceneId: decision.toolContext.targetSceneId,
         codeChanged: editResult.data.tsxCode !== sceneToEdit.tsxCode,
-        durationChanged: editFinalDuration && editFinalDuration !== sceneToEdit.duration,
+        durationChanged,
       });
-      
+
       const [updatedScene] = await db.update(scenes)
-        .set({
-          tsxCode: editResult.data.tsxCode,
-          duration: editFinalDuration,
-          props: editResult.data.props || sceneToEdit.props,
-          updatedAt: new Date(),
-        })
+        .set(setFields)
         .where(eq(scenes.id, decision.toolContext.targetSceneId))
         .returning();
       
