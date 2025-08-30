@@ -1988,6 +1988,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       }
                     }}
                     onContextMenu={(e) => handleContextMenu(e, scene.id)}
+                    onClick={(e) => {
+                      // Simple click selects the scene without starting reorder
+                      e.stopPropagation();
+                      setSelectedSceneId(scene.id);
+                      try {
+                        const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: scene.id } });
+                        window.dispatchEvent(ev);
+                      } catch {}
+                    }}
                   >
                     {/* Resize Handle Start */}
                     <div

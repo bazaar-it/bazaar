@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED FROM DATABASE SCHEMA
  * DO NOT EDIT MANUALLY - RUN: npm run generate:types
  * 
- * Generated at: 2025-08-30T09:01:12.833Z
+ * Generated at: 2025-08-30T10:27:00.835Z
  */
 
 /**
