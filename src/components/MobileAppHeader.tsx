@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical } from "lucide-react";
+import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
@@ -172,13 +172,22 @@ export default function MobileAppHeader({
             </div>
           ) : (
             <h1 
-              className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-gray-700"
+              className={`text-sm font-medium truncate cursor-pointer hover:text-gray-700 ${
+                isRenaming ? 'text-gray-400 pointer-events-none' : 'text-gray-900'
+              }`}
               onClick={() => {
                 setNewTitle(projectTitle);
                 setIsEditingName(true);
               }}
             >
-              {projectTitle}
+              {isRenaming ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>{newTitle}</span>
+                </div>
+              ) : (
+                projectTitle
+              )}
             </h1>
           )}
         </div>
