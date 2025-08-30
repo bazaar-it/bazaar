@@ -545,7 +545,7 @@ export default function ChatPanelG({
     );
     
     // Pass both GitHub and Figma modes to generation, plus website URL
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl, sceneUrls);
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
     
     // Show user message AFTER sending to backend to prevent overwriting
     addUserMessage(projectId, originalMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
@@ -707,11 +707,41 @@ export default function ChatPanelG({
     adjustTextareaHeight();
   }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
-  // Sync draft attachments with VideoState
+  // Sync draft attachments with VideoState (consolidated to prevent infinite loop)
   useEffect(() => {
-    const draftAttachments = uploadedImages.map(convertToDraftAttachment);
-    setDraftAttachments(projectId, draftAttachments);
-  }, [uploadedImages, projectId, setDraftAttachments]);
+    const sceneAttachments = selectedScenes.map(scene => ({
+      id: `scene-${scene.id}`,
+      status: 'uploaded' as const,
+      type: 'scene' as const,
+      name: scene.name,
+      sceneId: scene.id,
+      sceneIndex: scene.index,
+      isLoaded: true
+    }));
+    
+    const allAttachments = [
+      ...uploadedImages.map(convertToDraftAttachment),
+      ...sceneAttachments
+    ];
+    
+    setDraftAttachments(projectId, allAttachments);
+  }, [selectedScenes, uploadedImages, projectId, setDraftAttachments]);
+
+  // Initialize selectedScenes from draftAttachments on mount only
+  useEffect(() => {
+    const sceneAttachments = draftAttachments
+      .filter(att => att.type === 'scene' && att.sceneId && att.sceneIndex !== undefined)
+      .map(att => ({
+        id: att.sceneId!,
+        index: att.sceneIndex!,
+        name: att.name || `Scene ${att.sceneIndex}`
+      }));
+    
+    if (sceneAttachments.length > 0) {
+      setSelectedScenes(sceneAttachments);
+    }
+  }, []); // Empty dependency array - only run on mount
+
   // Robust focus management that works across environments
   const focusTextarea = useCallback(() => {
     if (!textareaRef.current) return false;
@@ -1647,40 +1677,40 @@ export default function ChatPanelG({
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
         <div className="space-y-4">
           {messages.map((msg, index) => {
-          // Find all scene plan messages
-          const scenePlanMessages = messages.filter(m => m.kind === 'scene_plan');
-          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
-          const totalScenePlans = scenePlanMessages.length;
-          
-          return (
-            <ChatMessage
-              key={msg.id}
-              message={{
-                id: msg.id,
-                message: msg.message,
-                isUser: msg.isUser,
-                timestamp: msg.timestamp,
-                status: msg.status,
-                kind: msg.kind,
-                imageUrls: msg.imageUrls,
-                videoUrls: msg.videoUrls,
-                audioUrls: msg.audioUrls,
-                sceneUrls: msg.sceneUrls,
-              }}
-              
-              onImageClick={(imageUrl) => {
-                // TODO: Implement image click handler
-                console.log('Image clicked:', imageUrl);
-              }}
-              projectId={projectId}
-              userId={userId}
-              onRevert={isReverting ? undefined : handleRevert}
-              onEditScenePlan={handleEditScenePlan}
-              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-              isFirstScenePlan={isFirstScenePlan}
-              totalScenePlans={totalScenePlans}
-            />
-          );
+            // Find all scene plan messages
+            const scenePlanMessages = messages.filter(m => m.kind === 'scene_plan');
+            const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+            const totalScenePlans = scenePlanMessages.length;
+            
+            return (
+              <ChatMessage
+                key={`${msg.id}-${index}`}
+                message={{
+                  id: msg.id,
+                  message: msg.message,
+                  isUser: msg.isUser,
+                  timestamp: msg.timestamp,
+                  status: msg.status,
+                  kind: msg.kind,
+                  imageUrls: msg.imageUrls,
+                  videoUrls: msg.videoUrls,
+                  audioUrls: msg.audioUrls,
+                  sceneUrls: msg.sceneUrls,
+                }}
+                
+                onImageClick={(imageUrl) => {
+                  // TODO: Implement image click handler
+                  console.log('Image clicked:', imageUrl);
+                }}
+                projectId={projectId}
+                userId={userId}
+                onRevert={isReverting ? undefined : handleRevert}
+                onEditScenePlan={handleEditScenePlan}
+                hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+                isFirstScenePlan={isFirstScenePlan}
+                totalScenePlans={totalScenePlans}
+              />
+            );
           })}
           
           {/* Show pulsating message UI when generating */}
@@ -1702,7 +1732,7 @@ export default function ChatPanelG({
 
         {/* Media upload preview area */}
         <MediaUpload
-          uploadedMedia={uploadedImages}
+          uploadedMedia={uploadedImages.filter(media => media.type !== 'scene')}
           onMediaChange={setUploadedImages}
           projectId={projectId}
           onAudioExtract={handleAudioExtract}

@@ -92,13 +92,16 @@ export interface DraftAttachment {
   status: 'uploading' | 'uploaded' | 'error';
   url?: string;
   error?: string;
-  type?: 'image' | 'video' | 'audio';
+  type?: 'image' | 'video' | 'audio' | 'scene';
   isLoaded?: boolean;
   duration?: number;
   name?: string;
   fileName?: string; // Store filename for reference
   fileSize?: number; // Store file size for reference
   mimeType?: string; // Store MIME type for reference
+  // Scene-specific fields
+  sceneId?: string;
+  sceneIndex?: number;
 }
 
 interface ProjectState {
