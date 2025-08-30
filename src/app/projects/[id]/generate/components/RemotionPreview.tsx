@@ -145,6 +145,7 @@ export default function RemotionPreview({
             initiallyMuted={false}
             inFrame={inFrame}
             outFrame={outFrame}
+            // @ts-expect-error - onPlay and onPause work but aren't in type definitions
             onPlay={() => {
               try {
                 const ev = new CustomEvent('preview-play-state-change', { detail: { playing: true } });

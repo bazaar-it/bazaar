@@ -1,5 +1,6 @@
-// Mock for ~/env module
-export const env = {
+// Mock for ~/env module (CommonJS for Jest compatibility)
+module.exports = {
+  env: {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://test',
   OPENAI_API_KEY: 'test-key',
@@ -16,4 +17,5 @@ export const env = {
   REMOTION_BUCKET_NAME: 'test-bucket',
   RENDER_MODE: 'local',
   LOG_LEVEL: 'error', // Reduce log noise in tests
+  },
 };

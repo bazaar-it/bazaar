@@ -590,7 +590,7 @@ export default function ErrorAnalyticsPage() {
                       });
                     }
                   }}
-                  disabled={systemConfigMutation.isLoading}
+                  disabled={systemConfigMutation.isPending}
                 >
                   <Target className="h-4 w-4" />
                   Reset Metrics
@@ -607,7 +607,7 @@ export default function ErrorAnalyticsPage() {
                       });
                     }
                   }}
-                  disabled={systemConfigMutation.isLoading}
+                  disabled={systemConfigMutation.isPending}
                 >
                   <PowerOff className="h-4 w-4" />
                   Emergency Disable
@@ -622,7 +622,7 @@ export default function ErrorAnalyticsPage() {
                       reason: 'Admin enable from dashboard'
                     });
                   }}
-                  disabled={systemConfigMutation.isLoading}
+                  disabled={systemConfigMutation.isPending}
                 >
                   <Power className="h-4 w-4" />
                   Enable Auto-Fix

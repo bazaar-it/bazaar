@@ -109,7 +109,7 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             if (currentMessageId) {
               updateMessage(projectId, currentMessageId, { 
                 content: data.message,
-                status: data.isComplete ? 'complete' : 'streaming'
+                status: data.isComplete ? 'success' : 'pending'
               });
             } else {
               // Create new assistant message with a proper UUID
