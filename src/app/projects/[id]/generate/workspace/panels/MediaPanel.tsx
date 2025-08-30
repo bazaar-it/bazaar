@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Upload, MoreVertical, Edit, Trash2, Loader2, Search } from "lucide-react";
 import { Icon } from '@iconify/react';
-import { IconPickerPanel } from "~/components/IconPickerPanel";
+import { IconSearchGrid } from "~/components/IconSearchGrid";
 
 // Animated audio wave component
 const AudioWaveAnimation = () => {
@@ -46,7 +46,7 @@ const AudioWaveAnimation = () => {
 
 type MediaPanelProps = {
   projectId: string;
-  onInsertToChat?: (url: string) => void;
+  onInsertToChat?: (url: string, name?: string) => void;
   defaultTab?: 'uploads' | 'icons'; // For auto-opening to specific tab
 };
 
@@ -131,8 +131,8 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
   }, []);
 
-  const handleClick = useCallback((url: string) => {
-    onInsertToChat?.(url);
+  const handleClick = useCallback((url: string, asset: any) => {
+    onInsertToChat?.(url, asset.customName || asset.originalName || '');
   }, [onInsertToChat]);
 
 
@@ -326,7 +326,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                       className="cursor-grab active:cursor-grabbing"
                       draggable
                       onDragStart={(e) => handleDragStart(e, a.url, a)}
-                      onClick={() => handleClick(a.url)}
+                      onClick={() => handleClick(a.url, a)}
                     >
                       {loadingAssetId === a.id ? (
                         <div className="w-full h-28 flex items-center justify-center bg-gray-50">
@@ -436,9 +436,8 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
             )}
           </div>
         </TabsContent>
-        
         <TabsContent value="icons" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
-          <IconPickerPanel onInsertToChat={onInsertToChat} />
+          <IconSearchGrid onInsertToChat={onInsertToChat} />
         </TabsContent>
       </Tabs>
     </div>

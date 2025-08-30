@@ -736,10 +736,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'media':
           return <MediaPanel
             projectId={projectId}
-            onInsertToChat={(url) => {
+            onInsertToChat={(url, name) => {
               // Broadcast drag/drop or click-insert to chat textarea via CustomEvent
               const event = new CustomEvent('chat-insert-media-url', { 
-                detail: { url, name: url.split('/').pop() } 
+                detail: { url, name: name || url.split('/').pop() } 
               });
               window.dispatchEvent(event);
             }}
