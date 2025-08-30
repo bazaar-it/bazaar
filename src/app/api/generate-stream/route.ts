@@ -98,65 +98,82 @@ export async function GET(request: NextRequest) {
         const isFirstUserMessage = userMessages.length === 1 && userMessages[0]?.id === userMsg.id;
 
         if (isFirstUserMessage) {
-          console.log('[SSE] First user message detected, generating title asynchronously...');
+          console.log('[SSE] First user message detected, checking if title generation is needed...');
           
-          // Generate title asynchronously to avoid blocking scene generation
-          generateTitle({
-            prompt: userMessage,
-            contextId: projectId,
-          }).then(async (titleResult) => {
-            let finalTitle = titleResult.titles?.[0] || "Untitled Video";
+          // Check current project title first - only generate if it's still an untitled project
+          const currentProject = await retryWithBackoff(async () => {
+            return await db.query.projects.findFirst({
+              columns: { title: true },
+              where: eq(projects.id, projectId),
+            });
+          }, 2, 500);
           
-          // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
-          if (finalTitle === "Untitled Video") {
-            // Get all user's projects with "Untitled Video" pattern to find next number
-            const userProjects = await retryWithBackoff(async () => {
-              return await db.query.projects.findMany({
-                columns: { title: true },
-                where: eq(projects.userId, userId), // Use the authenticated userId
-              });
-            }, 2, 500);
+          // Only generate title if current title matches "Untitled Video" pattern (default names)
+          const currentTitle = currentProject?.title || '';
+          const isDefaultTitle = currentTitle.includes('Untitled Video');
+          if (isDefaultTitle) {
+            console.log(`[SSE] Project has default title "${currentTitle}", generating new title...`);
             
-            // Find the highest number used in "Untitled Video X" titles
-            let highestNumber = 0;
-            const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+            // Generate title asynchronously to avoid blocking scene generation
+            generateTitle({
+              prompt: userMessage,
+              contextId: projectId,
+            }).then(async (titleResult) => {
+              let finalTitle = titleResult.titles?.[0] || "Untitled Video";
             
-            for (const project of untitledProjects) {
-              const match = /^Untitled Video (\d+)$/.exec(project.title);
-              if (match?.[1]) {
-                const num = parseInt(match[1], 10);
-                if (!isNaN(num) && num > highestNumber) {
-                  highestNumber = num;
+            // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
+            if (finalTitle === "Untitled Video") {
+              // Get all user's projects with "Untitled Video" pattern to find next number
+              const userProjects = await retryWithBackoff(async () => {
+                return await db.query.projects.findMany({
+                  columns: { title: true },
+                  where: eq(projects.userId, userId), // Use the authenticated userId
+                });
+              }, 2, 500);
+              
+              // Find the highest number used in "Untitled Video X" titles
+              let highestNumber = 0;
+              const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+              
+              for (const project of untitledProjects) {
+                const match = /^Untitled Video (\d+)$/.exec(project.title);
+                if (match?.[1]) {
+                  const num = parseInt(match[1], 10);
+                  if (!isNaN(num) && num > highestNumber) {
+                    highestNumber = num;
+                  }
                 }
               }
+              
+              // Generate proper numbered fallback
+              finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
             }
+
+            // Update the project title
+            await retryWithBackoff(async () => {
+              return await db.update(projects)
+                .set({ 
+                  title: finalTitle,
+                  updatedAt: new Date(),
+                })
+                .where(eq(projects.id, projectId));
+            }, 2, 500);
+
+            console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
             
-            // Generate proper numbered fallback
-            finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
-          }
-
-          // Update the project title
-          await retryWithBackoff(async () => {
-            return await db.update(projects)
-              .set({ 
+              // ✅ NEW: Send title update to client so it can invalidate queries
+              await writer.write(encoder.encode(formatSSE({
+                type: 'title_updated',
                 title: finalTitle,
-                updatedAt: new Date(),
-              })
-              .where(eq(projects.id, projectId));
-          }, 2, 500);
-
-          console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
-          
-            // ✅ NEW: Send title update to client so it can invalidate queries
-            await writer.write(encoder.encode(formatSSE({
-              type: 'title_updated',
-              title: finalTitle,
-              projectId: projectId
-            })));
-          }).catch((titleError) => {
-            // Don't fail the whole request if title generation fails
-            console.error('[SSE] Title generation failed:', titleError);
-          });
+                projectId: projectId
+              })));
+            }).catch((titleError) => {
+              // Don't fail the whole request if title generation fails
+              console.error('[SSE] Title generation failed:', titleError);
+            });
+          } else {
+            console.log(`[SSE] Project already has custom title "${currentTitle}", skipping title generation`);
+          }
         }
       } catch (titleError) {
         // Catch any synchronous errors
