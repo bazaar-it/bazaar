@@ -7,14 +7,13 @@ import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
 import { trimTool } from "~/tools/trim/trim";
-import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
 import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
-import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, TypographyToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
@@ -194,20 +193,44 @@ export async function executeToolFromDecision(
       };
 
     case 'editScene':
+      // Allow fallback parsing of scene target from machine tokens in the user prompt, e.g. [scene:UUID]
+      if (!decision.toolContext.targetSceneId) {
+        const sourceText = String(decision.toolContext.userPrompt || '');
+        const m = sourceText.match(/\[scene:([0-9a-fA-F-]{36})\]/);
+        if (m && m[1]) {
+          decision.toolContext.targetSceneId = m[1];
+        }
+      }
       if (!decision.toolContext.targetSceneId) {
         throw new Error("No target scene ID for edit operation");
       }
       
-      const sceneToEdit = await db.query.scenes.findFirst({
+      let sceneToEdit = await db.query.scenes.findFirst({
         where: eq(scenes.id, decision.toolContext.targetSceneId),
       });
-      
+      // If not found and target looks like a position-based token (e.g., "scene-2-id"), map to storyboard order
+      if (!sceneToEdit && /^scene-\d+-id$/i.test(String(decision.toolContext.targetSceneId))) {
+        try {
+          const idx = parseInt(String(decision.toolContext.targetSceneId).match(/scene-(\d+)-id/i)?.[1] || '0', 10) - 1;
+          if (!Number.isNaN(idx) && storyboard[idx]) {
+            decision.toolContext.targetSceneId = storyboard[idx].id;
+            sceneToEdit = await db.query.scenes.findFirst({
+              where: eq(scenes.id, decision.toolContext.targetSceneId),
+            });
+          }
+        } catch {}
+      }
+
       if (!sceneToEdit) {
         throw new Error("Scene not found for editing");
       }
       
-      // Handle referenced scenes for style/color matching in edits
-      let editReferenceScenes = undefined;
+      // IMPROVED: Always provide neighboring scenes for better context
+      // Find the index of the scene being edited
+      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext.targetSceneId);
+      let editReferenceScenes: Array<{id: string, name: string, tsxCode: string}> = [];
+      
+      // Add explicitly referenced scenes if any
       if (decision.toolContext.referencedSceneIds && decision.toolContext.referencedSceneIds.length > 0) {
         editReferenceScenes = decision.toolContext.referencedSceneIds
           .map(refId => storyboard.find(s => s.id === refId))
@@ -217,13 +240,88 @@ export async function executeToolFromDecision(
             name: scene.name,
             tsxCode: scene.tsxCode
           }));
+      }
+      
+      // SMART CONTEXT: Add neighboring scenes for continuity
+      if (targetSceneIndex !== -1) {
+        const isLastScene = targetSceneIndex === storyboard.length - 1;
+        const isFirstScene = targetSceneIndex === 0;
         
-        if (editReferenceScenes.length > 0) {
-          console.log('🔗 [HELPERS] Using reference scenes for edit:', {
-            targetScene: sceneToEdit.name,
-            referenceScenes: editReferenceScenes.map(r => r.name)
-          });
+        if (isLastScene && storyboard.length > 1) {
+          // For last scene: add 2 previous scenes
+          if (targetSceneIndex > 0) {
+            const prevScene = storyboard[targetSceneIndex - 1];
+            if (!editReferenceScenes.find(s => s.id === prevScene.id)) {
+              editReferenceScenes.push({
+                id: prevScene.id,
+                name: prevScene.name + ' (previous)',
+                tsxCode: prevScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex > 1) {
+            const prevPrevScene = storyboard[targetSceneIndex - 2];
+            if (!editReferenceScenes.find(s => s.id === prevPrevScene.id)) {
+              editReferenceScenes.push({
+                id: prevPrevScene.id,
+                name: prevPrevScene.name + ' (2 before)',
+                tsxCode: prevPrevScene.tsxCode
+              });
+            }
+          }
+        } else if (isFirstScene && storyboard.length > 1) {
+          // For first scene: add next 2 scenes
+          if (targetSceneIndex < storyboard.length - 1) {
+            const nextScene = storyboard[targetSceneIndex + 1];
+            if (!editReferenceScenes.find(s => s.id === nextScene.id)) {
+              editReferenceScenes.push({
+                id: nextScene.id,
+                name: nextScene.name + ' (next)',
+                tsxCode: nextScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex < storyboard.length - 2) {
+            const nextNextScene = storyboard[targetSceneIndex + 2];
+            if (!editReferenceScenes.find(s => s.id === nextNextScene.id)) {
+              editReferenceScenes.push({
+                id: nextNextScene.id,
+                name: nextNextScene.name + ' (2 after)',
+                tsxCode: nextNextScene.tsxCode
+              });
+            }
+          }
+        } else {
+          // Middle scene: add n-1 and n+1
+          if (targetSceneIndex > 0) {
+            const prevScene = storyboard[targetSceneIndex - 1];
+            if (!editReferenceScenes.find(s => s.id === prevScene.id)) {
+              editReferenceScenes.push({
+                id: prevScene.id,
+                name: prevScene.name + ' (previous)',
+                tsxCode: prevScene.tsxCode
+              });
+            }
+          }
+          if (targetSceneIndex < storyboard.length - 1) {
+            const nextScene = storyboard[targetSceneIndex + 1];
+            if (!editReferenceScenes.find(s => s.id === nextScene.id)) {
+              editReferenceScenes.push({
+                id: nextScene.id,
+                name: nextScene.name + ' (next)',
+                tsxCode: nextScene.tsxCode
+              });
+            }
+          }
         }
+        
+        console.log('🔗 [HELPERS] Smart context for edit:', {
+          targetScene: sceneToEdit.name,
+          targetIndex: targetSceneIndex,
+          isLastScene,
+          isFirstScene,
+          neighboringScenes: editReferenceScenes.map(r => r.name)
+        });
       }
       
       toolInput = {
@@ -258,23 +356,27 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
-      // Use duration from edit result if provided, otherwise keep existing
-      let editFinalDuration = editResult.data.duration;
-      
-      // Update database
+      // Preserve manual trims by default: ONLY change duration if explicitly requested
+      const setFields: any = {
+        tsxCode: editResult.data.tsxCode,
+        props: editResult.data.props || sceneToEdit.props,
+        updatedAt: new Date(),
+      };
+      let durationChanged = false;
+      if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
+        setFields.duration = editResult.data.duration;
+        durationChanged = editResult.data.duration !== sceneToEdit.duration;
+      }
+
+      // Update database without touching duration unless explicitly requested
       console.log('💾 [ROUTER] Updating scene in database:', {
         sceneId: decision.toolContext.targetSceneId,
         codeChanged: editResult.data.tsxCode !== sceneToEdit.tsxCode,
-        durationChanged: editFinalDuration && editFinalDuration !== sceneToEdit.duration,
+        durationChanged,
       });
-      
+
       const [updatedScene] = await db.update(scenes)
-        .set({
-          tsxCode: editResult.data.tsxCode,
-          duration: editFinalDuration || sceneToEdit.duration,
-          props: editResult.data.props || sceneToEdit.props,
-          updatedAt: new Date(),
-        })
+        .set(setFields)
         .where(eq(scenes.id, decision.toolContext.targetSceneId))
         .returning();
       
@@ -465,73 +567,36 @@ export async function executeToolFromDecision(
       };
 
     case 'typographyScene':
-      console.log('🎨 [HELPERS] Using TYPOGRAPHY tool');
+      // Typography is now handled by addScene tool
+      console.log('🎨 [HELPERS] Typography now handled by ADD tool');
       
-      // Build typography input with proper type checking
-      const typographyInput: TypographyToolInput = {
+      // Build add tool input for text scenes
+      const typographyInput: AddToolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
         userId,
-        projectFormat: projectFormat,
-        // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
-        // GitHub and Figma components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
-          tsxCode: storyboard[storyboard.length - 1].tsxCode,
-          style: undefined
-        } : undefined,
+        sceneNumber: storyboard.length + 1,
+        storyboardSoFar: storyboard,
+        projectFormat,
       };
       
-      try {
-        const typographyResult = await typographyTool.run(typographyInput);
-        
-        if (!typographyResult.success || !typographyResult.data) {
-          console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator');
-          throw new Error(typographyResult.error?.message || 'Typography generation failed');
-        }
-        
-        // Save to database (same pattern as addScene)
-        const [typographyScene] = await db.insert(scenes).values({
-          projectId,
-          name: typographyResult.data.name,
-          tsxCode: typographyResult.data.tsxCode,
-          duration: typographyResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        return { success: true, scene: typographyScene as any };
-        
-      } catch (error) {
-        console.warn('🔄 [HELPERS] Typography tool failed, falling back to code-generator:', error);
-        
-        // Fall back to code-generator for text-based requests
-        const fallbackInput: AddToolInput = {
-          userPrompt: decision.toolContext.userPrompt,
-          projectId,
-          userId,
-          sceneNumber: storyboard.length + 1,
-          storyboardSoFar: storyboard,
-          projectFormat,
-        };
-        
-        const fallbackResult = await addTool.run(fallbackInput);
-        
-        if (!fallbackResult.success || !fallbackResult.data) {
-          throw new Error(fallbackResult.error?.message || 'Both typography and fallback generation failed');
-        }
-        
-        // Save to database with fallback result
-        const [fallbackScene] = await db.insert(scenes).values({
-          projectId,
-          name: fallbackResult.data.name,
-          tsxCode: fallbackResult.data.tsxCode,
-          duration: fallbackResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        return { success: true, scene: fallbackScene as any };
+      const typographyResult = await addTool.run(typographyInput);
+      
+      if (!typographyResult.success || !typographyResult.data) {
+        throw new Error(typographyResult.error?.message || 'Text scene generation failed');
       }
+      
+      // Save to database
+      const [typographyScene] = await db.insert(scenes).values({
+        projectId,
+        name: typographyResult.data.name,
+        tsxCode: typographyResult.data.tsxCode,
+        duration: typographyResult.data.duration || 90, // Default for text scenes
+        order: storyboard.length,
+        props: {},
+      }).returning();
+      
+      return { success: true, scene: typographyScene as any };
 
     case 'imageRecreatorScene':
       console.log('🖼️ [HELPERS] Using IMAGE RECREATOR tool');
@@ -860,21 +925,10 @@ async function executeIndividualScene(
     // Execute appropriate tool with fallback
     switch (plan.toolType) {
       case 'typography':
+        // Typography is now handled by addTool
+        console.log(`🎨 [MULTI-SCENE] Typography now handled by ADD tool for scene ${sceneOrder}`);
+        
         try {
-          toolResult = await typographyTool.run({
-            userPrompt: plan.prompt,
-            projectId,
-            userId,
-            projectFormat,
-          });
-          
-          if (!toolResult.success || !toolResult.data) {
-            throw new Error(toolResult.error?.message || 'Typography tool failed');
-          }
-        } catch (error) {
-          console.warn(`🔄 [MULTI-SCENE] Typography tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
-          
-          // Fall back to code-generator
           toolResult = await addTool.run({
             userPrompt: plan.prompt,
             projectId,
@@ -883,6 +937,13 @@ async function executeIndividualScene(
             storyboardSoFar: storyboard,
             projectFormat,
           });
+          
+          if (!toolResult.success || !toolResult.data) {
+            throw new Error(toolResult.error?.message || 'Text scene generation failed');
+          }
+        } catch (error) {
+          console.warn(`🔄 [MULTI-SCENE] Text scene generation failed for scene ${sceneOrder}:`, error);
+          throw error; // No fallback needed as we're already using addTool
         }
         break;
         

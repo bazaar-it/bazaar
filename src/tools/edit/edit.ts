@@ -86,13 +86,23 @@ BRAND MATCHING INSTRUCTIONS:
       }
       
       
-      // Add reference scenes for style/color matching
+      // Add reference scenes for style/color matching and continuity
       if (input.referenceScenes?.length) {
-        context += `\n\nREFERENCE SCENES FOR STYLE/COLOR MATCHING:`;
+        context += `\n\nNEIGHBORING SCENES FOR CONTEXT AND CONTINUITY:`;
         input.referenceScenes.forEach((scene) => {
           context += `\n\n${scene.name} (ID: ${scene.id}):\n\`\`\`tsx\n${scene.tsxCode}\n\`\`\``;
         });
-        context += `\n\nIMPORTANT: Extract the specific colors, styles, animations, or patterns from the reference scenes that the user wants to apply. Be precise in matching the requested elements.`;
+        
+        // Check if we have neighboring scenes based on naming
+        const hasNeighbors = input.referenceScenes.some(s => 
+          s.name.includes('(previous)') || s.name.includes('(next)') || s.name.includes('(2 before)') || s.name.includes('(2 after)')
+        );
+        
+        if (hasNeighbors) {
+          context += `\n\nIMPORTANT: The neighboring scenes are provided for visual continuity. Maintain consistent styling, colors, animations, and transitions with these adjacent scenes.`;
+        } else {
+          context += `\n\nIMPORTANT: Extract the specific colors, styles, animations, or patterns from the reference scenes that the user wants to apply. Be precise in matching the requested elements.`;
+        }
       }
 
       // Build message content based on available context

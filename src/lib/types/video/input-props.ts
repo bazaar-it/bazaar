@@ -30,6 +30,7 @@ export const sceneSchema = z.object({
   type: z.enum([...SCENE_TYPES] as [SceneType, ...SceneType[]]),
   start: z.number().int().min(0).describe("Start frame"),
   duration: z.number().int().min(1).describe("Duration in frames"),
+  order: z.number().int().min(0).optional().describe("Scene order in timeline"),
   data: z.record(z.unknown()).describe("Scene-specific props, structure depends on 'type'"),
   // New field for transitions between scenes
   transitionToNext: transitionSchema.optional().describe("Transition to the next scene"),

@@ -233,6 +233,16 @@ You are creating content for a {{WIDTH}} by {{HEIGHT}} pixel {{FORMAT}} format v
  2. Allocate just enough frames (typical micro-scenes 20-40 frames, medium 40-80, complex 80-140).
  3. Viewers appreciate concise pacing—never stretch a 2-second idea into 6 seconds.
 
+INTELLIGENT TYPOGRAPHY DURATION (For text-focused scenes):
+DO NOT default to 180 frames for text! Typography scenes should be concise:
+• 1-3 words: 60 frames (2 seconds) - quick and punchy
+• 4-8 words: 90 frames (3 seconds) - comfortable reading
+• 9-15 words: 120 frames (4 seconds) - full sentence
+• 16-25 words: 150 frames (5 seconds) - short paragraph
+• 25+ words: 180+ frames (6+ seconds) - but consider splitting!
+
+Calculate: Base reading time (~3 words/second) + animation time (15-20 frames) + hold time (10-20 frames)
+Example: "Welcome" = 20f (animate in) + 20f (read) + 20f (hold) = 60 frames total
 ⸻
 
  REQUIRED VARIABLE AND FUNCTION NAMES

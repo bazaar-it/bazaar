@@ -18,6 +18,7 @@ import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { cn } from "~/lib/cn";
 import { generateCleanFilename } from "~/lib/utils/filename";
+import { useVideoState } from "~/stores/videoState";
 
 export type ExportFormat = "mp4" | "webm" | "gif";
 export type ExportQuality = "1080p" | "720p" | "480p";
@@ -42,6 +43,9 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
   const [renderId, setRenderId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  
+  // Get playback speed from Zustand state
+  const playbackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1.0);
   
   // When format changes to GIF, default to 720p for reasonable file size
   React.useEffect(() => {
@@ -81,11 +85,14 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
     if (selectedFormat) setFormat(selectedFormat);
     if (selectedQuality) setQuality(selectedQuality);
     
+    console.log('[ExportDropdown] Starting render with playback speed:', playbackSpeed);
+    
     // Don't close dropdown when starting export
     startRender.mutate({ 
       projectId,
       format: selectedFormat || format,
       quality: qualityMap[selectedQuality || quality],
+      playbackSpeed,
     });
   };
 

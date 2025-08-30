@@ -31,8 +31,9 @@ export class ContextBuilder {
         .where(eq(scenes.projectId, input.projectId))
         .orderBy(scenes.order);
 
-      // 2. Build recent chat context
-      const recentChat = (input.chatHistory || []).slice(-5);
+      // 2. Build FULL chat context - we have 1M+ context window, use it!
+      // Include ALL messages for complete conversation understanding
+      const recentChat = (input.chatHistory || []);
 
       // 3. Build image context from conversation
       const imageContext = await this.buildImageContext(input);
@@ -111,7 +112,8 @@ export class ContextBuilder {
   private summarizeConversation(chatHistory: Array<{role: string, content: string}>): string {
     if (chatHistory.length === 0) return 'New conversation';
     
-    const recentMessages = chatHistory.slice(-5);
+    // Now we have ALL messages, not just last 5
+    const recentMessages = chatHistory;
     const topics: string[] = [];
     
     for (const message of recentMessages) {
@@ -137,10 +139,10 @@ export class ContextBuilder {
     const currentImages = input.userContext?.imageUrls as string[] || [];
     const currentVideos = input.userContext?.videoUrls as string[] || [];
     
-    // Extract images from recent chat history  
+    // Extract images from ALL chat history now that we include everything
     const recentImagesFromChat: any[] = [];
     const recentVideosFromChat: any[] = [];
-    const recentChat = input.chatHistory?.slice(-10) || [];
+    const recentChat = input.chatHistory || [];
     
     for (let i = 0; i < recentChat.length; i++) {
       const msg = recentChat[i];

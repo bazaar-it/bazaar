@@ -30,8 +30,9 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
   const [currentFormat, setCurrentFormat] = useState<ExportFormat>('mp4');
   const [currentQuality, setCurrentQuality] = useState<ExportQuality>('high');
   
-  // Get audio from Zustand state
+  // Get audio and playback speed from Zustand state
   const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
+  const playbackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1.0);
   
   // Mutations and queries
   const startRender = api.render.startRender.useMutation({
@@ -114,12 +115,13 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     setCurrentFormat(format);
     setCurrentQuality(quality);
     
-    console.log('[ExportButton] Starting render (audio will be fetched from database)');
+    console.log('[ExportButton] Starting render with playback speed:', playbackSpeed);
     
     startRender.mutate({ 
       projectId,
       format,
       quality,
+      playbackSpeed,
     });
   };
 
@@ -340,6 +342,7 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
         variant="default"
         size={size}
         className={className}
+        title={playbackSpeed !== 1 ? `Export at ${playbackSpeed}x speed` : undefined}
       >
         {startRender.isPending ? (
           <>
@@ -349,7 +352,7 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
         ) : (
           <>
             <Download className="mr-2 h-4 w-4" />
-            Render
+            Render{playbackSpeed !== 1 ? ` ${playbackSpeed}x` : ''}
           </>
         )}
       </Button>

@@ -18,17 +18,23 @@ import {
   Upload,
   X,
   Clock,
-  Hash
+  Hash,
+  Scissors
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { toast } from 'sonner';
 import { api } from '~/trpc/react';
 import { extractSceneColors } from '~/lib/utils/extract-scene-colors';
+import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
+import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 
 // Constants from React Video Editor Pro
 const ROW_HEIGHT = 60;
 const TIMELINE_ITEM_HEIGHT = 40;
 const FPS = 30;
+// Extra visual space to allow trimming/extending the rightmost scene comfortably.
+// Spacer is positioned outside the percent-based content to avoid width drift.
+const END_SPACER_PX = 240;
 
 // Define Scene type based on Bazaar-Vid structure
 interface Scene {
@@ -61,7 +67,7 @@ interface TimelinePanelProps {
 }
 
 interface DragInfo {
-  action: 'move' | 'resize-start' | 'resize-end' | 'playhead' | 'reorder';
+  action: 'resize-start' | 'resize-end' | 'playhead' | 'reorder';
   sceneId?: string;
   startX: number;
   startPosition: number;  // In frames
@@ -69,9 +75,18 @@ interface DragInfo {
   sceneIndex?: number;
 }
 
+// Helper: Clean technical suffixes from scene names (e.g., _X21YX)
+const cleanSceneName = (name?: string) => {
+  if (!name) return name;
+  return name.replace(/_[A-Z0-9]{4,}$/, '');
+};
+
 export default function TimelinePanel({ projectId, userId, onClose }: TimelinePanelProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const timeRulerRef = useRef<HTMLDivElement>(null);
+  const innerContentRef = useRef<HTMLDivElement>(null);
+  const gestureBaseZoomRef = useRef<number>(1);
+  const [isPointerInside, setIsPointerInside] = useState(false);
   const audioCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
@@ -91,10 +106,22 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [displayMode, setDisplayMode] = useState<'frames' | 'time'>('frames');
+  // Loop controls state (mirrors PreviewPanelG's loopState)
+  const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
+  // Split operation busy flag to prevent repeated clicks and provide feedback
+  const [isSplitBusy, setIsSplitBusy] = useState(false);
+  // Deletion busy flag to prevent duplicate deletions
+  const [isDeletionBusy, setIsDeletionBusy] = useState(false);
+  const deletionInProgressRef = useRef<Set<string>>(new Set());
   
   // Get video state from Zustand store
   const project = useVideoState(state => state.projects[projectId]);
-  const scenes = project?.props?.scenes || [];
+  // Sort scenes by order field to ensure consistency with Preview
+  const unsortedScenes = project?.props?.scenes || [];
+  const scenes = useMemo(() => 
+    [...unsortedScenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0)),
+    [unsortedScenes]
+  );
   
   // Audio state - get from project
   const audioTrack = project?.audio || null;
@@ -115,7 +142,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       id: s.id,
       rootName: s.name,
       dataName: s.data?.name,
-      displayName: s.name || s.data?.name || 'Unnamed'
+      displayName: cleanSceneName(s.name || s.data?.name) || 'Unnamed'
     })));
   }, [scenes]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
@@ -123,8 +150,17 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
+  const pushAction = useVideoState((state: any) => state.pushAction as (projectId: string, action: any) => void);
+  const popUndo = useVideoState((state: any) => state.popUndo as (projectId: string) => any);
+  const pushRedo = useVideoState((state: any) => state.pushRedo as (projectId: string, action: any) => void);
+  const popRedo = useVideoState((state: any) => state.popRedo as (projectId: string) => any);
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
   const reorderScenes = useVideoState(state => state.reorderScenes);
+  const storeSetPlaybackSpeed = useVideoState(state => state.setPlaybackSpeed);
+  const storePlaybackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1);
+  
+  // tRPC utils for cache invalidation
+  const utils = api.useUtils();
   
   // API mutation for persisting duration changes
   const updateSceneDurationMutation = api.scenes.updateSceneDuration.useMutation({
@@ -132,6 +168,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       console.log('[Timeline] Scene duration persisted to database');
       // Invalidate iterations query to ensure restore button updates
       await utils.generation.getBatchMessageIterations.invalidate();
+      // Invalidate project scenes so PreviewPanelG syncs latest durations
+      await utils.generation.getProjectScenes.invalidate({ projectId });
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene duration:', error);
@@ -141,8 +179,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for updating scene name
   const updateSceneNameMutation = api.generation.updateSceneName.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('[Timeline] Scene name persisted to database');
+      await utils.generation.getProjectScenes.invalidate({ projectId });
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene name:', error);
@@ -151,10 +190,28 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   });
   
   // API mutation for deleting scenes
+  const restoreSceneMutation = api.generation.restoreScene.useMutation({
+    onSuccess: async () => {
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      toast.success('Undo complete');
+    },
+    onError: () => toast.error('Failed to undo delete')
+  });
   const removeSceneMutation = api.generation.removeScene.useMutation({
-    onSuccess: () => {
+    onSuccess: async (res: any) => {
       console.log('[Timeline] Scene deleted from database');
-      toast.success('Scene deleted');
+      const deleted = res?.data?.deletedScene || res?.deletedScene;
+      toast.success('Scene deleted', {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            if (deleted) {
+              restoreSceneMutation.mutate({ projectId, scene: deleted });
+            }
+          }
+        }
+      } as any);
+      await utils.generation.getProjectScenes.invalidate({ projectId });
     },
     onError: (error) => {
       console.error('[Timeline] Failed to delete scene:', error);
@@ -164,17 +221,35 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for reordering scenes
   const reorderScenesMutation = api.scenes.reorderScenes.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       console.log('[Timeline] Scene order persisted to database');
+      // Ensure all panels see new order
+      await utils.generation.getProjectScenes.invalidate({ projectId });
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene order:', error);
       toast.error('Failed to save scene order');
     }
   });
+  // API mutation for splitting scenes
+  const splitSceneMutation = api.scenes.splitScene.useMutation({
+    onSuccess: async () => {
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      toast.success('Scene split');
+    },
+    onError: (error) => {
+      console.error('[Timeline] Failed to split scene:', error);
+      toast.error('Failed to split scene');
+    }
+  });
   
   // Get current frame from PreviewPanelG via event system
   const [currentFrame, setCurrentFrame] = useState(0);
+  const lastFrameRef = useRef<number>(0);
+  const lastExplicitPlayStateRef = useRef<{ playing: boolean; ts: number }>({ playing: false, ts: 0 });
+  const timelineRanges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
+  const currentFrameRef = useRef(0);
+  useEffect(() => { currentFrameRef.current = currentFrame; }, [currentFrame]);
   const [isPlaying, setIsPlaying] = useState(false);
   
   // Generate waveform when audio loads or canvas becomes available
@@ -211,7 +286,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const generateWaveform = async (audioUrl: string) => {
     try {
       console.log('[Timeline] Starting waveform generation...');
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Import audio context manager dynamically to avoid SSR issues
+      const { getAudioContext, enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+      
+      // Try to get existing context, or create one with user gesture
+      let audioContext = getAudioContext();
+      if (!audioContext) {
+        console.log('[Timeline] No audio context available, attempting to create with user gesture...');
+        audioContext = enableAudioWithGesture();
+      }
+      
+      if (!audioContext) {
+        console.warn('[Timeline] Cannot create waveform without user interaction - skipping visualization');
+        return []; // Return empty waveform data
+      }
       const response = await fetch(audioUrl);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -246,6 +335,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
     } catch (error) {
       console.error('[Timeline] Failed to generate waveform:', error);
+      // Return empty array if waveform generation fails
+      return [];
     }
   };
   
@@ -300,7 +391,32 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
       
       if (event.detail && typeof event.detail.frame === 'number') {
-        setCurrentFrame(event.detail.frame);
+        const frame = event.detail.frame as number;
+        setCurrentFrame(frame);
+        // Prefer explicit onPlay/onPause events; only infer from frame ticks
+        // if no explicit state change has occurred recently
+        const now = Date.now();
+        const sinceExplicit = now - lastExplicitPlayStateRef.current.ts;
+        const preferExplicit = sinceExplicit <= 500;
+        if (!preferExplicit) {
+          if (frame !== lastFrameRef.current) {
+            lastFrameRef.current = frame;
+            if (!isPlaying) setIsPlaying(true);
+            if ((window as any).__timelinePlayStateTimer) {
+              window.clearTimeout((window as any).__timelinePlayStateTimer);
+            }
+            (window as any).__timelinePlayStateTimer = window.setTimeout(() => {
+              // Only auto-pause if we still have not received an explicit event
+              const since = Date.now() - lastExplicitPlayStateRef.current.ts;
+              if (since > 400) setIsPlaying(false);
+            }, 150);
+          }
+        }
+        if (process.env.NODE_ENV === 'development') {
+          const ar = findSceneAtFrame(timelineRanges, frame);
+          // eslint-disable-next-line no-console
+          console.debug('[Timeline] frame', frame, 'active', ar ? `${ar.index}:${ar.id}` : 'none', 'ranges', timelineRanges.map(r => `[${r.index}:${r.start}-${r.end}]`).join(' '));
+        }
       }
     };
     
@@ -312,7 +428,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     const handlePlayStateChange = (event: CustomEvent) => {
       if (event.detail && typeof event.detail.playing === 'boolean') {
-        setIsPlaying(event.detail.playing);
+        const playing = event.detail.playing as boolean;
+        lastExplicitPlayStateRef.current = { playing, ts: Date.now() };
+        setIsPlaying(playing);
       }
     };
     
@@ -324,8 +442,33 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       window.removeEventListener('preview-frame-update' as any, handleFrameUpdate);
       window.removeEventListener('playback-speed-change' as any, handlePlaybackSpeed);
       window.removeEventListener('preview-play-state-change' as any, handlePlayStateChange);
+      if ((window as any).__timelinePlayStateTimer) {
+        window.clearTimeout((window as any).__timelinePlayStateTimer);
+        (window as any).__timelinePlayStateTimer = null;
+      }
     };
-  }, [isDragging, dragInfo]);
+  }, [isDragging, dragInfo, isPlaying, timelineRanges]);
+
+  // Request initial play state on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const ev = new Event('request-play-state');
+        window.dispatchEvent(ev);
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Sync loop state from PreviewPanelG when loaded
+  useEffect(() => {
+    const handleLoopLoaded = (event: CustomEvent) => {
+      const state = event.detail?.state as 'video' | 'off' | 'scene' | undefined;
+      if (state) setLoopState(state);
+    };
+    window.addEventListener('loop-state-loaded' as any, handleLoopLoaded);
+    return () => window.removeEventListener('loop-state-loaded' as any, handleLoopLoaded);
+  }, []);
   
   // Calculate total duration - memoized to prevent infinite re-renders
   const totalDuration = useMemo(() => {
@@ -366,9 +509,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const scrollLeft = timelineRef.current.scrollLeft;
     const clickX = e.clientX - rect.left;
     
-    // Account for scroll position and zoom scale
+    // Account for scroll position and use the true content width (exclude spacer)
     const actualClickX = clickX + scrollLeft;
-    const actualWidth = rect.width * zoomScale;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const actualWidth = Math.max(1, contentScrollWidth);
     
     // Clamp to actual timeline bounds
     const clampedX = Math.max(0, Math.min(actualWidth, actualClickX));
@@ -408,9 +552,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // Handle zoom with mouse wheel (React Video Editor Pro pattern)
   const handleWheelZoom = useCallback((e: React.WheelEvent) => {
+    // Allow pinch-zoom (ctrl/meta) to zoom timeline only (prevent browser zoom)
     if (!e.ctrlKey && !e.metaKey) return;
-    
-    e.preventDefault();
+    e.preventDefault(); // stop page/browser zoom
     // Use smaller increments for smoother zooming
     const zoomSpeed = 0.05;
     const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
@@ -421,6 +565,57 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return Math.round(Math.max(0.25, Math.min(4, newScale)) * 100) / 100;
     });
   }, []);
+
+  // Prevent browser zoom shortcuts when pointer is inside timeline; apply to timeline instead
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!isPointerInside) return;
+      const isZoomShortcut = (e.metaKey || e.ctrlKey) && (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0');
+      if (!isZoomShortcut) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setZoomScale(prev => {
+        if (e.key === '0') return 1;
+        const step = 0.1;
+        const next = e.key === '-' ? prev - step : prev + step;
+        return Math.round(Math.max(0.25, Math.min(4, next)) * 100) / 100;
+      });
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true } as any);
+  }, [isPointerInside]);
+
+  // Safari/macOS: prevent page zoom on trackpad pinch by handling gesture events
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const onGestureStart = (e: any) => {
+      if (!isPointerInside) return;
+      try { e.preventDefault(); } catch {}
+      gestureBaseZoomRef.current = zoomScale;
+    };
+    const onGestureChange = (e: any) => {
+      if (!isPointerInside) return;
+      try { e.preventDefault(); } catch {}
+      const scale = typeof e.scale === 'number' ? e.scale : 1;
+      setZoomScale(() => {
+        const next = gestureBaseZoomRef.current * scale;
+        return Math.round(Math.max(0.25, Math.min(4, next)) * 100) / 100;
+      });
+    };
+    const onGestureEnd = (e: any) => {
+      if (!isPointerInside) return;
+      try { e.preventDefault(); } catch {}
+    };
+    el.addEventListener('gesturestart', onGestureStart as any, { passive: false } as any);
+    el.addEventListener('gesturechange', onGestureChange as any, { passive: false } as any);
+    el.addEventListener('gestureend', onGestureEnd as any, { passive: false } as any);
+    return () => {
+      el.removeEventListener('gesturestart', onGestureStart as any);
+      el.removeEventListener('gesturechange', onGestureChange as any);
+      el.removeEventListener('gestureend', onGestureEnd as any);
+    };
+  }, [zoomScale, isPointerInside]);
   
   // Handle resize/trim drag start
   const handleResizeDragStart = useCallback((
@@ -448,6 +643,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     });
     setIsDragging(true);
     setSelectedSceneId(sceneId);
+    try {
+      const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId } });
+      window.dispatchEvent(ev);
+    } catch {}
   }, [scenes]);
   
   // Snapping helper function
@@ -463,6 +662,45 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     const rect = timelineRef.current.getBoundingClientRect();
     
+    // Deadzone for resize operations to avoid ultra-sensitive trims on tiny moves
+    if (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end') {
+      const deltaPx = Math.abs(e.clientX - dragInfo.startX);
+      const RESIZE_DEADZONE_PX = 8; // require at least 8px before changing duration
+      if (deltaPx < RESIZE_DEADZONE_PX) {
+        return; // ignore tiny movements
+      }
+
+      // Map pixel movement to frames using the current scene's own width, not total duration
+      const currentProject = useVideoState.getState().projects[projectId];
+      const currentScenes = currentProject?.props?.scenes || [];
+      const scene = currentScenes.find((s: Scene) => s.id === dragInfo.sceneId);
+      if (!scene) return;
+
+      // Compute content width and the pixel width of this scene block
+      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const sceneStartFrames = dragInfo.startPosition; // start position in frames captured at drag start
+      const sceneLeftPx = (sceneStartFrames / totalDuration) * contentWidth;
+      const sceneWidthPx = Math.max(1, (scene.duration / totalDuration) * contentWidth);
+      const framesPerPixel = scene.duration / sceneWidthPx; // local mapping at current zoom
+
+      const pixelDelta = e.clientX - dragInfo.startX; // positive when moving right
+      const frameDelta = Math.round(pixelDelta * framesPerPixel);
+      const minDuration = 1;
+
+      if (dragInfo.action === 'resize-start') {
+        const newDuration = Math.max(minDuration, dragInfo.startDuration - frameDelta);
+        if (newDuration !== scene.duration) {
+          updateScene(projectId, dragInfo.sceneId || '', { duration: newDuration });
+        }
+      } else if (dragInfo.action === 'resize-end') {
+        const newDuration = Math.max(minDuration, dragInfo.startDuration + frameDelta);
+        if (newDuration !== scene.duration) {
+          updateScene(projectId, dragInfo.sceneId || '', { duration: newDuration });
+        }
+      }
+      return; // handled resize path
+    }
+
     if (dragInfo.action === 'reorder') {
       // Handle scene reordering
       const mouseX = e.clientX - rect.left + timelineRef.current.scrollLeft;
@@ -555,27 +793,34 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return;
     }
     
-    const deltaX = e.clientX - dragInfo.startX;
-    const pixelsPerFrame = rect.width / totalDuration;
-    let deltaFrames = Math.round(deltaX / pixelsPerFrame);
+    // Compute mouse frame with zoom + scroll like playhead logic
+    const mouseX = e.clientX - rect.left + (timelineRef.current?.scrollLeft || 0);
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const actualWidth = Math.max(1, contentScrollWidth);
+    // Allow dragging beyond the current timeline width to extend last scene
+    const percentage = actualWidth > 0 ? mouseX / actualWidth : 0; // intentionally NOT clamped
+    const mouseFrame = Math.round(percentage * totalDuration);
+    // Delta from original drag start X approximated via frame delta
+    let deltaFrames = mouseFrame - dragInfo.startPosition;
     
     // Apply snapping for resize operations
     if (!e.shiftKey && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
-      // Dynamic snap interval based on zoom level for fine control - frame-by-frame
+      // Dynamic snap interval tuned for less sensitivity when zoomed out
       let snapInterval = 1; // Default to frame precision
-      
-      if (zoomScale >= 2) {
-        snapInterval = 1; // Frame-by-frame when zoomed in
+      if (zoomScale >= 3) {
+        snapInterval = 1;
+      } else if (zoomScale >= 2) {
+        snapInterval = 1;
       } else if (zoomScale >= 1.5) {
-        snapInterval = 1; // Frame-by-frame at medium-high zoom too
-      } else if (zoomScale >= 1) {
-        snapInterval = 2; // 2 frames at normal zoom
+        snapInterval = 2;
+      } else if (zoomScale >= 1.0) {
+        snapInterval = 5;
       } else if (zoomScale >= 0.75) {
-        snapInterval = 3; // 3 frames when slightly zoomed out
+        snapInterval = 10;
       } else if (zoomScale >= 0.5) {
-        snapInterval = 5; // 5 frames when zoomed out more
+        snapInterval = 15;
       } else {
-        snapInterval = 10; // 10 frames when very zoomed out
+        snapInterval = 30; // much coarser when very zoomed out
       }
       
       if (dragInfo.action === 'resize-start') {
@@ -596,25 +841,23 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (!scene) return;
     
     if (dragInfo.action === 'resize-start') {
-      // Trim from start - dragging right decreases duration, dragging left increases it
-      const newDuration = Math.max(30, dragInfo.startDuration - deltaFrames);
-      
+      // New start is mouseFrame clamped so end stays >= min
+      const minDuration = 1;
+      const maxNewStart = dragInfo.startPosition + dragInfo.startDuration - minDuration;
+      const newStart = Math.max(0, Math.min(maxNewStart, mouseFrame));
+      const newDuration = Math.max(minDuration, dragInfo.startDuration - (newStart - dragInfo.startPosition));
+
       if (newDuration !== scene.duration) {
-        // Only update duration, preserve everything else
-        updateScene(projectId, dragInfo.sceneId || '', {
-          duration: newDuration
-        });
+        updateScene(projectId, dragInfo.sceneId || '', { duration: newDuration });
       }
-      
     } else if (dragInfo.action === 'resize-end') {
-      // Trim from end - dragging right increases duration, dragging left decreases it
-      const newDuration = Math.max(30, dragInfo.startDuration + deltaFrames);
-      
+      // New end is mouseFrame; duration is end - original start, clamped to min and totalDuration
+      const minDuration = 1;
+      const newEnd = Math.max(dragInfo.startPosition + minDuration, mouseFrame);
+      const newDuration = Math.max(minDuration, newEnd - dragInfo.startPosition);
+
       if (newDuration !== scene.duration) {
-        // Only update duration, preserve everything else
-        updateScene(projectId, dragInfo.sceneId || '', {
-          duration: newDuration
-        });
+        updateScene(projectId, dragInfo.sceneId || '', { duration: newDuration });
       }
     }
   }, [dragInfo, totalDuration, zoomScale, updateScene, projectId, snapToGrid]);
@@ -622,10 +865,28 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // Handle resize drag end
   const handleResizeDragEnd = useCallback((e?: MouseEvent) => {
     // If we were doing a reorder operation
-    if (dragInfo && dragInfo.action === 'reorder' && e && timelineRef.current) {
+      if (dragInfo && dragInfo.action === 'reorder' && e && timelineRef.current) {
+      // Prevent click-to-swap: only reorder if mouse moved enough
+      const deltaPx = Math.abs(e.clientX - dragInfo.startX);
+      const REORDER_THRESHOLD_PX = 6;
+      if (deltaPx < REORDER_THRESHOLD_PX) {
+        // Treat as a simple click/select; do not reorder
+        setDragInfo(null);
+        setIsDragging(false);
+        return;
+      }
       const rect = timelineRef.current.getBoundingClientRect();
+      // Require dropping inside the timeline bounds to commit a reorder
+      const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+      if (!inside) {
+        // Cancel reorder if user drags out (e.g., into chat) and releases
+        setDragInfo(null);
+        setIsDragging(false);
+        return;
+      }
       const mouseX = e.clientX - rect.left + timelineRef.current.scrollLeft;
-      const relativeX = mouseX / (rect.width * zoomScale);
+      const contentScrollWidth2 = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const relativeX = contentScrollWidth2 > 0 ? mouseX / contentScrollWidth2 : 0;
       const mouseFrame = Math.round(relativeX * totalDuration);
       
       // Find which scene we're dropping on
@@ -638,9 +899,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
           // We're dropping on scene at index i
           if (dragInfo.sceneIndex !== undefined && i !== dragInfo.sceneIndex) {
+            // Require 30% overlap (drop near the center of the target scene) to commit reorder
+            const targetDur = scene.duration || 150;
+            const localPos = mouseFrame - cumulativeFrames;
+            const minCenter = Math.floor(targetDur * 0.3);
+            const maxCenter = Math.ceil(targetDur * 0.7);
+            if (localPos < minCenter || localPos > maxCenter) {
+              setDragInfo(null);
+              setIsDragging(false);
+              break;
+            }
             console.log('[Timeline] Reordering scenes:', dragInfo.sceneIndex, 'to', i);
             
             // Perform the reorder
+            // Push undo with previous order before committing
+            const beforeOrder = scenes.map((s: Scene) => s.id);
             reorderScenes(projectId, dragInfo.sceneIndex, i);
             
             // Create new order array for API
@@ -655,6 +928,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               projectId,
               sceneIds: newOrder.map((s: Scene) => s.id)
             });
+            try { pushAction(projectId, { type: 'reorder', beforeOrder, afterOrder: newOrder.map((s: Scene) => s.id) }); } catch {}
             
             toast.success('Scenes reordered');
           }
@@ -665,18 +939,71 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
     // If we were doing a resize operation, persist the duration change
     else if (dragInfo && (dragInfo.action === 'resize-start' || dragInfo.action === 'resize-end')) {
+      if (e && timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect();
+        const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+        if (!inside) {
+          // Cancel resize if mouse released outside timeline (e.g., dragging into chat)
+          setDragInfo(null);
+          setIsDragging(false);
+          return;
+        }
+      }
       // Get current scenes from store to avoid dependency issues
       const currentProject = useVideoState.getState().projects[projectId];
       const currentScenes = currentProject?.props?.scenes || [];
       const scene = currentScenes.find((s: Scene) => s.id === dragInfo.sceneId);
       
       if (scene && scene.duration !== dragInfo.startDuration && dragInfo.sceneId) {
-        // Duration has changed, persist to database
-        updateSceneDurationMutation.mutate({
-          projectId,
-          sceneId: dragInfo.sceneId,
-          duration: scene.duration
-        });
+        if (dragInfo.action === 'resize-start') {
+          // Perfect trim-from-start: split at trimmed amount and keep right part
+          const trimmed = Math.max(1, dragInfo.startDuration - scene.duration);
+          (async () => {
+            try {
+              const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: dragInfo.sceneId!, frame: trimmed });
+              if (res?.rightSceneId) {
+                removeSceneMutation.mutate({ projectId, sceneId: dragInfo.sceneId! });
+                setSelectedSceneId(res.rightSceneId);
+                // Force-fetch latest scenes and replace VideoState to keep timeline and preview in sync
+                try {
+                  await utils.generation.getProjectScenes.invalidate({ projectId });
+                  const latest = await (utils.generation.getProjectScenes as any).fetch({ projectId });
+                  if (latest && Array.isArray(latest)) {
+                    const currentProps = useVideoState.getState().getCurrentProps();
+                    if (currentProps) {
+                      let start = 0;
+                      const converted = latest.map((db: any) => {
+                        const duration = db.duration || 150;
+                        const out = {
+                          id: db.id,
+                          type: 'custom' as const,
+                          start,
+                          duration,
+                          name: db.name,
+                          data: { code: db.tsxCode, name: db.name, componentId: db.id, props: db.props || {} }
+                        };
+                        start += duration;
+                        return out;
+                      });
+                      useVideoState.getState().replace(projectId, { ...currentProps, scenes: converted, meta: { ...currentProps.meta, duration: start } } as any);
+                    }
+                  }
+                } catch {}
+                toast.success('Trimmed from start');
+              }
+            } catch (err) {
+              console.error('Trim-from-start (drag) error', err);
+              toast.error('Failed to trim from start');
+            }
+          })();
+        } else {
+          // Right-edge: simple duration update
+          updateSceneDurationMutation.mutate({
+            projectId,
+            sceneId: dragInfo.sceneId,
+            duration: scene.duration
+          });
+        }
       }
     }
     
@@ -715,18 +1042,233 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   }, [contextMenu]);
   
   // Handle scene operations
-  const handleDeleteScene = useCallback((sceneId: string) => {
+  const handleDeleteScene = useCallback((sceneId: string, skipConfirmation: boolean = false) => {
+    // Prevent duplicate deletions
+    if (isDeletionBusy || deletionInProgressRef.current.has(sceneId)) {
+      console.warn('[Timeline] Deletion already in progress for scene:', sceneId);
+      return;
+    }
+    
+    // For keyboard shortcuts, add confirmation
+    if (!skipConfirmation) {
+      const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+      const sceneData = scenes[sceneIndex] as any;
+      const sceneName = sceneData?.name || sceneData?.data?.name || `Scene ${sceneIndex + 1}`;
+      if (!window.confirm(`Delete "${sceneName}"?\n\nPress OK to delete, or Cancel to keep it.`)) {
+        return;
+      }
+    }
+    
+    // Mark deletion as in progress
+    setIsDeletionBusy(true);
+    deletionInProgressRef.current.add(sceneId);
+    
     // Update local state immediately for responsive UI
+    // Push undo: capture full scene payload with a reliable order
+    const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
+    const scenePayload = sceneIndex >= 0 ? scenes[sceneIndex] : undefined;
+    if (scenePayload) {
+      const orderValue = (scenePayload as any).order ?? sceneIndex; // fallback to index if order missing
+      const sceneForUndo = { ...scenePayload, order: orderValue } as any;
+      pushAction(projectId, { type: 'deleteScene', scene: sceneForUndo });
+    }
     deleteScene(projectId, sceneId);
     
     // Persist to database
-    removeSceneMutation.mutate({
-      projectId,
-      sceneId
-    });
+    removeSceneMutation.mutate(
+      {
+        projectId,
+        sceneId
+      },
+      {
+        onSettled: () => {
+          // Clear deletion flag after operation completes
+          setIsDeletionBusy(false);
+          deletionInProgressRef.current.delete(sceneId);
+        }
+      }
+    );
     
     setContextMenu(null);
-  }, [deleteScene, projectId, removeSceneMutation]);
+  }, [deleteScene, projectId, removeSceneMutation, isDeletionBusy, scenes, pushAction]);
+
+  // Keyboard: Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (!isMod) return;
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true');
+      if (isTyping) return;
+      if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const action = popUndo(projectId);
+        if (!action) return;
+        if (action.type === 'deleteScene') {
+          // Restore via API using scene payload captured before delete
+          restoreSceneMutation.mutate({ projectId, scene: {
+            id: action.scene.id,
+            name: action.scene.name || action.scene.data?.name,
+            tsxCode: action.scene.data?.code || (action.scene as any).tsxCode,
+            duration: action.scene.duration || 150,
+            order: (action.scene as any).order ?? 0,
+            props: action.scene.data?.props,
+            layoutJson: (action.scene as any).layoutJson,
+          }});
+          pushRedo(projectId, { type: 'deleteScene', scene: action.scene });
+        } else if (action.type === 'reorder') {
+          reorderScenesMutation.mutate({ projectId, sceneIds: action.beforeOrder });
+          pushRedo(projectId, { type: 'reorder', beforeOrder: action.afterOrder, afterOrder: action.beforeOrder });
+        } else if (action.type === 'updateDuration') {
+          updateScene(projectId, action.sceneId, { duration: action.prevDuration });
+          updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.prevDuration });
+          pushRedo(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.newDuration, newDuration: action.prevDuration });
+        }
+      } else if (e.key.toLowerCase() === 'z' && e.shiftKey) {
+        e.preventDefault();
+        const action = popRedo(projectId);
+        if (!action) return;
+        if (action.type === 'deleteScene') {
+          // Re-delete the scene
+          removeSceneMutation.mutate({ projectId, sceneId: action.scene.id });
+          pushAction(projectId, { type: 'deleteScene', scene: action.scene });
+        } else if (action.type === 'reorder') {
+          reorderScenesMutation.mutate({ projectId, sceneIds: action.afterOrder });
+          pushAction(projectId, { type: 'reorder', beforeOrder: action.beforeOrder, afterOrder: action.afterOrder });
+        } else if (action.type === 'updateDuration') {
+          updateScene(projectId, action.sceneId, { duration: action.newDuration });
+          updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.newDuration });
+          pushAction(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.prevDuration, newDuration: action.newDuration });
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [projectId, popUndo, pushRedo, popRedo, restoreSceneMutation, reorderScenesMutation, updateScene, updateSceneDurationMutation, removeSceneMutation]);
+
+  // Helper: compute scene start frame by id
+  const getSceneStartById = useCallback((sceneId: string): { start: number; duration: number } | null => {
+    let start = 0;
+    for (let i = 0; i < scenes.length; i++) {
+      const s = scenes[i] as Scene | undefined;
+      if (!s) continue;
+      if (s.id === sceneId) {
+        return { start, duration: s.duration || 150 };
+      }
+      start += s.duration || 150;
+    }
+    return null;
+  }, [scenes]);
+
+  // Split at current playhead for a specific scene id
+  const handleSplitAtPlayhead = useCallback((sceneId: string) => {
+    if (isSplitBusy || splitSceneMutation.isPending) {
+      return;
+    }
+    const info = getSceneStartById(sceneId);
+    if (!info) return;
+    // Ask preview for the exact current frame, then use the freshest value
+    try { window.dispatchEvent(new Event('request-current-frame')); } catch {}
+    setTimeout(() => {
+      const frameNow = Math.round(currentFrameRef.current);
+      const offset = Math.max(0, frameNow - info.start);
+      if (offset <= 0 || offset >= info.duration) {
+        toast.info('Move playhead inside this scene to split');
+        return;
+      }
+      (async () => {
+        try {
+          setIsSplitBusy(true);
+          const res = await splitSceneMutation.mutateAsync({ projectId, sceneId, frame: offset });
+          if (res?.rightSceneId) {
+            setSelectedSceneId(res.rightSceneId);
+          }
+          // Force-fetch latest scenes and replace state to keep UI in sync immediately
+          await utils.generation.getProjectScenes.invalidate({ projectId });
+          try {
+            const latest = await (utils.generation.getProjectScenes as any).fetch({ projectId });
+            if (latest && Array.isArray(latest)) {
+              const currentProps = useVideoState.getState().getCurrentProps();
+              if (currentProps) {
+                let start = 0;
+                const ordered = [...latest].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+                const converted = ordered.map((db: any) => {
+                  const duration = db.duration || 150;
+                  const out = {
+                    id: db.id,
+                    type: 'custom' as const,
+                    start,
+                    duration,
+                    order: db.order ?? 0,
+                    name: db.name,
+                    data: { code: db.tsxCode, name: db.name, componentId: db.id, props: db.props || {} }
+                  };
+                  start += duration;
+                  return out;
+                });
+                useVideoState.getState().replace(projectId, { ...currentProps, scenes: converted, meta: { ...currentProps.meta, duration: start } } as any);
+              }
+            }
+          } catch {}
+          toast.success('Scene split at playhead');
+        } catch (err) {
+          console.error('Context split error', err);
+          toast.error('Failed to split scene');
+        } finally {
+          setIsSplitBusy(false);
+        }
+      })();
+    }, 30);
+  }, [getSceneStartById, projectId, splitSceneMutation, utils, isSplitBusy]);
+
+  // Trim-left button: split at playhead and delete left part (keep right with offset)
+  const handleTrimLeftClick = useCallback(() => {
+    if (!selectedSceneId) return;
+    const info = getSceneStartById(selectedSceneId);
+    if (!info) return;
+    // Ask for freshest frame
+    try { window.dispatchEvent(new Event('request-current-frame')); } catch {}
+    setTimeout(async () => {
+      const frameNow = Math.round(currentFrame);
+      const offset = Math.max(1, Math.min(info.duration - 1, frameNow - info.start));
+      if (offset <= 0 || offset >= info.duration) {
+        toast.info('Move playhead inside the scene to trim');
+        return;
+      }
+      try {
+        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: selectedSceneId, frame: offset });
+        if (res?.rightSceneId) {
+          removeSceneMutation.mutate({ projectId, sceneId: selectedSceneId });
+          setSelectedSceneId(res.rightSceneId);
+          try {
+            await utils.generation.getProjectScenes.invalidate({ projectId });
+          } catch {}
+          toast.success('Trimmed from start');
+          const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: res.rightSceneId } });
+          window.dispatchEvent(ev);
+        }
+      } catch (err) {
+        console.error('Trim-left error', err);
+        toast.error('Failed to trim from start');
+      }
+    }, 30);
+  }, [selectedSceneId, getSceneStartById, currentFrame, projectId, splitSceneMutation, removeSceneMutation, utils]);
+
+  // Trim-right button: set duration to playhead offset (end at playhead)
+  const handleTrimRightClick = useCallback(() => {
+    if (!selectedSceneId) return;
+    const info = getSceneStartById(selectedSceneId);
+    if (!info) return;
+    const frameNow = Math.round(currentFrame);
+    const offset = Math.max(1, Math.min(info.duration, frameNow - info.start));
+    if (offset <= 0 || offset > info.duration) {
+      toast.info('Move playhead inside the scene to trim');
+      return;
+    }
+    // Update locally and persist
+    updateScene(projectId, selectedSceneId, { duration: offset });
+    updateSceneDurationMutation.mutate({ projectId, sceneId: selectedSceneId, duration: offset });
+  }, [selectedSceneId, getSceneStartById, currentFrame, projectId, updateScene, updateSceneDurationMutation]);
   
   // Handle scene name editing
   const handleEditName = useCallback((sceneId: string | null, name?: string) => {
@@ -785,16 +1327,124 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
       // Delete/Backspace for deleting selected scene - only if not typing
       else if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
-        if (selectedSceneId) {
+        if (selectedSceneId && !isDeletionBusy) {
           e.preventDefault();
-          handleDeleteScene(selectedSceneId);
+          // Call with skipConfirmation=false for keyboard shortcuts
+          handleDeleteScene(selectedSceneId, false);
         }
       }
     };
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedSceneId, handleDeleteScene, togglePlayPause]);
+  }, [selectedSceneId, handleDeleteScene, togglePlayPause, isDeletionBusy]);
+
+  // Keyboard shortcuts: [ start, ] end, | split
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Ignore if typing
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (
+        active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('role') === 'textbox'
+      );
+      if (isTyping) return;
+
+      const findSceneAtFrame = (): { scene: Scene; index: number; start: number } | null => {
+        let start = 0;
+        for (let i = 0; i < scenes.length; i++) {
+          const s = scenes[i];
+          if (!s) continue;
+          const end = start + (s.duration || 150);
+          if (currentFrame >= start && currentFrame < end) {
+            return { scene: s, index: i, start };
+          }
+          start = end;
+        }
+        return null;
+      };
+
+      const minFrames = 1;
+      const target = selectedSceneId
+        ? (() => {
+            const i = scenes.findIndex((s: any) => s.id === selectedSceneId);
+            if (i >= 0) {
+              const start = scenes.slice(0, i).reduce((acc, s) => acc + (s.duration || 150), 0);
+              return { scene: scenes[i] as Scene, index: i, start };
+            }
+            return findSceneAtFrame();
+          })()
+        : findSceneAtFrame();
+
+      if (!target) return;
+      const { scene, start } = target;
+      const offset = Math.max(0, currentFrame - start);
+
+      // [ set start (perfect trim-from-start)
+      if (e.key === '[') {
+        const splitAt = Math.max(1, Math.min((scene.duration || 150) - 1, offset));
+        if (splitAt >= 1 && splitAt < (scene.duration || 150)) {
+          (async () => {
+            try {
+              const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: scene.id, frame: splitAt });
+              if (res?.rightSceneId) {
+                removeSceneMutation.mutate({ projectId, sceneId: scene.id });
+                setSelectedSceneId(res.rightSceneId);
+                await utils.generation.getProjectScenes.invalidate({ projectId });
+                toast.success('Trimmed from start');
+              }
+            } catch (err) {
+              console.error('Trim-from-start error', err);
+              toast.error('Failed to trim from start');
+            }
+          })();
+        }
+        e.preventDefault();
+        return;
+      }
+
+      // ] set end (trim-to-end)
+      if (e.key === ']') {
+        const newDuration = Math.max(minFrames, offset);
+        if (newDuration !== scene.duration) {
+          updateScene(projectId, scene.id, { duration: newDuration });
+          updateSceneDurationMutation.mutate({ projectId, sceneId: scene.id, duration: newDuration });
+        }
+        e.preventDefault();
+        return;
+      }
+
+      // | split (Shift+Backslash on many keyboards)
+      if (e.key === '|' || (e.shiftKey && e.key === '\\')) {
+        if (isSplitBusy || splitSceneMutation.isPending) {
+          e.preventDefault();
+          return;
+        }
+        (async () => {
+          try {
+            const sceneAt = target;
+            if (sceneAt) {
+              const { scene, start } = sceneAt;
+              const offset = Math.max(0, currentFrame - start);
+              if (offset > 0 && offset < (scene.duration || 150)) {
+                setIsSplitBusy(true);
+                await splitSceneMutation.mutateAsync({ projectId, sceneId: scene.id, frame: offset });
+              } else {
+                toast.info('Move playhead inside the scene to split');
+              }
+            }
+          } catch (err) {
+            console.error('Split error', err);
+          } finally {
+            setIsSplitBusy(false);
+          }
+        })();
+        e.preventDefault();
+        return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [scenes, selectedSceneId, currentFrame, projectId, updateScene, updateSceneDurationMutation, isSplitBusy, splitSceneMutation.isPending]);
   
   const handleDuplicateScene = useCallback((sceneId: string) => {
     const scene = scenes.find((s: Scene) => s.id === sceneId);
@@ -880,11 +1530,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // Calculate timeline height based on content - make it reactive to audio changes
   const timelineHeight = useMemo(() => {
-    // More breathing room: 60px controls, 32px ruler, 80px scenes area, extra for audio
-    const height = audioTrack ? 240 : 180;
-    console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, height });
+    // Controls (60) + ruler (32) + scenes area + padding
+    const sceneCount = scenes?.length || 0;
+    const compact = !audioTrack && sceneCount <= 1;
+    const height = audioTrack ? 280 : compact ? 180 : 220;
+    console.log('[Timeline] Height calculation:', { hasAudio: !!audioTrack, sceneCount, height });
     return height;
-  }, [audioTrack]);
+  }, [audioTrack, scenes]);
   
   // Synchronize scrolling - timeline controls ruler
   const handleTimelineScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -898,12 +1550,48 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   }, []);
   
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950" style={{ height: `${timelineHeight}px` }}>
+    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-xl shadow-sm select-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
       {/* Timeline Controls - Modern design */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-800 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          {/* Playback Controls */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-50/70 dark:bg-gray-900/50 backdrop-blur-sm">
+        {/* Left cluster: frame/time display */}
+        <div className="flex items-center gap-3 min-w-[220px]">
+          {/* Frame/Time Counter - Minimal with switch indicator */}
+          <div className="flex items-center gap-1">
+            {displayMode === 'frames' ? (
+              <button
+                onClick={() => setDisplayMode('time')}
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                title="Switch to time display"
+              >
+                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
+                  {currentFrame}
+                </span>
+                <span className="text-sm text-gray-400">/</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
+                  {totalDuration}f
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setDisplayMode('frames')}
+                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                title="Switch to frame display"
+              >
+                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
+                  {(currentFrame / FPS).toFixed(2)}s
+                </span>
+                <span className="text-sm text-gray-400">/</span>
+                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
+                  {(totalDuration / FPS).toFixed(2)}s
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Center cluster: playback controls */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
             <button
               onClick={() => {
                 const newFrame = Math.max(0, currentFrame - 30);
@@ -942,51 +1630,88 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               <SkipForward className="w-3.5 h-3.5" />
             </button>
           </div>
-          
-          {/* Frame/Time Counter - Minimal with switch indicator */}
-          <div className="flex items-center gap-1">
-            {displayMode === 'frames' ? (
-              <button
-                onClick={() => setDisplayMode('time')}
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                title="Switch to time display"
-              >
-                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
-                  {currentFrame}
-                </span>
-                <span className="text-sm text-gray-400">/</span>
-                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
-                  {totalDuration}f
-                </span>
-                <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                onClick={() => setDisplayMode('frames')}
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                title="Switch to frame display"
-              >
-                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
-                  {(currentFrame / FPS).toFixed(2)}s
-                </span>
-                <span className="text-sm text-gray-400">/</span>
-                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
-                  {(totalDuration / FPS).toFixed(2)}s
-                </span>
-                <svg className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-              </button>
-            )}
-          </div>
         </div>
-        
+
         {/* Right side controls */}
         <div className="flex items-center gap-2">
+          {/* Edit Controls: Trim Left, Split, Trim Right */}
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+            <button
+              onClick={handleTrimLeftClick}
+              disabled={!selectedSceneId}
+              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="Trim start to playhead ([)"
+            >
+              [
+            </button>
+            <button
+              onClick={() => selectedSceneId && handleSplitAtPlayhead(selectedSceneId)}
+              disabled={!selectedSceneId || isSplitBusy || splitSceneMutation.isPending}
+              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+              title={isSplitBusy || splitSceneMutation.isPending ? "Splitting…" : "Split at playhead (|)"}
+            >
+              {isSplitBusy || splitSceneMutation.isPending ? (
+                <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                '|'
+              )}
+            </button>
+            <button
+              onClick={handleTrimRightClick}
+              disabled={!selectedSceneId}
+              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+              title=
+                "Trim end to playhead (])"
+            >
+              ]
+            </button>
+          </div>
+
+          {/* Loop Controls */}
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+            {([
+              { key: 'off', label: 'Off' },
+              { key: 'scene', label: 'Scene' },
+              { key: 'video', label: 'Video' },
+            ] as const).map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => {
+                  setLoopState(opt.key);
+                  const ev = new CustomEvent('loop-state-change', { detail: { state: opt.key } });
+                  window.dispatchEvent(ev);
+                }}
+                className={cn(
+                  "px-2 py-1 rounded-md text-xs transition-colors",
+                  loopState === opt.key
+                    ? "bg-gray-900 text-white dark:bg-gray-200 dark:text-gray-900"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                title={`Loop: ${opt.label}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Playback Speed */}
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+            <PlaybackSpeedSlider
+              currentSpeed={storePlaybackSpeed}
+              onSpeedChange={(speed) => {
+                if (projectId) {
+                  storeSetPlaybackSpeed(projectId, speed);
+                }
+                try {
+                  const ev = new CustomEvent('playback-speed-change', { detail: { speed } });
+                  window.dispatchEvent(ev);
+                } catch {}
+              }}
+            />
+          </div>
+
           {/* Zoom Controls */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
@@ -1022,7 +1747,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {onClose && (
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 transition-colors border border-gray-200 dark:border-gray-700"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-300 transition-colors"
             title="Close Timeline"
           >
             <X className="w-4 h-4" />
@@ -1036,7 +1761,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Time Ruler - not independently scrollable */}
         <div 
           ref={timeRulerRef}
-          className="h-8 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 relative overflow-hidden cursor-pointer"
+          className="h-8 bg-gray-100 dark:bg-gray-900 relative overflow-hidden cursor-pointer select-none"
           onClick={(e) => {
             // Move playhead when clicking on time ruler
             if (timelineRef.current) {
@@ -1044,9 +1769,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               const scrollLeft = timelineRef.current.scrollLeft;
               const clickX = e.clientX - rect.left;
               
-              // Account for scroll position and zoom scale
+              // Account for scroll and use true content width (exclude spacer)
               const actualClickX = clickX + scrollLeft;
-              const actualWidth = rect.width * zoomScale;
+              const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+              const actualWidth = Math.max(1, contentScrollWidth);
               
               // Calculate percentage and frame
               const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
@@ -1096,7 +1822,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                   style={{ left: `${position}%` }}
                 >
                   <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
-                  <span className="absolute top-3 left-0 text-[10px] text-gray-500 dark:text-gray-400 transform -translate-x-1/2 font-mono whitespace-nowrap">
+                  <span className="absolute top-3 left-0 text-[10px] text-gray-500 dark:text-gray-400 transform -translate-x-1/2 font-mono whitespace-nowrap select-none pointer-events-none">
                     {formatTime(frame)}
                   </span>
                 </div>
@@ -1115,9 +1841,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           onClick={handleTimelineClick}
           onWheel={handleWheelZoom}
           onScroll={handleTimelineScroll}
+          onMouseEnter={() => setIsPointerInside(true)}
+          onMouseLeave={() => setIsPointerInside(false)}
           style={{ 
             height: `${timelineHeight - 60 - 32}px`,
-            cursor: isDragging ? 'grabbing' : 'crosshair' 
+            cursor: isDragging ? 'grabbing' : (isSplitBusy || splitSceneMutation.isPending) ? 'progress' : 'crosshair' 
           }}
         >
           <div
@@ -1127,7 +1855,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               minWidth: '100%',
               minHeight: '100%'
             }}
+            ref={innerContentRef}
           >
+            {/* IMPORTANT: Do not use padding on this container. Block left/width are percent-based
+               and must be relative to the true content width. Adding inner padding distorts the
+               percentage base and makes visual block boundaries drift from the actual video frames.
+               We add a separate absolute spacer after the content (see below) to provide extra
+               drag space without affecting percent calculations. */}
             {/* Dynamic grid lines matching time markers */}
             <div className="absolute inset-0 pointer-events-none">
               {(() => {
@@ -1175,14 +1909,38 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </div>
             
             {/* Scene Items */}
-            <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
+            <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '20px', marginBottom: '20px' }}>
               {scenes.map((scene: any, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
+                // DEBUG: Log what Timeline sees
+                if (index === 0) {
+                  console.log('[Timeline] Scene positions:', scenes.map((s: any, i: number) => ({
+                    id: s.id,
+                    order: s.order,
+                    start: s.start,
+                    duration: s.duration,
+                    calculatedStart: scenes.slice(0, i).reduce((acc: number, sc: any) => acc + (sc.duration || 150), 0)
+                  })));
+                }
                 // When zoomed, scenes need to scale with the container
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
+                
+                // DEBUG: Log width calculation for all scenes
+                if (index === 0) {
+                  console.log(`[Timeline] First scene rendering:`, {
+                    sceneId: scene.id,
+                    sceneDuration: scene.duration,
+                    actualDuration: scene.data?.duration,
+                    expectedWidth: (430 / 640) * 100,
+                    calculatedWidth: width,
+                    totalDuration,
+                    sceneObject: scene
+                  });
+                }
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
+                const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
                 
                 return (
                   <div
@@ -1201,19 +1959,57 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       ...getSceneStyles(scene),
                       transition: 'all 0.2s ease'
                     }}
+                    draggable
+                    onDragStart={(e) => {
+                      try {
+                        const payload = {
+                          type: 'timeline-scene',
+                          projectId,
+                          sceneId: scene.id,
+                          index: index + 1,
+                          name: displayName,
+                        };
+                        e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                        e.dataTransfer.setData('text/plain', `@scene ${index + 1}`);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      } catch {}
+                    }}
                     onMouseDown={(e) => {
                       // Check if we're clicking on a resize handle
                       const rect = e.currentTarget.getBoundingClientRect();
                       const relativeX = e.clientX - rect.left;
-                      const isLeftEdge = relativeX < 10;
-                      const isRightEdge = relativeX > rect.width - 10;
+                    const isLeftEdge = relativeX < 10;
+                    const isRightEdge = relativeX > rect.width - 10;
                       
                       if (isLeftEdge) {
                         handleResizeDragStart(e, scene.id, 'resize-start');
                       } else if (isRightEdge) {
                         handleResizeDragStart(e, scene.id, 'resize-end');
                       } else {
-                        // Start reorder drag
+                        // Do not start reorder from the block body; reserved for drag-to-chat.
+                      }
+                    }}
+                    onContextMenu={(e) => handleContextMenu(e, scene.id)}
+                    onClick={(e) => {
+                      // Simple click selects the scene without starting reorder
+                      e.stopPropagation();
+                      setSelectedSceneId(scene.id);
+                      try {
+                        const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: scene.id } });
+                        window.dispatchEvent(ev);
+                      } catch {}
+                    }}
+                  >
+                    {/* Resize Handle Start */}
+                    <div
+                      className="absolute left-0 top-0 bottom-0 w-2 md:w-3 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-l-lg transition-colors backdrop-blur-sm"
+                      title="Trim start (drag)"
+                    />
+
+                    {/* Reorder Grip */}
+                    <div
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/80 hover:text-white/100 cursor-grab active:cursor-grabbing select-none"
+                      onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         setDragInfo({
@@ -1226,14 +2022,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                         });
                         setIsDragging(true);
                         setSelectedSceneId(scene.id);
-                      }
-                    }}
-                    onContextMenu={(e) => handleContextMenu(e, scene.id)}
-                  >
-                    {/* Resize Handle Start */}
-                    <div
-                      className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-l-lg transition-colors backdrop-blur-sm"
-                    />
+                        try {
+                          const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: scene.id } });
+                          window.dispatchEvent(ev);
+                        } catch {}
+                      }}
+                      draggable={false}
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
                     
                     {/* Scene Label */}
                     {editingSceneId === scene.id ? (
@@ -1259,16 +2057,17 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           setEditingSceneId(scene.id);
-                          setEditingName(scene.name || scene.data?.name || `Scene ${index + 1}`);
+                          setEditingName(displayName);
                         }}
                       >
-                        {scene.name || scene.data?.name || `Scene ${index + 1}`}
+                        {displayName}
                       </span>
                     )}
                     
                     {/* Resize Handle End */}
                     <div
-                      className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-r-lg transition-colors backdrop-blur-sm"
+                      className="absolute right-0 top-0 bottom-0 w-2 md:w-3 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-r-lg transition-colors backdrop-blur-sm"
+                      title="Trim end (drag)"
                     />
                   </div>
                 );
@@ -1300,6 +2099,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               </div>
             )}
             
+            {/* End spacer (visual extra space that does not affect percent-based widths)
+                This lives outside the content's percent base (left: 100%). It lets users drag
+                beyond the last block without altering how block percentages are computed. */}
+            <div
+              className="absolute top-0 bottom-0"
+              style={{ left: '100%', width: `${END_SPACER_PX}px` }}
+            />
+
             {/* Playhead - with Bazaar orange gradient */}
             <div
               className="absolute top-0 bottom-0 w-1 cursor-ew-resize z-30"
@@ -1372,13 +2179,24 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             <Copy className="w-4 h-4" />
             Duplicate Scene
           </button>
+          <button
+            onClick={() => {
+              handleSplitAtPlayhead(contextMenu.sceneId);
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-gray-700 dark:text-gray-200 transition-colors"
+          >
+            <Scissors className="w-4 h-4" />
+            Split at Playhead
+          </button>
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
           <button
-            onClick={() => handleDeleteScene(contextMenu.sceneId)}
-            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left text-red-600 dark:text-red-400 transition-colors"
+            onClick={() => handleDeleteScene(contextMenu.sceneId, true)}
+            disabled={isDeletionBusy}
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left text-red-600 dark:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-4 h-4" />
-            Delete Scene
+            {isDeletionBusy ? 'Deleting...' : 'Delete Scene'}
           </button>
         </div>
       )}

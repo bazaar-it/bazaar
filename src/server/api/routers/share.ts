@@ -197,6 +197,32 @@ export const shareRouter = createTRPCRouter({
       };
     }),
 
+  // Get existing share for a specific project
+  getProjectShare: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { projectId } = input;
+      const userId = ctx.session.user.id;
+
+      const existingShare = await db.query.sharedVideos.findFirst({
+        where: and(
+          eq(sharedVideos.projectId, projectId),
+          eq(sharedVideos.userId, userId)
+        ),
+      });
+
+      if (!existingShare) {
+        return null;
+      }
+
+      return {
+        id: existingShare.id,
+        shareUrl: getShareUrl(existingShare.id),
+      };
+    }),
+
   // Get user's shared videos
   getMyShares: protectedProcedure
     .query(async ({ ctx }) => {

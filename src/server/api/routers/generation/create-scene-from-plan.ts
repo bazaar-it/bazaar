@@ -4,7 +4,6 @@ import { db } from "~/server/db";
 import { scenes, messages, projects } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { addTool } from "~/tools/add/add";
-import { typographyTool } from "~/tools/typography/typography";
 import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import type { ScenePlan } from "~/tools/helpers/types";
 
@@ -106,7 +105,8 @@ export const createSceneFromPlanRouter = createTRPCRouter({
         switch (scenePlan.toolType) {
           case 'typography':
             try {
-              toolResult = await typographyTool.run({
+              // Typography is now handled by addTool
+              toolResult = await addTool.run({
                 userPrompt: scenePlan.prompt,
                 projectId,
                 userId,
@@ -441,7 +441,8 @@ export const createSceneFromPlanRouter = createTRPCRouter({
             };
             
             if (scenePlan.toolType === 'typography') {
-              toolResult = await typographyTool.run(baseInput);
+              // Typography is now handled by addTool
+              toolResult = await addTool.run(baseInput);
             } else if (scenePlan.toolType === 'recreate' && imageUrls.length > 0) {
               toolResult = await imageRecreatorTool.run({
                 ...baseInput,
