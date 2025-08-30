@@ -281,41 +281,32 @@ COMMON MISTAKES TO AVOID (based on patterns above):
       });
     };
 
-    // Get context from working scenes
-    const workingSceneContext = getWorkingSceneContext();
-    
-    // Progressive fix prompts based on attempt number WITH CONTEXT
+    // Build neighbor + broken code context and targeted prompt
+    const storyboard = scenesRef.current as any[];
+    const idx = storyboard.findIndex(s => s.id === sceneId);
+    const brokenScene = idx >= 0 ? storyboard[idx] : null;
+    const prevScene = idx > 0 ? storyboard[idx - 1] : null;
+    const nextScene = idx >= 0 && idx < storyboard.length - 1 ? storyboard[idx + 1] : null;
+    const brokenCode = brokenScene?.data?.code || '';
+    const neighborBlocks: string[] = [];
+    if (prevScene?.data?.code) {
+      neighborBlocks.push(`=== PREVIOUS SCENE: "${prevScene.data?.name || prevScene.name || `Scene ${idx}`}" ===\n\n\`\`\`tsx\n${prevScene.data.code}\n\`\`\``);
+    }
+    if (nextScene?.data?.code) {
+      neighborBlocks.push(`=== NEXT SCENE: "${nextScene.data?.name || nextScene.name || `Scene ${idx + 2}`}" ===\n\n\`\`\`tsx\n${nextScene.data.code}\n\`\`\``);
+    }
+    const neighborContext = neighborBlocks.length ? `\nNEIGHBOR CONTEXT:\n${neighborBlocks.join('\n\n')}` : '';
+
+    const header = `Use the EDIT tool on targetSceneId=${sceneId}. Do NOT create a new scene. Return the FULL fixed component code.`;
+    const brokenBlock = brokenCode ? `\nBROKEN SCENE (FIX THIS):\n\n\`\`\`tsx\n${brokenCode}\n\`\`\`` : '';
+    const errorBlock = `\nERROR: "${errorDetails.errorMessage}"`;
     let fixPrompt: string;
-    
     if (attemptNumber === 1) {
-      // Attempt 1: Quick targeted fix with context
-      fixPrompt = `🔧 FIX BROKEN SCENE: Scene "${errorDetails.sceneName}" (ID: ${sceneId}) has a compilation error. The error message is: "${errorDetails.errorMessage}". 
-
-${workingSceneContext}
-
-Fix ONLY this specific error. Make minimal changes to resolve the compilation issue. Match the patterns from the working examples above.`;
+      fixPrompt = `${header}\n${brokenBlock}\n${errorBlock}${neighborContext}\nMake the minimal change necessary to compile successfully.`;
     } else if (attemptNumber === 2) {
-      // Attempt 2: Comprehensive fix with context
-      fixPrompt = `🔧 FIX BROKEN SCENE (ATTEMPT 2): Previous fix failed. Scene "${errorDetails.sceneName}" still has errors. Error: "${errorDetails.errorMessage}". 
-
-${workingSceneContext}
-
-Fix ALL compilation errors. Study the working examples carefully and match their exact patterns. Check:
-- No duplicate variable declarations
-- Correct spring() parameter syntax (no duplicate fps)
-- Proper imports matching the examples
-- Remove any auto-generated defaults that don't exist in working scenes`;
+      fixPrompt = `${header}\n${brokenBlock}\n${errorBlock}${neighborContext}\nFix all compilation errors. Ensure no duplicate identifiers, correct Remotion imports/hooks, correct spring() usage.`;
     } else {
-      // Attempt 3: Nuclear option - rewrite based on working examples
-      fixPrompt = `🔧 REWRITE BROKEN SCENE (FINAL ATTEMPT): Two fixes have failed. Scene "${errorDetails.sceneName}" needs a complete rewrite. Error: "${errorDetails.errorMessage}".
-
-${workingSceneContext}
-
-REWRITE this component by closely following the structure of the working examples above. Use their exact patterns for:
-- Variable declarations (don't add padding/margin/gap if they don't use them)
-- Spring animations (exact syntax from examples)
-- Component structure
-Keep similar visual output but use the proven patterns from the working scenes.`;
+      fixPrompt = `${header}\n${brokenBlock}\n${errorBlock}${neighborContext}\nRewrite if needed to match neighbor style but preserve intent.`;
     }
     
     // Add retry logic for API failures
@@ -333,7 +324,7 @@ Keep similar visual output but use the proven patterns from the working scenes.`
         const result = await generateSceneMutation.mutateAsync({
           projectId,
           userMessage: fixPrompt,
-          userContext: { imageUrls: undefined }
+          userContext: { imageUrls: undefined, sceneId }
         });
 
         const responseData = result as any;
@@ -648,6 +639,22 @@ Keep similar visual output but use the proven patterns from the working scenes.`
     
     if (!error) {
       toolsLogger.error('[SILENT FIX] Invalid error event: error is missing', undefined, { detail: event.detail });
+      return;
+    }
+
+    // Validate scene exists in current storyboard and ID format looks valid
+    const sceneExists = scenesRef.current.some((s) => s.id === sceneId);
+    if (!sceneExists) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] Scene ID not found in current project, skipping', { sceneId });
+      }
+      return;
+    }
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(sceneId)) {
+      if (DEBUG_AUTOFIX) {
+        toolsLogger.warn('[SILENT FIX] Scene ID format invalid, skipping', { sceneId });
+      }
       return;
     }
     

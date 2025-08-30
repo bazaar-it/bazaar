@@ -67,7 +67,7 @@ interface TimelinePanelProps {
 }
 
 interface DragInfo {
-  action: 'move' | 'resize-start' | 'resize-end' | 'playhead' | 'reorder';
+  action: 'resize-start' | 'resize-end' | 'playhead' | 'reorder';
   sceneId?: string;
   startX: number;
   startPosition: number;  // In frames
@@ -1052,7 +1052,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     // For keyboard shortcuts, add confirmation
     if (!skipConfirmation) {
       const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
-      const sceneName = scenes[sceneIndex]?.name || scenes[sceneIndex]?.data?.name || `Scene ${sceneIndex + 1}`;
+      const sceneData = scenes[sceneIndex] as any;
+      const sceneName = sceneData?.name || sceneData?.data?.name || `Scene ${sceneIndex + 1}`;
       if (!window.confirm(`Delete "${sceneName}"?\n\nPress OK to delete, or Cancel to keep it.`)) {
         return;
       }
@@ -1352,6 +1353,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         let start = 0;
         for (let i = 0; i < scenes.length; i++) {
           const s = scenes[i];
+          if (!s) continue;
           const end = start + (s.duration || 150);
           if (currentFrame >= start && currentFrame < end) {
             return { scene: s, index: i, start };
