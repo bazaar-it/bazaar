@@ -1,6 +1,7 @@
 # 🏆 Bazaar-Vid Progress Summary
 
 ## 📝 Latest Update (Aug 30, 2025)
+- Sprint 111: Created Motion Graphics Principles (Taste Charter) docs with pro tips and anti‑patterns. See `/memory-bank/sprints/sprint111_motion_graphics_principles/`.
 - Sprint 98 follow-up: Extracted `wrapSceneNamespace` helper and refactored `PreviewPanelG.tsx` to use it with a small cache, improving maintainability and reducing repeated regex work during preview renders. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
 
 ## 📝 Latest Update (Aug 28, 2025)
@@ -1050,3 +1051,15 @@ The core video generation pipeline is **production-ready** with:
 - ✅ Updated TypeScript interfaces and UI components
 
 **BUSINESS IMPACT**: Admin dashboard now shows only meaningful, accurate metrics for production use.
+- 2025-08-30: Hardened duration handling across edit/code paths.
+  - Server (generation/helpers.ts): Preserve trims by default; ignore tool-returned duration unless explicitly requested via `requestedDurationFrames`. Added logging when ignoring.
+  - Server (api/routers/scenes.ts): Added `overwriteDuration` flag to `updateSceneCode`; only update duration when true. Logged both applied and ignored cases.
+  - Client (CodePanelG.tsx): Added confirmation prompt when code-declared `durationInFrames` mismatches DB; passes `overwriteDuration` based on user choice.
+  - Goal: Prevent trim → edit from reverting manual duration. Now duration changes are intentional and auditable.
+ - 2025-08-30: Drafted Deep Research–powered “Make Better” design.
+   - Added `memory-bank/sprints/sprint98_autofix_analysis/DEEP-RESEARCH-MAKE-BETTER-DESIGN.md`.
+   - Defined plan-only Phase 1 with SSE progress and safety rails (compile → auto-fix → eval) before rollout.
+ - 2025-08-30: Transition Tool design + scaffold.
+   - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
+   - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
+   - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.

@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { PlusIcon, MonitorIcon, SmartphoneIcon, SquareIcon } from "lucide-react";
-import { FormatSelectorModal } from "./FormatSelectorModal";
 import { type VideoFormat } from "~/app/projects/new/FormatSelector";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
@@ -30,12 +29,11 @@ export function NewProjectButton({
   onStart,
   onProjectCreated,
   children,
-  enableQuickCreate = false,
+  enableQuickCreate = true,
   disableFormatDropdown = false
 }: NewProjectButtonProps = {}) {
   const router = useRouter();
   const { data: session } = useSession();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFormatOptions, setShowFormatOptions] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null);
   const { lastFormat, updateLastFormat } = useLastUsedFormat();
@@ -133,7 +131,6 @@ export function NewProjectButton({
     onSuccess: (result) => {
       console.log(`Created project with format: ${selectedFormat}`);
       console.log(`Navigating to: /projects/${result.projectId}/generate`);
-      setIsModalOpen(false);
       if (onProjectCreated) {
         onProjectCreated(result.projectId);
       }
@@ -161,8 +158,8 @@ export function NewProjectButton({
       return;
     }
     
-    // Open the format selector modal
-    setIsModalOpen(true);
+    // Use last format or default to landscape
+    handleFormatSelect(lastFormat);
   };
 
   const handleFormatSelect = async (formatId: VideoFormat) => {
@@ -191,7 +188,6 @@ export function NewProjectButton({
     
     // Hide format options and create project
     setShowFormatOptions(false);
-    setIsModalOpen(false);
     
     // Create project with selected format
     createProjectMutation.mutate({
@@ -379,16 +375,6 @@ export function NewProjectButton({
             })}
           </div>
         </div>
-      )}
-      
-      {/* Format Selector Modal - shown on mobile or when quick create is disabled */}
-      {(!enableQuickCreate || isMobile) && (
-        <FormatSelectorModal
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
-          onSelect={handleFormatSelect}
-          isCreating={createProjectMutation.isPending}
-        />
       )}
     </div>
   );

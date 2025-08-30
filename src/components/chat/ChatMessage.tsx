@@ -531,7 +531,7 @@ export const ChatMessage = React.memo(ChatMessageComponent, (prevProps, nextProp
   // Custom comparison function - only re-render if these specific props change
   return (
     prevProps.message.id === nextProps.message.id &&
-    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.message === nextProps.message.message &&
     prevProps.message.status === nextProps.message.status &&
     prevProps.message.kind === nextProps.message.kind &&
     prevProps.hasIterations === nextProps.hasIterations &&
