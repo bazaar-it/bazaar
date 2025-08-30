@@ -269,7 +269,7 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
 
   // State for showing more badges
   const [showAllBadges, setShowAllBadges] = useState(false);
-  const maxVisibleBadges = 5;
+  const maxVisibleBadges = 4;
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 space-y-4">

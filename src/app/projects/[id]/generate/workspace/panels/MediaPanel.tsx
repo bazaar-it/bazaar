@@ -46,7 +46,7 @@ const AudioWaveAnimation = () => {
 
 type MediaPanelProps = {
   projectId: string;
-  onInsertToChat?: (url: string) => void;
+  onInsertToChat?: (url: string, name?: string) => void;
   defaultTab?: 'uploads' | 'icons'; // For auto-opening to specific tab
 };
 
@@ -131,8 +131,8 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
   }, []);
 
-  const handleClick = useCallback((url: string) => {
-    onInsertToChat?.(url);
+  const handleClick = useCallback((url: string, asset: any) => {
+    onInsertToChat?.(url, asset.customName || asset.originalName || '');
   }, [onInsertToChat]);
 
 
@@ -326,7 +326,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                       className="cursor-grab active:cursor-grabbing"
                       draggable
                       onDragStart={(e) => handleDragStart(e, a.url, a)}
-                      onClick={() => handleClick(a.url)}
+                      onClick={() => handleClick(a.url, a)}
                     >
                       {loadingAssetId === a.id ? (
                         <div className="w-full h-28 flex items-center justify-center bg-gray-50">

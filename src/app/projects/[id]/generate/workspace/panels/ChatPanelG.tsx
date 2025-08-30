@@ -832,7 +832,9 @@ export default function ChatPanelG({
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
         const id = nanoid();
-        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
+        // Use the actual name if provided, otherwise fallback to URL
+        const fileName = name || url.split('/').pop() || 'media';
+        setUploadedImages((prev) => ([...prev, { id, file: new File([], fileName), status: 'uploaded', url, type, isLoaded: true }]));
       }
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
