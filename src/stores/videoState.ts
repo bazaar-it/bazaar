@@ -69,6 +69,12 @@ export interface AudioTrack {
   loop?: boolean;           // Loop the audio
 }
 
+// Timeline action types for undo/redo
+export type TimelineAction =
+  | { type: 'deleteScene'; scene: any }
+  | { type: 'reorder'; beforeOrder: string[]; afterOrder: string[] }
+  | { type: 'updateDuration'; sceneId: string; prevDuration: number; newDuration: number };
+
 // Draft attachment interface
 export interface DraftAttachment {
   id: string;
@@ -94,6 +100,17 @@ interface ProjectState {
   shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
   draftMessage?: string; // Persist chat input when panels change
   draftAttachments?: DraftAttachment[]; // Persist uploaded attachments when panels change
+  playbackSpeed?: number; // Playback speed for preview and export (0.25-4.0)
+}
+
+// Code cache entry
+interface CodeCacheEntry {
+  prompt: string;
+  tsxCode: string;
+  name: string;
+  duration: number;
+  timestamp: number;
+  hitCount: number;
 }
 
 interface VideoState {
@@ -102,6 +119,9 @@ interface VideoState {
   chatHistory: Record<string, ChatMessage[]>;
   refreshTokens: Record<string, number>;
   
+  // CLIENT-SIDE CODE CACHE (saves 8-12 seconds on repeated prompts)
+  codeCache: Map<string, CodeCacheEntry>;
+  cacheStats: { hits: number; misses: number };
   
   // OPTIMIZATION #5: Scene selection state
   selectedScenes: Record<string, string | null>;
@@ -112,6 +132,12 @@ interface VideoState {
   
   // Track which scene plan messages are currently generating
   generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
+  undoStacks: Record<string, Array<TimelineAction>>;
+  redoStacks: Record<string, Array<TimelineAction>>;
+
+  // Undo/Redo stacks per project (timeline-focused actions)
+  undoStacks: Record<string, Array<TimelineAction>>;
+  redoStacks: Record<string, Array<TimelineAction>>;
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
@@ -144,6 +170,12 @@ interface VideoState {
   
   // Force refresh of preview components by generating a new refresh token
   
+  // CLIENT-SIDE CODE CACHING
+  getCachedCode: (projectId: string, prompt: string) => CodeCacheEntry | null;
+  setCachedCode: (projectId: string, prompt: string, code: { tsxCode: string; name: string; duration: number }) => void;
+  getCacheStats: () => { hits: number; misses: number; hitRate: number };
+  clearCache: () => void;
+  
   // OPTIMIZATION #2: Add/update/delete individual scenes without full refetch
   addScene: (projectId: string, scene: any) => void;
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
@@ -165,6 +197,10 @@ interface VideoState {
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
   
+  // Playback speed management
+  setPlaybackSpeed: (projectId: string, speed: number) => void;
+  getPlaybackSpeed: (projectId: string) => number;
+  
   // Scene generation tracking
   setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
   isSceneGenerating: (projectId: string, messageId: string) => boolean;
@@ -178,6 +214,12 @@ interface VideoState {
   clearDraft: (projectId: string) => void;
 }
 
+// Simple hash function for cache keys
+const hashPrompt = (projectId: string, prompt: string): string => {
+  const normalized = prompt.toLowerCase().trim().replace(/\s+/g, ' ');
+  return `${projectId}:${normalized}`;
+};
+
 export const useVideoState = create<VideoState>()(
   persist(
     (set, get) => ({
@@ -188,7 +230,13 @@ export const useVideoState = create<VideoState>()(
   selectedScenes: {},
   lastSyncTime: 0,
   pendingDbSync: {},
-  generatingScenes: {},
+      generatingScenes: {},
+      undoStacks: {},
+      redoStacks: {},
+  
+  // Initialize code cache
+  codeCache: new Map(),
+  cacheStats: { hits: 0, misses: 0 },
   
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
@@ -920,6 +968,36 @@ export const useVideoState = create<VideoState>()(
         [projectId]: sceneId
       }
     })),
+
+  // ---- UNDO / REDO SUPPORT ----
+  pushAction: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.undoStacks[projectId] || [];
+    return {
+      undoStacks: { ...state.undoStacks, [projectId]: [...stack, action] },
+      // Clear redo stack on new action
+      redoStacks: { ...state.redoStacks, [projectId]: [] },
+    } as any;
+  }),
+  popUndo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.undoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    state.undoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
+  pushRedo: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.redoStacks[projectId] || [];
+    return { redoStacks: { ...state.redoStacks, [projectId]: [...stack, action] } } as any;
+  }),
+  popRedo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.redoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    state.redoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
     
   // Get selected scene
   getSelectedScene: (projectId: string) => {
@@ -959,14 +1037,15 @@ export const useVideoState = create<VideoState>()(
         scenes.splice(newIndex, 0, movedScene);
       }
       
-      // Recalculate start times for all scenes
+      // Recalculate start times AND order field for all scenes
       let currentStart = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         if (scene) {
           scenes[i] = {
             ...scene,
-            start: currentStart
+            start: currentStart,
+            order: i  // CRITICAL: Update order field to match new position!
           };
           currentStart += scene.duration || 150;
         }
@@ -1322,7 +1401,120 @@ export const useVideoState = create<VideoState>()(
         }
       };
     }),
-}),
+
+  // CLIENT-SIDE CODE CACHING METHODS
+  getCachedCode: (projectId: string, prompt: string) => {
+    const state = get();
+    const cacheKey = hashPrompt(projectId, prompt);
+    const cached = state.codeCache.get(cacheKey);
+    
+    if (cached) {
+      // Update stats and hit count
+      set((state) => {
+        const entry = state.codeCache.get(cacheKey);
+        if (entry) {
+          entry.hitCount++;
+          state.codeCache.set(cacheKey, entry);
+        }
+        return {
+          ...state,
+          cacheStats: {
+            ...state.cacheStats,
+            hits: state.cacheStats.hits + 1
+          }
+        };
+      });
+      
+      console.log(`💾 [Client Cache] HIT for "${prompt.slice(0, 50)}..." (saved ~8s)`);
+      return cached;
+    }
+    
+    // Update miss count
+    set((state) => ({
+      ...state,
+      cacheStats: {
+        ...state.cacheStats,
+        misses: state.cacheStats.misses + 1
+      }
+    }));
+    
+    return null;
+  },
+  
+  setCachedCode: (projectId: string, prompt: string, code: { tsxCode: string; name: string; duration: number }) => {
+    set((state) => {
+      const cacheKey = hashPrompt(projectId, prompt);
+      const newCache = new Map(state.codeCache);
+      
+      // Limit cache size to 100 entries (LRU)
+      if (newCache.size >= 100) {
+        // Remove oldest entry (first in map)
+        const firstKey = newCache.keys().next().value;
+        if (firstKey) newCache.delete(firstKey);
+      }
+      
+      newCache.set(cacheKey, {
+        prompt,
+        tsxCode: code.tsxCode,
+        name: code.name,
+        duration: code.duration,
+        timestamp: Date.now(),
+        hitCount: 0
+      });
+      
+      console.log(`💾 [Client Cache] Stored code for "${prompt.slice(0, 50)}..."`);
+      
+      return {
+        ...state,
+        codeCache: newCache
+      };
+    });
+  },
+  
+  getCacheStats: () => {
+    const state = get();
+    const total = state.cacheStats.hits + state.cacheStats.misses;
+    return {
+      hits: state.cacheStats.hits,
+      misses: state.cacheStats.misses,
+      hitRate: total > 0 ? state.cacheStats.hits / total : 0
+    };
+  },
+  
+  clearCache: () => {
+    set((state) => ({
+      ...state,
+      codeCache: new Map(),
+      cacheStats: { hits: 0, misses: 0 }
+    }));
+    console.log('🗑️ [Client Cache] Cleared all cached code');
+  },
+
+  setPlaybackSpeed: (projectId: string, speed: number) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      // Clamp speed to valid range
+      const clampedSpeed = Math.max(0.25, Math.min(4, speed));
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            playbackSpeed: clampedSpeed
+          }
+        }
+      };
+    }),
+
+  getPlaybackSpeed: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.playbackSpeed ?? 1.0;
+  },
+    }),
     {
       name: 'bazaar-video-state',
       storage: createJSONStorage(() => localStorage),

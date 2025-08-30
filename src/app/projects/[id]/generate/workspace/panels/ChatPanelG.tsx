@@ -111,6 +111,7 @@ export default function ChatPanelG({
     draftAttachments.map(convertFromDraftAttachment)
   );
   const [selectedIcons, setSelectedIcons] = useState<string[]>([]); // Track selected icons
+  const [selectedScenes, setSelectedScenes] = useState<{ id: string; index: number; name: string }[]>([]); // Dragged scene mentions
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -397,6 +398,13 @@ export default function ChatPanelG({
       .filter(img => img.status === 'uploaded' && img.url && img.type === 'audio')
       .map(img => img.url!);
     
+    // If scenes were attached via drag, append a friendly reference for the model and machine tokens (not shown in UI)
+    if (selectedScenes.length > 0) {
+      const humanRefs = selectedScenes.map(s => `@scene ${s.index}`).join(', ');
+      const idTokens = selectedScenes.map(s => `[scene:${s.id}]`).join(' ');
+      trimmedMessage = `${trimmedMessage}\n\nUse these specific scenes: ${humanRefs}\n${idTokens}`.trim();
+    }
+    
     // Resolve @mentions and categorize URLs by type
     if (userAssets?.assets) {
       console.log('[ChatPanelG] User assets available:', userAssets.assets.length);
@@ -461,6 +469,7 @@ export default function ChatPanelG({
     setUploadedImages([]);
     setDraftAttachments(projectId, []); // Clear draft attachments in store too
     setSelectedIcons([]); // Clear icon previews after sending
+    setSelectedScenes([]); // Clear scene mentions after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
     
@@ -883,6 +892,17 @@ export default function ChatPanelG({
       const jsonData = e.dataTransfer.getData('application/json');
       if (jsonData) {
         const data = JSON.parse(jsonData);
+        // Timeline scene drop
+        if (data.type === 'timeline-scene' && data.sceneId) {
+          const mention = { id: String(data.sceneId), index: Number(data.index) || 0, name: String(data.name || '') };
+          setSelectedScenes((prev) => {
+            if (prev.some((s) => s.id === mention.id)) return prev;
+            return [...prev, mention];
+          });
+          setIsDragOver(false);
+          toast.success(`Attached ${mention.name || `Scene ${mention.index}`}`);
+          return;
+        }
         if (data.type === 'github-component') {
           // Handle GitHub component(s) drop
           let componentsToAdd: any[] = [];
@@ -1340,6 +1360,26 @@ export default function ChatPanelG({
                 
                 // Invalidate the scenes query to ensure fresh data
                 await utils.generation.getProjectScenes.invalidate({ projectId });
+                // Offer undo using scene payload
+                try {
+                  toast.success('Scene deleted', {
+                    action: {
+                      label: 'Undo',
+                      onClick: () => restoreSceneMutation.mutate({
+                        projectId,
+                        scene: {
+                          id: actualScene.id,
+                          name: actualScene.name,
+                          tsxCode: (actualScene as any).tsxCode,
+                          duration: actualScene.duration || 150,
+                          order: (actualScene as any).order ?? 0,
+                          props: (actualScene as any).props,
+                          layoutJson: (actualScene as any).layoutJson,
+                        }
+                      })
+                    }
+                  } as any);
+                } catch {}
                 
               } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
                 // For edits and trims, use the updateScene method from VideoState
@@ -1639,6 +1679,31 @@ export default function ChatPanelG({
           >
             {/* Text area container with fixed height that stops before icons */}
             <div className="flex flex-col w-full">
+              {/* Scene mentions (dragged from timeline) */}
+              {selectedScenes.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
+                  <span className="text-xs text-gray-500 mr-2">Scenes:</span>
+                  {selectedScenes.map((s, i) => (
+                    <div
+                      key={`${s.id}-${i}`}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg shadow-sm"
+                      title={s.name}
+                    >
+                      <span className="text-xs text-gray-700 font-medium">Scene {s.index}</span>
+                      <span className="text-[10px] text-gray-500 ml-1 max-w-[120px] truncate">{s.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedScenes(prev => prev.filter(x => x.id !== s.id))}
+                        className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Remove ${s.name}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Icon previews */}
               {selectedIcons.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">

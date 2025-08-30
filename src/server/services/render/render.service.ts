@@ -25,6 +25,7 @@ export interface RenderConfig {
   scenes: any[];
   format: 'mp4' | 'webm' | 'gif';
   quality: 'low' | 'medium' | 'high';
+  playbackSpeed?: number;
   projectProps?: any;
   audio?: AudioTrack;
   onProgress?: (progress: number) => void;
@@ -327,6 +328,7 @@ export async function prepareRenderConfig({
   scenes,
   format = 'mp4',
   quality = 'high',
+  playbackSpeed = 1.0,
   projectProps,
   audio,
 }: RenderConfig) {
@@ -416,16 +418,47 @@ export async function prepareRenderConfig({
   
   console.log(`[prepareRenderConfig] ${validScenes.length} of ${scenes.length} scenes passed preprocessing`);
   
-  // Calculate total duration
-  const totalDuration = validScenes.reduce((sum, scene) => {
+  // Calculate original total duration before speed adjustment
+  const originalTotalDuration = validScenes.reduce((sum, scene) => {
     return sum + (scene.duration || 150); // Default 5 seconds at 30fps
   }, 0);
+  
+  // Apply playback speed multiplier to scene durations
+  // Higher speed = shorter video (e.g., 2x speed = half duration)
+  // Lower speed = longer video (e.g., 0.5x speed = double duration)
+  const speedAdjustedScenes = validScenes.map(scene => {
+    const originalDuration = scene.duration || 150;
+    // New Duration = Original Duration / Speed
+    const adjustedDuration = Math.max(1, Math.round(originalDuration / playbackSpeed));
+    
+    if (playbackSpeed !== 1.0) {
+      console.log(`[prepareRenderConfig] Scene ${scene.id} duration: ${originalDuration} → ${adjustedDuration} frames (${playbackSpeed}x speed)`);
+    }
+    
+    return {
+      ...scene,
+      duration: adjustedDuration,
+      originalDuration // Keep original for reference
+    };
+  });
+  
+  // Calculate adjusted total duration
+  const totalDuration = speedAdjustedScenes.reduce((sum, scene) => {
+    return sum + scene.duration;
+  }, 0);
+  
+  console.log(`[prepareRenderConfig] Total duration: ${originalTotalDuration} → ${totalDuration} frames (${playbackSpeed}x speed)`);
+  
+  // Warning for very slow speeds that might timeout Lambda
+  if (playbackSpeed < 0.5 && totalDuration > 1800) { // > 1 minute at 0.5x speed
+    console.warn(`[prepareRenderConfig] Long render detected: ${totalDuration} frames at ${playbackSpeed}x speed might timeout`);
+  }
   
   const estimatedDurationMinutes = totalDuration / 30 / 60; // frames to minutes
   
   return {
     projectId,
-    scenes: validScenes,
+    scenes: speedAdjustedScenes, // Use speed-adjusted scenes
     format,
     quality,
     settings,
@@ -434,9 +467,11 @@ export async function prepareRenderConfig({
     renderWidth,
     renderHeight,
     audio,
+    playbackSpeed, // Include for debugging
+    originalDuration: originalTotalDuration,
     // This will be used by Lambda
     inputProps: {
-      scenes: validScenes,
+      scenes: speedAdjustedScenes, // Use speed-adjusted scenes
       projectId,
       width: renderWidth,
       height: renderHeight,
