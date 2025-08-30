@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
@@ -580,14 +580,26 @@ export const removeScene = protectedProcedure
         ) as any as SceneDeleteResponse;
       }
 
+      // Prepare payload for client-side undo
+      const deletedScenePayload = {
+        id: scene.id,
+        projectId: scene.projectId,
+        name: scene.name,
+        tsxCode: scene.tsxCode,
+        duration: scene.duration,
+        order: scene.order,
+        props: scene.props,
+        layoutJson: scene.layoutJson,
+      } as const;
+
       // 2. Delete the scene
       await db.delete(scenes).where(eq(scenes.id, sceneId));
 
       console.log(`[${response.getRequestId()}] Scene deleted successfully`);
 
-      // 3. Return success response
+      // 3. Return success response (include payload for potential undo)
       return response.success(
-        { deletedId: sceneId },
+        { deletedId: sceneId, deletedScene: deletedScenePayload },
         'scene.delete',
         'scene',
         [sceneId]
@@ -606,6 +618,54 @@ export const removeScene = protectedProcedure
         'scene'
       ) as any as SceneDeleteResponse;
     }
+  });
+
+/**
+ * RESTORE SCENE (Undo)
+ */
+export const restoreScene = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    scene: z.object({
+      id: z.string(),
+      name: z.string(),
+      tsxCode: z.string(),
+      duration: z.number().min(1),
+      order: z.number().min(0),
+      props: z.any().optional(),
+      layoutJson: z.any().optional(),
+    })
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, scene } = input;
+    const userId = ctx.session.user.id;
+
+    // Verify project ownership
+    const project = await db.query.projects.findFirst({
+      where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+    });
+    if (!project) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: "Access denied" });
+    }
+
+    // Bump order of existing scenes at or after the target position
+    await db.update(scenes)
+      .set({ order: sql`${scenes.order} + 1` })
+      .where(and(eq(scenes.projectId, projectId), gte(scenes.order, scene.order)));
+
+    // Insert scene back (preserve original ID)
+    const [restored] = await db.insert(scenes).values({
+      id: scene.id,
+      projectId,
+      name: scene.name,
+      tsxCode: scene.tsxCode,
+      duration: scene.duration,
+      order: scene.order,
+      props: scene.props as any,
+      layoutJson: scene.layoutJson as any,
+    }).returning();
+
+    return { success: true, scene: restored };
   });
 
 /**

@@ -15,6 +15,7 @@ import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
 import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
+import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -158,6 +159,8 @@ export function PreviewPanelG({
   const playerRef = useRef<PlayerRef>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Cache for namespaced scene code to avoid repeated regex work on every render
+  const nsCacheRef = useRef<Map<string, string>>(new Map());
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
@@ -1353,36 +1356,25 @@ export default function SingleSceneComposition() {
             if (compiled && compiled.isValid) {
               // ✅ VALID SCENE: Process normally
               const sceneCode = compiled.compiledCode;
-              // Isolate this scene in a namespace to prevent top-level identifier collisions when multiple scenes are concatenated
-              const sceneNamespaceName = `SceneNS_${index}`;
-              // Read offset and prepare optional remapping of frame reads
+              const sceneNamespaceName = `SceneNS_${index}`; // used for error boundary wrapper names
               const startOffset = ((originalScene as any).data?.props?.startOffset) || 0;
-              // Build a code header that defines an offsetted frame helper without shadowing the real useCurrentFrame
-              const offsetHeader = (startOffset && startOffset > 0)
-                ? `// Frame offset helper for Scene ${index}\nconst __offsetUseCurrentFrame_${index} = () => (useCurrentFrame() + ${startOffset});`
-                : '';
-              // If offset is present, rewrite both bare and window-qualified useCurrentFrame() calls to the offset helper
-              const codeForNamespace = (startOffset && startOffset > 0)
-                ? sceneCode
-                    // Replace fully-qualified calls first to avoid leaving window.Remotion.__offset...
-                    .replace(/window\.Remotion\s*\.useCurrentFrame\s*\(\s*\)/g, `__offsetUseCurrentFrame_${index}()`)
-                    // Then replace bare hook calls
-                    .replace(/\buseCurrentFrame\s*\(\s*\)/g, `__offsetUseCurrentFrame_${index}()`)
-                : sceneCode;
-              const wrappedSceneCode = [
-                `// Isolated namespace for Scene ${index}`,
-                `const ${sceneNamespaceName} = (() => {`,
-                offsetHeader,
-                codeForNamespace,
-                `  return { Comp: ${compiled.componentName} };`,
-                `})();`
-              ].filter(Boolean).join('\n');
-              const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
-              remotionFunctions.forEach(func => {
-                if (sceneCode.includes(func)) {
-                  allImports.add(func);
-                }
-              });
+              // Cache key based on scene identity + offset + quick code hash
+              const codeHash = `${sceneCode.length}-${sceneCode.substring(0, 200).replace(/\s+/g, '')}`;
+              const cacheKey = `${originalScene.id}:${startOffset}:${codeHash}`;
+              let wrappedSceneCode = nsCacheRef.current.get(cacheKey);
+              let usedRemotionFns: string[] = [];
+              if (!wrappedSceneCode) {
+                const wrapped = wrapSceneNamespace({
+                  sceneCode,
+                  index,
+                  componentName: compiled.componentName,
+                  startOffset,
+                });
+                wrappedSceneCode = wrapped.code;
+                usedRemotionFns = wrapped.usedRemotionFns;
+                nsCacheRef.current.set(cacheKey, wrappedSceneCode);
+              }
+              usedRemotionFns.forEach((fn) => allImports.add(fn));
 
               // ✅ VALID: Add working scene with error boundary for runtime protection
               const errorBoundaryWrapper = `

@@ -67,6 +67,11 @@ Next:
 - Increased right-end spacer to 240px (outside percent base) to make extending the rightmost scene comfortable and drift-free.
 - Smarter split naming: Right-hand scene after split now increments existing “(Part N)” if present (e.g., “Intro (Part 2)” → “Intro (Part 3)”), otherwise defaults to “(Part 2)”.
 
+2025-08-30 — Styling polish + Drag-to-Chat
+- Styling: Added 10px outer margin and 15px-ish rounded corners to Timeline panel (`m-2.5 rounded-2xl`), with subtle border and shadow to match workspace style.
+- Centered transport controls: Play/pause and prev/next are centered in the header grid for better balance.
+- Drag to Chat: You can now drag a scene block from the timeline into Chat. The chat shows a small “Scenes” chip row for context (Scene N: Name). On submit, the message is augmented with human-friendly refs like “@scene N” and hidden machine tokens `[scene:ID]` (not shown in the text area) so the Brain can precisely target scenes without exposing UUIDs to the user.
+
 2025-08-29 — Split compile fix (Preview)
 - Fixed runtime error: “Cannot set property useCurrentFrame of #<Object> which has only a getter”.
 - Root cause: Preview tried to temporarily assign to `window.Remotion.useCurrentFrame` to add per-scene offsets.
@@ -76,3 +81,8 @@ Next:
 2025-08-29 — Empty state safety after delete
 - Deleting down to 0 scenes could leave Preview without a component, causing confusing states.
 - Added a minimal placeholder composition (white AbsoluteFill) and default player props when no scenes exist, so the Player remains stable and shows an empty canvas instead of an error.
+2025-08-30 — Command-Z Undo (initial)
+- Added timeline-focused undo/redo stack in `useVideoState` with action types: deleteScene, reorder, updateDuration.
+- Timeline: Cmd/Ctrl+Z triggers undo of the last action (restore deleted scene, revert reorder, restore previous duration). Shift+redo not yet wired; redo stack is populated for a follow-up.
+- AI deletes in Chat also offer Undo via toast and will respect Cmd+Z if run from Timeline.
+- Safety: Trims and reorders cancel on mouseup outside timeline so dragging to Chat won’t commit destructive changes.

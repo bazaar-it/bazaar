@@ -69,6 +69,12 @@ export interface AudioTrack {
   loop?: boolean;           // Loop the audio
 }
 
+// Timeline action types for undo/redo
+export type TimelineAction =
+  | { type: 'deleteScene'; scene: any }
+  | { type: 'reorder'; beforeOrder: string[]; afterOrder: string[] }
+  | { type: 'updateDuration'; sceneId: string; prevDuration: number; newDuration: number };
+
 // Draft attachment interface
 export interface DraftAttachment {
   id: string;
@@ -126,6 +132,12 @@ interface VideoState {
   
   // Track which scene plan messages are currently generating
   generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
+  undoStacks: Record<string, Array<TimelineAction>>;
+  redoStacks: Record<string, Array<TimelineAction>>;
+
+  // Undo/Redo stacks per project (timeline-focused actions)
+  undoStacks: Record<string, Array<TimelineAction>>;
+  redoStacks: Record<string, Array<TimelineAction>>;
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
@@ -218,7 +230,9 @@ export const useVideoState = create<VideoState>()(
   selectedScenes: {},
   lastSyncTime: 0,
   pendingDbSync: {},
-  generatingScenes: {},
+      generatingScenes: {},
+      undoStacks: {},
+      redoStacks: {},
   
   // Initialize code cache
   codeCache: new Map(),
@@ -954,6 +968,36 @@ export const useVideoState = create<VideoState>()(
         [projectId]: sceneId
       }
     })),
+
+  // ---- UNDO / REDO SUPPORT ----
+  pushAction: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.undoStacks[projectId] || [];
+    return {
+      undoStacks: { ...state.undoStacks, [projectId]: [...stack, action] },
+      // Clear redo stack on new action
+      redoStacks: { ...state.redoStacks, [projectId]: [] },
+    } as any;
+  }),
+  popUndo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.undoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    state.undoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
+  pushRedo: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.redoStacks[projectId] || [];
+    return { redoStacks: { ...state.redoStacks, [projectId]: [...stack, action] } } as any;
+  }),
+  popRedo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.redoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    state.redoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
     
   // Get selected scene
   getSelectedScene: (projectId: string) => {
@@ -1470,7 +1514,7 @@ export const useVideoState = create<VideoState>()(
     const project = state.projects[projectId];
     return project?.playbackSpeed ?? 1.0;
   },
-}),
+    }),
     {
       name: 'bazaar-video-state',
       storage: createJSONStorage(() => localStorage),

@@ -1,5 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Aug 30, 2025)
+- Sprint 98 follow-up: Extracted `wrapSceneNamespace` helper and refactored `PreviewPanelG.tsx` to use it with a small cache, improving maintainability and reducing repeated regex work during preview renders. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
+
 ## 📝 Latest Update (Aug 28, 2025)
 - Current Sprint: Sprint 103 — Multi-Tool System Analysis (COMPLETED)
 - Result: Data-driven decision NOT to implement multi-tool (< 1% usage)

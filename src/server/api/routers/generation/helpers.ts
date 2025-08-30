@@ -193,14 +193,34 @@ export async function executeToolFromDecision(
       };
 
     case 'editScene':
+      // Allow fallback parsing of scene target from machine tokens in the user prompt, e.g. [scene:UUID]
+      if (!decision.toolContext.targetSceneId) {
+        const sourceText = String(decision.toolContext.userPrompt || '');
+        const m = sourceText.match(/\[scene:([0-9a-fA-F-]{36})\]/);
+        if (m && m[1]) {
+          decision.toolContext.targetSceneId = m[1];
+        }
+      }
       if (!decision.toolContext.targetSceneId) {
         throw new Error("No target scene ID for edit operation");
       }
       
-      const sceneToEdit = await db.query.scenes.findFirst({
+      let sceneToEdit = await db.query.scenes.findFirst({
         where: eq(scenes.id, decision.toolContext.targetSceneId),
       });
-      
+      // If not found and target looks like a position-based token (e.g., "scene-2-id"), map to storyboard order
+      if (!sceneToEdit && /^scene-\d+-id$/i.test(String(decision.toolContext.targetSceneId))) {
+        try {
+          const idx = parseInt(String(decision.toolContext.targetSceneId).match(/scene-(\d+)-id/i)?.[1] || '0', 10) - 1;
+          if (!Number.isNaN(idx) && storyboard[idx]) {
+            decision.toolContext.targetSceneId = storyboard[idx].id;
+            sceneToEdit = await db.query.scenes.findFirst({
+              where: eq(scenes.id, decision.toolContext.targetSceneId),
+            });
+          }
+        } catch {}
+      }
+
       if (!sceneToEdit) {
         throw new Error("Scene not found for editing");
       }
