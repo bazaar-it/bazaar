@@ -155,7 +155,8 @@ export const messages = createTable(
     role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
     kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
-    imageUrls: d.jsonb("image_urls").$type<string[]>(), // 🚨 NEW: Support for uploaded images
+    imageUrls: d.jsonb("image_urls").$type<string[]>(), // Support for uploaded images
+    videoUrls: d.jsonb("video_urls").$type<string[]>(), // Support for uploaded videos
     sequence: d.integer().notNull().default(0), // Message sequence number for ordering
     createdAt: d
       .timestamp({ withTimezone: true })

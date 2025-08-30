@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Undo2, AlertCircle, Play } from 'lucide-react';
+import { Undo2, Play} from 'lucide-react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
 import { useVideoState } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
@@ -381,6 +381,35 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
                 </div>
               </div>
             )}
+
+            {/* Show uploaded videos for user messages */}
+            {message.isUser && message.videoUrls && message.videoUrls.length > 0 && (
+              <div className="space-y-2 mb-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {message.videoUrls.map((videoUrl: string, index: number) => (
+                    <div 
+                      key={index} 
+                      className="relative cursor-pointer"
+                      onClick={() => onImageClick?.(videoUrl)}
+                    >
+                      <video 
+                        src={videoUrl} 
+                        className="w-full max-h-32 object-contain rounded border bg-gray-50"
+                        muted
+                        preload="metadata"
+                      />
+                      <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                        ✓
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 text-xs opacity-75">
+                  <span>📎</span>
+                  <span>{message.videoUrls.length} video{message.videoUrls.length > 1 ? 's' : ''} included</span>
+                </div>
+              </div>
+            )}
             
             <div className="text-sm leading-relaxed">
               {/* Always use GeneratingMessage component for "Generating code" messages */}
@@ -531,7 +560,7 @@ export const ChatMessage = React.memo(ChatMessageComponent, (prevProps, nextProp
   // Custom comparison function - only re-render if these specific props change
   return (
     prevProps.message.id === nextProps.message.id &&
-    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.message === nextProps.message.message &&
     prevProps.message.status === nextProps.message.status &&
     prevProps.message.kind === nextProps.message.kind &&
     prevProps.hasIterations === nextProps.hasIterations &&

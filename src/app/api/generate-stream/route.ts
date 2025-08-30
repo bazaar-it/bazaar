@@ -67,17 +67,14 @@ export async function GET(request: NextRequest) {
       const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
       const parsedAudioUrls = audioUrls ? JSON.parse(audioUrls) : undefined;
       
-      // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
-      // But don't include audio URLs as they're not images!
-      const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
-      
       // ✅ NEW: Add retry logic for database operations
       const userMsg = await retryWithBackoff(async () => {
         return await messageService.createMessage({
           projectId,
           content: userMessage,
           role: "user",
-          imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
+          imageUrls: parsedImageUrls?.length > 0 ? parsedImageUrls : undefined,
+          videoUrls: parsedVideoUrls?.length > 0 ? parsedVideoUrls : undefined,
         });
       }, 3, 1000);
 

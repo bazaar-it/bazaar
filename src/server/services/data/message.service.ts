@@ -29,6 +29,7 @@ export class MessageService {
     content: string;
     role: 'user' | 'assistant';
     imageUrls?: string[];
+    videoUrls?: string[];
     status?: string;
     kind?: string;
     id?: string;
@@ -43,6 +44,7 @@ export class MessageService {
       sequence,
       createdAt: new Date(),
       imageUrls: data.imageUrls,
+      videoUrls: data.videoUrls,
       status: data.status,
       kind: data.kind,
     };

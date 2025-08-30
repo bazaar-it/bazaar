@@ -41,6 +41,7 @@ interface ComponentMessage {
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
   kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
+  videoUrls?: string[];
 }
 
 interface ChatPanelGProps {
@@ -131,6 +132,9 @@ export default function ChatPanelG({
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
   
+  // Load messages from database to ensure video persistence after refresh
+  const { data: dbMessages } = api.chat.getMessages.useQuery({ projectId });
+  
   // Check if user has GitHub connected and get discovered components
   const { data: githubConnection } = api.github.getConnection.useQuery();
   const { data: discoveredComponents } = api.githubDiscovery.discoverComponents.useQuery(
@@ -139,7 +143,7 @@ export default function ChatPanelG({
   );
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -153,6 +157,14 @@ export default function ChatPanelG({
   // Commented out to prevent re-render spam
   // console.log('[ChatPanelG] Messages from VideoState:', messages.length);
   
+  // Sync database messages to VideoState when loaded
+  useEffect(() => {
+    if (dbMessages && dbMessages.length > 0) {
+      console.log('[ChatPanelG] Syncing database messages to VideoState:', dbMessages.length);
+      syncDbMessages(projectId, dbMessages);
+    }
+  }, [dbMessages, projectId, syncDbMessages]);
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -170,6 +182,7 @@ export default function ChatPanelG({
       status: msg.status,
       kind: msg.kind,
       imageUrls: msg.imageUrls,
+      videoUrls: msg.videoUrls,
     }));
   }, [messages]);
 
@@ -453,7 +466,7 @@ export default function ChatPanelG({
     }
     
     // Show user message immediately (with original text including @mentions for display)
-    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined);
+    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined, videoUrls.length > 0 ? videoUrls : undefined);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -1581,6 +1594,7 @@ export default function ChatPanelG({
                 status: msg.status,
                 kind: msg.kind,
                 imageUrls: msg.imageUrls,
+                videoUrls: msg.videoUrls,
               }}
               onImageClick={(imageUrl) => {
                 // TODO: Implement image click handler
