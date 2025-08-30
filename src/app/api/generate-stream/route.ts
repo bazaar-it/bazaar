@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
   const audioUrls = searchParams.get('audioUrls');
+  const sceneUrls = searchParams.get('sceneUrls'); // 🚨 NEW: Scene attachments
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
   const websiteUrl = searchParams.get('websiteUrl');
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
       const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
       const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
       const parsedAudioUrls = audioUrls ? JSON.parse(audioUrls) : undefined;
+      const parsedSceneUrls = sceneUrls ? JSON.parse(sceneUrls) : undefined; // 🚨 NEW: Scene attachments
       
       // ✅ NEW: Add retry logic for database operations
       const userMsg = await retryWithBackoff(async () => {
@@ -76,6 +78,7 @@ export async function GET(request: NextRequest) {
           imageUrls: parsedImageUrls?.length > 0 ? parsedImageUrls : undefined,
           videoUrls: parsedVideoUrls?.length > 0 ? parsedVideoUrls : undefined,
           audioUrls: parsedAudioUrls?.length > 0 ? parsedAudioUrls : undefined,
+          sceneUrls: parsedSceneUrls?.length > 0 ? parsedSceneUrls : undefined, // 🚨 NEW: Scene attachments
         });
       }, 3, 1000);
 
@@ -257,6 +260,7 @@ export async function GET(request: NextRequest) {
           imageUrls: parsedImageUrls,
           videoUrls: parsedVideoUrls,
           audioUrls: parsedAudioUrls,
+          sceneUrls: parsedSceneUrls,
           modelOverride: modelOverride,
           useGitHub: useGitHub
         })));

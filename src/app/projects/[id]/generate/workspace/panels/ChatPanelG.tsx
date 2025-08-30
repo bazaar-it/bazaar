@@ -488,8 +488,8 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] 🎵 Including audio in chat submission:', audioUrls);
     }
     
-    // Show user message immediately (with original text including @mentions for display)
-    addUserMessage(projectId, originalMessage);
+    // Get scene URLs from selected scenes
+    let sceneUrls = selectedScenes.map(s => s.id);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -545,7 +545,10 @@ export default function ChatPanelG({
     );
     
     // Pass both GitHub and Figma modes to generation, plus website URL
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl, sceneUrls);
+    
+    // Show user message AFTER sending to backend to prevent overwriting
+    addUserMessage(projectId, originalMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -1643,9 +1646,9 @@ export default function ChatPanelG({
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
         <div className="space-y-4">
-          {componentMessages.map((msg, index) => {
+          {messages.map((msg, index) => {
           // Find all scene plan messages
-          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
+          const scenePlanMessages = messages.filter(m => m.kind === 'scene_plan');
           const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
           const totalScenePlans = scenePlanMessages.length;
           
@@ -1654,15 +1657,17 @@ export default function ChatPanelG({
               key={msg.id}
               message={{
                 id: msg.id,
-                message: msg.content,
+                message: msg.message,
                 isUser: msg.isUser,
-                timestamp: msg.timestamp.getTime(),
+                timestamp: msg.timestamp,
                 status: msg.status,
                 kind: msg.kind,
                 imageUrls: msg.imageUrls,
                 videoUrls: msg.videoUrls,
                 audioUrls: msg.audioUrls,
+                sceneUrls: msg.sceneUrls,
               }}
+              
               onImageClick={(imageUrl) => {
                 // TODO: Implement image click handler
                 console.log('Image clicked:', imageUrl);

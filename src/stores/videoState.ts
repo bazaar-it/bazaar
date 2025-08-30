@@ -24,6 +24,7 @@ export interface ChatMessage {
   imageUrls?: string[]; // Support for uploaded images
   videoUrls?: string[]; // Support for uploaded videos
   audioUrls?: string[]; // Support for uploaded audio files
+  sceneUrls?: string[]; // Support for scene attachments
 }
 
 // Define message update parameters for streaming support
@@ -56,6 +57,8 @@ export type DbMessage = {
   videoUrls?: string[] | null;
   // Support for uploaded audio files
   audioUrls?: string[] | null;
+  // Support for scene attachments
+  sceneUrls?: string[] | null;
 }
 
 // Define ProjectState interface
@@ -140,12 +143,10 @@ interface VideoState {
   
   // Track which scene plan messages are currently generating
   generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
-  undoStacks: Record<string, Array<TimelineAction>>;
-  redoStacks: Record<string, Array<TimelineAction>>;
-
+  
   // Undo/Redo stacks per project (timeline-focused actions)
-  undoStacks: Record<string, Array<TimelineAction>>;
-  redoStacks: Record<string, Array<TimelineAction>>;
+  undoStacks: Record<string, Array<TimelineAction> | null>;
+  redoStacks: Record<string, Array<TimelineAction> | null>;
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
@@ -156,7 +157,7 @@ interface VideoState {
   updateAndRefresh: (projectId: string, updater: (props: InputProps) => InputProps) => void;
   
   // Chat management with hybrid persistence
-  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[]) => void;
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[], sceneUrls?: string[]) => void;
   addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
   updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
   
@@ -519,13 +520,24 @@ export const useVideoState = create<VideoState>()(
         jobId: null, // DB messages don't have jobId
         imageUrls: dbMessage.imageUrls || undefined, // Include uploaded images from database
         videoUrls: dbMessage.videoUrls || undefined, // Include uploaded videos from database
-        audioUrls: dbMessage.audioUrls || undefined // Include uploaded audio files from database
+        audioUrls: dbMessage.audioUrls || undefined, // Include uploaded audio files from database
+        sceneUrls: dbMessage.sceneUrls || undefined // Include scene attachments from database
       }));
+      
+
       
       // Helper function to check if two messages are duplicates
       const isDuplicateMessage = (msg1: ChatMessage, msg2: ChatMessage) => {
         // Same role/type
         if (msg1.isUser !== msg2.isUser) return false;
+        
+        // Check if scene URLs are different - if so, they're NOT duplicates
+        const sceneUrls1 = msg1.sceneUrls || [];
+        const sceneUrls2 = msg2.sceneUrls || [];
+        if (sceneUrls1.length !== sceneUrls2.length || 
+            !sceneUrls1.every((url, index) => url === sceneUrls2[index])) {
+          return false; // Different scene attachments = not duplicates
+        }
         
         // Same content (trimmed and compared)
         const content1 = msg1.message.trim();
@@ -552,7 +564,8 @@ export const useVideoState = create<VideoState>()(
       
       // Add all DB messages first
       syncedMessages.forEach(dbMsg => {
-        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}`;
+        const sceneUrlsKey = dbMsg.sceneUrls?.join(',') || 'no-scenes';
+        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
         if (!processedContents.has(contentKey)) {
           deduplicatedHistory.push(dbMsg);
           processedContents.add(contentKey);
@@ -567,7 +580,8 @@ export const useVideoState = create<VideoState>()(
         );
         
         if (!isDuplicate) {
-          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}`;
+          const sceneUrlsKey = clientMsg.sceneUrls?.join(',') || 'no-scenes';
+          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
           if (!processedContents.has(contentKey)) {
             deduplicatedHistory.push(clientMsg);
             processedContents.add(contentKey);
@@ -996,6 +1010,7 @@ export const useVideoState = create<VideoState>()(
     const stack = state.undoStacks[projectId] || [];
     if (stack.length === 0) return null;
     const action = stack[stack.length - 1];
+    if (!action) return null;
     state.undoStacks[projectId] = stack.slice(0, -1);
     return action;
   },
@@ -1008,6 +1023,7 @@ export const useVideoState = create<VideoState>()(
     const stack = state.redoStacks[projectId] || [];
     if (stack.length === 0) return null;
     const action = stack[stack.length - 1];
+    if (!action) return null;
     state.redoStacks[projectId] = stack.slice(0, -1);
     return action;
   },
@@ -1094,7 +1110,7 @@ export const useVideoState = create<VideoState>()(
     }),
   
   // Implement missing addUserMessage method
-  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[]) =>
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[], sceneUrls?: string[]) =>
     set((state) => {
       const project = state.projects[projectId];
       if (!project) return state;
@@ -1123,10 +1139,9 @@ export const useVideoState = create<VideoState>()(
         status: 'success',
         imageUrls: imageUrls, // Include uploaded images with message
         videoUrls: videoUrls, // Include uploaded videos with message
-        audioUrls: audioUrls // Include uploaded audio files with message
+        audioUrls: audioUrls, // Include uploaded audio files with message
+        sceneUrls: sceneUrls // Include scene attachments with message
       };
-      
-      console.log('[VideoState] Adding user message:', { id: newMessage.id, content: content.substring(0, 50) + '...' });
       
       return {
         ...state,

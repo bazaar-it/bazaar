@@ -3,7 +3,7 @@
 
 import { db } from "~/server/db";
 import { scenes, messages } from "~/server/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
@@ -18,18 +18,40 @@ export class ContextBuilder {
     console.log('📚 [CONTEXT BUILDER] Project:', input.projectId);
     console.log('📚 [CONTEXT BUILDER] Has images:', !!(input.userContext?.imageUrls as string[])?.length);
     
-    try {
-      // 1. Get scenes with FULL TSX code for cross-scene operations
-      const scenesWithCode = await db
-        .select({ 
-          id: scenes.id, 
-          name: scenes.name, 
-          order: scenes.order,
-          tsxCode: scenes.tsxCode  // CRITICAL: Full code for context
-        })
-        .from(scenes)
-        .where(eq(scenes.projectId, input.projectId))
-        .orderBy(scenes.order);
+          try {
+        // 1. Get scenes with FULL TSX code for cross-scene operations
+        const attachedSceneIds = (input.userContext?.sceneUrls ?? []) as string[];
+        
+        let scenesWithCode;
+        if ((attachedSceneIds as string[]).length > 0) {
+          // Only include attached scenes for context when specific scenes are referenced
+          console.log(`📚 [CONTEXT BUILDER] Scene attachments detected: ${(attachedSceneIds as string[]).length} scenes`);
+          scenesWithCode = await db
+            .select({ 
+              id: scenes.id, 
+              name: scenes.name, 
+              order: scenes.order,
+              tsxCode: scenes.tsxCode  // Full code for context
+            })
+            .from(scenes)
+            .where(and(
+              eq(scenes.projectId, input.projectId),
+              inArray(scenes.id, attachedSceneIds)  // Only attached scenes
+            ))
+            .orderBy(scenes.order);
+        } else {
+          // Fallback: include all scenes for general context
+          scenesWithCode = await db
+            .select({ 
+              id: scenes.id, 
+              name: scenes.name, 
+              order: scenes.order,
+              tsxCode: scenes.tsxCode  // Full code for context
+            })
+            .from(scenes)
+            .where(eq(scenes.projectId, input.projectId))
+            .orderBy(scenes.order);
+        }
 
       // 2. Build FULL chat context - we have 1M+ context window, use it!
       // Include ALL messages for complete conversation understanding
@@ -192,13 +214,13 @@ export class ContextBuilder {
       
       // SKIP analysis if the prompt is ONLY a URL (websiteToVideo will handle it)
       // Extract just the first line (the actual user input) before any [CONTEXT: ...] additions
-      const firstLine = input.prompt.split('\n')[0].trim();
+      const firstLine = (input.prompt ?? '').split('\n')[0]?.trim() ?? '';
       const cleanPrompt = firstLine.replace(/[.,;!?)+\s]+$/, '');
       const cleanUrl = targetUrl.replace(/[.,;!?)+]+$/, '');
       
       // Debug logging
       console.log('📚 [CONTEXT BUILDER] URL Detection Debug:', {
-        originalPrompt: input.prompt,
+        originalPrompt: input.prompt ?? '',
         firstLine,
         cleanPrompt,
         targetUrl,
@@ -279,7 +301,7 @@ export class ContextBuilder {
               input.projectId,
               analysis.metadata?.url || targetUrl,
               webContext,
-              input.prompt
+              input.prompt ?? ''
             );
             console.log(`📚 [CONTEXT BUILDER] 💾 Web context saved to database for future reference`);
           } catch (error) {

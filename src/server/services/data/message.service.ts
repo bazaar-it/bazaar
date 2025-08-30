@@ -31,6 +31,7 @@ export class MessageService {
     imageUrls?: string[];
     videoUrls?: string[];
     audioUrls?: string[];
+    sceneUrls?: string[]; 
     status?: string;
     kind?: string;
     id?: string;
@@ -47,6 +48,7 @@ export class MessageService {
       imageUrls: data.imageUrls,
       videoUrls: data.videoUrls,
       audioUrls: data.audioUrls,
+      sceneUrls: data.sceneUrls, 
       status: data.status,
       kind: data.kind,
     };

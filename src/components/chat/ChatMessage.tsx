@@ -5,6 +5,7 @@ import { Undo2, Play, Pause, Volume2 } from 'lucide-react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
 import { useVideoState } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
+import { SceneAttachments } from './SceneAttachments';
 import { api } from '~/trpc/react';
 import { toast } from 'sonner';
 
@@ -542,7 +543,14 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
                 </div>
               </div>
             )}
+
+            {/* Show scene attachments for user messages */}
+            {message.isUser && message.sceneUrls && message.sceneUrls.length > 0 && projectId && (
+              <SceneAttachments sceneIds={message.sceneUrls} projectId={projectId} />
+            )}
+
             
+
             <div className="text-sm leading-relaxed">
               {/* Always use GeneratingMessage component for "Generating code" messages */}
               {!message.isUser && 
