@@ -69,6 +69,8 @@ export interface AudioTrack {
   duration: number;
   startTime: number;
   endTime: number;
+  // Where to place the audio segment on the video timeline (seconds)
+  timelineOffsetSec?: number;
   volume: number;
   // Phase 1 enhancements
   fadeInDuration?: number;  // Fade in duration in seconds

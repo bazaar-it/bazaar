@@ -500,6 +500,7 @@ export const projectRouter = createTRPCRouter({
         duration: z.number(),
         startTime: z.number(),
         endTime: z.number(),
+        timelineOffsetSec: z.number().optional(),
         volume: z.number(),
         fadeInDuration: z.number().optional(),
         fadeOutDuration: z.number().optional(),

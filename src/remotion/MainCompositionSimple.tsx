@@ -324,40 +324,39 @@ export const VideoComposition: React.FC<{
     <AbsoluteFill>
       {/* Background audio track */}
       {audio && (() => {
-        // When to start playing in the video timeline (in frames)
-        const videoStartFrame = 0; // Always start at the beginning of video
-        // Calculate how long to play (based on trimmed segment)
-        const audioStartTime = audio.startTime || 0;
-        const audioEndTime = audio.endTime || audio.duration || 0;
-        const segmentDuration = audioEndTime - audioStartTime;
-        const seqDuration = Math.min(
-          Math.max(1, Math.round(segmentDuration * 30)),
-          totalVideoDuration
-        );
-        
-        // The offset within the audio file itself (where to start reading from the audio)
-        const audioOffsetFrames = Math.round(audioStartTime * 30);
-        
-        const shouldLoop = segmentDuration < (totalVideoDuration / 30);
-        
+        const FPS = 30;
+        const trimStart = audio.startTime || 0;
+        const trimEnd = audio.endTime || audio.duration || 0;
+        const trimDurationSec = Math.max(0, trimEnd - trimStart);
+        // Timeline placement (defaults to 0 if missing)
+        const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0);
+        const videoStartFrame = Math.round(offsetSec * FPS);
+        // Clip duration limited by remaining video after offset
+        const maxPlayableSec = Math.max(0, (totalVideoDuration / FPS) - offsetSec);
+        const playDurationSec = Math.min(trimDurationSec, maxPlayableSec);
+        const seqDuration = Math.max(1, Math.round(playDurationSec * FPS));
+        const audioOffsetFrames = Math.round(trimStart * FPS);
+
+        const shouldLoop = trimDurationSec < maxPlayableSec;
+
         console.log('[VideoComposition] Rendering Audio in Sequence:', {
           src: audio.url,
           videoStartFrame,
           seqDuration,
-          audioStartTime,
-          audioEndTime,
+          trimStart,
+          trimEnd,
+          offsetSec,
           audioOffsetFrames,
           loop: shouldLoop,
           playbackRate: audio.playbackRate || 1,
         });
-        
+
         return (
           <Sequence from={videoStartFrame} durationInFrames={seqDuration}>
             <Audio
               src={audio.url}
               volume={audio.volume}
               startFrom={audioOffsetFrames}
-              // endAt omitted; Sequence duration defines clip length
               loop={shouldLoop}
               playbackRate={audio.playbackRate || 1}
             />

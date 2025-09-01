@@ -116,6 +116,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [audioPulse, setAudioPulse] = useState(false);
   const audioLastUrlRef = useRef<string | null>(null);
   const audioHadRef = useRef<boolean>(false);
+  // Peaks cache and refs
+  const peaksCacheRef = useRef<Map<string, number[]>>(new Map()); // url -> peak times in seconds
+  const peaksSecondsRef = useRef<number[] | null>(null);
+  // Hover tooltip state for peaks
+  const [peakTooltip, setPeakTooltip] = useState<{ x: number; y: number; frames: number[] } | null>(null);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [displayMode, setDisplayMode] = useState<'frames' | 'time'>('frames');
@@ -572,6 +577,71 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       console.log('[Timeline] Waveform generated, samples:', smoothedWaveform.length);
       setAudioWaveform({ peak: smoothedWaveform, rms: smoothedRms });
+
+      // Peak detection on decoded audio (seconds), cached per URL
+      try {
+        const detectAudioPeaks = (samples: Float32Array, sampleRate: number): number[] => {
+          // Downsampled window scan + local max + min distance
+          const downsampleHz = 100; // 100Hz windows (~10ms)
+          const windowSize = Math.max(1, Math.floor(sampleRate / downsampleHz));
+          const minPeakDistanceSec = 0.18; // ~180ms between peaks
+          const minPeakDistanceSamples = Math.max(1, Math.floor(sampleRate * minPeakDistanceSec));
+
+          // Find global max to set a relative threshold
+          let globalMax = 0;
+          for (let i = 0; i < samples.length; i += windowSize) {
+            const v = Math.abs(samples[i] || 0);
+            if (v > globalMax) globalMax = v;
+          }
+          const ampThreshold = globalMax * 0.6; // configurable
+
+          const peaksSec: number[] = [];
+          let lastPeakIndex = -minPeakDistanceSamples;
+          for (let i = windowSize; i < samples.length - windowSize; i += windowSize) {
+            let maxInWindow = 0;
+            let sumSquares = 0;
+            for (let j = -windowSize; j <= windowSize; j++) {
+              const s = Math.abs(samples[i + j] || 0);
+              maxInWindow = Math.max(maxInWindow, s);
+              sumSquares += s * s;
+            }
+            const rms = Math.sqrt(sumSquares / (windowSize * 2 + 1));
+
+            if (maxInWindow > ampThreshold && i - lastPeakIndex >= minPeakDistanceSamples) {
+              // Local max check via neighbor windows
+              const prevIdx = Math.max(windowSize, i - windowSize);
+              const nextIdx = Math.min(samples.length - windowSize - 1, i + windowSize);
+              let prevRms = 0, nextRms = 0;
+              for (let j = -windowSize; j <= windowSize; j++) {
+                const ps = Math.abs(samples[prevIdx + j] || 0);
+                const ns = Math.abs(samples[nextIdx + j] || 0);
+                prevRms += ps * ps;
+                nextRms += ns * ns;
+              }
+              prevRms = Math.sqrt(prevRms / (windowSize * 2 + 1));
+              nextRms = Math.sqrt(nextRms / (windowSize * 2 + 1));
+
+              if (rms > prevRms && rms > nextRms) {
+                peaksSec.push(i / sampleRate);
+                lastPeakIndex = i;
+              }
+            }
+          }
+          return peaksSec;
+        };
+
+        if (!peaksCacheRef.current.has(audioUrl)) {
+          const peaksSec = detectAudioPeaks(channelData, audioBuffer.sampleRate);
+          peaksCacheRef.current.set(audioUrl, peaksSec);
+        }
+        peaksSecondsRef.current = peaksCacheRef.current.get(audioUrl) || null;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Timeline] Peaks detected (seconds):', peaksSecondsRef.current?.length || 0);
+        }
+      } catch (err) {
+        console.warn('[Timeline] Peak detection failed:', err);
+        peaksSecondsRef.current = null;
+      }
       
       if (audioCanvasRef.current && audioTrack) {
         console.log('[Timeline] Drawing waveform on canvas...');
@@ -631,8 +701,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
     // Only render what fits into the video timeline window
     const videoDurationSec = Math.max(0.01, totalFrames / FPS);
+    const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0);
+    // Only portion that fits in video window after offset
+    const visibleEndCap = segmentStart + Math.max(0, videoDurationSec - offsetSec);
     const visibleStartSec = segmentStart;
-    const visibleEndSec = Math.min(segmentEnd, segmentStart + videoDurationSec);
+    const visibleEndSec = Math.min(segmentEnd, visibleEndCap);
     
     // Determine sample range corresponding to the visible segment
     const startIndex = Math.max(0, Math.floor((visibleStartSec / decodedDuration) * samples));
@@ -665,6 +738,66 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     ctx.lineTo(cssWidth, centerY);
     ctx.stroke();
   };
+
+  // Map peak seconds → frames on the timeline, respecting trim window and video duration
+  const mapPeaksToFrames = useCallback((peaksSec: number[], audio: AudioTrack, totalFrames: number): number[] => {
+    if (!peaksSec || peaksSec.length === 0) return [];
+    const FPS_LOCAL = FPS;
+    const startSec = Math.max(0, audio.startTime || 0); // trim start within file
+    const endSec = Math.max(startSec, audio.endTime || audio.duration || 0); // trim end within file
+    const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0); // timeline placement
+    const frames: number[] = [];
+    for (const p of peaksSec) {
+      if (p >= startSec && p <= endSec) {
+        // Translate file time to timeline time
+        const t = offsetSec + (p - startSec);
+        const f = Math.round(t * FPS_LOCAL);
+        if (f >= 0 && f < totalFrames) frames.push(f);
+      }
+    }
+    return frames;
+  }, []);
+
+  // Compute mouse frame from clientX using the full timeline mapping (respects scroll and zoom)
+  const frameFromClientX = useCallback((clientX: number): number => {
+    const el = timelineRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const scrollLeft = el.scrollLeft;
+    const clickX = clientX - rect.left;
+    const actualClickX = clickX + scrollLeft;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const actualWidth = Math.max(1, contentScrollWidth);
+    const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+    const newFrame = Math.round(percentage * totalDuration);
+    return Math.max(0, Math.min(totalDuration - 1, newFrame));
+  }, [timelineRef, innerContentRef, zoomScale, totalDuration]);
+
+  // Handle hover over audio block to show nearby peak frames (tooltip-only)
+  const handleAudioHover = useCallback((e: React.MouseEvent) => {
+    if (!audioTrack || isAudioDraggingRef.current) return;
+    const peaksSec = peaksSecondsRef.current;
+    if (!peaksSec || peaksSec.length === 0) { setPeakTooltip(null); return; }
+
+    const mouseFrame = frameFromClientX(e.clientX);
+    // Map to frames (once per hover tick)
+    const allPeakFrames = mapPeaksToFrames(peaksSec, audioTrack, totalDuration);
+    if (allPeakFrames.length === 0) { setPeakTooltip(null); return; }
+
+    // Find peaks within ±30 frames (≈1s)
+    const windowFrames = 30;
+    const nearby = allPeakFrames.filter(f => Math.abs(f - mouseFrame) <= windowFrames);
+    if (nearby.length === 0) { setPeakTooltip(null); return; }
+
+    // Show up to 8 nearest, sorted by distance
+    nearby.sort((a, b) => Math.abs(a - mouseFrame) - Math.abs(b - mouseFrame));
+    const frames = nearby.slice(0, 8);
+    setPeakTooltip({ x: e.clientX, y: e.clientY - 20, frames });
+  }, [audioTrack, totalDuration, frameFromClientX, mapPeaksToFrames]);
+
+  const handleAudioHoverLeave = useCallback(() => {
+    setPeakTooltip(null);
+  }, []);
   
   // Listen for frame updates and play state changes from PreviewPanelG
   useEffect(() => {
@@ -1090,13 +1223,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       if (zoomScale >= 3) snapFrames = 1; else if (zoomScale >= 2) snapFrames = 1; else if (zoomScale >= 1.5) snapFrames = 2; else if (zoomScale >= 1.0) snapFrames = 5; else if (zoomScale >= 0.75) snapFrames = 10; else if (zoomScale >= 0.5) snapFrames = 15; else snapFrames = 30;
       const snapSec = snapFrames / FPS;
       if (dragInfo.action === 'audio-move') {
+        // Move adjusts timeline offset, not trim
         const segLen = Math.max(minLen, (dragInfo.audioEndSec! - dragInfo.audioStartSec!));
-        let newStart = (dragInfo.audioStartSec || 0) + deltaSec;
-        // Snap unless shift is held
-        if (!e.shiftKey) newStart = Math.round(newStart / snapSec) * snapSec;
-        newStart = Math.max(0, Math.min(decodedDur - segLen, newStart));
-        const newEnd = Math.min(decodedDur, newStart + segLen);
-        updateProjectAudio(projectId, { ...audioTrack, startTime: newStart, endTime: newEnd });
+        const baseOffset = (dragInfo as any).audioTimelineOffsetSec || 0;
+        let newOffset = baseOffset + deltaSec;
+        if (!e.shiftKey) newOffset = Math.round(newOffset / snapSec) * snapSec;
+        // Clamp within video window
+        const videoSec = Math.max(0.01, totalDuration / FPS);
+        newOffset = Math.max(0, Math.min(Math.max(0, videoSec - segLen), newOffset));
+        updateProjectAudio(projectId, { ...audioTrack, timelineOffsetSec: newOffset });
       } else if (dragInfo.action === 'audio-resize-start') {
         // Adjust startTime only
         let newStart = (dragInfo.audioStartSec || 0) + deltaSec;
@@ -2425,22 +2560,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                   )}
                   style={{
                     left: (() => {
-                      // Position based on actual startTime
-                      const startSec = Math.max(0, audioTrack.startTime || 0);
+                      // Position based on timeline offset (defaults to 0)
+                      const offset = Math.max(0, (audioTrack as any).timelineOffsetSec || 0);
                       const videoSec = Math.max(0.01, totalDuration / FPS);
-                      // Ensure we don't go beyond video bounds
-                      const clampedStart = Math.min(startSec, videoSec);
-                      const leftPct = (clampedStart * FPS / totalDuration) * 100;
+                      const clamped = Math.min(offset, videoSec);
+                      const leftPct = (clamped * FPS / totalDuration) * 100;
                       return `${Math.max(0, Math.min(100, leftPct))}%`;
                     })(),
                     width: (() => {
-                      const start = Math.max(0, audioTrack.startTime || 0);
-                      const end = Math.max(start, (audioTrack.endTime || audioTrack.duration || 1));
+                      const offset = Math.max(0, (audioTrack as any).timelineOffsetSec || 0);
+                      const trimStart = Math.max(0, audioTrack.startTime || 0);
+                      const trimEnd = Math.max(trimStart, (audioTrack.endTime || audioTrack.duration || 1));
+                      const trimDur = Math.max(0, trimEnd - trimStart);
                       const videoSec = Math.max(0.01, totalDuration / FPS);
-                      // Calculate width based on how much fits in the video
-                      const startInVideo = Math.min(start, videoSec);
-                      const endInVideo = Math.min(end, videoSec);
-                      const visibleSec = Math.max(0, endInVideo - startInVideo);
+                      const remaining = Math.max(0, videoSec - offset);
+                      const visibleSec = Math.min(trimDur, remaining);
                       const widthPct = (visibleSec * FPS / totalDuration) * 100;
                       return `${Math.max(0, Math.min(100, widthPct))}%`;
                     })(),
@@ -2462,7 +2596,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       startDuration: 0,
                       audioStartSec: audioTrack.startTime,
                       audioEndSec: audioTrack.endTime,
-                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // baseline timeline offset
+                      // @ts-ignore - extend drag info with new field
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
                     });
                     setIsDragging(true);
                   }}
@@ -2471,6 +2608,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                     setAudioMenu({ x: e.clientX, y: e.clientY });
                     setIsAudioSelected(true);
                   }}
+                  onMouseMove={handleAudioHover}
+                  onMouseLeave={handleAudioHoverLeave}
                 >
                   {/* Trim handle - start */}
                   <div
@@ -2479,17 +2618,20 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       e.stopPropagation();
                       isAudioDraggingRef.current = true;
                       setAudioPulse(false);
-                      setDragInfo({
-                        action: 'audio-resize-start',
-                        startX: e.clientX,
-                        startPosition: 0,
-                        startDuration: 0,
-                        audioStartSec: audioTrack.startTime,
-                        audioEndSec: audioTrack.endTime,
-                        audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration
-                      });
-                      setIsDragging(true);
-                    }}
+                    setDragInfo({
+                      action: 'audio-resize-start',
+                      startX: e.clientX,
+                      startPosition: 0,
+                      startDuration: 0,
+                      audioStartSec: audioTrack.startTime,
+                      audioEndSec: audioTrack.endTime,
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // Keep baseline offset for completeness
+                      // @ts-ignore
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
+                    });
+                    setIsDragging(true);
+                  }}
                   />
 
                   {/* Waveform */}
@@ -2509,17 +2651,19 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       e.stopPropagation();
                       isAudioDraggingRef.current = true;
                       setAudioPulse(false);
-                      setDragInfo({
-                        action: 'audio-resize-end',
-                        startX: e.clientX,
-                        startPosition: 0,
-                        startDuration: 0,
-                        audioStartSec: audioTrack.startTime,
-                        audioEndSec: audioTrack.endTime,
-                        audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration
-                      });
-                      setIsDragging(true);
-                    }}
+                    setDragInfo({
+                      action: 'audio-resize-end',
+                      startX: e.clientX,
+                      startPosition: 0,
+                      startDuration: 0,
+                      audioStartSec: audioTrack.startTime,
+                      audioEndSec: audioTrack.endTime,
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // @ts-ignore
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
+                    });
+                    setIsDragging(true);
+                  }}
                   />
                 </div>
                 {audioMenu && (
@@ -2702,6 +2846,19 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             <Trash2 className="w-4 h-4" />
             {isDeletionBusy ? 'Deleting...' : 'Delete Scene'}
           </button>
+        </div>
+      )}
+
+      {/* Peak hover tooltip (no visual markers) */}
+      {peakTooltip && peakTooltip.frames && peakTooltip.frames.length > 0 && (
+        <div
+          className="fixed z-[9999] bg-gray-900 text-white px-2 py-1 rounded-md text-xs shadow-lg pointer-events-none"
+          style={{
+            left: Math.min(peakTooltip.x + 12, window.innerWidth - 200),
+            top: Math.max(0, peakTooltip.y),
+          }}
+        >
+          Peaks near: {peakTooltip.frames.join(', ')}
         </div>
       )}
     </div>

@@ -161,6 +161,7 @@ export class AddAudioTool extends BaseMCPTool<AddAudioInput, AddAudioOutput> {
         duration: actualDuration,
         startTime: startTimeSec,
         endTime: endTimeSec,
+        timelineOffsetSec: 0,
         volume: 1,
       };
       

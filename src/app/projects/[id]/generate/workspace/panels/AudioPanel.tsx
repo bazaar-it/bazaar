@@ -147,6 +147,7 @@ export function AudioPanel({ projectId }: AudioPanelProps) {
           duration: audio.duration,
           startTime: 0,
           endTime: audio.duration,
+          timelineOffsetSec: 0,
           volume: 1,
         };
         

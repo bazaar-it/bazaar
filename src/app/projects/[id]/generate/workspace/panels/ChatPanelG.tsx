@@ -1045,6 +1045,7 @@ export default function ChatPanelG({
       duration: 30, // Default duration - will be updated when loaded
       startTime: 0,
       endTime: 30,
+      timelineOffsetSec: 0,
       volume: 0.7, // Default volume
       fadeInDuration: 0.5, // Nice default fade
       fadeOutDuration: 0.5,
