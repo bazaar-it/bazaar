@@ -1,8 +1,12 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 01, 2025)
+- Sprint 98: Fixed preview namespacing collisions causing new scenes to break with `Identifier 'SceneNS_*' has already been declared`. Changed namespace wrapper to `var` and made error-boundary helper names redeclaration‑safe. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
+
 ## 📝 Latest Update (Aug 30, 2025)
 - Sprint 111: Created Motion Graphics Principles (Taste Charter) docs with pro tips and anti‑patterns. See `/memory-bank/sprints/sprint111_motion_graphics_principles/`.
 - Sprint 98 follow-up: Extracted `wrapSceneNamespace` helper and refactored `PreviewPanelG.tsx` to use it with a small cache, improving maintainability and reducing repeated regex work during preview renders. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
+ - Timeline audio waveform now in sync with music: Fixed segment rendering and canvas sizing in `TimelinePanel.tsx`. Details: `/memory-bank/sprints/sprint98_autofix_analysis/timeline-audio-waveform-desync.md`.
 
 ## 📝 Latest Update (Aug 28, 2025)
 - Current Sprint: Sprint 103 — Multi-Tool System Analysis (COMPLETED)
