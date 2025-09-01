@@ -142,7 +142,7 @@ export default function RemotionPreview({
             loop={loop}
             autoPlay={true}
             playbackRate={playbackRate}
-            initiallyMuted={false}
+            initiallyMuted={true}
             inFrame={inFrame}
             outFrame={outFrame}
             // @ts-expect-error - onPlay and onPause work but aren't in type definitions
