@@ -173,7 +173,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   //   })));
   // }, [scenes]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
-  const [audioWaveform, setAudioWaveform] = useState<{peak: number[], rms: number[]}>();
+  const [audioWaveform, setAudioWaveform] = useState<{peak: number[], rms: number[], min?: number[], max?: number[]}>();
   
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
@@ -516,11 +516,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const blockSize = Math.max(1, Math.floor(channelData.length / targetSamples));
       const waveform: number[] = [];
       const rmsValues: number[] = [];
+      const minValues: number[] = [];
+      const maxValues: number[] = [];
       
       // Calculate both positive and negative peaks for more accurate representation
       for (let i = 0; i < targetSamples; i++) {
-        let maxPositive = 0;
-        let maxNegative = 0;
+        let maxPositive = -Infinity;
+        let minNegative = Infinity;
         let sumSquares = 0;
         let count = 0;
         
@@ -533,7 +535,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           
           // Track both positive and negative peaks
           if (sample > maxPositive) maxPositive = sample;
-          if (sample < maxNegative) maxNegative = sample;
+          if (sample < minNegative) minNegative = sample;
           
           // Calculate RMS (what you hear)
           sumSquares += sample * sample;
@@ -541,23 +543,29 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         }
         
         // Use the larger absolute value between positive and negative peaks
-        const maxSample = Math.max(Math.abs(maxPositive), Math.abs(maxNegative));
+        const maxSample = Math.max(Math.abs(maxPositive || 0), Math.abs(minNegative !== Infinity ? minNegative : 0));
         
         // Store both peak and RMS
         const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
         // Use peak value directly for clearer visualization
         waveform.push(maxSample);
         rmsValues.push(rms);
+        maxValues.push(Number.isFinite(maxPositive) ? maxPositive : 0);
+        minValues.push(Number.isFinite(minNegative) ? minNegative : 0);
       }
       
       // Light smoothing - just enough to remove noise, not flatten
       const smoothedWaveform: number[] = [];
       const smoothedRms: number[] = [];
+      const smoothedMin: number[] = [];
+      const smoothedMax: number[] = [];
       
       for (let i = 0; i < waveform.length; i++) {
         if (i === 0 || i === waveform.length - 1) {
           smoothedWaveform.push(waveform[i] || 0);
           smoothedRms.push(rmsValues[i] || 0);
+          smoothedMin.push(minValues[i] ?? 0);
+          smoothedMax.push(maxValues[i] ?? 0);
         } else {
           // Simple 3-point average with null checks
           const prev = waveform[i - 1] || 0;
@@ -570,13 +578,25 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           const nextRms = rmsValues[i + 1] || 0;
           const rmsAvg = (prevRms * 0.25 + currRms * 0.5 + nextRms * 0.25);
           
+          const prevMin = minValues[i - 1] ?? 0;
+          const currMin = minValues[i] ?? 0;
+          const nextMin = minValues[i + 1] ?? 0;
+          const minAvg = (prevMin * 0.25 + currMin * 0.5 + nextMin * 0.25);
+          
+          const prevMax = maxValues[i - 1] ?? 0;
+          const currMax = maxValues[i] ?? 0;
+          const nextMax = maxValues[i + 1] ?? 0;
+          const maxAvg = (prevMax * 0.25 + currMax * 0.5 + nextMax * 0.25);
+          
           smoothedWaveform.push(avg);
           smoothedRms.push(rmsAvg);
+          smoothedMin.push(minAvg);
+          smoothedMax.push(maxAvg);
         }
       }
       
       console.log('[Timeline] Waveform generated, samples:', smoothedWaveform.length);
-      setAudioWaveform({ peak: smoothedWaveform, rms: smoothedRms });
+      setAudioWaveform({ peak: smoothedWaveform, rms: smoothedRms, min: smoothedMin, max: smoothedMax });
 
       // Peak detection on decoded audio (seconds), cached per URL
       try {
@@ -645,7 +665,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       if (audioCanvasRef.current && audioTrack) {
         console.log('[Timeline] Drawing waveform on canvas...');
-        drawWaveform({ peak: smoothedWaveform, rms: smoothedRms }, audioTrack, totalDuration);
+        drawWaveform({ peak: smoothedWaveform, rms: smoothedRms, min: smoothedMin, max: smoothedMax }, audioTrack, totalDuration);
       } else {
         console.log('[Timeline] Canvas not ready yet');
       }
@@ -657,7 +677,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   };
 
   // Draw waveform on canvas - professional horizontal waveform like in DAWs with RMS/Peak display
-  const drawWaveform = (waveform: {peak: number[], rms: number[]}, audio: AudioTrack, totalFrames: number) => {
+  const drawWaveform = (waveform: {peak: number[], rms: number[], min?: number[], max?: number[]}, audio: AudioTrack, totalFrames: number) => {
     if (!audioCanvasRef.current) return;
 
     const canvas = audioCanvasRef.current;
@@ -692,9 +712,18 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const segEndIdx = Math.min(samples, Math.ceil((segmentEnd / decodedDuration) * samples));
     
     let maxAmplitude = 0;
-    for (let i = segStartIdx; i < segEndIdx; i++) {
-      const v = Math.abs(waveform.peak[i] || 0);
-      if (v > maxAmplitude) maxAmplitude = v;
+    if (waveform.min && waveform.max) {
+      for (let i = segStartIdx; i < segEndIdx; i++) {
+        const vmax = Math.abs(waveform.max[i] || 0);
+        const vmin = Math.abs(waveform.min[i] || 0);
+        const v = Math.max(vmax, vmin);
+        if (v > maxAmplitude) maxAmplitude = v;
+      }
+    } else {
+      for (let i = segStartIdx; i < segEndIdx; i++) {
+        const v = Math.abs(waveform.peak[i] || 0);
+        if (v > maxAmplitude) maxAmplitude = v;
+      }
     }
     const targetHalfHeight = cssHeight * 0.45;
     const ampScale = maxAmplitude > 0 ? (targetHalfHeight / maxAmplitude) : 0;
@@ -720,13 +749,25 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     // With higher resolution, make bars thinner
     const barWidth = Math.max(0.5, sampleWidth * 0.6); // Thinner bars for higher res
     
-    for (let i = 0; i < segmentSamples; i++) {
-      const x = i * sampleWidth;
-      const amplitude = Math.abs(waveform.peak[startIndex + i] || 0) * ampScale;
-      
-      // Draw vertical bar from center upward and downward
-      if (amplitude > 0.3) { // Lower threshold for more detail
-        ctx.fillRect(x, centerY - amplitude, barWidth, amplitude * 2);
+    if (waveform.min && waveform.max) {
+      for (let i = 0; i < segmentSamples; i++) {
+        const idx = startIndex + i;
+        const x = i * sampleWidth;
+        const maxA = (waveform.max[idx] || 0) * ampScale;
+        const minA = (waveform.min[idx] || 0) * ampScale;
+        // Convert to Y coordinates and draw a single vertical bar spanning min→max
+        const yTop = centerY - maxA;
+        const yBottom = centerY - minA;
+        const top = Math.min(yTop, yBottom);
+        const height = Math.max(1, Math.abs(yBottom - yTop));
+        ctx.fillRect(x, top, barWidth, height);
+      }
+    } else {
+      for (let i = 0; i < segmentSamples; i++) {
+        const x = i * sampleWidth;
+        const amplitude = Math.abs(waveform.peak[startIndex + i] || 0) * ampScale;
+        const height = Math.max(1, amplitude * 2);
+        ctx.fillRect(x, centerY - amplitude, barWidth, height);
       }
     }
     
