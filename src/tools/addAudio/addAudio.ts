@@ -116,14 +116,51 @@ export class AddAudioTool extends BaseMCPTool<AddAudioInput, AddAudioOutput> {
         console.warn('🎵 [ADD AUDIO] Could not determine audio duration, using default');
       }
       
-      // Create audio track object compatible with AudioPanel
+      // Default: project‑wide background audio for the whole video
+      let startTimeSec = 0;
+      let endTimeSec = actualDuration;
+
+      // If user targeted a specific scene, align audio to that scene window only
+      if (input.targetSceneId) {
+        try {
+          const { db } = await import("~/server/db");
+          const { scenes } = await import("~/server/db/schema");
+          const { eq } = await import("drizzle-orm");
+
+          // Fetch all scenes for this project to compute cumulative starts
+          const projectScenes = await db.query.scenes.findMany({
+            where: eq(scenes.projectId, input.projectId),
+            columns: { id: true, duration: true, order: true },
+            orderBy: [scenes.order],
+          });
+
+          // Compute cumulative start (in frames) for the target scene
+          const FPS = 30;
+          let cumulativeFrames = 0;
+          for (const s of projectScenes) {
+            if (s.id === input.targetSceneId) {
+              const sceneDurFrames = (s.duration || 150);
+              startTimeSec = cumulativeFrames / FPS;
+              endTimeSec = Math.max(startTimeSec + sceneDurFrames / FPS, startTimeSec + 0.1);
+              break;
+            }
+            cumulativeFrames += (s.duration || 150);
+          }
+        } catch (err) {
+          console.warn('🎵 [ADD AUDIO] Failed to align audio to target scene, falling back to global:', err);
+          startTimeSec = 0;
+          endTimeSec = actualDuration;
+        }
+      }
+
+      // Create audio track object stored on the project
       const audioTrack = {
         id: audioUrl,
         url: audioUrl,
         name: filename,
         duration: actualDuration,
-        startTime: 0,
-        endTime: actualDuration, // Must be positive to prevent Remotion errors
+        startTime: startTimeSec,
+        endTime: endTimeSec,
         volume: 1,
       };
       
@@ -137,23 +174,21 @@ export class AddAudioTool extends BaseMCPTool<AddAudioInput, AddAudioOutput> {
       
       console.log('🎵 [ADD AUDIO] Successfully updated project audio in database');
       
-      // Import and trigger audio panel auto-opening
-      try {
-        const { useVideoState } = await import("~/stores/videoState");
-        useVideoState.getState().setShouldOpenAudioPanel(input.projectId, true);
-        console.log('🎵 [ADD AUDIO] Set flag to auto-open audio panel');
-      } catch (error) {
-        console.warn('🎵 [ADD AUDIO] Could not set audio panel flag:', error);
-      }
+      // Note: Do not import client state on the server. The client will pick up DB changes
+      // and optionally open the panel based on UX logic.
       
-      // Create response message
+      // Create response message tailored to Timeline controls
       let chatResponse = `✅ Added audio: ${trackInfo?.name || filename}`;
-      
+
       if (isDefaultTrack && trackInfo) {
         chatResponse += `\n\n${trackInfo.description}`;
       }
-      
-      chatResponse += `\n\nYou can control volume, trim, and fade effects in the Audio panel.`;
+
+      if (input.targetSceneId) {
+        chatResponse += `\n\nApplied to the specified scene only. Open the Timeline to fine‑tune start/end (trim), volume, and fades.`;
+      } else {
+        chatResponse += `\n\nApplied as background audio for the whole video. Open the Timeline to adjust start/end (trim), volume, and fades.`;
+      }
       
       return {
         success: true,
