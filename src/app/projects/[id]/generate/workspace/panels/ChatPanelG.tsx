@@ -1206,22 +1206,10 @@ export default function ChatPanelG({
                 props: revertedScene.props || {}
               }
             };
-            
-            const updatedScenes = [...currentScenes, transformedScene];
-            const currentPropsData = getCurrentProps();
-            
-            if (currentPropsData) {
-              const updatedProps = {
-                ...currentPropsData,
-                scenes: updatedScenes,
-                meta: {
-                  ...currentPropsData.meta,
-                  duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                }
-              };
-              
-              replace(projectId, updatedProps);
-            }
+            // Removed optimistic replace for stability.
+            // Rely on DB invalidation + PreviewPanelG sync to prevent transient duplicates.
+            // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+            await utils.generation.getProjectScenes.invalidate({ projectId });
           } else {
             // Scene was updated
             updateScene(projectId, revertedScene.id, revertedScene);
@@ -1500,33 +1488,13 @@ export default function ChatPanelG({
                   ? [transformedScene]
                   : [...currentScenes, transformedScene];
                 
-                const currentPropsData = getCurrentProps();
-                if (currentPropsData) {
-                  const updatedProps = {
-                    ...currentPropsData,
-                    scenes: updatedScenes,
-                    meta: {
-                      ...currentPropsData.meta,
-                      duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                      title: currentPropsData.meta?.title || 'New Project'
-                    }
-                  };
-                  
-                  replace(projectId, updatedProps);
-                  
-                  console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
-                    sceneId: transformedScene.id,
-                    totalScenes: updatedScenes.length,
-                    replacedWelcome: isWelcomeProject
-                  });
-                  
-                  // Invalidate the scenes query to ensure fresh data
-                  await utils.generation.getProjectScenes.invalidate({ projectId });
-                  
-                  // Call the callback if provided
-                  if (onSceneGenerated) {
-                    onSceneGenerated(transformedScene.id);
-                  }
+                // Removed optimistic replace.
+                // Rely on DB invalidation + PreviewPanelG sync for canonical ordering.
+                // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+                await utils.generation.getProjectScenes.invalidate({ projectId });
+                // Callback can still be invoked with the new ID if needed
+                if (onSceneGenerated) {
+                  onSceneGenerated(transformedScene.id);
                 }
               }
             }
@@ -1611,6 +1579,8 @@ export default function ChatPanelG({
           
           // Always invalidate scenes to ensure UI is in sync with database
           await utils.generation.getProjectScenes.invalidate({ projectId });
+          // Also invalidate project data so audio additions/edits reflect immediately in Timeline
+          await utils.project.getById.invalidate({ id: projectId });
         }
       }
     },
