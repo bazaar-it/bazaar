@@ -418,9 +418,30 @@ export const generateScene = protectedProcedure
       }
 
       // 9. Return universal response
-      // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
-      // Also handle websiteToVideo which returns multiple scenes
+      // ✅ SPECIAL CASES: Tools that don't create scenes
+      // - Audio add: succeeds without returning a scene
+      // - Scene planner: [disabled]
       if (!toolResult.scene && !toolResult.scenes) {
+        if (decision.toolName === 'addAudio' && toolResult.success) {
+          // Count usage for successful operation
+          await UsageService.incrementPromptUsage(userId);
+          // Return a lightweight success payload so client can update chat and UI
+          return {
+            data: undefined,
+            meta: {
+              success: true,
+              // Use a distinct operation so client can detect audio add
+              operation: 'audio.add',
+            },
+            context: {
+              reasoning: decision.reasoning,
+              // Prefer explicit chatResponse from tool if present; fall back to decision text
+              chatResponse: (toolResult as any).chatResponse || (decision as any).chatResponse,
+            },
+            assistantMessageId,
+            additionalMessageIds: toolResult.additionalMessageIds || [],
+          } as any as SceneCreateResponse;
+        }
         /* [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
         if (decision.toolName === 'scenePlanner') {
           // Scene planner succeeded - increment usage

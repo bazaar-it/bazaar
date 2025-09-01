@@ -50,6 +50,35 @@ export async function executeToolFromDecision(
   // Prepare tool input based on tool type
   switch (decision.toolName) {
     case 'addScene':
+      // SAFETY OVERRIDE: If audio URLs are present, this is an audio add request.
+      // Some short prompts like "add" may be misclassified by the Brain.
+      if (decision.toolContext?.audioUrls && decision.toolContext.audioUrls.length > 0) {
+        console.log('🎵 [HELPERS] Forcing addAudio: audioUrls present but Brain chose addScene');
+        const addAudioTool = new AddAudioTool();
+        const audioInput: AddAudioInput = {
+          userPrompt: decision.toolContext.userPrompt,
+          projectId,
+          userId,
+          audioUrls: decision.toolContext.audioUrls,
+          ...(typeof decision.toolContext.targetSceneId === 'string' && decision.toolContext.targetSceneId.trim()
+            ? { targetSceneId: decision.toolContext.targetSceneId }
+            : {}),
+        } as AddAudioInput;
+        const audioResult = await addAudioTool.run(audioInput);
+        if (!audioResult.success) {
+          throw new Error(audioResult.error?.message || 'Add audio operation failed');
+        }
+        // Add an assistant message if provided
+        if (audioResult.data?.chatResponse && messageId) {
+          await messageService.createMessage({
+            id: randomUUID(),
+            projectId,
+            content: audioResult.data.chatResponse,
+            role: 'assistant',
+          });
+        }
+        return { success: true };
+      }
       // Get reference scenes if specified by Brain for cross-scene style matching
       let referenceScenes: any[] = [];
       if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {
@@ -717,13 +746,20 @@ export async function executeToolFromDecision(
       // Create the addAudio tool
       const addAudioTool = new AddAudioTool();
       
+      // Default behavior: GLOBAL background audio unless user explicitly mentions a scene
+      const userText = (decision.toolContext.userPrompt || '').toLowerCase();
+      const mentionsScene = /\bscene\s*\d+\b/.test(userText) || /\bscene\b/.test(userText) && /\b(only|just|specifically)\b/.test(userText);
+      const shouldScopeToScene = mentionsScene;
+
       const audioInput: AddAudioInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
         userId,
         audioUrls: decision.toolContext.audioUrls || [],
-        targetSceneId: decision.toolContext.targetSceneId,
-      };
+        ...(shouldScopeToScene && typeof decision.toolContext.targetSceneId === 'string' && decision.toolContext.targetSceneId.trim()
+          ? { targetSceneId: decision.toolContext.targetSceneId }
+          : {}),
+      } as AddAudioInput;
       
       const audioResult = await addAudioTool.run(audioInput);
       
@@ -732,15 +768,12 @@ export async function executeToolFromDecision(
       }
       
       // Audio was added successfully - create chat response message
-      if (audioResult.chatResponse && messageId) {
+      if (audioResult.data?.chatResponse && messageId) {
         await messageService.createMessage({
           id: randomUUID(),
           projectId,
-          content: audioResult.chatResponse,
+          content: audioResult.data.chatResponse,
           role: 'assistant',
-          parentMessageId: messageId,
-          userId,
-          timestamp: new Date(),
         });
       }
       
@@ -775,7 +808,6 @@ export async function executeToolFromDecision(
           projectId,
           content: websiteResult.chatResponse,
           role: 'assistant',
-          timestamp: new Date(),
         });
       }
       

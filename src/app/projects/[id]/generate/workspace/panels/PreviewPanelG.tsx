@@ -123,13 +123,17 @@ export function PreviewPanelG({
         return scene;
       });
       
+      // Dedupe by ID for defense-in-depth.
+      // Prevents accidental duplicates if multiple writers ever reappear.
+      // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+      const dedupedScenes = Array.from(new Map(convertedScenes.map((s: any) => [s.id, s])).values());
       // Update VideoState with new scenes
       const updatedProps = {
         ...currentProps,
-        scenes: convertedScenes,
+        scenes: dedupedScenes,
         meta: {
           ...currentProps.meta,
-          duration: currentStart
+          duration: dedupedScenes.reduce((sum: number, s: any) => sum + (s.duration || 0), 0)
         }
       };
       
@@ -160,7 +164,8 @@ export function PreviewPanelG({
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   // Cache for namespaced scene code to avoid repeated regex work on every render
-  const nsCacheRef = useRef<Map<string, string>>(new Map());
+  // Cache wrapped scene code along with detected Remotion fn usage
+  const nsCacheRef = useRef<Map<string, { code: string; usedRemotionFns: string[] }>>(new Map());
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
@@ -306,6 +311,14 @@ export function PreviewPanelG({
   const audioFingerprint = useMemo(() => {
     return `${projectAudio?.url || ''}-${projectAudio?.startTime || 0}-${projectAudio?.endTime || 0}-${projectAudio?.volume || 1}`;
   }, [projectAudio?.url, projectAudio?.startTime, projectAudio?.endTime, projectAudio?.volume]);
+
+  // Clear wrapper namespace cache when scene fingerprint changes
+  useEffect(() => {
+    try {
+      nsCacheRef.current.clear();
+      console.log('[PreviewPanelG] Cleared namespace cache due to scene fingerprint change');
+    } catch {}
+  }, [scenesFingerprint]);
   
   // Calculate scene boundaries for scene loop functionality
   const sceneRanges = useMemo(() => {
@@ -900,6 +913,7 @@ export default function EmptyComposition() {
           allImports.add('Audio');
           allImports.add('useCurrentFrame');
           allImports.add('interpolate');
+          allImports.add('Series'); // use Series.Sequence to time-offset audio
         }
         
         const allImportsArray = Array.from(allImports);
@@ -1227,30 +1241,35 @@ class SingleSceneErrorBoundary extends React.Component {
 // Enhanced Audio Component with Fade Effects
 const EnhancedAudio = ({ audioData }) => {
   const frame = useCurrentFrame();
-  const startFrame = Math.floor(audioData.startTime * 30);
-  const endFrame = Math.floor(audioData.endTime * 30);
+  // Audio trimming: startTime is where in the audio file to start playing from
+  const audioOffsetFrames = Math.floor((audioData.startTime || 0) * 30);
+  const audioEndFrames = Math.floor((audioData.endTime || audioData.duration || 0) * 30);
+  const audioDurationFrames = audioEndFrames - audioOffsetFrames;
+  
+  // Timeline positioning: audio always starts at frame 0 in the video
+  const videoStartFrame = 0;
+  
   const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
   const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
-  const duration = endFrame - startFrame;
   
   // Calculate volume with fade effects
   let volume = audioData.volume;
   
-  // Apply fade in
-  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+  // Apply fade in (relative to video timeline)
+  if (fadeInFrames > 0 && frame < videoStartFrame + fadeInFrames) {
     volume *= interpolate(
       frame,
-      [startFrame, startFrame + fadeInFrames],
+      [videoStartFrame, videoStartFrame + fadeInFrames],
       [0, 1],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
   }
   
-  // Apply fade out
-  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+  // Apply fade out (relative to video timeline)
+  if (fadeOutFrames > 0 && frame > videoStartFrame + audioDurationFrames - fadeOutFrames) {
     volume *= interpolate(
       frame,
-      [endFrame - fadeOutFrames, endFrame],
+      [videoStartFrame + audioDurationFrames - fadeOutFrames, videoStartFrame + audioDurationFrames],
       [1, 0],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
@@ -1261,13 +1280,15 @@ const EnhancedAudio = ({ audioData }) => {
     return null;
   }
   
-  return React.createElement(Audio, {
-    src: audioData.url,
-    startFrom: startFrame,
-    endAt: endFrame,
-    volume: volume,
-    playbackRate: audioData.playbackRate || 1
-  });
+  return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
+    React.createElement(Audio, {
+      src: audioData.url,
+      startFrom: audioOffsetFrames, // This is the key fix - offset within the audio file
+      // endAt intentionally omitted; Sequence duration bounds playback
+      volume: volume,
+      playbackRate: audioData.playbackRate || 1
+    })
+  );
 };
 
 export default function SingleSceneComposition() {
@@ -1334,7 +1355,7 @@ export default function SingleSceneComposition() {
         const sceneComponents: string[] = [];
         // Use ALL scenes for total duration - critical for sync!
         const totalDuration = orderedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-        const allImports = new Set(['Series', 'AbsoluteFill', 'Audio', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+        const allImports = new Set(['Series', 'AbsoluteFill', 'Audio', 'Img', 'Sequence', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
         
         // Create a map of compiled scenes by ID for proper lookup
         const compiledById = new Map();
@@ -1356,30 +1377,36 @@ export default function SingleSceneComposition() {
             if (compiled && compiled.isValid) {
               // ✅ VALID SCENE: Process normally
               const sceneCode = compiled.compiledCode;
-              const sceneNamespaceName = `SceneNS_${index}`; // used for error boundary wrapper names
+              // Use a STABLE namespace derived from scene ID, not from index
+              const shortId = String(originalScene.id || '')
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .slice(0, 8) || `idx${index}`;
+              const sceneNamespaceName = `SceneNS_${shortId}`; // used for error boundary wrapper names
               const startOffset = ((originalScene as any).data?.props?.startOffset) || 0;
               // Cache key based on scene identity + offset + quick code hash
               const codeHash = `${sceneCode.length}-${sceneCode.substring(0, 200).replace(/\s+/g, '')}`;
               const cacheKey = `${originalScene.id}:${startOffset}:${codeHash}`;
-              let wrappedSceneCode = nsCacheRef.current.get(cacheKey);
-              let usedRemotionFns: string[] = [];
+              let cacheEntry = nsCacheRef.current.get(cacheKey) as any;
+              let wrappedSceneCode: string | undefined = cacheEntry?.code;
+              let usedRemotionFns: string[] = cacheEntry?.usedRemotionFns || [];
               if (!wrappedSceneCode) {
                 const wrapped = wrapSceneNamespace({
                   sceneCode,
                   index,
                   componentName: compiled.componentName,
                   startOffset,
+                  namespaceName: sceneNamespaceName,
                 });
                 wrappedSceneCode = wrapped.code;
                 usedRemotionFns = wrapped.usedRemotionFns;
-                nsCacheRef.current.set(cacheKey, wrappedSceneCode);
+                nsCacheRef.current.set(cacheKey, { code: wrappedSceneCode, usedRemotionFns });
               }
               usedRemotionFns.forEach((fn) => allImports.add(fn));
 
               // ✅ VALID: Add working scene with error boundary for runtime protection
               const errorBoundaryWrapper = `
 // React Error Boundary for Scene ${index} (Valid)
-class ${sceneNamespaceName}ErrorBoundary extends React.Component {
+var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -1652,11 +1679,11 @@ class ${sceneNamespaceName}ErrorBoundary extends React.Component {
   }
 }
 
-function ${sceneNamespaceName}WithErrorBoundary() {
+var ${sceneNamespaceName}WithErrorBoundary = function() {
   return React.createElement(${sceneNamespaceName}ErrorBoundary);
 }`;
               
-              sceneImports.push(wrappedSceneCode);
+              sceneImports.push(wrappedSceneCode!);
               sceneImports.push(errorBoundaryWrapper);
               // Render with error boundary; offset applied via namespaced useCurrentFrame
               sceneComponents.push(`
@@ -1797,6 +1824,7 @@ function EmergencyScene${index}() {
           allImports.add('Audio');
           allImports.add('useCurrentFrame');
           allImports.add('interpolate');
+          allImports.add('Sequence');
         }
         
         const allImportsArray = Array.from(allImports);
@@ -1950,29 +1978,35 @@ ${sceneImports.join('\n\n')}
 // Enhanced Audio Component with Fade Effects
 const EnhancedAudio = ({ audioData }) => {
   const frame = useCurrentFrame();
-  const startFrame = Math.floor(audioData.startTime * 30);
-  const endFrame = Math.floor(audioData.endTime * 30);
+  // Audio trimming: startTime is where in the audio file to start playing from
+  const audioOffsetFrames = Math.floor((audioData.startTime || 0) * 30);
+  const audioEndFrames = Math.floor((audioData.endTime || audioData.duration || 0) * 30);
+  const audioDurationFrames = audioEndFrames - audioOffsetFrames;
+  
+  // Timeline positioning: audio always starts at frame 0 in the video
+  const videoStartFrame = 0;
+  
   const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
   const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
   
   // Calculate volume with fade effects
   let volume = audioData.volume;
   
-  // Apply fade in
-  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+  // Apply fade in (relative to video timeline)
+  if (fadeInFrames > 0 && frame < videoStartFrame + fadeInFrames) {
     volume *= interpolate(
       frame,
-      [startFrame, startFrame + fadeInFrames],
+      [videoStartFrame, videoStartFrame + fadeInFrames],
       [0, 1],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
   }
   
-  // Apply fade out
-  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+  // Apply fade out (relative to video timeline)
+  if (fadeOutFrames > 0 && frame > videoStartFrame + audioDurationFrames - fadeOutFrames) {
     volume *= interpolate(
       frame,
-      [endFrame - fadeOutFrames, endFrame],
+      [videoStartFrame + audioDurationFrames - fadeOutFrames, videoStartFrame + audioDurationFrames],
       [1, 0],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
@@ -1983,13 +2017,14 @@ const EnhancedAudio = ({ audioData }) => {
     return null;
   }
   
-  return React.createElement(Audio, {
-    src: audioData.url,
-    startFrom: startFrame,
-    endAt: endFrame,
-    volume: volume,
-    playbackRate: audioData.playbackRate || 1
-  });
+  return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
+    React.createElement(Audio, {
+      src: audioData.url,
+      startFrom: audioOffsetFrames, // This is the key fix - offset within the audio file
+      volume: volume,
+      playbackRate: audioData.playbackRate || 1
+    })
+  );
 };
 
 export default function MultiSceneComposition(props) {

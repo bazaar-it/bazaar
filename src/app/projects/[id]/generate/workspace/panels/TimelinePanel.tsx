@@ -51,9 +51,9 @@ interface AudioTrack {
   id: string;
   url: string;
   name: string;
-  duration: number;  // in frames
-  startTime: number; // in frames
-  endTime: number;   // in frames
+  duration: number;  // in seconds
+  startTime: number; // in seconds
+  endTime: number;   // in seconds
   volume: number;
   fadeInDuration?: number;
   fadeOutDuration?: number;
@@ -67,12 +67,16 @@ interface TimelinePanelProps {
 }
 
 interface DragInfo {
-  action: 'resize-start' | 'resize-end' | 'playhead' | 'reorder';
+  action: 'resize-start' | 'resize-end' | 'playhead' | 'reorder' | 'audio-move' | 'audio-resize-start' | 'audio-resize-end';
   sceneId?: string;
   startX: number;
-  startPosition: number;  // In frames
-  startDuration: number;  // In frames
+  startPosition: number;  // In frames (for scenes/playhead) or px base for audio
+  startDuration: number;  // In frames (for scenes)
   sceneIndex?: number;
+  // Audio-specific fields
+  audioStartSec?: number;
+  audioEndSec?: number;
+  audioDurationSec?: number;
 }
 
 // Helper: Clean technical suffixes from scene names (e.g., _X21YX)
@@ -88,7 +92,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const gestureBaseZoomRef = useRef<number>(1);
   const [isPointerInside, setIsPointerInside] = useState(false);
   const audioCanvasRef = useRef<HTMLCanvasElement>(null);
+  const decodedAudioDurationRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isAudioDraggingRef = useRef(false);
+  const audioAppliedAtRef = useRef<number>(0); // Track when we last applied audio locally
+  const audioInitializedRef = useRef<boolean>(false);
   const timelineId = useRef(`timeline-${Date.now()}-${Math.random()}`);
   
   // Debug: Log when timeline mounts/unmounts
@@ -103,6 +111,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
+  const [audioMenu, setAudioMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isAudioSelected, setIsAudioSelected] = useState(false);
+  const [audioPulse, setAudioPulse] = useState(false);
+  const audioLastUrlRef = useRef<string | null>(null);
+  const audioHadRef = useRef<boolean>(false);
+  // Peaks cache and refs
+  const peaksCacheRef = useRef<Map<string, number[]>>(new Map()); // url -> peak times in seconds
+  const peaksSecondsRef = useRef<number[] | null>(null);
+  // Hover tooltip state for peaks
+  const [peakTooltip, setPeakTooltip] = useState<{ x: number; y: number; frames: number[] } | null>(null);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [displayMode, setDisplayMode] = useState<'frames' | 'time'>('frames');
@@ -123,30 +141,39 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     [unsortedScenes]
   );
   
+  // Query database for latest project data (including audio)
+  const { data: dbProject } = api.project.getById.useQuery(
+    { id: projectId },
+    { 
+      staleTime: 60_000, // Cache for 1 minute
+      refetchOnWindowFocus: false 
+    }
+  );
+  
   // Audio state - get from project
   const audioTrack = project?.audio || null;
   
   // Debug log when audio changes
-  useEffect(() => {
-    console.log('[Timeline] Audio state from store:', {
-      projectId,
-      hasProject: !!project,
-      hasAudio: !!audioTrack,
-      audioTrack
-    });
-  }, [projectId, project, audioTrack]);
+  // useEffect(() => {
+  //   console.log('[Timeline] Audio state from store:', {
+  //     projectId,
+  //     hasProject: !!project,
+  //     hasAudio: !!audioTrack,
+  //     audioTrack
+  //   });
+  // }, [projectId, project, audioTrack]);
   
   // Debug scene name changes
-  useEffect(() => {
-    console.log('[Timeline] Scenes updated:', scenes.map((s: any) => ({
-      id: s.id,
-      rootName: s.name,
-      dataName: s.data?.name,
-      displayName: cleanSceneName(s.name || s.data?.name) || 'Unnamed'
-    })));
-  }, [scenes]);
+  // useEffect(() => {
+  //   console.log('[Timeline] Scenes updated:', scenes.map((s: any) => ({
+  //     id: s.id,
+  //     rootName: s.name,
+  //     dataName: s.data?.name,
+  //     displayName: cleanSceneName(s.name || s.data?.name) || 'Unnamed'
+  //   })));
+  // }, [scenes]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
-  const [audioWaveform, setAudioWaveform] = useState<number[]>();
+  const [audioWaveform, setAudioWaveform] = useState<{peak: number[], rms: number[]}>();
   
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
@@ -157,6 +184,109 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
   const reorderScenes = useVideoState(state => state.reorderScenes);
   const storeSetPlaybackSpeed = useVideoState(state => state.setPlaybackSpeed);
+  
+  // Persist audio changes with versioned reconciliation
+  const updateAudioMutation = api.project.updateAudio.useMutation({
+    onMutate: async (vars) => {
+      // Record when we applied this optimistically
+      const appliedAt = Date.now();
+      audioAppliedAtRef.current = appliedAt;
+      
+      // Cancel ongoing fetches to avoid race during optimistic update
+      await utils.project.getById.cancel({ id: projectId });
+      const previous = utils.project.getById.getData({ id: projectId });
+      const previousAppliedAt = audioAppliedAtRef.current;
+
+      // Optimistically update query cache with timestamp
+      utils.project.getById.setData({ id: projectId }, (old: any) => {
+        if (!old) return old;
+        return { 
+          ...old, 
+          audio: vars.audio ?? null,
+          audioUpdatedAt: new Date(appliedAt)
+        };
+      });
+      
+      // Return context for rollback
+      return { previous, previousAppliedAt } as { previous: any, previousAppliedAt: number };
+    },
+    onSuccess: (data) => {
+      // Update with server's timestamp
+      if (data?.audioUpdatedAt) {
+        audioAppliedAtRef.current = data.audioUpdatedAt;
+      }
+    },
+    onError: (error, vars, ctx) => {
+      console.error('[Timeline] Failed to persist audio settings:', error);
+      // Rollback on error
+      if (ctx?.previousAppliedAt) {
+        audioAppliedAtRef.current = ctx.previousAppliedAt;
+      }
+      // Roll back cache
+      if (ctx?.previous) {
+        utils.project.getById.setData({ id: projectId }, ctx.previous);
+        // Roll back local store as well
+        const prevAudio = (ctx.previous as any)?.audio ?? null;
+        updateProjectAudio(projectId, prevAudio);
+      }
+      toast.error('Failed to save audio changes');
+    },
+    onSettled: async () => {
+      await utils.project.getById.invalidate({ id: projectId });
+    }
+  });
+  
+  // Robust DB → Zustand audio sync
+  useEffect(() => {
+    if (isAudioDraggingRef.current) return; // don't sync while user is editing
+    const dbAudio = (dbProject as any)?.audio ?? null;
+    const localAudio = (project as any)?.audio ?? null;
+
+    // When DB says no audio but local has one → clear local
+    if (!dbAudio && localAudio && !audioInitializedRef.current) {
+      console.log('[Timeline] Clearing local audio to match DB (deleted on server)');
+      updateProjectAudio(projectId, null);
+      audioHadRef.current = false;
+      audioLastUrlRef.current = null;
+      setAudioPulse(false);
+      return;
+    }
+    // When DB has audio but local is missing → set local
+    if (dbAudio && !localAudio) {
+      const audioWithId = { id: (dbAudio as any).id || dbAudio.url || 'default-id', ...dbAudio } as any;
+      console.log('[Timeline] Setting local audio from DB');
+      updateProjectAudio(projectId, audioWithId);
+      // Pulse highlight if newly added or URL changed
+      const prevHad = audioHadRef.current;
+      const prevUrl = audioLastUrlRef.current;
+      audioHadRef.current = true;
+      audioLastUrlRef.current = audioWithId.url || null;
+      if (!prevHad || prevUrl !== audioWithId.url) {
+        setAudioPulse(true);
+        window.setTimeout(() => setAudioPulse(false), 1800);
+      }
+      audioInitializedRef.current = true;
+      return;
+    }
+    // When both exist, sync if they differ (URL or timings/volume)
+    if (dbAudio && localAudio) {
+      const a = dbAudio;
+      const b = localAudio;
+      const differs = a.url !== b.url || a.startTime !== b.startTime || a.endTime !== b.endTime || a.volume !== b.volume || (a.playbackRate || 1) !== (b.playbackRate || 1) || (a.fadeInDuration || 0) !== (b.fadeInDuration || 0) || (a.fadeOutDuration || 0) !== (b.fadeOutDuration || 0);
+      // After first init, only adopt server when URL changed (source changed) to avoid overwriting in-flight local edits
+      if (differs && (!audioInitializedRef.current || a.url !== b.url)) {
+        const audioWithId = { id: (a as any).id || a.url || 'default-id', ...a } as any;
+        console.log('[Timeline] Updating local audio to match DB changes');
+        updateProjectAudio(projectId, audioWithId);
+        if (a.url !== b.url) {
+          audioLastUrlRef.current = a.url || null;
+          setAudioPulse(true);
+          window.setTimeout(() => setAudioPulse(false), 1800);
+        }
+        audioInitializedRef.current = true;
+      }
+    }
+  }, [dbProject?.audio, project, projectId, updateProjectAudio]);
   const storePlaybackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1);
   
   // tRPC utils for cache invalidation
@@ -243,6 +373,44 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
   });
   
+  // Versioned reconciliation: Sync DB audio to local state only if DB is newer
+  useEffect(() => {
+    if (!dbProject) return;
+    
+    // Get timestamps
+    const serverAudioTimestamp = dbProject.audioUpdatedAt?.getTime() || 0;
+    const localAudioTimestamp = audioAppliedAtRef.current;
+    
+    console.log('[Timeline] Audio reconciliation check:', {
+      serverTimestamp: serverAudioTimestamp,
+      localTimestamp: localAudioTimestamp,
+      serverIsNewer: serverAudioTimestamp > localAudioTimestamp,
+      hasServerAudio: !!dbProject.audio,
+      hasLocalAudio: !!audioTrack
+    });
+    
+    // Only update if server is definitively newer (not equal, to prevent flicker)
+    if (serverAudioTimestamp > localAudioTimestamp) {
+      if (dbProject.audio) {
+        // Server has audio and it's newer - update local
+        // Add id field that videoState expects
+        const audioWithId = {
+          id: 'audio-1',
+          ...dbProject.audio
+        };
+        updateProjectAudio(projectId, audioWithId);
+        audioAppliedAtRef.current = serverAudioTimestamp;
+        console.log('[Timeline] Applied newer audio from server');
+      } else {
+        // Server explicitly removed audio and it's newer
+        updateProjectAudio(projectId, null);
+        audioAppliedAtRef.current = serverAudioTimestamp;
+        console.log('[Timeline] Removed audio based on newer server state');
+      }
+    }
+    // If timestamps are equal or local is newer, keep local state (no flicker!)
+  }, [dbProject?.audioUpdatedAt, dbProject?.audio, projectId, updateProjectAudio]);
+  
   // Get current frame from PreviewPanelG via event system
   const [currentFrame, setCurrentFrame] = useState(0);
   const lastFrameRef = useRef<number>(0);
@@ -252,21 +420,41 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   useEffect(() => { currentFrameRef.current = currentFrame; }, [currentFrame]);
   const [isPlaying, setIsPlaying] = useState(false);
   
+  // Calculate total duration - needs to be before any useEffect that uses it
+  const totalDuration = useMemo(() => {
+    // console.log('[Timeline] Calculating totalDuration for scenes:', scenes.length);
+    return Math.max(150, scenes.reduce((acc: number, scene: Scene) => {
+      return acc + (scene.duration || 150);
+    }, 0));
+  }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
+  
+  // Track if waveform is being generated to prevent duplicate calls
+  const waveformGeneratingRef = useRef(false);
+  const lastGeneratedUrlRef = useRef<string | null>(null);
+  
   // Generate waveform when audio loads or canvas becomes available
   useEffect(() => {
     console.log('[Timeline] Audio track:', audioTrack);
-    if (audioTrack?.url) {
+    if (audioTrack?.url && audioTrack.url !== lastGeneratedUrlRef.current && !waveformGeneratingRef.current) {
       console.log('[Timeline] Generating waveform for:', audioTrack.url);
       // Small delay to ensure canvas is mounted
       setTimeout(() => {
-        if (audioCanvasRef.current) {
+        if (audioCanvasRef.current && !waveformGeneratingRef.current) {
           console.log('[Timeline] Canvas found, starting waveform generation');
-          generateWaveform(audioTrack.url);
-        } else {
+          waveformGeneratingRef.current = true;
+          lastGeneratedUrlRef.current = audioTrack.url;
+          generateWaveform(audioTrack.url).finally(() => {
+            waveformGeneratingRef.current = false;
+          });
+        } else if (!audioCanvasRef.current) {
           console.log('[Timeline] Canvas not found, retrying in 500ms');
           setTimeout(() => {
-            if (audioCanvasRef.current) {
-              generateWaveform(audioTrack.url);
+            if (audioCanvasRef.current && !waveformGeneratingRef.current) {
+              waveformGeneratingRef.current = true;
+              lastGeneratedUrlRef.current = audioTrack.url;
+              generateWaveform(audioTrack.url).finally(() => {
+                waveformGeneratingRef.current = false;
+              });
             }
           }, 500);
         }
@@ -274,13 +462,24 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
   }, [audioTrack?.url]);
   
-  // Redraw waveform when audioWaveform state updates
+  // Redraw waveform when audioWaveform state updates or zoom changes
   useEffect(() => {
-    if (audioWaveform && audioCanvasRef.current) {
-      console.log('[Timeline] Redrawing waveform with data:', audioWaveform.length, 'samples');
-      drawWaveform(audioWaveform);
+    if (audioWaveform && audioCanvasRef.current && audioTrack) {
+      console.log('[Timeline] Redrawing waveform with data:', audioWaveform.peak.length, 'samples');
+      drawWaveform(audioWaveform, audioTrack, totalDuration);
     }
-  }, [audioWaveform]);
+  }, [audioWaveform, zoomScale, audioTrack, totalDuration]);
+
+  // Redraw on window resize to keep canvas in sync with container size
+  useEffect(() => {
+    const onResize = () => {
+      if (audioWaveform && audioCanvasRef.current && audioTrack) {
+        drawWaveform(audioWaveform, audioTrack, totalDuration);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [audioWaveform, audioTrack, totalDuration]);
 
   // Generate waveform visualization
   const generateWaveform = async (audioUrl: string) => {
@@ -304,32 +503,149 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const response = await fetch(audioUrl);
       const arrayBuffer = await response.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      
+
       console.log('[Timeline] Audio decoded, duration:', audioBuffer.duration, 'seconds');
-      
-      // Generate waveform data with more samples for finer detail
+      decodedAudioDurationRef.current = audioBuffer.duration;
+
+      // Generate waveform data with proper detail
       const channelData = audioBuffer.getChannelData(0);
-      const samples = 200; // More samples for finer waveform
-      const blockSize = Math.floor(channelData.length / samples);
-      const waveform: number[] = [];
       
-      for (let i = 0; i < samples; i++) {
-        let sum = 0;
-        for (let j = 0; j < blockSize; j++) {
-          const dataIndex = i * blockSize + j;
-          if (dataIndex < channelData.length) {
-            sum += Math.abs(channelData[dataIndex] || 0);
-          }
+      // Use much higher resolution for better detail
+      const canvasWidth = audioCanvasRef.current?.clientWidth || 1200;
+      const targetSamples = Math.min(4000, Math.max(1000, canvasWidth * 3)); // Much higher resolution
+      const blockSize = Math.max(1, Math.floor(channelData.length / targetSamples));
+      const waveform: number[] = [];
+      const rmsValues: number[] = [];
+      
+      // Calculate both positive and negative peaks for more accurate representation
+      for (let i = 0; i < targetSamples; i++) {
+        let maxPositive = 0;
+        let maxNegative = 0;
+        let sumSquares = 0;
+        let count = 0;
+        
+        // Process this block - look at both positive and negative peaks
+        const startIdx = i * blockSize;
+        const endIdx = Math.min(startIdx + blockSize, channelData.length);
+        
+        for (let j = startIdx; j < endIdx; j++) {
+          const sample = channelData[j] || 0;
+          
+          // Track both positive and negative peaks
+          if (sample > maxPositive) maxPositive = sample;
+          if (sample < maxNegative) maxNegative = sample;
+          
+          // Calculate RMS (what you hear)
+          sumSquares += sample * sample;
+          count++;
         }
-        waveform.push(sum / blockSize);
+        
+        // Use the larger absolute value between positive and negative peaks
+        const maxSample = Math.max(Math.abs(maxPositive), Math.abs(maxNegative));
+        
+        // Store both peak and RMS
+        const rms = count > 0 ? Math.sqrt(sumSquares / count) : 0;
+        // Use peak value directly for clearer visualization
+        waveform.push(maxSample);
+        rmsValues.push(rms);
       }
       
-      console.log('[Timeline] Waveform data generated, samples:', waveform.length);
-      setAudioWaveform(waveform);
+      // Light smoothing - just enough to remove noise, not flatten
+      const smoothedWaveform: number[] = [];
+      const smoothedRms: number[] = [];
       
-      if (audioCanvasRef.current) {
+      for (let i = 0; i < waveform.length; i++) {
+        if (i === 0 || i === waveform.length - 1) {
+          smoothedWaveform.push(waveform[i] || 0);
+          smoothedRms.push(rmsValues[i] || 0);
+        } else {
+          // Simple 3-point average with null checks
+          const prev = waveform[i - 1] || 0;
+          const curr = waveform[i] || 0;
+          const next = waveform[i + 1] || 0;
+          const avg = (prev * 0.25 + curr * 0.5 + next * 0.25);
+          
+          const prevRms = rmsValues[i - 1] || 0;
+          const currRms = rmsValues[i] || 0;
+          const nextRms = rmsValues[i + 1] || 0;
+          const rmsAvg = (prevRms * 0.25 + currRms * 0.5 + nextRms * 0.25);
+          
+          smoothedWaveform.push(avg);
+          smoothedRms.push(rmsAvg);
+        }
+      }
+      
+      console.log('[Timeline] Waveform generated, samples:', smoothedWaveform.length);
+      setAudioWaveform({ peak: smoothedWaveform, rms: smoothedRms });
+
+      // Peak detection on decoded audio (seconds), cached per URL
+      try {
+        const detectAudioPeaks = (samples: Float32Array, sampleRate: number): number[] => {
+          // Downsampled window scan + local max + min distance
+          const downsampleHz = 100; // 100Hz windows (~10ms)
+          const windowSize = Math.max(1, Math.floor(sampleRate / downsampleHz));
+          const minPeakDistanceSec = 0.18; // ~180ms between peaks
+          const minPeakDistanceSamples = Math.max(1, Math.floor(sampleRate * minPeakDistanceSec));
+
+          // Find global max to set a relative threshold
+          let globalMax = 0;
+          for (let i = 0; i < samples.length; i += windowSize) {
+            const v = Math.abs(samples[i] || 0);
+            if (v > globalMax) globalMax = v;
+          }
+          const ampThreshold = globalMax * 0.6; // configurable
+
+          const peaksSec: number[] = [];
+          let lastPeakIndex = -minPeakDistanceSamples;
+          for (let i = windowSize; i < samples.length - windowSize; i += windowSize) {
+            let maxInWindow = 0;
+            let sumSquares = 0;
+            for (let j = -windowSize; j <= windowSize; j++) {
+              const s = Math.abs(samples[i + j] || 0);
+              maxInWindow = Math.max(maxInWindow, s);
+              sumSquares += s * s;
+            }
+            const rms = Math.sqrt(sumSquares / (windowSize * 2 + 1));
+
+            if (maxInWindow > ampThreshold && i - lastPeakIndex >= minPeakDistanceSamples) {
+              // Local max check via neighbor windows
+              const prevIdx = Math.max(windowSize, i - windowSize);
+              const nextIdx = Math.min(samples.length - windowSize - 1, i + windowSize);
+              let prevRms = 0, nextRms = 0;
+              for (let j = -windowSize; j <= windowSize; j++) {
+                const ps = Math.abs(samples[prevIdx + j] || 0);
+                const ns = Math.abs(samples[nextIdx + j] || 0);
+                prevRms += ps * ps;
+                nextRms += ns * ns;
+              }
+              prevRms = Math.sqrt(prevRms / (windowSize * 2 + 1));
+              nextRms = Math.sqrt(nextRms / (windowSize * 2 + 1));
+
+              if (rms > prevRms && rms > nextRms) {
+                peaksSec.push(i / sampleRate);
+                lastPeakIndex = i;
+              }
+            }
+          }
+          return peaksSec;
+        };
+
+        if (!peaksCacheRef.current.has(audioUrl)) {
+          const peaksSec = detectAudioPeaks(channelData, audioBuffer.sampleRate);
+          peaksCacheRef.current.set(audioUrl, peaksSec);
+        }
+        peaksSecondsRef.current = peaksCacheRef.current.get(audioUrl) || null;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Timeline] Peaks detected (seconds):', peaksSecondsRef.current?.length || 0);
+        }
+      } catch (err) {
+        console.warn('[Timeline] Peak detection failed:', err);
+        peaksSecondsRef.current = null;
+      }
+      
+      if (audioCanvasRef.current && audioTrack) {
         console.log('[Timeline] Drawing waveform on canvas...');
-        drawWaveform(waveform);
+        drawWaveform({ peak: smoothedWaveform, rms: smoothedRms }, audioTrack, totalDuration);
       } else {
         console.log('[Timeline] Canvas not ready yet');
       }
@@ -339,48 +655,149 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return [];
     }
   };
-  
-  // Draw waveform on canvas - professional horizontal waveform like in DAWs
-  const drawWaveform = (waveform: number[]) => {
+
+  // Draw waveform on canvas - professional horizontal waveform like in DAWs with RMS/Peak display
+  const drawWaveform = (waveform: {peak: number[], rms: number[]}, audio: AudioTrack, totalFrames: number) => {
     if (!audioCanvasRef.current) return;
-    
+
     const canvas = audioCanvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    // Ensure canvas backing store matches CSS size for crisp rendering
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const cssWidth = canvas.clientWidth || 1200;
+    const cssHeight = canvas.clientHeight || TIMELINE_ITEM_HEIGHT * 2;
+    if (canvas.width !== Math.floor(cssWidth * dpr) || canvas.height !== Math.floor(cssHeight * dpr)) {
+      canvas.width = Math.floor(cssWidth * dpr);
+      canvas.height = Math.floor(cssHeight * dpr);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    // Clear canvas in CSS pixels after scaling
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    // Set style for clean, solid waveform
+    ctx.fillStyle = 'rgba(120, 130, 145, 0.85)'; // Darker gray with good opacity
+    ctx.strokeStyle = 'rgba(120, 130, 145, 0.4)'; // More visible outline
+    ctx.lineWidth = 0.75;
+
+    const samples = waveform.peak.length;
+    const decodedDuration = decodedAudioDurationRef.current || audio.duration || 1; // seconds
+    const segmentStart = Math.max(0, audio.startTime || 0);
+    const segmentEnd = Math.min(decodedDuration, (audio.endTime ?? decodedDuration));
+
+    // Compute normalization from the WHOLE segment (not just visible slice)
+    const segStartIdx = Math.max(0, Math.floor((segmentStart / decodedDuration) * samples));
+    const segEndIdx = Math.min(samples, Math.ceil((segmentEnd / decodedDuration) * samples));
     
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let maxAmplitude = 0;
+    for (let i = segStartIdx; i < segEndIdx; i++) {
+      const v = Math.abs(waveform.peak[i] || 0);
+      if (v > maxAmplitude) maxAmplitude = v;
+    }
+    const targetHalfHeight = cssHeight * 0.45;
+    const ampScale = maxAmplitude > 0 ? (targetHalfHeight / maxAmplitude) : 0;
+
+    // Only render what fits into the video timeline window
+    const videoDurationSec = Math.max(0.01, totalFrames / FPS);
+    const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0);
+    // Only portion that fits in video window after offset
+    const visibleEndCap = segmentStart + Math.max(0, videoDurationSec - offsetSec);
+    const visibleStartSec = segmentStart;
+    const visibleEndSec = Math.min(segmentEnd, visibleEndCap);
     
-    // Set style for filled gray waveform
-    ctx.fillStyle = 'rgba(156, 163, 175, 0.8)'; // gray-400
-    ctx.strokeStyle = 'rgba(156, 163, 175, 0.8)';
+    // Determine sample range corresponding to the visible segment
+    const startIndex = Math.max(0, Math.floor((visibleStartSec / decodedDuration) * samples));
+    const endIndex = Math.min(samples, Math.ceil((visibleEndSec / decodedDuration) * samples));
+    const segmentSamples = Math.max(1, endIndex - startIndex);
+    
+    // Map the selected segment to the canvas CSS width
+    const sampleWidth = cssWidth / segmentSamples;
+    const centerY = cssHeight / 2;
+
+    // Draw waveform as vertical bars for clearer visualization
+    // With higher resolution, make bars thinner
+    const barWidth = Math.max(0.5, sampleWidth * 0.6); // Thinner bars for higher res
+    
+    for (let i = 0; i < segmentSamples; i++) {
+      const x = i * sampleWidth;
+      const amplitude = Math.abs(waveform.peak[startIndex + i] || 0) * ampScale;
+      
+      // Draw vertical bar from center upward and downward
+      if (amplitude > 0.3) { // Lower threshold for more detail
+        ctx.fillRect(x, centerY - amplitude, barWidth, amplitude * 2);
+      }
+    }
+    
+    // Add subtle center line
+    ctx.strokeStyle = 'rgba(100, 100, 100, 0.2)';
     ctx.lineWidth = 0.5;
-    
-    const samples = waveform.length;
-    const sampleWidth = canvas.width / samples;
-    const centerY = canvas.height / 2;
-    
-    // Draw filled waveform path
     ctx.beginPath();
     ctx.moveTo(0, centerY);
-    
-    // Draw upper half of waveform with higher amplitude
-    for (let i = 0; i < samples; i++) {
-      const x = i * sampleWidth;
-      const amplitude = (waveform[i] || 0) * (canvas.height * 0.9); // Use 90% of height for bigger waveform
-      ctx.lineTo(x, centerY - amplitude);
-    }
-    
-    // Draw lower half of waveform (mirror)
-    for (let i = samples - 1; i >= 0; i--) {
-      const x = i * sampleWidth;
-      const amplitude = (waveform[i] || 0) * (canvas.height * 0.9); // Match upper amplitude
-      ctx.lineTo(x, centerY + amplitude);
-    }
-    
-    ctx.closePath();
-    ctx.fill();
+    ctx.lineTo(cssWidth, centerY);
+    ctx.stroke();
   };
+
+  // Map peak seconds → frames on the timeline, respecting trim window and video duration
+  const mapPeaksToFrames = useCallback((peaksSec: number[], audio: AudioTrack, totalFrames: number): number[] => {
+    if (!peaksSec || peaksSec.length === 0) return [];
+    const FPS_LOCAL = FPS;
+    const startSec = Math.max(0, audio.startTime || 0); // trim start within file
+    const endSec = Math.max(startSec, audio.endTime || audio.duration || 0); // trim end within file
+    const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0); // timeline placement
+    const frames: number[] = [];
+    for (const p of peaksSec) {
+      if (p >= startSec && p <= endSec) {
+        // Translate file time to timeline time
+        const t = offsetSec + (p - startSec);
+        const f = Math.round(t * FPS_LOCAL);
+        if (f >= 0 && f < totalFrames) frames.push(f);
+      }
+    }
+    return frames;
+  }, []);
+
+  // Compute mouse frame from clientX using the full timeline mapping (respects scroll and zoom)
+  const frameFromClientX = useCallback((clientX: number): number => {
+    const el = timelineRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const scrollLeft = el.scrollLeft;
+    const clickX = clientX - rect.left;
+    const actualClickX = clickX + scrollLeft;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const actualWidth = Math.max(1, contentScrollWidth);
+    const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
+    const newFrame = Math.round(percentage * totalDuration);
+    return Math.max(0, Math.min(totalDuration - 1, newFrame));
+  }, [timelineRef, innerContentRef, zoomScale, totalDuration]);
+
+  // Handle hover over audio block to show nearby peak frames (tooltip-only)
+  const handleAudioHover = useCallback((e: React.MouseEvent) => {
+    if (!audioTrack || isAudioDraggingRef.current) return;
+    const peaksSec = peaksSecondsRef.current;
+    if (!peaksSec || peaksSec.length === 0) { setPeakTooltip(null); return; }
+
+    const mouseFrame = frameFromClientX(e.clientX);
+    // Map to frames (once per hover tick)
+    const allPeakFrames = mapPeaksToFrames(peaksSec, audioTrack, totalDuration);
+    if (allPeakFrames.length === 0) { setPeakTooltip(null); return; }
+
+    // Find peaks within ±30 frames (≈1s)
+    const windowFrames = 30;
+    const nearby = allPeakFrames.filter(f => Math.abs(f - mouseFrame) <= windowFrames);
+    if (nearby.length === 0) { setPeakTooltip(null); return; }
+
+    // Show up to 8 nearest, sorted by distance
+    nearby.sort((a, b) => Math.abs(a - mouseFrame) - Math.abs(b - mouseFrame));
+    const frames = nearby.slice(0, 8);
+    setPeakTooltip({ x: e.clientX, y: e.clientY - 20, frames });
+  }, [audioTrack, totalDuration, frameFromClientX, mapPeaksToFrames]);
+
+  const handleAudioHoverLeave = useCallback(() => {
+    setPeakTooltip(null);
+  }, []);
   
   // Listen for frame updates and play state changes from PreviewPanelG
   useEffect(() => {
@@ -470,14 +887,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     return () => window.removeEventListener('loop-state-loaded' as any, handleLoopLoaded);
   }, []);
   
-  // Calculate total duration - memoized to prevent infinite re-renders
-  const totalDuration = useMemo(() => {
-    console.log('[Timeline] Calculating totalDuration for scenes:', scenes.length);
-    return Math.max(150, scenes.reduce((acc: number, scene: Scene) => {
-      return acc + (scene.duration || 150);
-    }, 0));
-  }, [scenes.length, scenes.map(s => `${s.id}-${s.duration}`).join(',')]);
-  
   // Audio track calculations
   useEffect(() => {
     // Audio track state updated
@@ -509,27 +918,27 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const scrollLeft = timelineRef.current.scrollLeft;
     const clickX = e.clientX - rect.left;
     
-    // Account for scroll position and use the true content width (exclude spacer)
+    // The actual timeline width is based on the zoom scale
+    const baseWidth = rect.width;
+    const actualTimelineWidth = baseWidth * zoomScale;
+    
+    // Account for scroll position
     const actualClickX = clickX + scrollLeft;
-    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
-    const actualWidth = Math.max(1, contentScrollWidth);
     
-    // Clamp to actual timeline bounds
-    const clampedX = Math.max(0, Math.min(actualWidth, actualClickX));
-    
-    // Calculate percentage (0 to 1) based on actual width
-    const percentage = clampedX / actualWidth;
+    // Calculate percentage (0 to 1) based on actual timeline width
+    const percentage = actualClickX / actualTimelineWidth;
+    const clampedPercentage = Math.max(0, Math.min(1, percentage));
     
     // Convert to frame
-    const newFrame = Math.round(percentage * totalDuration);
+    const newFrame = Math.round(clampedPercentage * totalDuration);
     const clampedFrame = Math.max(0, Math.min(totalDuration - 1, newFrame));
     
     console.log('[Timeline Click] Seek to frame:', {
       clickX,
       scrollLeft,
       actualClickX,
-      actualWidth,
-      percentage: (percentage * 100).toFixed(1) + '%',
+      actualTimelineWidth,
+      percentage: (clampedPercentage * 100).toFixed(1) + '%',
       frame: clampedFrame,
       zoomScale
     });
@@ -793,6 +1202,52 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return;
     }
     
+    // AUDIO: Move or trim operations mapped by seconds across content width
+    if (dragInfo.action === 'audio-move' || dragInfo.action === 'audio-resize-start' || dragInfo.action === 'audio-resize-end') {
+      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const deltaPx = e.clientX - dragInfo.startX;
+      const secondsPerPixel = (totalDuration / FPS) / Math.max(1, contentWidth);
+      const deltaSec = deltaPx * secondsPerPixel;
+      const decodedDur = decodedAudioDurationRef.current || audioTrack?.duration || 0;
+      if (!audioTrack || decodedDur <= 0) return;
+      const minLen = 0.1;
+      // Deadzone for resize operations
+      if (dragInfo.action === 'audio-resize-start' || dragInfo.action === 'audio-resize-end') {
+        const RESIZE_DEADZONE_PX = 6;
+        if (Math.abs(deltaPx) < RESIZE_DEADZONE_PX) {
+          return;
+        }
+      }
+      // Snapping based on zoom (convert frame snapping to seconds)
+      let snapFrames = 1;
+      if (zoomScale >= 3) snapFrames = 1; else if (zoomScale >= 2) snapFrames = 1; else if (zoomScale >= 1.5) snapFrames = 2; else if (zoomScale >= 1.0) snapFrames = 5; else if (zoomScale >= 0.75) snapFrames = 10; else if (zoomScale >= 0.5) snapFrames = 15; else snapFrames = 30;
+      const snapSec = snapFrames / FPS;
+      if (dragInfo.action === 'audio-move') {
+        // Move adjusts timeline offset, not trim
+        const segLen = Math.max(minLen, (dragInfo.audioEndSec! - dragInfo.audioStartSec!));
+        const baseOffset = (dragInfo as any).audioTimelineOffsetSec || 0;
+        let newOffset = baseOffset + deltaSec;
+        if (!e.shiftKey) newOffset = Math.round(newOffset / snapSec) * snapSec;
+        // Clamp within video window
+        const videoSec = Math.max(0.01, totalDuration / FPS);
+        newOffset = Math.max(0, Math.min(Math.max(0, videoSec - segLen), newOffset));
+        updateProjectAudio(projectId, { ...audioTrack, timelineOffsetSec: newOffset });
+      } else if (dragInfo.action === 'audio-resize-start') {
+        // Adjust startTime only
+        let newStart = (dragInfo.audioStartSec || 0) + deltaSec;
+        if (!e.shiftKey) newStart = Math.round(newStart / snapSec) * snapSec;
+        newStart = Math.max(0, Math.min((dragInfo.audioEndSec || decodedDur) - minLen, newStart));
+        updateProjectAudio(projectId, { ...audioTrack, startTime: newStart });
+      } else if (dragInfo.action === 'audio-resize-end') {
+        // Adjust endTime only
+        let newEnd = (dragInfo.audioEndSec || decodedDur) + deltaSec;
+        if (!e.shiftKey) newEnd = Math.round(newEnd / snapSec) * snapSec;
+        newEnd = Math.max((dragInfo.audioStartSec || 0) + minLen, Math.min(decodedDur, newEnd));
+        updateProjectAudio(projectId, { ...audioTrack, endTime: newEnd });
+      }
+      return;
+    }
+
     // Compute mouse frame with zoom + scroll like playhead logic
     const mouseX = e.clientX - rect.left + (timelineRef.current?.scrollLeft || 0);
     const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
@@ -1006,6 +1461,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         }
       }
     }
+
+    // AUDIO: Persist audio changes to DB after drag ends
+    if (dragInfo && (dragInfo.action === 'audio-move' || dragInfo.action === 'audio-resize-start' || dragInfo.action === 'audio-resize-end')) {
+      const audio = useVideoState.getState().projects[projectId]?.audio || null;
+      updateAudioMutation.mutate({ projectId, audio: audio || null } as any);
+      isAudioDraggingRef.current = false;
+    }
     
     setDragInfo(null);
     setIsDragging(false);
@@ -1040,6 +1502,20 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return () => document.removeEventListener('click', handleClick);
     }
   }, [contextMenu]);
+
+  // Close audio context menu on outside click (mousedown to avoid blur issues)
+  useEffect(() => {
+    const handleMouseDown = () => setAudioMenu(null);
+    const handleTouchStart = () => setAudioMenu(null);
+    if (audioMenu) {
+      document.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('touchstart', handleTouchStart);
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown);
+        document.removeEventListener('touchstart', handleTouchStart);
+      };
+    }
+  }, [audioMenu]);
   
   // Handle scene operations
   const handleDeleteScene = useCallback((sceneId: string, skipConfirmation: boolean = false) => {
@@ -1145,6 +1621,27 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [projectId, popUndo, pushRedo, popRedo, restoreSceneMutation, reorderScenesMutation, updateScene, updateSceneDurationMutation, removeSceneMutation]);
+
+  // Keyboard: Delete/Backspace removes audio when hovering timeline (and not typing)
+  useEffect(() => {
+    const onDeleteKey = (e: KeyboardEvent) => {
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true');
+      if (isTyping) return;
+      if (!isPointerInside) return; // Only when timeline is focused/hovered
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (!audioTrack) return;
+      // Remove audio from project
+      e.preventDefault();
+      // Update local state immediately
+      updateProjectAudio(projectId, null);
+      // Persist to database with optimistic update
+      updateAudioMutation.mutate({ projectId, audio: null } as any);
+      toast.success('Audio removed');
+    };
+    window.addEventListener('keydown', onDeleteKey);
+    return () => window.removeEventListener('keydown', onDeleteKey);
+  }, [isPointerInside, audioTrack, projectId, updateProjectAudio, updateAudioMutation]);
 
   // Helper: compute scene start frame by id
   const getSceneStartById = useCallback((sceneId: string): { start: number; duration: number } | null => {
@@ -1913,32 +2410,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               {scenes.map((scene: any, index: number) => {
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
-                // DEBUG: Log what Timeline sees
-                if (index === 0) {
-                  console.log('[Timeline] Scene positions:', scenes.map((s: any, i: number) => ({
-                    id: s.id,
-                    order: s.order,
-                    start: s.start,
-                    duration: s.duration,
-                    calculatedStart: scenes.slice(0, i).reduce((acc: number, sc: any) => acc + (sc.duration || 150), 0)
-                  })));
-                }
                 // When zoomed, scenes need to scale with the container
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
-                
-                // DEBUG: Log width calculation for all scenes
-                if (index === 0) {
-                  console.log(`[Timeline] First scene rendering:`, {
-                    sceneId: scene.id,
-                    sceneDuration: scene.duration,
-                    actualDuration: scene.data?.duration,
-                    expectedWidth: (430 / 640) * 100,
-                    calculatedWidth: width,
-                    totalDuration,
-                    sceneObject: scene
-                  });
-                }
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
                 const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
                 
@@ -2078,24 +2552,198 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             {audioTrack && (
               <div className="relative" style={{ height: ROW_HEIGHT, marginTop: '10px' }}>
                 <div
-                  className="absolute border border-gray-300/30 rounded-lg"
+                  className={cn(
+                    "absolute rounded-lg shadow-sm",
+                    "bg-gradient-to-b from-gray-100 to-gray-200/90 dark:from-gray-800 dark:to-gray-800/60",
+                    isAudioSelected ? "ring-2 ring-orange-400" : "border border-gray-300/40",
+                    audioPulse && !isAudioSelected ? "ring-2 ring-orange-400 animate-pulse" : ""
+                  )}
                   style={{
-                    // Audio duration is in seconds, convert to frames
-                    left: `${((audioTrack.startTime || 0) * FPS / totalDuration) * 100}%`,
-                    width: `${(((audioTrack.endTime || audioTrack.duration || 1) - (audioTrack.startTime || 0)) * FPS / totalDuration) * 100}%`,
+                    left: (() => {
+                      // Position based on timeline offset (defaults to 0)
+                      const offset = Math.max(0, (audioTrack as any).timelineOffsetSec || 0);
+                      const videoSec = Math.max(0.01, totalDuration / FPS);
+                      const clamped = Math.min(offset, videoSec);
+                      const leftPct = (clamped * FPS / totalDuration) * 100;
+                      return `${Math.max(0, Math.min(100, leftPct))}%`;
+                    })(),
+                    width: (() => {
+                      const offset = Math.max(0, (audioTrack as any).timelineOffsetSec || 0);
+                      const trimStart = Math.max(0, audioTrack.startTime || 0);
+                      const trimEnd = Math.max(trimStart, (audioTrack.endTime || audioTrack.duration || 1));
+                      const trimDur = Math.max(0, trimEnd - trimStart);
+                      const videoSec = Math.max(0.01, totalDuration / FPS);
+                      const remaining = Math.max(0, videoSec - offset);
+                      const visibleSec = Math.min(trimDur, remaining);
+                      const widthPct = (visibleSec * FPS / totalDuration) * 100;
+                      return `${Math.max(0, Math.min(100, widthPct))}%`;
+                    })(),
                     height: TIMELINE_ITEM_HEIGHT,
                     top: '50%',
-                    transform: 'translateY(-50%)'
+                    transform: 'translateY(-50%)',
+                    cursor: isDragging && dragInfo?.action === 'audio-move' ? 'grabbing' : 'default'
                   }}
+                  onMouseDown={(e) => {
+                    // Start moving the audio segment
+                    e.stopPropagation();
+                    isAudioDraggingRef.current = true;
+                    setIsAudioSelected(true);
+                    setAudioPulse(false);
+                    setDragInfo({
+                      action: 'audio-move',
+                      startX: e.clientX,
+                      startPosition: 0,
+                      startDuration: 0,
+                      audioStartSec: audioTrack.startTime,
+                      audioEndSec: audioTrack.endTime,
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // baseline timeline offset
+                      // @ts-ignore - extend drag info with new field
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
+                    });
+                    setIsDragging(true);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setAudioMenu({ x: e.clientX, y: e.clientY });
+                    setIsAudioSelected(true);
+                  }}
+                  onMouseMove={handleAudioHover}
+                  onMouseLeave={handleAudioHoverLeave}
                 >
-                  {/* Audio waveform canvas - no background, just the waveform */}
+                  {/* Trim handle - start */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize bg-white/40 hover:bg-white/70 rounded-l"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      isAudioDraggingRef.current = true;
+                      setAudioPulse(false);
+                    setDragInfo({
+                      action: 'audio-resize-start',
+                      startX: e.clientX,
+                      startPosition: 0,
+                      startDuration: 0,
+                      audioStartSec: audioTrack.startTime,
+                      audioEndSec: audioTrack.endTime,
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // Keep baseline offset for completeness
+                      // @ts-ignore
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
+                    });
+                    setIsDragging(true);
+                  }}
+                  />
+
+                  {/* Waveform */}
                   <canvas
                     ref={audioCanvasRef}
-                    className="absolute inset-0 w-full h-full"
+                    className="absolute inset-0 w-full h-full pointer-events-none"
                     width={1200}
                     height={TIMELINE_ITEM_HEIGHT * 2}
                   />
+
+                  {/* Inline audio controls removed: no labels or sliders on timeline */}
+
+                  {/* Trim handle - end */}
+                  <div
+                    className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize bg-white/40 hover:bg-white/70 rounded-r"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      isAudioDraggingRef.current = true;
+                      setAudioPulse(false);
+                    setDragInfo({
+                      action: 'audio-resize-end',
+                      startX: e.clientX,
+                      startPosition: 0,
+                      startDuration: 0,
+                      audioStartSec: audioTrack.startTime,
+                      audioEndSec: audioTrack.endTime,
+                      audioDurationSec: decodedAudioDurationRef.current || audioTrack.duration,
+                      // @ts-ignore
+                      audioTimelineOffsetSec: (audioTrack as any).timelineOffsetSec || 0
+                    });
+                    setIsDragging(true);
+                  }}
+                  />
                 </div>
+                {audioMenu && (
+                  <div
+                    className="fixed bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 min-w-[140px] text-sm"
+                    style={{ left: Math.min(audioMenu.x, window.innerWidth - 160), top: Math.min(audioMenu.y, window.innerHeight - 120), zIndex: 9999 }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-4 py-2.5 flex items-center gap-2 text-gray-700 dark:text-gray-200">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-xs">Song Offset</span>
+                      <button
+                        className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        onClick={() => {
+                          const decodedDur = decodedAudioDurationRef.current || audioTrack.duration || 0;
+                          const newStart = Math.max(0, (audioTrack.startTime || 0) - 1);
+                          const minLen = 0.1;
+                          const newEnd = Math.max(newStart + minLen, Math.min(decodedDur, audioTrack.endTime || decodedDur));
+                          const updated = { ...audioTrack, startTime: newStart, endTime: newEnd };
+                          updateProjectAudio(projectId, updated);
+                          updateAudioMutation.mutate({ projectId, audio: updated } as any);
+                        }}
+                        title="-1s"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >-1s</button>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0}
+                        value={Number.isFinite(audioTrack.startTime) ? audioTrack.startTime : 0}
+                        onChange={(e) => {
+                          const decodedDur = decodedAudioDurationRef.current || audioTrack.duration || 0;
+                          let newStart = parseFloat(e.target.value);
+                          if (Number.isNaN(newStart)) return;
+                          newStart = Math.max(0, Math.min(decodedDur, newStart));
+                          const minLen = 0.1;
+                          const newEnd = Math.max(newStart + minLen, Math.min(decodedDur, audioTrack.endTime || decodedDur));
+                          const updated = { ...audioTrack, startTime: newStart, endTime: newEnd };
+                          updateProjectAudio(projectId, updated);
+                          updateAudioMutation.mutate({ projectId, audio: updated } as any);
+                        }}
+                        className="w-20 px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 outline-none"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        onClick={() => {
+                          const decodedDur = decodedAudioDurationRef.current || audioTrack.duration || 0;
+                          const newStart = Math.min(decodedDur, (audioTrack.startTime || 0) + 1);
+                          const minLen = 0.1;
+                          const newEnd = Math.max(newStart + minLen, Math.min(decodedDur, audioTrack.endTime || decodedDur));
+                          const updated = { ...audioTrack, startTime: newStart, endTime: newEnd };
+                          updateProjectAudio(projectId, updated);
+                          updateAudioMutation.mutate({ projectId, audio: updated } as any);
+                        }}
+                        title="+1s"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >+1s</button>
+                    </div>
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                    <button
+                      onClick={() => {
+                        updateProjectAudio(projectId, null);
+                        updateAudioMutation.mutate({ projectId, audio: null } as any);
+                        setAudioMenu(null);
+                        setIsAudioSelected(false);
+                        toast.success('Audio removed');
+                      }}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left text-red-600 dark:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Audio
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             
@@ -2198,6 +2846,19 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             <Trash2 className="w-4 h-4" />
             {isDeletionBusy ? 'Deleting...' : 'Delete Scene'}
           </button>
+        </div>
+      )}
+
+      {/* Peak hover tooltip (no visual markers) */}
+      {peakTooltip && peakTooltip.frames && peakTooltip.frames.length > 0 && (
+        <div
+          className="fixed z-[9999] bg-gray-900 text-white px-2 py-1 rounded-md text-xs shadow-lg pointer-events-none"
+          style={{
+            left: Math.min(peakTooltip.x + 12, window.innerWidth - 200),
+            top: Math.max(0, peakTooltip.y),
+          }}
+        >
+          Peaks near: {peakTooltip.frames.join(', ')}
         </div>
       )}
     </div>

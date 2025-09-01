@@ -296,6 +296,14 @@ export default function AppHeader({
                   className="flex-1 min-w-0 max-w-[240px] h-8 text-sm font-medium rounded-[15px] shadow-sm"
                   autoFocus
                   disabled={isRenaming}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleRenameClick();
+                    } else if (e.key === 'Escape') {
+                      setNewTitle(projectTitle || "");
+                      setIsEditingName(false);
+                    }
+                  }}
                 />
                 <div className="flex items-center ml-2 flex-shrink-0">
                   <Button 
@@ -325,14 +333,23 @@ export default function AppHeader({
               </div>
             ) : (
               <h1
-                className="text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0"
+                className={`text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0 ${
+                  isRenaming ? 'text-gray-400 pointer-events-none' : ''
+                }`}
                 onClick={() => {
                   setNewTitle(projectTitle);
                   setIsEditingName(true);
                 }}
                 title={projectTitle} // Show full title on hover
               >
-                {projectTitle}
+                {isRenaming ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>{newTitle}</span>
+                  </div>
+                ) : (
+                  projectTitle
+                )}
               </h1>
             )}
           </div>

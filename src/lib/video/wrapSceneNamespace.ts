@@ -1,11 +1,15 @@
 // src/lib/video/wrapSceneNamespace.ts
 // Helper to isolate a scene in an IIFE namespace and safely remap frame reads with an offset.
 
+// See memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md
+// Stable-ID namespacing and redeclaration tolerance prevent preview crashes when
+// scenes are inserted/reordered or when a wrapper is emitted twice in one module.
 export type WrapNamespaceParams = {
   sceneCode: string;
   index: number; // scene index in ordered list
   componentName: string; // compiled component name to return from the namespace
   startOffset?: number; // optional frame offset to add to useCurrentFrame
+  namespaceName?: string; // optional stable namespace to use instead of index-based
 };
 
 export type WrapNamespaceResult = {
@@ -27,11 +31,15 @@ const REMOTION_FN_CANDIDATES = [
   'random',
 ];
 
+// Wrap scene code in an IIFE and return a small API { Comp } under a stable name.
+// - Use ID-based namespace (preferred) passed via namespaceName to avoid index drift.
+// - Use 'var' for the outer binding so duplicate inclusions don't throw.
+// - Optionally remap useCurrentFrame() to apply a startOffset without mutating globals.
 export function wrapSceneNamespace(params: WrapNamespaceParams): WrapNamespaceResult {
   const { sceneCode, index, componentName } = params;
   const startOffset = Math.max(0, Math.floor(params.startOffset || 0));
 
-  const sceneNamespaceName = `SceneNS_${index}`;
+  const sceneNamespaceName = params.namespaceName || `SceneNS_${index}`;
 
   // Prepare offset header + code rewrite.
   let offsetHeader = '';
@@ -57,7 +65,8 @@ export function wrapSceneNamespace(params: WrapNamespaceParams): WrapNamespaceRe
   // Build the wrapped code
   const wrapped = [
     `// Isolated namespace for Scene ${index}`,
-    `const ${sceneNamespaceName} = (() => {`,
+    // Use 'var' so accidental duplicate declarations in a single module don't throw.
+    `var ${sceneNamespaceName} = (() => {`,
     offsetHeader,
     namespacedBody,
     `  return { Comp: ${componentName} };`,
@@ -71,4 +80,3 @@ export function wrapSceneNamespace(params: WrapNamespaceParams): WrapNamespaceRe
 
   return { code: wrapped, usedRemotionFns };
 }
-

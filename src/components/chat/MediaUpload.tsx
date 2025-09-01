@@ -10,7 +10,7 @@ export interface UploadedMedia {
   status: 'uploading' | 'uploaded' | 'error';
   url?: string;
   error?: string;
-  type?: 'image' | 'video' | 'audio';
+  type?: 'image' | 'video' | 'audio' | 'scene';
   isLoaded?: boolean; // Track if the actual media has loaded
   duration?: number; // For audio files
 }

@@ -14,7 +14,7 @@ import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
-import { type DraftAttachment } from "~/stores/videoState";
+import { type DraftAttachment, type DbMessage } from "~/stores/videoState";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
@@ -41,6 +41,8 @@ interface ComponentMessage {
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
   kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
+  videoUrls?: string[];
+  audioUrls?: string[];
 }
 
 interface ChatPanelGProps {
@@ -132,6 +134,8 @@ export default function ChatPanelG({
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
   
+
+  
   // Check if user has GitHub connected and get discovered components
   const { data: githubConnection } = api.github.getConnection.useQuery();
   const { data: discoveredComponents } = api.githubDiscovery.discoverComponents.useQuery(
@@ -140,7 +144,7 @@ export default function ChatPanelG({
   );
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -148,12 +152,34 @@ export default function ChatPanelG({
   const selectedScene = selectedSceneId ? scenes.find((s: any) => s.id === selectedSceneId) : null;
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
+  // Load messages from database on mount
+  const { data: dbMessages } = api.chat.getMessages.useQuery({ 
+    projectId 
+  }, {
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minute cache
+  });
+
   const messages = getProjectChatHistory(projectId);
   
   // Debug: Log messages to check for duplicates
   // Commented out to prevent re-render spam
   // console.log('[ChatPanelG] Messages from VideoState:', messages.length);
   
+  // Sync database messages to VideoState when loaded
+  useEffect(() => {
+    if (dbMessages && dbMessages.length > 0) {
+      console.log('[ChatPanelG] Syncing database messages to VideoState:', dbMessages.length);
+      const typedMessages: DbMessage[] = dbMessages.map(msg => ({
+        ...msg,
+        role: msg.role as 'user' | 'assistant',
+        kind: msg.kind as 'status' | 'text' | 'error' | 'tool_result' | 'scene_plan' | undefined
+      }));
+      syncDbMessages(projectId, typedMessages);
+    }
+  }, [dbMessages, projectId, syncDbMessages]);
+
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -171,6 +197,8 @@ export default function ChatPanelG({
       status: msg.status,
       kind: msg.kind,
       imageUrls: msg.imageUrls,
+      videoUrls: msg.videoUrls,
+      audioUrls: msg.audioUrls,
     }));
   }, [messages]);
 
@@ -460,8 +488,8 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] 🎵 Including audio in chat submission:', audioUrls);
     }
     
-    // Show user message immediately (with original text including @mentions for display)
-    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined);
+    // Get scene URLs from selected scenes
+    let sceneUrls = selectedScenes.map(s => s.id);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -517,7 +545,10 @@ export default function ChatPanelG({
     );
     
     // Pass both GitHub and Figma modes to generation, plus website URL
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    
+    // Show user message AFTER sending to backend to prevent overwriting
+    addUserMessage(projectId, originalMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -676,11 +707,41 @@ export default function ChatPanelG({
     adjustTextareaHeight();
   }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
-  // Sync draft attachments with VideoState
+  // Sync draft attachments with VideoState (consolidated to prevent infinite loop)
   useEffect(() => {
-    const draftAttachments = uploadedImages.map(convertToDraftAttachment);
-    setDraftAttachments(projectId, draftAttachments);
-  }, [uploadedImages, projectId, setDraftAttachments]);
+    const sceneAttachments = selectedScenes.map(scene => ({
+      id: `scene-${scene.id}`,
+      status: 'uploaded' as const,
+      type: 'scene' as const,
+      name: scene.name,
+      sceneId: scene.id,
+      sceneIndex: scene.index,
+      isLoaded: true
+    }));
+    
+    const allAttachments = [
+      ...uploadedImages.map(convertToDraftAttachment),
+      ...sceneAttachments
+    ];
+    
+    setDraftAttachments(projectId, allAttachments);
+  }, [selectedScenes, uploadedImages, projectId, setDraftAttachments]);
+
+  // Initialize selectedScenes from draftAttachments on mount only
+  useEffect(() => {
+    const sceneAttachments = draftAttachments
+      .filter(att => att.type === 'scene' && att.sceneId && att.sceneIndex !== undefined)
+      .map(att => ({
+        id: att.sceneId!,
+        index: att.sceneIndex!,
+        name: att.name || `Scene ${att.sceneIndex}`
+      }));
+    
+    if (sceneAttachments.length > 0) {
+      setSelectedScenes(sceneAttachments);
+    }
+  }, []); // Empty dependency array - only run on mount
+
   // Robust focus management that works across environments
   const focusTextarea = useCallback(() => {
     if (!textareaRef.current) return false;
@@ -984,6 +1045,7 @@ export default function ChatPanelG({
       duration: 30, // Default duration - will be updated when loaded
       startTime: 0,
       endTime: 30,
+      timelineOffsetSec: 0,
       volume: 0.7, // Default volume
       fadeInDuration: 0.5, // Nice default fade
       fadeOutDuration: 0.5,
@@ -1145,22 +1207,10 @@ export default function ChatPanelG({
                 props: revertedScene.props || {}
               }
             };
-            
-            const updatedScenes = [...currentScenes, transformedScene];
-            const currentPropsData = getCurrentProps();
-            
-            if (currentPropsData) {
-              const updatedProps = {
-                ...currentPropsData,
-                scenes: updatedScenes,
-                meta: {
-                  ...currentPropsData.meta,
-                  duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                }
-              };
-              
-              replace(projectId, updatedProps);
-            }
+            // Removed optimistic replace for stability.
+            // Rely on DB invalidation + PreviewPanelG sync to prevent transient duplicates.
+            // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+            await utils.generation.getProjectScenes.invalidate({ projectId });
           } else {
             // Scene was updated
             updateScene(projectId, revertedScene.id, revertedScene);
@@ -1439,33 +1489,13 @@ export default function ChatPanelG({
                   ? [transformedScene]
                   : [...currentScenes, transformedScene];
                 
-                const currentPropsData = getCurrentProps();
-                if (currentPropsData) {
-                  const updatedProps = {
-                    ...currentPropsData,
-                    scenes: updatedScenes,
-                    meta: {
-                      ...currentPropsData.meta,
-                      duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                      title: currentPropsData.meta?.title || 'New Project'
-                    }
-                  };
-                  
-                  replace(projectId, updatedProps);
-                  
-                  console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
-                    sceneId: transformedScene.id,
-                    totalScenes: updatedScenes.length,
-                    replacedWelcome: isWelcomeProject
-                  });
-                  
-                  // Invalidate the scenes query to ensure fresh data
-                  await utils.generation.getProjectScenes.invalidate({ projectId });
-                  
-                  // Call the callback if provided
-                  if (onSceneGenerated) {
-                    onSceneGenerated(transformedScene.id);
-                  }
+                // Removed optimistic replace.
+                // Rely on DB invalidation + PreviewPanelG sync for canonical ordering.
+                // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+                await utils.generation.getProjectScenes.invalidate({ projectId });
+                // Callback can still be invoked with the new ID if needed
+                if (onSceneGenerated) {
+                  onSceneGenerated(transformedScene.id);
                 }
               }
             }
@@ -1550,6 +1580,8 @@ export default function ChatPanelG({
           
           // Always invalidate scenes to ensure UI is in sync with database
           await utils.generation.getProjectScenes.invalidate({ projectId });
+          // Also invalidate project data so audio additions/edits reflect immediately in Timeline
+          await utils.project.getById.invalidate({ id: projectId });
         }
       }
     },
@@ -1615,37 +1647,41 @@ export default function ChatPanelG({
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
         <div className="space-y-4">
-          {componentMessages.map((msg, index) => {
-          // Find all scene plan messages
-          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
-          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
-          const totalScenePlans = scenePlanMessages.length;
-          
-          return (
-            <ChatMessage
-              key={msg.id}
-              message={{
-                id: msg.id,
-                message: msg.content,
-                isUser: msg.isUser,
-                timestamp: msg.timestamp.getTime(),
-                status: msg.status,
-                kind: msg.kind,
-                imageUrls: msg.imageUrls,
-              }}
-              onImageClick={(imageUrl) => {
-                // TODO: Implement image click handler
-                console.log('Image clicked:', imageUrl);
-              }}
-              projectId={projectId}
-              userId={userId}
-              onRevert={isReverting ? undefined : handleRevert}
-              onEditScenePlan={handleEditScenePlan}
-              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-              isFirstScenePlan={isFirstScenePlan}
-              totalScenePlans={totalScenePlans}
-            />
-          );
+          {messages.map((msg, index) => {
+            // Find all scene plan messages
+            const scenePlanMessages = messages.filter(m => m.kind === 'scene_plan');
+            const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+            const totalScenePlans = scenePlanMessages.length;
+            
+            return (
+              <ChatMessage
+                key={`${msg.id}-${index}`}
+                message={{
+                  id: msg.id,
+                  message: msg.message,
+                  isUser: msg.isUser,
+                  timestamp: msg.timestamp,
+                  status: msg.status,
+                  kind: msg.kind,
+                  imageUrls: msg.imageUrls,
+                  videoUrls: msg.videoUrls,
+                  audioUrls: msg.audioUrls,
+                  sceneUrls: msg.sceneUrls,
+                }}
+                
+                onImageClick={(imageUrl) => {
+                  // TODO: Implement image click handler
+                  console.log('Image clicked:', imageUrl);
+                }}
+                projectId={projectId}
+                userId={userId}
+                onRevert={isReverting ? undefined : handleRevert}
+                onEditScenePlan={handleEditScenePlan}
+                hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+                isFirstScenePlan={isFirstScenePlan}
+                totalScenePlans={totalScenePlans}
+              />
+            );
           })}
           
           {/* Show pulsating message UI when generating */}
@@ -1667,7 +1703,7 @@ export default function ChatPanelG({
 
         {/* Media upload preview area */}
         <MediaUpload
-          uploadedMedia={uploadedImages}
+          uploadedMedia={uploadedImages.filter(media => media.type !== 'scene')}
           onMediaChange={setUploadedImages}
           projectId={projectId}
           onAudioExtract={handleAudioExtract}

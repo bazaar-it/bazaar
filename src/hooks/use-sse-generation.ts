@@ -19,7 +19,7 @@ function generateUUID(): string {
 
 interface UseSSEGenerationOptions {
   projectId: string;
-  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
+  onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; sceneUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
   onComplete?: () => void;
   onError?: (error: string) => void;
 }
@@ -36,6 +36,7 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     imageUrls?: string[],
     videoUrls?: string[],
     audioUrls?: string[],
+    sceneUrls?: string[], 
     modelOverride?: string,
     useGitHub?: boolean,
     websiteUrl?: string
@@ -61,6 +62,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     
     if (audioUrls?.length) {
       params.append('audioUrls', JSON.stringify(audioUrls));
+    }
+    
+    if (sceneUrls?.length) {
+      params.append('sceneUrls', JSON.stringify(sceneUrls));
     }
     
     if (modelOverride) {
@@ -96,6 +101,7 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
               imageUrls: data.imageUrls,
               videoUrls: data.videoUrls,
               audioUrls: data.audioUrls,
+              sceneUrls: data.sceneUrls,
               modelOverride: data.modelOverride,
               useGitHub: data.useGitHub
             });

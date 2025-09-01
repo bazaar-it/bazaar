@@ -105,6 +105,7 @@ export const projects = createTable(
     title: d.varchar({ length: 255 }).notNull(),
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
+    audioUpdatedAt: d.timestamp("audio_updated_at", { withTimezone: true }),
     isWelcome: d.boolean().default(true).notNull(),
     isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -155,7 +156,10 @@ export const messages = createTable(
     role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
     kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
-    imageUrls: d.jsonb("image_urls").$type<string[]>(), // 🚨 NEW: Support for uploaded images
+    imageUrls: d.jsonb("image_urls").$type<string[]>(), // Support for uploaded images
+    videoUrls: d.jsonb("video_urls").$type<string[]>(), // Support for uploaded videos
+    audioUrls: d.jsonb("audio_urls").$type<string[]>(), // Support for uploaded audio files
+    sceneUrls: d.jsonb("scene_urls").$type<string[]>(), // Support for scene attachments
     sequence: d.integer().notNull().default(0), // Message sequence number for ordering
     createdAt: d
       .timestamp({ withTimezone: true })

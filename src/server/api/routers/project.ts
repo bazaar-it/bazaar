@@ -500,6 +500,7 @@ export const projectRouter = createTRPCRouter({
         duration: z.number(),
         startTime: z.number(),
         endTime: z.number(),
+        timelineOffsetSec: z.number().optional(),
         volume: z.number(),
         fadeInDuration: z.number().optional(),
         fadeOutDuration: z.number().optional(),
@@ -529,11 +530,12 @@ export const projectRouter = createTRPCRouter({
           });
         }
 
-        // Update the audio field
+        // Update the audio field with timestamp
         const updated = await ctx.db
           .update(projects)
           .set({
             audio: input.audio,
+            audioUpdatedAt: new Date(),
             updatedAt: new Date()
           })
           .where(eq(projects.id, input.projectId))
@@ -547,7 +549,11 @@ export const projectRouter = createTRPCRouter({
           });
         }
         console.log(`[Project] Updated audio for project ${input.projectId}:`, input.audio);
-        return { success: true, audio: result.audio };
+        return { 
+          success: true, 
+          audio: result.audio,
+          audioUpdatedAt: result.audioUpdatedAt?.getTime() || Date.now()
+        };
       } catch (error) {
         console.error("Error updating project audio:", error);
         if (error instanceof TRPCError) {
