@@ -323,30 +323,48 @@ export const VideoComposition: React.FC<{
   return (
     <AbsoluteFill>
       {/* Background audio track */}
-      {audio && (
-        <>
-          {console.log('[VideoComposition] Rendering Audio component with:', {
-            src: audio.url,
-            volume: audio.volume,
-            startFrom: Math.round(audio.startTime * 30),
-            endAt: Math.round(audio.endTime * 30),
-            loop: audio.endTime - audio.startTime < totalVideoDuration / 30,
-            playbackRate: audio.playbackRate || 1,
-            totalVideoDuration,
-            audioDuration: audio.endTime - audio.startTime,
-            videoDurationSeconds: totalVideoDuration / 30
-          })}
-          <Audio
-            src={audio.url}
-            volume={audio.volume}
-            startFrom={Math.round(audio.startTime * 30)} // Convert seconds to frames
-            endAt={Math.round(audio.endTime * 30)} // Convert seconds to frames
-            loop={audio.endTime - audio.startTime < totalVideoDuration / 30} // Loop if audio is shorter than video
-            playbackRate={audio.playbackRate || 1}
-          />
-        </>
-      )}
-      
+      {audio && (() => {
+        // When to start playing in the video timeline (in frames)
+        const videoStartFrame = 0; // Always start at the beginning of video
+        // Calculate how long to play (based on trimmed segment)
+        const audioStartTime = audio.startTime || 0;
+        const audioEndTime = audio.endTime || audio.duration || 0;
+        const segmentDuration = audioEndTime - audioStartTime;
+        const seqDuration = Math.min(
+          Math.max(1, Math.round(segmentDuration * 30)),
+          totalVideoDuration
+        );
+        
+        // The offset within the audio file itself (where to start reading from the audio)
+        const audioOffsetFrames = Math.round(audioStartTime * 30);
+        
+        const shouldLoop = segmentDuration < (totalVideoDuration / 30);
+        
+        console.log('[VideoComposition] Rendering Audio in Sequence:', {
+          src: audio.url,
+          videoStartFrame,
+          seqDuration,
+          audioStartTime,
+          audioEndTime,
+          audioOffsetFrames,
+          loop: shouldLoop,
+          playbackRate: audio.playbackRate || 1,
+        });
+        
+        return (
+          <Sequence from={videoStartFrame} durationInFrames={seqDuration}>
+            <Audio
+              src={audio.url}
+              volume={audio.volume}
+              startFrom={audioOffsetFrames}
+              // endAt omitted; Sequence duration defines clip length
+              loop={shouldLoop}
+              playbackRate={audio.playbackRate || 1}
+            />
+          </Sequence>
+        );
+      })()}
+
       {/* Video scenes with DB duration enforcement via Sequence */}
       {sequences}
     </AbsoluteFill>
