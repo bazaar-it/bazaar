@@ -3,3 +3,6 @@ ALTER TABLE "bazaar-vid_message" ADD COLUMN "video_urls" jsonb;
 ALTER TABLE "bazaar-vid_message" ADD COLUMN "audio_urls" jsonb;
 ALTER TABLE "bazaar-vid_message" ADD COLUMN "scene_urls" jsonb;
 --> statement-breakpoint
+-- Add audioUpdatedAt timestamp to projects table for versioned reconciliation
+ALTER TABLE "bazaar-vid_project" ADD COLUMN "audio_updated_at" timestamp with time zone;
+--> statement-breakpoint

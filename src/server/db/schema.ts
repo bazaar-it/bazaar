@@ -105,6 +105,7 @@ export const projects = createTable(
     title: d.varchar({ length: 255 }).notNull(),
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
+    audioUpdatedAt: d.timestamp("audio_updated_at", { withTimezone: true }),
     isWelcome: d.boolean().default(true).notNull(),
     isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
