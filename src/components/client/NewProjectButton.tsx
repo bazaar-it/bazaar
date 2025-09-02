@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { PlusIcon, MonitorIcon, SmartphoneIcon, SquareIcon } from "lucide-react";
-import { type VideoFormat } from "~/app/projects/new/FormatSelector";
+import { type VideoFormat } from "~/lib/types/video/remotion-constants";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { useLastUsedFormat } from "~/hooks/use-last-used-format";

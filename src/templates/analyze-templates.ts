@@ -1,7 +1,7 @@
 // Script to analyze templates and determine their format compatibility
 // This is a temporary analysis script to help determine which formats each template supports
 
-import { type VideoFormat } from '../app/projects/new/FormatSelector';
+import { type VideoFormat } from '../lib/types/video/remotion-constants';
 
 // Template analysis results based on manual review
 export const templateFormatAnalysis = {

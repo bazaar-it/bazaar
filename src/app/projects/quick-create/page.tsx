@@ -25,8 +25,7 @@ export default function QuickCreatePage() {
     },
     onError: (error) => {
       console.error("Failed to quick create project:", error);
-      // If creation fails, fallback to the regular new project page
-      router.push('/projects/new');
+      // Log error but don't redirect - let user retry
     }
   });
 

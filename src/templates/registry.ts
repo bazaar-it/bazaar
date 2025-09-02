@@ -1,6 +1,6 @@
 // Import templates that have been updated to the new format
 import KnowsCode, { templateConfig as knowsCodeConfig } from './KnowsCode';
-import { type VideoFormat } from '../app/projects/new/FormatSelector';
+import { type VideoFormat } from '../lib/types/video/remotion-constants';
 import { templateFormatAnalysis } from './analyze-templates';
 import PromptIntro, { templateConfig as promptIntroConfig } from './PromptIntro';
 import AppleSignIn, { templateConfig as appleSignInConfig } from './AppleSignIn';
