@@ -92,6 +92,19 @@ async function preprocessSceneForLambda(scene: any) {
   // Database scenes have tsxCode directly, not in data.code
   const tsxCode = scene.tsxCode;
   
+  // Emergency switch: Force fallback component for all scenes
+  const FORCE_FALLBACK = process.env.RENDER_FORCE_FALLBACK === '1';
+  if (FORCE_FALLBACK) {
+    const fallbackOnly = `const Component = function ComponentFallback() {\n  return React.createElement(\n    'div',\n    {\n      style: {\n        width: '100%',\n        height: '100%',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        backgroundColor: '#0f172a',\n        color: 'white',\n        fontFamily: 'Inter, system-ui, sans-serif',\n        fontSize: '32px'\n      }\n    },\n    'Scene unavailable — using fallback'\n  );\n};\n\nreturn Component;\n`;
+    console.warn(`[Preprocess] FORCE_FALLBACK enabled - rendering fallback for scene ${scene.id}`);
+    return {
+      ...scene,
+      jsCode: fallbackOnly,
+      compiledCode: fallbackOnly,
+      tsxCode,
+    };
+  }
+
   if (!tsxCode || tsxCode.trim().length === 0) {
     console.error(`[Preprocess] No code found for scene ${scene.id} - scene structure:`, {
       hasId: !!scene.id,
@@ -213,11 +226,10 @@ async function preprocessSceneForLambda(scene: any) {
       transformedCode = `\nconst { ${reactHooks.length > 0 ? reactHooks.join(', ') : 'useState, useEffect'} } = React;\n` + transformedCode;
     }
     
-    // Add Remotion components at the beginning if needed
-    if (remotionComponents.length > 0) {
-      // Simply declare the components as available - MainCompositionSimple will provide them
-      transformedCode = `// Remotion components will be provided by the runtime\n` + transformedCode;
-    }
+    // Do NOT inject `const { ... } = Remotion;` here.
+    // In Lambda, Remotion primitives are provided as Function parameters (AbsoluteFill, useCurrentFrame, etc.)
+    // We already removed the original `const { ... } = window.Remotion` line above so the code
+    // can reference these identifiers directly from the function scope.
     
     // Keep export default for Lambda compatibility - Lambda expects proper ES6 modules
     // Only convert to const Component if there's no export default
@@ -252,6 +264,13 @@ async function preprocessSceneForLambda(scene: any) {
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
     transformedCode = await replaceIconifyIcons(transformedCode);
+
+    // SAFETY: Provide a runtime helper for any remaining inline icon calls
+    // Some transforms may emit __inlineIcon(svg, props). Ensure it's defined.
+    if (transformedCode.includes('__inlineIcon(') && !/\b__inlineIcon\s*=/.test(transformedCode)) {
+      const inlineIconHelper = `\n// Inline Icon helper injected by preprocess\nconst __inlineIcon = (svg, props = {}) => {\n  try {\n    return React.createElement('span', {\n      ...props,\n      dangerouslySetInnerHTML: { __html: svg }\n    });\n  } catch (_) {\n    return React.createElement('span', { ...props });\n  }\n};\n`;
+      transformedCode = inlineIconHelper + transformedCode;
+    }
     
     // Fix avatar URLs - replace window.BazaarAvatars with actual URLs
     // This handles the window.BazaarAvatars['avatar-name'] pattern
@@ -284,6 +303,18 @@ async function preprocessSceneForLambda(scene: any) {
       .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, 'const Component = $1;')  // export default variable -> const Component
       .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')  // Remove export const
       .replace(/export\s+{\s*[^}]*\s*};?/g, '');            // Remove export { ... }
+
+    // SAFETY NET: Ensure a valid React component is always defined for Lambda rendering
+    // If transformation did not produce a Component, provide a minimal fallback to prevent React error #130
+    if (!/\bconst\s+Component\s*=/.test(transformedCode)) {
+      transformedCode += `\nconst Component = function ComponentFallback() {\n  return React.createElement(\n    'div',\n    {\n      style: {\n        width: '100%',\n        height: '100%',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        backgroundColor: '#0f172a',\n        color: 'white',\n        fontFamily: 'Inter, system-ui, sans-serif'\n      }\n    },\n    'Scene failed to compile — showing fallback'\n  );\n};\n`;
+    }
+
+    // Ensure the Function constructor returns the component to the Lambda runtime
+    // CRITICAL: We must explicitly return; functions do NOT return the last expression implicitly
+    if (!/\breturn\s+Component\s*;?\s*$/m.test(transformedCode)) {
+      transformedCode += `\n// Explicitly return the component for Lambda Function execution\nreturn Component;\n`;
+    }
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
     console.log(`[Preprocess] Transformation summary:`, {

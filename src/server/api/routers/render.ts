@@ -130,7 +130,7 @@ export const renderRouter = createTRPCRouter({
         quality: input.quality,
         playbackSpeed: input.playbackSpeed,
         projectProps: project.props,
-        audio: project.audio, // Get audio from database
+        audio: project.audio || undefined, // Get audio from database (convert null to undefined)
       });
       
       // Log what prepareRenderConfig returned
@@ -180,23 +180,8 @@ export const renderRouter = createTRPCRouter({
             duration: totalDuration,
           });
           
-          // Update state if we got an output URL immediately
-          if (result.outputUrl) {
-            renderState.set(result.renderId, {
-              ...renderState.get(result.renderId)!,
-              status: 'completed',
-              progress: 100,
-              outputUrl: result.outputUrl,
-            });
-            
-            // Update database tracking
-            await ExportTrackingService.updateExportStatus({
-              renderId: result.renderId,
-              status: 'completed',
-              progress: 100,
-              outputUrl: result.outputUrl,
-            });
-          }
+          // Lambda render doesn't return outputUrl immediately
+          // It will be available when checking render progress
           
           return { renderId: result.renderId };
         } catch (error) {
@@ -303,7 +288,7 @@ export const renderRouter = createTRPCRouter({
           // Update local state with latest progress
           if (progress.done) {
             // The outputFile from Lambda might be a full URL or just a key
-            let outputUrl = progress.outputFile;
+            let outputUrl = progress.outputFile || undefined;
             
             if (outputUrl) {
               // If it's already a full S3 URL, use it as-is
