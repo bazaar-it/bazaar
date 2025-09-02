@@ -46,31 +46,29 @@ function preprocessComponentCode(code: string, componentId: string): string {
     'import React, {'
   );
   
-  // Ensure Remotion is imported properly
-  if (!processedCode.includes('from "remotion"') && !processedCode.includes('from \'remotion\'')) {
-    processedCode = `import { useCurrentFrame, useVideoConfig } from 'remotion';\n${processedCode}`;
-    fixes.push('Added missing Remotion imports');
-  }
+  // REMOVED: Import injection that causes browser crashes
+  // Browsers cannot resolve bare module specifiers like 'remotion'
+  // The bundled code already has everything it needs via window.Remotion
+  // This was causing immediate crashes when browser tried GET /remotion → 404
   
-  // Fix createElement variable mismatches (a.createElement -> React.createElement)
-  // This is specific to the issue we found in the component
+  // DISABLED: createElement replacement that breaks non-React code
+  // This was replacing ALL .createElement calls, even from other libraries
+  // Example corruption: calculator.createElement() → React.createElement() = SYNTAX ERROR
+  // Bundled code should already have correct references
+  
+  /* Commented out to prevent breaking valid code:
   if (processedCode.includes('.createElement') && processedCode.includes('import React')) {
-    // Find all potential React aliases used with createElement
     const creatorMatches = [...processedCode.matchAll(/([a-zA-Z0-9_$]+)\.createElement/g)];
     const creatorVariables = new Set<string>();
     
     creatorMatches.forEach(match => {
-      // Safely extract the matched group and ensure it's a string
       const varName = match[1] || '';
-      // Only add non-empty strings that aren't 'React'
       if (varName && varName !== 'React') {
         creatorVariables.add(varName);
       }
     });
     
-    // Replace all non-React createElement calls
     creatorVariables.forEach(varName => {
-      // Ensure varName is defined before using it in RegExp
       if (varName) {
         const pattern = new RegExp(`${varName}\\.createElement`, 'g');
         processedCode = processedCode.replace(pattern, 'React.createElement');
@@ -81,6 +79,7 @@ function preprocessComponentCode(code: string, componentId: string): string {
       fixes.push(`Fixed createElement calls (${Array.from(creatorVariables).join(', ')} → React)`);
     }
   }
+  */
   
   // Strip any import assertions which might cause issues
   processedCode = processedCode.replace(/import\s+.*\s+assert\s+\{[^}]*\};?/g, '// Removed import assertion');
@@ -616,13 +615,25 @@ if (typeof window !== 'undefined') {
       apiRouteLogger.debug(componentId, "Added fallback component detection mechanism");
     }
     
-    // 7. Return the enhanced component code with proper content type
+    // 7. Add ESM export for compatibility with useRemoteComponent
+    // This allows both side-effect registration AND module import patterns to work
+    const finalJs = jsContent + `
+      
+      // Export for ESM consumers (useRemoteComponent)
+      export default (typeof window !== 'undefined' && window.__REMOTION_COMPONENT) ? 
+        window.__REMOTION_COMPONENT : 
+        ((typeof global !== 'undefined' && global.__REMOTION_COMPONENT) ? 
+          global.__REMOTION_COMPONENT : 
+          undefined);
+    `;
+    
+    // 8. Return the enhanced component code with proper content type
     const headers = {
       'Content-Type': 'application/javascript',
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
     };
     
-    return new NextResponse(jsContent, { status: 200, headers });
+    return new NextResponse(finalJs, { status: 200, headers });
     
   } catch (error) {
     // Handle any unexpected errors
