@@ -28,8 +28,36 @@
 - **Reliability Issues**: Different compilation methods = inconsistent results
 - **Solution**: Single server compilation = 95%+ reliability, 10ms cached loads
 
-## Next Steps
-- Implement compile service (Sucrase on server) with tests
-- Wire to create/edit path and persist `outputUrl`
-- Add preview placeholder while building
-- Set up R2 bucket with proper CORS and caching headers
+---
+
+## 2025-09-02 - APPROACH PIVOT 🔄
+
+### Decision Made: Hybrid Approach
+After team discussion and deeper analysis of `render.service.ts`, we discovered:
+- Lambda compilation is complex (icon replacement, export stripping, etc.)
+- Two compilation targets (browser vs Lambda) would be complicated
+- R2 setup adds unnecessary complexity
+
+### New Approach: Hybrid TSX/JS Storage
+- **Store both TSX and compiled JS in database**
+- **Compile once at generation/edit time**
+- **No R2, no CDN, no external dependencies**
+
+### Why Hybrid Is Better
+1. **Simpler**: Just database columns, no infrastructure
+2. **Faster**: No network round trips
+3. **Safer**: Code stays atomic with scene
+4. **Cheaper**: No R2 costs
+5. **Easier**: One compilation format (browser only)
+
+### Documentation Updated
+- **TODO.md**: Completely rewritten for hybrid approach
+- **DECISION.md**: Created to document architecture decision
+- **Progress**: This update
+
+## Next Steps (Hybrid Approach)
+- Add `js_code` column to scenes table
+- Create server-side compilation utility
+- Integrate with scene creation/editing
+- Update preview panels to use pre-compiled JS
+- Backfill existing scenes

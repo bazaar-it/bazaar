@@ -56,6 +56,20 @@ export function PreviewPanelG({
       // This will be invalidated when scenes are created
     }
   );
+  
+  // Debug: Check if jsCode is coming from API
+  React.useEffect(() => {
+    if (dbScenes && dbScenes.length > 0) {
+      const firstScene = dbScenes[0];
+      if (firstScene) {
+        console.log('[PreviewPanelG] DB scenes received, first scene jsCode status:', {
+          sceneId: firstScene.id,
+          hasJsCode: !!firstScene.jsCode,
+          jsCodeLength: firstScene.jsCode?.length,
+        });
+      }
+    }
+  }, [dbScenes]);
 
   // NOTE: Auto-fix hook is now only used in ChatPanelG to avoid duplicate event listeners
   // PreviewPanelG only dispatches errors, ChatPanelG handles the fixing
@@ -113,6 +127,7 @@ export function PreviewPanelG({
           name: localName || dbScene.name,
           data: {
             code: dbScene.tsxCode,
+            jsCode: dbScene.jsCode, // Pre-compiled JavaScript if available
             // Also preserve local name in data for backward compatibility
             name: localName || dbScene.name,
             componentId: dbScene.id,
@@ -351,15 +366,21 @@ export function PreviewPanelG({
     }
   }, [loopState, selectedSceneRange?.start]);
 
-  // 🚨 SIMPLIFIED: Direct scene compilation
+  // 🚨 SIMPLIFIED: Direct scene compilation with pre-compiled JS support
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
-    // Get code from scene.data.code (the correct location based on the type)
+    // Get code from scene.data (supporting both TSX and pre-compiled JS)
     const sceneCode = (scene.data as any)?.code;
+    const preCompiledJS = (scene.data as any)?.jsCode; // Pre-compiled JavaScript from DB
     const sceneName = (scene.data as any)?.name || scene.id;
     const sceneId = scene.id;
     
-    if (!sceneCode) {
-      console.warn(`[PreviewPanelG] Scene ${index} has no code. Scene structure:`, {
+    // Log if we have pre-compiled JS
+    if (preCompiledJS) {
+      console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) has pre-compiled JS`);
+    }
+    
+    if (!sceneCode && !preCompiledJS) {
+      console.warn(`[PreviewPanelG] Scene ${index} has no code (TSX or JS). Scene structure:`, {
         id: scene.id,
         hasDataCode: !!(scene.data as any)?.code,
         dataKeys: scene.data ? Object.keys(scene.data) : [],
@@ -406,8 +427,37 @@ export function PreviewPanelG({
       // Log cleaned code for debugging
       // Cleaned scene code processing
 
-      // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
-      const testCompositeCode = `
+      // Use pre-compiled JS if available, otherwise compile TSX
+      let transformedCode: string;
+      
+      if (preCompiledJS) {
+        // 🚀 FAST PATH: Use pre-compiled JavaScript directly
+        console.log(`[PreviewPanelG] 🚀 Using pre-compiled JS for scene ${index} (${sceneName})`);
+        
+        // Pre-compiled JS has export statements, we need to remove ALL of them
+        // 1. Remove export default function
+        // 2. Remove export const statements
+        // 3. Remove any other export statements
+        let cleanCompiledJS = preCompiledJS
+          .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
+          .replace(/export\s+default\s+(\w+);?\s*/g, '') // Remove standalone export default
+          .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;') // Keep const but remove export
+          .replace(/export\s+\{[^}]*\};?\s*/g, ''); // Remove named exports
+        
+        // Extract the component name from the original JS before cleaning
+        const exportFuncMatch = preCompiledJS.match(/export\s+default\s+function\s+(\w+)/);
+        const actualComponentName = exportFuncMatch ? exportFuncMatch[1] : componentName;
+        
+        transformedCode = cleanCompiledJS;
+        
+        // Override the component name to match what's in the compiled JS
+        componentName = actualComponentName;
+      } else {
+        // ⚠️ SLOW PATH: Client-side compilation (legacy)
+        console.log(`[PreviewPanelG] ⚠️ No pre-compiled JS, using client-side compilation for scene ${index} (${sceneName})`);
+        
+        // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
+        const testCompositeCode = `
 const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random } = window.Remotion;
 
 ${cleanSceneCode}
@@ -416,35 +466,35 @@ export default function TestComponent() {
   return <${componentName} />;
 }`;
 
-      // This is REAL validation - if Sucrase can't compile it, it's actually broken
-      let transformedCode: string;
-      try {
-        const result = transform(testCompositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
-        transformedCode = result.code;
-      } catch (syntaxError) {
-        // Sucrase compilation failed - this is a syntax error
-        console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
-        console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
-        
-        // Still dispatch the error event for auto-fix
-        const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
-        const errorEvent = new CustomEvent('preview-scene-error', {
-          detail: {
-            sceneId,
-            sceneName,
-            sceneIndex: index + 1,
-            error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
-          }
-        });
-        window.dispatchEvent(errorEvent);
-        console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
-        
-        // Re-throw to handle in outer catch
-        throw syntaxError;
+        // This is REAL validation - if Sucrase can't compile it, it's actually broken
+        try {
+          const result = transform(testCompositeCode, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          transformedCode = result.code;
+        } catch (syntaxError) {
+          // Sucrase compilation failed - this is a syntax error
+          console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
+          console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
+          
+          // Still dispatch the error event for auto-fix
+          const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId,
+              sceneName,
+              sceneIndex: index + 1,
+              error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
+            }
+          });
+          window.dispatchEvent(errorEvent);
+          console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
+          
+          // Re-throw to handle in outer catch
+          throw syntaxError;
+        }
       }
 
       // Scene compiled successfully
@@ -458,9 +508,10 @@ export default function TestComponent() {
       });
       window.dispatchEvent(successEvent);
       
+      // Return the appropriate code based on what was used
       return {
         isValid: true,
-        compiledCode: cleanSceneCode,
+        compiledCode: preCompiledJS ? transformedCode : cleanSceneCode,
         componentName: componentName
       };
 

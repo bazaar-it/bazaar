@@ -33,6 +33,13 @@ export const getProjectScenes = protectedProcedure
       orderBy: [scenes.order],
     });
 
+    // Debug: Log if jsCode is present
+    console.log('[getProjectScenes] First scene jsCode status:', {
+      sceneId: projectScenes[0]?.id,
+      hasJsCode: !!projectScenes[0]?.jsCode,
+      jsCodeLength: projectScenes[0]?.jsCode?.length,
+    });
+
     return projectScenes;
   });
 
