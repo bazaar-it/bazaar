@@ -130,6 +130,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [isSplitBusy, setIsSplitBusy] = useState(false);
   // Deletion busy flag to prevent duplicate deletions
   const [isDeletionBusy, setIsDeletionBusy] = useState(false);
+  const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null);
   const deletionInProgressRef = useRef<Set<string>>(new Set());
   
   // Get video state from Zustand store
@@ -330,6 +331,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const removeSceneMutation = api.generation.removeScene.useMutation({
     onSuccess: async (res: any) => {
       console.log('[Timeline] Scene deleted from database');
+      setPendingDeleteSceneId(null); // Clear pending state
       const deleted = res?.data?.deletedScene || res?.deletedScene;
       toast.success('Scene deleted', {
         action: {
@@ -345,6 +347,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     },
     onError: (error) => {
       console.error('[Timeline] Failed to delete scene:', error);
+      setPendingDeleteSceneId(null); // Clear pending state on error
       toast.error('Failed to delete scene');
     }
   });
@@ -1525,14 +1528,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return;
     }
     
-    // For keyboard shortcuts, add confirmation
+    // For keyboard shortcuts and first click, show inline confirmation
     if (!skipConfirmation) {
-      const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
-      const sceneData = scenes[sceneIndex] as any;
-      const sceneName = sceneData?.name || sceneData?.data?.name || `Scene ${sceneIndex + 1}`;
-      if (!window.confirm(`Delete "${sceneName}"?\n\nPress OK to delete, or Cancel to keep it.`)) {
-        return;
-      }
+      setPendingDeleteSceneId(sceneId);
+      return;
     }
     
     // Mark deletion as in progress
@@ -1566,7 +1565,23 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     );
     
     setContextMenu(null);
-  }, [deleteScene, projectId, removeSceneMutation, isDeletionBusy, scenes, pushAction]);
+  }, [deleteScene, projectId, removeSceneMutation, isDeletionBusy, scenes, pushAction, setPendingDeleteSceneId]);
+
+  // Clear pending delete on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pendingDeleteSceneId) {
+        // Check if click is outside the timeline
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-timeline-scene]')) {
+          setPendingDeleteSceneId(null);
+        }
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [pendingDeleteSceneId]);
 
   // Keyboard: Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo
   useEffect(() => {
@@ -2419,6 +2434,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 return (
                   <div
                     key={scene.id}
+                    data-timeline-scene={scene.id}
                     className={cn(
                       "absolute flex items-center rounded-lg text-sm font-medium transition-all cursor-move",
                       isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15"
@@ -2543,6 +2559,34 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       className="absolute right-0 top-0 bottom-0 w-2 md:w-3 cursor-ew-resize bg-white/20 hover:bg-white/40 rounded-r-lg transition-colors backdrop-blur-sm"
                       title="Trim end (drag)"
                     />
+                    
+                    {/* Inline Delete Confirmation */}
+                    {pendingDeleteSceneId === scene.id && (
+                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-50">
+                        <div className="text-white text-xs font-mono flex items-center gap-2">
+                          <span>Delete?</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteScene(scene.id, true);
+                              setPendingDeleteSceneId(null);
+                            }}
+                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-[10px] font-bold"
+                          >
+                            Y
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingDeleteSceneId(null);
+                            }}
+                            className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-[10px] font-bold"
+                          >
+                            N
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2839,7 +2883,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           </button>
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
           <button
-            onClick={() => handleDeleteScene(contextMenu.sceneId, true)}
+            onClick={() => {
+              handleDeleteScene(contextMenu.sceneId, false); // Show confirmation
+              setContextMenu(null); // Close menu
+            }}
             disabled={isDeletionBusy}
             className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left text-red-600 dark:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

@@ -29,6 +29,7 @@ export const generateScene = protectedProcedure
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
       audioUrls: z.array(z.string()).optional(),
+      sceneUrls: z.array(z.string()).optional(), // Scene IDs that were attached/dragged into chat
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
       useGitHub: z.boolean().optional(), // Explicit GitHub component search mode
     }).optional(),
@@ -259,6 +260,7 @@ export const generateScene = protectedProcedure
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
           audioUrls: userContext?.audioUrls,
+          sceneUrls: userContext?.sceneUrls, // Pass attached scene IDs to orchestrator
           modelOverride: userContext?.modelOverride,
           useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
           githubConnected,

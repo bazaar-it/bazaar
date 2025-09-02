@@ -1,3 +1,4 @@
+// src/config/prompts/active/code-generator.ts
 /**
  * Universal Code Generator Prompt
  * Used by: src/tools/add/add_helpers/CodeGeneratorNEW.ts
@@ -282,6 +283,13 @@ ANIMATION AND CSS ESSENTIALS
   fontFamily: "Inter" // or "DM Sans", "Playfair Display", etc.
   fontWeight: "700" // use string values for weights
 
+
+⸻
+
+HARD PROHIBITIONS (ABSOLUTE)
+• NEVER use import, require, or dynamic import. Do not import from 'react', 'remotion', or any other module.
+• Use ONLY the ALLOWED WINDOW GLOBALS below for all APIs.
+• Always export the component as the single default export. Do NOT assign to window.__REMOTION_COMPONENT, and do NOT use module.exports or named exports.
 
 ⸻
 

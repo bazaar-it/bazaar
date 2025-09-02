@@ -16,35 +16,9 @@ function preprocessComponentCode(code: string, componentId: string): string {
   const fixes: string[] = [];
   let processedCode = code;
   
-  // Fix React imports that might be causing issues
-  if (/import\s+([a-z])\s+from\s*["']react["']/.exec(processedCode)) {
-    processedCode = processedCode.replace(/import\s+([a-z])\s+from\s*["']react["']/g, 'import React from "react"');
-    fixes.push('Fixed single-letter React import');
-  }
-  
-  // Fix namespace imports
-  if (/import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s*["']react["']/.exec(processedCode)) {
-    processedCode = processedCode.replace(
-      /import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s*["']react["']/g, 
-      'import React from "react"'
-    );
-    fixes.push('Fixed namespace React import');
-  }
-  
-  // Fix naked destructuring imports (import { useState } from 'react')
-  if (/import\s*\{[^}]*\}\s*from\s*["']react["']/.exec(processedCode)) {
-    processedCode = processedCode.replace(
-      /import\s*\{\s*([^}]*)\s*\}\s*from\s*["']react["']/g,
-      'import React, {$1} from "react"'
-    );
-    fixes.push('Fixed naked destructuring imports');
-  }
-  
-  // Fix invalid ES module syntax
-  processedCode = processedCode.replace(
-    /import\s+React\s+from\s*["']react["']\s*;?\s*import\s+\{/g, 
-    'import React, {'
-  );
+  // REMOVED: All React import "fixing" that was corrupting valid code
+  // The LLM generates code using window.React which works correctly in browser
+  // We were breaking working code by trying to "fix" it
   
   // REMOVED: Import injection that causes browser crashes
   // Browsers cannot resolve bare module specifiers like 'remotion'
@@ -552,68 +526,9 @@ if (typeof window !== 'undefined') {
       apiRouteLogger.debug(componentId, `Added auto-registration for component: ${mainComponentName}`);
     }
     
-    // 6. If we don't have explicit registration or a detected component name,
-    // add a fallback mechanism that tries to find any React component in the global scope
-    if (!hasRemotionRegistration && !codeInfo.mainComponent) {
-      // Add a fallback global component detection mechanism
-      const fallbackCode = `
-// Fallback component detection for Remotion
-(function detectAndRegisterComponent() {
-  if (typeof window === 'undefined') return;
-  
-  console.log('[Component ${componentId}] Running fallback component detection');
-  
-  // Component already registered - nothing to do
-  if (window.__REMOTION_COMPONENT) {
-    console.log('[Component ${componentId}] Component already registered, skipping fallback detection');
-    return;
-  }
-  
-  // Look for likely component functions in the global scope
-  const componentCandidates = Object.keys(window).filter(key => {
-    // Skip known non-component globals
-    if (['React', 'Remotion', 'document', 'window', 'location'].includes(key)) return false;
-    
-    // Component names typically start with capital letter
-    if (!/^[A-Z]/.test(key)) return false;
-    
-    // Must be a function
-    return typeof window[key] === 'function';
-  });
-  
-  console.log('[Component ${componentId}] Found ' + componentCandidates.length + ' potential component candidates');
-  
-  if (componentCandidates.length > 0) {
-    // First try to find a component with Scene or Component in the name
-    const bestCandidate = componentCandidates.find(c => 
-      c.includes('Scene') || c.includes('Component')
-    ) || componentCandidates[0];
-    
-    console.log('[Component ${componentId}] Auto-registering component ' + bestCandidate + ' to window.__REMOTION_COMPONENT');
-    window.__REMOTION_COMPONENT = window[bestCandidate];
-  } else {
-    console.warn('[Component ${componentId}] No component candidates found in global scope');
-    // Create a simple fallback component in case no component is found
-    window.__REMOTION_COMPONENT = (props) => {
-      const React = window.React;
-      const { AbsoluteFill } = window.Remotion || {};
-      
-      return React.createElement(
-        AbsoluteFill || 'div',
-        { style: { background: '#f44336', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' } },
-        React.createElement('div', { style: { textAlign: 'center' } }, [
-          React.createElement('h2', { key: 'title' }, 'Component Error'),
-          React.createElement('p', { key: 'message' }, 'Failed to find a valid component. Check browser console for details.'),
-          React.createElement('pre', { key: 'id', style: { fontSize: '12px' } }, '${componentId}')
-        ])
-      );
-    };
-  }
-})();
-`;
-      jsContent += fallbackCode;
-      apiRouteLogger.debug(componentId, "Added fallback component detection mechanism");
-    }
+    // REMOVED: Dangerous window scanning that could grab wrong globals
+    // This was causing Date, Array, and other built-ins to be treated as components
+    // If a component doesn't export properly, it should fail clearly rather than guess
     
     // 7. Add ESM export for compatibility with useRemoteComponent
     // This allows both side-effect registration AND module import patterns to work
@@ -628,10 +543,17 @@ if (typeof window !== 'undefined') {
     `;
     
     // 8. Return the enhanced component code with proper content type
-    const headers = {
-      'Content-Type': 'application/javascript',
-      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+    // Cache successful components for better performance
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/javascript'
     };
+    
+    // Cache successful components with valid outputUrl
+    if (job.status === 'complete' && job.outputUrl) {
+      headers['Cache-Control'] = 'public, max-age=300, stale-while-revalidate=600'; // Cache for 5 min, stale for 10 min
+    } else {
+      headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'; // Don't cache errors/pending
+    }
     
     return new NextResponse(finalJs, { status: 200, headers });
     

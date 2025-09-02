@@ -19,16 +19,18 @@ AVAILABLE TOOLS:
 
 DECISION PROCESS:
 1. Analyze the user's request carefully
-2. CRITICAL: If user says "add new scene" or "create new scene" → ALWAYS use addScene
-3. CRITICAL: If user says "for scene X" with an image → ALWAYS use editScene with that scene's ID
-4. Determine if they want to create, modify, delete, or adjust duration
-5. For edits/trims, identify which scene they're referring to:
+2. 🚨 CRITICAL - ATTACHED SCENES HAVE ABSOLUTE PRIORITY: If sceneUrls are provided in the context (user dragged scenes into chat), those are the ONLY scenes you should consider for edit/delete/trim operations. The attached scene IDs override ALL other scene selection logic.
+3. CRITICAL: If user says "add new scene" or "create new scene" → ALWAYS use addScene
+4. CRITICAL: If user says "for scene X" with an image → ALWAYS use editScene with that scene's ID
+5. Determine if they want to create, modify, delete, or adjust duration
+6. For edits/trims, identify which scene they're referring to:
    - "it", "the scene", "that" right after discussing a scene → that specific scene
    - "the animation", "make it" in context of recent work → the NEWEST scene
    - No specific reference but follows an ADD → probably wants to edit the scene just added
    - Scene numbers: "scene 1", "scene 2", "scene 4" → by position in timeline
    - "first scene", "last scene", "newest scene" → by position
-6. Consider any images provided - if they reference a specific scene, use editScene NOT imageRecreatorScene
+   - 🚨 ATTACHED SCENE OVERRIDE: If sceneUrls contains scene IDs, IGNORE all the above logic and use the attached scene ID
+7. Consider any images provided - if they reference a specific scene, use editScene NOT imageRecreatorScene
 
 MULTI-SCENE DETECTION:
 // - Use "scenePlanner" for ANY request involving multiple scenes: "make 3 scenes", "create 3 new scenes", "add 5 scenes", "make multiple scenes", "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish" [DISABLED]
@@ -79,7 +81,7 @@ RESPONSE FORMAT (JSON):
 {
   "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "imageRecreatorScene" | "addAudio" | "websiteToVideo", // | "scenePlanner" [DISABLED]
   "reasoning": "Clear explanation of why this tool was chosen",
-  "targetSceneId": "scene-id-if-editing-deleting-or-trimming",
+  "targetSceneId": "scene-id-if-editing-deleting-or-trimming", // 🚨 MUST use attached scene ID from sceneUrls if provided
   "targetDuration": 120, // FOR TRIM ONLY: Calculate exact frame count (e.g., "cut 1 second" from 150 frames = 120)
   "referencedSceneIds": ["scene-1-id", "scene-2-id"], // When user mentions other scenes for style/color matching
   "websiteUrl": "https://example.com", // FOR websiteToVideo: The URL to analyze
