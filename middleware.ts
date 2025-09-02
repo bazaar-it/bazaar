@@ -41,8 +41,8 @@ export async function middleware(request: NextRequest) {
     
     // Redirect authenticated users from homepage if not intentional
     if (!intentionalLanding) {
-      console.log('[Middleware] Authenticated user detected, redirecting to /projects/new');
-      return NextResponse.redirect(new URL('/projects/new', request.url));
+      console.log('[Middleware] Authenticated user detected, redirecting to /projects/quick-create');
+      return NextResponse.redirect(new URL('/projects/quick-create', request.url));
     }
   }
   

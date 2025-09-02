@@ -5,6 +5,64 @@ import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequen
 // Import CSS fonts - works in both local and Lambda without cancelRender() errors
 import './fonts.css';
 
+// Error Boundary Component for Scene Isolation
+class SceneErrorBoundary extends React.Component<
+  { children: React.ReactNode; sceneId: string; sceneName: string; index: number },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error(`[SceneErrorBoundary] Scene ${this.props.index} (${this.props.sceneName}) crashed:`, {
+      sceneId: this.props.sceneId,
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Error placeholder that matches video dimensions
+      return (
+        <AbsoluteFill style={{ 
+          backgroundColor: '#0f0f0f', 
+          color: '#ff6b6b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.9 }}>⚠️</div>
+          <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>Scene Error</div>
+          <div style={{ fontSize: 18, opacity: 0.7, marginBottom: 16 }}>
+            {this.props.sceneName || `Scene ${this.props.index + 1}`}
+          </div>
+          <div style={{ 
+            fontSize: 14, 
+            opacity: 0.5, 
+            maxWidth: '60%', 
+            textAlign: 'center',
+            lineHeight: 1.5
+          }}>
+            {this.state.error?.message || 'This scene could not be rendered'}
+          </div>
+        </AbsoluteFill>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Fonts are loaded via CSS @import in fonts.css
 // This works in both local and Lambda without cancelRender() errors
 
@@ -311,7 +369,13 @@ export const VideoComposition: React.FC<{
         from={cumulativeStart}
         durationInFrames={dbDuration}
       >
-        <DynamicScene scene={{...scene, duration: dbDuration}} index={index} width={width} height={height} />
+        <SceneErrorBoundary 
+          sceneId={scene.id} 
+          sceneName={scene.name || `Scene ${index + 1}`}
+          index={index}
+        >
+          <DynamicScene scene={{...scene, duration: dbDuration}} index={index} width={width} height={height} />
+        </SceneErrorBoundary>
       </Sequence>
     );
     

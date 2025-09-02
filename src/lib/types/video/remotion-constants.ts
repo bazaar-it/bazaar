@@ -4,6 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from "zod";
 import type { InputProps } from "./input-props";
 
+// Video format type used across the application
+export type VideoFormat = 'landscape' | 'portrait' | 'square';
+
 export const COMP_NAME = "MyComp";
 
 export const CompositionProps = z.object({
@@ -27,7 +30,7 @@ export const defaultDemoProps: z.infer<typeof DemoTimelineProps> = {
 };
 
 // Function to generate default project props with a welcome scene
-export function createDefaultProjectProps(format: 'landscape' | 'portrait' | 'square' = 'landscape'): InputProps {
+export function createDefaultProjectProps(format: VideoFormat = 'landscape'): InputProps {
   const welcomeSceneId = uuidv4();
   
   // Define dimensions based on format
