@@ -1303,6 +1303,9 @@ export default function ChatPanelG({
         setGenerationPhase('generating');
         
         try {
+          // Extract scene IDs from selectedScenes
+          const attachedSceneIds = selectedScenes.map(s => s.id);
+          
           const result = await generateSceneMutation.mutateAsync({
             projectId,
             userMessage,
@@ -1310,6 +1313,7 @@ export default function ChatPanelG({
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
               audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
+              sceneUrls: attachedSceneIds.length > 0 ? attachedSceneIds : undefined, // Pass attached scene IDs
               modelOverride: modelOverride,
               useGitHub: useGitHub,
             },
