@@ -17,6 +17,7 @@ const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
   // Additional icon sets found in codebase
   'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(m => m.default || m),
   heroicons: () => import('@iconify-json/heroicons/icons.json').then(m => m.default || m),
+  healthicons: () => import('@iconify-json/healthicons/icons.json').then(m => m.default || m),
   bi: () => import('@iconify-json/bi/icons.json').then(m => m.default || m),
   codicon: () => import('@iconify-json/codicon/icons.json').then(m => m.default || m),
   devicon: () => import('@iconify-json/devicon/icons.json').then(m => m.default || m),
@@ -31,49 +32,133 @@ const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
 // Cache loaded icon sets to avoid reloading
 const loadedSets: Record<string, Promise<IconifyJSON>> = {};
 
+// Cache for fetched SVGs from API (expires after 1 hour)
+const svgCache: Map<string, { svg: { attributes: Record<string, string>, body: string }, timestamp: number }> = new Map();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
 /**
- * Build inline SVG from icon name
- * @param iconName - Icon name in format "prefix:name" (e.g., "mdi:heart")
- * @returns Object with SVG attributes and body HTML, or null if not found
+ * Fetch icon from Iconify API as fallback
+ * Supports ALL 200,000+ icons without local packages
  */
-export async function buildInlineSVG(iconName: string): Promise<{ attributes: Record<string, string>, body: string } | null> {
+async function fetchIconFromAPI(iconName: string): Promise<{ attributes: Record<string, string>, body: string } | null> {
+  // Check cache first
+  const cached = svgCache.get(iconName);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`[Icon Loader] Using cached SVG for ${iconName}`);
+    return cached.svg;
+  }
+  
+  const [prefix, name] = iconName.split(':');
+  
+  try {
+    console.log(`[Icon Loader] Fetching ${iconName} from API...`);
+    const response = await fetch(`https://api.iconify.design/${prefix}/${name}.svg`);
+    
+    if (!response.ok) {
+      console.warn(`[Icon Loader] API returned ${response.status} for ${iconName}`);
+      return null;
+    }
+
+    const svgText = await response.text();
+    
+    // Parse SVG to extract attributes and body
+    const viewBoxMatch = svgText.match(/viewBox="([^"]+)"/);
+    const bodyMatch = svgText.match(/<svg[^>]*>(.*)<\/svg>/s);
+    
+    if (!bodyMatch) {
+      console.warn(`[Icon Loader] Invalid SVG from API for ${iconName}`);
+      return null;
+    }
+
+    const result = {
+      attributes: {
+        viewBox: viewBoxMatch?.[1] || '0 0 24 24',
+        width: '1em',
+        height: '1em',
+        fill: 'currentColor'
+      },
+      body: bodyMatch[1] || ''
+    };
+    
+    // Cache the result
+    svgCache.set(iconName, { svg: result, timestamp: Date.now() });
+    console.log(`[Icon Loader] Cached SVG for ${iconName}`);
+    
+    return result;
+  } catch (error) {
+    console.error(`[Icon Loader] API fetch failed for ${iconName}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get fallback placeholder icon
+ * Used when icon cannot be loaded from anywhere
+ */
+function getFallbackIcon(iconName: string): { attributes: Record<string, string>, body: string } {
+  console.warn(`[Icon Loader] Using fallback for ${iconName}`);
+  return {
+    attributes: {
+      viewBox: '0 0 24 24',
+      width: '1em',
+      height: '1em',
+      fill: 'currentColor'
+    },
+    // Question mark circle as fallback
+    body: `<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">?</text>`
+  };
+}
+
+/**
+ * Build inline SVG from icon name - with fallback chain
+ * @param iconName - Icon name in format "prefix:name" (e.g., "mdi:heart")
+ * @returns Object with SVG attributes and body HTML, NEVER null
+ */
+export async function buildInlineSVG(iconName: string): Promise<{ attributes: Record<string, string>, body: string }> {
   const [prefix, name] = iconName.split(':');
   
   if (!prefix || !name) {
     console.warn(`[Icon Loader] Invalid icon name: ${iconName}`);
-    return null;
+    return getFallbackIcon(iconName);
   }
 
-  // Load the icon set if not already loading
+  // Try local packages first
   if (!loadedSets[prefix]) {
     const loader = iconSetLoaders[prefix];
-    if (!loader) {
-      console.warn(`[Icon Loader] Unknown icon set: ${prefix}`);
-      return null;
+    if (loader) {
+      loadedSets[prefix] = loader();
     }
-    loadedSets[prefix] = loader();
   }
 
-  try {
-    const iconSet = await loadedSets[prefix];
-    const iconData = getIconData(iconSet, name);
-    
-    if (!iconData) {
-      console.warn(`[Icon Loader] Icon not found: ${iconName}`);
-      return null;
+  // Try to load from local package
+  if (loadedSets[prefix]) {
+    try {
+      const iconSet = await loadedSets[prefix];
+      const iconData = getIconData(iconSet, name);
+      
+      if (iconData) {
+        // Convert icon data to SVG
+        const svg = iconToSVG(iconData, { width: '1em', height: '1em' });
+        
+        // Make IDs unique to prevent conflicts
+        const safeBody = replaceIDs(svg.body, `${prefix}-${name}-${Date.now()}-`);
+        
+        console.log(`[Icon Loader] Loaded ${iconName} from local package`);
+        return { attributes: svg.attributes, body: safeBody };
+      }
+    } catch (error) {
+      console.warn(`[Icon Loader] Local package failed for ${iconName}:`, error);
     }
-
-    // Convert icon data to SVG
-    const svg = iconToSVG(iconData, { width: '1em', height: '1em' });
-    
-    // Make IDs unique to prevent conflicts when multiple instances are rendered
-    const safeBody = replaceIDs(svg.body, `${prefix}-${name}-${Date.now()}-`);
-    
-    return { attributes: svg.attributes, body: safeBody };
-  } catch (error) {
-    console.error(`[Icon Loader] Error loading ${iconName}:`, error);
-    return null;
   }
+
+  // Try API as fallback
+  const apiIcon = await fetchIconFromAPI(iconName);
+  if (apiIcon) {
+    return apiIcon;
+  }
+
+  // Last resort: return fallback (never returns null)
+  return getFallbackIcon(iconName);
 }
 
 /**
@@ -83,29 +168,21 @@ export async function buildInlineSVG(iconName: string): Promise<{ attributes: Re
  */
 export async function preloadIcons(iconNames: string[]): Promise<Map<string, { attributes: Record<string, string>, body: string }>> {
   const iconMap = new Map();
-  const missing: string[] = [];
   
   // Load all icons in parallel for better performance
   const results = await Promise.all(
     iconNames.map(async (name) => {
-      const svg = await buildInlineSVG(name);
+      const svg = await buildInlineSVG(name); // Never returns null now
       return { name, svg };
     })
   );
   
-  // Build the map - only add successfully loaded icons
+  // Build the map - all icons will have a value (fallback at minimum)
   for (const { name, svg } of results) {
-    if (svg) {
-      iconMap.set(name, svg);
-    } else {
-      missing.push(name);
-    }
+    iconMap.set(name, svg);
   }
   
-  console.log(`[Icon Loader] Successfully loaded ${iconMap.size} of ${iconNames.length} icons`);
-  if (missing.length > 0) {
-    console.warn(`[Icon Loader] Missing icons: ${missing.join(', ')}`);
-  }
+  console.log(`[Icon Loader] Loaded ${iconMap.size} icons (with fallbacks where needed)`);
   
   return iconMap;
 }

@@ -12,6 +12,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { Badge } from "~/components/ui/badge";
 import { api } from "~/trpc/react";
 import { useParams } from "next/navigation";
+import { getIconSetAvailability, getIconSetBadge } from "~/lib/icons/icon-sets";
 import {
   Tooltip,
   TooltipContent,
@@ -339,17 +340,25 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
                   <div className="grid grid-cols-2 gap-1">
                     {filteredCollectionEntries.map(([prefix, meta]) => {
                       const checked = selectedPrefixes.includes(prefix);
+                      const availability = getIconSetAvailability(prefix);
+                      const badge = getIconSetBadge(availability);
                       return (
                         <button
                           key={prefix}
                           onClick={() => togglePrefix(prefix)}
                           className={`flex items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-muted ${checked ? "bg-muted" : ""}`}
+                          title={badge.tooltip}
                         >
                           <div className={`shrink-0 h-4 w-4 border rounded-sm flex items-center justify-center ${checked ? "bg-primary text-primary-foreground" : ""}`}>
                             {checked && <Check className="h-3 w-3" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="font-mono text-xs opacity-70 truncate">{prefix}</div>
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono text-xs opacity-70 truncate">{prefix}</span>
+                              <span className={`text-[10px] px-1 py-0 rounded-full ${badge.color}`}>
+                                {badge.label}
+                              </span>
+                            </div>
                             <div className="text-sm truncate">{meta.name}</div>
                           </div>
                         </button>
@@ -368,18 +377,30 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
          <div className="flex flex-wrap items-center gap-2">
            {selectedPrefixes
              .slice(0, showAllBadges ? undefined : maxVisibleBadges)
-             .map((p) => (
-               <Badge key={p} variant="secondary" className="font-mono flex items-center gap-1 text-xs">
-                 {p}
-                 <button
-                   onClick={() => removePrefix(p)}
-                   className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
-                   title="Remove from selection"
+             .map((p) => {
+               const availability = getIconSetAvailability(p);
+               const badge = getIconSetBadge(availability);
+               return (
+                 <Badge 
+                   key={p} 
+                   variant="secondary" 
+                   className="font-mono flex items-center gap-1 text-xs"
+                   title={badge.tooltip}
                  >
-                   <X className="h-3 w-3" />
-                 </button>
-               </Badge>
-             ))}
+                   <span className={`text-[10px] ${availability === 'local' ? 'text-green-600' : 'text-blue-600'}`}>
+                     {availability === 'local' ? '✓' : '☁'}
+                   </span>
+                   {p}
+                   <button
+                     onClick={() => removePrefix(p)}
+                     className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                     title="Remove from selection"
+                   >
+                     <X className="h-3 w-3" />
+                   </button>
+                 </Badge>
+               );
+             })}
            {selectedPrefixes.length > maxVisibleBadges && (
              <Button
                variant="ghost"

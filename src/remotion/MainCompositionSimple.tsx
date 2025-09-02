@@ -1,7 +1,7 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile } from "remotion";
 // Import CSS fonts - works in both local and Lambda without cancelRender() errors
 import './fonts.css';
 
@@ -120,6 +120,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       console.log(`[DynamicScene] After export conversion, executableCode starts with:`, executableCode.substring(0, 200));
       
       // Create a component factory function
+      // The Function constructor returns the value of the last expression
       const createComponent = new Function(
         'React',
         'AbsoluteFill',
@@ -139,7 +140,6 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         'Video',
         'staticFile',
         `
-        try {
           // Additional Remotion components that might be used
           const Series = Sequence; // Alias for compatibility
           
@@ -147,6 +147,24 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           const window = {
             RemotionGoogleFonts: {
               loadFont: () => {} // No-op for Lambda
+            },
+            // Runtime fallback for Iconify when server-side inlining did not replace icons
+            IconifyIcon: (props) => {
+              const style = props?.style || {};
+              return React.createElement(
+                'span',
+                {
+                  ...props,
+                  style: {
+                    display: 'inline-block',
+                    width: style.width || '1em',
+                    height: style.height || '1em',
+                    background: style.background || 'currentColor',
+                    borderRadius: style.borderRadius || '2px',
+                    ...style,
+                  }
+                }
+              );
             },
             // IconifyIcon should already be replaced with SVGs during preprocessing
             BazaarAvatars: {
@@ -161,47 +179,9 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Override useVideoConfig to use actual dimensions
           const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
+          // Execute the scene code
+          // The last expression (Component;) will be returned
           ${executableCode}
-          
-          // Log what we're trying to execute
-          console.log('[ComponentFactory] Executing scene code...');
-          
-          // Try to return the component (it should be assigned to Component variable)
-          if (typeof Component !== 'undefined') {
-            console.log('[ComponentFactory] Found Component variable');
-            return Component;
-          }
-          
-          // Fallback attempts
-          if (typeof Scene !== 'undefined') {
-            console.log('[ComponentFactory] Found Scene variable');
-            return Scene;
-          }
-          if (typeof MyScene !== 'undefined') {
-            console.log('[ComponentFactory] Found MyScene variable');
-            return MyScene;
-          }
-          
-          // Check if we have any function that looks like a component
-          const localVars = Object.getOwnPropertyNames(this || {});
-          console.log('[ComponentFactory] Available local variables:', localVars);
-          
-          // Try to find a component-like function
-          for (const varName of localVars) {
-            if ((varName.includes('Scene') || varName.includes('Component')) && typeof this[varName] === 'function') {
-              console.log('[ComponentFactory] Found component via variable scan:', varName);
-              return this[varName];
-            }
-          }
-          
-          console.error('[ComponentFactory] No component found in scene code');
-          console.error('[ComponentFactory] typeof Component:', typeof Component);
-          console.error('[ComponentFactory] typeof Scene:', typeof Scene);
-          return null;
-        } catch (e) {
-          console.error('Scene component factory error:', e);
-          return null;
-        }
         `
       );
       
@@ -230,11 +210,15 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       );
       
       if (ComponentFactory) {
-        console.log(`[DynamicScene] Successfully created component factory for scene ${index}`);
-        // Render the component
-        return <ComponentFactory />;
-      } else {
-        console.error(`[DynamicScene] Component factory returned null/undefined for scene ${index}`);
+        if (typeof ComponentFactory === 'function') {
+          console.log(`[DynamicScene] Rendering function component for scene ${index}`);
+          return <ComponentFactory />;
+        }
+        if (React.isValidElement(ComponentFactory)) {
+          console.log(`[DynamicScene] Rendering element component for scene ${index}`);
+          return ComponentFactory;
+        }
+        console.error(`[DynamicScene] Unsupported component value for scene ${index}:`, ComponentFactory);
       }
     } catch (error) {
       console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
@@ -314,15 +298,11 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
-  // Fonts are loaded via CSS - no delay needed
-  const [handle] = React.useState(() => delayRender());
-  
+  // Fonts are loaded via CSS - no blocking needed
   React.useEffect(() => {
     console.log(`[VideoComposition] Using CSS-loaded fonts from fonts.css`);
     console.log(`[VideoComposition] Project dimensions: ${width}x${height}`);
-    // Continue immediately - CSS fonts are loaded automatically
-    continueRender(handle);
-  }, [handle, width, height]);
+  }, [width, height]);
   
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {

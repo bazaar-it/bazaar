@@ -68,9 +68,15 @@ export async function replaceIconifyIcons(code: string): Promise<string> {
     return code;
   }
   
-  // Preload all icons
+  // Preload all icons (with fallback chain)
   const iconMap = await preloadIcons(Array.from(iconNames));
   console.log(`[Icon Replace] Preloaded ${iconMap.size} icons`);
+  
+  // Check if we got all icons
+  const missingIcons = Array.from(iconNames).filter(name => !iconMap.has(name));
+  if (missingIcons.length > 0) {
+    console.warn(`[Icon Replace] Some icons could not be loaded (will use fallbacks):`, missingIcons);
+  }
   
   // For dynamic icons, inject a runtime map at the top of the code
   const needsRuntimeMap = code.includes('iconData[') || code.includes('icons[');
@@ -96,9 +102,17 @@ function __InlineIcon(props) {
   const def = __INLINE_ICON_MAP[icon];
   
   if (!def) {
-    // No fallback - just return null for missing icons
-    console.warn('[InlineIcon] Icon not found:', icon);
-    return null;
+    // Return a placeholder SVG for missing icons
+    console.warn('[InlineIcon] Icon not found, using placeholder:', icon);
+    return React.createElement('svg', {
+      viewBox: '0 0 24 24',
+      width: '1em',
+      height: '1em',
+      fill: 'currentColor',
+      dangerouslySetInnerHTML: {
+        __html: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">?</text>'
+      }
+    });
   }
   
   // Merge props with icon attributes
@@ -116,6 +130,8 @@ function __InlineIcon(props) {
   
   return React.createElement('svg', svgProps);
 }
+// Lowercase alias to handle any casing variations
+const __inlineIcon = __InlineIcon;
 `;
     
     // Prepend the runtime code
@@ -365,5 +381,53 @@ function __InlineIcon(props) {
   }
   
   console.log(`[Icon Replace] Transformation complete. Icons inlined: ${hasTransformations || needsRuntimeMap}`);
+  
+  // POST-VALIDATION: Ensure no window.IconifyIcon remains
+  const remainingIcons = transformedCode.match(/window\.IconifyIcon/g);
+  const bareIconifyRefs = transformedCode.match(/\bIconifyIcon\b/g);
+  
+  if ((remainingIcons && remainingIcons.length > 0) || (bareIconifyRefs && bareIconifyRefs.length > 0)) {
+    console.error(`[Icon Replace] CRITICAL: Found IconifyIcon references that weren't replaced by AST`);
+    console.error(`[Icon Replace] window.IconifyIcon: ${remainingIcons?.length || 0}, bare IconifyIcon: ${bareIconifyRefs?.length || 0}`);
+    
+    // We need to inject the runtime code if it wasn't already added
+    if (!transformedCode.includes('function __InlineIcon')) {
+      console.warn('[Icon Replace] Injecting runtime __InlineIcon function for force-replaced references');
+      
+      // Inject a minimal __InlineIcon that just returns a placeholder
+      const minimalRuntime = `
+// Minimal runtime for IconifyIcon references that weren't caught by AST
+function __InlineIcon(props) {
+  const { icon, ...rest } = props;
+  console.warn('[Runtime] Rendering placeholder for uncaught icon:', icon);
+  return React.createElement('svg', {
+    width: rest.width || 24,
+    height: rest.height || 24,
+    viewBox: '0 0 24 24',
+    fill: 'currentColor',
+    ...rest
+  }, React.createElement('rect', { x: 4, y: 4, width: 16, height: 16, rx: 2 }));
+}
+// Lowercase alias to handle any casing variations
+const __inlineIcon = __InlineIcon;
+`;
+      transformedCode = minimalRuntime + '\n' + transformedCode;
+    }
+    
+    // Standardize all references to use __InlineIcon (capital I)
+    transformedCode = transformedCode.replace(/window\.IconifyIcon/g, '__InlineIcon');
+    transformedCode = transformedCode.replace(/\bIconifyIcon\b/g, '__InlineIcon');
+    console.warn('[Icon Replace] Force-replaced remaining IconifyIcon references with runtime fallback');
+  }
+  
+  // Final validation
+  const finalCheck = transformedCode.match(/window\.IconifyIcon|\bIconifyIcon\b/g);
+  if (finalCheck && finalCheck.length > 0) {
+    console.error('[Icon Replace] POST-VALIDATION FAILED: IconifyIcon references still present after all replacements!');
+    throw new Error('Failed to replace all IconifyIcon references - export will fail');
+  } else {
+    console.log('[Icon Replace] ✅ POST-VALIDATION PASSED: No IconifyIcon references remaining');
+  }
+  
   return transformedCode;
 }
