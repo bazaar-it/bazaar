@@ -85,8 +85,8 @@ export default function ChatPanelG({
   userId,
 }: ChatPanelGProps) {
   // Get draft message and attachments from store to persist across panel changes
-  const draftMessage = useVideoState((state) => state.getDraftMessage(projectId));
-  const draftAttachments = useVideoState((state) => state.getDraftAttachments(projectId));
+  const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
+  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments || []);
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
   const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
   const clearDraft = useVideoState((state) => state.clearDraft);
@@ -1759,7 +1759,6 @@ export default function ChatPanelG({
               {/* Icon previews */}
               {selectedIcons.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
-                  <span className="text-xs text-gray-500 mr-2">Icons:</span>
                   {selectedIcons.map((iconName, index) => (
                     <div 
                       key={`${iconName}-${index}`}
