@@ -9,12 +9,12 @@ import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import HomePageTextAnimation from "~/components/HomePageTextAnimation";
-import TemplateScrollGrid from "~/components/TemplateScrollGrid";
+import HomePageTemplatesSection from "~/components/marketing/HomePageTemplatesSection";
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
 
-export function Homepage() {
+export default function Homepage() {
   const { data: session, status } = useSession();
   const [showVideo, setShowVideo] = useState(false);
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
@@ -134,7 +134,7 @@ export function Homepage() {
             </div>
           )}
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
-            No credit card required
+            Start with 100 free prompts
           </p>
         </div>
         
@@ -220,27 +220,18 @@ export function Homepage() {
           </div>
         </section>
 
-        {/* 25 Templates Section */}
-        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
-          <div className="text-center mb-8 md:mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              50+ Templates to Start From
-            </h2>
-          </div>
-          
-          {/* Template Scroll Grid with Real Images */}
-          <div className="mb-12">
-            <TemplateScrollGrid />
-          </div>
-          
-          {/* Start Creating Now Button */}
-          <div className="text-center mt-5">
+        {/* Homepage Templates Section */}
+        <HomePageTemplatesSection marketingHeaderRef={marketingHeaderRef} />
+
+        {/* Start Creating Now CTA Section */}
+        <section className="mt-8 py-16 px-4">
+          <div className="max-w-4xl mx-auto text-center">
             {status === "authenticated" && session?.user ? (
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <NewProjectButton
                   enableQuickCreate={true}
                   disableFormatDropdown={false}
-                  className="!inline-block !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="!block !w-full !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
                   variant="ghost"
                 >
                   Start Creating Now
@@ -250,7 +241,7 @@ export function Homepage() {
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <button
                   onClick={async () => {
-                    if (tryForFreeLoading) return; // Prevent multiple clicks
+                    if (tryForFreeLoading) return;
                     setTryForFreeLoading(true);
                     try {
                       await handleTryForFree();
@@ -259,7 +250,7 @@ export function Homepage() {
                     }
                   }}
                   disabled={tryForFreeLoading}
-                  className="cursor-pointer inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="cursor-pointer inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors disabled:opacity-50"
                 >
                   {tryForFreeLoading ? (
                     <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

@@ -5,7 +5,7 @@
  */
 
 import crypto from 'crypto';
-import { LRUCache } from 'lru-cache';
+import LRUCache from 'lru-cache';
 
 interface CachedCode {
   tsxCode: string;

@@ -9,7 +9,7 @@ import GoogleSignIn, { templateConfig as googleSignInConfig } from './GoogleSign
 import Coding, { templateConfig as codingConfig } from './Coding';
 import GradientText, { templateConfig as gradientTextConfig } from './GradientText';
 import DualScreenApp, { templateConfig as dualScreenAppConfig } from './DualScreenApp';
-import AudioAnimation, { templateConfig as audioAnimationConfig } from './AudioAnimation';
+import GoogleSearch, { templateConfig as googleSearchConfig } from './GoogleSearch';
 import PromptUI, { templateConfig as promptUIConfig } from './PromptUI';
 import DotDotDot, { templateConfig as dotDotDotConfig } from './DotDotDot';
 import Placeholders, { templateConfig as placeholdersConfig } from './Placeholders';
@@ -26,7 +26,7 @@ import TeslaStockGraph, { templateConfig as teslaStockGraphConfig } from './Tesl
 import CursorClickScene, { templateConfig as cursorClickSceneConfig } from './CursorClickScene';
 import MobileApp, { templateConfig as mobileAppConfig } from './MobileApp';
 import AppDownload, { templateConfig as appDownloadConfig } from './AppDownload';
-import Keyboard, { templateConfig as keyboardConfig } from './Keyboard';
+import AnimatedHistogram, { templateConfig as animatedHistogramConfig } from './AnimatedHistogram';
 import DarkBGGradientText, { templateConfig as darkBGGradientTextConfig } from './DarkBGGradientText';
 import Today1Percent, { templateConfig as today1PercentConfig } from './Today1Percent';
 import FlareBG, { templateConfig as flareBGConfig } from './FlareBG';
@@ -89,10 +89,10 @@ export const TEMPLATES: TemplateDefinition[] = [
   
   
   
-  // 3. Today 1%
+  // 3. Mobile App
   addFormatSupport({
-    ...today1PercentConfig,
-    component: Today1Percent,
+    ...mobileAppConfig,
+    component: MobileApp,
   }),
   
   // 4. App Download
@@ -101,10 +101,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: AppDownload,
   }),
   
-  // 6. Audio Animation
+  // 6. Google Search
   addFormatSupport({
-    ...audioAnimationConfig,
-    component: AudioAnimation,
+    ...googleSearchConfig,
+    component: GoogleSearch,
   }),
   
   // 7. Gradient Text
@@ -113,22 +113,22 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: GradientText,
   }),
   
-  // 8. Dark BG Gradient Text
+  // 8. Dual Screen App
   addFormatSupport({
-    ...darkBGGradientTextConfig,
-    component: DarkBGGradientText,
+    ...dualScreenAppConfig,
+    component: DualScreenApp,
   }),
   
-  // 9. Keyboard Animation
+  // 9. Animated Histogram
   addFormatSupport({
-    ...keyboardConfig,
-    component: Keyboard,
+    ...animatedHistogramConfig,
+    component: AnimatedHistogram,
   }),
 
   // 🎨 BACKGROUND GRADIENTS
   addFormatSupport({
-    ...flareBGConfig,
-    component: FlareBG,
+    ...googleSignInConfig,
+    component: GoogleSignIn,
   }),
   addFormatSupport({
     ...pinkBGConfig,
@@ -205,10 +205,6 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: DrawOn,
   }),
   addFormatSupport({
-    ...dualScreenAppConfig,
-    component: DualScreenApp,
-  }),
-  addFormatSupport({
     ...fadeInConfig,
     component: FadeIn,
   }),
@@ -217,20 +213,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: GitHubSignIn,
   }),
   addFormatSupport({
-    ...googleSignInConfig,
-    component: GoogleSignIn,
-  }),
-  addFormatSupport({
     ...highlightSweepConfig,
     component: HighlightSweep,
   }),
   addFormatSupport({
     ...knowsCodeConfig,
     component: KnowsCode,
-  }),
-  addFormatSupport({
-    ...mobileAppConfig,
-    component: MobileApp,
   }),
   addFormatSupport({
     ...morphingTextConfig,

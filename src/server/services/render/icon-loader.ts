@@ -6,27 +6,19 @@ import type { IconifyJSON } from '@iconify/types';
 import { getIconData, iconToSVG, replaceIDs } from '@iconify/utils';
 
 // Lazy load icon sets to avoid loading unused sets
+// Only include packages that are actually installed in node_modules
 const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
-  // Primary icon sets
+  // Verified installed packages
   mdi: () => import('@iconify-json/mdi/icons.json').then(m => m.default || m),
   'material-symbols': () => import('@iconify-json/material-symbols/icons.json').then(m => m.default || m),
   lucide: () => import('@iconify-json/lucide/icons.json').then(m => m.default || m),
   carbon: () => import('@iconify-json/carbon/icons.json').then(m => m.default || m),
   tabler: () => import('@iconify-json/tabler/icons.json').then(m => m.default || m),
-  
-  // Additional icon sets found in codebase
   'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(m => m.default || m),
   heroicons: () => import('@iconify-json/heroicons/icons.json').then(m => m.default || m),
-  healthicons: () => import('@iconify-json/healthicons/icons.json').then(m => m.default || m),
-  bi: () => import('@iconify-json/bi/icons.json').then(m => m.default || m),
-  codicon: () => import('@iconify-json/codicon/icons.json').then(m => m.default || m),
-  devicon: () => import('@iconify-json/devicon/icons.json').then(m => m.default || m),
-  'fa6-brands': () => import('@iconify-json/fa6-brands/icons.json').then(m => m.default || m),
-  'fa6-solid': () => import('@iconify-json/fa6-solid/icons.json').then(m => m.default || m),
-  logos: () => import('@iconify-json/logos/icons.json').then(m => m.default || m),
-  octicon: () => import('@iconify-json/octicon/icons.json').then(m => m.default || m),
-  'akar-icons': () => import('@iconify-json/akar-icons/icons.json').then(m => m.default || m),
-  ic: () => import('@iconify-json/ic/icons.json').then(m => m.default || m),
+  
+  // Note: Other icon sets will be loaded via API fallback automatically
+  // This includes: bi, codicon, devicon, fa6-brands, fa6-solid, logos, octicon, akar-icons, ic, healthicons
 };
 
 // Cache loaded icon sets to avoid reloading
