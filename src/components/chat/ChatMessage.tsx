@@ -2,12 +2,32 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Undo2, Play, Pause, Volume2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
 import { useVideoState } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
 import { SceneAttachments } from './SceneAttachments';
 import { api } from '~/trpc/react';
 import { toast } from 'sonner';
+
+// Function to extract icons and clean text
+const extractIconsFromMessage = (text: string) => {
+  const iconPattern = /\[icon:([^\]]+)\]/g;
+  const icons: string[] = [];
+  let match;
+
+  // Extract all icons
+  while ((match = iconPattern.exec(text)) !== null) {
+    if (match[1]) {
+      icons.push(match[1]);
+    }
+  }
+  
+  // Remove icon markers from text
+  const cleanText = text.replace(iconPattern, '').trim();
+  
+  return { icons, cleanText };
+};
 
 // Audio Player Component
 interface AudioPlayerProps {
@@ -551,28 +571,57 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
 
             
 
-            <div className="text-sm leading-relaxed">
-              {/* Always use GeneratingMessage component for "Generating code" messages */}
-              {!message.isUser && 
-               message.message.toLowerCase().includes("generating code") && 
-               message.status === "pending" ? (
-                <GeneratingMessage />
-              ) : isSceneSuccess ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600">✅</span>
-                  <span className="font-medium">{message.message}</span>
-                </div>
-              ) : (
-                <span>
-                  {message.message
-                    .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
-                    .replace(/<!-- SCENE_PLAN_OVERVIEW:.*? -->/, '')
-                    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
-                    .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
-                    .trim()}
-                </span>
-              )}
-            </div>
+            {/* Extract icons from message for top positioning */}
+            {(() => {
+              const processedMessage = message.message
+                .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
+                .replace(/<!-- SCENE_PLAN_OVERVIEW:.*? -->/, '')
+                .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
+                .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
+                .trim();
+              
+              const { icons, cleanText } = extractIconsFromMessage(processedMessage);
+              
+              return (
+                <>
+                  {/* Show icons at the top like images */}
+                  {icons.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex flex-wrap gap-2">
+                        {icons.map((iconName: string, index: number) => (
+                          <div 
+                            key={`icon-${index}`} 
+                            className="bg-gray-50 rounded-lg p-3 border"
+                          >
+                            <Icon 
+                              icon={iconName} 
+                              className="w-8 h-8 text-gray-700"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show text content */}
+                  <div className="text-sm leading-relaxed">
+                    {/* Always use GeneratingMessage component for "Generating code" messages */}
+                    {!message.isUser && 
+                     cleanText.toLowerCase().includes("generating code") && 
+                     message.status === "pending" ? (
+                      <GeneratingMessage />
+                    ) : isSceneSuccess ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600">✅</span>
+                        <span className="font-medium">{cleanText}</span>
+                      </div>
+                    ) : (
+                      <div>{cleanText}</div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
             
             {/* Scene plan overview actions (Create All button) */}
             {isScenePlanOverview && scenePlanOverviewData && (
