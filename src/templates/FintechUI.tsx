@@ -128,7 +128,7 @@ const ProgressBar = ({ percentage, color, delay = 0 }: { percentage: number; col
   );
 };
 
-const MyWalletSection = ({ opacity }: { opacity: number }) => {
+const MyWalletSection = () => {
   const frame = useCurrentFrame();
   const anim = (delay: number) => spring({ frame: frame - delay, fps: 30, config: { damping: 12, stiffness: 200 } });
   

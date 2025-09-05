@@ -1,4 +1,5 @@
 // src/templates/GradientText.tsx
+import React from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function GradientText() {
