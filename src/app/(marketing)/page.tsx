@@ -2,7 +2,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { headers } from "next/headers";
-import { Homepage } from "~/app/(marketing)/home/page";
+import Homepage from "~/app/(marketing)/home/page";
 
 export default async function HomePage() {
   const session = await auth();

@@ -1,17 +1,15 @@
 // Import templates that have been updated to the new format
 import KnowsCode, { templateConfig as knowsCodeConfig } from './KnowsCode';
-import { type VideoFormat } from '../app/projects/new/FormatSelector';
+import { type VideoFormat } from '../lib/types/video/remotion-constants';
 import { templateFormatAnalysis } from './analyze-templates';
 import PromptIntro, { templateConfig as promptIntroConfig } from './PromptIntro';
-import FintechUI, { templateConfig as fintechConfig } from './FintechUI';
-import GrowthGraph, { templateConfig as growthConfig } from './GrowthGraph';
 import AppleSignIn, { templateConfig as appleSignInConfig } from './AppleSignIn';
 import GitHubSignIn, { templateConfig as githubSignInConfig } from './GitHubSignIn';
 import GoogleSignIn, { templateConfig as googleSignInConfig } from './GoogleSignIn';
 import Coding, { templateConfig as codingConfig } from './Coding';
 import GradientText, { templateConfig as gradientTextConfig } from './GradientText';
 import DualScreenApp, { templateConfig as dualScreenAppConfig } from './DualScreenApp';
-import AudioAnimation, { templateConfig as audioAnimationConfig } from './AudioAnimation';
+import GoogleSearch, { templateConfig as googleSearchConfig } from './GoogleSearch';
 import PromptUI, { templateConfig as promptUIConfig } from './PromptUI';
 import DotDotDot, { templateConfig as dotDotDotConfig } from './DotDotDot';
 import Placeholders, { templateConfig as placeholdersConfig } from './Placeholders';
@@ -28,8 +26,7 @@ import TeslaStockGraph, { templateConfig as teslaStockGraphConfig } from './Tesl
 import CursorClickScene, { templateConfig as cursorClickSceneConfig } from './CursorClickScene';
 import MobileApp, { templateConfig as mobileAppConfig } from './MobileApp';
 import AppDownload, { templateConfig as appDownloadConfig } from './AppDownload';
-import AppJiggle, { templateConfig as appJiggleConfig } from './AppJiggle';
-import Keyboard, { templateConfig as keyboardConfig } from './Keyboard';
+import AnimatedHistogram, { templateConfig as animatedHistogramConfig } from './AnimatedHistogram';
 import DarkBGGradientText, { templateConfig as darkBGGradientTextConfig } from './DarkBGGradientText';
 import Today1Percent, { templateConfig as today1PercentConfig } from './Today1Percent';
 import FlareBG, { templateConfig as flareBGConfig } from './FlareBG';
@@ -88,11 +85,14 @@ export const TEMPLATES: TemplateDefinition[] = [
     ...promptUIConfig,
     component: PromptUI,
   }),
+
   
-  // 3. Today 1%
+  
+  
+  // 3. Mobile App
   addFormatSupport({
-    ...today1PercentConfig,
-    component: Today1Percent,
+    ...mobileAppConfig,
+    component: MobileApp,
   }),
   
   // 4. App Download
@@ -101,16 +101,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: AppDownload,
   }),
   
-  // 5. App Jiggle
+  // 6. Google Search
   addFormatSupport({
-    ...appJiggleConfig,
-    component: AppJiggle,
-  }),
-  
-  // 6. Audio Animation
-  addFormatSupport({
-    ...audioAnimationConfig,
-    component: AudioAnimation,
+    ...googleSearchConfig,
+    component: GoogleSearch,
   }),
   
   // 7. Gradient Text
@@ -119,22 +113,22 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: GradientText,
   }),
   
-  // 8. Dark BG Gradient Text
+  // 8. Dual Screen App
   addFormatSupport({
-    ...darkBGGradientTextConfig,
-    component: DarkBGGradientText,
+    ...dualScreenAppConfig,
+    component: DualScreenApp,
   }),
   
-  // 9. Keyboard Animation
+  // 9. Animated Histogram
   addFormatSupport({
-    ...keyboardConfig,
-    component: Keyboard,
+    ...animatedHistogramConfig,
+    component: AnimatedHistogram,
   }),
 
   // 🎨 BACKGROUND GRADIENTS
   addFormatSupport({
-    ...flareBGConfig,
-    component: FlareBG,
+    ...googleSignInConfig,
+    component: GoogleSignIn,
   }),
   addFormatSupport({
     ...pinkBGConfig,
@@ -211,28 +205,12 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: DrawOn,
   }),
   addFormatSupport({
-    ...dualScreenAppConfig,
-    component: DualScreenApp,
-  }),
-  addFormatSupport({
     ...fadeInConfig,
     component: FadeIn,
   }),
   addFormatSupport({
-    ...fintechConfig,
-    component: FintechUI,
-  }),
-  addFormatSupport({
     ...githubSignInConfig,
     component: GitHubSignIn,
-  }),
-  addFormatSupport({
-    ...googleSignInConfig,
-    component: GoogleSignIn,
-  }),
-  addFormatSupport({
-    ...growthConfig,
-    component: GrowthGraph,
   }),
   addFormatSupport({
     ...highlightSweepConfig,
@@ -241,10 +219,6 @@ export const TEMPLATES: TemplateDefinition[] = [
   addFormatSupport({
     ...knowsCodeConfig,
     component: KnowsCode,
-  }),
-  addFormatSupport({
-    ...mobileAppConfig,
-    component: MobileApp,
   }),
   addFormatSupport({
     ...morphingTextConfig,
