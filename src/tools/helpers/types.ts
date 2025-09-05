@@ -178,21 +178,6 @@ export interface TrimToolOutput extends BaseToolOutput {
 // NEW SPECIALIZED TOOL TYPES
 
 
-export interface ImageRecreatorToolInput extends BaseToolInput {
-  imageUrls: string[];
-  recreationType?: 'full' | 'segment';
-  projectFormat?: {
-    format: 'landscape' | 'portrait' | 'square';
-    width: number;
-    height: number;
-  };
-}
-
-export interface ImageRecreatorToolOutput extends BaseToolOutput {
-  tsxCode: string;
-  name: string;
-  duration: number;
-}
 
 export interface ScenePlannerToolInput extends BaseToolInput {
   storyboardSoFar?: Array<{

@@ -43,6 +43,7 @@ import CoolSkyBG, { templateConfig as coolSkyBGConfig } from './CoolSkyBG';
 import VibeyBG, { templateConfig as vibeyBGConfig } from './VibeyBG';
 import VibesBG, { templateConfig as vibesBGConfig } from './VibesBG';
 import FastText, { templateConfig as fastTextConfig } from './FastText';
+import ProductHuntWelcome, { templateConfig as productHuntWelcomeConfig } from './ProductHuntWelcome';
 
 export interface TemplateDefinition {
   id: string;
@@ -86,16 +87,19 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: PromptUI,
   }),
 
+  // 3. Product Hunt Welcome
+  addFormatSupport({
+    ...productHuntWelcomeConfig,
+    component: ProductHuntWelcome,
+  }),
   
-  
-  
-  // 3. Today 1%
+  // 4. Today 1%
   addFormatSupport({
     ...today1PercentConfig,
     component: Today1Percent,
   }),
   
-  // 4. App Download
+  // 5. App Download
   addFormatSupport({
     ...appDownloadConfig,
     component: AppDownload,

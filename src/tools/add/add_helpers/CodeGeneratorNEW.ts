@@ -92,6 +92,9 @@ export class UnifiedCodeProcessor {
       cleanCode = cleanCode.replace(/(const\s*{[^}]*)(\bcurrentFrame\b)([^}]*}\s*=\s*window\.Remotion)/g, '$1useCurrentFrame$3');
     }
     
+    // Normalize icons/imports before further checks (avoid runtime crashes)
+    cleanCode = this.normalizeGeneratedCode(cleanCode);
+
     // Ensure single export default only (original CodeGeneratorService logic)
     if (cleanCode.includes('export default function') && cleanCode.includes('function SingleSceneComposition')) {
       const sceneMatch = cleanCode.match(/const \{[^}]+\} = window\.Remotion;[\s\S]*?export default function \w+\(\)[^{]*\{[\s\S]*?\n\}/);
@@ -128,6 +131,33 @@ export class UnifiedCodeProcessor {
       duration: durationAnalysis.frames,
       reasoning: `Generated ${toolName.toLowerCase()} scene: "${name}" (${durationAnalysis.frames} frames)`,
     };
+  }
+
+  /**
+   * Normalize LLM-generated TSX for our runtime:
+   * - Strip imports we provide via globals
+   * - Canonicalize Iconify usage to window.IconifyIcon
+   */
+  private normalizeGeneratedCode(code: string): string {
+    let out = code;
+    // Remove import lines for globals
+    out = out
+      .replace(/^[\t ]*import\s+[^;]*from\s+['"]react['"];?\s*$/gmi, '')
+      .replace(/^[\t ]*import\s+[^;]*from\s+['"]react-dom['"];?\s*$/gmi, '')
+      .replace(/^[\t ]*import\s+[^;]*from\s+['"]remotion['"];?\s*$/gmi, '')
+      .replace(/^[\t ]*import\s+[^;]*from\s+['"]@iconify\/react['"];?\s*$/gmi, '')
+      .replace(/^[\t ]*import\s+['"][^'"]+\.css['"];?\s*$/gmi, '');
+
+    // JSX Iconify normalization
+    out = out
+      .replace(/<\s*IconifyIcon(\s|>)/g, '<window.IconifyIcon$1')
+      .replace(/<\s*Icon(\s|>)/g, '<window.IconifyIcon$1');
+    // createElement Iconify normalization
+    out = out
+      .replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(window.IconifyIcon,')
+      .replace(/React\.createElement\(\s*Icon\s*,/g, 'React.createElement(window.IconifyIcon,');
+
+    return out;
   }
 
   /**
@@ -895,29 +925,24 @@ export default function ${input.functionName}() {
       
       const userPrompt = `USER REQUEST: "${input.userPrompt}"
 
-UPLOADED IMAGES TO USE IN YOUR CODE:
+UPLOADED IMAGES:
 ${imageUrlsList}
 
-CRITICAL: You MUST use these exact image URLs in your generated code with the Remotion <Img> component.
-DO NOT generate placeholder URLs or use stock photos - use the URLs provided above.
+ANALYZE THE USER'S INTENT:
+1. If they want to USE/EMBED the image: Display it with <Img src="URL">
+2. If they want to RECREATE the design: Build it from scratch with React components
+3. If unclear: Default to embedding the image
 
-IMPORTANT: Study the image to understand the visual style, colors, typography, and design elements. Then create MOTION GRAPHICS that showcase these elements one at a time in sequence.
-
-DO NOT recreate the static layout exactly. Instead:
-1. Identify the key elements (headline, subtext, buttons, icons, etc.)
-2. Show each element individually in temporal sequence
-3. Match the visual style (colors, fonts, spacing) but follow motion graphics principles
-4. Use conditional rendering: {frame >= X && frame < Y && (element)}
+BASED ON YOUR ANALYSIS OF THE USER'S REQUEST AND IMAGE:
+- Determine whether to embed the actual image or recreate its design
+- Create appropriate motion graphics following that intent
+- Always use the exact URLs provided when embedding
+- Match visual style when recreating
 
 ANIMATION REQUIREMENTS:
-- First element: Choose from slide-in, fade+scale, or type-on
-- Second element: MUST use a different animation than the first
-- Status/alerts: Add continuous pulse or glow AFTER entrance
-- Buttons/CTAs: Use directional entrance (slide up/down) with bounce
-- Data/maps: Progressive reveal with path animations
-- VARY YOUR ANIMATIONS - don't just spring scale everything
-
-Transform the static design into sequential storytelling.`;
+- Use varied animations (not just scale)
+- Create temporal sequences
+- Follow motion graphics principles`;
       
       // Use centralized vision API with proper message format
       const visionMessagesContent: AIMessage['content'] = [

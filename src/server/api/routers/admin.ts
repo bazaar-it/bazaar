@@ -37,6 +37,76 @@ const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 });
 
 export const adminRouter = createTRPCRouter({
+  // List projects with filters - admin only
+  listProjects: adminOnlyProcedure
+    .input(z.object({
+      search: z.string().optional(),
+      userId: z.string().optional(),
+      updatedFrom: z.date().optional(),
+      updatedTo: z.date().optional(),
+      limit: z.number().min(1).max(100).default(20),
+      offset: z.number().min(0).default(0),
+      sortBy: z.enum(['updatedAt', 'createdAt']).default('updatedAt'),
+      sortDir: z.enum(['asc', 'desc']).default('desc'),
+    }))
+    .query(async ({ input }) => {
+      const conditions: any[] = [];
+      if (input.userId) conditions.push(eq(projects.userId, input.userId));
+      if (input.updatedFrom) conditions.push(gte(projects.updatedAt, input.updatedFrom));
+      if (input.updatedTo) conditions.push(lte(projects.updatedAt, input.updatedTo));
+      if (input.search && input.search.trim().length > 0) {
+        conditions.push(like(projects.title, `%${input.search.trim()}%`));
+      }
+
+      const whereExpr = conditions.length > 0 ? and(...conditions) : undefined;
+      const orderExpr = input.sortBy === 'updatedAt'
+        ? (input.sortDir === 'asc' ? asc(projects.updatedAt) : desc(projects.updatedAt))
+        : (input.sortDir === 'asc' ? asc(projects.createdAt) : desc(projects.createdAt));
+
+      const rows = await db
+        .select({
+          id: projects.id,
+          title: projects.title,
+          userId: projects.userId,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
+          totalMessages: sql<number>`COUNT(DISTINCT ${messages.id})`.as('total_messages'),
+        })
+        .from(projects)
+        .leftJoin(scenes, eq(projects.id, scenes.projectId))
+        .leftJoin(messages, eq(projects.id, messages.projectId))
+        .where(whereExpr as any)
+        .groupBy(projects.id, projects.title, projects.userId, projects.createdAt, projects.updatedAt)
+        .orderBy(orderExpr)
+        .limit(input.limit)
+        .offset(input.offset);
+
+      const totalCountRes = await db
+        .select({ count: count() })
+        .from(projects)
+        .where(whereExpr as any);
+
+      // Resolve user names/emails in one go
+      const userIds = Array.from(new Set(rows.map(r => r.userId)));
+      const userMap: Record<string, { id: string; name: string | null; email: string } > = {};
+      if (userIds.length) {
+        const userRows = await db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds));
+        for (const u of userRows) userMap[u.id] = u;
+      }
+
+      return {
+        projects: rows.map(r => ({
+          ...r,
+          user: userMap[r.userId] || null,
+        })),
+        totalCount: totalCountRes[0]?.count || 0,
+        hasMore: input.offset + input.limit < (totalCountRes[0]?.count || 0),
+      };
+    }),
   // Get Brand Profile for a project - admin only
   getBrandProfile: adminOnlyProcedure
     .input(z.object({ projectId: z.string() }))
@@ -3533,7 +3603,7 @@ export default function GeneratedScene() {
       };
     }),
 
-  // Search for a project by ID - admin only (uses production database)
+  // Search for a project by ID - admin only (uses current schema)
   searchProject: adminOnlyProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
@@ -3541,12 +3611,11 @@ export default function GeneratedScene() {
       const projectData = await db
         .select({
           id: projects.id,
-          name: projects.name,
+          title: projects.title,
           createdAt: projects.createdAt,
           updatedAt: projects.updatedAt,
           userId: projects.userId,
-          music: projects.music,
-          shareLink: projects.shareLink,
+          audio: projects.audio,
         })
         .from(projects)
         .where(eq(projects.id, input.projectId))
@@ -3561,16 +3630,16 @@ export default function GeneratedScene() {
 
       const project = projectData[0];
 
-      // Parse music field if it's a string
-      let parsedMusic = null;
-      if (project.music) {
+      // Parse audio field if it's a string (back-compat)
+      let parsedAudio: any = null;
+      if (project.audio) {
         try {
-          parsedMusic = typeof project.music === 'string' 
-            ? JSON.parse(project.music) 
-            : project.music;
+          parsedAudio = typeof project.audio === 'string'
+            ? JSON.parse(project.audio as unknown as string)
+            : project.audio;
         } catch (e) {
-          console.warn('Failed to parse music field:', e);
-          parsedMusic = null;
+          console.warn('Failed to parse audio field:', e);
+          parsedAudio = null;
         }
       }
 
@@ -3599,9 +3668,14 @@ export default function GeneratedScene() {
         .where(eq(messages.projectId, project.id))
         .orderBy(asc(messages.createdAt));
 
+      // Map to legacy-friendly shape expected by the admin UI
       return {
-        ...project,
-        music: parsedMusic,
+        id: project.id,
+        name: project.title, // UI expects `name`
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        userId: project.userId,
+        music: parsedAudio, // UI expects `music`
         user: userData[0] || null,
         scenes: projectScenes,
         messages: projectMessages,
@@ -3634,9 +3708,10 @@ export default function GeneratedScene() {
         .insert(projects)
         .values({
           id: newProjectId,
-          name: `${original.name} (Copy)`,
+          title: `${(original as any).title ?? (original as any).name ?? 'Untitled'} (Copy)`,
           userId: ctx.session.user.id, // Admin becomes the owner
-          music: original.music,
+          props: (original as any).props,
+          audio: (original as any).audio ?? (original as any).music ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
@@ -3662,7 +3737,8 @@ export default function GeneratedScene() {
           id: crypto.randomUUID(),
           projectId: newProjectId,
           name: scene.name,
-          code: scene.code,
+          tsxCode: (scene as any).tsxCode ?? (scene as any).code ?? '',
+          props: (scene as any).props ?? null,
           duration: scene.duration,
           order: scene.order,
           createdAt: new Date(),

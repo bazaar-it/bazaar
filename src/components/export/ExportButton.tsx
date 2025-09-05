@@ -1,3 +1,4 @@
+// src/components/export/ExportButton.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -11,7 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { ExportOptionsModal, type ExportFormat, type ExportQuality } from "./ExportOptionsModal";
+import type { ExportFormat, ExportQuality } from "./ExportOptionsModal";
 import { generateCleanFilename } from "~/lib/utils/filename";
 import { useVideoState } from "~/stores/videoState";
 
@@ -25,10 +26,9 @@ interface ExportButtonProps {
 export function ExportButton({ projectId, projectTitle = "video", className, size = "sm" }: ExportButtonProps) {
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [currentFormat, setCurrentFormat] = useState<ExportFormat>('mp4');
-  const [currentQuality, setCurrentQuality] = useState<ExportQuality>('high');
+  const currentFormat: ExportFormat = 'mp4';
+  const currentQuality: ExportQuality = 'high';
   
   // Get audio and playback speed from Zustand state
   const projectAudio = useVideoState(state => state.projects[projectId]?.audio);
@@ -62,6 +62,53 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
   
   const trackDownload = api.render.trackDownload.useMutation();
 
+  const buildSupportEmail = () => {
+    const issues = (status as any)?.warnings as Array<{ type: string; message: string; sceneId?: string; data?: any }> | undefined;
+    const lines: string[] = [];
+    lines.push(`Subject: Export failed on project "${projectTitle}"`);
+    lines.push("");
+    lines.push(`Hi Markus,`);
+    lines.push("");
+    lines.push(`An export failed.`);
+    lines.push(`- Project: ${projectTitle}`);
+    lines.push(`- Render ID: ${renderId ?? 'unknown'}`);
+    lines.push(`- Error: ${(status as any)?.error ?? 'Unknown error'}`);
+    if (issues && issues.length > 0) {
+      lines.push("- Issues:");
+      for (const w of issues) {
+        const scenePart = w.sceneId ? ` [scene ${w.sceneId}]` : "";
+        lines.push(`  • ${w.type}${scenePart}: ${w.message}`);
+      }
+    }
+    lines.push("");
+    lines.push("If helpful, I can try a different element to avoid the failing one.");
+    lines.push("Thanks!");
+    return lines.join("\n");
+  };
+
+  const buildDegradedEmail = () => {
+    const issues = (status as any)?.warnings as Array<{ type: string; message: string; sceneId?: string; data?: any }> | undefined;
+    const lines: string[] = [];
+    lines.push(`Subject: Export degraded (fallbacks used) on project "${projectTitle}"`);
+    lines.push("");
+    lines.push(`Hi Markus,`);
+    lines.push("");
+    lines.push(`The export completed, but some elements used fallbacks.`);
+    lines.push(`- Project: ${projectTitle}`);
+    lines.push(`- Render ID: ${renderId ?? 'unknown'}`);
+    if (issues && issues.length > 0) {
+      lines.push("- Issues:");
+      for (const w of issues) {
+        const scenePart = w.sceneId ? ` [scene ${w.sceneId}]` : "";
+        lines.push(`  • ${w.type}${scenePart}: ${w.message}`);
+      }
+    }
+    lines.push("");
+    lines.push("I can try a different element if needed.");
+    lines.push("Thanks!");
+    return lines.join("\n");
+  };
+
   // Handle completion and auto-download
   useEffect(() => {
     console.log('[ExportButton] Status changed:', status);
@@ -72,6 +119,34 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
         toast.success("Render complete! Starting download...");
         setHasDownloaded(true);
         setDownloadUrl(status.outputUrl);
+        // Notify if fallbacks were used
+        const warns: any[] | undefined = (status as any)?.warnings;
+        if (Array.isArray(warns) && warns.length > 0) {
+          const body = buildDegradedEmail();
+          toast.info(
+            <div className="text-xs">
+              <div>Some elements were rendered with fallbacks.</div>
+              <div className="mt-1 flex gap-2">
+                <button
+                  className="px-2 py-1 rounded bg-gray-900 text-white"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(body);
+                      toast.success('Copied email body for markus@bazaar.it');
+                    } catch {
+                      const params = new URLSearchParams({ subject: `Export degraded: ${projectTitle}`, body });
+                      window.location.href = `mailto:markus@bazaar.it?${params.toString()}`;
+                    }
+                  }}
+                >
+                  Copy email to markus@bazaar.it
+                </button>
+              </div>
+            </div>,
+            { duration: 10000 }
+          );
+        }
         
         // Auto-download with improved approach
         (async () => {
@@ -110,23 +185,14 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     }
   }, [status?.status, status?.outputUrl, projectId, status?.error, renderId, trackDownload, hasDownloaded]);
 
-  const handleExport = (format: ExportFormat, quality: ExportQuality) => {
-    setShowExportModal(false);
-    setCurrentFormat(format);
-    setCurrentQuality(quality);
-    
-    console.log('[ExportButton] Starting render with playback speed:', playbackSpeed);
-    
+  const handleExportClick = () => {
+    console.log('[ExportButton] Starting render (mp4/high) with playback speed:', playbackSpeed);
     startRender.mutate({ 
       projectId,
-      format,
-      quality,
+      format: 'mp4',
+      quality: 'high',
       playbackSpeed,
     });
-  };
-
-  const handleExportClick = () => {
-    setShowExportModal(true);
   };
 
   // Completed state - show download button
@@ -236,6 +302,7 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
     const errorMessage = status.error || 'Render failed';
     const isNetworkError = errorMessage.includes('network error');
     const isFontError = errorMessage.includes('font') || errorMessage.includes('loadFont');
+    const warnings: any[] | undefined = (status as any)?.warnings;
     
     return (
       <div className="flex flex-col gap-2">
@@ -257,6 +324,13 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
             <p>{errorMessage}</p>
           )}
         </div>
+        {Array.isArray(warnings) && warnings.length > 0 && (
+          <div className="text-xs text-amber-600 max-w-xs">
+            <p>
+              Issues detected: {warnings.length}. You can copy a prefilled email to support.
+            </p>
+          </div>
+        )}
         <Button 
           variant="outline" 
           size="sm"
@@ -269,6 +343,29 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
           <RefreshCw className="mr-2 h-3 w-3" />
           Try Again
         </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              const body = buildSupportEmail();
+              try {
+                await navigator.clipboard.writeText(body);
+                toast.success("Copied email body for markus@bazaar.it");
+              } catch {
+                toast.info("Clipboard not available. Opening mail client...");
+                const params = new URLSearchParams({
+                  subject: `Export failed: ${projectTitle}`,
+                  body,
+                });
+                window.location.href = `mailto:markus@bazaar.it?${params.toString()}`;
+              }
+            }}
+          >
+            <AlertCircle className="mr-2 h-3 w-3" />
+            Copy email to markus@bazaar.it
+          </Button>
+        </div>
       </div>
     );
   }
@@ -357,12 +454,7 @@ export function ExportButton({ projectId, projectTitle = "video", className, siz
         )}
       </Button>
       
-      <ExportOptionsModal
-        open={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        onExport={handleExport}
-        isExporting={startRender.isPending}
-      />
+      {/* Options modal removed: always mp4/high via black button */}
     </>
   );
 }

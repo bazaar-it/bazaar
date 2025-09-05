@@ -112,6 +112,8 @@ export const shareRouter = createTRPCRouter({
                 columns: {
                   id: true,
                   tsxCode: true,
+                  jsCode: true,        // Include pre-compiled JS for faster loading
+                  jsCompiledAt: true,  // To check if compilation is fresh
                   duration: true,
                   name: true,
                   props: true,
@@ -153,7 +155,8 @@ export const shareRouter = createTRPCRouter({
           start: currentStart,
           duration: sceneDuration,
           data: {
-            code: dbScene.tsxCode, // Include the TSX code directly
+            code: dbScene.jsCode || dbScene.tsxCode, // Use pre-compiled JS if available, fallback to TSX
+            isPreCompiled: !!dbScene.jsCode,         // Flag to skip compilation on client
             name: dbScene.name || `Scene ${(dbScene.order ?? index) + 1}`,
             componentId: dbScene.id, // Use scene ID as component ID
             props: dbScene.props || {},

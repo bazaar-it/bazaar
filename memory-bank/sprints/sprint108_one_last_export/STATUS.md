@@ -2,9 +2,9 @@
 
 ## Date: 2025-09-02
 
-## Current Status: ⚠️ PARTIAL SUCCESS
+## Current Status: ✅ Exporting reliably with graceful degradations
 
-The export completes successfully but scenes are still showing fallback metadata instead of actual content.
+Exports complete; API icons inline or degrade to placeholders; dynamic icons resolved via runtime map. Scene isolation holds. We now need user‑visible notification + email payload.
 
 ## What's Working ✅
 
@@ -24,10 +24,11 @@ The export completes successfully but scenes are still showing fallback metadata
 - Video file is generated successfully
 - All 5 scenes are processed
 
-## What's Not Working ❌
+## Remaining Work
 
-### Scene Rendering Issue
-All scenes are showing fallback metadata instead of actual content.
+### User Notification
+- Show a post‑export summary of degradations (icons/placeholders, missing media, font substitutions)
+- Provide a “Copy email to markus@bazaar.it” with structured diagnostics
 
 #### Evidence from Logs:
 ```
@@ -39,10 +40,8 @@ hasReturnComponent: false
 
 The preprocessing correctly adds `Component;` as the last line (for Function constructor to return it), but the scenes are not rendering.
 
-## Root Cause Analysis
-
-### The Problem
-The Function constructor in `MainCompositionSimple.tsx` is not properly returning the Component.
+## Notes
+- Function constructor return issue fixed by explicit `return Component;` and site v3/v4 deploys.
 
 ### What We Tried
 1. ✅ Removed the `try-catch` block from inside the Function constructor body

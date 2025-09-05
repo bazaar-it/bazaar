@@ -198,6 +198,30 @@ export default function AppHeader({
     }
   );
 
+  const buildSupportEmail = () => {
+    const issues = (renderStatus as any)?.warnings as Array<{ type: string; message: string; sceneId?: string; data?: any }> | undefined;
+    const lines: string[] = [];
+    lines.push(`Subject: Export failed on project "${projectTitle || ''}"`);
+    lines.push("");
+    lines.push(`Hi Markus,`);
+    lines.push("");
+    lines.push(`An export failed.`);
+    lines.push(`- Project: ${projectTitle || ''}`);
+    lines.push(`- Render ID: ${renderId ?? 'unknown'}`);
+    lines.push(`- Error: ${renderStatus?.error ?? 'Unknown error'}`);
+    if (issues && issues.length > 0) {
+      lines.push("- Issues:");
+      for (const w of issues) {
+        const scenePart = w.sceneId ? ` [scene ${w.sceneId}]` : "";
+        lines.push(`  • ${w.type}${scenePart}: ${w.message}`);
+      }
+    }
+    lines.push("");
+    lines.push("If helpful, I can try a different element to avoid the failing one.");
+    lines.push("Thanks!");
+    return lines.join("\n");
+  };
+
   // Handle export completion - auto-download
   React.useEffect(() => {
     if (renderStatus?.status === 'completed' && renderId && renderStatus.outputUrl && !hasDownloaded) {
@@ -262,6 +286,35 @@ export default function AppHeader({
       quality: "high", // 1080p maps to "high"
     });
   };
+
+  React.useEffect(() => {
+    // If completed with warnings, show degradation notice with copy-to-email
+    if (renderStatus?.status === 'completed' && Array.isArray((renderStatus as any)?.warnings) && (renderStatus as any).warnings.length > 0) {
+      const body = buildSupportEmail();
+      toast.info(
+        <div className="text-xs">
+          <div>Export completed, but some elements used fallbacks.</div>
+          <div className="mt-1 flex gap-2">
+            <button
+              className="px-2 py-1 rounded bg-gray-900 text-white"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(body);
+                  toast.success('Copied email body for markus@bazaar.it');
+                } catch {
+                  const params = new URLSearchParams({ subject: `Export degraded: ${projectTitle || ''}`, body });
+                  window.location.href = `mailto:markus@bazaar.it?${params.toString()}`;
+                }
+              }}
+            >
+              Copy email to markus@bazaar.it
+            </button>
+          </div>
+        </div>,
+        { duration: 10000 }
+      );
+    }
+  }, [renderStatus?.status]);
 
   const handleRenameClick = () => {
     if (onRename && newTitle.trim()) {
@@ -387,34 +440,66 @@ export default function AppHeader({
             
             {/* Download button - MP4 1080p */}
             {(startRender.isPending || !!renderId) && renderStatus ? (
-              // Rendering state with visual progress bar
-              <div className="relative inline-flex overflow-hidden rounded-[15px]">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="relative gap-2 shadow-sm text-white border-0"
-                  style={{
-                    backgroundColor: 'rgb(107 114 128)', // gray-500
-                  }}
-                  disabled
-                >
-                  {/* Orange progress fill */}
-                  <div 
-                    className="absolute left-0 top-0 bottom-0 bg-orange-500"
-                    style={{
-                      width: `${renderStatus.progress || 0}%`,
-                      transition: 'width 0.5s ease-out',
-                      background: 'linear-gradient(90deg, rgb(251 146 60) 0%, rgb(249 115 22) 100%)'
+              renderStatus.status === 'failed' ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 rounded-[15px] shadow-sm border-red-300 text-red-600"
+                    disabled
+                  >
+                    <XIcon className="h-4 w-4" />
+                    Render Failed
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-2 rounded-[15px] shadow-sm"
+                    onClick={async () => {
+                      const body = buildSupportEmail();
+                      try {
+                        await navigator.clipboard.writeText(body);
+                        toast.success('Copied email body for markus@bazaar.it');
+                      } catch {
+                        const params = new URLSearchParams({ subject: `Export failed: ${projectTitle || ''}`, body });
+                        window.location.href = `mailto:markus@bazaar.it?${params.toString()}`;
+                      }
                     }}
-                  />
-                  
-                  {/* Button content - above the progress bar */}
-                  <span className="relative z-10 flex items-center">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="ml-2">Rendering {renderStatus.progress || 0}%</span>
-                  </span>
-                </Button>
-              </div>
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy email to markus@bazaar.it
+                  </Button>
+                </div>
+              ) : (
+                // Rendering state with visual progress bar
+                <div className="relative inline-flex overflow-hidden rounded-[15px]">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="relative gap-2 shadow-sm text-white border-0"
+                    style={{
+                      backgroundColor: 'rgb(107 114 128)', // gray-500
+                    }}
+                    disabled
+                  >
+                    {/* Orange progress fill */}
+                    <div 
+                      className="absolute left-0 top-0 bottom-0 bg-orange-500"
+                      style={{
+                        width: `${renderStatus.progress || 0}%`,
+                        transition: 'width 0.5s ease-out',
+                        background: 'linear-gradient(90deg, rgb(251 146 60) 0%, rgb(249 115 22) 100%)'
+                      }}
+                    />
+                    
+                    {/* Button content - above the progress bar */}
+                    <span className="relative z-10 flex items-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="ml-2">Rendering {renderStatus.progress || 0}%</span>
+                    </span>
+                  </Button>
+                </div>
+              )
             ) : (
               // Default state
               <Button

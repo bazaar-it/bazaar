@@ -15,13 +15,19 @@ export const getProjectScenes = protectedProcedure
     const { projectId } = input;
     const userId = ctx.session.user.id;
 
-    // Verify project ownership
-    const project = await db.query.projects.findFirst({
+    // Verify project access: owners or admins can access
+    let project = await db.query.projects.findFirst({
       where: and(
         eq(projects.id, projectId),
         eq(projects.userId, userId)
       ),
     });
+
+    if (!project && ctx.session.user.isAdmin) {
+      project = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+      });
+    }
 
     if (!project) {
       throw new Error("Project not found or access denied");

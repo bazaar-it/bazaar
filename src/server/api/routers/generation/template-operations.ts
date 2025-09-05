@@ -7,6 +7,8 @@ import { eq, and } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder } from "~/lib/api/response-helpers";
 import { generateTemplateSuffix } from "~/lib/utils/uniquifyTemplateCode";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
+import { randomUUID } from "crypto";
 
 
 /**
@@ -54,23 +56,44 @@ export const addTemplate = protectedProcedure
       const uniqueSuffix = generateTemplateSuffix();
       const sceneName = `${templateName}_${uniqueSuffix}`;
 
-      // 4. Get template code (no uniquification needed - scenes run in isolation)
+      // 4. Get template code
       const { templateCode } = input;
       
       console.log(`[${response.getRequestId()}] Using template with unique scene name suffix: ${uniqueSuffix}`);
 
-      // 5. Save template as a new scene
+      // 5. ALWAYS compile templates through sceneCompiler for conflict detection
+      // This ensures duplicate templates get auto-namespaced components
+      const newSceneId = randomUUID();
+      const compilationResult = await sceneCompiler.compileScene(templateCode, {
+        projectId,
+        sceneId: newSceneId,
+        existingScenes: existingScenes.map(s => ({ id: s.id, tsxCode: s.tsxCode, name: s.name }))
+      });
+      
+      // Log if conflicts were auto-fixed
+      if (compilationResult.conflicts && compilationResult.conflicts.length > 0) {
+        console.log(`[${response.getRequestId()}] Auto-fixed ${compilationResult.conflicts.length} conflicts in template:`, 
+          compilationResult.conflicts.map(c => `${c.originalName} → ${c.newName}`)
+        );
+      }
+      
+      // 6. Save template as a new scene with compiled JS
       console.log(`[${response.getRequestId()}] Saving template to database`, {
         name: sceneName,
         order: sceneOrder,
         duration: templateDuration,
         uniqueSuffix,
+        hasCompiledJS: compilationResult.success,
       });
 
       const [newScene] = await db.insert(scenes).values({
+        id: newSceneId,
         projectId,
         name: sceneName,
-        tsxCode: templateCode,
+        tsxCode: compilationResult.tsxCode, // Use potentially auto-fixed code
+        jsCode: compilationResult.jsCode,    // Always has a value (compiled or fallback)
+        jsCompiledAt: compilationResult.compiledAt,
+        compilationError: compilationResult.compilationError || null,
         duration: templateDuration,
         order: sceneOrder,
         props: {},
@@ -90,14 +113,14 @@ export const addTemplate = protectedProcedure
         uniqueSuffix,
       });
 
-      // 6. Clear welcome flag if this is the first scene
+      // 7. Clear welcome flag if this is the first scene
       if (project.isWelcome && existingScenes.length === 0) {
         await db.update(projects)
           .set({ isWelcome: false })
           .where(eq(projects.id, projectId));
       }
 
-      // 7. Track template usage for analytics
+      // 8. Track template usage for analytics
       // TODO: Uncomment when templateUsages table is created
       // await db.insert(templateUsages).values({
       //   templateId,
@@ -106,7 +129,7 @@ export const addTemplate = protectedProcedure
       //   sceneId: newScene.id,
       // });
 
-      // 8. Add chat message for context
+      // 9. Add chat message for context
       await messageService.createMessage({
         projectId,
         content: `Added ${templateName} template to scene ${sceneOrder + 1}`,

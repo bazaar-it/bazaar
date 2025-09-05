@@ -1,21 +1,89 @@
 # Sprint 108: One Last Export – Reliable Export Pipeline
 
 ## Goal
-Ship a rock-solid export experience where a single problematic icon or scene never breaks the whole render. Ensure all icons selected in the UI are either fully supported and inlined or safely degraded, and scenes are sandboxed so the rest of the video completes.
+Guarantee that whatever renders in the preview panel (fonts, icons, images, logos, videos, audio, animations) is rendered to MP4 reliably. Exports must not crash; if an element can’t be reproduced exactly, we degrade gracefully and clearly notify the user what was substituted, with a ready‑to‑send email to markus@bazaar.it containing the exact diagnostics.
 
 ## Why
-- A single unknown icon can trigger React #130 and break the entire export.
-- Users can browse far more icons in the UI than our renderer guarantees.
-- We need guaranteed inlining or graceful fallback, plus scene isolation.
+- Eliminate “export failed” friction. A single bad element must not break the whole render.
+- Keep creative freedom in preview while ensuring production‑grade reliability on export.
+- Provide explicit user feedback (what changed and why) with actionable next steps or contact.
 
 ## Scope
 - Hybrid icon inlining in preprocess (local packages → Iconify HTTP API → placeholder SVG)
 - Post-transform validation (no `window.IconifyIcon` remains)
-- Small runtime Iconify shim (last-resort safety)
-- Scene isolation verification (bad scene shows placeholder, others render)
-- UI gating/badging for icon sets vs export support
-- Remotion site redeploy and configuration alignment (REMOTION_SERVE_URL)
-- Basic caching of fetched SVGs
+- Scene isolation (bad scene shows placeholder; others render)
+- Caching (in‑memory TTL + R2 write‑through/read‑through)
+- Export‑time telemetry + render warnings per scene/element
+- User notification: post‑export summary (log‑only now), with copy‑to‑email payload
+- Remotion site alignment (only when remotion code changes)
+
+## Icon Pipeline Architecture (Expanded)
+
+High-level flow per scene at export time:
+
+1) Detect icon names
+   - Parse code; collect literals (icon="set:name") and heuristic arrays
+   - Preload these names ahead of AST transform
+
+2) Preload icons (three-tier)
+   - Tier 1: Local @iconify-json packages (fast path)
+   - Tier 2: Iconify HTTP API fetch (retry with backoff; 429-aware)
+   - Tier 3: Generate placeholder SVG (question-mark glyph)
+
+3) Transform code (AST)
+   - Inline literal icons to <svg ... dangerouslySetInnerHTML={...} />
+   - Replace dynamic icons with __InlineIcon and inject __INLINE_ICON_MAP when needed
+
+4) Post-validation (safety net)
+   - If any window.IconifyIcon or bare IconifyIcon survives:
+     - Inject runtime __InlineIcon (with aliases __inlineIcon/_InlineIcon)
+     - Force-replace remaining refs → __InlineIcon; re‑validate
+
+5) Scene isolation & runtime safety
+   - SceneErrorBoundary prevents one scene from breaking others
+   - Remotion runtime shim remains an optional last resort (site deploy only when needed)
+
+## API Fallback & Caching
+
+- Endpoint: Iconify API `https://api.iconify.design/{prefix}/{name}.svg`
+- Retry: exponential backoff (e.g. 250ms, 500ms, 1s; max 3 tries); respect 429 Retry-After
+- Timeouts: short backoff retries; on repeated failure → placeholder
+- Caching layers:
+  - In-memory TTL cache (key: set:name)
+  - R2 read‑through/write‑through cache (key: icons/{set}/{name}.svg)
+  - Optional warm‑cache step (off by default)
+
+## Operational Limits & Telemetry
+
+- Rate limiting: token-bucket per host (Iconify) to avoid 429 storms
+- Metrics (log‑only) per export:
+  - icons_requested/cached/api/placeholder
+  - r2 reads/hits/writes, api_retries, rate_limited
+  - per‑scene warnings collected during preprocess
+- Error budget: placeholder usage ≤ X% per export (configurable)
+
+## Failure Modes & Behavior
+
+- Local miss + API miss/timeout → placeholder SVG inlined
+- Any stray window.IconifyIcon after AST → inject runtime __InlineIcon + replace
+- Scene‑level error → SceneErrorBoundary, remaining scenes render
+- No export should fail solely due to icons/media/fonts
+
+## Acceptance Criteria (Expanded)
+
+- 0 React #130 errors from icons across 100 test exports
+- 100% replacement: no IconifyIcon references in final jsCode
+- Export completes with a mix of valid/invalid icons; placeholders appear where needed
+- Cache hit ratio improves on repeat exports of same icons
+- User sees a clear summary when degradations occur and can copy an email to support
+
+## Interlock with Sprint 106 (Server-Side Compilation)
+
+- Single Artifact Source: Sprint 106 compiles TSX→JS once and stores it alongside the scene. Sprint 108 consumes the same JS for export, minimizing preview/export drift.
+- Preprocess Alignment: The AST icon replacement and media safety transforms run on the render path but are designed to be deterministic over the compiled JS from Sprint 106.
+- Faster, More Predictable Export: With precompiled JS, export skips client/Sucrase paths, reducing failure points and making Sprint 108’s fallbacks the only moving parts.
+- Warnings Lifecycle: RenderWarnings generated by Sprint 108 attach to the export record and can be surfaced back into the editor that’s already using Sprint 106’s compiled artifact.
+- Future: Once Sprint 106 finalizes, some transforms can migrate earlier (at save-time), further reducing work during export and improving parity.
 
 ## Non-Goals
 - Full server-side compilation rollout (tracked in Sprint 106)

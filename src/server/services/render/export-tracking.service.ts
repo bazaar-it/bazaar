@@ -124,6 +124,24 @@ export class ExportTrackingService {
   }
 
   /**
+   * Merge metadata JSON for an export by renderId
+   */
+  static async updateExportMetadata(renderId: string, metadataPatch: Record<string, any>) {
+    try {
+      const [updated] = await db.update(exports)
+        .set({
+          metadata: sql`coalesce(${exports.metadata}, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb`
+        })
+        .where(eq(exports.renderId, renderId))
+        .returning();
+      return updated;
+    } catch (error) {
+      console.error('[ExportTracking] Failed to update export metadata:', error);
+      return null;
+    }
+  }
+
+  /**
    * Track when a user downloads an export
    */
   static async trackDownload(renderId: string, userAgent?: string, ipAddress?: string) {

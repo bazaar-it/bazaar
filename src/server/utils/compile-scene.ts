@@ -31,11 +31,18 @@ export function compileSceneToJS(tsxCode: string): CompilationResult {
 
   try {
     // Transform TSX to JS using Sucrase
-    const { code: jsCode } = transform(tsxCode, {
+    const { code: transformedCode } = transform(tsxCode, {
       transforms: ['typescript', 'jsx'],
       production: true,
       jsxRuntime: 'classic', // Use React.createElement
     });
+
+    // Remove export statements for Function constructor compatibility
+    // This allows the compiled JS to be executed directly in the browser
+    const jsCode = transformedCode
+      .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
+      .replace(/export\s+default\s+(\w+);?\s*/g, '')
+      .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;');
 
     // Validate the output has something
     if (!jsCode || jsCode.trim().length === 0) {
@@ -46,7 +53,7 @@ export function compileSceneToJS(tsxCode: string): CompilationResult {
     }
 
     // Check for common issues that might cause runtime problems
-    if (!jsCode.includes('export default') && !jsCode.includes('function')) {
+    if (!jsCode.includes('function')) {
       console.warn('[compileSceneToJS] Warning: Compiled code may not have a valid component');
     }
 

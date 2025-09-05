@@ -15,7 +15,7 @@ interface ShareVideoPlayerClientProps {
   setIsLooping: (value: boolean) => void;
 }
 
-const DynamicScene: React.FC<{ code: string; sceneProps: any }> = ({ code, sceneProps }) => {
+const DynamicScene: React.FC<{ code: string; sceneProps: any; isPreCompiled?: boolean }> = ({ code, sceneProps, isPreCompiled }) => {
     const [Component, setComponent] = useState<React.ComponentType<any> | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +30,8 @@ const DynamicScene: React.FC<{ code: string; sceneProps: any }> = ({ code, scene
             }
 
             try {
-                const transformedCode = transform(code, {
+                // Skip transformation if we already have compiled JS
+                const transformedCode = isPreCompiled ? code : transform(code, {
                     transforms: ['typescript', 'jsx'],
                     production: true,
                 }).code;
@@ -137,7 +138,11 @@ export default function ShareVideoPlayerClient({ inputProps, audio, isLooping, s
             startFrame += duration;
             return (
               <Sequence key={scene.id} from={from} durationInFrames={duration}>
-                <DynamicScene code={scene.data.code} sceneProps={scene.data.props || {}} />
+                <DynamicScene 
+                  code={scene.data.code} 
+                  sceneProps={scene.data.props || {}} 
+                  isPreCompiled={scene.data.isPreCompiled}
+                />
               </Sequence>
             );
           })}

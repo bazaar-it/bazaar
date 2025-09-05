@@ -53,6 +53,50 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       (window as any).IconifyIcon = IconifyWrapper;
       
+      // NEW: Add __InlineIcon for runtime SVG rendering
+      (window as any).__InlineIcon = function InlineIcon({ icon, style, ...props }: { 
+        icon: string; 
+        style?: React.CSSProperties;
+        [key: string]: any;
+      }) {
+        // Get icon data from registry
+        const iconData = (window as any).__iconRegistry?.[icon];
+        
+        if (!iconData) {
+          // Fallback for missing icons - show a question mark
+          return React.createElement('div', {
+            style: {
+              width: '1em',
+              height: '1em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid currentColor',
+              borderRadius: '50%',
+              fontSize: '0.8em',
+              color: 'currentColor',
+              ...style
+            },
+            ...props
+          }, '?');
+        }
+        
+        // Render inline SVG from preloaded data
+        return React.createElement('svg', {
+          viewBox: iconData.attributes.viewBox || '0 0 24 24',
+          width: iconData.attributes.width || '1em',
+          height: iconData.attributes.height || '1em',
+          fill: iconData.attributes.fill || 'currentColor',
+          style: {
+            display: 'inline-block',
+            verticalAlign: 'middle',
+            ...style
+          },
+          dangerouslySetInnerHTML: { __html: iconData.body },
+          ...props
+        });
+      };
+      
       // NEW: Add Font loader stub - fonts now load via CSS
       (window as any).RemotionGoogleFonts = {
         loadFont: async (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {

@@ -1,3 +1,4 @@
+// src/server/services/render/replace-iconify-icons.ts
 /**
  * AST-based Iconify icon replacement
  * Replaces IconifyIcon components with inline SVGs at build time
@@ -12,6 +13,11 @@ import * as t from '@babel/types';
 const traverse = typeof traverseFn === 'function' ? traverseFn : (traverseFn as any).default;
 const generate = typeof generateFn === 'function' ? generateFn : (generateFn as any).default;
 import { buildInlineSVG, preloadIcons } from './icon-loader';
+
+interface WarningHook {
+  addWarning?: (w: { type: string; message: string; sceneId?: string; data?: any }) => void;
+  sceneId?: string;
+}
 
 type SvgDef = { attributes: Record<string, string>, body: string };
 
@@ -49,7 +55,7 @@ function extractIconNames(code: string): Set<string> {
 /**
  * Replace IconifyIcon components with inline SVGs using AST transformation
  */
-export async function replaceIconifyIcons(code: string): Promise<string> {
+export async function replaceIconifyIcons(code: string, hook?: WarningHook): Promise<string> {
   // Check if already transformed (idempotency)
   if (code.includes('__INLINE_ICON_MAP') || code.includes('__InlineIcon')) {
     console.log('[Icon Replace] Code already transformed, skipping');
@@ -76,68 +82,20 @@ export async function replaceIconifyIcons(code: string): Promise<string> {
   const missingIcons = Array.from(iconNames).filter(name => !iconMap.has(name));
   if (missingIcons.length > 0) {
     console.warn(`[Icon Replace] Some icons could not be loaded (will use fallbacks):`, missingIcons);
-  }
-  
-  // For dynamic icons, inject a runtime map at the top of the code
-  const needsRuntimeMap = code.includes('iconData[') || code.includes('icons[');
-  
-  if (needsRuntimeMap) {
-    // Build the inline icon map for runtime usage
-    const inlineMapEntries: string[] = [];
-    for (const [name, svg] of iconMap.entries()) {
-      const attrsStr = JSON.stringify(svg.attributes);
-      const bodyStr = JSON.stringify(svg.body);
-      inlineMapEntries.push(`  "${name}": { attributes: ${attrsStr}, body: ${bodyStr} }`);
-    }
-    
-    const runtimeCode = `
-// Inline icon map for dynamic icon usage
-const __INLINE_ICON_MAP = {
-${inlineMapEntries.join(',\n')}
-};
-
-// Runtime icon component for dynamic icons
-function __InlineIcon(props) {
-  const icon = props.icon;
-  const def = __INLINE_ICON_MAP[icon];
-  
-  if (!def) {
-    // Return a placeholder SVG for missing icons
-    console.warn('[InlineIcon] Icon not found, using placeholder:', icon);
-    return React.createElement('svg', {
-      viewBox: '0 0 24 24',
-      width: '1em',
-      height: '1em',
-      fill: 'currentColor',
-      dangerouslySetInnerHTML: {
-        __html: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">?</text>'
+    if (hook?.addWarning) {
+      for (const name of missingIcons) {
+        hook.addWarning({
+          type: 'icon_missing',
+          message: `Icon not available: ${name} (placeholder will be used)`,
+          sceneId: hook.sceneId,
+          data: { icon: name }
+        });
       }
-    });
+    }
   }
   
-  // Merge props with icon attributes
-  const svgProps = Object.assign({
-    fill: 'currentColor',
-    width: '1em',
-    height: '1em'
-  }, def.attributes, props);
-  
-  // Remove the 'icon' prop as it's not a valid SVG attribute
-  delete svgProps.icon;
-  
-  // Add the SVG body
-  svgProps.dangerouslySetInnerHTML = { __html: def.body };
-  
-  return React.createElement('svg', svgProps);
-}
-// Lowercase alias to handle any casing variations
-const __inlineIcon = __InlineIcon;
-`;
-    
-    // Prepend the runtime code
-    code = runtimeCode + '\n' + code;
-    console.log('[Icon Replace] Injected runtime icon map with', iconMap.size, 'icons');
-  }
+  // We'll decide to inject runtime map later based on actual dynamic usage detected during traversal
+  let dynamicIconUsed = false;
   
   // Now parse and transform the code
   let ast;
@@ -179,17 +137,23 @@ const __inlineIcon = __InlineIcon;
       hasExportDefault = true;
     },
     
-    // Handle JSX elements like <IconifyIcon icon="mdi:heart" />
+    // Handle JSX elements like <IconifyIcon icon="mdi:heart" /> or <window.IconifyIcon .../>
     JSXElement(path: any) {
       try {
         const node = path.node;
         if (!node || !node.openingElement) return;
         
         const opening = node.openingElement;
-        if (!t.isJSXIdentifier(opening.name)) return;
-        
-        const elementName = opening.name.name;
-        if (elementName !== 'IconifyIcon' && !elementName.includes('IconifyIcon')) return;
+        let isIconify = false;
+        if (t.isJSXIdentifier(opening.name)) {
+          const elementName = opening.name.name;
+          isIconify = elementName === 'IconifyIcon' || elementName.includes('IconifyIcon');
+        } else if (t.isJSXMemberExpression(opening.name)) {
+          // Match window.IconifyIcon
+          isIconify = t.isJSXIdentifier(opening.name.object, { name: 'window' }) &&
+                      t.isJSXIdentifier(opening.name.property, { name: 'IconifyIcon' });
+        }
+        if (!isIconify) return;
         
         // Find icon attribute
       const iconAttr = opening.attributes.find(
@@ -240,11 +204,11 @@ const __inlineIcon = __InlineIcon;
         }
       } else if (t.isJSXExpressionContainer(iconAttr.value)) {
         // Dynamic icon - replace with __InlineIcon
-        if (needsRuntimeMap) {
-          hasTransformations = true;
-          opening.name = t.jsxIdentifier('__InlineIcon');
-          console.log('[Icon Replace] Replaced dynamic JSX icon with __InlineIcon');
-        }
+        dynamicIconUsed = true;
+        hasTransformations = true;
+        // Standardize to __InlineIcon for dynamic cases
+        opening.name = t.jsxIdentifier('__InlineIcon');
+        console.log('[Icon Replace] Replaced dynamic JSX icon with __InlineIcon');
       }
       } catch (err) {
         // Safe error handling without Babel hub
@@ -268,8 +232,11 @@ const __inlineIcon = __InlineIcon;
       
       const [comp, props] = path.node.arguments;
       
-      // Check if it's IconifyIcon
-      if (!t.isIdentifier(comp, { name: 'IconifyIcon' })) return;
+      // Check if it's IconifyIcon or window.IconifyIcon
+      let isIconify = false;
+      if (t.isIdentifier(comp, { name: 'IconifyIcon' })) isIconify = true;
+      if (t.isMemberExpression(comp) && t.isIdentifier(comp.object, { name: 'window' }) && t.isIdentifier(comp.property, { name: 'IconifyIcon' })) isIconify = true;
+      if (!isIconify) return;
       if (!t.isObjectExpression(props)) return;
       
       // Find icon prop
@@ -323,11 +290,10 @@ const __inlineIcon = __InlineIcon;
         }
       } else {
         // Dynamic icon - replace with __InlineIcon
-        if (needsRuntimeMap) {
-          hasTransformations = true;
-          path.node.arguments[0] = t.identifier('__InlineIcon');
-          console.log('[Icon Replace] Replaced dynamic createElement with __InlineIcon');
-        }
+        dynamicIconUsed = true;
+        hasTransformations = true;
+        path.node.arguments[0] = t.identifier('__InlineIcon');
+        console.log('[Icon Replace] Replaced dynamic createElement with __InlineIcon');
       }
       } catch (err) {
         // Safe error handling without Babel hub
@@ -341,6 +307,52 @@ const __inlineIcon = __InlineIcon;
     return code;
   }
   
+  // If dynamic icon usage detected, inject runtime map before generating code
+  if (dynamicIconUsed) {
+    if (hook?.addWarning) {
+      hook.addWarning({
+        type: 'icon_dynamic',
+        message: 'Dynamic icon usage detected; using runtime inline map',
+        sceneId: hook.sceneId,
+      });
+    }
+    const inlineMapEntries: string[] = [];
+    for (const [name, svg] of iconMap.entries()) {
+      const attrsStr = JSON.stringify(svg.attributes);
+      const bodyStr = JSON.stringify(svg.body);
+      inlineMapEntries.push(`  "${name}": { attributes: ${attrsStr}, body: ${bodyStr} }`);
+    }
+    const runtimeCode = `
+// Inline icon map for dynamic icon usage
+const __INLINE_ICON_MAP = {
+${inlineMapEntries.join(',\n')}
+};
+
+// Runtime icon component for dynamic icons
+function __InlineIcon(props) {
+  const icon = props.icon;
+  const def = __INLINE_ICON_MAP[icon];
+  if (!def) {
+    console.warn('[InlineIcon] Icon not found, using placeholder:', icon);
+    return React.createElement('svg', {
+      viewBox: '0 0 24 24', width: '1em', height: '1em', fill: 'currentColor',
+      dangerouslySetInnerHTML: { __html: '<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>' +
+        '<text x="12" y="16" text-anchor="middle" font-size="14" fill="currentColor">?</text>' }
+    });
+  }
+  const svgProps = Object.assign({ fill: 'currentColor', width: '1em', height: '1em' }, def.attributes, props);
+  delete svgProps.icon;
+  svgProps.dangerouslySetInnerHTML = { __html: def.body };
+  return React.createElement('svg', svgProps);
+}
+const __inlineIcon = __InlineIcon;
+// Expose globally to avoid scope issues in Lambda Function wrapper
+try { (globalThis as any).__InlineIcon = __InlineIcon; (globalThis as any).__inlineIcon = __InlineIcon; (globalThis as any)._InlineIcon = __InlineIcon; } catch (_) {}
+`;
+    code = runtimeCode + '\n' + code;
+    console.log('[Icon Replace] Injected runtime icon map at top (dynamic usage) with', iconMap.size, 'icons');
+  }
+
   // Generate code from AST if we made transformations
   let transformedCode = code;
   if (hasTransformations && ast) {
@@ -357,7 +369,7 @@ const __inlineIcon = __InlineIcon;
   // Replace all IconifyIcon references in the final code
   // This is crucial - we MUST replace window.IconifyIcon with __InlineIcon
   // because window.IconifyIcon doesn't exist in Lambda
-  if (needsRuntimeMap || hasTransformations) {
+  if (dynamicIconUsed || hasTransformations) {
     // Replace all references to window.IconifyIcon or IconifyIcon
     let replacementCount = 0;
     
@@ -380,7 +392,7 @@ const __inlineIcon = __InlineIcon;
     console.log('[Icon Replace] Added export default Component');
   }
   
-  console.log(`[Icon Replace] Transformation complete. Icons inlined: ${hasTransformations || needsRuntimeMap}`);
+  console.log(`[Icon Replace] Transformation complete. Icons inlined: ${hasTransformations || dynamicIconUsed}`);
   
   // POST-VALIDATION: Ensure no window.IconifyIcon remains
   const remainingIcons = transformedCode.match(/window\.IconifyIcon/g);

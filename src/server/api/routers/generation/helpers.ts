@@ -7,16 +7,37 @@ import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
 import { trimTool } from "~/tools/trim/trim";
-import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
 import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
-import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
+
+// Helper function to compile TSX with context-aware conflict resolution
+async function prepareSceneDataWithCompilation(
+  tsxCode: string,
+  projectId: string,
+  sceneId: string = randomUUID(),
+  existingScenes?: Pick<SceneEntity, 'id' | 'tsxCode' | 'name'>[]
+) {
+  const compilationResult = await sceneCompiler.compileScene(tsxCode, {
+    projectId,
+    sceneId,
+    existingScenes
+  });
+  
+  return {
+    tsxCode: compilationResult.tsxCode, // May be auto-fixed for conflicts
+    jsCode: compilationResult.jsCode,    // Always has a value (compiled or fallback)
+    jsCompiledAt: compilationResult.compiledAt,
+    compilationError: compilationResult.compilationError || null,
+  };
+}
 
 // Helper function for tool execution and database save
 export async function executeToolFromDecision(
@@ -168,10 +189,20 @@ export async function executeToolFromDecision(
         duration: addFinalDuration,
       });
       
+      // Compile TSX to JS with conflict resolution for multi-scene projects
+      const newSceneId = randomUUID();
+      const compiledData = await prepareSceneDataWithCompilation(
+        addResult.data.tsxCode,
+        projectId,
+        newSceneId,
+        storyboard // Pass existing scenes for conflict detection
+      );
+      
       const [newScene] = await db.insert(scenes).values({
+        id: newSceneId, // Use the same ID we used for compilation
         projectId,
         name: addResult.data.name,
-        tsxCode: addResult.data.tsxCode,
+        ...compiledData,
         duration: addFinalDuration || 150,
         order: storyboard.length,
         props: addResult.data.props || {},
@@ -385,9 +416,17 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
+      // Compile the edited TSX code to JS with conflict checking
+      const compiledEdit = await prepareSceneDataWithCompilation(
+        editResult.data.tsxCode,
+        projectId,
+        decision.toolContext.targetSceneId!,
+        storyboard // Pass existing scenes for conflict detection
+      );
+      
       // Preserve manual trims by default: ONLY change duration if explicitly requested
       const setFields: any = {
-        tsxCode: editResult.data.tsxCode,
+        ...compiledEdit,
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
       };
@@ -602,136 +641,6 @@ export async function executeToolFromDecision(
         scene: sceneToDelete as any // Cast to any to avoid props type issue
       };
 
-    case 'typographyScene':
-      // Typography is now handled by addScene tool
-      console.log('🎨 [HELPERS] Typography now handled by ADD tool');
-      
-      // Build add tool input for text scenes
-      const typographyInput: AddToolInput = {
-        userPrompt: decision.toolContext.userPrompt,
-        projectId,
-        userId,
-        sceneNumber: storyboard.length + 1,
-        storyboardSoFar: storyboard,
-        projectFormat,
-      };
-      
-      const typographyResult = await addTool.run(typographyInput);
-      
-      if (!typographyResult.success || !typographyResult.data) {
-        throw new Error(typographyResult.error?.message || 'Text scene generation failed');
-      }
-      
-      // Save to database
-      const [typographyScene] = await db.insert(scenes).values({
-        projectId,
-        name: typographyResult.data.name,
-        tsxCode: typographyResult.data.tsxCode,
-        duration: typographyResult.data.duration || 90, // Default for text scenes
-        order: storyboard.length,
-        props: {},
-      }).returning();
-      
-      return { success: true, scene: typographyScene as any };
-
-    case 'imageRecreatorScene':
-      console.log('🖼️ [HELPERS] Using IMAGE RECREATOR tool');
-      
-      // Build image recreator input with proper type checking
-      const imageRecreatorInput: ImageRecreatorToolInput = {
-        userPrompt: decision.toolContext.userPrompt,
-        projectId,
-        userId,
-        imageUrls: decision.toolContext.imageUrls || [], // Ensure it's always an array
-        projectFormat: projectFormat,
-        recreationType: 'full' // Default recreation type
-      };
-      
-      try {
-        const imageResult = await imageRecreatorTool.run(imageRecreatorInput);
-        
-        if (!imageResult.success) {
-          // 🚨 CRITICAL FIX: Don't fallback if image recreator explicitly failed validation
-          // This indicates the generated code has syntax errors or missing patterns
-          // Falling back to addTool would likely generate the same invalid code
-          console.error('🚨 [HELPERS] Image recreator tool failed validation - returning error to prevent app crash');
-          console.error('🚨 [HELPERS] Error details:', imageResult.error);
-          
-          // Return the error directly instead of trying a fallback that might also fail
-          const errorMessage = typeof imageResult.error === 'string' 
-            ? imageResult.error 
-            : imageResult.error?.message || 'Image recreation validation failed - code would crash the app';
-          throw new Error(errorMessage);
-        }
-        
-        if (!imageResult.data) {
-          console.warn('🔄 [HELPERS] Image recreator succeeded but returned no data, falling back to code-generator');
-          throw new Error('Image recreation succeeded but returned no data');
-        }
-        
-        // Save to database (same pattern as addScene)
-        const [imageScene] = await db.insert(scenes).values({
-          projectId,
-          name: imageResult.data.name,
-          tsxCode: imageResult.data.tsxCode,
-          duration: imageResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        if (!imageScene) {
-          throw new Error('Failed to save image recreation scene to database');
-        }
-        
-        console.log('✅ [HELPERS] Image recreation successful:', imageScene.name);
-        return { success: true, scene: imageScene as any };
-        
-      } catch (error) {
-        // 🚨 CRITICAL FIX: Only use fallback for unexpected errors, not validation failures
-        if (error instanceof Error && error.message.includes('validation failed')) {
-          // Don't fallback for validation failures - rethrow to prevent app crashes
-          console.error('🚨 [HELPERS] Validation failure detected - not using fallback to prevent crashes');
-          throw error;
-        }
-        
-        console.warn('🔄 [HELPERS] Image recreator tool had unexpected error, falling back to code-generator:', error);
-        
-        // Fall back to code-generator with images (only for unexpected errors)
-        const fallbackInput: AddToolInput = {
-          userPrompt: decision.toolContext.userPrompt,
-          projectId,
-          userId,
-          sceneNumber: storyboard.length + 1,
-          storyboardSoFar: storyboard,
-          imageUrls: decision.toolContext.imageUrls,
-          projectFormat,
-          // FIGMA: Pass Figma component data to fallback
-          figmaComponentData: decision.toolContext.figmaComponentData,
-        };
-        
-        const fallbackResult = await addTool.run(fallbackInput);
-        
-        if (!fallbackResult.success || !fallbackResult.data) {
-          throw new Error(fallbackResult.error?.message || 'Both image recreation and fallback generation failed');
-        }
-        
-        // Save to database with fallback result
-        const [fallbackScene] = await db.insert(scenes).values({
-          projectId,
-          name: fallbackResult.data.name,
-          tsxCode: fallbackResult.data.tsxCode,
-          duration: fallbackResult.data.duration || 150,
-          order: storyboard.length,
-          props: {},
-        }).returning();
-        
-        if (!fallbackScene) {
-          throw new Error('Failed to save fallback scene to database');
-        }
-        
-        console.log('✅ [HELPERS] Fallback to addTool successful:', fallbackScene.name);
-        return { success: true, scene: fallbackScene as any };
-      }
       // [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
       // console.log(`📋 [HELPERS] Created plan with ${plannerResult.data.scenePlans.length} scenes`);
       // ... (scenePlanner case logic removed for simplicity)
@@ -991,32 +900,19 @@ async function executeIndividualScene(
         break;
         
       case 'recreate':
-        try {
-          toolResult = await imageRecreatorTool.run({
-            userPrompt: plan.prompt,
-            imageUrls: plan.context.imageUrls || [],
-            projectId,
-            userId,
-            projectFormat,
-            recreationType: 'full',
-          });
-          
-          if (!toolResult.success || !toolResult.data) {
-            throw new Error(toolResult.error?.message || 'Image recreation tool failed');
-          }
-        } catch (error) {
-          console.warn(`🔄 [MULTI-SCENE] Image recreation tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
-          
-          // Fall back to code-generator with images
-          toolResult = await addTool.run({
-            userPrompt: plan.prompt,
-            projectId,
-            userId,
-            sceneNumber: sceneOrder + 1,
-            storyboardSoFar: storyboard,
-            imageUrls: plan.context.imageUrls,
-            projectFormat,
-          });
+        // Use addTool for image recreation - it handles both embed and recreate intents
+        toolResult = await addTool.run({
+          userPrompt: plan.prompt,
+          projectId,
+          userId,
+          sceneNumber: sceneOrder + 1,
+          storyboardSoFar: storyboard,
+          imageUrls: plan.context.imageUrls || [],
+          projectFormat,
+        });
+        
+        if (!toolResult.success || !toolResult.data) {
+          throw new Error(toolResult.error?.message || 'Image recreation failed');
         }
         break;
         
@@ -1037,11 +933,19 @@ async function executeIndividualScene(
       return { success: false, error: toolResult.error?.message || 'Tool execution failed' };
     }
     
-    // Save to database with correct order
+    // Save to database with correct order and compiled JS
+    const websiteSceneId = randomUUID();
+    const compiledWebsite = await prepareSceneDataWithCompilation(
+      toolResult.data.tsxCode,
+      projectId,
+      websiteSceneId,
+      storyboard
+    );
     const [newScene] = await db.insert(scenes).values({
+      id: websiteSceneId,
       projectId,
       name: toolResult.data.name,
-      tsxCode: toolResult.data.tsxCode,
+      ...compiledWebsite,
       duration: toolResult.data.duration || 150,
       order: sceneOrder,
       props: {},
