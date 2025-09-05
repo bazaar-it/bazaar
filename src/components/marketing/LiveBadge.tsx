@@ -8,7 +8,7 @@ type LiveStatus = {
   source?: string;
 };
 
-export default function LiveBadge({ pollMs = 30000 }: { pollMs?: number }) {
+export default function LiveBadge({ pollMs = 60000 }: { pollMs?: number }) {
   const [status, setStatus] = useState<LiveStatus | null>(null);
 
   async function fetchStatus(signal?: AbortSignal) {
@@ -42,7 +42,7 @@ export default function LiveBadge({ pollMs = 30000 }: { pollMs?: number }) {
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-red-700 border border-red-200 shadow-sm hover:bg-red-100 transition-colors"
-      aria-label="We are live on X"
+      aria-label="The boys are live"
     >
       <span className="relative flex h-2 w-2">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>

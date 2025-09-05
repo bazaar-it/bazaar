@@ -1,25 +1,10 @@
 // src/app/admin/live/page.tsx
 import { auth } from "~/server/auth";
 import { db, metrics } from "~/server/db";
-import { desc, eq } from "drizzle-orm";
+import { getCurrentLiveStatus, type LiveStatusTags } from "~/lib/utils/liveStatus";
 import { revalidatePath } from "next/cache";
 
-async function getLiveStatus() {
-  const rows = await db
-    .select()
-    .from(metrics)
-    .where(eq(metrics.name, 'live_status'))
-    .orderBy(desc(metrics.timestamp))
-    .limit(1);
-  const latest = rows[0];
-  const forced = process.env.LIVE_FORCE?.toLowerCase();
-  const forceLive = forced === 'true' || forced === '1' ? true : forced === 'false' || forced === '0' ? false : undefined;
-  const live = forceLive ?? (latest ? latest.value === 1 : false);
-  const url = (latest?.tags as any)?.url || process.env.LIVE_URL_DEFAULT || '';
-  const updatedAt = latest?.timestamp instanceof Date ? latest.timestamp.toISOString() : new Date().toISOString();
-  const source = forceLive !== undefined ? 'force' : latest ? 'db' : 'default';
-  return { live, url, updatedAt, source };
-}
+async function getLiveStatus() { return getCurrentLiveStatus(); }
 
 async function requireAdmin() {
   const session = await auth();
@@ -39,10 +24,11 @@ export default async function AdminLivePage() {
     const url = String(formData.get('url') || '') || undefined;
     const platform = String(formData.get('platform') || 'x');
     const live = liveStr === 'on';
+    const tags: LiveStatusTags = { url, platform, source: 'admin' };
     await db.insert(metrics).values({
       name: 'live_status',
       value: live ? 1 : 0,
-      tags: { url, platform, source: 'admin' },
+      tags,
     });
     revalidatePath('/admin/live');
   }
@@ -93,4 +79,3 @@ export default async function AdminLivePage() {
     </div>
   );
 }
-

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db, metrics } from '~/server/db';
-import { desc, eq } from 'drizzle-orm';
+import { coerceLiveFromEvent, coerceLiveFromStatus, getCurrentLiveStatus } from '~/lib/utils/liveStatus';
 
 const postSchema = z.object({
   live: z.boolean().optional(),
@@ -22,61 +22,9 @@ function getDefaultUrl(): string | undefined {
   return process.env.LIVE_URL_DEFAULT;
 }
 
-function coerceLiveFromEvent(eventType?: string): boolean | undefined {
-  if (!eventType) return undefined;
-  const t = eventType.toLowerCase();
-  if (t.includes('started') || t.includes('start')) return true;
-  if (t.includes('stopped') || t.includes('stop') || t.includes('end')) return false;
-  return undefined;
-}
-
-function coerceLiveFromStatus(status?: string | number): boolean | undefined {
-  if (status === undefined || status === null) return undefined;
-  if (typeof status === 'number') return status === 1 ? true : status === 0 ? false : undefined;
-  const s = String(status).toLowerCase();
-  if (['live', 'online', 'started', 'start', 'on'].includes(s)) return true;
-  if (['offline', 'stopped', 'stop', 'end', 'off'].includes(s)) return false;
-  if (s === '1') return true;
-  if (s === '0') return false;
-  return undefined;
-}
-
 export async function GET() {
-  try {
-    // Try to read latest metric
-    const rows = await db
-      .select()
-      .from(metrics)
-      .where(eq(metrics.name, 'live_status'))
-      .orderBy(desc(metrics.timestamp))
-      .limit(1);
-
-    const latest = rows[0];
-    const forced = process.env.LIVE_FORCE?.toLowerCase();
-    const forceLive = forced === 'true' || forced === '1' ? true : forced === 'false' || forced === '0' ? false : undefined;
-
-    const live = forceLive ?? (latest ? latest.value === 1 : false);
-    const url = latest?.tags?.url || getDefaultUrl();
-
-    return NextResponse.json({
-      live,
-      url,
-      updatedAt: latest?.timestamp?.toISOString?.() ?? new Date().toISOString(),
-      source: forceLive !== undefined ? 'force' : latest ? 'db' : 'default',
-    });
-  } catch (error) {
-    console.error('[live-status][GET] Error:', error);
-    // Fallback to env on error
-    const forced = process.env.LIVE_FORCE?.toLowerCase();
-    const forceLive = forced === 'true' || forced === '1' ? true : forced === 'false' || forced === '0' ? false : undefined;
-    return NextResponse.json({
-      live: forceLive ?? false,
-      url: getDefaultUrl(),
-      updatedAt: new Date().toISOString(),
-      source: 'fallback',
-      error: 'db_unavailable',
-    });
-  }
+  const result = await getCurrentLiveStatus();
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest) {

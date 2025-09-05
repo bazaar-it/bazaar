@@ -79,6 +79,7 @@ export const env = createEnv({
       .string()
       .transform(v => (v ?? '').toLowerCase())
       .optional(),
+    LIVE_MODE: z.enum(["manual", "webhook"]).optional().default("manual"),
   },
 
   /**
@@ -137,6 +138,7 @@ export const env = createEnv({
     LIVE_STATUS_SECRET: process.env.LIVE_STATUS_SECRET,
     LIVE_URL_DEFAULT: process.env.LIVE_URL_DEFAULT,
     LIVE_FORCE: process.env.LIVE_FORCE,
+    LIVE_MODE: process.env.LIVE_MODE,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -152,3 +154,11 @@ export const env = createEnv({
    */
   emptyStringAsUndefined: true,
 });
+
+// Conditional prod-time validation: If running in production webhook mode, require LIVE_STATUS_SECRET
+if (process.env.NODE_ENV === 'production') {
+  const mode = process.env.LIVE_MODE || 'manual';
+  if (mode === 'webhook' && !process.env.LIVE_STATUS_SECRET) {
+    throw new Error('[env] LIVE_STATUS_SECRET is required in production when LIVE_MODE=webhook');
+  }
+}

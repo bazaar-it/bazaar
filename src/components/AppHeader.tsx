@@ -259,7 +259,7 @@ export default function AppHeader({
         </a>
         {/* Site-wide Live indicator */}
         <div className="hidden sm:inline-flex">
-          <LiveBadge pollMs={20000} />
+          <LiveBadge pollMs={60000} />
         </div>
       </div>
 
