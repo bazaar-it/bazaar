@@ -279,8 +279,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
               />
             </div>
             
-            {/* Timeline panel - fixed height based on content */}
-            {isTimelineVisible && (
+            {/* Timeline panel - fixed height based on content - ADMIN ONLY */}
+            {isTimelineVisible && user?.isAdmin && (
               <div className="bg-gray-900 border-t border-gray-200">
                 <TimelinePanel
                   key={`timeline-${projectId}`}
