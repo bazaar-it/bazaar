@@ -26,7 +26,7 @@ function verifyWebhookSignature(body: string, signature: string | null, secret: 
   // Extract hex signature - Remotion may prefix with "sha512=" or similar
   let hexSignature = signature;
   if (signature.includes("=")) {
-    hexSignature = signature.split("=")[1];
+    hexSignature = signature.split("=")[1]!;
   }
   
   // Remotion uses SHA-512, not SHA-256

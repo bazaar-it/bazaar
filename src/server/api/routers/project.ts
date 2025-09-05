@@ -2,11 +2,11 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
-import { eq, desc, like, and, ne } from "drizzle-orm";
+import { eq, desc, like, and, ne, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
-import { applyPatch } from "fast-json-patch";
+import * as jsonPatch from "fast-json-patch";
 import type { Operation } from "fast-json-patch";
 import { generateNameFromPrompt } from "~/lib/utils/nameGenerator";
 import { generateTitle } from "~/server/services/ai/titleGenerator.service";
@@ -344,7 +344,7 @@ export const projectRouter = createTRPCRouter({
 
         // Apply the JSON patch
         const patchOperations = input.patch as unknown as Operation[];
-        const nextProps = applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
+        const nextProps = jsonPatch.applyPatch(structuredClone(project.props), patchOperations, true, false).newDocument;
         
         // Save the new props and the patch
         const updated = await ctx.db
@@ -500,6 +500,7 @@ export const projectRouter = createTRPCRouter({
         duration: z.number(),
         startTime: z.number(),
         endTime: z.number(),
+        timelineOffsetSec: z.number().optional(),
         volume: z.number(),
         fadeInDuration: z.number().optional(),
         fadeOutDuration: z.number().optional(),
@@ -529,11 +530,12 @@ export const projectRouter = createTRPCRouter({
           });
         }
 
-        // Update the audio field
+        // Update the audio field with timestamp
         const updated = await ctx.db
           .update(projects)
           .set({
             audio: input.audio,
+            audioUpdatedAt: new Date(),
             updatedAt: new Date()
           })
           .where(eq(projects.id, input.projectId))
@@ -547,7 +549,11 @@ export const projectRouter = createTRPCRouter({
           });
         }
         console.log(`[Project] Updated audio for project ${input.projectId}:`, input.audio);
-        return { success: true, audio: result.audio };
+        return { 
+          success: true, 
+          audio: result.audio,
+          audioUpdatedAt: result.audioUpdatedAt?.getTime() || Date.now()
+        };
       } catch (error) {
         console.error("Error updating project audio:", error);
         if (error instanceof TRPCError) {
@@ -663,5 +669,37 @@ export const projectRouter = createTRPCRouter({
       }
 
       return { success: true, asset: updated };
+    }),
+
+  // Delete an asset (soft delete)
+  softDeleteAsset: protectedProcedure
+    .input(z.object({
+      assetId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Soft delete the asset by setting deletedAt
+      const [deleted] = await ctx.db
+        .update(assets)
+        .set({
+          deletedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(assets.id, input.assetId),
+            eq(assets.userId, ctx.session.user.id),
+            isNull(assets.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Asset not found or you don't have permission to delete it"
+        });
+      }
+
+      return { success: true, assetId: input.assetId };
     }),
 }); 

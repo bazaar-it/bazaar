@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical } from "lucide-react";
+import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
@@ -34,56 +34,16 @@ export default function MobileAppHeader({
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
 
+  // Check for existing share
+  const { data: existingShare } = api.share.getProjectShare.useQuery(
+    { projectId: projectId! },
+    { enabled: !!projectId }
+  );
+
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
-      // Try to copy to clipboard with fallback for Safari mobile
-      try {
-        // Check if we have share API (mobile Safari supports this)
-        if (navigator.share && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-          await navigator.share({
-            title: projectTitle || 'Bazaar Video',
-            url: data.shareUrl
-          });
-          toast.success("Share completed!");
-        } else if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(data.shareUrl);
-          toast.success("Share link copied!");
-        } else {
-          // Fallback for mobile browsers
-          const textArea = document.createElement("textarea");
-          textArea.value = data.shareUrl;
-          textArea.style.position = "fixed";
-          textArea.style.left = "-999999px";
-          textArea.style.top = "-999999px";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          
-          try {
-            const successful = document.execCommand('copy');
-            if (successful) {
-              toast.success("Share link copied!");
-            } else {
-              // Show URL for manual copy
-              toast.info(
-                <div className="text-xs">
-                  <p className="mb-1">Share link created!</p>
-                  <p className="break-all font-mono text-[10px]">{data.shareUrl}</p>
-                </div>,
-                { duration: 10000 }
-              );
-            }
-          } catch (err) {
-            toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
-          } finally {
-            document.body.removeChild(textArea);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to share/copy:", error);
-        toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
-      }
+      await handleMobileShareSuccess(data.shareUrl, false);
       setIsSharing(false);
     },
     onError: (error) => {
@@ -92,14 +52,81 @@ export default function MobileAppHeader({
     },
   });
 
-  const handleShare = () => {
+  // Helper function to handle mobile share success
+  const handleMobileShareSuccess = async (shareUrl: string, isExisting: boolean) => {
+    // Try to copy to clipboard with fallback for Safari mobile
+    try {
+      // Check if we have share API (mobile Safari supports this)
+      if (navigator.share && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        await navigator.share({
+          title: projectTitle || 'Bazaar Video',
+          url: shareUrl
+        });
+        toast.success("Share completed!");
+      } else if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(isExisting ? "Share link copied!" : "Share link created and copied!");
+      } else {
+        // Fallback for mobile browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            toast.success(isExisting ? "Share link copied!" : "Share link created and copied!");
+          } else {
+            // Show URL for manual copy
+            toast.info(
+              <div className="text-xs">
+                <p className="mb-1">Share link {isExisting ? "copied" : "created"}!</p>
+                <p className="break-all font-mono text-[10px]">{shareUrl}</p>
+              </div>,
+              { duration: 10000 }
+            );
+          }
+        } catch (err) {
+          toast.info(`Share link: ${shareUrl}`, { duration: 10000 });
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to share/copy:", error);
+      toast.info(`Share link: ${shareUrl}`, { duration: 10000 });
+    }
+
+    // Auto-open in new tab for mobile (only if not using native share API)
+    if (!navigator.share || !/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      setTimeout(() => {
+        window.open(shareUrl, '_blank');
+      }, 1000);
+    }
+  };
+
+  const handleShare = async () => {
     if (!projectId) return;
     
     setIsSharing(true);
-    createShare.mutate({
-      projectId,
-      title: projectTitle,
-    });
+    
+    // Check if share already exists
+    if (existingShare) {
+      // Share exists - copy to clipboard and redirect
+      await handleMobileShareSuccess(existingShare.shareUrl, true);
+      setIsSharing(false);
+    } else {
+      // Create new share
+      createShare.mutate({
+        projectId,
+        title: projectTitle,
+      });
+    }
   };
 
   const handleRenameClick = () => {
@@ -172,13 +199,22 @@ export default function MobileAppHeader({
             </div>
           ) : (
             <h1 
-              className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-gray-700"
+              className={`text-sm font-medium truncate cursor-pointer hover:text-gray-700 ${
+                isRenaming ? 'text-gray-400 pointer-events-none' : 'text-gray-900'
+              }`}
               onClick={() => {
                 setNewTitle(projectTitle);
                 setIsEditingName(true);
               }}
             >
-              {projectTitle}
+              {isRenaming ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>{newTitle}</span>
+                </div>
+              ) : (
+                projectTitle
+              )}
             </h1>
           )}
         </div>

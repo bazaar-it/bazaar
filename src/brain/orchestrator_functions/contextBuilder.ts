@@ -3,7 +3,7 @@
 
 import { db } from "~/server/db";
 import { scenes, messages } from "~/server/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
@@ -18,21 +18,44 @@ export class ContextBuilder {
     console.log('📚 [CONTEXT BUILDER] Project:', input.projectId);
     console.log('📚 [CONTEXT BUILDER] Has images:', !!(input.userContext?.imageUrls as string[])?.length);
     
-    try {
-      // 1. Get scenes with FULL TSX code for cross-scene operations
-      const scenesWithCode = await db
-        .select({ 
-          id: scenes.id, 
-          name: scenes.name, 
-          order: scenes.order,
-          tsxCode: scenes.tsxCode  // CRITICAL: Full code for context
-        })
-        .from(scenes)
-        .where(eq(scenes.projectId, input.projectId))
-        .orderBy(scenes.order);
+          try {
+        // 1. Get scenes with FULL TSX code for cross-scene operations
+        const attachedSceneIds = (input.userContext?.sceneUrls ?? []) as string[];
+        
+        let scenesWithCode;
+        if ((attachedSceneIds as string[]).length > 0) {
+          // Only include attached scenes for context when specific scenes are referenced
+          console.log(`📚 [CONTEXT BUILDER] Scene attachments detected: ${(attachedSceneIds as string[]).length} scenes`);
+          scenesWithCode = await db
+            .select({ 
+              id: scenes.id, 
+              name: scenes.name, 
+              order: scenes.order,
+              tsxCode: scenes.tsxCode  // Full code for context
+            })
+            .from(scenes)
+            .where(and(
+              eq(scenes.projectId, input.projectId),
+              inArray(scenes.id, attachedSceneIds)  // Only attached scenes
+            ))
+            .orderBy(scenes.order);
+        } else {
+          // Fallback: include all scenes for general context
+          scenesWithCode = await db
+            .select({ 
+              id: scenes.id, 
+              name: scenes.name, 
+              order: scenes.order,
+              tsxCode: scenes.tsxCode  // Full code for context
+            })
+            .from(scenes)
+            .where(eq(scenes.projectId, input.projectId))
+            .orderBy(scenes.order);
+        }
 
-      // 2. Build recent chat context
-      const recentChat = (input.chatHistory || []).slice(-5);
+      // 2. Build FULL chat context - we have 1M+ context window, use it!
+      // Include ALL messages for complete conversation understanding
+      const recentChat = (input.chatHistory || []);
 
       // 3. Build image context from conversation
       const imageContext = await this.buildImageContext(input);
@@ -111,7 +134,8 @@ export class ContextBuilder {
   private summarizeConversation(chatHistory: Array<{role: string, content: string}>): string {
     if (chatHistory.length === 0) return 'New conversation';
     
-    const recentMessages = chatHistory.slice(-5);
+    // Now we have ALL messages, not just last 5
+    const recentMessages = chatHistory;
     const topics: string[] = [];
     
     for (const message of recentMessages) {
@@ -137,10 +161,10 @@ export class ContextBuilder {
     const currentImages = input.userContext?.imageUrls as string[] || [];
     const currentVideos = input.userContext?.videoUrls as string[] || [];
     
-    // Extract images from recent chat history  
+    // Extract images from ALL chat history now that we include everything
     const recentImagesFromChat: any[] = [];
     const recentVideosFromChat: any[] = [];
-    const recentChat = input.chatHistory?.slice(-10) || [];
+    const recentChat = input.chatHistory || [];
     
     for (let i = 0; i < recentChat.length; i++) {
       const msg = recentChat[i];
@@ -188,46 +212,85 @@ export class ContextBuilder {
         return undefined;
       }
       
+      // SKIP analysis if the prompt is ONLY a URL (websiteToVideo will handle it)
+      // Extract just the first line (the actual user input) before any [CONTEXT: ...] additions
+      const firstLine = (input.prompt ?? '').split('\n')[0]?.trim() ?? '';
+      const cleanPrompt = firstLine.replace(/[.,;!?)+\s]+$/, '');
+      const cleanUrl = targetUrl.replace(/[.,;!?)+]+$/, '');
+      
+      // Debug logging
+      console.log('📚 [CONTEXT BUILDER] URL Detection Debug:', {
+        originalPrompt: input.prompt ?? '',
+        firstLine,
+        cleanPrompt,
+        targetUrl,
+        cleanUrl,
+        isPlainUrl: cleanPrompt === targetUrl || cleanPrompt === cleanUrl || firstLine === targetUrl,
+      });
+      
+      const promptIsJustUrl = cleanPrompt === targetUrl || 
+                              cleanPrompt === cleanUrl ||
+                              firstLine === targetUrl;
+      
+      if (promptIsJustUrl) {
+        console.log('📚 [CONTEXT BUILDER] ✅ Plain URL detected - skipping analysis (websiteToVideo tool will handle)');
+        return undefined;
+      }
+      
       console.log(`📚 [CONTEXT BUILDER] Analyzing website: ${targetUrl}`);
       
       // Dynamic import to ensure server-side only execution
-      const { WebAnalysisAgent } = await import('~/tools/webAnalysis/WebAnalysisAgent');
-      const webAgent = new WebAnalysisAgent();
+      const { WebAnalysisAgentV4 } = await import('~/tools/webAnalysis/WebAnalysisAgentV4');
+      const webAgent = new WebAnalysisAgentV4(input.projectId);
       
-      // Validate URL first
-      const validation = await webAgent.validateUrl(targetUrl);
-      if (!validation.valid) {
-        console.log(`📚 [CONTEXT BUILDER] URL validation failed: ${validation.error}`);
+      // Perform web analysis with V4
+      let analysis;
+      try {
+        analysis = await webAgent.analyze(targetUrl);
+      } catch (error: any) {
+        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${error.message}`);
         return undefined;
       }
       
-      // Perform web analysis with R2 upload
-      const analysis = await webAgent.analyzeWebsite(targetUrl, input.projectId, input.userId);
-      
-      if (!analysis.success) {
-        console.log(`📚 [CONTEXT BUILDER] Web analysis failed: ${analysis.error}`);
-        return undefined;
+      // Save to brand profile table
+      try {
+        const { saveBrandProfile } = await import('~/server/services/website/save-brand-profile');
+        await saveBrandProfile(input.projectId, targetUrl, analysis);
+        console.log(`📚 [CONTEXT BUILDER] 💾 Brand profile saved to database`);
+      } catch (error) {
+        console.error(`📚 [CONTEXT BUILDER] Failed to save brand profile:`, error);
+        // Continue even if save fails
       }
       
-      // Return structured web context
-      if (analysis.screenshotUrls && analysis.pageData) {
-        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.pageData.title}`);
+      // Return structured web context for V4
+      if (analysis.screenshots && (analysis.brand || analysis.product)) {
+        console.log(`📚 [CONTEXT BUILDER] ✅ Web context created for ${analysis.brand?.identity?.name || 'website'}`);
         
         // Debug: Check if extraction data is present
-        console.log(`📚 [CONTEXT BUILDER] PageData structure:`, {
-          hasPageData: !!analysis.pageData,
-          hasVisualDesign: !!analysis.pageData?.visualDesign,
-          hasExtraction: !!analysis.pageData?.visualDesign?.extraction,
-          extractionKeys: analysis.pageData?.visualDesign?.extraction ? 
-            Object.keys(analysis.pageData.visualDesign.extraction).slice(0, 5) : 
-            'none'
+        console.log(`📚 [CONTEXT BUILDER] V4 Data structure:`, {
+          hasBrand: !!analysis.brand,
+          hasProduct: !!analysis.product,
+          hasScreenshots: !!analysis.screenshots,
+          screenshotCount: analysis.screenshots?.length || 0,
+          brandKeys: analysis.brand ? Object.keys(analysis.brand).slice(0, 5) : 'none'
         });
         
+        // Create V4-compatible web context that matches the expected type
         const webContext = {
-          originalUrl: analysis.url!,
-          screenshotUrls: analysis.screenshotUrls,
-          pageData: analysis.pageData,
-          analyzedAt: analysis.analyzedAt!
+          originalUrl: analysis.metadata?.url || targetUrl,
+          screenshotUrls: {
+            desktop: analysis.screenshots?.find(s => s.type === 'desktop')?.url || 
+                    analysis.screenshots?.[0]?.url || '',
+            mobile: analysis.screenshots?.find(s => s.type === 'mobile')?.url || 
+                   analysis.screenshots?.[1]?.url || ''
+          },
+          pageData: {
+            title: analysis.brand?.identity?.name || 'Untitled',
+            description: analysis.brand?.identity?.tagline,
+            headings: [],
+            url: analysis.metadata?.url || targetUrl
+          },
+          analyzedAt: new Date().toISOString()
         };
         
         // Fire-and-forget async save to database
@@ -236,13 +299,9 @@ export class ContextBuilder {
             const { webContextService } = await import('~/server/services/data/web-context.service');
             await webContextService.saveWebContext(
               input.projectId,
-              analysis.url!,
-              {
-                screenshotUrls: analysis.screenshotUrls!,
-                pageData: analysis.pageData!,
-                analyzedAt: analysis.analyzedAt!
-              },
-              input.prompt
+              analysis.metadata?.url || targetUrl,
+              webContext,
+              input.prompt ?? ''
             );
             console.log(`📚 [CONTEXT BUILDER] 💾 Web context saved to database for future reference`);
           } catch (error) {

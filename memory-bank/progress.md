@@ -1,13 +1,69 @@
 # 🏆 Bazaar-Vid Progress Summary
 
-## 🚀 **Current Status: Production Ready with Advanced Analytics Planning**
+## 📝 Latest Update (Sep 01, 2025)
+- Sprint 98: Fixed preview namespacing collisions causing new scenes to break with `Identifier 'SceneNS_*' has already been declared`. Changed namespace wrapper to `var` and made error-boundary helper names redeclaration‑safe. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
 
-**Last Updated**: August 2, 2025  
-**Current Sprint**: Sprint 91 - Promo Codes & Advanced Analytics
-**Previous Sprint**: Sprint 90 - Database Synchronization & Performance
-**Next Focus**: Multi-Context Tool System Implementation
+## 📝 Latest Update (Aug 30, 2025)
+- Sprint 111: Created Motion Graphics Principles (Taste Charter) docs with pro tips and anti‑patterns. See `/memory-bank/sprints/sprint111_motion_graphics_principles/`.
+- Sprint 98 follow-up: Extracted `wrapSceneNamespace` helper and refactored `PreviewPanelG.tsx` to use it with a small cache, improving maintainability and reducing repeated regex work during preview renders. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.
+ - Timeline audio waveform now in sync with music: Fixed segment rendering and canvas sizing in `TimelinePanel.tsx`. Details: `/memory-bank/sprints/sprint98_autofix_analysis/timeline-audio-waveform-desync.md`.
 
-## 🚀 Sprint 91: Promo Codes & Advanced Analytics (Current - August 2, 2025)
+## 📝 Latest Update (Aug 28, 2025)
+- Current Sprint: Sprint 103 — Multi-Tool System Analysis (COMPLETED)
+- Result: Data-driven decision NOT to implement multi-tool (< 1% usage)
+- Saved: 2-4 days of unnecessary development
+- Previous Sprint: Sprint 102 — Performance Optimization (major improvements achieved)
+
+## 🚀 **Current Status: Production Ready with Performance Optimizations**
+
+**Last Updated**: August 28, 2025  
+**Current Sprint**: Sprint 103 - Multi-Tool Analysis (COMPLETED)
+**Previous Sprint**: Sprint 102 - Performance Optimization (COMPLETED)
+**Next Focus**: Features that benefit 100% of users (not multi-tool)
+
+## 🚀 Sprint 103: Multi-Tool System Analysis (COMPLETED - August 28, 2025)
+
+### Data-Driven Decision Against Multi-Tool
+- **Status**: Analysis Complete - Decision Made
+- **Finding**: <1% of users would benefit from multi-tool
+- **Decision**: DO NOT IMPLEMENT - focus on higher-value features
+- **Time Saved**: 2-4 days of development
+
+### Key Analysis:
+- ✅ Analyzed 2,458 production messages from last 30 days
+- ✅ Found only 16 potential multi-tool patterns (0.65%)
+- ✅ Manual review showed most were false positives
+- ✅ Created comprehensive documentation for decision
+
+### Documentation:
+- `/memory-bank/sprints/sprint103_multitool/README.md`
+- `/memory-bank/sprints/sprint103_multitool/DATA_DRIVEN_DECISION.md`
+- `/memory-bank/sprints/sprint103_multitool/SAMPLE_MESSAGES_ANALYSIS.md`
+
+---
+
+## 🚀 Sprint 102: Performance Optimization (COMPLETED - August 28, 2025)
+
+### Major Performance Improvements
+- **Status**: Completed
+- **Result**: 8-12 second reduction in generation time
+- **Impact**: Much faster user experience
+
+### Implemented Optimizations:
+- ✅ **Database Query Parallelization**: Saves 700-1000ms per request
+- ✅ **Code Caching System**: LRU cache saves 8-12 seconds on repeated prompts
+- ✅ **API Key Rotation**: Load balancing across multiple keys
+- ✅ **Client-Side Caching**: Instant response for repeated operations
+- ✅ **Bug Fixes**: Fixed userTimezone undefined error
+
+### Performance Metrics:
+- Before: 15+ seconds for simple operations
+- After: 3-5 seconds for cached operations
+- Cache hit rate: ~30% expected in production
+
+---
+
+## 🚀 Sprint 91: Promo Codes & Advanced Analytics (Paused - August 2, 2025)
 
 ### Revolutionary System Upgrades Planned
 - **Status**: Architecture & Planning Complete
@@ -999,3 +1055,15 @@ The core video generation pipeline is **production-ready** with:
 - ✅ Updated TypeScript interfaces and UI components
 
 **BUSINESS IMPACT**: Admin dashboard now shows only meaningful, accurate metrics for production use.
+- 2025-08-30: Hardened duration handling across edit/code paths.
+  - Server (generation/helpers.ts): Preserve trims by default; ignore tool-returned duration unless explicitly requested via `requestedDurationFrames`. Added logging when ignoring.
+  - Server (api/routers/scenes.ts): Added `overwriteDuration` flag to `updateSceneCode`; only update duration when true. Logged both applied and ignored cases.
+  - Client (CodePanelG.tsx): Added confirmation prompt when code-declared `durationInFrames` mismatches DB; passes `overwriteDuration` based on user choice.
+  - Goal: Prevent trim → edit from reverting manual duration. Now duration changes are intentional and auditable.
+ - 2025-08-30: Drafted Deep Research–powered “Make Better” design.
+   - Added `memory-bank/sprints/sprint98_autofix_analysis/DEEP-RESEARCH-MAKE-BETTER-DESIGN.md`.
+   - Defined plan-only Phase 1 with SSE progress and safety rails (compile → auto-fix → eval) before rollout.
+ - 2025-08-30: Transition Tool design + scaffold.
+   - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
+   - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
+   - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.

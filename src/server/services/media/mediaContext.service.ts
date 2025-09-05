@@ -97,7 +97,7 @@ export class MediaContextService {
     
     // Create lookup maps
     const byUrl = new Map(allMedia.map(m => [m.url, m]));
-    const byName = new Map(allMedia.map(m => [m.originalName || '', m]).filter(([name]) => name));
+    const byName = new Map(allMedia.map(m => [m.originalName || '', m]).filter(([name]) => name)) as Map<string, MediaAsset>;
     
     // Create tag map
     const byTag = new Map<string, MediaAsset[]>();
@@ -174,8 +174,8 @@ export class MediaContextService {
       dimensions: asset.dimensions,
       metadata: {
         // Preserve custom name in metadata
-        customName: asset.customName,
-      }
+        customName: (asset as any).customName,
+      } as any
     };
   }
   
@@ -290,7 +290,7 @@ You MUST use these exact URLs when referencing media. Do NOT generate fake URLs.
     if (context.logos.length > 0) {
       prompt += `LOGOS (${context.logos.length}):\n`;
       context.logos.forEach((logo, i) => {
-        const customName = logo.metadata?.customName as string | undefined;
+        const customName = (logo.metadata as any)?.customName as string | undefined;
         prompt += `  ${i + 1}. URL: ${logo.url}\n`;
         if (customName) {
           prompt += `     Reference as: "${customName}"\n`;
@@ -304,7 +304,7 @@ You MUST use these exact URLs when referencing media. Do NOT generate fake URLs.
     if (context.images.length > 0) {
       prompt += `IMAGES (${context.images.length}):\n`;
       context.images.forEach((img, i) => {
-        const customName = img.metadata?.customName as string | undefined;
+        const customName = (img.metadata as any)?.customName as string | undefined;
         prompt += `  ${i + 1}. URL: ${img.url}\n`;
         if (customName) {
           prompt += `     Reference as: "${customName}"\n`;
@@ -380,7 +380,9 @@ VALIDATION: After generating code, verify ALL media URLs match the list above ex
     let match;
     
     while ((match = urlPattern.exec(code)) !== null) {
-      foundUrls.push(match[1]);
+      if (match[1]) {
+        foundUrls.push(match[1]);
+      }
     }
     
     // Check each found URL
@@ -393,7 +395,7 @@ VALIDATION: After generating code, verify ALL media URLs match the list above ex
         // Try to find what the user might have meant
         const possibleMatches = this.findMediaByReference(context, url);
         
-        if (possibleMatches.length > 0) {
+        if (possibleMatches.length > 0 && possibleMatches[0]) {
           // Replace with the best match
           const replacement = possibleMatches[0].url;
           fixedCode = fixedCode.replace(url, replacement);

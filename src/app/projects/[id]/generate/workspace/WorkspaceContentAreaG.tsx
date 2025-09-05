@@ -20,11 +20,12 @@ import TemplatesPanelG from './panels/TemplatesPanelG';
 import MediaPanel from './panels/MediaPanel';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import IntegrationsPanel from './panels/IntegrationsPanel';
+import { BrandProfilePanel } from '~/components/admin/BrandProfilePanel';
 import { toast } from 'sonner';
 import { cn } from "~/lib/cn";
 import { ExportDropdown } from '~/components/export/ExportDropdown';
-import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
-import { LoopToggle, type LoopState } from "~/components/ui/LoopToggle";
+// Removed playback-speed slider from Preview header; Timeline owns playback speed now.
+import type { LoopState } from "~/components/ui/LoopToggle";
 
 // Panel definitions for BAZAAR-304 workspace
 const PANEL_COMPONENTS_G = {
@@ -36,6 +37,7 @@ const PANEL_COMPONENTS_G = {
   myprojects: MyProjectsPanelG,
   media: MediaPanel,
   integrations: IntegrationsPanel,
+  brandprofile: BrandProfilePanel,
 };
 
 const PANEL_LABELS_G = {
@@ -46,6 +48,7 @@ const PANEL_LABELS_G = {
   templates: 'Templates',
   myprojects: 'My Projects',
   media: 'Media',
+  brandprofile: 'Brand Profile',
   integrations: 'Integrations',
 };
 
@@ -71,7 +74,7 @@ export interface WorkspaceContentAreaGHandle {
 }
 
 // Sortable panel wrapper
-function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setCurrentPlaybackSpeed, currentLoopState, setCurrentLoopState, selectedSceneId, onSceneSelect, scenes }: { 
+function SortablePanelG({ id, children, style, className, onRemove, projectId, currentPlaybackSpeed, setPlaybackSpeed, currentLoopState, setCurrentLoopState, selectedSceneId, onSceneSelect, scenes }: { 
   id: string; 
   children: React.ReactNode; 
   style?: React.CSSProperties; 
@@ -79,7 +82,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
   onRemove?: () => void;
   projectId?: string;
   currentPlaybackSpeed?: number;
-  setCurrentPlaybackSpeed?: (speed: number) => void;
+  setPlaybackSpeed?: (projectId: string, speed: number) => void;
   currentLoopState?: LoopState;
   setCurrentLoopState?: (state: LoopState) => void;
   selectedSceneId?: string | null;
@@ -125,35 +128,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
             {...listeners}
           >{panelTitle}</span>
           <div className="flex items-center gap-1">
-            {isPreviewPanel && (
-              <>
-                <LoopToggle
-                  loopState={currentLoopState || 'video'}
-                  onStateChange={(state) => {
-                    console.log('[WorkspaceContentAreaG] Loop state changed:', state);
-                    setCurrentLoopState?.(state);
-                    // Dispatch event to PreviewPanelG
-                    const event = new CustomEvent('loop-state-change', { detail: { state } });
-                    window.dispatchEvent(event);
-                  }}
-                  selectedSceneId={selectedSceneId}
-                  onSceneSelect={(sceneId) => {
-                    console.log('[WorkspaceContentAreaG] Scene selected for loop:', sceneId);
-                    onSceneSelect?.(sceneId);
-                  }}
-                  scenes={scenes?.map((s, i) => ({ id: s.id, name: `Scene ${i + 1}` })) || []}
-                />
-                <PlaybackSpeedSlider
-                  currentSpeed={currentPlaybackSpeed || 1}
-                  onSpeedChange={(speed) => {
-                    setCurrentPlaybackSpeed?.(speed);
-                    // Dispatch event to PreviewPanelG
-                    const event = new CustomEvent('playback-speed-change', { detail: { speed } });
-                    window.dispatchEvent(event);
-                  }}
-                />
-              </>
-            )}
+            {/* Playback speed is controlled from Timeline; no controls here. */}
             {/* Hide close button for Preview panel; users should always have video available */}
             {!isPreviewPanel && (
               <button 
@@ -315,8 +290,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       { id: 'preview', type: 'preview' },
     ]);
     
-    // Playback speed state for preview panel header
-    const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(1);
+    // Playback speed state from Zustand (persistent across sessions)
+    const { setPlaybackSpeed } = useVideoState();
+    const currentPlaybackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1);
     
     // Loop state for preview panel header - always default to 'video'
     // The actual project-specific state will be loaded by PreviewPanelG
@@ -327,8 +303,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       const handleSpeedLoaded = (event: Event) => {
         const customEvent = event as CustomEvent;
         const speed = customEvent.detail?.speed;
-        if (typeof speed === 'number') {
-          setCurrentPlaybackSpeed(speed);
+        if (typeof speed === 'number' && projectId) {
+          setPlaybackSpeed(projectId, speed);
         }
       };
       
@@ -719,7 +695,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     }, [getCurrentProps, projectId]);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
-    const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
+  const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
       if (!panel) return null;
       
       switch (panel.type) {
@@ -733,14 +709,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         case 'media':
           return <MediaPanel
             projectId={projectId}
-            onInsertToChat={(url) => {
+            onInsertToChat={(url, name) => {
               // Broadcast drag/drop or click-insert to chat textarea via CustomEvent
               const event = new CustomEvent('chat-insert-media-url', { 
-                detail: { url, name: url.split('/').pop() } 
+                detail: { url, name: name || url.split('/').pop() } 
               });
               window.dispatchEvent(event);
             }}
-            defaultTab={shouldOpenAudioPanel ? 'audio' : 'uploads'}
+            defaultTab={'uploads' as 'uploads' | 'icons'}
           />;
         case 'preview':
           return (
@@ -779,10 +755,26 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           return <IntegrationsPanel 
             projectId={projectId}
           />;
+        case 'brandprofile':
+          return <BrandProfilePanel 
+            projectId={projectId}
+          />;
         default:
           return null;
       }
-    }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel, userId]);
+  }, [projectId, initialProps, selectedSceneId, handleSceneGenerated, removePanel, userId]);
+
+    // Sync selected scene from TimelinePanel (global event)
+    useEffect(() => {
+      const onTimelineSelect = (e: Event) => {
+        const sceneId = (e as CustomEvent).detail?.sceneId as string | null | undefined;
+        if (typeof sceneId === 'string') {
+          setSelectedSceneId(sceneId);
+        }
+      };
+      window.addEventListener('timeline-select-scene', onTimelineSelect as EventListener);
+      return () => window.removeEventListener('timeline-select-scene', onTimelineSelect as EventListener);
+    }, []);
 
     // Render empty state if no panels are open
     if (openPanels.length === 0) {
@@ -846,7 +838,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                             onRemove={() => panel?.id ? removePanel(panel.id) : null}
                             projectId={projectId}
                             currentPlaybackSpeed={currentPlaybackSpeed}
-                            setCurrentPlaybackSpeed={setCurrentPlaybackSpeed}
+                            setPlaybackSpeed={setPlaybackSpeed}
                             currentLoopState={currentLoopState}
                             setCurrentLoopState={setCurrentLoopState}
                             selectedSceneId={selectedSceneId}

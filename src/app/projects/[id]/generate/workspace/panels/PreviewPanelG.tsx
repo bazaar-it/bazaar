@@ -14,7 +14,8 @@ import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
-import { useAutoFix } from '~/hooks/use-auto-fix';
+import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
+import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -56,12 +57,13 @@ export function PreviewPanelG({
     }
   );
 
-  // Initialize auto-fixer to listen for compilation errors
-  useAutoFix(projectId, dbScenes || []);
+  // NOTE: Auto-fix hook is now only used in ChatPanelG to avoid duplicate event listeners
+  // PreviewPanelG only dispatches errors, ChatPanelG handles the fixing
   
   // Update VideoState when database scenes change
   const { replace } = useVideoState();
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
+  const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (dbScenes && dbScenes.length > 0 && currentProps) {
@@ -73,12 +75,23 @@ export function PreviewPanelG({
         return;
       }
       
-      // Database scenes updated, syncing to VideoState
-      setLastSyncedSceneIds(currentSceneIds);
+      // Do not skip based on ID set alone; order/duration may have changed
       
-      // Convert database scenes to InputProps format
+      // Clear existing sync timer
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+      
+      // Debounce the sync to avoid rapid updates
+      const timer = setTimeout(() => {
+        console.log('[PreviewPanelG] 🔄 Database scenes changed, syncing to VideoState...');
+        // Database scenes updated, syncing to VideoState
+        setLastSyncedSceneIds(currentSceneIds);
+      
+      // Convert database scenes to InputProps format (sorted by order)
+      const ordered = [...dbScenes].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
       let currentStart = 0;
-      const convertedScenes = dbScenes.map((dbScene: any) => {
+      const convertedScenes = ordered.map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
         
         // Debug log to check if tsxCode exists
@@ -95,6 +108,7 @@ export function PreviewPanelG({
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
+          order: dbScene.order ?? 0,
           // Preserve local name if it exists and is different from DB name
           name: localName || dbScene.name,
           data: {
@@ -109,19 +123,33 @@ export function PreviewPanelG({
         return scene;
       });
       
+      // Dedupe by ID for defense-in-depth.
+      // Prevents accidental duplicates if multiple writers ever reappear.
+      // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+      const dedupedScenes = Array.from(new Map(convertedScenes.map((s: any) => [s.id, s])).values());
       // Update VideoState with new scenes
       const updatedProps = {
         ...currentProps,
-        scenes: convertedScenes,
+        scenes: dedupedScenes,
         meta: {
           ...currentProps.meta,
-          duration: currentStart
+          duration: dedupedScenes.reduce((sum: number, s: any) => sum + (s.duration || 0), 0)
         }
       };
       
-      replace(projectId, updatedProps);
+        replace(projectId, updatedProps);
+      }, 300); // 300ms debounce for DB sync
+      
+      setSyncDebounceTimer(timer);
     }
-  }, [dbScenes, projectId]);
+    
+    // Cleanup on unmount or deps change
+    return () => {
+      if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+      }
+    };
+  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -135,6 +163,9 @@ export function PreviewPanelG({
   const playerRef = useRef<PlayerRef>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Cache for namespaced scene code to avoid repeated regex work on every render
+  // Cache wrapped scene code along with detected Remotion fn usage
+  const nsCacheRef = useRef<Map<string, { code: string; usedRemotionFns: string[] }>>(new Map());
   
   // Loop state - using the three-state system
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
@@ -142,8 +173,14 @@ export function PreviewPanelG({
   // Fonts are now loaded via CSS - no JavaScript loading needed
   // All 99 Google Fonts are available through fonts.css imported in MainCompositionSimple
   
-  // Get scenes from reactive state
-  const scenes = currentProps?.scenes || [];
+  // Get scenes from reactive state - ALWAYS sort by order field for consistency
+  const unsortedScenes = currentProps?.scenes || [];
+  const scenes = useMemo(() => 
+    [...unsortedScenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0)),
+    [unsortedScenes]
+  );
+  const ranges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
+  const activeRange = useMemo(() => findSceneAtFrame(ranges, currentFrame), [ranges, currentFrame]);
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -223,26 +260,65 @@ export function PreviewPanelG({
       }
     };
     
+    // New: Provide precise current frame on demand
+    const handleRequestCurrentFrame = () => {
+      try {
+        const frame = (playerRef.current as any)?.getCurrentFrame?.();
+        if (typeof frame === 'number') {
+          const ev = new CustomEvent('preview-frame-update', { detail: { frame } });
+          window.dispatchEvent(ev);
+        }
+      } catch {}
+    };
+    
+    const handleRequestPlayState = () => {
+      try {
+        const ev = new CustomEvent('preview-play-state-change', { detail: { playing: isPlaying } });
+        window.dispatchEvent(ev);
+      } catch {}
+    };
+
     window.addEventListener('timeline-seek' as any, handleTimelineSeek);
     window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    window.addEventListener('request-play-state' as any, handleRequestPlayState);
+    window.addEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     
     return () => {
       window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
       window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+      window.removeEventListener('request-play-state' as any, handleRequestPlayState);
+      window.removeEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     };
   }, [isPlaying, setCurrentFrame]);
 
   // (moved below selectedSceneRange definition to avoid TDZ)
   
-  // Memoized scene fingerprint to prevent unnecessary re-renders
+  // Memoized scene fingerprint to prevent unnecessary re-renders - order-aware
   const scenesFingerprint = useMemo(() => {
-    return `${scenes.length}-${scenes.map(s => `${s.id}-${typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0}`).join(',')}`;
-  }, [scenes.length, scenes.map(s => s.id).join(','), scenes.map(s => typeof s.data?.tsxCode === 'string' ? s.data.tsxCode.length : 0).join(',')]);
+    // Sort scenes first to ensure consistent fingerprint regardless of state order
+    const sortedForFingerprint = [...scenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
+    // Check both possible code locations and use actual code content hash
+    return sortedForFingerprint.map((s, idx) => {
+      const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
+      // Create stable fingerprint including id, duration, order, and code hash
+      // Include index to detect reordering
+      const codeHash = code ? `${code.length}-${code.substring(0, 200).replace(/\s+/g, '')}` : 'empty';
+      return `${idx}-${s.id}-${(s as any).order ?? 0}-${s.duration || 150}-${codeHash}`;
+    }).join('|');
+  }, [scenes]);
   
   // Memoized audio fingerprint to prevent unnecessary re-renders
   const audioFingerprint = useMemo(() => {
     return `${projectAudio?.url || ''}-${projectAudio?.startTime || 0}-${projectAudio?.endTime || 0}-${projectAudio?.volume || 1}`;
   }, [projectAudio?.url, projectAudio?.startTime, projectAudio?.endTime, projectAudio?.volume]);
+
+  // Clear wrapper namespace cache when scene fingerprint changes
+  useEffect(() => {
+    try {
+      nsCacheRef.current.clear();
+      console.log('[PreviewPanelG] Cleared namespace cache due to scene fingerprint change');
+    } catch {}
+  }, [scenesFingerprint]);
   
   // Calculate scene boundaries for scene loop functionality
   const sceneRanges = useMemo(() => {
@@ -474,6 +550,30 @@ function FallbackScene${sceneIndex}() {
       justifyContent: 'center',
       opacity,
     }}>
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          background: 'rgba(17,24,39,0.8)',
+          color: '#e5e7eb',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11,
+          lineHeight: 1.2,
+          borderRadius: 8,
+          padding: '8px 10px',
+          zIndex: 9999,
+          pointerEvents: 'none'
+        }}>
+          <div>frame: {currentFrame}</div>
+          <div>
+            active: {activeRange ? (String(activeRange.index) + ' (' + (activeRange.id ? activeRange.id.slice(0, 8) : '') + ')') : 'none'}
+          </div>
+          <div>
+            ranges: {ranges.map(r => '[' + r.index + ':' + r.start + '-' + r.end + ']').join(' ')}
+          </div>
+        </div>
+      )}
       {/* Animated background shapes */}
       <div style={{
         position: 'absolute',
@@ -717,15 +817,43 @@ function FallbackScene${sceneIndex}() {
 
   // Compile a multi-scene composition
   const compileMultiSceneComposition = useCallback(async () => {
-    // Filter scenes that have code in their data
-    const scenesWithCode = scenes.filter(scene => (scene.data as any)?.code);
+    // ALWAYS use ALL scenes sorted by order - no filtering!
+    const orderedScenes = [...scenes].sort((a, b) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
     
-    if (scenesWithCode.length === 0) {
-      setComponentError(new Error('No scenes with code found.'));
+    if (orderedScenes.length === 0) {
+      // Provide a minimal placeholder component so the Player stays stable when there are no scenes
+      const placeholder = `
+const { AbsoluteFill } = window.Remotion;
+
+export default function EmptyComposition() {
+  return React.createElement(AbsoluteFill, { style: { backgroundColor: 'white' } });
+}`;
+      try {
+        const { code: transformed } = transform(placeholder, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+        const blob = new Blob([transformed], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        setComponentBlobUrl(url);
+        setComponentImporter(() => () => import(/* webpackIgnore: true */ url));
+        setComponentError(null);
+      } catch (e) {
+        setComponentImporter(null);
+        setComponentError(new Error('No scenes to preview.')); 
+      }
       return;
     }
 
-    console.log('[PreviewPanelG] Compiling composition with', scenesWithCode.length, 'scenes...');
+    console.log('[PreviewPanelG] Compiling composition with ALL', orderedScenes.length, 'scenes (including fallbacks)...');
+    console.log('[PreviewPanelG] Scene positions for compilation:', orderedScenes.map((s: any, i: number) => ({
+      id: s.id,
+      order: s.order,
+      start: s.start,
+      duration: s.duration,
+      calculatedStart: orderedScenes.slice(0, i).reduce((acc: number, sc: any) => acc + (sc.duration || 150), 0)
+    })));
     
     setIsCompiling(true);
     setComponentError(null);
@@ -741,8 +869,9 @@ function FallbackScene${sceneIndex}() {
 
     try {
       // 🚨 FIXED: Compile each scene individually with ISOLATION (no cascade failures)
+      // Compile ALL scenes, not just those with code - use fallbacks for empty ones
       compiledScenes = await Promise.all(
-        scenesWithCode.map((scene, index) => compileSceneDirectly(scene, index))
+        orderedScenes.map((scene, index) => compileSceneDirectly(scene, index))
       );
       
       const validScenes = compiledScenes.filter(s => s.isValid).length;
@@ -784,6 +913,7 @@ function FallbackScene${sceneIndex}() {
           allImports.add('Audio');
           allImports.add('useCurrentFrame');
           allImports.add('interpolate');
+          allImports.add('Series'); // use Series.Sequence to time-offset audio
         }
         
         const allImportsArray = Array.from(allImports);
@@ -794,6 +924,104 @@ function FallbackScene${sceneIndex}() {
 ${singleDestructuring}
 // Preserve native Audio constructor for scenes that might need it
 const NativeAudio = window.NativeAudio || window.Audio;
+
+// Create a wrapper component that loads fonts before rendering the scene
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
 
 ${scene.compiledCode}
 
@@ -1013,30 +1241,35 @@ class SingleSceneErrorBoundary extends React.Component {
 // Enhanced Audio Component with Fade Effects
 const EnhancedAudio = ({ audioData }) => {
   const frame = useCurrentFrame();
-  const startFrame = Math.floor(audioData.startTime * 30);
-  const endFrame = Math.floor(audioData.endTime * 30);
+  // Audio trimming: startTime is where in the audio file to start playing from
+  const audioOffsetFrames = Math.floor((audioData.startTime || 0) * 30);
+  const audioEndFrames = Math.floor((audioData.endTime || audioData.duration || 0) * 30);
+  const audioDurationFrames = audioEndFrames - audioOffsetFrames;
+  
+  // Timeline positioning: audio always starts at frame 0 in the video
+  const videoStartFrame = 0;
+  
   const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
   const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
-  const duration = endFrame - startFrame;
   
   // Calculate volume with fade effects
   let volume = audioData.volume;
   
-  // Apply fade in
-  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+  // Apply fade in (relative to video timeline)
+  if (fadeInFrames > 0 && frame < videoStartFrame + fadeInFrames) {
     volume *= interpolate(
       frame,
-      [startFrame, startFrame + fadeInFrames],
+      [videoStartFrame, videoStartFrame + fadeInFrames],
       [0, 1],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
   }
   
-  // Apply fade out
-  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+  // Apply fade out (relative to video timeline)
+  if (fadeOutFrames > 0 && frame > videoStartFrame + audioDurationFrames - fadeOutFrames) {
     volume *= interpolate(
       frame,
-      [endFrame - fadeOutFrames, endFrame],
+      [videoStartFrame + audioDurationFrames - fadeOutFrames, videoStartFrame + audioDurationFrames],
       [1, 0],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
@@ -1047,22 +1280,26 @@ const EnhancedAudio = ({ audioData }) => {
     return null;
   }
   
-  return React.createElement(Audio, {
-    src: audioData.url,
-    startFrom: startFrame,
-    endAt: endFrame,
-    volume: volume,
-    playbackRate: audioData.playbackRate || 1
-  });
+  return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
+    React.createElement(Audio, {
+      src: audioData.url,
+      startFrom: audioOffsetFrames, // This is the key fix - offset within the audio file
+      // endAt intentionally omitted; Sequence duration bounds playback
+      volume: volume,
+      playbackRate: audioData.playbackRate || 1
+    })
+  );
 };
 
 export default function SingleSceneComposition() {
   // Get audio from props
   const projectAudio = window.projectAudio;
   
-  return React.createElement(AbsoluteFill, {},
-    projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
-    React.createElement(SingleSceneErrorBoundary)
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      React.createElement(SingleSceneErrorBoundary)
+    )
   );
 }
         `;
@@ -1116,29 +1353,60 @@ export default function SingleSceneComposition() {
         // Multi-scene composition logic with compiled scenes
         const sceneImports: string[] = [];
         const sceneComponents: string[] = [];
-        const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-        const allImports = new Set(['Series', 'AbsoluteFill', 'Loop', 'Audio', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
-
+        // Use ALL scenes for total duration - critical for sync!
+        const totalDuration = orderedScenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+        const allImports = new Set(['Series', 'AbsoluteFill', 'Audio', 'Img', 'Sequence', 'useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'random']);
+        
+        // Create a map of compiled scenes by ID for proper lookup
+        const compiledById = new Map();
         compiledScenes.forEach((compiled, index) => {
-          const originalScene = scenesWithCode[index];
-          if (!compiled || !originalScene) return;
+          const originalScene = orderedScenes[index];
+          if (originalScene) {
+            compiledById.set(originalScene.id, compiled);
+          }
+        });
+
+        // Build scene components for ALL ordered scenes
+        orderedScenes.forEach((originalScene, index) => {
+          const compiled = compiledById.get(originalScene.id);
+          // CRITICAL: Never skip scenes! Use fallback if compilation failed
+          if (!originalScene) return; // Only skip if scene itself is missing
           
           try {
             // 🚨 CRITICAL FIX: Handle both valid AND invalid scenes gracefully
-            if (compiled.isValid) {
+            if (compiled && compiled.isValid) {
               // ✅ VALID SCENE: Process normally
               const sceneCode = compiled.compiledCode;
-              const remotionFunctions = ['useCurrentFrame', 'useVideoConfig', 'interpolate', 'spring', 'Sequence', 'Audio', 'Video', 'Img', 'staticFile'];
-              remotionFunctions.forEach(func => {
-                if (sceneCode.includes(func)) {
-                  allImports.add(func);
-                }
-              });
+              // Use a STABLE namespace derived from scene ID, not from index
+              const shortId = String(originalScene.id || '')
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .slice(0, 8) || `idx${index}`;
+              const sceneNamespaceName = `SceneNS_${shortId}`; // used for error boundary wrapper names
+              const startOffset = ((originalScene as any).data?.props?.startOffset) || 0;
+              // Cache key based on scene identity + offset + quick code hash
+              const codeHash = `${sceneCode.length}-${sceneCode.substring(0, 200).replace(/\s+/g, '')}`;
+              const cacheKey = `${originalScene.id}:${startOffset}:${codeHash}`;
+              let cacheEntry = nsCacheRef.current.get(cacheKey) as any;
+              let wrappedSceneCode: string | undefined = cacheEntry?.code;
+              let usedRemotionFns: string[] = cacheEntry?.usedRemotionFns || [];
+              if (!wrappedSceneCode) {
+                const wrapped = wrapSceneNamespace({
+                  sceneCode,
+                  index,
+                  componentName: compiled.componentName,
+                  startOffset,
+                  namespaceName: sceneNamespaceName,
+                });
+                wrappedSceneCode = wrapped.code;
+                usedRemotionFns = wrapped.usedRemotionFns;
+                nsCacheRef.current.set(cacheKey, { code: wrappedSceneCode, usedRemotionFns });
+              }
+              usedRemotionFns.forEach((fn) => allImports.add(fn));
 
               // ✅ VALID: Add working scene with error boundary for runtime protection
               const errorBoundaryWrapper = `
 // React Error Boundary for Scene ${index} (Valid)
-class ${compiled.componentName}ErrorBoundary extends React.Component {
+var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -1407,32 +1675,48 @@ class ${compiled.componentName}ErrorBoundary extends React.Component {
       return React.createElement(ErrorDisplay);
     }
 
-    return React.createElement(${compiled.componentName});
+    return React.createElement(${sceneNamespaceName}.Comp);
   }
 }
 
-function ${compiled.componentName}WithErrorBoundary() {
-  return React.createElement(${compiled.componentName}ErrorBoundary);
+var ${sceneNamespaceName}WithErrorBoundary = function() {
+  return React.createElement(${sceneNamespaceName}ErrorBoundary);
 }`;
               
-              sceneImports.push(compiled.compiledCode);
+              sceneImports.push(wrappedSceneCode!);
               sceneImports.push(errorBoundaryWrapper);
+              // Render with error boundary; offset applied via namespaced useCurrentFrame
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName}WithErrorBoundary />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${sceneNamespaceName}WithErrorBoundary, {})
+                )
               `);
               
-            } else {
+            } else if (compiled) {
               // 🚨 INVALID SCENE: Already has fallback code, just add it with error boundary
               // Scene isolation: failed compilation, using safe fallback
               
               // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
               sceneImports.push(compiled.compiledCode);
               sceneComponents.push(`
-                <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                  <${compiled.componentName} />
-                </Series.Sequence>
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(${compiled.componentName}, {})
+                )
+              `);
+            } else {
+              // 🚨 NO COMPILATION RESULT: Scene wasn't compiled at all (e.g., no code)
+              // Add a placeholder to maintain timeline sync
+              const placeholderScene = createFallbackScene(
+                (originalScene.data as any)?.name || (originalScene as any).name || `Scene ${index + 1}`,
+                index,
+                'Scene has no code',
+                originalScene.id
+              );
+              sceneImports.push(placeholderScene);
+              sceneComponents.push(`
+                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                  React.createElement(FallbackScene${index}, {})
+                )
               `);
             }
 
@@ -1527,9 +1811,9 @@ function EmergencyScene${index}() {
 }`;
             sceneImports.push(emergencyFallback);
             sceneComponents.push(`
-              <Series.Sequence durationInFrames={${originalScene.duration || 150}} premountFor={60}>
-                <EmergencyScene${index} />
-              </Series.Sequence>
+              React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(EmergencyScene${index}, {})
+              )
             `);
           }
         });
@@ -1540,6 +1824,7 @@ function EmergencyScene${index}() {
           allImports.add('Audio');
           allImports.add('useCurrentFrame');
           allImports.add('interpolate');
+          allImports.add('Sequence');
         }
         
         const allImportsArray = Array.from(allImports);
@@ -1566,8 +1851,8 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   
   // Load comprehensive font collection in batches to avoid URL length limits
   const fontGroups = [
-    // Group 1: Core Sans-Serif
-    'Inter:wght@100..900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
+    // Group 1: Core Sans-Serif - Ensure Inter 700 is explicitly included
+    'Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
     // Group 2: Extended Sans-Serif
     'Work+Sans:wght@100..900&family=Rubik:wght@300..900&family=Barlow:wght@100..900&family=Kanit:wght@100..900&family=DM+Sans:wght@400..700&family=Plus+Jakarta+Sans:wght@200..800&family=Space+Grotesk:wght@300..700&family=Outfit:wght@100..900&family=Lexend:wght@100..900&family=Manrope:wght@200..800',
     // Group 3: Serif & Display
@@ -1590,34 +1875,138 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   console.log('[Bazaar] Google Fonts loaded for consistent rendering');
 }
 
+// Create a wrapper component that loads fonts before rendering scenes
+const FontLoader = ({ children }) => {
+  const [fontsLoaded, setFontsLoaded] = React.useState(false);
+  
+  React.useEffect(() => {
+    // Inject font styles directly into the document
+    if (!document.getElementById('bazaar-preview-fonts')) {
+      const style = document.createElement('style');
+      style.id = 'bazaar-preview-fonts';
+      style.textContent = \`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+      \`;
+      document.head.appendChild(style);
+      
+      // Wait a bit for fonts to load
+      setTimeout(() => setFontsLoaded(true), 100);
+    } else {
+      setFontsLoaded(true);
+    }
+  }, []);
+  
+  // Show loading state while fonts load
+  if (!fontsLoaded) {
+    return React.createElement(AbsoluteFill, {
+      style: { backgroundColor: 'white' }
+    });
+  }
+  
+  return children;
+};
+
+// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
+if (!window.RemotionGoogleFontsLoaded) {
+  window.RemotionGoogleFontsLoaded = new Set();
+}
+
+window.RemotionGoogleFonts = {
+  loadFont: (fontFamily, options) => {
+    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
+    
+    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
+      window.RemotionGoogleFontsLoaded.add(fontKey);
+      
+      // Build the Google Fonts URL with the specific weights
+      const weights = options?.weights || ['400'];
+      const weightString = weights.join(';');
+      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
+      
+      // Create and inject the font link
+      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        
+        // Force font loading by checking if it's available
+        if (document.fonts && document.fonts.check) {
+          setTimeout(() => {
+            weights.forEach(weight => {
+              const testString = \`\${weight} 16px "\${fontFamily}"\`;
+              if (!document.fonts.check(testString)) {
+                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
+                // Try to trigger loading by using the font
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
+                testDiv.style.fontWeight = weight;
+                testDiv.style.position = 'absolute';
+                testDiv.style.visibility = 'hidden';
+                testDiv.textContent = 'Test';
+                document.body.appendChild(testDiv);
+                setTimeout(() => document.body.removeChild(testDiv), 100);
+              } else {
+                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
+              }
+            });
+          }, 500); // Give time for CSS to load
+        }
+      }
+    }
+    
+    // Return a mock result similar to @remotion/google-fonts
+    return {
+      fontFamily: fontFamily,
+      fonts: {},
+      unicodeRanges: {},
+      waitUntilDone: () => Promise.resolve()
+    };
+  }
+};
+
 ${sceneImports.join('\n\n')}
 
 // Enhanced Audio Component with Fade Effects
 const EnhancedAudio = ({ audioData }) => {
   const frame = useCurrentFrame();
-  const startFrame = Math.floor(audioData.startTime * 30);
-  const endFrame = Math.floor(audioData.endTime * 30);
+  // Audio trimming: startTime is where in the audio file to start playing from
+  const audioOffsetFrames = Math.floor((audioData.startTime || 0) * 30);
+  const audioEndFrames = Math.floor((audioData.endTime || audioData.duration || 0) * 30);
+  const audioDurationFrames = audioEndFrames - audioOffsetFrames;
+  
+  // Timeline positioning: audio always starts at frame 0 in the video
+  const videoStartFrame = 0;
+  
   const fadeInFrames = Math.floor((audioData.fadeInDuration || 0) * 30);
   const fadeOutFrames = Math.floor((audioData.fadeOutDuration || 0) * 30);
   
   // Calculate volume with fade effects
   let volume = audioData.volume;
   
-  // Apply fade in
-  if (fadeInFrames > 0 && frame < startFrame + fadeInFrames) {
+  // Apply fade in (relative to video timeline)
+  if (fadeInFrames > 0 && frame < videoStartFrame + fadeInFrames) {
     volume *= interpolate(
       frame,
-      [startFrame, startFrame + fadeInFrames],
+      [videoStartFrame, videoStartFrame + fadeInFrames],
       [0, 1],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
   }
   
-  // Apply fade out
-  if (fadeOutFrames > 0 && frame > endFrame - fadeOutFrames) {
+  // Apply fade out (relative to video timeline)
+  if (fadeOutFrames > 0 && frame > videoStartFrame + audioDurationFrames - fadeOutFrames) {
     volume *= interpolate(
       frame,
-      [endFrame - fadeOutFrames, endFrame],
+      [videoStartFrame + audioDurationFrames - fadeOutFrames, videoStartFrame + audioDurationFrames],
       [1, 0],
       { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
     );
@@ -1628,13 +2017,14 @@ const EnhancedAudio = ({ audioData }) => {
     return null;
   }
   
-  return React.createElement(Audio, {
-    src: audioData.url,
-    startFrom: startFrame,
-    endAt: endFrame,
-    volume: volume,
-    playbackRate: audioData.playbackRate || 1
-  });
+  return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
+    React.createElement(Audio, {
+      src: audioData.url,
+      startFrom: audioOffsetFrames, // This is the key fix - offset within the audio file
+      volume: volume,
+      playbackRate: audioData.playbackRate || 1
+    })
+  );
 };
 
 export default function MultiSceneComposition(props) {
@@ -1651,15 +2041,14 @@ export default function MultiSceneComposition(props) {
     }
   }, [projectAudio]);
   
-  return (
-    <AbsoluteFill>
-      {projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio })}
-      <Loop durationInFrames={${totalDuration}}>
-        <Series>
-          ${sceneComponents.join('\n          ')}
-        </Series>
-      </Loop>
-    </AbsoluteFill>
+  return React.createElement(FontLoader, {},
+    React.createElement(AbsoluteFill, {},
+      projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
+      // NO LOOP! Direct Series for proper frame mapping
+      React.createElement(Series, {},
+        ${sceneComponents.join(',\n          ')}
+      )
+    )
   );
 }
         `;
@@ -1716,7 +2105,7 @@ export default function MultiSceneComposition(props) {
       // Try to identify which scene might be causing the issue
       let problematicSceneInfo = null;
       if (error instanceof Error) {
-        problematicSceneInfo = detectProblematicScene(error, compiledScenes, scenesWithCode);
+        problematicSceneInfo = detectProblematicScene(error, compiledScenes, orderedScenes);
         
         if (problematicSceneInfo) {
           const enhancedMessage = enhanceErrorMessage(error, problematicSceneInfo);
@@ -1730,7 +2119,7 @@ export default function MultiSceneComposition(props) {
       // 🚨 CRITICAL FIX: Dispatch error event for autofixer when compilation fails
       if (problematicSceneInfo) {
         // We know which specific scene is problematic
-        const problematicScene = scenesWithCode[problematicSceneInfo.sceneIndex];
+        const problematicScene = orderedScenes[problematicSceneInfo.sceneIndex];
         if (problematicScene) {
           // Compilation error: dispatching error for specific scene
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -1745,7 +2134,7 @@ export default function MultiSceneComposition(props) {
         }
       } else {
         // Fallback to first scene if we can't identify the specific one
-        const firstSceneWithCode = scenesWithCode[0];
+        const firstSceneWithCode = orderedScenes[0];
         if (firstSceneWithCode) {
           // Compilation error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -1818,7 +2207,7 @@ export default function FallbackComposition() {
         console.error('[PreviewPanelG] Even fallback compilation failed:', fallbackError);
         
         // 🚨 CRITICAL FIX: Dispatch error event even for fallback failures
-        const firstSceneWithCode = scenesWithCode[0];
+        const firstSceneWithCode = orderedScenes[0];
         if (firstSceneWithCode) {
           // Fallback error: dispatching preview-scene-error event for autofixer
           const errorEvent = new CustomEvent('preview-scene-error', {
@@ -1838,29 +2227,65 @@ export default function FallbackComposition() {
     }
   }, [scenes]);
 
-  // 🚨 FIX: Debounced compilation to prevent multiple rapid recompiles
-  const [compilationDebounceTimer, setCompilationDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 🚨 SMART COMPILATION: Use ref to avoid recreating timer on every render
+  const compilationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCompiledFingerprintRef = useRef<string>('');
+  const isCompilingRef = useRef<boolean>(false);
   
   useEffect(() => {
     if (scenes.length > 0) {
-      // Clear existing timer
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
+      
+      // Skip if fingerprint hasn't actually changed (prevents duplicate compiles)
+      if (currentFingerprint === lastCompiledFingerprintRef.current) {
+        console.log('[PreviewPanelG] 🎯 Fingerprint unchanged, skipping compilation');
+        return;
       }
       
-      // Set new debounced timer
-      const timer = setTimeout(() => {
-        // Scenes changed (debounced), recompiling
-        compileMultiSceneComposition();
-      }, 100); // 100ms debounce
+      // Skip if already compiling
+      if (isCompilingRef.current) {
+        console.log('[PreviewPanelG] ⏳ Already compiling, will queue next compilation');
+      }
       
-      setCompilationDebounceTimer(timer);
+      // Clear existing timer
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
+      }
+      
+      // Set new debounced timer with increased delay to batch rapid updates
+      compilationTimerRef.current = setTimeout(async () => {
+        // Double-check fingerprint hasn't become the same during debounce
+        const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
+        if (latestFingerprint === lastCompiledFingerprintRef.current) {
+          console.log('[PreviewPanelG] 🎯 Fingerprint became unchanged during debounce, skipping');
+          return;
+        }
+        
+        // Prevent overlapping compilations
+        if (isCompilingRef.current) {
+          console.log('[PreviewPanelG] ⏳ Still compiling previous, skipping this update');
+          return;
+        }
+        
+        console.log('[PreviewPanelG] 📝 Scene content changed, triggering compilation');
+        console.log('[PreviewPanelG] Old fingerprint:', lastCompiledFingerprintRef.current?.substring(0, 50) + '...');
+        console.log('[PreviewPanelG] New fingerprint:', latestFingerprint.substring(0, 50) + '...');
+        
+        isCompilingRef.current = true;
+        lastCompiledFingerprintRef.current = latestFingerprint;
+        
+        try {
+          await compileMultiSceneComposition();
+        } finally {
+          isCompilingRef.current = false;
+        }
+      }, 600); // Increased to 600ms to better batch rapid updates
     }
     
     // Cleanup on unmount
     return () => {
-      if (compilationDebounceTimer) {
-        clearTimeout(compilationDebounceTimer);
+      if (compilationTimerRef.current) {
+        clearTimeout(compilationTimerRef.current);
       }
     };
   }, [scenesFingerprint, audioFingerprint, compileMultiSceneComposition]);
@@ -2006,6 +2431,14 @@ export default function FallbackComposition() {
     }
   }, [projectId]);
 
+  // Ensure loop target changes take effect immediately by nudging refreshToken
+  useEffect(() => {
+    // Remount the Remotion Player when switching between scene/video loop or when scene range changes
+    const start = selectedSceneRange?.start ?? -1;
+    const end = selectedSceneRange?.end ?? -1;
+    setRefreshToken(`loop-${loopState}-${start}-${end}-${Date.now()}`);
+  }, [loopState, selectedSceneRange?.start, selectedSceneRange?.end]);
+
   // Cleanup effect for component unmount
   useEffect(() => {
     return () => {
@@ -2021,10 +2454,10 @@ export default function FallbackComposition() {
 
   // Player props
   const playerProps = useMemo(() => {
-    if (!scenes.length) return null;
-    
     // Calculate total duration of all scenes for proper multi-scene playback
-    const totalDuration = scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0);
+    const totalDuration = scenes.length
+      ? scenes.reduce((sum, scene) => sum + (scene.duration || 150), 0)
+      : 150; // Minimal placeholder duration when no scenes
     
     // Get format dimensions from project props, fallback to landscape
     const width = currentProps?.meta?.width || 1920;
@@ -2036,7 +2469,7 @@ export default function FallbackComposition() {
       width,
       height,
       format,
-      durationInFrames: totalDuration, // Use total duration, not just last scene
+      durationInFrames: totalDuration, // Use total duration (or placeholder when empty)
       inputProps: {
         audio: projectAudio || null
       }
@@ -2073,6 +2506,7 @@ export default function FallbackComposition() {
             )}
           >
             <ErrorBoundary FallbackComponent={ErrorFallback}>
+              {/* Compute safe scene loop window (exclusive outFrame) to satisfy Player constraints */}
               <RemotionPreview
                 lazyComponent={componentImporter}
                 durationInFrames={playerProps.durationInFrames}
@@ -2084,8 +2518,22 @@ export default function FallbackComposition() {
                 playerRef={playerRef}
                 playbackRate={playbackSpeed}
                 loop={loopState !== 'off'}
-                inFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.start : undefined}
-                outFrame={loopState === 'scene' && selectedSceneRange ? selectedSceneRange.end : undefined}
+                // Remotion Player expects inFrame < outFrame < (durationInFrames - 1)
+                inFrame={(() => {
+                  if (loopState !== 'scene' || !selectedSceneRange || !playerProps) return undefined;
+                  return Math.max(0, selectedSceneRange.start);
+                })()}
+                outFrame={(() => {
+                  if (loopState !== 'scene' || !selectedSceneRange || !playerProps) return undefined;
+                  const total = playerProps.durationInFrames;
+                  const start = Math.max(0, selectedSceneRange.start);
+                  const endInclusive = Math.min(total - 1, selectedSceneRange.end);
+                  const maxOutExclusive = Math.max(1, total - 2);
+                  const desiredOutExclusive = endInclusive + 1; // exclusive end
+                  const outExclusive = Math.min(desiredOutExclusive, maxOutExclusive);
+                  // Validate window
+                  return outExclusive > start ? outExclusive : undefined;
+                })()}
                 onPlay={() => {
                   setIsPlaying(true);
                   const event = new CustomEvent('preview-play-state-change', { 

@@ -183,6 +183,9 @@ export const durationInFrames_ERROR = 180;`;
       assetUrls: input.assetUrls, // Pass persistent asset URLs
       isYouTubeAnalysis: input.isYouTubeAnalysis, // Pass YouTube analysis flag
       templateContext: input.templateContext, // Pass template context for better generation
+      promptVersion: (input as any).promptVersion, // Pass prompt version for A/B testing
+      // CRITICAL: Pass ALL scene context for consistency
+      storyboardContext: input.storyboardSoFar, // We have this but weren't using it!
     });
 
     // Return generated content - NO DATABASE!
@@ -500,7 +503,7 @@ IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add s
     
     // Check if we have V2 extraction data with full brand system
     // Also check for the existence of key V2 fields
-    const visualDesign = input.webContext.pageData?.visualDesign;
+    const visualDesign = (input.webContext as any).pageData?.visualDesign;
     const hasV2Extraction = visualDesign?.extraction || 
                            (visualDesign?.colorSystem && visualDesign?.shadows && visualDesign?.borderRadius);
     
@@ -531,8 +534,8 @@ IMPORTANT: Match the exact colors, layout, and text from the Figma design. Add s
     ];
 
     // Enhanced prompt for MOTION GRAPHICS based on extracted brand
-    const brandVisualDesign = input.webContext.pageData.visualDesign;
-    const narrative = input.webContext.pageData.productNarrative;
+    const brandVisualDesign = (input.webContext as any).pageData.visualDesign;
+    const narrative = (input.webContext as any).pageData.productNarrative;
     const enhancedPrompt = `${input.userPrompt}
 
 🎬 CREATE A MOTION GRAPHICS VIDEO BASED ON THIS BRAND:
@@ -543,13 +546,13 @@ HEADLINE: "${narrative.headline}"
 SUBHEADLINE: "${narrative.subheadline}"
 
 KEY FEATURES:
-${narrative.features.slice(0, 3).map(f => `• ${f.title}: ${f.description}`).join('\n')}
+${narrative.features.slice(0, 3).map((f: any) => `• ${f.title}: ${f.description}`).join('\n')}
 
 METRICS TO HIGHLIGHT:
-${narrative.metrics.map(m => `• ${m}`).join('\n')}
+${narrative.metrics.map((m: any) => `• ${m}`).join('\n')}
 
 TESTIMONIALS:
-${narrative.testimonials.slice(0, 2).map(t => `"${t.quote.slice(0, 100)}..." - ${t.author}`).join('\n')}
+${narrative.testimonials.slice(0, 2).map((t: any) => `"${t.quote.slice(0, 100)}..." - ${t.author}`).join('\n')}
 
 CALL-TO-ACTION BUTTONS:
 - Primary: "${narrative.ctas.primary}"
@@ -565,7 +568,7 @@ COLOR SYSTEM:
 - Neutrals: ${brandVisualDesign.colorSystem.neutrals.join(', ')}
 ${brandVisualDesign.colorSystem.gradients.length > 0 ? `
 GRADIENTS:
-${brandVisualDesign.colorSystem.gradients.map(g => 
+${brandVisualDesign.colorSystem.gradients.map((g: any) => 
   `- ${g.type}-gradient(${g.angle}deg, ${g.stops.join(', ')})`
 ).join('\n')}` : ''}
 
@@ -658,7 +661,7 @@ The goal is a MOTION GRAPHICS VIDEO that perfectly represents this brand, not a 
     ];
 
     // Enhanced prompt combining web context with user images
-    const webVisualDesign = input.webContext.pageData.visualDesign;
+    const webVisualDesign = (input.webContext as any).pageData.visualDesign;
     const enhancedPrompt = `${input.userPrompt}
 
 WEBSITE BRAND CONTEXT:

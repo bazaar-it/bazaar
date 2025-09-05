@@ -813,19 +813,22 @@ export default function AnalyticsPage() {
                           { label: '11-30 Days', key: 'usersActive11To30Days' },
                           { label: '30+ Days', key: 'usersActiveOver30Days' },
                         ].map((item) => {
-                          const count = engagementStats?.activeDays?.[item.key as keyof typeof engagementStats.activeDays] || 0;
-                          const percentage = engagementStats?.activeDays?.[`${item.key}Percentage` as keyof typeof engagementStats.activeDays] || '0';
+                          const countValue = engagementStats?.activeDays?.[item.key as keyof typeof engagementStats.activeDays];
+                          const percentageValue = engagementStats?.activeDays?.[`${item.key}Percentage` as keyof typeof engagementStats.activeDays];
+                          
+                          const count = typeof countValue === 'object' ? 0 : (countValue || 0);
+                          const percentage = typeof percentageValue === 'object' ? '0' : (percentageValue || '0');
                           
                           return (
                             <div key={item.key} className="space-y-1">
                               <div className="flex items-center justify-between text-sm">
                                 <span>{item.label}</span>
-                                <span className="font-medium">{count} users ({percentage}%)</span>
+                                <span className="font-medium">{String(count)} users ({String(percentage)}%)</span>
                               </div>
                               <div className="w-full bg-muted rounded-full h-2">
                                 <div
                                   className="bg-primary h-2 rounded-full transition-all"
-                                  style={{ width: `${percentage}%` }}
+                                  style={{ width: `${String(percentage)}%` }}
                                 />
                               </div>
                             </div>

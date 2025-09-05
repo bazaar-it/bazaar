@@ -12,7 +12,7 @@ import {
   extractFontsFromCode,
   getFontUrlsToLoad,
   isCoreFont 
-} from './fonts/font-registry-v2';
+} from './fonts/_archive/font-registry-v2';
 
 // Track loaded fonts to avoid duplicates
 const loadedFonts = new Set<string>();
@@ -39,7 +39,7 @@ async function loadFontFamily(fontFamily: string): Promise<void> {
   try {
     // Load all variants of this font
     await Promise.all(
-      fontEntry.variants.map(async (variant) => {
+      fontEntry.variants.map(async (variant: any) => {
         try {
           await loadFont({
             family: fontEntry.family,
@@ -71,7 +71,7 @@ export async function loadCoreFonts(): Promise<void> {
   try {
     // Load all core fonts in parallel
     await Promise.all(
-      CORE_FONTS_LIST.map(font => loadFontFamily(font.family))
+      CORE_FONTS_LIST.map((font: any) => loadFontFamily(font.family))
     );
 
     const duration = Date.now() - startTime;
@@ -93,7 +93,7 @@ export async function loadSceneFonts(code: string): Promise<void> {
   const fontUrls = getFontUrlsToLoad(fontFamilies);
   
   // Load each font using @remotion/fonts
-  await Promise.all(fontUrls.map(async ({ family, url, weight }) => {
+  await Promise.all(fontUrls.map(async ({ family, url, weight }: { family: string; url: string; weight: string }) => {
     try {
       await loadFont({
         family,
@@ -187,4 +187,4 @@ export const FontLoaderNew: React.FC<FontLoaderProps> = ({ children, sceneCodes 
 };
 
 // Export for use in other components
-export { loadFontFamily, loadSceneFonts };
+export { loadFontFamily };

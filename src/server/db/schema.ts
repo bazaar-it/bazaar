@@ -105,6 +105,7 @@ export const projects = createTable(
     title: d.varchar({ length: 255 }).notNull(),
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
+    audioUpdatedAt: d.timestamp("audio_updated_at", { withTimezone: true }),
     isWelcome: d.boolean().default(true).notNull(),
     isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -155,7 +156,10 @@ export const messages = createTable(
     role: d.varchar({ length: 50 }).notNull(), // 'user' or 'assistant'
     kind: d.varchar({ length: 50 }).default("message").notNull(), // 'message' | 'status'
     status: d.varchar({ length: 50 }), // 'pending' | 'building' | 'success' | 'error'
-    imageUrls: d.jsonb("image_urls").$type<string[]>(), // 🚨 NEW: Support for uploaded images
+    imageUrls: d.jsonb("image_urls").$type<string[]>(), // Support for uploaded images
+    videoUrls: d.jsonb("video_urls").$type<string[]>(), // Support for uploaded videos
+    audioUrls: d.jsonb("audio_urls").$type<string[]>(), // Support for uploaded audio files
+    sceneUrls: d.jsonb("scene_urls").$type<string[]>(), // Support for scene attachments
     sequence: d.integer().notNull().default(0), // Message sequence number for ordering
     createdAt: d
       .timestamp({ withTimezone: true })
@@ -1534,3 +1538,298 @@ export const iconUsage = createTable("icon_usage", (d) => ({
   index("icon_usage_created_idx").on(t.createdAt),
   index("icon_usage_action_idx").on(t.action),
 ])
+
+// Brand profiles table for storing extracted website brand data
+export const brandProfiles = createTable("brand_profile", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  websiteUrl: d.text("website_url").notNull(),
+  
+  // Complete brand extraction data as JSONB
+  brandData: d.jsonb("brand_data").$type<{
+    colors: {
+      primary: string;
+      secondary: string;
+      accents: string[];
+      neutrals: string[];
+      gradients: Array<{
+        stops: string[];
+        angle: number;
+        type: 'linear' | 'radial';
+      }>;
+    };
+    typography: {
+      fonts: Array<{
+        family: string;
+        weights: number[];
+        fallback?: string;
+      }>;
+      scale: Record<string, any>;
+    };
+    buttons: Record<string, any>;
+    shadows: Record<string, string>;
+    borderRadius: Record<string, string>;
+    iconography: {
+      style: 'line' | 'filled' | 'duotone' | 'mixed';
+      detectedIcons: string[];
+    };
+    imageryStyle: string[];
+    backgroundEffects: string[];
+    logo: {
+      light?: string;
+      dark?: string;
+      monochrome?: string;
+      favicon?: string;
+      ogImage?: string;
+    };
+  }>().notNull().$default(() => ({
+    colors: {
+      primary: '',
+      secondary: '',
+      accents: [],
+      neutrals: [],
+      gradients: []
+    },
+    typography: {
+      fonts: [],
+      scale: {}
+    },
+    buttons: {},
+    shadows: {},
+    borderRadius: {},
+    iconography: {
+      style: 'line' as const,
+      detectedIcons: []
+    },
+    imageryStyle: [],
+    backgroundEffects: [],
+    logo: {}
+  })),
+  
+  // Individual extraction elements for quick access
+  colors: d.jsonb("colors").$default(() => ({})),
+  typography: d.jsonb("typography").$default(() => ({})),
+  logos: d.jsonb("logos").$default(() => ({})),
+  
+  // Copy and voice data
+  copyVoice: d.jsonb("copy_voice").$type<{
+    voice: {
+      adjectives: string[];
+      tone: string;
+    };
+    valueProposition: {
+      headline: string;
+      subheadline: string;
+    };
+    taglines: string[];
+    ctas: Record<string, string>;
+  }>().$default(() => ({
+    voice: {
+      adjectives: [],
+      tone: ''
+    },
+    valueProposition: {
+      headline: '',
+      subheadline: ''
+    },
+    taglines: [],
+    ctas: {}
+  })),
+  
+  // Product narrative
+  productNarrative: d.jsonb("product_narrative").$type<{
+    audience: Record<string, any>;
+    problem: string;
+    solution: string;
+    useCases: Array<any>;
+    benefits: Array<any>;
+    features: Array<any>;
+  }>().$default(() => ({
+    audience: {},
+    problem: '',
+    solution: '',
+    useCases: [],
+    benefits: [],
+    features: []
+  })),
+  
+  // Social proof
+  socialProof: d.jsonb("social_proof").$type<{
+    testimonials: Array<any>;
+    caseStudies: Array<any>;
+    trustBadges: Record<string, any>;
+    logos: string[];
+    stats: Record<string, string>;
+  }>().$default(() => ({
+    testimonials: [],
+    caseStudies: [],
+    trustBadges: {},
+    logos: [],
+    stats: {}
+  })),
+  
+  // Screenshots and media assets
+  screenshots: d.jsonb("screenshots").$type<Array<{
+    url: string;
+    viewport: string;
+    width: number;
+    height: number;
+    s3Url?: string;
+  }>>().default([]),
+  
+  mediaAssets: d.jsonb("media_assets").$type<Array<{
+    url: string;
+    type: string;
+    s3Url?: string;
+  }>>().default([]),
+  
+  // Metadata
+  extractionVersion: d.text("extraction_version").default("1.0.0"),
+  extractionConfidence: d.jsonb("extraction_confidence").$default(() => ({})),
+  lastAnalyzedAt: d.timestamp("last_analyzed_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("brand_profiles_project_idx").on(t.projectId),
+  index("brand_profiles_url_idx").on(t.websiteUrl),
+  index("brand_profiles_created_idx").on(t.createdAt),
+]);
+
+// Brand profile versions for tracking changes over time
+export const brandProfileVersions = createTable("brand_profile_version", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  brandProfileId: d.uuid("brand_profile_id")
+    .notNull()
+    .references(() => brandProfiles.id, { onDelete: "cascade" }),
+  versionNumber: d.integer("version_number").notNull(),
+  brandData: d.jsonb("brand_data").notNull(),
+  changedBy: d.varchar("changed_by", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  changeReason: d.text("change_reason"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("brand_versions_profile_idx").on(t.brandProfileId),
+  index("brand_versions_created_idx").on(t.createdAt),
+  uniqueIndex("brand_versions_unique_idx").on(t.brandProfileId, t.versionNumber),
+]);
+
+// Relations for brand profiles
+export const brandProfilesRelations = relations(brandProfiles, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [brandProfiles.projectId],
+    references: [projects.id],
+  }),
+  versions: many(brandProfileVersions),
+}));
+
+export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ one }) => ({
+  brandProfile: one(brandProfiles, {
+    fields: [brandProfileVersions.brandProfileId],
+    references: [brandProfiles.id],
+  }),
+  changedByUser: one(users, {
+    fields: [brandProfileVersions.changedBy],
+    references: [users.id],
+  }),
+}))
+
+// Auto-fix metrics table for tracking error corrections
+export const autofixMetrics = createTable("autofix_metrics", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d.uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  sceneId: d.uuid("scene_id")
+    .references(() => scenes.id, { onDelete: "cascade" }),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  
+  // Error information
+  errorMessage: d.text("error_message").notNull(),
+  errorType: d.varchar("error_type", { length: 100 }), // 'compilation', 'runtime', 'timeout', etc.
+  errorSignature: d.varchar("error_signature", { length: 255 }), // Hash for deduplication
+  
+  // Fix attempt details
+  fixAttemptNumber: d.integer("fix_attempt_number").notNull().default(1),
+  fixStrategy: d.varchar("fix_strategy", { length: 50 }), // 'minimal', 'comprehensive', 'rewrite'
+  fixSuccess: d.boolean("fix_success").notNull().default(false),
+  fixDurationMs: d.integer("fix_duration_ms"),
+  
+  // Cost tracking
+  apiCallsCount: d.integer("api_calls_count").default(0),
+  estimatedCost: d.real("estimated_cost"),
+  
+  // Metadata
+  sessionId: d.varchar("session_id", { length: 100 }),
+  userAgent: d.text("user_agent"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("autofix_project_idx").on(t.projectId),
+  index("autofix_user_idx").on(t.userId),
+  index("autofix_scene_idx").on(t.sceneId),
+  index("autofix_created_idx").on(t.createdAt),
+  index("autofix_signature_idx").on(t.errorSignature),
+  index("autofix_session_idx").on(t.sessionId),
+])
+
+// Auto-fix session summaries for aggregated metrics
+export const autofixSessions = createTable("autofix_sessions", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  sessionId: d.varchar("session_id", { length: 100 }).notNull().unique(),
+  userId: d.varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  projectId: d.uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" }),
+  
+  // Session metrics
+  totalErrors: d.integer("total_errors").notNull().default(0),
+  uniqueErrors: d.integer("unique_errors").notNull().default(0),
+  successfulFixes: d.integer("successful_fixes").notNull().default(0),
+  failedFixes: d.integer("failed_fixes").notNull().default(0),
+  totalApiCalls: d.integer("total_api_calls").notNull().default(0),
+  totalCost: d.real("total_cost"),
+  
+  // Circuit breaker state
+  circuitBreakerTripped: d.boolean("circuit_breaker_tripped").default(false),
+  killSwitchActivated: d.boolean("kill_switch_activated").default(false),
+  
+  // Timestamps
+  startedAt: d.timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: d.timestamp("ended_at", { withTimezone: true }),
+}), (t) => [
+  index("autofix_session_user_idx").on(t.userId),
+  index("autofix_session_project_idx").on(t.projectId),
+  index("autofix_session_started_idx").on(t.startedAt),
+])
+
+// Relations for auto-fix metrics
+export const autofixMetricsRelations = relations(autofixMetrics, ({ one }) => ({
+  project: one(projects, {
+    fields: [autofixMetrics.projectId],
+    references: [projects.id],
+  }),
+  scene: one(scenes, {
+    fields: [autofixMetrics.sceneId],
+    references: [scenes.id],
+  }),
+  user: one(users, {
+    fields: [autofixMetrics.userId],
+    references: [users.id],
+  }),
+}))
+
+export const autofixSessionsRelations = relations(autofixSessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [autofixSessions.userId],
+    references: [users.id],
+  }),
+  project: one(projects, {
+    fields: [autofixSessions.projectId],
+    references: [projects.id],
+  }),
+  metrics: many(autofixMetrics),
+}))

@@ -19,6 +19,7 @@ import {
   Music,
   Zap,
   Film,
+  ShieldCheck,
 } from "lucide-react";
 import { Images } from "lucide-react";
 
@@ -46,13 +47,14 @@ interface PanelOption {
   color: string;
 }
 
-// Workspace panels in vertical order: Projects, Chat, Media, Code, Templates
-// HIDDEN: Video, Timeline, Integrations
+// Workspace panels in vertical order: Projects, Chat, Timeline, Media, Code, Templates
+// HIDDEN: Video, Integrations
 const navItems: WorkspacePanelG[] = [
+  { type: 'brandprofile', id: 'brandprofile', name: "Brand", icon: ShieldCheck, href: "#brandprofile", tooltip: "Brand Profile (Admin)" },
   { type: 'myprojects', id: 'myprojects', name: "Projects", icon: FolderIcon, href: "#myprojects", tooltip: "My Projects" },
   { type: 'chat', id: 'chat', name: "Chat", icon: MessageSquareIcon, href: "#chat", tooltip: "Chat Panel" },
   // { type: 'preview', id: 'preview', name: "Video", icon: PlayIcon, href: "#preview", tooltip: "Video Panel" },
-  // { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
+  { type: 'timeline', id: 'timeline', name: "Timeline", icon: Film, href: "#timeline", tooltip: "Timeline Panel" },
   { type: 'media', id: 'media', name: "Media", icon: Images, href: "#media", tooltip: "Uploads & icons" },
   { type: 'code', id: 'code', name: "Code", icon: Code2Icon, href: "#code", tooltip: "Code Panel" },
   { type: 'templates', id: 'templates', name: "Templates", icon: LayoutTemplateIcon, href: "#templates", tooltip: "Templates Panel" },
@@ -71,6 +73,10 @@ export function GenerateSidebar({
   const visibleNavItems = navItems.filter(item => {
     // Hide integrations panel for non-admin users
     if (item.type === 'integrations' && !isAdmin) {
+      return false;
+    }
+    // Show brand profile panel only for admin users
+    if (item.type === 'brandprofile' && !isAdmin) {
       return false;
     }
     return true;

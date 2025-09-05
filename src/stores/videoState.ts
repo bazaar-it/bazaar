@@ -22,6 +22,9 @@ export interface ChatMessage {
   toolStartTime?: number;
   executionTimeSeconds?: number | null;
   imageUrls?: string[]; // Support for uploaded images
+  videoUrls?: string[]; // Support for uploaded videos
+  audioUrls?: string[]; // Support for uploaded audio files
+  sceneUrls?: string[]; // Support for scene attachments
 }
 
 // Define message update parameters for streaming support
@@ -48,16 +51,26 @@ export type DbMessage = {
   updatedAt?: Date;
   status?: 'pending' | 'success' | 'error' | 'building';
   kind?: 'text' | 'tool_result' | 'error' | 'status' | 'scene_plan';
+  // Support for uploaded images
+  imageUrls?: string[] | null;
+  // Support for uploaded videos
+  videoUrls?: string[] | null;
+  // Support for uploaded audio files
+  audioUrls?: string[] | null;
+  // Support for scene attachments
+  sceneUrls?: string[] | null;
 }
 
 // Define ProjectState interface
-interface AudioTrack {
+export interface AudioTrack {
   id: string;
   url: string;
   name: string;
   duration: number;
   startTime: number;
   endTime: number;
+  // Where to place the audio segment on the video timeline (seconds)
+  timelineOffsetSec?: number;
   volume: number;
   // Phase 1 enhancements
   fadeInDuration?: number;  // Fade in duration in seconds
@@ -69,6 +82,30 @@ interface AudioTrack {
   loop?: boolean;           // Loop the audio
 }
 
+// Timeline action types for undo/redo
+export type TimelineAction =
+  | { type: 'deleteScene'; scene: any }
+  | { type: 'reorder'; beforeOrder: string[]; afterOrder: string[] }
+  | { type: 'updateDuration'; sceneId: string; prevDuration: number; newDuration: number };
+
+// Draft attachment interface
+export interface DraftAttachment {
+  id: string;
+  status: 'uploading' | 'uploaded' | 'error';
+  url?: string;
+  error?: string;
+  type?: 'image' | 'video' | 'audio' | 'scene';
+  isLoaded?: boolean;
+  duration?: number;
+  name?: string;
+  fileName?: string; // Store filename for reference
+  fileSize?: number; // Store file size for reference
+  mimeType?: string; // Store MIME type for reference
+  // Scene-specific fields
+  sceneId?: string;
+  sceneIndex?: number;
+}
+
 interface ProjectState {
   props: InputProps;
   chatHistory: ChatMessage[];
@@ -78,6 +115,18 @@ interface ProjectState {
   audio?: AudioTrack | null;
   shouldOpenAudioPanel?: boolean; // Flag to trigger audio panel opening
   draftMessage?: string; // Persist chat input when panels change
+  draftAttachments?: DraftAttachment[]; // Persist uploaded attachments when panels change
+  playbackSpeed?: number; // Playback speed for preview and export (0.25-4.0)
+}
+
+// Code cache entry
+interface CodeCacheEntry {
+  prompt: string;
+  tsxCode: string;
+  name: string;
+  duration: number;
+  timestamp: number;
+  hitCount: number;
 }
 
 interface VideoState {
@@ -86,6 +135,9 @@ interface VideoState {
   chatHistory: Record<string, ChatMessage[]>;
   refreshTokens: Record<string, number>;
   
+  // CLIENT-SIDE CODE CACHE (saves 8-12 seconds on repeated prompts)
+  codeCache: Map<string, CodeCacheEntry>;
+  cacheStats: { hits: number; misses: number };
   
   // OPTIMIZATION #5: Scene selection state
   selectedScenes: Record<string, string | null>;
@@ -97,6 +149,10 @@ interface VideoState {
   // Track which scene plan messages are currently generating
   generatingScenes: Record<string, Set<string>>; // projectId -> Set of messageIds
   
+  // Undo/Redo stacks per project (timeline-focused actions)
+  undoStacks: Record<string, Array<TimelineAction> | null>;
+  redoStacks: Record<string, Array<TimelineAction> | null>;
+  
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
   replace: (projectId: string, newProps: InputProps) => void;
@@ -106,7 +162,7 @@ interface VideoState {
   updateAndRefresh: (projectId: string, updater: (props: InputProps) => InputProps) => void;
   
   // Chat management with hybrid persistence
-  addUserMessage: (projectId: string, content: string, imageUrls?: string[]) => void;
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[], sceneUrls?: string[]) => void;
   addAssistantMessage: (projectId: string, messageId: string, content: string) => void;
   updateMessage: (projectId: string, messageId: string, updates: MessageUpdates) => void;
   
@@ -127,6 +183,12 @@ interface VideoState {
   clearProject: (projectId: string) => void;
   
   // Force refresh of preview components by generating a new refresh token
+  
+  // CLIENT-SIDE CODE CACHING
+  getCachedCode: (projectId: string, prompt: string) => CodeCacheEntry | null;
+  setCachedCode: (projectId: string, prompt: string, code: { tsxCode: string; name: string; duration: number }) => void;
+  getCacheStats: () => { hits: number; misses: number; hitRate: number };
+  clearCache: () => void;
   
   // OPTIMIZATION #2: Add/update/delete individual scenes without full refetch
   addScene: (projectId: string, scene: any) => void;
@@ -149,6 +211,10 @@ interface VideoState {
   // Remove a specific message by ID
   removeMessage: (projectId: string, messageId: string) => void;
   
+  // Playback speed management
+  setPlaybackSpeed: (projectId: string, speed: number) => void;
+  getPlaybackSpeed: (projectId: string) => number;
+  
   // Scene generation tracking
   setSceneGenerating: (projectId: string, messageId: string, isGenerating: boolean) => void;
   isSceneGenerating: (projectId: string, messageId: string) => boolean;
@@ -157,7 +223,16 @@ interface VideoState {
   // Draft message persistence
   setDraftMessage: (projectId: string, message: string) => void;
   getDraftMessage: (projectId: string) => string;
+  setDraftAttachments: (projectId: string, attachments: DraftAttachment[]) => void;
+  getDraftAttachments: (projectId: string) => DraftAttachment[];
+  clearDraft: (projectId: string) => void;
 }
+
+// Simple hash function for cache keys
+const hashPrompt = (projectId: string, prompt: string): string => {
+  const normalized = prompt.toLowerCase().trim().replace(/\s+/g, ' ');
+  return `${projectId}:${normalized}`;
+};
 
 export const useVideoState = create<VideoState>()(
   persist(
@@ -169,7 +244,13 @@ export const useVideoState = create<VideoState>()(
   selectedScenes: {},
   lastSyncTime: 0,
   pendingDbSync: {},
-  generatingScenes: {},
+      generatingScenes: {},
+      undoStacks: {},
+      redoStacks: {},
+  
+  // Initialize code cache
+  codeCache: new Map(),
+  cacheStats: { hits: 0, misses: 0 },
   
   getCurrentProps: () => {
     const { currentProjectId, projects } = get();
@@ -424,7 +505,9 @@ export const useVideoState = create<VideoState>()(
         id: m.id.substring(0, 8),
         role: m.role,
         seq: m.sequence,
-        content: m.content.substring(0, 30) + '...'
+        content: m.content.substring(0, 30) + '...',
+        hasAudioUrls: !!m.audioUrls && m.audioUrls.length > 0,
+        audioUrlsCount: m.audioUrls?.length || 0
       })));
       
       console.log('[videoState.syncDbMessages] Current chatHistory before sync:', state.projects[projectId]?.chatHistory.length || 0, 'messages');
@@ -439,13 +522,27 @@ export const useVideoState = create<VideoState>()(
         sequence: dbMessage.sequence,
         status: dbMessage.status || "success",
         kind: dbMessage.kind || (dbMessage.role === "user" ? "text" : "text"), // User messages are also 'text' type
-        jobId: null // DB messages don't have jobId
+        jobId: null, // DB messages don't have jobId
+        imageUrls: dbMessage.imageUrls || undefined, // Include uploaded images from database
+        videoUrls: dbMessage.videoUrls || undefined, // Include uploaded videos from database
+        audioUrls: dbMessage.audioUrls || undefined, // Include uploaded audio files from database
+        sceneUrls: dbMessage.sceneUrls || undefined // Include scene attachments from database
       }));
+      
+
       
       // Helper function to check if two messages are duplicates
       const isDuplicateMessage = (msg1: ChatMessage, msg2: ChatMessage) => {
         // Same role/type
         if (msg1.isUser !== msg2.isUser) return false;
+        
+        // Check if scene URLs are different - if so, they're NOT duplicates
+        const sceneUrls1 = msg1.sceneUrls || [];
+        const sceneUrls2 = msg2.sceneUrls || [];
+        if (sceneUrls1.length !== sceneUrls2.length || 
+            !sceneUrls1.every((url, index) => url === sceneUrls2[index])) {
+          return false; // Different scene attachments = not duplicates
+        }
         
         // Same content (trimmed and compared)
         const content1 = msg1.message.trim();
@@ -472,7 +569,8 @@ export const useVideoState = create<VideoState>()(
       
       // Add all DB messages first
       syncedMessages.forEach(dbMsg => {
-        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}`;
+        const sceneUrlsKey = dbMsg.sceneUrls?.join(',') || 'no-scenes';
+        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
         if (!processedContents.has(contentKey)) {
           deduplicatedHistory.push(dbMsg);
           processedContents.add(contentKey);
@@ -487,7 +585,8 @@ export const useVideoState = create<VideoState>()(
         );
         
         if (!isDuplicate) {
-          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}`;
+          const sceneUrlsKey = clientMsg.sceneUrls?.join(',') || 'no-scenes';
+          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
           if (!processedContents.has(contentKey)) {
             deduplicatedHistory.push(clientMsg);
             processedContents.add(contentKey);
@@ -901,6 +1000,38 @@ export const useVideoState = create<VideoState>()(
         [projectId]: sceneId
       }
     })),
+
+  // ---- UNDO / REDO SUPPORT ----
+  pushAction: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.undoStacks[projectId] || [];
+    return {
+      undoStacks: { ...state.undoStacks, [projectId]: [...stack, action] },
+      // Clear redo stack on new action
+      redoStacks: { ...state.redoStacks, [projectId]: [] },
+    } as any;
+  }),
+  popUndo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.undoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    if (!action) return null;
+    state.undoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
+  pushRedo: (projectId: string, action: TimelineAction) => set((state) => {
+    const stack = state.redoStacks[projectId] || [];
+    return { redoStacks: { ...state.redoStacks, [projectId]: [...stack, action] } } as any;
+  }),
+  popRedo: (projectId: string): TimelineAction | null => {
+    const state = get();
+    const stack = state.redoStacks[projectId] || [];
+    if (stack.length === 0) return null;
+    const action = stack[stack.length - 1];
+    if (!action) return null;
+    state.redoStacks[projectId] = stack.slice(0, -1);
+    return action;
+  },
     
   // Get selected scene
   getSelectedScene: (projectId: string) => {
@@ -936,16 +1067,19 @@ export const useVideoState = create<VideoState>()(
       
       // Move the scene
       const [movedScene] = scenes.splice(oldIndex, 1);
-      scenes.splice(newIndex, 0, movedScene);
+      if (movedScene) {
+        scenes.splice(newIndex, 0, movedScene);
+      }
       
-      // Recalculate start times for all scenes
+      // Recalculate start times AND order field for all scenes
       let currentStart = 0;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         if (scene) {
           scenes[i] = {
             ...scene,
-            start: currentStart
+            start: currentStart,
+            order: i  // CRITICAL: Update order field to match new position!
           };
           currentStart += scene.duration || 150;
         }
@@ -981,7 +1115,7 @@ export const useVideoState = create<VideoState>()(
     }),
   
   // Implement missing addUserMessage method
-  addUserMessage: (projectId: string, content: string, imageUrls?: string[]) =>
+  addUserMessage: (projectId: string, content: string, imageUrls?: string[], videoUrls?: string[], audioUrls?: string[], sceneUrls?: string[]) =>
     set((state) => {
       const project = state.projects[projectId];
       if (!project) return state;
@@ -1008,10 +1142,11 @@ export const useVideoState = create<VideoState>()(
         timestamp: Date.now(),
         sequence: maxSequence + 1,
         status: 'success',
-        imageUrls: imageUrls // 🚨 NEW: Include uploaded images with message
+        imageUrls: imageUrls, // Include uploaded images with message
+        videoUrls: videoUrls, // Include uploaded videos with message
+        audioUrls: audioUrls, // Include uploaded audio files with message
+        sceneUrls: sceneUrls // Include scene attachments with message
       };
-      
-      console.log('[VideoState] Adding user message:', { id: newMessage.id, content: content.substring(0, 50) + '...' });
       
       return {
         ...state,
@@ -1262,7 +1397,159 @@ export const useVideoState = create<VideoState>()(
     const project = state.projects[projectId];
     return project?.draftMessage || '';
   },
-}),
+
+  setDraftAttachments: (projectId: string, attachments: DraftAttachment[]) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftAttachments: attachments
+          }
+        }
+      };
+    }),
+
+  getDraftAttachments: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.draftAttachments || [];
+  },
+
+  clearDraft: (projectId: string) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            draftMessage: undefined,
+            draftAttachments: undefined
+          }
+        }
+      };
+    }),
+
+  // CLIENT-SIDE CODE CACHING METHODS
+  getCachedCode: (projectId: string, prompt: string) => {
+    const state = get();
+    const cacheKey = hashPrompt(projectId, prompt);
+    const cached = state.codeCache.get(cacheKey);
+    
+    if (cached) {
+      // Update stats and hit count
+      set((state) => {
+        const entry = state.codeCache.get(cacheKey);
+        if (entry) {
+          entry.hitCount++;
+          state.codeCache.set(cacheKey, entry);
+        }
+        return {
+          ...state,
+          cacheStats: {
+            ...state.cacheStats,
+            hits: state.cacheStats.hits + 1
+          }
+        };
+      });
+      
+      console.log(`💾 [Client Cache] HIT for "${prompt.slice(0, 50)}..." (saved ~8s)`);
+      return cached;
+    }
+    
+    // Update miss count
+    set((state) => ({
+      ...state,
+      cacheStats: {
+        ...state.cacheStats,
+        misses: state.cacheStats.misses + 1
+      }
+    }));
+    
+    return null;
+  },
+  
+  setCachedCode: (projectId: string, prompt: string, code: { tsxCode: string; name: string; duration: number }) => {
+    set((state) => {
+      const cacheKey = hashPrompt(projectId, prompt);
+      const newCache = new Map(state.codeCache);
+      
+      // Limit cache size to 100 entries (LRU)
+      if (newCache.size >= 100) {
+        // Remove oldest entry (first in map)
+        const firstKey = newCache.keys().next().value;
+        if (firstKey) newCache.delete(firstKey);
+      }
+      
+      newCache.set(cacheKey, {
+        prompt,
+        tsxCode: code.tsxCode,
+        name: code.name,
+        duration: code.duration,
+        timestamp: Date.now(),
+        hitCount: 0
+      });
+      
+      console.log(`💾 [Client Cache] Stored code for "${prompt.slice(0, 50)}..."`);
+      
+      return {
+        ...state,
+        codeCache: newCache
+      };
+    });
+  },
+  
+  getCacheStats: () => {
+    const state = get();
+    const total = state.cacheStats.hits + state.cacheStats.misses;
+    return {
+      hits: state.cacheStats.hits,
+      misses: state.cacheStats.misses,
+      hitRate: total > 0 ? state.cacheStats.hits / total : 0
+    };
+  },
+  
+  clearCache: () => {
+    set((state) => ({
+      ...state,
+      codeCache: new Map(),
+      cacheStats: { hits: 0, misses: 0 }
+    }));
+    console.log('🗑️ [Client Cache] Cleared all cached code');
+  },
+
+  setPlaybackSpeed: (projectId: string, speed: number) =>
+    set((state) => {
+      if (!state.projects[projectId]) return state;
+      
+      // Clamp speed to valid range
+      const clampedSpeed = Math.max(0.25, Math.min(4, speed));
+      
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...state.projects[projectId],
+            playbackSpeed: clampedSpeed
+          }
+        }
+      };
+    }),
+
+  getPlaybackSpeed: (projectId: string) => {
+    const state = get();
+    const project = state.projects[projectId];
+    return project?.playbackSpeed ?? 1.0;
+  },
+    }),
     {
       name: 'bazaar-video-state',
       storage: createJSONStorage(() => localStorage),

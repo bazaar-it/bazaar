@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { type VideoFormat } from "~/app/projects/new/FormatSelector";
+import { type VideoFormat } from "~/lib/types/video/remotion-constants";
 import { api } from "~/trpc/react";
 
 const STORAGE_KEY = 'bazaar-last-format';

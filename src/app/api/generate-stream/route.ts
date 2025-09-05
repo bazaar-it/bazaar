@@ -6,6 +6,8 @@ import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { messageService } from '~/server/services/data/message.service';
 import { generateTitle } from '~/server/services/ai/titleGenerator.service';
+import { WebsiteToVideoHandler } from '~/tools/website/websiteToVideoHandler';
+import type { StreamingEvent } from '~/tools/website/websiteToVideoHandler';
 
 // SSE helper to format messages
 function formatSSE(data: any): string {
@@ -44,8 +46,10 @@ export async function GET(request: NextRequest) {
   const imageUrls = searchParams.get('imageUrls');
   const videoUrls = searchParams.get('videoUrls');
   const audioUrls = searchParams.get('audioUrls');
+  const sceneUrls = searchParams.get('sceneUrls'); // 🚨 NEW: Scene attachments
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
+  const websiteUrl = searchParams.get('websiteUrl');
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -63,10 +67,7 @@ export async function GET(request: NextRequest) {
       const parsedImageUrls = imageUrls ? JSON.parse(imageUrls) : undefined;
       const parsedVideoUrls = videoUrls ? JSON.parse(videoUrls) : undefined;
       const parsedAudioUrls = audioUrls ? JSON.parse(audioUrls) : undefined;
-      
-      // For now, store video URLs in imageUrls field (until we add a separate videoUrls column)
-      // But don't include audio URLs as they're not images!
-      const allMediaUrls = [...(parsedImageUrls || []), ...(parsedVideoUrls || [])];
+      const parsedSceneUrls = sceneUrls ? JSON.parse(sceneUrls) : undefined; // 🚨 NEW: Scene attachments
       
       // ✅ NEW: Add retry logic for database operations
       const userMsg = await retryWithBackoff(async () => {
@@ -74,7 +75,10 @@ export async function GET(request: NextRequest) {
           projectId,
           content: userMessage,
           role: "user",
-          imageUrls: allMediaUrls.length > 0 ? allMediaUrls : undefined,
+          imageUrls: parsedImageUrls?.length > 0 ? parsedImageUrls : undefined,
+          videoUrls: parsedVideoUrls?.length > 0 ? parsedVideoUrls : undefined,
+          audioUrls: parsedAudioUrls?.length > 0 ? parsedAudioUrls : undefined,
+          sceneUrls: parsedSceneUrls?.length > 0 ? parsedSceneUrls : undefined, // 🚨 NEW: Scene attachments
         });
       }, 3, 1000);
 
@@ -97,82 +101,170 @@ export async function GET(request: NextRequest) {
         const isFirstUserMessage = userMessages.length === 1 && userMessages[0]?.id === userMsg.id;
 
         if (isFirstUserMessage) {
-          console.log('[SSE] First user message detected, generating title asynchronously...');
+          console.log('[SSE] First user message detected, checking if title generation is needed...');
           
-          // Generate title asynchronously to avoid blocking scene generation
-          generateTitle({
-            prompt: userMessage,
-            contextId: projectId,
-          }).then(async (titleResult) => {
-            let finalTitle = titleResult.title;
+          // Check current project title first - only generate if it's still an untitled project
+          const currentProject = await retryWithBackoff(async () => {
+            return await db.query.projects.findFirst({
+              columns: { title: true },
+              where: eq(projects.id, projectId),
+            });
+          }, 2, 500);
           
-          // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
-          if (finalTitle === "Untitled Video") {
-            // Get all user's projects with "Untitled Video" pattern to find next number
-            const userProjects = await retryWithBackoff(async () => {
-              return await db.query.projects.findMany({
-                columns: { title: true },
-                where: eq(projects.userId, userId), // Use the authenticated userId
-              });
-            }, 2, 500);
+          // Only generate title if current title matches "Untitled Video" pattern (default names)
+          const currentTitle = currentProject?.title || '';
+          const isDefaultTitle = currentTitle.includes('Untitled Video');
+          if (isDefaultTitle) {
+            console.log(`[SSE] Project has default title "${currentTitle}", generating new title...`);
             
-            // Find the highest number used in "Untitled Video X" titles
-            let highestNumber = 0;
-            const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+            // Generate title asynchronously to avoid blocking scene generation
+            generateTitle({
+              prompt: userMessage,
+              contextId: projectId,
+            }).then(async (titleResult) => {
+              let finalTitle = titleResult.titles?.[0] || "Untitled Video";
             
-            for (const project of untitledProjects) {
-              const match = /^Untitled Video (\d+)$/.exec(project.title);
-              if (match?.[1]) {
-                const num = parseInt(match[1], 10);
-                if (!isNaN(num) && num > highestNumber) {
-                  highestNumber = num;
+            // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
+            if (finalTitle === "Untitled Video") {
+              // Get all user's projects with "Untitled Video" pattern to find next number
+              const userProjects = await retryWithBackoff(async () => {
+                return await db.query.projects.findMany({
+                  columns: { title: true },
+                  where: eq(projects.userId, userId), // Use the authenticated userId
+                });
+              }, 2, 500);
+              
+              // Find the highest number used in "Untitled Video X" titles
+              let highestNumber = 0;
+              const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
+              
+              for (const project of untitledProjects) {
+                const match = /^Untitled Video (\d+)$/.exec(project.title);
+                if (match?.[1]) {
+                  const num = parseInt(match[1], 10);
+                  if (!isNaN(num) && num > highestNumber) {
+                    highestNumber = num;
+                  }
                 }
               }
+              
+              // Generate proper numbered fallback
+              finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
             }
+
+            // Update the project title
+            await retryWithBackoff(async () => {
+              return await db.update(projects)
+                .set({ 
+                  title: finalTitle,
+                  updatedAt: new Date(),
+                })
+                .where(eq(projects.id, projectId));
+            }, 2, 500);
+
+            console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
             
-            // Generate proper numbered fallback
-            finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
-          }
-
-          // Update the project title
-          await retryWithBackoff(async () => {
-            return await db.update(projects)
-              .set({ 
+              // ✅ NEW: Send title update to client so it can invalidate queries
+              await writer.write(encoder.encode(formatSSE({
+                type: 'title_updated',
                 title: finalTitle,
-                updatedAt: new Date(),
-              })
-              .where(eq(projects.id, projectId));
-          }, 2, 500);
-
-          console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
-          
-            // ✅ NEW: Send title update to client so it can invalidate queries
-            await writer.write(encoder.encode(formatSSE({
-              type: 'title_updated',
-              title: finalTitle,
-              projectId: projectId
-            })));
-          }).catch((titleError) => {
-            // Don't fail the whole request if title generation fails
-            console.error('[SSE] Title generation failed:', titleError);
-          });
+                projectId: projectId
+              })));
+            }).catch((titleError) => {
+              // Don't fail the whole request if title generation fails
+              console.error('[SSE] Title generation failed:', titleError);
+            });
+          } else {
+            console.log(`[SSE] Project already has custom title "${currentTitle}", skipping title generation`);
+          }
         }
       } catch (titleError) {
         // Catch any synchronous errors
         console.error('[SSE] Title generation setup failed:', titleError);
       }
       
-      // 3. Just send the user data back - no assistant message yet
-      await writer.write(encoder.encode(formatSSE({
-        type: 'ready',
-        userMessageId: userMsg.id,
-        userMessage: userMessage,
-        imageUrls: parsedImageUrls,
-        videoUrls: parsedVideoUrls,
-        audioUrls: parsedAudioUrls,
-        modelOverride: modelOverride,
-        useGitHub: useGitHub
-      })));
+      // ✨ NEW: Check if this is a website-to-video request
+      if (websiteUrl) {
+        console.log('[SSE] Website-to-video pipeline detected:', websiteUrl);
+        
+        // Send initial analysis message
+        await writer.write(encoder.encode(formatSSE({
+          type: 'assistant_message_chunk',
+          message: `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`,
+          isComplete: false
+        })));
+        
+        // Setup streaming callback for real-time updates
+        let assistantMessageContent = `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`;
+        
+        const streamingCallback = async (event: StreamingEvent) => {
+          console.log('[SSE] Streaming event:', event.type);
+          
+          if (event.type === 'scene_completed') {
+            // Send scene progress message
+            const progressMessage = `Creating Scene ${event.data.sceneIndex + 1}/${event.data.totalScenes}: ${event.data.sceneName}...`;
+            assistantMessageContent += `\n\n${progressMessage} ✅`;
+            
+            await writer.write(encoder.encode(formatSSE({
+              type: 'assistant_message_chunk',
+              message: progressMessage,
+              isComplete: false
+            })));
+            
+            // Send scene addition event for immediate timeline update
+            await writer.write(encoder.encode(formatSSE({
+              type: 'scene_added',
+              data: {
+                sceneId: event.data.sceneId,
+                sceneName: event.data.sceneName,
+                progress: Math.round(((event.data.sceneIndex + 1) / event.data.totalScenes) * 100)
+              }
+            })));
+          }
+          
+          if (event.type === 'all_scenes_complete') {
+            // Send final completion message
+            const domain = new URL(websiteUrl).hostname;
+            const completionMessage = `\n\n✨ Complete! Generated ${event.data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
+            assistantMessageContent += completionMessage;
+            
+            await writer.write(encoder.encode(formatSSE({
+              type: 'assistant_message_chunk', 
+              message: completionMessage,
+              isComplete: true
+            })));
+          }
+        };
+        
+        // Execute website pipeline with streaming
+        const result = await WebsiteToVideoHandler.execute({
+          userPrompt: userMessage,
+          projectId,
+          userId,
+          websiteUrl,
+          streamingCallback
+        });
+        
+        if (result.success) {
+          console.log('[SSE] Website pipeline completed successfully');
+        } else {
+          throw new Error(result.error?.message || 'Website pipeline failed');
+        }
+        
+      } else {
+        // 3. Just send the user data back - no assistant message yet (regular flow)
+        await writer.write(encoder.encode(formatSSE({
+          type: 'ready',
+          userMessageId: userMsg.id,
+          userMessage: userMessage,
+          imageUrls: parsedImageUrls,
+          videoUrls: parsedVideoUrls,
+          audioUrls: parsedAudioUrls,
+          sceneUrls: parsedSceneUrls,
+          modelOverride: modelOverride,
+          useGitHub: useGitHub
+        })));
+      }
 
     } catch (error) {
       console.error('[SSE] Error:', error);
@@ -213,12 +305,16 @@ export async function GET(request: NextRequest) {
     }
   })();
 
-  // Return SSE response
+  // Return SSE response with proper timeout configuration
   return new Response(stream.readable, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable proxy buffering
     },
   });
 }
+
+// Export runtime config for longer execution
+export const maxDuration = 300; // 5 minutes

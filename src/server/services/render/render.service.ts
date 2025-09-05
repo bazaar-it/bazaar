@@ -6,6 +6,8 @@
 // The old injectFontLoadingCode function has been removed as it used browser APIs (document.fonts)
 // that don't exist in Lambda's Node environment
 
+import { replaceIconifyIcons } from './replace-iconify-icons';
+
 export interface AudioTrack {
   url: string;
   name: string;
@@ -23,6 +25,7 @@ export interface RenderConfig {
   scenes: any[];
   format: 'mp4' | 'webm' | 'gif';
   quality: 'low' | 'medium' | 'high';
+  playbackSpeed?: number;
   projectProps?: any;
   audio?: AudioTrack;
   onProgress?: (progress: number) => void;
@@ -89,6 +92,19 @@ async function preprocessSceneForLambda(scene: any) {
   // Database scenes have tsxCode directly, not in data.code
   const tsxCode = scene.tsxCode;
   
+  // Emergency switch: Force fallback component for all scenes
+  const FORCE_FALLBACK = process.env.RENDER_FORCE_FALLBACK === '1';
+  if (FORCE_FALLBACK) {
+    const fallbackOnly = `const Component = function ComponentFallback() {\n  return React.createElement(\n    'div',\n    {\n      style: {\n        width: '100%',\n        height: '100%',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        backgroundColor: '#0f172a',\n        color: 'white',\n        fontFamily: 'Inter, system-ui, sans-serif',\n        fontSize: '32px'\n      }\n    },\n    'Scene unavailable — using fallback'\n  );\n};\n\nreturn Component;\n`;
+    console.warn(`[Preprocess] FORCE_FALLBACK enabled - rendering fallback for scene ${scene.id}`);
+    return {
+      ...scene,
+      jsCode: fallbackOnly,
+      compiledCode: fallbackOnly,
+      tsxCode,
+    };
+  }
+
   if (!tsxCode || tsxCode.trim().length === 0) {
     console.error(`[Preprocess] No code found for scene ${scene.id} - scene structure:`, {
       hasId: !!scene.id,
@@ -175,6 +191,10 @@ async function preprocessSceneForLambda(scene: any) {
       production: true,
     });
     
+    // Replace Iconify icons with inline SVGs for Lambda
+    console.log(`[Preprocess] Replacing Iconify icons for scene ${scene.id}...`);
+    transformedCode = await replaceIconifyIcons(transformedCode);
+    
     // Extract Remotion components being used (if any)
     const remotionComponents = [];
     const remotionMatch = transformedCode.match(/const\s*{\s*([^}]+)\s*}\s*=\s*window\.Remotion\s*;?/);
@@ -206,11 +226,10 @@ async function preprocessSceneForLambda(scene: any) {
       transformedCode = `\nconst { ${reactHooks.length > 0 ? reactHooks.join(', ') : 'useState, useEffect'} } = React;\n` + transformedCode;
     }
     
-    // Add Remotion components at the beginning if needed
-    if (remotionComponents.length > 0) {
-      // Simply declare the components as available - MainCompositionSimple will provide them
-      transformedCode = `// Remotion components will be provided by the runtime\n` + transformedCode;
-    }
+    // Do NOT inject `const { ... } = Remotion;` here.
+    // In Lambda, Remotion primitives are provided as Function parameters (AbsoluteFill, useCurrentFrame, etc.)
+    // We already removed the original `const { ... } = window.Remotion` line above so the code
+    // can reference these identifiers directly from the function scope.
     
     // Keep export default for Lambda compatibility - Lambda expects proper ES6 modules
     // Only convert to const Component if there's no export default
@@ -245,6 +264,13 @@ async function preprocessSceneForLambda(scene: any) {
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
     transformedCode = await replaceIconifyIcons(transformedCode);
+
+    // SAFETY: Provide a runtime helper for any remaining inline icon calls
+    // Some transforms may emit __inlineIcon(svg, props). Ensure it's defined.
+    if (transformedCode.includes('__inlineIcon(') && !/\b__inlineIcon\s*=/.test(transformedCode)) {
+      const inlineIconHelper = `\n// Inline Icon helper injected by preprocess\nconst __inlineIcon = (svg, props = {}) => {\n  try {\n    return React.createElement('span', {\n      ...props,\n      dangerouslySetInnerHTML: { __html: svg }\n    });\n  } catch (_) {\n    return React.createElement('span', { ...props });\n  }\n};\n`;
+      transformedCode = inlineIconHelper + transformedCode;
+    }
     
     // Fix avatar URLs - replace window.BazaarAvatars with actual URLs
     // This handles the window.BazaarAvatars['avatar-name'] pattern
@@ -277,6 +303,18 @@ async function preprocessSceneForLambda(scene: any) {
       .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, 'const Component = $1;')  // export default variable -> const Component
       .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')  // Remove export const
       .replace(/export\s+{\s*[^}]*\s*};?/g, '');            // Remove export { ... }
+
+    // SAFETY NET: Ensure a valid React component is always defined for Lambda rendering
+    // If transformation did not produce a Component, provide a minimal fallback to prevent React error #130
+    if (!/\bconst\s+Component\s*=/.test(transformedCode)) {
+      transformedCode += `\nconst Component = function ComponentFallback() {\n  return React.createElement(\n    'div',\n    {\n      style: {\n        width: '100%',\n        height: '100%',\n        display: 'flex',\n        alignItems: 'center',\n        justifyContent: 'center',\n        backgroundColor: '#0f172a',\n        color: 'white',\n        fontFamily: 'Inter, system-ui, sans-serif'\n      }\n    },\n    'Scene failed to compile — showing fallback'\n  );\n};\n`;
+    }
+
+    // Ensure the Function constructor returns the component to the Lambda runtime
+    // CRITICAL: We must explicitly return; functions do NOT return the last expression implicitly
+    if (!/\breturn\s+Component\s*;?\s*$/m.test(transformedCode)) {
+      transformedCode += `\n// Explicitly return the component for Lambda Function execution\nreturn Component;\n`;
+    }
     
     console.log(`[Preprocess] Scene ${scene.id} transformed for Lambda`);
     console.log(`[Preprocess] Transformation summary:`, {
@@ -315,238 +353,13 @@ async function preprocessSceneForLambda(scene: any) {
   }
 }
 
-// Helper function to replace Iconify icons with actual SVGs
-async function replaceIconifyIcons(code: string): Promise<string> {
-  const { loadNodeIcon } = await import('@iconify/utils/lib/loader/node-loader');
-  
-  // First, extract all icon names from data structures
-  const iconNames = new Set<string>();
-  
-  // Find icon data arrays like: { icon: "mdi:home", ... }
-  const iconDataRegex = /\{\s*icon:\s*["']([^"']+)["']/g;
-  let match;
-  while ((match = iconDataRegex.exec(code)) !== null) {
-    if (match[1]) {
-      iconNames.add(match[1]);
-      console.log(`[Preprocess] Found icon in data: ${match[1]}`);
-    }
-  }
-  
-  // Also find direct icon usage with literal strings
-  const directIconRegex = /<window\.IconifyIcon\s+icon=["']([^"']+)["']/g;
-  while ((match = directIconRegex.exec(code)) !== null) {
-    if (match[1]) {
-      iconNames.add(match[1]);
-      console.log(`[Preprocess] Found direct icon: ${match[1]}`);
-    }
-  }
-
-  // Capture variable-based icon references like: icon: myIcon
-  const variableIconRefRegex = /\b(icon|iconName|tabIcon)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)/g;
-  const variableNames = new Set<string>();
-  let vmatch;
-  while ((vmatch = variableIconRefRegex.exec(code)) !== null) {
-    if (vmatch[2]) variableNames.add(vmatch[2]);
-  }
-  // Resolve variable assignments: const myIcon = 'prefix:name'
-  for (const varName of variableNames) {
-    const assignRegex = new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*["']([^"']+)["']`,'g');
-    let amatch;
-    while ((amatch = assignRegex.exec(code)) !== null) {
-      const val = amatch[1];
-      if (val && val.includes(':')) {
-        iconNames.add(val);
-        console.log(`[Preprocess] Resolved variable icon ${varName} -> ${val}`);
-      }
-    }
-  }
-  
-  // Load all icons first
-  const iconMap = new Map<string, string>();
-  console.log(`[Preprocess] Loading ${iconNames.size} unique icons...`);
-  
-  // Loader with smart fallbacks for common outline names
-  async function loadWithFallback(name: string): Promise<string | null> {
-    const [collection, icon] = name.split(':');
-    if (!collection || !icon) return null;
-    
-    // Try loading the exact icon first
-    try {
-      const svg = await loadNodeIcon(collection, icon);
-      if (svg) {
-        console.log(`[Preprocess] Loaded exact icon: ${name}`);
-        return svg;
-      }
-    } catch (e) {
-      console.log(`[Preprocess] Could not load exact icon: ${name}`);
-    }
-    
-    // Handle material-symbols outline variants
-    if (collection === 'material-symbols' && icon.endsWith('-outline')) {
-      const base = icon.replace(/-outline$/, '');
-      
-      // Map common outline names to their actual icon names
-      const iconMapping: Record<string, string[]> = {
-        'favorite-outline': ['favorite', 'heart', 'favorite-border'],
-        'home-outline': ['home', 'house', 'home-work'],
-        'chat-outline': ['chat', 'message', 'chat-bubble'],
-        'person-outline': ['person', 'account-circle', 'person-2'],
-        'search-outline': ['search', 'search-rounded']
-      };
-      
-      // Try mapped alternatives
-      const mappedAlternatives = iconMapping[icon] || [base];
-      
-      for (const alt of mappedAlternatives) {
-        const candidates = [
-          `material-symbols:${alt}`,
-          `material-symbols:${alt}-outline`,
-          `material-symbols:${alt}-rounded`,
-          `mdi:${alt}`,
-          `mdi:${alt}-outline`
-        ];
-        
-        for (const cand of candidates) {
-          const [c2, i2] = cand.split(':');
-          try {
-            const svg2 = await loadNodeIcon(c2 || '', i2 || '');
-            if (svg2) {
-              console.log(`[Preprocess] Using fallback: ${name} -> ${cand}`);
-              return svg2;
-            }
-          } catch {}
-        }
-      }
-    }
-    
-    // Try removing -outline suffix as last resort
-    if (icon.endsWith('-outline')) {
-      const baseIcon = icon.replace(/-outline$/, '');
-      try {
-        const svg = await loadNodeIcon(collection, baseIcon);
-        if (svg) {
-          console.log(`[Preprocess] Using base icon without outline: ${name} -> ${collection}:${baseIcon}`);
-          return svg;
-        }
-      } catch {}
-    }
-    
-    console.warn(`[Preprocess] No icon found for: ${name}`);
-    return null;
-  }
-
-  for (const iconName of iconNames) {
-    const svgString = await loadWithFallback(iconName);
-    if (svgString) {
-      iconMap.set(iconName, svgString);
-      console.log(`[Preprocess] Loaded icon: ${iconName}`);
-    } else {
-      console.warn(`[Preprocess] Icon "${iconName}" not found, using fallback`);
-      // Use a generic icon shape as fallback that's less obtrusive
-      const fallbackSvg = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
-      iconMap.set(iconName, fallbackSvg);
-    }
-  }
-  
-  console.log(`[Preprocess] Loaded ${iconNames.size} icons from initial scan`);
-  
-  // Broaden detection: include any literal that looks like an icon name with allowed prefixes
-  // Do this BEFORE building the icon map entries
-  try {
-    const allowedPrefixes = ['material-symbols', 'simple-icons', 'mdi', 'tabler', 'lucide', 'ph', 'bi', 'fa', 'ri', 'ion', 'iconicons'];
-    const allStringLikeIcons = code.match(/["']([a-z0-9_-]+:[a-z0-9_\-]+)["']/gi) || [];
-    for (const m of allStringLikeIcons) {
-      const val = m.slice(1, -1).toLowerCase(); // Ensure lowercase
-      const prefix = val.split(':')[0];
-      if (prefix && allowedPrefixes.includes(prefix) && !iconMap.has(val)) {
-        const svgString = await loadWithFallback(val);
-        if (svgString && !iconMap.has(val)) {
-          iconMap.set(val, svgString);
-          console.log(`[Preprocess] Added additional icon: ${val}`);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[Preprocess] Error loading additional icons:', e);
-  }
-  
-  console.log(`[Preprocess] Total icons loaded: ${iconMap.size}`);
-  
-  // NOW build the icon map entries with ALL collected icons
-  const iconMapEntries = [];
-  for (const [name, svg] of iconMap.entries()) {
-    // Extract viewBox and inner content
-    const viewBoxMatch = svg.match(/viewBox="([^"]+)"/);
-    const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 24 24";
-    
-    // Extract inner SVG markup to preserve all shapes (paths, circles, rects, etc.)
-    const innerMatch = svg.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
-    const inner = innerMatch?.[1]?.replace(/`/g, '\\`') || '';
-    iconMapEntries.push(`"${name}": function(props) { return React.createElement("svg", Object.assign({viewBox:"${viewBox}",width:"1em",height:"1em",fill:"currentColor", dangerouslySetInnerHTML: { __html: \`${inner}\` }}, props)); }`);
-  }
-  
-  // Create the icon map code that will be injected (top-level shim)
-  const iconMapCode = `
-    const __iconMap = {
-      ${iconMapEntries.join(',\n      ')}
-    };
-    const IconifyIcon = function(props) {
-      const _p = props || {};
-      const iconName = _p.icon;
-      const rest = (function(p){ var r={}; for (var k in p){ if(k!== 'icon' && Object.prototype.hasOwnProperty.call(p,k)) r[k]=p[k]; } return r; })(_p);
-      if (!iconName) {
-        // Return empty span for missing icon prop
-        return React.createElement("span", {style: Object.assign({display:"inline-block",width:"1em",height:"1em"}, rest && rest.style)});
-      }
-      const IconComponent = __iconMap[iconName];
-      if (IconComponent) {
-        return IconComponent(rest);
-      }
-      // Fallback: simple square icon shape
-      console.warn('Icon not in map:', iconName);
-      return React.createElement("svg", Object.assign({viewBox:"0 0 24 24",width:"1em",height:"1em",fill:"currentColor"}, rest), 
-        React.createElement("rect", {x:"4",y:"4",width:"16",height:"16",rx:"2",fill:"none",stroke:"currentColor",strokeWidth:"2"})
-      );
-    };
-  `;
-
-  // Replace window.IconifyIcon with our local IconifyIcon
-  // This handles both JSX and React.createElement forms
-  code = code.replace(/window\.IconifyIcon/g, 'IconifyIcon');
-  
-  // Also handle React.createElement calls that already exist
-  code = code.replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(IconifyIcon,');
-  
-  // Always inject the shim at the beginning so IconifyIcon exists in any scope
-  code = iconMapCode + '\n' + code;
-  console.log(`[Preprocess] Injected top-level Iconify shim with ${iconMap.size} icons`);
-  
-  // Log a sample of the transformed code to verify injection
-  const codePreview = code.substring(0, 1500);
-  console.log('[Preprocess] Code after icon injection (first 1500 chars):');
-  console.log(codePreview);
-  
-  // Check if IconifyIcon is actually being used in the code
-  const iconifyUsageCount = (code.match(/IconifyIcon/g) || []).length;
-  console.log(`[Preprocess] IconifyIcon is referenced ${iconifyUsageCount} times in the transformed code`);
-  
-  // Check for the actual compiled form
-  const createElementIconCount = (code.match(/React\.createElement\(\s*IconifyIcon/g) || []).length;
-  console.log(`[Preprocess] React.createElement(IconifyIcon) found ${createElementIconCount} times`);
-  
-  // Look for any icon references
-  const iconReferences = code.match(/icon(?:Item)?\.icon/g) || [];
-  console.log(`[Preprocess] Found ${iconReferences.length} icon property references`);
-  
-  return code;
-}
-
 // Prepare render configuration for Lambda
 export async function prepareRenderConfig({
   projectId,
   scenes,
   format = 'mp4',
   quality = 'high',
+  playbackSpeed = 1.0,
   projectProps,
   audio,
 }: RenderConfig) {
@@ -636,16 +449,47 @@ export async function prepareRenderConfig({
   
   console.log(`[prepareRenderConfig] ${validScenes.length} of ${scenes.length} scenes passed preprocessing`);
   
-  // Calculate total duration
-  const totalDuration = validScenes.reduce((sum, scene) => {
+  // Calculate original total duration before speed adjustment
+  const originalTotalDuration = validScenes.reduce((sum, scene) => {
     return sum + (scene.duration || 150); // Default 5 seconds at 30fps
   }, 0);
+  
+  // Apply playback speed multiplier to scene durations
+  // Higher speed = shorter video (e.g., 2x speed = half duration)
+  // Lower speed = longer video (e.g., 0.5x speed = double duration)
+  const speedAdjustedScenes = validScenes.map(scene => {
+    const originalDuration = scene.duration || 150;
+    // New Duration = Original Duration / Speed
+    const adjustedDuration = Math.max(1, Math.round(originalDuration / playbackSpeed));
+    
+    if (playbackSpeed !== 1.0) {
+      console.log(`[prepareRenderConfig] Scene ${scene.id} duration: ${originalDuration} → ${adjustedDuration} frames (${playbackSpeed}x speed)`);
+    }
+    
+    return {
+      ...scene,
+      duration: adjustedDuration,
+      originalDuration // Keep original for reference
+    };
+  });
+  
+  // Calculate adjusted total duration
+  const totalDuration = speedAdjustedScenes.reduce((sum, scene) => {
+    return sum + scene.duration;
+  }, 0);
+  
+  console.log(`[prepareRenderConfig] Total duration: ${originalTotalDuration} → ${totalDuration} frames (${playbackSpeed}x speed)`);
+  
+  // Warning for very slow speeds that might timeout Lambda
+  if (playbackSpeed < 0.5 && totalDuration > 1800) { // > 1 minute at 0.5x speed
+    console.warn(`[prepareRenderConfig] Long render detected: ${totalDuration} frames at ${playbackSpeed}x speed might timeout`);
+  }
   
   const estimatedDurationMinutes = totalDuration / 30 / 60; // frames to minutes
   
   return {
     projectId,
-    scenes: validScenes,
+    scenes: speedAdjustedScenes, // Use speed-adjusted scenes
     format,
     quality,
     settings,
@@ -654,9 +498,11 @@ export async function prepareRenderConfig({
     renderWidth,
     renderHeight,
     audio,
+    playbackSpeed, // Include for debugging
+    originalDuration: originalTotalDuration,
     // This will be used by Lambda
     inputProps: {
-      scenes: validScenes,
+      scenes: speedAdjustedScenes, // Use speed-adjusted scenes
       projectId,
       width: renderWidth,
       height: renderHeight,

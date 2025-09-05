@@ -67,7 +67,21 @@ export function VoiceInput({ onTranscription, disabled = false }: VoiceInputProp
       {/* Voice button */}
       <button
         type="button"
-        onClick={recordingState === 'recording' ? stopRecording : startRecording}
+        onClick={async () => {
+          // Enable audio context with user gesture before starting recording
+          try {
+            const { enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+            enableAudioWithGesture();
+          } catch (error) {
+            console.warn('[VoiceInput] Audio context not available:', error);
+          }
+          
+          if (recordingState === 'recording') {
+            stopRecording();
+          } else {
+            startRecording();
+          }
+        }}
         className={cn(
           "p-0.5 rounded-full flex items-center justify-center",
           recordingState === 'recording'
@@ -157,7 +171,21 @@ export function VoiceInputWithError({
       {/* Voice button */}
       <button
         type="button"
-        onClick={recordingState === 'recording' ? stopRecording : startRecording}
+        onClick={async () => {
+          // Enable audio context with user gesture before starting recording
+          try {
+            const { enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+            enableAudioWithGesture();
+          } catch (error) {
+            console.warn('[VoiceInput] Audio context not available:', error);
+          }
+          
+          if (recordingState === 'recording') {
+            stopRecording();
+          } else {
+            startRecording();
+          }
+        }}
         className={cn(
           "p-0.5 rounded-full flex items-center justify-center",
           recordingState === 'recording'

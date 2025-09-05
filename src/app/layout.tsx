@@ -20,7 +20,7 @@ function getStructuredData() {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "Bazaar - AI Motion Graphics Software for Software Demos",
-      "description": "The #1 AI motion graphics software for creating software demos. Generate professional animated demos instantly. Like Cursor for motion graphics - describe what you want, get stunning animations.",
+      "description": "AI motion graphics for software demos. Just describe what you want - prompt your way to the perfect demo video. Upload images, Figma boards, YouTube links and more.",
       "url": siteConfig.url,
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Web",
@@ -51,7 +51,7 @@ function getStructuredData() {
       "name": "Bazaar AI Video API",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "API",
-      "description": "API for AI agents and chatbots to generate videos programmatically. Perfect for ChatGPT plugins, Claude tools, and custom AI implementations.",
+      "description": "API for generating motion graphics programmatically. Create professional software demos through natural language prompts.",
       "url": `${siteConfig.url}/api`,
       "featureList": [
         "Text-to-video generation",
@@ -123,10 +123,10 @@ function getStructuredData() {
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `Bazaar - AI Video Generator for ChatGPT, Claude & Gemini | Create Videos with AI`,
-    template: `%s | Bazaar AI Video Platform`,
+    default: `Bazaar - AI Motion Graphics for Software Demos`,
+    template: `%s | Bazaar`,
   },
-  description: "Bazaar - AI motion graphics software for software demos. Create animated product demos instantly with AI. The easiest way to make professional software demo videos. Like Cursor for motion graphics.",
+  description: "AI motion graphics for software demos. Prompt your way to the perfect demo video - just describe what you want. Upload screenshots, Figma designs, YouTube references and watch AI create professional animations instantly.",
   keywords: [
     "AI motion graphics software",
     "AI software demo creator",
@@ -157,8 +157,8 @@ export const metadata: Metadata = {
   ],
   creator: "Bazaar",
   openGraph: {
-    title: `Bazaar - #1 AI Video Generator for ChatGPT, Claude & Gemini`,
-    description: "The leading AI video platform for chatbots and AI assistants. Generate professional motion graphics instantly from text. Perfect for ChatGPT, Claude, Gemini integration.",
+    title: `Bazaar - AI Motion Graphics for Software Demos`,
+    description: "Prompt your way to professional software demos. Just describe what you want or upload images, Figma boards, YouTube links. AI creates stunning motion graphics instantly.",
     url: siteConfig.url,
     siteName: siteConfig.name,
     locale: "en_US",
@@ -174,8 +174,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `Bazaar - AI Video Generator for Chatbots | ChatGPT & Claude Compatible`,
-    description: "Generate videos with AI chatbots. Bazaar works seamlessly with ChatGPT, Claude, Gemini. Create motion graphics from text instantly.",
+    title: `Bazaar - AI Motion Graphics for Software Demos`,
+    description: "Prompt your way to the perfect demo video. Describe what you want, upload images, Figma designs, YouTube refs - get professional animations instantly.",
     creator: "@bazaar",
     images: [`${siteConfig.url}/og-image.png`],
   },

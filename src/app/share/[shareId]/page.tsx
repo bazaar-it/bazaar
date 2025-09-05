@@ -65,9 +65,10 @@ export default async function SharePage({ params }: PageProps) {
           inputProps={inputProps}
           project={project}
           creator={creator}
-          viewCount={viewCount}
+          viewCount={viewCount ?? 0}
           createdAt={createdAt}
           shareUrl={shareUrl}
+          audio={shareData.project.audio}
         />
       </main>
     </div>

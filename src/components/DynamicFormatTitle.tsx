@@ -102,13 +102,15 @@ const DynamicFormatTitle: React.FC = () => {
 
   return (
     <div className="text-center mb-8">
-      <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900" style={{ marginLeft: '40px' }}>
-        Create in{' '}
-        <span className="inline-block min-w-[280px] text-left">
-          {displayText}
-          {showCursor && (
-            <span className="text-gray-400">|</span>
-          )}
+      <h2 className="text-4xl md:text-5xl font-bold mb-4 text-gray-900">
+        <span className="block sm:inline">Create in</span>
+        <span className="block sm:inline sm:ml-3">
+          <span className="inline-block min-w-[200px] md:min-w-[280px] text-center sm:text-left">
+            {displayText}
+            {showCursor && (
+              <span className="text-gray-400">|</span>
+            )}
+          </span>
         </span>
       </h2>
     </div>

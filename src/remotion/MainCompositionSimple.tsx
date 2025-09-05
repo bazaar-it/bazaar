@@ -1,9 +1,67 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, Series, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, continueRender, delayRender } from "remotion";
+import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile } from "remotion";
 // Import CSS fonts - works in both local and Lambda without cancelRender() errors
 import './fonts.css';
+
+// Error Boundary Component for Scene Isolation
+class SceneErrorBoundary extends React.Component<
+  { children: React.ReactNode; sceneId: string; sceneName: string; index: number },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error(`[SceneErrorBoundary] Scene ${this.props.index} (${this.props.sceneName}) crashed:`, {
+      sceneId: this.props.sceneId,
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Error placeholder that matches video dimensions
+      return (
+        <AbsoluteFill style={{ 
+          backgroundColor: '#0f0f0f', 
+          color: '#ff6b6b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          fontFamily: 'Inter, system-ui, sans-serif'
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.9 }}>⚠️</div>
+          <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>Scene Error</div>
+          <div style={{ fontSize: 18, opacity: 0.7, marginBottom: 16 }}>
+            {this.props.sceneName || `Scene ${this.props.index + 1}`}
+          </div>
+          <div style={{ 
+            fontSize: 14, 
+            opacity: 0.5, 
+            maxWidth: '60%', 
+            textAlign: 'center',
+            lineHeight: 1.5
+          }}>
+            {this.state.error?.message || 'This scene could not be rendered'}
+          </div>
+        </AbsoluteFill>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Fonts are loaded via CSS @import in fonts.css
 // This works in both local and Lambda without cancelRender() errors
@@ -62,6 +120,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       console.log(`[DynamicScene] After export conversion, executableCode starts with:`, executableCode.substring(0, 200));
       
       // Create a component factory function
+      // The Function constructor returns the value of the last expression
       const createComponent = new Function(
         'React',
         'AbsoluteFill',
@@ -81,7 +140,6 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         'Video',
         'staticFile',
         `
-        try {
           // Additional Remotion components that might be used
           const Series = Sequence; // Alias for compatibility
           
@@ -89,6 +147,24 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           const window = {
             RemotionGoogleFonts: {
               loadFont: () => {} // No-op for Lambda
+            },
+            // Runtime fallback for Iconify when server-side inlining did not replace icons
+            IconifyIcon: (props) => {
+              const style = props?.style || {};
+              return React.createElement(
+                'span',
+                {
+                  ...props,
+                  style: {
+                    display: 'inline-block',
+                    width: style.width || '1em',
+                    height: style.height || '1em',
+                    background: style.background || 'currentColor',
+                    borderRadius: style.borderRadius || '2px',
+                    ...style,
+                  }
+                }
+              );
             },
             // IconifyIcon should already be replaced with SVGs during preprocessing
             BazaarAvatars: {
@@ -103,47 +179,9 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Override useVideoConfig to use actual dimensions
           const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
+          // Execute the scene code
+          // The last expression (Component;) will be returned
           ${executableCode}
-          
-          // Log what we're trying to execute
-          console.log('[ComponentFactory] Executing scene code...');
-          
-          // Try to return the component (it should be assigned to Component variable)
-          if (typeof Component !== 'undefined') {
-            console.log('[ComponentFactory] Found Component variable');
-            return Component;
-          }
-          
-          // Fallback attempts
-          if (typeof Scene !== 'undefined') {
-            console.log('[ComponentFactory] Found Scene variable');
-            return Scene;
-          }
-          if (typeof MyScene !== 'undefined') {
-            console.log('[ComponentFactory] Found MyScene variable');
-            return MyScene;
-          }
-          
-          // Check if we have any function that looks like a component
-          const localVars = Object.getOwnPropertyNames(this || {});
-          console.log('[ComponentFactory] Available local variables:', localVars);
-          
-          // Try to find a component-like function
-          for (const varName of localVars) {
-            if ((varName.includes('Scene') || varName.includes('Component')) && typeof this[varName] === 'function') {
-              console.log('[ComponentFactory] Found component via variable scan:', varName);
-              return this[varName];
-            }
-          }
-          
-          console.error('[ComponentFactory] No component found in scene code');
-          console.error('[ComponentFactory] typeof Component:', typeof Component);
-          console.error('[ComponentFactory] typeof Scene:', typeof Scene);
-          return null;
-        } catch (e) {
-          console.error('Scene component factory error:', e);
-          return null;
-        }
         `
       );
       
@@ -172,11 +210,15 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
       );
       
       if (ComponentFactory) {
-        console.log(`[DynamicScene] Successfully created component factory for scene ${index}`);
-        // Render the component
-        return <ComponentFactory />;
-      } else {
-        console.error(`[DynamicScene] Component factory returned null/undefined for scene ${index}`);
+        if (typeof ComponentFactory === 'function') {
+          console.log(`[DynamicScene] Rendering function component for scene ${index}`);
+          return <ComponentFactory />;
+        }
+        if (React.isValidElement(ComponentFactory)) {
+          console.log(`[DynamicScene] Rendering element component for scene ${index}`);
+          return ComponentFactory;
+        }
+        console.error(`[DynamicScene] Unsupported component value for scene ${index}:`, ComponentFactory);
       }
     } catch (error) {
       console.error(`[DynamicScene] Failed to render scene ${index}:`, error);
@@ -236,44 +278,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
   );
 };
 
-// Helper function to extract duration from scene code
-const extractSceneDuration = (scene: any): number => {
-  if (!scene.jsCode) return scene.duration || 150;
-  
-  try {
-    // Transform the code to handle ES6 exports
-    let codeWithExports = scene.jsCode;
-    
-    // Transform "export const durationInFrames = X;" to "exports.durationInFrames = X;"
-    codeWithExports = codeWithExports.replace(
-      /export\s+const\s+durationInFrames\s*=\s*([^;]+);?/g,
-      'const durationInFrames = $1; exports.durationInFrames = durationInFrames;'
-    );
-    
-    const durationExtractor = new Function(`
-      try {
-        let exports = {};
-        ${codeWithExports}
-        // Try to get duration from exports or local scope
-        return exports.durationInFrames || (typeof durationInFrames !== 'undefined' ? durationInFrames : null);
-      } catch (e) {
-        console.warn('Duration extraction error:', e);
-        return null;
-      }
-    `);
-    
-    const extractedDuration = durationExtractor();
-    if (extractedDuration && extractedDuration > 0) {
-      console.log(`[DurationExtractor] Successfully extracted duration: ${extractedDuration} frames`);
-      return extractedDuration;
-    }
-    console.warn(`[DurationExtractor] Failed to extract valid duration, using fallback: ${scene.duration || 150} frames`);
-    return scene.duration || 150;
-  } catch (error) {
-    console.warn('[DurationExtractor] Failed to extract scene duration:', error);
-    return scene.duration || 150;
-  }
-};
+// Duration extraction removed - DB duration is the single source of truth
 
 // Video composition component
 export const VideoComposition: React.FC<{
@@ -293,15 +298,11 @@ export const VideoComposition: React.FC<{
     playbackRate?: number;
   };
 }> = ({ scenes = [], width = 1920, height = 1080, audio }) => {
-  // Fonts are loaded via CSS - no delay needed
-  const [handle] = React.useState(() => delayRender());
-  
+  // Fonts are loaded via CSS - no blocking needed
   React.useEffect(() => {
     console.log(`[VideoComposition] Using CSS-loaded fonts from fonts.css`);
     console.log(`[VideoComposition] Project dimensions: ${width}x${height}`);
-    // Continue immediately - CSS fonts are loaded automatically
-    continueRender(handle);
-  }, [handle, width, height]);
+  }, [width, height]);
   
   // Debug audio prop
   console.log('[VideoComposition] Audio prop received:', audio ? {
@@ -330,53 +331,85 @@ export const VideoComposition: React.FC<{
     );
   }
 
-  // Calculate total video duration for audio looping
-  const totalVideoDuration = scenes.reduce((sum, scene) => {
-    return sum + extractSceneDuration(scene);
+  // Sort scenes by order field to ensure consistency with Timeline
+  const sortedScenes = [...scenes].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  
+  // Calculate total video duration for audio looping - use DB durations strictly
+  const totalVideoDuration = sortedScenes.reduce((sum, scene) => {
+    return sum + (scene.duration || 150); // Use DB duration as truth
   }, 0);
 
+  // Build sequences with cumulative start positions - DB as truth
+  let cumulativeStart = 0;
+  const sequences = sortedScenes.map((scene, index) => {
+    const dbDuration = scene.duration || 150; // Use DB duration strictly
+    const sequenceElement = (
+      <Sequence
+        key={scene.id || index}
+        from={cumulativeStart}
+        durationInFrames={dbDuration}
+      >
+        <SceneErrorBoundary 
+          sceneId={scene.id} 
+          sceneName={scene.name || `Scene ${index + 1}`}
+          index={index}
+        >
+          <DynamicScene scene={{...scene, duration: dbDuration}} index={index} width={width} height={height} />
+        </SceneErrorBoundary>
+      </Sequence>
+    );
+    
+    console.log(`[VideoComposition] Scene ${index} (${scene.id}): from=${cumulativeStart}, duration=${dbDuration} frames`);
+    cumulativeStart += dbDuration;
+    return sequenceElement;
+  });
+  
   return (
     <AbsoluteFill>
       {/* Background audio track */}
-      {audio && (
-        <>
-          {console.log('[VideoComposition] Rendering Audio component with:', {
-            src: audio.url,
-            volume: audio.volume,
-            startFrom: Math.round(audio.startTime * 30),
-            endAt: Math.round(audio.endTime * 30),
-            loop: audio.endTime - audio.startTime < totalVideoDuration / 30,
-            playbackRate: audio.playbackRate || 1,
-            totalVideoDuration,
-            audioDuration: audio.endTime - audio.startTime,
-            videoDurationSeconds: totalVideoDuration / 30
-          })}
-          <Audio
-            src={audio.url}
-            volume={audio.volume}
-            startFrom={Math.round(audio.startTime * 30)} // Convert seconds to frames
-            endAt={Math.round(audio.endTime * 30)} // Convert seconds to frames
-            loop={audio.endTime - audio.startTime < totalVideoDuration / 30} // Loop if audio is shorter than video
-            playbackRate={audio.playbackRate || 1}
-          />
-        </>
-      )}
-      
-      {/* Video scenes */}
-      <Series>
-        {scenes.map((scene, index) => {
-          // Extract the real duration from the scene code
-          const realDuration = extractSceneDuration(scene);
-          
-          console.log(`[VideoComposition] Scene ${index} duration: ${realDuration} frames (${Math.round(realDuration / 30)}s)`);
-          
-          return (
-            <Series.Sequence key={scene.id || index} durationInFrames={realDuration}>
-              <DynamicScene scene={{...scene, duration: realDuration}} index={index} width={width} height={height} />
-            </Series.Sequence>
-          );
-        })}
-      </Series>
+      {audio && (() => {
+        const FPS = 30;
+        const trimStart = audio.startTime || 0;
+        const trimEnd = audio.endTime || audio.duration || 0;
+        const trimDurationSec = Math.max(0, trimEnd - trimStart);
+        // Timeline placement (defaults to 0 if missing)
+        const offsetSec = Math.max(0, (audio as any).timelineOffsetSec || 0);
+        const videoStartFrame = Math.round(offsetSec * FPS);
+        // Clip duration limited by remaining video after offset
+        const maxPlayableSec = Math.max(0, (totalVideoDuration / FPS) - offsetSec);
+        const playDurationSec = Math.min(trimDurationSec, maxPlayableSec);
+        const seqDuration = Math.max(1, Math.round(playDurationSec * FPS));
+        const audioOffsetFrames = Math.round(trimStart * FPS);
+
+        const shouldLoop = trimDurationSec < maxPlayableSec;
+
+        console.log('[VideoComposition] Rendering Audio in Sequence:', {
+          src: audio.url,
+          videoStartFrame,
+          seqDuration,
+          trimStart,
+          trimEnd,
+          offsetSec,
+          audioOffsetFrames,
+          loop: shouldLoop,
+          playbackRate: audio.playbackRate || 1,
+        });
+
+        return (
+          <Sequence from={videoStartFrame} durationInFrames={seqDuration}>
+            <Audio
+              src={audio.url}
+              volume={audio.volume}
+              startFrom={audioOffsetFrames}
+              loop={shouldLoop}
+              playbackRate={audio.playbackRate || 1}
+            />
+          </Sequence>
+        );
+      })()}
+
+      {/* Video scenes with DB duration enforcement via Sequence */}
+      {sequences}
     </AbsoluteFill>
   );
 };
@@ -397,10 +430,10 @@ export const MainComposition: React.FC = () => {
           audio: undefined,
         }}
         calculateMetadata={({ props }: { props: { scenes?: any[]; projectId?: string; width?: number; height?: number; audio?: any } }) => {
-          // Calculate total duration by extracting from each scene's code
-          const totalDuration = (props.scenes || []).reduce((sum: number, scene: any) => {
-            const sceneDuration = extractSceneDuration(scene);
-            return sum + sceneDuration;
+          // Calculate total duration using DB durations strictly - sort first
+          const sortedScenes = [...(props.scenes || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          const totalDuration = sortedScenes.reduce((sum: number, scene: any) => {
+            return sum + (scene.duration || 150); // DB duration as truth
           }, 0);
           
           console.log(`[MainComposition] Total calculated duration: ${totalDuration} frames (${Math.round(totalDuration / 30)}s)`);

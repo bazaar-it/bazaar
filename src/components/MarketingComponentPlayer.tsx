@@ -4,9 +4,20 @@ import { useIntersectionAnimation } from '~/hooks/use-intersection-animation';
 
 const MarketingComponentPlayer: React.FC = () => {
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const animationRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isVisible } = useIntersectionAnimation(containerRef, 0.3);
+
+  // Mobile detection for responsive aspect ratio
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (!isVisible) {
@@ -169,7 +180,7 @@ const MarketingComponentPlayer: React.FC = () => {
               position: "relative",
               flexWrap: "wrap",
               lineHeight: "1.3", // Better line spacing
-              maxHeight: "120px", // Limit height to prevent overlap
+              maxHeight: "150px", // Limit height to prevent overlap
               overflow: "hidden", // Hide overflow
             }}
           >
@@ -229,7 +240,7 @@ const MarketingComponentPlayer: React.FC = () => {
             >
               <IconifyIcon
                 icon="material-symbols:send"
-                className="marketing-component-icon"
+                className="marketing-send-icon"
                 style={{
                   color: "#FFFFFF",
                 }}
@@ -282,10 +293,14 @@ const MarketingComponentPlayer: React.FC = () => {
           }
           
           .marketing-send-button {
-            width: 60px;
-            height: 60px;
+            width: 36px;
+            height: 36px;
             bottom: 20px;
             right: 24px;
+          }
+          
+          .marketing-send-icon {
+            font-size: 25px;
           }
           
           @media (max-width: 768px) {
@@ -304,10 +319,14 @@ const MarketingComponentPlayer: React.FC = () => {
             }
             
             .marketing-send-button {
-              width: 50px !important;
-              height: 50px !important;
+              width: 36px !important;
+              height: 36px !important;
               bottom: 16px !important;
               right: 16px !important;
+            }
+            
+            .marketing-send-icon {
+              font-size: 25px !important;
             }
           }
         `
@@ -315,7 +334,7 @@ const MarketingComponentPlayer: React.FC = () => {
       <div 
         style={{ 
           width: '100%', 
-          aspectRatio: '3/1', // Changed to an even more compact ratio
+          aspectRatio: isMobile ? '1.6/1' : '3/1', // Much more height on mobile to ensure full visibility
           background: '#FFFFFF',
           borderRadius: '12px',
           overflow: 'hidden',

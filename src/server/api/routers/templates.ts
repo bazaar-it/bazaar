@@ -278,7 +278,7 @@ export const templatesRouter = createTRPCRouter({
         sourceProject: {
           columns: {
             id: true,
-            name: true,
+            title: true,
           },
         },
         sourceScene: {
@@ -292,4 +292,6 @@ export const templatesRouter = createTRPCRouter({
     
     return userTemplates;
   }),
+
+
 });
