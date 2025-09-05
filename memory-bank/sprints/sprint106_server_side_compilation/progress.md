@@ -108,6 +108,32 @@ After team discussion and deeper analysis of `render.service.ts`, we discovered:
 - `TESTING-CHECKLIST.md`: Hands-on steps for create → preview → export + edge cases
 - `ARCHITECTURE-EXPLAINER.md`: What changed, why it works, and runtime path
 - `RUNBOOK-COMPILATION-ISSUES.md`: Triage guide for preview/export failures
+ - `EXPLAINER-ONE-PAGER.md`: Executive 1‑pager for sharing
+ - `DEMO-SCRIPT.md`: 5–7 minute demo outline
+ - `VERIFICATION-QUERIES.md`: Copy‑paste SQL to validate `js_compiled_at` and counts
+- `PHASE2-ACCEPTANCE-CRITERIA.md`: Docs‑only acceptance criteria for next phase
+
+### Tests Added (Phase 1 assurances)
+- `src/server/services/compilation/__tests__/scene-compiler.phase1.test.ts`
+  - Appends auto-return for Function constructor
+  - Renames colliding identifiers with sceneId suffix
+- `src/lib/video/__tests__/wrapSceneNamespace.phase1.test.ts`
+  - No duplicate Remotion destructuring injected
+  - Uses `var` for duplicate-safe namespace
+  - Correctly remaps `useCurrentFrame` with startOffset
+
+---
+
+## 2025-09-04 — Phase 2 Scoping Started
+
+### Scope & Plans Added
+- `PHASE2-SCOPE.md`: Objectives, deliverables, risks, milestones
+- `PHASE2-ROLL-OUT-CHECKLIST.md`: Dev → staging → prod steps, verification, rollback
+- `PHASE2-MIGRATION-PLAN.md`: Dev-first ADD COLUMN plan + validation and backfill
+- `TICKETS-PHASE2.md`: Concrete tasks with effort/risk notes
+
+### Notes
+- No code or migrations applied yet. Docs-first only on branch `feat/sprint106-server-compilation-phase1`.
 - Keep only global fallback for `window.IconifyIcon` (idempotent).
 - Normalize icons in client slow-path (mirror server compiler).
 - Add metrics for slow-path usage and precompiled coverage.

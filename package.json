@@ -48,6 +48,7 @@
     "start": "next start",
     "test": "NODE_ENV=development dotenv -e .env.local -- node node_modules/jest/bin/jest.js",
     "test:watch": "NODE_ENV=development dotenv -e .env.local -- node node_modules/jest/bin/jest.js --watch",
+    "test:phase1": "NODE_ENV=development dotenv -e .env.local -- node node_modules/jest/bin/jest.js \"(wrapSceneNamespace\\.phase1|scene-compiler\\.phase1|composite-header\\.phase1)\\.test\\.ts$\"",
     "test:screenshots": "dotenv -e .env.local -- tsx src/tools/webAnalysis/__tests__/screenshot-test.ts",
     "test:template-selection": "tsx src/tests/run-intelligent-tests.ts unit",
     "test:e2e": "tsx src/tests/run-intelligent-tests.ts e2e",
