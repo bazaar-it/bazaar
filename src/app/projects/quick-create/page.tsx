@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -9,104 +9,49 @@ import { useLastUsedFormat } from "~/hooks/use-last-used-format";
 export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { lastFormat, updateLastFormat } = useLastUsedFormat();
-  const [hasAttemptedCreate, setHasAttemptedCreate] = useState(false);
-  const [timeoutReached, setTimeoutReached] = useState(false);
+  const { lastFormat } = useLastUsedFormat();
   
-  // Check for existing projects (for title generation and smart redirect)
-  const { data: existingProjects, isLoading: projectsLoading } = api.project.list.useQuery(undefined, {
-    enabled: !!session?.user,
-  });
-
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
     onSuccess: (result) => {
-      console.log(`Quick created project with format: ${lastFormat}`);
-      updateLastFormat(lastFormat); // Save the format for next time
+      console.log(`[QuickCreate] Project created, redirecting to: /projects/${result.projectId}/generate`);
       router.push(`/projects/${result.projectId}/generate`);
     },
     onError: (error) => {
-      console.error("Failed to quick create project:", error);
+      console.error("[QuickCreate] Failed to create project:", error);
       // Fallback to home page on error
-      setTimeout(() => {
-        router.push("/");
-      }, 2000);
+      router.push("/");
     }
   });
 
-  // Set a timeout to fallback after 10 seconds
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!createProjectMutation.isSuccess) {
-        console.log('[QuickCreate] Timeout reached, redirecting to home page');
-        setTimeoutReached(true);
-        router.push("/");
-      }
-    }, 10000);
-
-    return () => clearTimeout(timeout);
-  }, [createProjectMutation.isSuccess, router]);
-
-  useEffect(() => {
-    // Redirect to login if not authenticated
-    if (status === "loading") return;
+    // Simple, direct logic - no complex dependencies
+    
+    // 1. Wait for auth to load
+    if (status === "loading") {
+      console.log('[QuickCreate] Waiting for auth...');
+      return;
+    }
+    
+    // 2. If not authenticated, redirect to login
     if (!session?.user) {
+      console.log('[QuickCreate] No user session, redirecting to login');
       router.push("/login?redirect=/projects/quick-create");
       return;
     }
 
-    // Wait for projects to load
-    if (projectsLoading) return;
-
-    // Prevent multiple attempts or actions after timeout
-    if (hasAttemptedCreate || timeoutReached) return;
-
-    // Smart redirect logic: if user has projects, redirect to latest
-    if (existingProjects && existingProjects.length > 0) {
-      console.log('[QuickCreate] User has projects, redirecting to latest');
-      const latestProject = existingProjects[0]; // Already sorted by updatedAt
-      if (latestProject?.id) {
-        router.push(`/projects/${latestProject.id}/generate`);
-        return;
-      }
-    }
-
-    // User has no projects, create a new one
-    console.log('[QuickCreate] User has no projects, creating new one');
-    
-    // Don't create if already creating
+    // 3. If already creating or created, wait
     if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
+      console.log('[QuickCreate] Already creating or created');
       return;
     }
 
-    // Mark that we've attempted to create
-    setHasAttemptedCreate(true);
-
-    // Auto-create project with last used format (defaults to landscape)
-    // Generate unique title
-    let title = "Untitled Video";
-    if (existingProjects && existingProjects.length > 0) {
-      // Find the highest number
-      const numbers = existingProjects
-        .map((p: any) => {
-          const match = /^Untitled Video (\d+)$/.exec(p.title || '');
-          return match && match[1] ? parseInt(match[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      
-      const highestNumber = Math.max(0, ...numbers);
-      title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
-        ? "Untitled Video" 
-        : `Untitled Video ${highestNumber + 1}`;
-    }
-    
-    // Create project with last used format (defaults to landscape)
+    // 4. Create project immediately - don't wait for existing projects list
+    console.log('[QuickCreate] Creating new project with format:', lastFormat);
     createProjectMutation.mutate({
-      format: lastFormat,
-      title: title  // Pass the title to avoid undefined
+      format: lastFormat
     });
-    // Fixed dependencies - using specific mutation state flags instead of the whole object
-  }, [session, status, router, createProjectMutation.isPending, createProjectMutation.isSuccess, existingProjects, lastFormat, projectsLoading, hasAttemptedCreate, timeoutReached]);
+  }, [status, session, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router]);
 
   // Loading state
   return (
@@ -177,20 +122,16 @@ export default function QuickCreatePage() {
           {/* Text content with monospace font */}
           <div className="space-y-3 max-w-sm mx-auto">
             <h1 className="text-xl font-mono font-light text-white tracking-wide">
-              {projectsLoading ? "INITIALIZING..." : 
-               existingProjects && existingProjects.length > 0 ? "LOADING PROJECT..." :
-               "CREATING WORKSPACE..."}
+              CREATING WORKSPACE...
             </h1>
             
             {/* Format indicator - tech style */}
-            {(!projectsLoading && (!existingProjects || existingProjects.length === 0)) && (
-              <div className="flex items-center justify-center gap-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
-                  <span className="text-white/60">FORMAT:</span>
-                  <span className="text-white uppercase">{lastFormat}</span>
-                </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
+                <span className="text-white/60">FORMAT:</span>
+                <span className="text-white uppercase">{lastFormat}</span>
               </div>
-            )}
+            </div>
             
             {/* Progress indicator - terminal style */}
             <div className="flex items-center justify-center gap-1 mt-6 font-mono text-white/40 text-xs">
@@ -212,4 +153,4 @@ export default function QuickCreatePage() {
       `}</style>
     </div>
   );
-} 
+}

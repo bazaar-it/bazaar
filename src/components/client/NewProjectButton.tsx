@@ -169,27 +169,10 @@ export function NewProjectButton({
     // Update the last used format
     updateLastFormat(formatId);
     
-    // Generate unique title
-    let title = "Untitled Video";
-    if (existingProjects && existingProjects.length > 0) {
-      // Find the highest number
-      const numbers = existingProjects
-        .map((p: any) => {
-          const match = /^Untitled Video (\d+)$/.exec(p.title || '');
-          return match && match[1] ? parseInt(match[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      
-      const highestNumber = Math.max(0, ...numbers);
-      title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
-        ? "Untitled Video" 
-        : `Untitled Video ${highestNumber + 1}`;
-    }
-    
     // Hide format options and create project
     setShowFormatOptions(false);
     
-    // Create project with selected format
+    // Create project with selected format - title is generated server-side
     createProjectMutation.mutate({
       format: formatId
     });
@@ -208,12 +191,9 @@ export function NewProjectButton({
       return;
     }
     
-    // Hide dropdown if showing
-    setShowFormatOptions(false);
-    
-    // Create project with last used format (defaults to landscape)
-    handleFormatSelect(lastFormat);
-  }, [onStart, session?.user, router, lastFormat, handleFormatSelect]);
+    // Simple redirect to quick-create page - let it handle everything
+    router.push('/projects/quick-create');
+  }, [onStart, session?.user, router]);
 
   // Detect if we're on mobile
   const [isMobile, setIsMobile] = useState(false);
